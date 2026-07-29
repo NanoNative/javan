@@ -4281,6 +4281,882 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void functionStoredInFieldBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("function-stored-in-field");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Reader reader = new Reader(value -> value + "-stored");
+                    System.out.println(reader.read("value"));
+                }
+
+                private static final class Reader {
+                    private final Function<String, String> function;
+
+                    private Reader(final Function<String, String> function) {
+                        this.function = function;
+                    }
+
+                    private String read(final String value) {
+                        return function.apply(value);
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        if (run.exitCode() != 0) {
+            throw new AssertionError(run.stderr());
+        }
+
+        assertThat(process(
+            project,
+            List.of(project.resolve(".javan/bin/function-stored-in-field").toString())
+        ).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void capturedFunctionStoredInFieldSurvivesGcStress() throws Exception {
+        final Path project = project("captured-function-stored-in-field");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String prefix = new String("captured-");
+                    final Reader reader = new Reader(value -> prefix + value);
+                    System.out.println(reader.read("value"));
+                }
+
+                private static final class Reader {
+                    private final Function<String, String> function;
+
+                    private Reader(final Function<String, String> function) {
+                        this.function = function;
+                    }
+
+                    private String read(final String value) {
+                        return function.apply(value);
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        if (run.exitCode() != 0) {
+            throw new AssertionError(run.stderr());
+        }
+
+        assertThat(process(
+            project,
+            List.of(project.resolve(".javan/bin/captured-function-stored-in-field").toString()),
+            defaultProcessTimeout(),
+            java.util.Map.of("JAVAN_GC_STRESS", "1")
+        ).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void storedJdkFunctionReferenceIsRejectedAtVerification() throws Exception {
+        final Path project = project("stored-jdk-function-reference");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Function<Object, String> function = String::valueOf;
+                    System.out.println(new Reader(function).read("value"));
+                }
+
+                private static final class Reader {
+                    private final Function<Object, String> function;
+
+                    private Reader(final Function<Object, String> function) {
+                        this.function = function;
+                    }
+
+                    private String read(final Object value) {
+                        return function.apply(value);
+                    }
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.stderr())
+            .contains("error[JAVAN030]", "unsupported reachable bytecode", "invokedynamic")
+            .doesNotContain("error[JAVAN012]");
+    }
+
+    @Test
+    void storedFunctionWithPrimitiveCaptureIsRejectedAtVerification() throws Exception {
+        final Path project = project("stored-function-primitive-capture");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final int suffix = args.length;
+                    final Function<String, String> function = value -> value + suffix;
+                    System.out.println(new Reader(function).read("value"));
+                }
+
+                private static final class Reader {
+                    private final Function<String, String> function;
+
+                    private Reader(final Function<String, String> function) {
+                        this.function = function;
+                    }
+
+                    private String read(final String value) {
+                        return function.apply(value);
+                    }
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.stderr())
+            .contains(
+                "error[JAVAN012]",
+                "Function.apply requires either a closed-world Function implementation class or a supported materialized Function lambda target."
+            )
+            .doesNotContain("error[JAVAN030]");
+    }
+
+    @Test
+    void storedFunctionWithPrimitiveReturnIsRejectedAtVerification() throws Exception {
+        final Path project = project("stored-function-primitive-return");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Function<String, Integer> function = Main::length;
+                    System.out.println(new Reader(function).read("value"));
+                }
+
+                private static int length(final String value) {
+                    return value.length();
+                }
+
+                private static final class Reader {
+                    private final Function<String, Integer> function;
+
+                    private Reader(final Function<String, Integer> function) {
+                        this.function = function;
+                    }
+
+                    private Integer read(final String value) {
+                        return function.apply(value);
+                    }
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.stderr())
+            .contains(
+                "error[JAVAN012]",
+                "Function.apply requires either a closed-world Function implementation class or a supported materialized Function lambda target."
+            )
+            .doesNotContain("error[JAVAN030]");
+    }
+
+    @Test
+    void boundCustomObjectSamStoredInFieldBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("bound-custom-object-sam");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private final Renderer renderer;
+
+                private Main() {
+                    renderer = this::render;
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new Main().renderLater("row"));
+                }
+
+                private Object renderLater(final Object value) {
+                    return renderer.render(value);
+                }
+
+                private Object render(final Object value) {
+                    return "rendered:" + value;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Renderer", """
+            package com.acme;
+
+            @FunctionalInterface
+            public interface Renderer {
+                Object render(Object value);
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/bound-custom-object-sam").toString())).stdout()
+            : "";
+
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
+    void boundCustomObjectSamWithConcreteAndMaterializedReceiversBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("bound-custom-object-sam-mixed-receivers");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private final Renderer renderer;
+
+                private Main() {
+                    renderer = this::render;
+                }
+
+                public static void main(final String[] args) {
+                    final Main application = new Main();
+                    System.out.println(
+                        application.renderLater(new PrefixRenderer(), "row")
+                            + ":"
+                            + application.renderLater(application.renderer, "row")
+                    );
+                }
+
+                private Object renderLater(final Renderer selected, final Object value) {
+                    return selected.render(value);
+                }
+
+                private Object render(final Object value) {
+                    return "materialized:" + value;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Renderer", """
+            package com.acme;
+
+            @FunctionalInterface
+            public interface Renderer {
+                Object render(Object value);
+            }
+            """);
+        writeJava(project, "com.acme.PrefixRenderer", """
+            package com.acme;
+
+            public final class PrefixRenderer implements Renderer {
+                @Override
+                public Object render(final Object value) {
+                    return "concrete:" + value;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/bound-custom-object-sam-mixed-receivers").toString())).stdout()
+            : "";
+
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
+    void boundCustomLongSamStoredInFieldBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("bound-custom-long-sam");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private final KeySource keySource;
+
+                private Main() {
+                    keySource = this::key;
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new Main().keyLater(7L));
+                }
+
+                private String keyLater(final long value) {
+                    return keySource.key(value);
+                }
+
+                private String key(final long value) {
+                    return "row-" + value;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.KeySource", """
+            package com.acme;
+
+            @FunctionalInterface
+            public interface KeySource {
+                String key(long value);
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/bound-custom-long-sam").toString())).stdout()
+            : "";
+
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
+    void staticCustomLongSamPassedThroughFactoryAndStoredInFieldBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("static-custom-long-sam");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private final KeySource keySource;
+
+                private Main(final KeySource keySource) {
+                    this.keySource = keySource;
+                }
+
+                public static void main(final String[] args) {
+                    final Main application = create(index -> "row-" + index);
+                    System.out.println(application.keyLater(7L));
+                }
+
+                private static Main create(final KeySource keySource) {
+                    return new Main(keySource);
+                }
+
+                private String keyLater(final long value) {
+                    return keySource.key(value);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.KeySource", """
+            package com.acme;
+
+            @FunctionalInterface
+            public interface KeySource {
+                String key(long value);
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/static-custom-long-sam").toString())).stdout()
+            : "";
+
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
+    void boundCustomLongSamWithConcreteAndMaterializedReceiversBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("bound-custom-long-sam-mixed-receivers");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private final KeySource keySource;
+
+                private Main() {
+                    keySource = this::key;
+                }
+
+                public static void main(final String[] args) {
+                    final Main application = new Main();
+                    System.out.println(
+                        application.keyLater(new PrefixKeySource(), 7L)
+                            + ":"
+                            + application.keyLater(application.keySource, 7L)
+                    );
+                }
+
+                private String keyLater(final KeySource selected, final long value) {
+                    return selected.key(value);
+                }
+
+                private String key(final long value) {
+                    return "materialized-" + value;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.KeySource", """
+            package com.acme;
+
+            @FunctionalInterface
+            public interface KeySource {
+                String key(long value);
+            }
+            """);
+        writeJava(project, "com.acme.PrefixKeySource", """
+            package com.acme;
+
+            public final class PrefixKeySource implements KeySource {
+                @Override
+                public String key(final long value) {
+                    return "concrete-" + value;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/bound-custom-long-sam-mixed-receivers").toString())).stdout()
+            : "";
+
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
+    void twoObjectSamWithConcreteAndMaterializedReceiversBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("two-object-sam-mixed-receivers");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Combiner materialized = Main::combine;
+                    System.out.println(
+                        combineLater(new PrefixCombiner(), "left", "right")
+                            + ":"
+                            + combineLater(materialized, "left", "right")
+                    );
+                }
+
+                private static Object combineLater(
+                    final Combiner selected,
+                    final Object first,
+                    final Object second
+                ) {
+                    return selected.combine(first, second);
+                }
+
+                private static Object combine(final Object first, final Object second) {
+                    return "materialized-" + first + "-" + second;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Combiner", """
+            package com.acme;
+
+            @FunctionalInterface
+            public interface Combiner {
+                Object combine(Object first, Object second);
+            }
+            """);
+        writeJava(project, "com.acme.PrefixCombiner", """
+            package com.acme;
+
+            public final class PrefixCombiner implements Combiner {
+                @Override
+                public Object combine(final Object first, final Object second) {
+                    return "concrete-" + first + "-" + second;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/two-object-sam-mixed-receivers").toString())).stdout()
+            : "";
+
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
+    void booleanSamWithConcreteAndMaterializedReceiversBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("boolean-sam-mixed-receivers");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Matcher materialized = Main::matches;
+                    System.out.println(
+                        matchesLater(new NeverMatcher(), "row")
+                            + ":"
+                            + matchesLater(materialized, "row")
+                    );
+                }
+
+                private static boolean matchesLater(final Matcher selected, final Object value) {
+                    return selected.matches(value);
+                }
+
+                private static boolean matches(final Object value) {
+                    return value != null;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Matcher", """
+            package com.acme;
+
+            @FunctionalInterface
+            public interface Matcher {
+                boolean matches(Object value);
+            }
+            """);
+        writeJava(project, "com.acme.NeverMatcher", """
+            package com.acme;
+
+            public final class NeverMatcher implements Matcher {
+                @Override
+                public boolean matches(final Object value) {
+                    return false;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/boolean-sam-mixed-receivers").toString())).stdout()
+            : "";
+
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
+    void consumerWithConcreteAndMaterializedReceiversBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("consumer-mixed-receivers");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Consumer;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Consumer<String> materialized = Main::consume;
+                    consumeLater(new PrefixConsumer(), "row");
+                    consumeLater(materialized, "row");
+                }
+
+                private static void consumeLater(final Consumer<String> selected, final String value) {
+                    selected.accept(value);
+                }
+
+                private static void consume(final String value) {
+                    System.out.println("materialized-" + value);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.PrefixConsumer", """
+            package com.acme;
+
+            import java.util.function.Consumer;
+
+            public final class PrefixConsumer implements Consumer<String> {
+                @Override
+                public void accept(final String value) {
+                    System.out.println("concrete-" + value);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/consumer-mixed-receivers").toString())).stdout()
+            : "";
+
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
+    void biConsumerWithConcreteAndMaterializedReceiversBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("bi-consumer-mixed-receivers");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.BiConsumer;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final BiConsumer<String, String> materialized = Main::consume;
+                    consumeLater(new PrefixConsumer(), "left", "right");
+                    consumeLater(materialized, "left", "right");
+                }
+
+                private static void consumeLater(
+                    final BiConsumer<String, String> selected,
+                    final String first,
+                    final String second
+                ) {
+                    selected.accept(first, second);
+                }
+
+                private static void consume(final String first, final String second) {
+                    System.out.println("materialized-" + first + "-" + second);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.PrefixConsumer", """
+            package com.acme;
+
+            import java.util.function.BiConsumer;
+
+            public final class PrefixConsumer implements BiConsumer<String, String> {
+                @Override
+                public void accept(final String first, final String second) {
+                    System.out.println("concrete-" + first + "-" + second);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/bi-consumer-mixed-receivers").toString())).stdout()
+            : "";
+
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
+    void boundCustomSamWithPrimitiveCaptureReportsUnsupportedInterfaceDispatch() throws Exception {
+        final Path project = project("bound-custom-sam-primitive-capture");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private final Renderer renderer;
+
+                private Main(final int suffix) {
+                    renderer = value -> render(suffix, value);
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new Main(args.length).renderLater("row"));
+                }
+
+                private Object renderLater(final Object value) {
+                    return renderer.render(value);
+                }
+
+                private Object render(final int suffix, final Object value) {
+                    return value + ":" + suffix;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Renderer", """
+            package com.acme;
+
+            @FunctionalInterface
+            public interface Renderer {
+                Object render(Object value);
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode() + "\n" + run.stderr())
+            .startsWith("2\n")
+            .contains(
+                "error[JAVAN012]",
+                "com/acme/Renderer.render(Ljava/lang/Object;)Ljava/lang/Object;",
+                "Interface dispatch requires at least one concrete implementation in the closed world."
+            )
+            .doesNotContain("error[JAVAN901]", "JAVAN-RUNTIME-PANIC");
+    }
+
+    @Test
+    void boundCustomSamWithPrimitiveReturnReportsUnsupportedInterfaceDispatch() throws Exception {
+        final Path project = project("bound-custom-sam-primitive-return");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private final Renderer renderer;
+
+                private Main() {
+                    renderer = this::render;
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new Main().renderLater("row"));
+                }
+
+                private int renderLater(final Object value) {
+                    return renderer.render(value);
+                }
+
+                private int render(final Object value) {
+                    return value.toString().length();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Renderer", """
+            package com.acme;
+
+            @FunctionalInterface
+            public interface Renderer {
+                int render(Object value);
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode() + "\n" + run.stderr())
+            .startsWith("2\n")
+            .contains(
+                "error[JAVAN012]",
+                "com/acme/Renderer.render(Ljava/lang/Object;)I",
+                "Interface dispatch requires at least one concrete implementation in the closed world."
+            )
+            .doesNotContain("error[JAVAN901]", "JAVAN-RUNTIME-PANIC");
+    }
+
+    @Test
+    void boundCustomSamWithNonFinalOwnerReportsUnsupportedInterfaceDispatch() throws Exception {
+        final Path project = project("bound-custom-sam-non-final-owner");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public class Main {
+                private final Renderer renderer;
+
+                private Main() {
+                    renderer = this::render;
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new Main().renderLater("row"));
+                }
+
+                private Object renderLater(final Object value) {
+                    return renderer.render(value);
+                }
+
+                private Object render(final Object value) {
+                    return "rendered:" + value;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Renderer", """
+            package com.acme;
+
+            @FunctionalInterface
+            public interface Renderer {
+                Object render(Object value);
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode() + "\n" + run.stderr())
+            .startsWith("2\n")
+            .contains(
+                "error[JAVAN012]",
+                "com/acme/Renderer.render(Ljava/lang/Object;)Ljava/lang/Object;",
+                "Interface dispatch requires at least one concrete implementation in the closed world."
+            )
+            .doesNotContain("error[JAVAN901]", "JAVAN-RUNTIME-PANIC");
+    }
+
+    @Test
+    void boundCustomSamWithJdkOwnerReportsUnsupportedInterfaceDispatch() throws Exception {
+        final Path project = project("bound-custom-sam-jdk-owner");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private final Renderer renderer;
+
+                private Main() {
+                    renderer = "prefix-"::concat;
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new Main().renderLater("row"));
+                }
+
+                private String renderLater(final String value) {
+                    return renderer.render(value);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Renderer", """
+            package com.acme;
+
+            @FunctionalInterface
+            public interface Renderer {
+                String render(String value);
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode() + "\n" + run.stderr())
+            .startsWith("2\n")
+            .contains(
+                "error[JAVAN012]",
+                "com/acme/Renderer.render(Ljava/lang/String;)Ljava/lang/String;",
+                "Interface dispatch requires at least one concrete implementation in the closed world."
+            )
+            .doesNotContain("error[JAVAN901]", "JAVAN-RUNTIME-PANIC");
+    }
+
+    @Test
     void supplierGetConcreteImplementationBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("supplier-get-concrete");
         writeJava(project, "com.acme.Main", """
@@ -5014,6 +5890,50 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void optionalFilterBoundFinalReceiverPredicateBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-filter-bound-final-receiver");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Expected expected = new Expected("focused");
+                    System.out.println(Optional.of("focused").filter(expected::matches).isPresent());
+                    System.out.println(Optional.of("other").filter(expected::matches).isPresent());
+                }
+
+                private static final class Expected {
+                    private final String value;
+
+                    private Expected(final String value) {
+                        this.value = value;
+                    }
+
+                    private boolean matches(final Object candidate) {
+                        return value.equals(candidate);
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        if (run.exitCode() != 0) {
+            throw new AssertionError(run.stderr());
+        }
+
+        assertThat(process(
+            project,
+            List.of(project.resolve(".javan/bin/optional-filter-bound-final-receiver").toString())
+        ).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void optionalOrElseGetInlineSupplierLambdaBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("optional-or-else-get-lambda");
         writeJava(project, "com.acme.Main", """
@@ -5039,6 +5959,500 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         assertThat(process(project, List.of(project.resolve(".javan/bin/optional-or-else-get-lambda").toString())).stdout())
             .isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("value\nfallback\n");
+    }
+
+    @Test
+    void optionalOrElseGetBoundInstanceMixedCaptureSupplierBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-or-else-get-bound-instance-mixed-capture-supplier");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private final String prefix;
+
+                private Main(final String prefix) {
+                    this.prefix = prefix;
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new Main("row").select(Optional.empty(), "wide", 7));
+                }
+
+                private String select(final Optional<String> previous, final String viewport, final int row) {
+                    final String state = "ready";
+                    return previous.orElseGet(() -> resolve(state, viewport, row));
+                }
+
+                private String resolve(final String state, final String viewport, final int row) {
+                    return prefix + ":" + state + ":" + viewport + ":" + row;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        if (run.exitCode() != 0) {
+            throw new AssertionError(run.stderr());
+        }
+
+        assertThat(process(
+            project,
+            List.of(project.resolve(".javan/bin/optional-or-else-get-bound-instance-mixed-capture-supplier").toString())
+        ).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void optionalOrElseGetBoundMethodSupplierBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-or-else-get-bound-method-supplier");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                public static void main(final String[] args) {
+                    System.out.println(new Main().select(Optional.empty()));
+                }
+
+                private String select(final Optional<String> previous) {
+                    return previous.orElseGet(this::supply);
+                }
+
+                private String supply() {
+                    return "fallback";
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        if (run.exitCode() != 0) {
+            throw new AssertionError(run.stderr());
+        }
+
+        assertThat(process(
+            project,
+            List.of(project.resolve(".javan/bin/optional-or-else-get-bound-method-supplier").toString())
+        ).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void optionalOrElseGetBoundInstanceSupplierOnNonFinalClassFailsClearly() throws Exception {
+        final Path project = project("optional-or-else-get-bound-instance-supplier-non-final");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public class Main {
+                public static void main(final String[] args) {
+                    System.out.println(new Main().select(Optional.empty()));
+                }
+
+                private String select(final Optional<String> previous) {
+                    return previous.orElseGet(() -> supply());
+                }
+
+                private String supply() {
+                    return "fallback";
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode() + "\n" + run.stderr())
+            .contains("2\nerror[JAVAN012]", "Optional.orElseGet", "supported direct supplier lambda target");
+    }
+
+    @Test
+    void optionalOrElseGetCapturedSupplierLambdaBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-or-else-get-captured-supplier-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String prefix = "prefix";
+                    final String middle = "middle";
+                    final String suffix = "suffix";
+                    final Supplier<String> fallback = () -> join(prefix, middle, suffix);
+                    System.out.println(Optional.<String>empty().orElseGet(fallback));
+                }
+
+                private static String join(final String prefix, final String middle, final String suffix) {
+                    return prefix + ":" + middle + ":" + suffix;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        requireBuildSuccess(run(tempDir, "build", project.toString()));
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-or-else-get-captured-supplier-lambda").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void optionalOrElseGetMaterializedSupplierSkipsPresentValue() throws Exception {
+        final Path project = project("optional-or-else-get-materialized-supplier-present");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Supplier<String> fallback = () -> fallback();
+                    System.out.println(Optional.of("value").orElseGet(fallback));
+                }
+
+                private static String fallback() {
+                    System.out.println("called");
+                    return "fallback";
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        requireBuildSuccess(run(tempDir, "build", project.toString()));
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-or-else-get-materialized-supplier-present").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void optionalOrElseGetMaterializedSupplierInvokesEmptyValueOnce() throws Exception {
+        final Path project = project("optional-or-else-get-materialized-supplier-empty");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Supplier<String> fallback = () -> fallback();
+                    System.out.println(Optional.<String>empty().orElseGet(fallback));
+                }
+
+                private static String fallback() {
+                    System.out.println("called");
+                    return "fallback";
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        requireBuildSuccess(run(tempDir, "build", project.toString()));
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-or-else-get-materialized-supplier-empty").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void optionalOrMaterializedSupplierBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-or-materialized-supplier");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Supplier<Optional<String>> fallback = () -> fallback();
+                    System.out.println(Optional.<String>empty().or(fallback).orElse("missing"));
+                }
+
+                private static Optional<String> fallback() {
+                    System.out.println("called");
+                    return Optional.of("fallback");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        requireBuildSuccess(run(tempDir, "build", project.toString()));
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-or-materialized-supplier").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void objectsRequireNonNullElseGetMaterializedSupplierBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("objects-require-non-null-else-get-materialized-supplier");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Objects;
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Supplier<String> fallback = () -> fallback();
+                    System.out.println(Objects.requireNonNullElseGet(null, fallback));
+                }
+
+                private static String fallback() {
+                    System.out.println("called");
+                    return "fallback";
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        requireBuildSuccess(run(tempDir, "build", project.toString()));
+        assertThat(process(project, List.of(project.resolve(".javan/bin/objects-require-non-null-else-get-materialized-supplier").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void supplierGetMaterializedInstanceMethodReferenceBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("supplier-get-materialized-instance-method-reference");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private final String value;
+
+                private Main(final String value) {
+                    this.value = value;
+                }
+
+                public static void main(final String[] args) {
+                    final Main receiver = new Main("instance");
+                    final Supplier<String> supplier = receiver::value;
+                    System.out.println(supplier.get());
+                }
+
+                private String value() {
+                    return value;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        requireBuildSuccess(run(tempDir, "build", project.toString()));
+        assertThat(process(project, List.of(project.resolve(".javan/bin/supplier-get-materialized-instance-method-reference").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void unsupportedSupplierConstructorReferenceIsRejected() throws Exception {
+        final Path project = project("unsupported-supplier-constructor-reference");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Supplier<StringBuilder> fallback = StringBuilder::new;
+                    System.out.println(Optional.<StringBuilder>empty().orElseGet(fallback));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.stderr()).contains("error[JAVAN012]", "Optional.orElseGet");
+    }
+
+    @Test
+    void unsupportedSupplierShapeReportsExactSupportedSubset() throws Exception {
+        final Path project = project("unsupported-supplier-shape-diagnostic");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Supplier<StringBuilder> unsupported = StringBuilder::new;
+                    System.out.println(unsupported == null);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.stderr()).contains(
+            "error[JAVAN030]",
+            "Only StringConcatFactory string concatenation, exact record ObjectMethods equals/hashCode, exact LambdaMetafactory Function/Predicate shapes, "
+                + "the exact Supplier subset (zero-argument reference-return invocation directly lowered to admitted application-static "
+                + "implementations or final implementation-owner bound instance targets, plus application static/instance-target "
+                + "materialization with reference-only captures and reference "
+                + "returns), the current "
+                + "Consumer/BiConsumer object-capture materialization slice, and the current custom-SAM materialization subset are implemented."
+        );
+    }
+
+    @Test
+    void jdkOwnerSupplierInstanceMethodReferenceReportsExactSupportedSubset() throws Exception {
+        final Path project = project("unsupported-jdk-owner-supplier-method-reference");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Supplier<String> unsupported = "value"::toString;
+                    System.out.println(unsupported == null);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.stderr()).contains(
+            "error[JAVAN030]",
+            "Only StringConcatFactory string concatenation, exact record ObjectMethods equals/hashCode, exact LambdaMetafactory Function/Predicate shapes, "
+                + "the exact Supplier subset (zero-argument reference-return invocation directly lowered to admitted application-static "
+                + "implementations or final implementation-owner bound instance targets, plus application static/instance-target "
+                + "materialization with reference-only captures and reference "
+                + "returns), the current "
+                + "Consumer/BiConsumer object-capture materialization slice, and the current custom-SAM materialization subset are implemented."
+        );
+    }
+
+    @Test
+    void supplierGetMixedConcreteAndMaterializedReceiversBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("supplier-get-mixed-concrete-materialized");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String prefix = "captured";
+                    final String suffix = "-lambda";
+                    final Supplier<String> captured = () -> prefix + suffix;
+                    System.out.println(read(new ConcreteSupplier()) + ":" + read(captured));
+                }
+
+                private static String read(final Supplier<String> supplier) {
+                    return supplier.get();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.ConcreteSupplier", """
+            package com.acme;
+
+            import java.util.function.Supplier;
+
+            public final class ConcreteSupplier implements Supplier<String> {
+                @Override
+                public String get() {
+                    return "concrete";
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        requireBuildSuccess(run(tempDir, "build", project.toString()));
+        assertThat(process(project, List.of(project.resolve(".javan/bin/supplier-get-mixed-concrete-materialized").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void supplierGetMaterializedArrayCaptureBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("supplier-get-materialized-array-capture");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String[] values = new String[] {"zero", "one"};
+                    final Supplier<String> captured = () -> values[1];
+                    System.out.println(read(captured));
+                }
+
+                private static String read(final Supplier<String> supplier) {
+                    return supplier.get();
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        requireBuildSuccess(run(tempDir, "build", project.toString()));
+        assertThat(process(
+            project,
+            List.of(project.resolve(".javan/bin/supplier-get-materialized-array-capture").toString()),
+            defaultProcessTimeout(),
+            java.util.Map.of("JAVAN_GC_STRESS", "1")
+        ).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void optionalOrMaterializedSupplierSkipsPresentValue() throws Exception {
+        final Path project = project("optional-or-materialized-supplier-present");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Supplier<Optional<String>> fallback = () -> fallback();
+                    System.out.println(Optional.of("value").or(fallback).orElse("missing"));
+                }
+
+                private static Optional<String> fallback() {
+                    System.out.println("called");
+                    return Optional.of("fallback");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        requireBuildSuccess(run(tempDir, "build", project.toString()));
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-or-materialized-supplier-present").toString())).stdout())
+            .isEqualTo(jvmOutput);
     }
 
     @Test
@@ -6133,6 +7547,46 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         assertThat(run.exitCode()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/polymorphic-call").toString())).stdout()).isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("child\n");
+    }
+
+    @Test
+    void inheritedMethodThroughFinalSubclassBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("final-subclass-inherited-method");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main extends Base {
+                public Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new Main().value());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Base", """
+            package com.acme;
+
+            public class Base {
+                public Base() {
+                }
+
+                public int value() {
+                    return 42;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        if (run.exitCode() != 0) {
+            throw new AssertionError(run.stderr());
+        }
+
+        assertThat(process(
+            project,
+            List.of(project.resolve(".javan/bin/final-subclass-inherited-method").toString())
+        ).stdout()).isEqualTo(jvmOutput);
     }
 
     @Test

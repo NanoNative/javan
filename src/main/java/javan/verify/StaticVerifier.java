@@ -8,10 +8,12 @@ import javan.classfile.CodeAttribute;
 import javan.classfile.CodeException;
 import javan.classfile.DynamicRef;
 import javan.classfile.FieldRef;
+import javan.classfile.FunctionLambdaUse;
 import javan.classfile.Instruction;
 import javan.classfile.LambdaMetafactoryCall;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
+import javan.classfile.RecordObjectMethodsCall;
 import javan.compat.BytecodeSupport;
 import javan.compat.ExactMethodSupport;
 import javan.compat.JdkCallSupport;
@@ -21,9 +23,11 @@ import javan.compat.NetworkApiSupport;
 import javan.util.Strings2;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Verifies the static Java profile for reachable code and warns about unreachable violations.
@@ -459,7 +463,16 @@ public final class StaticVerifier {
         if (unsupportedNewArrayType(instruction)) {
             diagnostics.add(newArrayDiagnostic(classFile, method, instruction, reachable));
         }
-        if (unsupportedInvokedynamic(classFile, method, instruction) && !ignoredUnreachableRecordObjectMethod(classFile, method, instruction, reachable)) {
+        final Optional<String> unsupportedRecordComponent =
+            unsupportedRecordComponentDescriptor(classes, classFile, method, instruction);
+        if (reachable == 1 && unsupportedRecordComponent.isPresent()) {
+            diagnostics.add(recordComponentDiagnostic(
+                classFile,
+                method,
+                unsupportedRecordComponent.orElseThrow()
+            ));
+        } else if (unsupportedInvokedynamic(classes, classFile, method, instruction)
+            && !ignoredUnreachableRecordObjectMethod(classFile, method, instruction, reachable)) {
             diagnostics.add(invokedynamicDiagnostic(classFile, method, instruction, reachable));
         }
         if (unsupportedStringConstant == 1 && unsupportedRuntimeStringSemanticCall(instruction)) {
@@ -606,6 +619,12 @@ public final class StaticVerifier {
         if (supportedInterruptedWaitHandler(code, handler)) {
             return true;
         }
+        if (supportedArraysFillHandler(code, handler)) {
+            return true;
+        }
+        if (supportedMathExactHandler(code, handler)) {
+            return true;
+        }
         if (supportedFinallyRethrowHandler(code, handler)) {
             return true;
         }
@@ -692,6 +711,120 @@ public final class StaticVerifier {
             }
         }
         return hasWaitCall == 1;
+    }
+
+    private static boolean supportedArraysFillHandler(final CodeAttribute code, final CodeException handler) {
+        if (handler.catchType().isEmpty()) {
+            return false;
+        }
+        final String catchType = handler.catchType().orElseThrow();
+        int hasCaughtFillCall = 0;
+        for (final Instruction instruction : code.instructions()) {
+            if (instruction.offset() < handler.startPc()) {
+                continue;
+            }
+            if (instruction.offset() >= handler.endPc()) {
+                continue;
+            }
+            if (isArraysFillCall(instruction)) {
+                if (arraysFillCanThrowTo(instruction.methodRef().orElseThrow(), catchType)) {
+                    hasCaughtFillCall = 1;
+                }
+                continue;
+            }
+            if (instruction.opcode() == 1) {
+                continue;
+            }
+            if (instruction.opcode() == 192
+                && instruction.className().isPresent()
+                && "[B".equals(instruction.className().orElseThrow())) {
+                continue;
+            }
+            if (!supportedInterruptedWaitProtectedInstruction(instruction)) {
+                return false;
+            }
+        }
+        return hasCaughtFillCall == 1;
+    }
+
+    private static boolean isArraysFillCall(final Instruction instruction) {
+        if (instruction.opcode() != 184 || instruction.methodRef().isEmpty()) {
+            return false;
+        }
+        final MethodRef target = instruction.methodRef().orElseThrow();
+        if (!"java/util/Arrays".equals(target.owner()) || !"fill".equals(target.name())) {
+            return false;
+        }
+        return "([BB)V".equals(target.descriptor()) || "([BIIB)V".equals(target.descriptor());
+    }
+
+    private static boolean arraysFillCanThrowTo(final MethodRef target, final String catchType) {
+        if (JdkCallSupport.isPlatformThrowableAssignable("java/lang/NullPointerException", catchType)) {
+            return true;
+        }
+        if (!"([BIIB)V".equals(target.descriptor())) {
+            return false;
+        }
+        if (JdkCallSupport.isPlatformThrowableAssignable("java/lang/IllegalArgumentException", catchType)) {
+            return true;
+        }
+        return JdkCallSupport.isPlatformThrowableAssignable("java/lang/ArrayIndexOutOfBoundsException", catchType);
+    }
+
+    private static boolean supportedMathExactHandler(final CodeAttribute code, final CodeException handler) {
+        if (handler.catchType().isEmpty()
+            || !JdkCallSupport.isPlatformThrowableAssignable(
+                "java/lang/ArithmeticException",
+                handler.catchType().orElseThrow()
+            )) {
+            return false;
+        }
+        int hasExactCall = 0;
+        for (final Instruction instruction : code.instructions()) {
+            if (instruction.offset() < handler.startPc()) {
+                continue;
+            }
+            if (instruction.offset() >= handler.endPc()) {
+                continue;
+            }
+            if (isSupportedMathExactCall(instruction)) {
+                hasExactCall = 1;
+                continue;
+            }
+            if (!supportedMathExactProtectedInstruction(instruction)) {
+                return false;
+            }
+        }
+        return hasExactCall == 1;
+    }
+
+    private static boolean isSupportedMathExactCall(final Instruction instruction) {
+        if (instruction.opcode() != 184 || instruction.methodRef().isEmpty()) {
+            return false;
+        }
+        final MethodRef target = instruction.methodRef().orElseThrow();
+        if (!"java/lang/Math".equals(target.owner())) {
+            return false;
+        }
+        if ("addExact".equals(target.name()) && "(II)I".equals(target.descriptor())) {
+            return true;
+        }
+        return "multiplyExact".equals(target.name())
+            && ("(JI)J".equals(target.descriptor()) || "(JJ)J".equals(target.descriptor()));
+    }
+
+    private static boolean supportedMathExactProtectedInstruction(final Instruction instruction) {
+        final int opcode = instruction.opcode();
+        if (opcode >= 2 && opcode <= 10) {
+            return true;
+        }
+        if (opcode >= 16 && opcode <= 22) {
+            return true;
+        }
+        if (opcode >= 26 && opcode <= 33) {
+            return true;
+        }
+        return false;
     }
 
     private static boolean supportedFinallyRethrowHandler(final CodeAttribute code, final CodeException handler) {
@@ -1144,6 +1277,9 @@ public final class StaticVerifier {
         }
         final int opcode = instruction.opcode();
         if (opcode == 0) {
+            return true;
+        }
+        if (opcode == 1) {
             return true;
         }
         if (opcode == 18) {
@@ -2601,6 +2737,9 @@ public final class StaticVerifier {
         if (!JdkCallSupport.isPlatformThrowable(methodRef.owner())) {
             return false;
         }
+        if (JdkCallSupport.isMatchExceptionCauseConstructor(methodRef)) {
+            return true;
+        }
         if ("()V".equals(methodRef.descriptor())) {
             return true;
         }
@@ -2817,6 +2956,7 @@ public final class StaticVerifier {
     }
 
     private static boolean unsupportedInvokedynamic(
+        final Map<String, ClassFile> classes,
         final ClassFile classFile,
         final MethodInfo method,
         final Instruction instruction
@@ -2831,46 +2971,138 @@ public final class StaticVerifier {
         if (supportedStringConcat(dynamicRef.orElseThrow())) {
             return false;
         }
-        if (supportedLambdaMetafactory(dynamicRef.orElseThrow())) {
+        if (supportedLambdaMetafactory(classes, method, instruction, dynamicRef.orElseThrow())) {
             return false;
         }
-        if (supportedRecordEqualsDynamic(classFile, method, instruction)) {
+        if (supportedRecordObjectMethodsDynamic(classes, classFile, method, instruction)) {
             return false;
         }
         return true;
     }
 
-    private static boolean supportedRecordEqualsDynamic(
+    private static boolean supportedRecordObjectMethodsDynamic(
+        final Map<String, ClassFile> classes,
         final ClassFile classFile,
         final MethodInfo method,
         final Instruction instruction
     ) {
-        if (!"java/lang/Record".equals(classFile.superName())) {
-            return false;
-        }
-        if (!"equals".equals(method.name()) || !"(Ljava/lang/Object;)Z".equals(method.descriptor())) {
-            return false;
-        }
         final Optional<DynamicRef> dynamicRef = instruction.dynamicRef();
         if (dynamicRef.isEmpty()) {
             return false;
         }
-        final DynamicRef ref = dynamicRef.orElseThrow();
-        if (!"java/lang/runtime/ObjectMethods".equals(ref.bootstrapOwner())) {
+        return recordObjectMethodsCall(classFile, method, instruction).isPresent()
+            && unsupportedRecordComponentDescriptor(classes, classFile, method, instruction).isEmpty();
+    }
+
+    private static Optional<String> unsupportedRecordComponentDescriptor(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction
+    ) {
+        if (instruction.opcode() != 186 || instruction.dynamicRef().isEmpty()) {
+            return Optional.empty();
+        }
+        final Optional<RecordObjectMethodsCall> recordCall =
+            recordObjectMethodsCall(classFile, method, instruction);
+        return recordCall.isEmpty()
+            ? Optional.empty()
+            : unsupportedRecordComponentDescriptor(
+                classes,
+                recordCall.orElseThrow(),
+                "hashCode".equals(method.name())
+            );
+    }
+
+    private static Optional<RecordObjectMethodsCall> recordObjectMethodsCall(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction
+    ) {
+        final DynamicRef dynamicRef = instruction.dynamicRef().orElseThrow();
+        final Optional<RecordObjectMethodsCall> equalsCall =
+            RecordObjectMethodsCall.resolve(classFile, method, dynamicRef);
+        return equalsCall.isPresent()
+            ? equalsCall
+            : RecordObjectMethodsCall.resolveHashCode(classFile, method, dynamicRef);
+    }
+
+    private static Optional<String> unsupportedRecordComponentDescriptor(
+        final Map<String, ClassFile> classes,
+        final RecordObjectMethodsCall recordCall,
+        final boolean hashCode
+    ) {
+        for (final RecordObjectMethodsCall.Component component : recordCall.components()) {
+            if (!supportedRecordComponentShape(classes, component.shape(), hashCode)) {
+                return Optional.of(component.diagnosticType());
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static boolean supportedRecordComponentShape(
+        final Map<String, ClassFile> classes,
+        final RecordObjectMethodsCall.Shape shape,
+        final boolean hashCode
+    ) {
+        if (!shape.valid()) {
             return false;
         }
-        if (!"bootstrap".equals(ref.bootstrapName())) {
-            return false;
+        if (shape.isArray() || shape.referenceOwner().isEmpty()) {
+            return true;
         }
-        for (final javan.classfile.FieldInfo field : classFile.fields()) {
-            if (field.isStatic()) {
-                continue;
-            }
-            if (!field.descriptor().startsWith("L") && !field.descriptor().startsWith("[")) {
-                return false;
-            }
+        if (shape.isList()) {
+            return supportedRecordComponentShape(classes, shape.listElement().orElseThrow(), hashCode);
         }
-        return true;
+        final String owner = shape.referenceOwner().orElseThrow();
+        if ("java/lang/String".equals(owner) || isRecordBoxedPrimitive(owner)) {
+            return true;
+        }
+        final ClassFile componentClass = classes.get(owner);
+        return componentClass != null
+            && componentClass.application()
+            && !componentClass.isInterface()
+            && componentClass.isFinal()
+            && hasSupportedRecordReferenceObjectMethod(classes, componentClass, hashCode);
+    }
+
+    private static boolean isRecordBoxedPrimitive(final String owner) {
+        return "java/lang/Boolean".equals(owner)
+            || "java/lang/Byte".equals(owner)
+            || "java/lang/Character".equals(owner)
+            || "java/lang/Short".equals(owner)
+            || "java/lang/Integer".equals(owner)
+            || "java/lang/Long".equals(owner)
+            || "java/lang/Float".equals(owner)
+            || "java/lang/Double".equals(owner);
+    }
+
+    private static boolean hasSupportedRecordReferenceObjectMethod(
+        final Map<String, ClassFile> classes,
+        final ClassFile componentClass,
+        final boolean hashCode
+    ) {
+        if (componentClass.isEnum()) {
+            return true;
+        }
+        final String methodName = hashCode ? "hashCode" : "equals";
+        final String descriptor = hashCode ? "()I" : "(Ljava/lang/Object;)Z";
+        String current = componentClass.name();
+        final Set<String> visited = new HashSet<>();
+        while (classes.containsKey(current) && visited.add(current)) {
+            if ("java/lang/Object".equals(current)) {
+                return true;
+            }
+            final ClassFile currentClass = classes.get(current);
+            final Optional<MethodInfo> target = currentClass.method(methodName, descriptor);
+            if (target.isPresent()) {
+                return currentClass.application()
+                    && !target.orElseThrow().isStatic()
+                    && target.orElseThrow().code().isPresent();
+            }
+            current = currentClass.superName();
+        }
+        return "java/lang/Object".equals(current);
     }
 
     private static boolean supportedStringConcat(final DynamicRef dynamicRef) {
@@ -2892,14 +3124,99 @@ public final class StaticVerifier {
             && dynamicRef.bootstrapArguments().getFirst().indexOf(2) < 0;
     }
 
-    private static boolean supportedLambdaMetafactory(final DynamicRef dynamicRef) {
+    private static boolean supportedLambdaMetafactory(
+        final Map<String, ClassFile> classes,
+        final MethodInfo method,
+        final Instruction instruction,
+        final DynamicRef dynamicRef
+    ) {
         final Optional<LambdaMetafactoryCall> lambdaCall = LambdaMetafactoryCall.resolve(dynamicRef);
-        return lambdaCall.isPresent()
-            && (lambdaCall.orElseThrow().isDirectlyLowerable()
-            || lambdaCall.orElseThrow().isZeroCaptureMaterializedObjectLambda()
-            || lambdaCall.orElseThrow().isZeroCaptureMaterializedBooleanLambda()
-            || lambdaCall.orElseThrow().isMaterializedBiFunctionLambda()
-            || lambdaCall.orElseThrow().isMaterializedVoidLambda());
+        if (lambdaCall.isEmpty()) {
+            return false;
+        }
+        final LambdaMetafactoryCall lambda = lambdaCall.orElseThrow();
+        if (lambda.isFunction()
+            && shouldMaterializeFunctionLambda(method, instruction)
+            && !FunctionLambdaUse.isProvablyDiscardedZeroCapture(lambda, method, instruction)) {
+            final ClassFile implementationClass = classes.get(lambda.implementation().owner());
+            return implementationClass != null
+                && implementationClass.application()
+                && lambda.isMaterializedFunctionLambda();
+        }
+        if (lambda.isSupplier()) {
+            final ClassFile implementationClass = classes.get(lambda.implementation().owner());
+            if (implementationClass == null || !implementationClass.application()) {
+                return false;
+            }
+        }
+        return lambda.isDirectlyLowerable(classes)
+            || lambda.isZeroCaptureMaterializedObjectLambda()
+            || lambda.isZeroCaptureMaterializedLongObjectLambda(classes)
+            || lambda.isZeroCaptureMaterializedBooleanLambda()
+            || lambda.isMaterializedBiFunctionLambda()
+            || lambda.isMaterializedVoidLambda()
+            || lambda.isMaterializedSupplierLambda()
+            || lambda.isMaterializedBoundCustomObjectLambda(classes);
+    }
+
+    private static boolean shouldMaterializeFunctionLambda(
+        final MethodInfo method,
+        final Instruction instruction
+    ) {
+        if (method.code().isEmpty()) {
+            return true;
+        }
+        final List<Instruction> instructions = method.code().orElseThrow().instructions();
+        for (int index = 0; index < instructions.size(); index++) {
+            if (instructions.get(index).offset() != instruction.offset()) {
+                continue;
+            }
+            for (int consumerIndex = index + 1; consumerIndex < instructions.size(); consumerIndex++) {
+                final Instruction candidate = instructions.get(consumerIndex);
+                final Optional<MethodRef> consumer = candidate.methodRef();
+                if (consumer.isPresent()) {
+                    return !isInlineFunctionConsumer(consumer.orElseThrow());
+                }
+                if (endsInlineFunctionSearch(candidate.opcode())) {
+                    return true;
+                }
+            }
+            return true;
+        }
+        return true;
+    }
+
+    private static boolean endsInlineFunctionSearch(final int opcode) {
+        return (opcode >= 54 && opcode <= 58)
+            || (opcode >= 79 && opcode <= 95)
+            || (opcode >= 153 && opcode <= 177)
+            || opcode == 179
+            || opcode == 181
+            || opcode == 186
+            || opcode == 191
+            || opcode == 194
+            || opcode == 195
+            || opcode == 198
+            || opcode == 199;
+    }
+
+    private static boolean isInlineFunctionConsumer(final MethodRef target) {
+        if ("java/util/function/Function".equals(target.owner())
+            && "apply".equals(target.name())
+            && "(Ljava/lang/Object;)Ljava/lang/Object;".equals(target.descriptor())) {
+            return true;
+        }
+        if ("computeIfAbsent".equals(target.name())
+            && "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;".equals(target.descriptor())
+            && ("java/util/Map".equals(target.owner())
+            || "java/util/HashMap".equals(target.owner())
+            || "java/util/LinkedHashMap".equals(target.owner())
+            || "java/util/TreeMap".equals(target.owner()))) {
+            return true;
+        }
+        return "java/util/Optional".equals(target.owner())
+            && ("map".equals(target.name()) || "flatMap".equals(target.name()))
+            && "(Ljava/util/function/Function;)Ljava/util/Optional;".equals(target.descriptor());
     }
 
     private static boolean supportedStringConcatParameters(final String descriptor) {
@@ -3100,13 +3417,34 @@ public final class StaticVerifier {
         final int reachable
     ) {
         final String reason =
-            "Only StringConcatFactory string concatenation, record ObjectMethods equals, exact LambdaMetafactory Function/Predicate shapes, the current Consumer/BiConsumer object-capture materialization slice, and the current custom-SAM materialization subset are implemented.";
+            "Only StringConcatFactory string concatenation, exact record ObjectMethods equals/hashCode, exact LambdaMetafactory Function/Predicate shapes, "
+                + "the exact Supplier subset (zero-argument reference-return invocation directly lowered to admitted application-static "
+                + "implementations or final implementation-owner bound instance targets, plus application static/instance-target "
+                + "materialization with reference-only captures and reference "
+                + "returns), the current "
+                + "Consumer/BiConsumer object-capture materialization slice, and the current custom-SAM materialization subset are implemented.";
         final String fix =
-            "Keep invokedynamic limited to supported javac string concatenation, supported record equals, or the admitted LambdaMetafactory subset.";
+            "Keep invokedynamic limited to supported javac string concatenation, exact supported record equals/hashCode, or the admitted LambdaMetafactory subset.";
         if (reachable == 1) {
             return error(classFile, method, "JAVAN030", "unsupported reachable bytecode", instruction.mnemonic(), reason, fix);
         }
         return warning(classFile, method, "JAVAN130", "unsupported bytecode in unreachable code", instruction.mnemonic(), reason, fix);
+    }
+
+    private static Diagnostic recordComponentDiagnostic(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final String descriptor
+    ) {
+        return error(
+            classFile,
+            method,
+            "JAVAN030",
+            "unsupported record component type",
+            descriptor,
+            "Record equals/hashCode only admits closed reference shapes with complete native semantics.",
+            "Use String, a boxed primitive, an array, an exact List/ArrayList element shape, an enum, or a final application class with a reachable equals/hashCode implementation."
+        );
     }
 
     private static Diagnostic instanceOfTargetDiagnostic(

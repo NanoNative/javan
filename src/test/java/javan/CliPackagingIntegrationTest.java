@@ -524,6 +524,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "#define JAVAN_ABI_RUNTIME_DIAGNOSTICS 1",
             "#define JAVAN_ABI_STRUCTURED_ERROR 1",
             "#define JAVAN_ABI_RESULT_WRAPPERS 1",
+            "#define JAVAN_ABI_OBJECT_HANDLES 1",
             "typedef struct {",
             "int ok;",
             "char* message;",
@@ -540,6 +541,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "\"abiVersion\": 2",
             "\"stringOwnership\": \"input-copied-gc-managed-utf8-output-javan-owned-free-with-javan_free\"",
             "\"byteArrayOwnership\": \"input-copied-gc-managed-output-javan-owned-data-free-with-javan_free\"",
+            "\"objectHandleOwnership\": \"opaque-refcounted-gc-rooted-c-handle-release-with-javan_object_handle_release\"",
             "\"errorResultAbi\": \"abi-v2-c-owned-javanresult-try-wrappers-v1-direct-exports-compatible\"",
             "\"exceptionMapping\": \"caught-runtime-panic-to-last-error-limited-same-method-catch\"",
             "\"threadRuntimeRules\": \"parallel-host-thread-bootstrap-current-thread-interrupt-isalive-sleep-start-join-runnable-target-plus-startvirtualthread-builderstart-builderunstarted-factory-executor-threadlocal-park-parknanos-parkuntil-unpark-and-isvirtual-no-virtual-scheduler\"",
@@ -775,6 +777,126 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void staticLibraryObjectHandleExportBuildsAndRunsFromC() throws Exception {
+        final Path project = project("library-object-handle");
+        writeJava(project, "com.acme.Handles", """
+            package com.acme;
+
+            public final class Handles {
+                private Handles() {
+                }
+
+                public static Object create() {
+                    return new String("native-handle");
+                }
+
+                public static Object identity(final Object value) {
+                    return value;
+                }
+
+                public static String describe(final Object value) {
+                    return String.valueOf(value);
+                }
+            }
+            """);
+
+        final CliRun run = run(
+            tempDir,
+            "build",
+            project.toString(),
+            "--kind",
+            "staticlib",
+            "--export",
+            "com.acme.Handles.create():object",
+            "--export",
+            "com.acme.Handles.identity(object):object",
+            "--export",
+            "com.acme.Handles.describe(object):String"
+        );
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Path library = project.resolve(".javan/dist/liblibrary-object-handle.a");
+        final Path header = project.resolve(".javan/dist/bindings/c/library-object-handle.h");
+        assertThat(library).exists();
+        assertThat(Files.readString(header)).contains(
+            "typedef struct javan_object_handle JavanObjectHandle;",
+            "JavanObjectHandle* javan_export_com_acme_Handles_create_void(void);",
+            "JavanObjectHandle* javan_export_com_acme_Handles_identity_object(JavanObjectHandle* arg0);",
+            "JavanResult javan_try_com_acme_Handles_create_void(JavanObjectHandle** out);",
+            "void javan_object_handle_retain(JavanObjectHandle* handle);",
+            "void javan_object_handle_release(JavanObjectHandle* handle);"
+        );
+        final Path caller = writeC(project, "call_object_handle.c", """
+            #include <stdio.h>
+            #include ".javan/dist/bindings/c/library-object-handle.h"
+
+            int main(void) {
+                JavanObjectHandle* value = javan_export_com_acme_Handles_create_void();
+                if (value == NULL) {
+                    return 2;
+                }
+                char* text = javan_export_com_acme_Handles_describe_object(value);
+                printf("%s\\n", text);
+                javan_free(text);
+                javan_object_handle_retain(value);
+                JavanObjectHandle* identity = javan_export_com_acme_Handles_identity_object(value);
+                if (identity == NULL) {
+                    return 3;
+                }
+                char* second = javan_export_com_acme_Handles_describe_object(identity);
+                printf("%s\\n", second);
+                javan_free(second);
+                javan_object_handle_release(identity);
+                javan_object_handle_release(value);
+                javan_object_handle_release(value);
+                JavanObjectHandle* try_value = NULL;
+                JavanResult result = javan_try_com_acme_Handles_create_void(&try_value);
+                printf("try:%d:%d\\n", result.ok, try_value != NULL);
+                javan_object_handle_release(try_value);
+                javan_result_free(&result);
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-object-handle");
+        assertThat(process(project, List.of("cc", caller.toString(), library.toString(), "-o", binary.toString())).exitCode())
+            .isZero();
+        assertThat(process(project, List.of(binary.toString())).stdout())
+            .isEqualTo("native-handle\nnative-handle\ntry:1:1\n");
+    }
+
+    @Test
+    void objectHandleExportsRejectNonCBindingsExplicitly() throws Exception {
+        final Path project = project("library-object-bindings");
+        writeJava(project, "com.acme.Handles", """
+            package com.acme;
+
+            public final class Handles {
+                private Handles() {
+                }
+
+                public static Object create() {
+                    return new String("native-handle");
+                }
+            }
+            """);
+
+        final CliRun run = run(
+            tempDir,
+            "build",
+            project.toString(),
+            "--kind",
+            "staticlib",
+            "--bindings",
+            "rust",
+            "--export",
+            "com.acme.Handles.create():object"
+        );
+
+        assertThat(run.exitCode()).isNotZero();
+        assertThat(run.stderr()).contains("Object-handle exports currently support C bindings only");
+    }
+
+    @Test
     void libraryExportsCanComeFromJavanToml() throws Exception {
         final Path project = project("library-config");
         Files.writeString(project.resolve("javan.toml"), """
@@ -835,7 +957,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void unsupportedExportSignatureFailsClearly() throws Exception {
+    void shortObjectHandleExportBuilds() throws Exception {
         final Path project = project("library-bad-export");
         writeJava(project, "com.acme.Bad", """
             package com.acme;
@@ -852,7 +974,6 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
 
         final CliRun run = run(tempDir, "build", project.toString(), "--kind", "staticlib", "--export", "com.acme.Bad.nope");
 
-        assertThat(run.exitCode()).isEqualTo(2);
-        assertThat(run.stderr()).contains("Unsupported export object type");
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
     }
 }

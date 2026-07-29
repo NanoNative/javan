@@ -457,6 +457,7 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, DynamicLambda> workingObjectLocalLambdas = copyObjectLocalLambdas(objectLocalLambdas);
         final List<IrInstruction> mergedInstructions = new ArrayList<>();
         final List<StackValue> workingStack = new ArrayList<>(stack);
+        final int lastMaterializingDuplicateOffset = BytecodeToIR.lastMaterializingDuplicateOffset(bytecode);
         List<StackValue> prefix = List.of();
         int conditionalCount = 0;
         final String targetLabel = "guarded_value_target_" + instruction.offset();
@@ -487,7 +488,8 @@ final class BytecodeToIRControlFlowSupport {
                     dispatches,
                     Map.of(),
                     Map.of(),
-                    SourceLineIndex.empty()
+                    SourceLineIndex.empty(),
+                    lastMaterializingDuplicateOffset
                 );
             }
         }
@@ -561,12 +563,48 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches
     ) {
+        return lowerLinearBlock(
+            classes,
+            classFile,
+            method,
+            bytecode,
+            startIndex,
+            endIndex,
+            stackPrefix,
+            locals,
+            objectLocalKinds,
+            objectLocalThrowableTypes,
+            objectLocalLambdas,
+            localDeclarations,
+            dispatches,
+            new HashMap<>(),
+            SourceLineIndex.empty()
+        );
+    }
+    static BlockResult lowerLinearBlock(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final List<Instruction> bytecode,
+        final int startIndex,
+        final int endIndex,
+        final List<StackValue> stackPrefix,
+        final Map<Integer, IrExpression> locals,
+        final Map<Integer, StackKind> objectLocalKinds,
+        final Map<Integer, String> objectLocalThrowableTypes,
+        final Map<Integer, DynamicLambda> objectLocalLambdas,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<String, IrDispatch> dispatches,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
+    ) {
         final List<IrInstruction> blockInstructions = new ArrayList<>();
         final List<StackValue> blockStack = new ArrayList<>(stackPrefix);
         final Map<Integer, IrExpression> blockLocals = copyExpressionLocals(locals);
         final Map<Integer, StackKind> blockObjectLocalKinds = copyObjectLocalKinds(objectLocalKinds);
         final Map<Integer, String> blockObjectLocalThrowableTypes = copyObjectLocalThrowableTypes(objectLocalThrowableTypes);
         final Map<Integer, DynamicLambda> blockObjectLocalLambdas = copyObjectLocalLambdas(objectLocalLambdas);
+        final int lastMaterializingDuplicateOffset = BytecodeToIR.lastMaterializingDuplicateOffset(bytecode);
         for (int index = startIndex; index < endIndex; index++) {
             final Instruction blockInstruction = bytecode.get(index);
             if (isControlTransfer(blockInstruction.opcode())) {
@@ -579,7 +617,7 @@ final class BytecodeToIRControlFlowSupport {
                 blockInstruction,
                 blockInstructions,
                 blockStack,
-                new HashMap<>(),
+                pendingExceptionHandlerStacks,
                 blockLocals,
                 blockObjectLocalKinds,
                 blockObjectLocalThrowableTypes,
@@ -588,7 +626,8 @@ final class BytecodeToIRControlFlowSupport {
                 dispatches,
                 Map.of(),
                 Map.of(),
-                SourceLineIndex.empty()
+                sourceLines,
+                lastMaterializingDuplicateOffset
             );
         }
         return new BlockResult(List.copyOf(blockInstructions), List.copyOf(blockStack));
@@ -618,6 +657,8 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, DynamicLambda> objectLocalLambdas,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines,
         final List<Integer> skippedOffsets,
         final List<Integer> replacementLabelOffsets
     ) {
@@ -635,6 +676,7 @@ final class BytecodeToIRControlFlowSupport {
         }
         int doneOffset = -1;
         final Map<Integer, Integer> blockEnds = new HashMap<>();
+        final List<Integer> terminalThrowTargets = new ArrayList<>();
         for (int targetCursor = 0; targetCursor < targetOffsets.size(); targetCursor++) {
             final int targetOffset = targetOffsets.get(targetCursor);
             final int targetIndex = instructionIndex(bytecode, targetOffset);
@@ -657,6 +699,11 @@ final class BytecodeToIRControlFlowSupport {
                 blockEnds.put(targetOffset, jumpIndex);
                 continue;
             }
+            if (endsWithThrow(bytecode, targetIndex, nextTargetIndex)) {
+                blockEnds.put(targetOffset, nextTargetIndex);
+                terminalThrowTargets.add(targetOffset);
+                continue;
+            }
             if (targetCursor + 1 < targetOffsets.size()) {
                 return false;
             }
@@ -669,17 +716,21 @@ final class BytecodeToIRControlFlowSupport {
             return false;
         }
         final int lastTargetOffset = targetOffsets.getLast();
-        final int lastTargetIndex = instructionIndex(bytecode, lastTargetOffset);
-        if (lastTargetIndex < 0 || lastTargetIndex > doneIndex || containsControlTransfer(bytecode, lastTargetIndex, doneIndex)) {
-            return false;
+        if (!blockEnds.containsKey(lastTargetOffset)) {
+            final int lastTargetIndex = instructionIndex(bytecode, lastTargetOffset);
+            if (lastTargetIndex < 0 || lastTargetIndex > doneIndex || containsControlTransfer(bytecode, lastTargetIndex, doneIndex)) {
+                return false;
+            }
+            blockEnds.put(lastTargetOffset, doneIndex);
         }
-        blockEnds.put(lastTargetOffset, doneIndex);
 
         final List<StackValue> selectorStack = new ArrayList<>(stack);
         popInt(classFile, method, selectorStack);
         final List<StackValue> prefix = List.copyOf(selectorStack);
         final int originalLocalDeclarationCount = localDeclarations.size();
         final Map<Integer, IrLocal> workingDeclarations = copyLocalDeclarations(localDeclarations);
+        final Map<Integer, StackValue> workingPendingExceptionHandlerStacks =
+            new HashMap<>(pendingExceptionHandlerStacks);
         final List<SwitchBlock> blocks = new ArrayList<>();
         StackKind selectedKind = null;
         for (final int targetOffset : targetOffsets) {
@@ -698,8 +749,14 @@ final class BytecodeToIRControlFlowSupport {
                 objectLocalThrowableTypes,
                 objectLocalLambdas,
                 workingDeclarations,
-                dispatches
+                dispatches,
+                workingPendingExceptionHandlerStacks,
+                sourceLines
             );
+            if (terminalThrowTargets.contains(targetOffset)) {
+                blocks.add(new SwitchBlock(targetOffset, blockEndIndex, block.instructions(), Optional.empty()));
+                continue;
+            }
             if (!hasSelectedValue(prefix, block.stack())) {
                 return false;
             }
@@ -709,12 +766,13 @@ final class BytecodeToIRControlFlowSupport {
             } else if (selectedKind != selectedValue.kind()) {
                 throw unsupportedBranchValueMerge(classFile, method, instruction);
             }
-            blocks.add(new SwitchBlock(targetOffset, blockEndIndex, block.instructions(), selectedValue));
+            blocks.add(new SwitchBlock(targetOffset, blockEndIndex, block.instructions(), Optional.of(selectedValue)));
         }
         if (selectedKind == null) {
             return false;
         }
         appendNewLocalDeclarations(localDeclarations, workingDeclarations, originalLocalDeclarationCount);
+        pendingExceptionHandlerStacks.putAll(workingPendingExceptionHandlerStacks);
         final IrExpression selector = switchSelector(classFile, method, instructions, stack, localDeclarations);
         final IrType valueType = stackKindType(selectedKind);
         final String localName = "switchValue" + localDeclarations.size() + "_" + instruction.offset();
@@ -733,8 +791,14 @@ final class BytecodeToIRControlFlowSupport {
             addInt(replacementLabelOffsets, block.targetOffset());
             instructions.add(IrInstruction.label(label(block.targetOffset())));
             instructions.addAll(block.instructions());
-            instructions.add(assignLocal(selectedKind, localName, stackValueExpression(block.selectedValue())));
-            instructions.add(IrInstruction.jump(doneLabel));
+            if (block.selectedValue().isPresent()) {
+                instructions.add(assignLocal(
+                    selectedKind,
+                    localName,
+                    stackValueExpression(block.selectedValue().orElseThrow())
+                ));
+                instructions.add(IrInstruction.jump(doneLabel));
+            }
             addInstructionOffsets(bytecode, instructionIndex(bytecode, block.targetOffset()), block.endIndex(), skippedOffsets);
             if (block.endIndex() < bytecode.size() && bytecode.get(block.endIndex()).opcode() == 167) {
                 addInt(skippedOffsets, bytecode.get(block.endIndex()).offset());
@@ -743,6 +807,13 @@ final class BytecodeToIRControlFlowSupport {
         instructions.add(IrInstruction.label(doneLabel));
         stack.add(stackValue(selectedKind, localExpression(valueType, new IrLocal(valueType, localName))));
         return true;
+    }
+    static boolean endsWithThrow(final List<Instruction> bytecode, final int startIndex, final int endIndex) {
+        if (startIndex >= endIndex) {
+            return false;
+        }
+        return bytecode.get(endIndex - 1).opcode() == 191
+            && !containsControlTransfer(bytecode, startIndex, endIndex - 1);
     }
     static IrExpression branchCondition(
         final ClassFile classFile,
@@ -1162,7 +1233,12 @@ final class BytecodeToIRControlFlowSupport {
     record SwitchEntry(Optional<Integer> value, int targetOffset) {
     }
 
-    record SwitchBlock(int targetOffset, int endIndex, List<IrInstruction> instructions, StackValue selectedValue) {
+    record SwitchBlock(
+        int targetOffset,
+        int endIndex,
+        List<IrInstruction> instructions,
+        Optional<StackValue> selectedValue
+    ) {
     }
 
 }

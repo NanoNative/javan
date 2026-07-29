@@ -44,6 +44,31 @@ final class BytecodeToIRTest {
     private Path tempDir;
 
     @Test
+    void recordReferenceDispatchTerminatesOnCyclicSuperclassHierarchy() {
+        final ClassFile leaf = classFile(
+            "com/acme/Leaf",
+            "com/acme/Cycle",
+            0x0010,
+            List.of(),
+            List.of(),
+            List.of()
+        );
+        final ClassFile cycle = classFile(
+            "com/acme/Cycle",
+            leaf.name(),
+            0x0010,
+            List.of(),
+            List.of(),
+            List.of()
+        );
+        assertThat(BytecodeToIRInvokeSupport.recordReferenceTarget(
+            Map.of(leaf.name(), leaf, cycle.name(), cycle),
+            leaf.name(),
+            false
+        )).isEmpty();
+    }
+
+    @Test
     void lowersClassMetadataFieldsStaticFieldsEnumConstantsAndSortedClasses() {
         final MethodInfo main = method(0x0008, "main", "()V", 0, 0, plain(0, 177, "return"));
         final ClassFile zeta = classFile(
@@ -1501,6 +1526,148 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersBoundInstanceOptionalMapFunctionArgumentsInReceiverCaptureInputOrder() {
+        final EntryPoint entryPoint = new EntryPoint(
+            "com/acme/Main",
+            "mapBoundValue",
+            "(Lcom/acme/Main;Ljava/lang/Object;Ljava/util/Optional;)Ljava/util/Optional;"
+        );
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0x0010, List.of(), List.of(), List.of(
+                    optionalBoundInstanceMapLambdaMethod(),
+                    optionalBoundInstanceMapLambdaImplementationMethod()
+                ))
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint), List.of()),
+            SourceLineIndex.empty()
+        );
+        final String implementation = symbol(
+            "com/acme/Main",
+            "lambda$map$0",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"
+        );
+        final IrExpression invocation = program.functions().stream()
+            .filter(function -> function.name().equals("mapBoundValue"))
+            .flatMap(function -> function.instructions().stream())
+            .flatMap(instruction -> instruction.expression().stream())
+            .filter(expression -> implementation.equals(expression.value()))
+            .findFirst()
+            .orElseThrow();
+
+        assertThat(invocation).isEqualTo(IrExpression.objectCall(
+            implementation,
+            List.of(
+                IrExpression.objectLocal("arg0"),
+                IrExpression.objectLocal("arg1"),
+                IrExpression.objectLocal("object0")
+            )
+        ));
+    }
+
+    @Test
+    void lowersUnboundInstanceOptionalMapFunctionInputAsReceiver() {
+        final EntryPoint entryPoint = new EntryPoint(
+            "com/acme/Main",
+            "mapRow",
+            "(Ljava/util/Optional;)Ljava/util/Optional;"
+        );
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    List.of(),
+                    List.of(optionalUnboundInstanceMapReferenceMethod())
+                ),
+                "com/acme/Row",
+                classFile(
+                    "com/acme/Row",
+                    "java/lang/Object",
+                    0x0010,
+                    List.of(),
+                    List.of(),
+                    List.of(rowKeyMethod())
+                )
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint), List.of()),
+            SourceLineIndex.empty()
+        );
+        final String implementation = symbol("com/acme/Row", "key", "()Ljava/lang/Object;");
+        final IrExpression invocation = program.functions().stream()
+            .filter(function -> function.name().equals("mapRow"))
+            .flatMap(function -> function.instructions().stream())
+            .flatMap(instruction -> instruction.expression().stream())
+            .filter(expression -> implementation.equals(expression.value()))
+            .findFirst()
+            .orElseThrow();
+
+        assertThat(invocation).isEqualTo(IrExpression.objectCall(
+            implementation,
+            List.of(IrExpression.objectCall(
+                "javan_objects_require_non_null",
+                List.of(IrExpression.objectLocal("object0"))
+            ))
+        ));
+    }
+
+    @Test
+    void lowersUnboundInstanceLongOptionalMapFunctionWithBoxedResult() {
+        final EntryPoint entryPoint = new EntryPoint(
+            "com/acme/Main",
+            "mapRowAmount",
+            "(Ljava/util/Optional;)Ljava/util/Optional;"
+        );
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    List.of(),
+                    List.of(optionalUnboundInstanceLongMapReferenceMethod())
+                ),
+                "com/acme/Row",
+                classFile(
+                    "com/acme/Row",
+                    "java/lang/Object",
+                    0x0010,
+                    List.of(),
+                    List.of(),
+                    List.of(rowAmountMethod())
+                )
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint), List.of()),
+            SourceLineIndex.empty()
+        );
+        final String implementation = symbol("com/acme/Row", "amount", "()J");
+        final IrExpression invocation = program.functions().stream()
+            .filter(function -> function.name().equals("mapRowAmount"))
+            .flatMap(function -> function.instructions().stream())
+            .flatMap(instruction -> instruction.expression().stream())
+            .filter(expression -> "javan_long_value_of".equals(expression.value()))
+            .findFirst()
+            .orElseThrow();
+
+        assertThat(invocation).isEqualTo(IrExpression.objectCall(
+            "javan_long_value_of",
+            List.of(IrExpression.longCall(
+                implementation,
+                List.of(IrExpression.objectCall(
+                    "javan_objects_require_non_null",
+                    List.of(IrExpression.objectLocal("object0"))
+                ))
+            ))
+        ));
+    }
+
+    @Test
     void lowersOptionalMapStringInputLambdaToObjectCompatibleImplementation() {
         final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "mapStringValue", "(Ljava/util/Optional;)Ljava/util/Optional;");
         final IrProgram program = new BytecodeToIR().lower(
@@ -1894,12 +2061,16 @@ final class BytecodeToIRTest {
         );
 
         assertThat(program.functions()).filteredOn(function -> function.name().equals("applyValueNonLambda")).singleElement().satisfies(function -> {
-            assertThat(function.locals()).isEmpty();
+            assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
             assertThat(function.instructions()).containsExactly(
-                IrInstruction.returnObject(IrExpression.objectCall(
-                    "javan_com_acme_Loader_apply__Ljava_lang_Object__Ljava_lang_Object_",
-                    List.of(IrExpression.objectLocal("arg1"), IrExpression.objectLocal("arg0"))
-                ))
+                IrInstruction.assignObject(
+                    "object0",
+                    IrExpression.objectCall(
+                        "javan_com_acme_Loader_apply__Ljava_lang_Object__Ljava_lang_Object_",
+                        List.of(IrExpression.objectLocal("arg1"), IrExpression.objectLocal("arg0"))
+                    )
+                ),
+                IrInstruction.returnObject(IrExpression.objectLocal("object0"))
             );
         });
     }
@@ -1959,12 +2130,16 @@ final class BytecodeToIRTest {
         );
 
         assertThat(program.functions()).filteredOn(function -> function.name().equals("supplyValueNonLambda")).singleElement().satisfies(function -> {
-            assertThat(function.locals()).isEmpty();
+            assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
             assertThat(function.instructions()).containsExactly(
-                IrInstruction.returnObject(IrExpression.objectCall(
-                    symbol("com/acme/FallbackSupplier", "get", "()Ljava/lang/Object;"),
-                    List.of(IrExpression.objectLocal("arg0"))
-                ))
+                IrInstruction.assignObject(
+                    "object0",
+                    IrExpression.objectCall(
+                        symbol("com/acme/FallbackSupplier", "get", "()Ljava/lang/Object;"),
+                        List.of(IrExpression.objectLocal("arg0"))
+                    )
+                ),
+                IrInstruction.returnObject(IrExpression.objectLocal("object0"))
             );
         });
     }
@@ -2024,12 +2199,16 @@ final class BytecodeToIRTest {
         );
 
         assertThat(program.functions()).filteredOn(function -> function.name().equals("testValueNonLambda")).singleElement().satisfies(function -> {
-            assertThat(function.locals()).isEmpty();
+            assertThat(function.locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
             assertThat(function.instructions()).containsExactly(
-                IrInstruction.returnInt(IrExpression.intCall(
-                    "javan_com_acme_Matcher_test__Ljava_lang_Object__Z",
-                    List.of(IrExpression.objectLocal("arg1"), IrExpression.objectLocal("arg0"))
-                ))
+                IrInstruction.assignInt(
+                    "int0",
+                    IrExpression.intCall(
+                        "javan_com_acme_Matcher_test__Ljava_lang_Object__Z",
+                        List.of(IrExpression.objectLocal("arg1"), IrExpression.objectLocal("arg0"))
+                    )
+                ),
+                IrInstruction.returnInt(IrExpression.intLocal("int0"))
             );
         });
     }
@@ -2741,14 +2920,19 @@ final class BytecodeToIRTest {
             SourceLineIndex.empty()
         );
 
-        assertThat(program.functions()).filteredOn(function -> function.name().equals("invokeConcreteBiFunction")).singleElement().satisfies(function ->
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("invokeConcreteBiFunction")).singleElement().satisfies(function -> {
+            assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
             assertThat(function.instructions()).containsExactly(
-                IrInstruction.returnObject(IrExpression.objectCall(
-                    "javan_com_acme_Joiner_apply__Ljava_lang_Object_Ljava_lang_Object__Ljava_lang_Object_",
-                    List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("arg2"))
-                ))
-            )
-        );
+                IrInstruction.assignObject(
+                    "object0",
+                    IrExpression.objectCall(
+                        "javan_com_acme_Joiner_apply__Ljava_lang_Object_Ljava_lang_Object__Ljava_lang_Object_",
+                        List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("arg2"))
+                    )
+                ),
+                IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+            );
+        });
     }
 
     @Test
@@ -5049,6 +5233,27 @@ final class BytecodeToIRTest {
                 IrExpression.intBinary("+", IrExpression.intLocal("local0"), IrExpression.intLiteral(2))
             ),
             IrInstruction.returnInt(IrExpression.intLocal("local0"))
+        );
+    }
+
+    @Test
+    void lowersIntNegationToWrappingRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(I)I",
+            1,
+            1,
+            plain(0, 26, "iload_0"),
+            plain(1, 116, "ineg"),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_int_neg",
+                List.of(IrExpression.intLocal("arg0"))
+            ))
         );
     }
 
@@ -8576,6 +8781,82 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersExhaustiveSwitchExpressionWithThrowingDefaultToSelectedValue() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(I)I",
+            4,
+            1,
+            plain(0, 26, "iload_0"),
+            plainOperands(1, 170, "tableswitch", tableSwitchOperands(1, 31, 0, 2, 41, 45, 49)),
+            classInstruction(32, 187, "new", "java/lang/MatchException"),
+            plain(35, 89, "dup"),
+            plain(36, 1, "aconst_null"),
+            plain(37, 1, "aconst_null"),
+            invokeSpecial(38, new MethodRef(
+                "java/lang/MatchException",
+                "<init>",
+                "(Ljava/lang/String;Ljava/lang/Throwable;)V"
+            )),
+            plain(41, 191, "athrow"),
+            plain(42, 4, "iconst_1"),
+            plainOperands(43, 167, "goto", 0, 8),
+            plain(46, 5, "iconst_2"),
+            plainOperands(47, 167, "goto", 0, 4),
+            plain(50, 7, "iconst_4"),
+            plain(51, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).contains(
+            IrInstruction.assignInt("switchValue1_1", IrExpression.intLiteral(1)),
+            IrInstruction.assignInt("switchValue1_1", IrExpression.intLiteral(2)),
+            IrInstruction.assignInt("switchValue1_1", IrExpression.intLiteral(4)),
+            IrInstruction.returnInt(IrExpression.intLocal("switchValue1_1"))
+        );
+    }
+
+    @Test
+    void lowersThrowingSwitchArmToItsRuntimeExceptionHandler() {
+        final IrFunction function = lowerMain(methodWithHandlers(
+            0x0008,
+            "main",
+            "(I)Ljava/lang/String;",
+            4,
+            1,
+            List.of(new CodeException(32, 42, 60, Optional.of("java/lang/RuntimeException"))),
+            plain(0, 26, "iload_0"),
+            plainOperands(1, 170, "tableswitch", tableSwitchOperands(1, 31, 0, 1, 41, 45)),
+            classInstruction(32, 187, "new", "java/lang/MatchException"),
+            plain(35, 89, "dup"),
+            stringConstant(36, "boom"),
+            plain(37, 1, "aconst_null"),
+            invokeSpecial(38, new MethodRef(
+                "java/lang/MatchException",
+                "<init>",
+                "(Ljava/lang/String;Ljava/lang/Throwable;)V"
+            )),
+            plain(41, 191, "athrow"),
+            stringConstant(42, "one"),
+            plainOperands(43, 167, "goto", 0, 8),
+            stringConstant(46, "two"),
+            plain(51, 176, "areturn"),
+            invokeVirtual(60, new MethodRef(
+                "java/lang/RuntimeException",
+                "getMessage",
+                "()Ljava/lang/String;"
+            )),
+            plain(61, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).contains(
+            IrInstruction.jump("label_60"),
+            IrInstruction.label("label_60"),
+            IrInstruction.returnObject(IrExpression.stringLiteral("boom"))
+        );
+    }
+
+    @Test
     void lowersLookupSwitchToSelectorLocalBranchesAndDefaultJump() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -8661,11 +8942,16 @@ final class BytecodeToIRTest {
             implementationType("com/acme/MetricImpl", "com/acme/Metric", "value", "()I")
         );
 
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnInt(IrExpression.intCall(
-                symbol("com/acme/MetricImpl", "value", "()I"),
-                List.of(IrExpression.objectLocal("arg0"))
-            ))
+            IrInstruction.assignInt(
+                "int0",
+                IrExpression.intCall(
+                    symbol("com/acme/MetricImpl", "value", "()I"),
+                    List.of(IrExpression.objectLocal("arg0"))
+                )
+            ),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
         );
     }
 
@@ -8688,11 +8974,16 @@ final class BytecodeToIRTest {
             implementationType("com/acme/MetricImpl", "com/acme/Metric", "value", "()J")
         );
 
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.LONG, "long0"));
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnLong(IrExpression.longCall(
-                symbol("com/acme/MetricImpl", "value", "()J"),
-                List.of(IrExpression.objectLocal("arg0"))
-            ))
+            IrInstruction.assignLong(
+                "long0",
+                IrExpression.longCall(
+                    symbol("com/acme/MetricImpl", "value", "()J"),
+                    List.of(IrExpression.objectLocal("arg0"))
+                )
+            ),
+            IrInstruction.returnLong(IrExpression.longLocal("long0"))
         );
     }
 
@@ -8715,11 +9006,16 @@ final class BytecodeToIRTest {
             implementationType("com/acme/MetricImpl", "com/acme/Metric", "value", "()F")
         );
 
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.FLOAT, "float0"));
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnFloat(IrExpression.floatCall(
-                symbol("com/acme/MetricImpl", "value", "()F"),
-                List.of(IrExpression.objectLocal("arg0"))
-            ))
+            IrInstruction.assignFloat(
+                "float0",
+                IrExpression.floatCall(
+                    symbol("com/acme/MetricImpl", "value", "()F"),
+                    List.of(IrExpression.objectLocal("arg0"))
+                )
+            ),
+            IrInstruction.returnFloat(IrExpression.floatLocal("float0"))
         );
     }
 
@@ -8742,11 +9038,16 @@ final class BytecodeToIRTest {
             implementationType("com/acme/MetricImpl", "com/acme/Metric", "value", "()D")
         );
 
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.DOUBLE, "double0"));
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnDouble(IrExpression.doubleCall(
-                symbol("com/acme/MetricImpl", "value", "()D"),
-                List.of(IrExpression.objectLocal("arg0"))
-            ))
+            IrInstruction.assignDouble(
+                "double0",
+                IrExpression.doubleCall(
+                    symbol("com/acme/MetricImpl", "value", "()D"),
+                    List.of(IrExpression.objectLocal("arg0"))
+                )
+            ),
+            IrInstruction.returnDouble(IrExpression.doubleLocal("double0"))
         );
     }
 
@@ -8769,11 +9070,16 @@ final class BytecodeToIRTest {
             implementationType("com/acme/ProviderImpl", "com/acme/Provider", "value", "()Ljava/lang/Object;")
         );
 
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.objectCall(
-                symbol("com/acme/ProviderImpl", "value", "()Ljava/lang/Object;"),
-                List.of(IrExpression.objectLocal("arg0"))
-            ))
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    symbol("com/acme/ProviderImpl", "value", "()Ljava/lang/Object;"),
+                    List.of(IrExpression.objectLocal("arg0"))
+                )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 
@@ -8798,11 +9104,16 @@ final class BytecodeToIRTest {
         );
 
         final String dispatchSymbol = "javan_dispatch_com_acme_Provider_value___Ljava_lang_Object_";
+        assertThat(program.functions().getFirst().locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
         assertThat(program.functions().getFirst().instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.objectCall(
-                dispatchSymbol,
-                List.of(IrExpression.objectLocal("arg0"))
-            ))
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    dispatchSymbol,
+                    List.of(IrExpression.objectLocal("arg0"))
+                )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
         assertThat(program.dispatches()).singleElement().satisfies(dispatch -> {
             assertThat(dispatch.symbol()).isEqualTo(dispatchSymbol);
@@ -8842,11 +9153,16 @@ final class BytecodeToIRTest {
 
         final IrProgram program = lowerProgram(main, base, leaf);
 
+        assertThat(program.functions().getFirst().locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
         assertThat(program.functions().getFirst().instructions()).containsExactly(
-            IrInstruction.returnInt(IrExpression.intCall(
-                "javan_dispatch_com_acme_Base_value___I",
-                List.of(IrExpression.objectLocal("arg0"))
-            ))
+            IrInstruction.assignInt(
+                "int0",
+                IrExpression.intCall(
+                    "javan_dispatch_com_acme_Base_value___I",
+                    List.of(IrExpression.objectLocal("arg0"))
+                )
+            ),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
         );
         assertThat(program.dispatches()).singleElement().satisfies(dispatch -> {
             assertThat(dispatch.symbol()).isEqualTo("javan_dispatch_com_acme_Base_value___I");
@@ -9842,11 +10158,16 @@ final class BytecodeToIRTest {
         final IrProgram program = lowerProgram(main, provider, baseProvider, childProvider, otherProvider);
 
         final String dispatchSymbol = "javan_dispatch_com_acme_Provider_value___Ljava_lang_Object_";
+        assertThat(program.functions().getFirst().locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
         assertThat(program.functions().getFirst().instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.objectCall(
-                dispatchSymbol,
-                List.of(IrExpression.objectLocal("arg0"))
-            ))
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    dispatchSymbol,
+                    List.of(IrExpression.objectLocal("arg0"))
+                )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
         assertThat(program.dispatches()).singleElement().satisfies(dispatch -> {
             assertThat(dispatch.symbol()).isEqualTo(dispatchSymbol);
@@ -15461,11 +15782,16 @@ final class BytecodeToIRTest {
             implementationType("com/acme/BMetric", "com/acme/Metric", "value", "()I")
         );
 
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnInt(IrExpression.intCall(
-                "javan_dispatch_com_acme_Metric_value___I",
-                List.of(IrExpression.objectLocal("arg0"))
-            ))
+            IrInstruction.assignInt(
+                "int0",
+                IrExpression.intCall(
+                    "javan_dispatch_com_acme_Metric_value___I",
+                    List.of(IrExpression.objectLocal("arg0"))
+                )
+            ),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
         );
     }
 
@@ -15489,11 +15815,16 @@ final class BytecodeToIRTest {
             implementationType("com/acme/BMetric", "com/acme/Metric", "value", "()J")
         );
 
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.LONG, "long0"));
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnLong(IrExpression.longCall(
-                "javan_dispatch_com_acme_Metric_value___J",
-                List.of(IrExpression.objectLocal("arg0"))
-            ))
+            IrInstruction.assignLong(
+                "long0",
+                IrExpression.longCall(
+                    "javan_dispatch_com_acme_Metric_value___J",
+                    List.of(IrExpression.objectLocal("arg0"))
+                )
+            ),
+            IrInstruction.returnLong(IrExpression.longLocal("long0"))
         );
     }
 
@@ -15517,11 +15848,16 @@ final class BytecodeToIRTest {
             implementationType("com/acme/BMetric", "com/acme/Metric", "value", "()F")
         );
 
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.FLOAT, "float0"));
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnFloat(IrExpression.floatCall(
-                "javan_dispatch_com_acme_Metric_value___F",
-                List.of(IrExpression.objectLocal("arg0"))
-            ))
+            IrInstruction.assignFloat(
+                "float0",
+                IrExpression.floatCall(
+                    "javan_dispatch_com_acme_Metric_value___F",
+                    List.of(IrExpression.objectLocal("arg0"))
+                )
+            ),
+            IrInstruction.returnFloat(IrExpression.floatLocal("float0"))
         );
     }
 
@@ -15545,11 +15881,16 @@ final class BytecodeToIRTest {
             implementationType("com/acme/BMetric", "com/acme/Metric", "value", "()D")
         );
 
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.DOUBLE, "double0"));
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnDouble(IrExpression.doubleCall(
-                "javan_dispatch_com_acme_Metric_value___D",
-                List.of(IrExpression.objectLocal("arg0"))
-            ))
+            IrInstruction.assignDouble(
+                "double0",
+                IrExpression.doubleCall(
+                    "javan_dispatch_com_acme_Metric_value___D",
+                    List.of(IrExpression.objectLocal("arg0"))
+                )
+            ),
+            IrInstruction.returnDouble(IrExpression.doubleLocal("double0"))
         );
     }
 
@@ -15756,6 +16097,27 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).containsExactly(
             IrInstruction.returnInt(IrExpression.intCall(
                 "javan_string_is_empty",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersStringIsBlankToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/String;)Z",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/String", "isBlank", "()Z")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_string_is_blank",
                 List.of(IrExpression.objectLocal("arg0"))
             ))
         );
@@ -20072,6 +20434,27 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersMathRoundFloatToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(F)I",
+            1,
+            1,
+            plain(0, 34, "fload_0"),
+            invokeStatic(1, new MethodRef("java/lang/Math", "round", "(F)I")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_math_round_float",
+                List.of(IrExpression.floatLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
     void lowersMathAbsLongToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -20264,6 +20647,50 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersMathMinFloatToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(FF)F",
+            2,
+            2,
+            plain(0, 34, "fload_0"),
+            plain(1, 35, "fload_1"),
+            invokeStatic(2, new MethodRef("java/lang/Math", "min", "(FF)F")),
+            plain(3, 174, "freturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnFloat(IrExpression.floatCall(
+                "javan_math_min_float",
+                List.of(IrExpression.floatLocal("arg0"), IrExpression.floatLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersMathMinDoubleToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(DD)D",
+            4,
+            4,
+            plain(0, 38, "dload_0"),
+            plain(1, 40, "dload_2"),
+            invokeStatic(2, new MethodRef("java/lang/Math", "min", "(DD)D")),
+            plain(3, 175, "dreturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnDouble(IrExpression.doubleCall(
+                "javan_math_min_double",
+                List.of(IrExpression.doubleLocal("arg0"), IrExpression.doubleLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
     void lowersMathMaxIntToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -20308,6 +20735,50 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersMathMaxFloatToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(FF)F",
+            2,
+            2,
+            plain(0, 34, "fload_0"),
+            plain(1, 35, "fload_1"),
+            invokeStatic(2, new MethodRef("java/lang/Math", "max", "(FF)F")),
+            plain(3, 174, "freturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnFloat(IrExpression.floatCall(
+                "javan_math_max_float",
+                List.of(IrExpression.floatLocal("arg0"), IrExpression.floatLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersMathMaxDoubleToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(DD)D",
+            4,
+            4,
+            plain(0, 38, "dload_0"),
+            plain(1, 40, "dload_2"),
+            invokeStatic(2, new MethodRef("java/lang/Math", "max", "(DD)D")),
+            plain(3, 175, "dreturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnDouble(IrExpression.doubleCall(
+                "javan_math_max_double",
+                List.of(IrExpression.doubleLocal("arg0"), IrExpression.doubleLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
     void lowersMathToIntExactToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -20322,6 +20793,90 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).containsExactly(
             IrInstruction.returnInt(IrExpression.intCall("javan_math_to_int_exact", List.of(IrExpression.longLocal("arg0"))))
+        );
+    }
+
+    @Test
+    void lowersMathAddExactIntToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(II)I",
+            2,
+            2,
+            plain(0, 26, "iload_0"),
+            plain(1, 27, "iload_1"),
+            invokeStatic(2, new MethodRef("java/lang/Math", "addExact", "(II)I")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).contains(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_math_add_exact_int",
+                List.of(IrExpression.intLocal("int0"), IrExpression.intLocal("int1"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersMathMultiplyExactLongIntToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(JI)J",
+            3,
+            3,
+            plain(0, 30, "lload_0"),
+            plain(1, 28, "iload_2"),
+            invokeStatic(2, new MethodRef("java/lang/Math", "multiplyExact", "(JI)J")),
+            plain(3, 173, "lreturn")
+        ));
+
+        assertThat(function.instructions()).contains(
+            IrInstruction.assignLong("long0", IrExpression.longLocal("arg0")),
+            IrInstruction.assignInt("int1", IrExpression.intLocal("arg1")),
+            IrInstruction.assignInt(
+                "int2",
+                IrExpression.intCall(
+                    "javan_math_multiply_exact_long_int_overflows",
+                    List.of(IrExpression.longLocal("long0"), IrExpression.intLocal("int1"))
+                )
+            ),
+            IrInstruction.returnLong(IrExpression.longCall(
+                "javan_math_multiply_exact_long_int",
+                List.of(IrExpression.longLocal("long0"), IrExpression.intLocal("int1"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersMathMultiplyExactLongLongToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(JJ)J",
+            4,
+            4,
+            plain(0, 30, "lload_0"),
+            plain(1, 32, "lload_2"),
+            invokeStatic(2, new MethodRef("java/lang/Math", "multiplyExact", "(JJ)J")),
+            plain(3, 173, "lreturn")
+        ));
+
+        assertThat(function.instructions()).contains(
+            IrInstruction.assignLong("long0", IrExpression.longLocal("arg0")),
+            IrInstruction.assignLong("long1", IrExpression.longLocal("arg1")),
+            IrInstruction.assignInt(
+                "int2",
+                IrExpression.intCall(
+                    "javan_math_multiply_exact_long_long_overflows",
+                    List.of(IrExpression.longLocal("long0"), IrExpression.longLocal("long1"))
+                )
+            ),
+            IrInstruction.returnLong(IrExpression.longCall(
+                "javan_math_multiply_exact_long_long",
+                List.of(IrExpression.longLocal("long0"), IrExpression.longLocal("long1"))
+            ))
         );
     }
 
@@ -20451,6 +21006,50 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersLongCompareInJavaOperandOrder() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(JJ)I",
+            4,
+            4,
+            plain(0, 30, "lload_0"),
+            plain(1, 32, "lload_2"),
+            invokeStatic(2, new MethodRef("java/lang/Long", "compare", "(JJ)I")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_lcmp",
+                List.of(IrExpression.longLocal("arg0"), IrExpression.longLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersLongCompareUnsignedInJavaOperandOrder() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(JJ)I",
+            4,
+            4,
+            plain(0, 30, "lload_0"),
+            plain(1, 32, "lload_2"),
+            invokeStatic(2, new MethodRef("java/lang/Long", "compareUnsigned", "(JJ)I")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_long_compare_unsigned",
+                List.of(IrExpression.longLocal("arg0"), IrExpression.longLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
     void lowersBooleanToStringToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -20501,6 +21100,27 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).containsExactly(
             IrInstruction.returnFloat(IrExpression.floatCall("javan_float_int_bits_to_float", List.of(IrExpression.intLocal("arg0"))))
+        );
+    }
+
+    @Test
+    void lowersFloatToRawIntBitsToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(F)I",
+            1,
+            1,
+            plain(0, 34, "fload_0"),
+            invokeStatic(1, new MethodRef("java/lang/Float", "floatToRawIntBits", "(F)I")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_float_to_raw_int_bits",
+                List.of(IrExpression.floatLocal("arg0"))
+            ))
         );
     }
 
@@ -21080,6 +21700,63 @@ final class BytecodeToIRTest {
                 "javan_arrays_copy_of_range_byte",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.intLiteral(1), IrExpression.intLiteral(2))
             ))
+        );
+    }
+
+    @Test
+    void lowersWholeByteArrayFillToStatusRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "([B)V",
+            2,
+            1,
+            plain(0, 42, "aload_0"),
+            plain(1, 8, "iconst_5"),
+            invokeStatic(2, new MethodRef("java/util/Arrays", "fill", "([BB)V")),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.instructions().getFirst()).isEqualTo(
+            IrInstruction.assignInt(
+                "int0",
+                IrExpression.intCall(
+                    "javan_arrays_fill_byte",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.intLiteral(5))
+                )
+            )
+        );
+    }
+
+    @Test
+    void lowersRangedByteArrayFillToStatusRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "([B)V",
+            4,
+            1,
+            plain(0, 42, "aload_0"),
+            plain(1, 4, "iconst_1"),
+            plain(2, 5, "iconst_2"),
+            plain(3, 8, "iconst_5"),
+            invokeStatic(4, new MethodRef("java/util/Arrays", "fill", "([BIIB)V")),
+            plain(5, 177, "return")
+        ));
+
+        assertThat(function.instructions().getFirst()).isEqualTo(
+            IrInstruction.assignInt(
+                "int0",
+                IrExpression.intCall(
+                    "javan_arrays_fill_range_byte",
+                    List.of(
+                        IrExpression.objectLocal("arg0"),
+                        IrExpression.intLiteral(1),
+                        IrExpression.intLiteral(2),
+                        IrExpression.intLiteral(5)
+                    )
+                )
+            )
         );
     }
 
@@ -27317,6 +27994,165 @@ final class BytecodeToIRTest {
             )),
             invokeVirtual(3, new MethodRef("java/util/Optional", "map", "(Ljava/util/function/Function;)Ljava/util/Optional;")),
             plain(4, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo optionalBoundInstanceMapLambdaMethod() {
+        return method(
+            0x0008,
+            "mapBoundValue",
+            "(Lcom/acme/Main;Ljava/lang/Object;Ljava/util/Optional;)Ljava/util/Optional;",
+            3,
+            3,
+            plain(0, 44, "aload_2"),
+            plain(1, 42, "aload_0"),
+            plain(2, 43, "aload_1"),
+            invokeDynamic(3, new DynamicRef(
+                "apply",
+                "(Lcom/acme/Main;Ljava/lang/Object;)Ljava/util/function/Function;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "invokevirtual com/acme/Main.lambda$map$0:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+                    "(Ljava/lang/Object;)Ljava/lang/Object;"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                    BootstrapArgument.methodHandle(
+                        5,
+                        new MethodRef(
+                            "com/acme/Main",
+                            "lambda$map$0",
+                            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"
+                        )
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;")
+                )
+            )),
+            invokeVirtual(4, new MethodRef(
+                "java/util/Optional",
+                "map",
+                "(Ljava/util/function/Function;)Ljava/util/Optional;"
+            )),
+            plain(7, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo optionalBoundInstanceMapLambdaImplementationMethod() {
+        return method(
+            0,
+            "lambda$map$0",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+            1,
+            3,
+            plain(0, 44, "aload_2"),
+            plain(1, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo optionalUnboundInstanceMapReferenceMethod() {
+        return method(
+            0x0008,
+            "mapRow",
+            "(Ljava/util/Optional;)Ljava/util/Optional;",
+            2,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeDynamic(1, new DynamicRef(
+                "apply",
+                "()Ljava/util/function/Function;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "invokevirtual com/acme/Row.key:()Ljava/lang/Object;",
+                    "(Lcom/acme/Row;)Ljava/lang/Object;"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                    BootstrapArgument.methodHandle(
+                        5,
+                        new MethodRef("com/acme/Row", "key", "()Ljava/lang/Object;")
+                    ),
+                    BootstrapArgument.methodType("(Lcom/acme/Row;)Ljava/lang/Object;")
+                )
+            )),
+            invokeVirtual(2, new MethodRef(
+                "java/util/Optional",
+                "map",
+                "(Ljava/util/function/Function;)Ljava/util/Optional;"
+            )),
+            plain(5, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo optionalUnboundInstanceLongMapReferenceMethod() {
+        return method(
+            0x0008,
+            "mapRowAmount",
+            "(Ljava/util/Optional;)Ljava/util/Optional;",
+            2,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeDynamic(1, new DynamicRef(
+                "apply",
+                "()Ljava/util/function/Function;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "invokevirtual com/acme/Row.amount:()J",
+                    "(Lcom/acme/Row;)Ljava/lang/Long;"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                    BootstrapArgument.methodHandle(
+                        5,
+                        new MethodRef("com/acme/Row", "amount", "()J")
+                    ),
+                    BootstrapArgument.methodType("(Lcom/acme/Row;)Ljava/lang/Long;")
+                )
+            )),
+            invokeVirtual(2, new MethodRef(
+                "java/util/Optional",
+                "map",
+                "(Ljava/util/function/Function;)Ljava/util/Optional;"
+            )),
+            plain(5, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo rowKeyMethod() {
+        return method(
+            0,
+            "key",
+            "()Ljava/lang/Object;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            plain(1, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo rowAmountMethod() {
+        return method(
+            0,
+            "amount",
+            "()J",
+            2,
+            1,
+            plain(0, 10, "lconst_1"),
+            plain(1, 173, "lreturn")
         );
     }
 

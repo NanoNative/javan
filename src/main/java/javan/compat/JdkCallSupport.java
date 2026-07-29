@@ -36,6 +36,8 @@ public final class JdkCallSupport {
         {"java/lang/IllegalMonitorStateException", "java/lang/RuntimeException"},
         {"java/lang/IllegalStateException", "java/lang/RuntimeException"},
         {"java/lang/IllegalThreadStateException", "java/lang/RuntimeException"},
+        {"java/lang/MatchException", "java/lang/RuntimeException"},
+        {"java/lang/ArrayIndexOutOfBoundsException", "java/lang/IndexOutOfBoundsException"},
         {"java/lang/IndexOutOfBoundsException", "java/lang/RuntimeException"},
         {"java/lang/NegativeArraySizeException", "java/lang/RuntimeException"},
         {"java/lang/NullPointerException", "java/lang/RuntimeException"},
@@ -78,8 +80,11 @@ public final class JdkCallSupport {
         intrinsic("Objects.nonNull", "java/util/Objects", "nonNull", "(Ljava/lang/Object;)Z"),
         intrinsic("Objects.toString", "java/util/Objects", "toString", "(Ljava/lang/Object;)Ljava/lang/String;", "(Ljava/lang/Object;Ljava/lang/String;)Ljava/lang/String;"),
         intrinsic("Math.abs", "java/lang/Math", "abs", "(I)I", "(J)J", "(F)F", "(D)D"),
-        intrinsic("Math.min", "java/lang/Math", "min", "(II)I", "(JJ)J"),
-        intrinsic("Math.max", "java/lang/Math", "max", "(II)I", "(JJ)J"),
+        intrinsic("Math.round", "java/lang/Math", "round", "(F)I"),
+        intrinsic("Math.min", "java/lang/Math", "min", "(II)I", "(JJ)J", "(FF)F", "(DD)D"),
+        intrinsic("Math.max", "java/lang/Math", "max", "(II)I", "(JJ)J", "(FF)F", "(DD)D"),
+        intrinsic("Math.addExact", "java/lang/Math", "addExact", "(II)I"),
+        intrinsic("Math.multiplyExact", "java/lang/Math", "multiplyExact", "(JI)J", "(JJ)J"),
         intrinsic("Math.toIntExact", "java/lang/Math", "toIntExact", "(J)I"),
         intrinsic("System.nanoTime", "java/lang/System", "nanoTime", "()J"),
         intrinsic("System.currentTimeMillis", "java/lang/System", "currentTimeMillis", "()J"),
@@ -257,6 +262,7 @@ public final class JdkCallSupport {
             "([BII)[B",
             "([Ljava/lang/Object;II)[Ljava/lang/Object;"
         ),
+        intrinsic("Arrays.fill", "java/util/Arrays", "fill", "([BB)V", "([BIIB)V"),
         intrinsic("Integer.toString", "java/lang/Integer", "toString", "(I)Ljava/lang/String;"),
         runtime("Integer.toString.instance", "java/lang/Integer", "toString", "()Ljava/lang/String;"),
         runtime("Integer.valueOf", "java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;"),
@@ -274,6 +280,8 @@ public final class JdkCallSupport {
             "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Integer;",
             "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Object;"
         ),
+        intrinsic("Long.compare", "java/lang/Long", "compare", "(JJ)I"),
+        intrinsic("Long.compareUnsigned", "java/lang/Long", "compareUnsigned", "(JJ)I"),
         intrinsic("Long.toString", "java/lang/Long", "toString", "(J)Ljava/lang/String;"),
         runtime("Long.toString.instance", "java/lang/Long", "toString", "()Ljava/lang/String;"),
         runtime("Long.valueOf", "java/lang/Long", "valueOf", "(J)Ljava/lang/Long;"),
@@ -309,6 +317,7 @@ public final class JdkCallSupport {
             "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Object;"
         ),
         intrinsic("Float.intBitsToFloat", "java/lang/Float", "intBitsToFloat", "(I)F"),
+        intrinsic("Float.floatToRawIntBits", "java/lang/Float", "floatToRawIntBits", "(F)I"),
         intrinsic("Double.toString", "java/lang/Double", "toString", "(D)Ljava/lang/String;"),
         runtime("Double.toString.instance", "java/lang/Double", "toString", "()Ljava/lang/String;"),
         runtime("Double.valueOf", "java/lang/Double", "valueOf", "(D)Ljava/lang/Double;"),
@@ -376,6 +385,7 @@ public final class JdkCallSupport {
         runtime("String.length", "java/lang/String", "length", "()I"),
         runtime("String.hashCode", "java/lang/String", "hashCode", "()I"),
         runtime("String.isEmpty", "java/lang/String", "isEmpty", "()Z"),
+        runtime("String.isBlank", "java/lang/String", "isBlank", "()Z"),
         runtime("String.charAt", "java/lang/String", "charAt", "(I)C"),
         runtime("String.indexOf", "java/lang/String", "indexOf", "(I)I"),
         runtime("String.indexOf", "java/lang/String", "indexOf", "(II)I"),
@@ -1653,6 +1663,22 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Checks for the Java compiler's exact synthetic exhaustive-switch exception constructor.
+     *
+     * @param methodRef method reference
+     * @return true only for {@code MatchException(String, Throwable)}
+     */
+    public static boolean isMatchExceptionCauseConstructor(final MethodRef methodRef) {
+        if (!"java/lang/MatchException".equals(methodRef.owner())) {
+            return false;
+        }
+        if (!"<init>".equals(methodRef.name())) {
+            return false;
+        }
+        return "(Ljava/lang/String;Ljava/lang/Throwable;)V".equals(methodRef.descriptor());
+    }
+
+    /**
      * Checks whether a supported platform throwable can be caught by the requested catch type.
      *
      * @param thrownType JVM internal name for the directly thrown type
@@ -1875,6 +1901,9 @@ public final class JdkCallSupport {
     private static boolean isSupportedThrowableCall(final MethodRef methodRef) {
         if (!isPlatformThrowable(methodRef.owner())) {
             return false;
+        }
+        if (isMatchExceptionCauseConstructor(methodRef)) {
+            return true;
         }
         if ("<init>".equals(methodRef.name()) && "()V".equals(methodRef.descriptor())) {
             return true;

@@ -1267,9 +1267,27 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksStringIsBlankAsExplicitRejected() {
+    void marksStringIsBlankAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/String", "isBlank", "()Z")))
-            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksFloatToRawIntBitsAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Float", "floatToRawIntBits", "(F)I")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksMathMultiplyExactLongIntAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Math", "multiplyExact", "(JI)J")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksMathMultiplyExactLongLongAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Math", "multiplyExact", "(JJ)J")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test

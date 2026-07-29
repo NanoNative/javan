@@ -36,6 +36,518 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void materializedLambdaKindPredicateDistinguishesRuntimeAndConcreteObjects() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                void* lambda = 0;
+                void* concrete = 0;
+                void** roots[] = {
+                    (void**) &lambda,
+                    (void**) &concrete
+                };
+                javan_register_static_roots(0, 0);
+                javan_root_frame_push(roots, 2);
+                lambda = javan_materialized_lambda_new(1);
+                concrete = javan_integer_value_of(7);
+                printf(
+                    "%d:%d:%d\\n",
+                    javan_materialized_lambda_is_instance(lambda),
+                    javan_materialized_lambda_is_instance(concrete),
+                    javan_materialized_lambda_is_instance(0)
+                );
+                javan_root_frame_pop(roots);
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("1:0:0\n");
+    }
+
+    @Test
+    void materializedLambdaWrapperStateAndCapturesAreCollectible() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                void* capture = 0;
+                void* lambda = 0;
+                void** roots[] = {
+                    (void**) &capture,
+                    (void**) &lambda
+                };
+                javan_register_static_roots(0, 0);
+                javan_root_frame_push(roots, 2);
+                capture = javan_integer_value_of(7);
+                lambda = javan_materialized_lambda_new_with_captures(1, 1, capture);
+                javan_root_frame_pop(roots);
+                javan_gc_collect();
+                javan_validate_heap_metadata();
+                printf("%lu\\n", javan_heap_live_allocations());
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("0\n");
+    }
+
+    @Test
+    void materializedLambdaRootsVarargsCapturesAcrossForcedCollection() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                void* capture = 0;
+                void* lambda = 0;
+                void** capture_roots[] = {
+                    (void**) &capture
+                };
+                void** lambda_roots[] = {
+                    (void**) &lambda
+                };
+                javan_register_static_roots(0, 0);
+                javan_root_frame_push(capture_roots, 1);
+                capture = javan_integer_value_of(7);
+                for (int index = 0; index < 8; index++) {
+                    (void) javan_integer_value_of(index + 100);
+                }
+                javan_root_frame_pop(capture_roots);
+                unsigned long before = javan_heap_gc_collections();
+                lambda = javan_materialized_lambda_new_with_captures(1, 1, capture);
+                javan_root_frame_push(lambda_roots, 1);
+                printf(
+                    "%d:%d\\n",
+                    javan_heap_gc_collections() > before,
+                    javan_integer_int_value(javan_materialized_lambda_capture(lambda, 0))
+                );
+                javan_root_frame_pop(lambda_roots);
+                return 0;
+            }
+            """,
+            "64"
+        );
+
+        assertThat(stdout).isEqualTo("1:7\n");
+    }
+
+    @Test
+    void materializedLambdaRejectsNegativeCaptureCountBeforeVarargsRead() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            """
+            javan_register_static_roots(0, 0);
+            """,
+            """
+            (void) javan_materialized_lambda_new_with_captures(1, -1);
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid materialized lambda capture count\n");
+    }
+
+    @Test
+    void materializedLambdaRejectsCaptureCountAboveRuntimeBoundBeforeVarargsRead() throws Exception {
+        final String nullCaptures = ", (void*) 0".repeat(256);
+        final String stdout = runRuntimePanicProbe(
+            """
+            javan_register_static_roots(0, 0);
+            """,
+            "(void) javan_materialized_lambda_new_with_captures(1, 256" + nullCaptures + ");"
+        );
+
+        assertThat(stdout).isEqualTo("invalid materialized lambda capture count\n");
+    }
+
+    @Test
+    void materializedLambdaRejectsMaximumIntegerCaptureCountBeforePointerSizeMultiplication() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            """
+            javan_register_static_roots(0, 0);
+            """,
+            """
+            (void) javan_materialized_lambda_new_with_captures(1, INT_MAX);
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid materialized lambda capture count\n");
+    }
+
+    @Test
+    void materializedLambdaHeapValidationRejectsUndersizedCaptureBufferBeforeIteration() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            """
+            static void* state_value = 0;
+            static void** roots[] = {
+                (void**) &state_value
+            };
+            javan_register_static_roots(roots, 1);
+            void* capture = javan_integer_value_of(7);
+            void* lambda = javan_materialized_lambda_new_with_captures(1, 1, capture);
+            state_value = ((struct javan_object_header*) lambda)->_javan_runtime_state;
+            javan_gc_collect();
+            materialized_lambda_state_probe* state = (materialized_lambda_state_probe*) state_value;
+            state->capture_count = 2;
+            """,
+            """
+            javan_validate_heap_metadata();
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid materialized lambda metadata\n");
+    }
+
+    @Test
+    void materializedLambdaGcRejectsUndersizedCaptureBufferBeforeIteration() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            """
+            static void* state_value = 0;
+            static void** roots[] = {
+                (void**) &state_value
+            };
+            javan_register_static_roots(roots, 1);
+            void* capture = javan_integer_value_of(7);
+            void* lambda = javan_materialized_lambda_new_with_captures(1, 1, capture);
+            state_value = ((struct javan_object_header*) lambda)->_javan_runtime_state;
+            javan_gc_collect();
+            materialized_lambda_state_probe* state = (materialized_lambda_state_probe*) state_value;
+            state->capture_count = 2;
+            """,
+            """
+            javan_gc_collect();
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid materialized lambda metadata\n");
+    }
+
+    @Test
+    void materializedLambdaTargetHelperRejectsShortString() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            """
+            static void* value = 0;
+            static void** roots[] = {
+                (void**) &value
+            };
+            javan_register_static_roots(roots, 1);
+            value = javan_string_from("x");
+            """,
+            """
+            (void) javan_materialized_lambda_target_id(value);
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid materialized lambda target\n");
+    }
+
+    @Test
+    void materializedLambdaCaptureHelperRejectsShortString() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            """
+            static void* value = 0;
+            static void** roots[] = {
+                (void**) &value
+            };
+            javan_register_static_roots(roots, 1);
+            value = javan_string_from("x");
+            """,
+            """
+            (void) javan_materialized_lambda_capture(value, 0);
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid materialized lambda capture\n");
+    }
+
+    @Test
+    void materializedLambdaTargetHelperRejectsOwnedCaptureBuffer() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            """
+            static void* capture = 0;
+            static void* lambda = 0;
+            static void** roots[] = {
+                (void**) &capture,
+                (void**) &lambda
+            };
+            javan_register_static_roots(roots, 2);
+            capture = javan_integer_value_of(7);
+            lambda = javan_materialized_lambda_new_with_captures(1, 1, capture);
+            materialized_lambda_state_probe* state =
+                (materialized_lambda_state_probe*) ((struct javan_object_header*) lambda)->_javan_runtime_state;
+            void* value = (void*) state->captures;
+            """,
+            """
+            (void) javan_materialized_lambda_target_id(value);
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid materialized lambda target\n");
+    }
+
+    @Test
+    void materializedLambdaCaptureHelperRejectsOwnedCaptureBuffer() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            """
+            static void* capture = 0;
+            static void* lambda = 0;
+            static void** roots[] = {
+                (void**) &capture,
+                (void**) &lambda
+            };
+            javan_register_static_roots(roots, 2);
+            capture = javan_integer_value_of(7);
+            lambda = javan_materialized_lambda_new_with_captures(1, 1, capture);
+            materialized_lambda_state_probe* state =
+                (materialized_lambda_state_probe*) ((struct javan_object_header*) lambda)->_javan_runtime_state;
+            void* value = (void*) state->captures;
+            """,
+            """
+            (void) javan_materialized_lambda_capture(value, 0);
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid materialized lambda capture\n");
+    }
+
+    @Test
+    void materializedLambdaTargetHelperRejectsStateNode() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            """
+            static void* capture = 0;
+            static void* lambda = 0;
+            static void** roots[] = {
+                (void**) &capture,
+                (void**) &lambda
+            };
+            javan_register_static_roots(roots, 2);
+            capture = javan_integer_value_of(7);
+            lambda = javan_materialized_lambda_new_with_captures(1, 1, capture);
+            void* value = ((struct javan_object_header*) lambda)->_javan_runtime_state;
+            """,
+            """
+            (void) javan_materialized_lambda_target_id(value);
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid materialized lambda target\n");
+    }
+
+    @Test
+    void materializedLambdaCaptureHelperRejectsStateNode() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            """
+            static void* capture = 0;
+            static void* lambda = 0;
+            static void** roots[] = {
+                (void**) &capture,
+                (void**) &lambda
+            };
+            javan_register_static_roots(roots, 2);
+            capture = javan_integer_value_of(7);
+            lambda = javan_materialized_lambda_new_with_captures(1, 1, capture);
+            void* value = ((struct javan_object_header*) lambda)->_javan_runtime_state;
+            """,
+            """
+            (void) javan_materialized_lambda_capture(value, 0);
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid materialized lambda capture\n");
+    }
+
+    @Test
+    void materializedLambdaTargetHelperRejectsStaleManagedValue() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            """
+            javan_register_static_roots(0, 0);
+            void* value = javan_string_from("stale");
+            javan_gc_collect();
+            """,
+            """
+            (void) javan_materialized_lambda_target_id(value);
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid materialized lambda target\n");
+    }
+
+    @Test
+    void materializedLambdaCaptureHelperRejectsStaleManagedValue() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            """
+            javan_register_static_roots(0, 0);
+            void* value = javan_string_from("stale");
+            javan_gc_collect();
+            """,
+            """
+            (void) javan_materialized_lambda_capture(value, 0);
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid materialized lambda capture\n");
+    }
+
+    @Test
+    void materializedLambdaTargetHelperRejectsUnmanagedValue() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            """
+            javan_register_static_roots(0, 0);
+            void* value = (void*) 1;
+            """,
+            """
+            (void) javan_materialized_lambda_target_id(value);
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid materialized lambda target\n");
+    }
+
+    @Test
+    void materializedLambdaCaptureHelperRejectsUnmanagedValue() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            """
+            javan_register_static_roots(0, 0);
+            void* value = (void*) 1;
+            """,
+            """
+            (void) javan_materialized_lambda_capture(value, 0);
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid materialized lambda capture\n");
+    }
+
+    @Test
+    void materializedLambdaTargetHelperRejectsPartiallyBuiltWrapper() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            """
+            static void* capture = 0;
+            static void* lambda = 0;
+            static void* value = 0;
+            static void** roots[] = {
+                (void**) &capture,
+                (void**) &lambda,
+                (void**) &value
+            };
+            javan_register_static_roots(roots, 3);
+            capture = javan_integer_value_of(7);
+            lambda = javan_materialized_lambda_new_with_captures(1, 1, capture);
+            value = javan_alloc(sizeof(struct javan_object_header));
+            ((struct javan_object_header*) value)->_javan_runtime_state =
+                ((struct javan_object_header*) lambda)->_javan_runtime_state;
+            ((struct javan_object_header*) value)->_javan_runtime_kind =
+                JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA;
+            """,
+            """
+            (void) javan_materialized_lambda_target_id(value);
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid materialized lambda target\n");
+    }
+
+    @Test
+    void materializedLambdaCaptureHelperRejectsPartiallyBuiltWrapper() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            """
+            static void* capture = 0;
+            static void* lambda = 0;
+            static void* value = 0;
+            static void** roots[] = {
+                (void**) &capture,
+                (void**) &lambda,
+                (void**) &value
+            };
+            javan_register_static_roots(roots, 3);
+            capture = javan_integer_value_of(7);
+            lambda = javan_materialized_lambda_new_with_captures(1, 1, capture);
+            value = javan_alloc(sizeof(struct javan_object_header));
+            ((struct javan_object_header*) value)->_javan_runtime_state =
+                ((struct javan_object_header*) lambda)->_javan_runtime_state;
+            ((struct javan_object_header*) value)->_javan_runtime_kind =
+                JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA;
+            """,
+            """
+            (void) javan_materialized_lambda_capture(value, 0);
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid materialized lambda capture\n");
+    }
+
+    @Test
+    void materializedLambdaHelpersRemainSafeDuringConcurrentCollection() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <pthread.h>
+            #include <stdatomic.h>
+            #include <stdio.h>
+
+            static void* lambda_value = 0;
+            static void* capture_value = 0;
+            static _Atomic int failures = 0;
+            static void** static_roots[] = {
+                (void**) &lambda_value,
+                (void**) &capture_value
+            };
+
+            static void* read_lambda(void* ignored) {
+                (void) ignored;
+                for (int index = 0; index < 20000; index++) {
+                    if (javan_materialized_lambda_is_instance(lambda_value) == 0
+                        || javan_materialized_lambda_target_id(lambda_value) != 1
+                        || javan_materialized_lambda_capture(lambda_value, 0) != capture_value) {
+                        atomic_store(&failures, 1);
+                        return 0;
+                    }
+                }
+                return 0;
+            }
+
+            static void* collect_heap(void* ignored) {
+                (void) ignored;
+                for (int index = 0; index < 20000; index++) {
+                    (void) javan_integer_value_of(index);
+                    javan_gc_collect();
+                }
+                return 0;
+            }
+
+            int main(void) {
+                pthread_t reader;
+                pthread_t collector;
+                javan_register_static_roots(static_roots, 2);
+                capture_value = javan_integer_value_of(7);
+                lambda_value = javan_materialized_lambda_new_with_captures(1, 1, capture_value);
+                if (pthread_create(&reader, 0, read_lambda, 0) != 0
+                    || pthread_create(&collector, 0, collect_heap, 0) != 0) {
+                    return 2;
+                }
+                (void) pthread_join(reader, 0);
+                (void) pthread_join(collector, 0);
+                printf("%d\\n", atomic_load(&failures));
+                return 0;
+            }
+            """,
+            "4096",
+            Map.of(),
+            java.time.Duration.ofSeconds(60)
+        );
+
+        assertThat(stdout).isEqualTo("0\n");
+    }
+
+    @Test
     void resourceSectionEscapesNonPrintableResourcePathsWithoutStringFormat() throws Exception {
         final Path source = Files.write(tempDir.resolve("raw.bin"), new byte[]{1});
 
@@ -6259,6 +6771,256 @@ final class RuntimeFilesTest {
     }
 
     private record RuntimeProbeOutput(String stdout, String stderr) {
+    }
+
+    @Test
+    void stringIsBlankRejectsNullReceiver() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            "javan_register_static_roots(0, 0);",
+            "(void) javan_string_is_blank(NULL);"
+        );
+
+        assertThat(stdout).isEqualTo("null string\n");
+    }
+
+    @Test
+    void stringIsBlankRejectsTruncatedUtf8() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            "javan_register_static_roots(0, 0);",
+            """
+            const char value[] = {(char) 0xe2, (char) 0x80, 0};
+            (void) javan_string_is_blank(value);
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid UTF-8 string\n");
+    }
+
+    @Test
+    void stringIsBlankRejectsOverlongUtf8() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            "javan_register_static_roots(0, 0);",
+            """
+            const char value[] = {(char) 0xc0, (char) 0x80, 0};
+            (void) javan_string_is_blank(value);
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid UTF-8 string\n");
+    }
+
+    @Test
+    void stringIsBlankRejectsInvalidUtf8Continuation() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            "javan_register_static_roots(0, 0);",
+            """
+            const char value[] = {(char) 0xe2, ' ', (char) 0x80, 0};
+            (void) javan_string_is_blank(value);
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid UTF-8 string\n");
+    }
+
+    @Test
+    void stringIsBlankRejectsOutOfRangeUtf8() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            "javan_register_static_roots(0, 0);",
+            """
+            const char value[] = {(char) 0xf4, (char) 0x90, (char) 0x80, (char) 0x80, 0};
+            (void) javan_string_is_blank(value);
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid UTF-8 string\n");
+    }
+
+    @Test
+    void stringIsBlankRejectsOverlongThreeByteUtf8() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            "javan_register_static_roots(0, 0);",
+            """
+            const char value[] = {(char) 0xe0, (char) 0x80, (char) 0x80, 0};
+            (void) javan_string_is_blank(value);
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid UTF-8 string\n");
+    }
+
+    @Test
+    void stringIsBlankRejectsOverlongFourByteUtf8() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            "javan_register_static_roots(0, 0);",
+            """
+            const char value[] = {(char) 0xf0, (char) 0x80, (char) 0x80, (char) 0x80, 0};
+            (void) javan_string_is_blank(value);
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid UTF-8 string\n");
+    }
+
+    @Test
+    void stringIsBlankRejectsInvalidThirdUtf8Continuation() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            "javan_register_static_roots(0, 0);",
+            """
+            const char value[] = {(char) 0xe2, (char) 0x80, ' ', 0};
+            (void) javan_string_is_blank(value);
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid UTF-8 string\n");
+    }
+
+    @Test
+    void stringIsBlankRejectsInvalidFourthUtf8Continuation() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            "javan_register_static_roots(0, 0);",
+            """
+            const char value[] = {(char) 0xf0, (char) 0x90, (char) 0x80, ' ', 0};
+            (void) javan_string_is_blank(value);
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid UTF-8 string\n");
+    }
+
+    @Test
+    void floatToRawIntBitsPreservesQuietNanPayload() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                float value = javan_float_int_bits_to_float(0x7fc01234);
+                printf("%08x\\n", (unsigned int) javan_float_to_raw_int_bits(value));
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("7fc01234\n");
+    }
+
+    @Test
+    void multiplyExactLongIntDetectsMinimumTimesNegativeOne() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <limits.h>
+            #include <stdio.h>
+
+            int main(void) {
+                printf("%d\\n", javan_math_multiply_exact_long_int_overflows(LLONG_MIN, -1));
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("1\n");
+    }
+
+    @Test
+    void multiplyExactLongLongDetectsMinimumTimesNegativeOne() throws Exception {
+        assertThat(multiplyExactLongLongOverflow("LLONG_MIN", "-1LL")).isEqualTo("1\n");
+    }
+
+    @Test
+    void multiplyExactLongLongAcceptsPositiveThreshold() throws Exception {
+        assertThat(multiplyExactLongLongOverflow("LLONG_MAX / 3LL", "3LL")).isEqualTo("0\n");
+    }
+
+    @Test
+    void multiplyExactLongLongRejectsPositiveThresholdOverflow() throws Exception {
+        assertThat(multiplyExactLongLongOverflow("LLONG_MAX / 3LL + 1LL", "3LL")).isEqualTo("1\n");
+    }
+
+    @Test
+    void multiplyExactLongLongAcceptsNegativeThreshold() throws Exception {
+        assertThat(multiplyExactLongLongOverflow("LLONG_MIN / 3LL", "3LL")).isEqualTo("0\n");
+    }
+
+    @Test
+    void multiplyExactLongLongRejectsNegativeThresholdOverflow() throws Exception {
+        assertThat(multiplyExactLongLongOverflow("LLONG_MIN / 3LL - 1LL", "3LL")).isEqualTo("1\n");
+    }
+
+    @Test
+    void multiplyExactLongLongRejectsPositiveTimesNegativeOverflow() throws Exception {
+        assertThat(multiplyExactLongLongOverflow("LLONG_MAX", "-2LL")).isEqualTo("1\n");
+    }
+
+    @Test
+    void multiplyExactLongLongAcceptsPositiveTimesNegative() throws Exception {
+        assertThat(multiplyExactLongLongOverflow("2LL", "-3LL")).isEqualTo("0\n");
+    }
+
+    @Test
+    void multiplyExactLongLongAcceptsNegativeTimesNegative() throws Exception {
+        assertThat(multiplyExactLongLongOverflow("-2LL", "-3LL")).isEqualTo("0\n");
+    }
+
+    @Test
+    void multiplyExactLongLongAcceptsZeroMultiplier() throws Exception {
+        assertThat(multiplyExactLongLongOverflow("LLONG_MIN", "0LL")).isEqualTo("0\n");
+    }
+
+    private String multiplyExactLongLongOverflow(final String left, final String right) throws Exception {
+        return runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <limits.h>
+            #include <stdio.h>
+
+            int main(void) {
+                printf(
+                    "%%d\\n",
+                    javan_math_multiply_exact_long_long_overflows(%s, %s)
+                );
+                return 0;
+            }
+            """.formatted(left, right),
+            "4096"
+        );
+    }
+
+    private String runRuntimePanicProbe(final String setup, final String statement) throws Exception {
+        return runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <limits.h>
+            #include <setjmp.h>
+            #include <stdio.h>
+
+            typedef struct {
+                int magic;
+                int target_id;
+                int capture_count;
+                void** captures;
+            } materialized_lambda_state_probe;
+
+            int main(void) {
+                %s
+                jmp_buf target;
+                javan_panic_set_target(&target);
+                if (setjmp(target) == 0) {
+                    %s
+                    javan_panic_clear_target(&target);
+                    puts("no panic");
+                    return 0;
+                }
+                const char* error = javan_last_error();
+                printf("%%s\\n", error == NULL ? "missing panic" : error);
+                return 0;
+            }
+            """.formatted(setup, statement),
+            "4096"
+        );
     }
 
     private String runRuntimeBoundaryProbe(final String source, final String heapLimitBytes) throws Exception {

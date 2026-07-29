@@ -197,10 +197,37 @@ final class BuildSurfaceTest {
     }
 
     @Test
-    void exportResolverRejectsUnsupportedParameterType() {
-        assertThatThrownBy(() -> new ExportResolver().resolve(Map.of(), tempDir, List.of("com.acme.Api.touch(Object):void")))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessage("Unsupported export type: Object");
+    void exportResolverResolvesObjectAliasParameterType() throws Exception {
+        final ClassFile api = classFile("com/acme/Api", method(0x0008, "touch", "(Ljava/lang/Object;)V"));
+
+        final ExportedMethod export = new ExportResolver()
+            .resolve(Map.of(api.name(), api), tempDir, List.of("com.acme.Api.touch(Object):void"))
+            .getFirst();
+
+        assertThat(export.parameterTypes()).containsExactly(AbiType.OBJECT);
+    }
+
+    @Test
+    void exportResolverResolvesFullyQualifiedObjectAliases() throws Exception {
+        final ClassFile api = classFile(
+            "com/acme/Api",
+            method(0x0008, "identity", "(Ljava/lang/Object;)Ljava/lang/Object;")
+        );
+
+        final ExportedMethod export = new ExportResolver()
+            .resolve(
+                Map.of(api.name(), api),
+                tempDir,
+                List.of("com.acme.Api.identity(java.lang.Object):java.lang.Object")
+            )
+            .getFirst();
+
+        assertThat(List.of(export.parameterTypes().getFirst(), export.returnType()))
+            .containsExactly(AbiType.OBJECT, AbiType.OBJECT);
+    }
+
+    @Test
+    void exportResolverRejectsVoidParameterType() {
         assertThatThrownBy(() -> new ExportResolver().resolve(Map.of(), tempDir, List.of("com.acme.Api.touch(void):void")))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessage("Unsupported export parameter type: void");
@@ -549,17 +576,29 @@ final class BuildSurfaceTest {
     }
 
     @Test
-    void exportResolverRejectsUnsupportedDescriptorTypesFromShortDeclaration() {
+    void exportResolverResolvesObjectDescriptorFromShortDeclaration() throws Exception {
         final ClassFile objectReturn = classFile("com/acme/Api", method(0x0008, "touch", "()Ljava/lang/Object;"));
-        final ClassFile intArrayReturn = classFile("com/acme/Bytes", method(0x0008, "read", "()[I"));
-        final ClassFile unknownReturn = classFile("com/acme/Weird", method(0x0008, "touch", "()Q"));
 
-        assertThatThrownBy(() -> new ExportResolver().resolve(Map.of(objectReturn.name(), objectReturn), tempDir, List.of("com.acme.Api.touch")))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessage("Unsupported export object type: java.lang.Object");
+        final ExportedMethod export = new ExportResolver()
+            .resolve(Map.of(objectReturn.name(), objectReturn), tempDir, List.of("com.acme.Api.touch"))
+            .getFirst();
+
+        assertThat(export.returnType()).isEqualTo(AbiType.OBJECT);
+    }
+
+    @Test
+    void exportResolverRejectsUnsupportedArrayDescriptorFromShortDeclaration() {
+        final ClassFile intArrayReturn = classFile("com/acme/Bytes", method(0x0008, "read", "()[I"));
+
         assertThatThrownBy(() -> new ExportResolver().resolve(Map.of(intArrayReturn.name(), intArrayReturn), tempDir, List.of("com.acme.Bytes.read")))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessage("Unsupported export array descriptor: ()[I");
+    }
+
+    @Test
+    void exportResolverRejectsUnknownDescriptorFromShortDeclaration() {
+        final ClassFile unknownReturn = classFile("com/acme/Weird", method(0x0008, "touch", "()Q"));
+
         assertThatThrownBy(() -> new ExportResolver().resolve(Map.of(unknownReturn.name(), unknownReturn), tempDir, List.of("com.acme.Weird.touch")))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessage("Unsupported export descriptor: ()Q");

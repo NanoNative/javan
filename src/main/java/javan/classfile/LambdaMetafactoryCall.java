@@ -2,6 +2,7 @@ package javan.classfile;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -199,7 +200,7 @@ public record LambdaMetafactoryCall(
     /**
      * Returns whether the lambda is directly lowerable by the current profile.
      *
-     * @return true for the supported function/predicate subset
+     * @return true for the supported function, predicate, and supplier subset
      */
     public boolean isDirectlyLowerable() {
         if (!(isFunction() || isPredicate() || isSupplier())) {
@@ -212,6 +213,114 @@ public record LambdaMetafactoryCall(
             return noInputs(instantiatedMethodDescriptor);
         }
         return inputDescriptor().isPresent();
+    }
+
+    /**
+     * Returns whether the lambda is directly lowerable with the parsed class hierarchy.
+     *
+     * @param classes parsed closed-world classes
+     * @return true when direct invocation preserves the lambda method-handle semantics
+     */
+    public boolean isDirectlyLowerable(final Map<String, ClassFile> classes) {
+        if (isDirectlyLowerable()) {
+            return true;
+        }
+        final ClassFile implementationClass = classes.get(implementation.owner());
+        return implementationClass != null
+            && implementationClass.isFinal()
+            && (isBoundInstanceSupplierLambda()
+                || isBoundInstancePredicateLambda()
+                || isBoundInstanceFunctionLambda()
+                || isUnboundInstanceFunctionReference());
+    }
+
+    private boolean isBoundInstanceSupplierLambda() {
+        if (!isSupplier()
+            || implementationReferenceKind != 5
+            || !objectReturn(implementation.descriptor())
+            || capturedParameterDescriptors.isEmpty()
+            || !("L" + implementation.owner() + ";").equals(capturedParameterDescriptors.getFirst())) {
+            return false;
+        }
+        final List<String> parameters = parameterDescriptors(implementation.descriptor());
+        if (!parametersMatchDescriptor(implementation.descriptor(), parameters)
+            || parameters.size() != capturedParameterDescriptors.size() - 1) {
+            return false;
+        }
+        for (int index = 1; index < capturedParameterDescriptors.size(); index++) {
+            if (!capturedParameterDescriptors.get(index).equals(parameters.get(index - 1))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean isBoundInstancePredicateLambda() {
+        if (!isPredicate()
+            || implementationReferenceKind != 5
+            || !booleanReturn(implementation.descriptor())
+            || capturedParameterDescriptors.isEmpty()
+            || !("L" + implementation.owner() + ";").equals(capturedParameterDescriptors.getFirst())) {
+            return false;
+        }
+        final List<String> parameters = parameterDescriptors(implementation.descriptor());
+        if (!parametersMatchDescriptor(implementation.descriptor(), parameters)
+            || parameters.size() != capturedParameterDescriptors.size()) {
+            return false;
+        }
+        for (int index = 1; index < capturedParameterDescriptors.size(); index++) {
+            if (!sameOrBoundPredicateCompatible(capturedParameterDescriptors.get(index), parameters.get(index - 1))) {
+                return false;
+            }
+        }
+        final Optional<String> input = inputDescriptor();
+        return input.isPresent() && sameOrBoundPredicateCompatible(input.orElseThrow(), parameters.getLast());
+    }
+
+    private boolean isBoundInstanceFunctionLambda() {
+        if (!isFunction()
+            || implementationReferenceKind != 5
+            || !objectReturn(implementation.descriptor())
+            || !hasObjectCaptures()
+            || capturedParameterDescriptors.isEmpty()
+            || !("L" + implementation.owner() + ";").equals(capturedParameterDescriptors.getFirst())) {
+            return false;
+        }
+        final List<String> parameters = parameterDescriptors(implementation.descriptor());
+        if (!parametersMatchDescriptor(implementation.descriptor(), parameters)
+            || parameters.size() != capturedParameterDescriptors.size()) {
+            return false;
+        }
+        for (int index = 1; index < capturedParameterDescriptors.size(); index++) {
+            if (!sameOrObjectCompatible(capturedParameterDescriptors.get(index), parameters.get(index - 1))) {
+                return false;
+            }
+        }
+        final Optional<String> input = inputDescriptor();
+        return input.isPresent() && sameOrObjectCompatible(input.orElseThrow(), parameters.getLast());
+    }
+
+    private boolean isUnboundInstanceFunctionReference() {
+        final boolean supportedReturn = objectReturn(implementation.descriptor())
+            || ("()J".equals(implementation.descriptor())
+                && ("(L" + implementation.owner() + ";)Ljava/lang/Long;").equals(instantiatedMethodDescriptor));
+        if (!isFunction()
+            || implementationReferenceKind != 5
+            || !supportedReturn
+            || !capturedParameterDescriptors.isEmpty()) {
+            return false;
+        }
+        final List<String> parameters = parameterDescriptors(implementation.descriptor());
+        if (!parametersMatchDescriptor(implementation.descriptor(), parameters) || !parameters.isEmpty()) {
+            return false;
+        }
+        final Optional<String> input = inputDescriptor();
+        return input.isPresent() && ("L" + implementation.owner() + ";").equals(input.orElseThrow());
+    }
+
+    private static boolean sameOrBoundPredicateCompatible(final String source, final String target) {
+        return source.equals(target)
+            || ("Ljava/lang/Object;".equals(target) && (source.startsWith("L") || source.startsWith("[")));
     }
 
     /**
@@ -275,12 +384,144 @@ public record LambdaMetafactoryCall(
     }
 
     /**
+     * Returns whether this {@code Function} can be represented by the captured-lambda runtime.
+     *
+     * @return true for static implementations with reference-only captures and reference returns
+     */
+    public boolean isMaterializedFunctionLambda() {
+        if (!isFunction()
+            || implementationReferenceKind != 6
+            || !objectReturn(implementation.descriptor())
+            || !hasObjectCaptures()) {
+            return false;
+        }
+        final List<String> parameters = parameterDescriptors(implementation.descriptor());
+        if (!parametersMatchDescriptor(implementation.descriptor(), parameters)
+            || parameters.size() != capturedParameterDescriptors.size() + 1) {
+            return false;
+        }
+        for (int index = 0; index < capturedParameterDescriptors.size(); index++) {
+            if (!sameOrMaterializedFunctionCompatible(capturedParameterDescriptors.get(index), parameters.get(index))) {
+                return false;
+            }
+        }
+        final Optional<String> input = inputDescriptor();
+        return input.isPresent()
+            && sameOrMaterializedFunctionCompatible(input.orElseThrow(), parameters.getLast());
+    }
+
+    /**
+     * Returns whether this custom one-argument object-return lambda can be represented by the captured-lambda runtime.
+     *
+     * @return true for bound instance implementations with reference-only captures and reference returns
+     */
+    public boolean isMaterializedBoundCustomObjectLambda() {
+        if (interfaceOwner.startsWith("java/util/function/")
+            || implementationReferenceKind != 5
+            || !singleObjectOrLongInput(samMethodDescriptor)
+            || !objectReturn(samMethodDescriptor)
+            || !singleObjectOrLongInput(instantiatedMethodDescriptor)
+            || !objectReturn(instantiatedMethodDescriptor)
+            || !objectReturn(implementation.descriptor())
+            || !hasObjectCaptures()
+            || capturedParameterDescriptors.isEmpty()
+            || !("L" + implementation.owner() + ";").equals(capturedParameterDescriptors.getFirst())) {
+            return false;
+        }
+        final List<String> parameters = parameterDescriptors(implementation.descriptor());
+        if (!parametersMatchDescriptor(implementation.descriptor(), parameters)
+            || parameters.size() != capturedParameterDescriptors.size()) {
+            return false;
+        }
+        for (int index = 1; index < capturedParameterDescriptors.size(); index++) {
+            if (!sameOrObjectCompatible(capturedParameterDescriptors.get(index), parameters.get(index - 1))) {
+                return false;
+            }
+        }
+        final Optional<String> input = inputDescriptor();
+        return input.isPresent()
+            && sameOrObjectCompatible(input.orElseThrow(), parameters.getLast());
+    }
+
+    /**
+     * Returns whether this custom lambda has a closed-world implementation owner that preserves virtual semantics.
+     *
+     * @param classes parsed closed-world classes
+     * @return true when the implementation owner is a final application class
+     */
+    public boolean isMaterializedBoundCustomObjectLambda(final Map<String, ClassFile> classes) {
+        if (!isMaterializedBoundCustomObjectLambda()) {
+            return false;
+        }
+        final ClassFile implementationClass = classes.get(implementation.owner());
+        return implementationClass != null
+            && implementationClass.application()
+            && implementationClass.isFinal();
+    }
+
+    private static boolean sameOrMaterializedFunctionCompatible(final String source, final String target) {
+        return source.equals(target)
+            || ("Ljava/lang/Object;".equals(target) && (source.startsWith("L") || source.startsWith("[")));
+    }
+
+    /**
+     * Returns whether this {@code Supplier} can be represented by the captured-lambda runtime.
+     *
+     * @return true for application static or instance implementations with object captures
+     */
+    public boolean isMaterializedSupplierLambda() {
+        if (!isSupplier()
+            || (implementationReferenceKind != 5 && implementationReferenceKind != 6)
+            || !objectReturn(implementation.descriptor())
+            || !hasObjectCaptures()) {
+            return false;
+        }
+        final List<String> implementationParameters = parameterDescriptors(implementation.descriptor());
+        if (implementationReferenceKind == 6) {
+            if (implementationParameters.size() != capturedParameterDescriptors.size()) {
+                return false;
+            }
+            for (int index = 0; index < capturedParameterDescriptors.size(); index++) {
+                if (!sameOrObjectCompatible(capturedParameterDescriptors.get(index), implementationParameters.get(index))) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        if (capturedParameterDescriptors.isEmpty()
+            || !("L" + implementation.owner() + ";").equals(capturedParameterDescriptors.getFirst())
+            || implementationParameters.size() != capturedParameterDescriptors.size() - 1) {
+            return false;
+        }
+        for (int index = 1; index < capturedParameterDescriptors.size(); index++) {
+            if (!sameOrObjectCompatible(capturedParameterDescriptors.get(index), implementationParameters.get(index - 1))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * Returns whether this is a materializable void-return lambda with object captures only.
      *
      * @return true when the current runtime can materialize the callable as a lambda object
      */
     public boolean isMaterializedVoidLambda() {
         return isMaterializedConsumerLambda() || isMaterializedBiConsumerLambda();
+    }
+
+    private boolean hasObjectCaptures() {
+        for (final String capture : capturedParameterDescriptors) {
+            if (!capture.startsWith("L") && !capture.startsWith("[")) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean sameOrObjectCompatible(final String source, final String target) {
+        return source.equals(target)
+            || ("Ljava/lang/Object;".equals(target) && (source.startsWith("L") || source.startsWith("[")));
     }
 
     /**
@@ -324,6 +565,44 @@ public record LambdaMetafactoryCall(
     }
 
     /**
+     * Returns whether this is a zero-capture static custom SAM with one long input and an object return.
+     *
+     * @return true when the typed long-to-object materialized-lambda runtime can represent the call
+     */
+    public boolean isZeroCaptureMaterializedLongObjectLambda() {
+        if (isDirectlyLowerable()
+            || interfaceOwner.startsWith("java/")
+            || implementationReferenceKind != 6
+            || !capturedParameterDescriptors.isEmpty()) {
+            return false;
+        }
+        return singleLongInput(samMethodDescriptor)
+            && objectReturn(samMethodDescriptor)
+            && singleLongInput(instantiatedMethodDescriptor)
+            && objectReturn(instantiatedMethodDescriptor)
+            && singleLongInput(implementation.descriptor())
+            && objectReturn(implementation.descriptor());
+    }
+
+    /**
+     * Returns whether the static long-to-object custom SAM interface and implementation are owned by application code.
+     *
+     * @param classes parsed closed-world classes
+     * @return true when both owners are application classes
+     */
+    public boolean isZeroCaptureMaterializedLongObjectLambda(final Map<String, ClassFile> classes) {
+        if (!isZeroCaptureMaterializedLongObjectLambda()) {
+            return false;
+        }
+        final ClassFile interfaceClass = classes.get(interfaceOwner);
+        final ClassFile implementationClass = classes.get(implementation.owner());
+        return interfaceClass != null
+            && interfaceClass.application()
+            && implementationClass != null
+            && implementationClass.application();
+    }
+
+    /**
      * Returns whether this is a zero-capture custom SAM boolean-return materialization.
      *
      * @return true when the current native profile can materialize the lambda as an object
@@ -347,8 +626,20 @@ public record LambdaMetafactoryCall(
         return input.isPresent() && input.orElseThrow().startsWith("L");
     }
 
+    private static boolean singleObjectOrLongInput(final String descriptor) {
+        final Optional<String> input = new LambdaMetafactoryCall("", "", "", "", new MethodRef("", "", ""), -1, descriptor, List.of())
+            .inputDescriptor();
+        return input.isPresent()
+            && (input.orElseThrow().startsWith("L") || input.orElseThrow().startsWith("[") || "J".equals(input.orElseThrow()));
+    }
+
+    private static boolean singleLongInput(final String descriptor) {
+        final List<String> parameters = parameterDescriptors(descriptor);
+        return parameters.size() == 1 && "J".equals(parameters.getFirst());
+    }
+
     private static boolean noInputs(final String descriptor) {
-        return parameterDescriptors(descriptor).isEmpty();
+        return descriptor.startsWith("()");
     }
 
     private static boolean objectInputs(final String descriptor, final int count) {
@@ -375,7 +666,12 @@ public record LambdaMetafactoryCall(
             return false;
         }
         final String descriptorValue = value.orElseThrow();
-        return descriptorValue.startsWith("L") || descriptorValue.startsWith("[");
+        if (descriptorValue.startsWith("L")) {
+            return descriptorValue.length() > 2
+                && descriptorValue.indexOf(';') == descriptorValue.length() - 1;
+        }
+        return descriptorValue.startsWith("[")
+            && skipArrayDescriptor(descriptorValue, 0) == descriptorValue.length();
     }
 
     private static boolean voidReturn(final String descriptor) {
@@ -414,7 +710,7 @@ public record LambdaMetafactoryCall(
             }
             if (type == 'L') {
                 final int end = descriptor.indexOf(';', index);
-                if (end < 0) {
+                if (end <= index + 1) {
                     return List.of();
                 }
                 result.add(descriptor.substring(start, end + 1));
@@ -437,6 +733,29 @@ public record LambdaMetafactoryCall(
         return List.copyOf(result);
     }
 
+    private static boolean parametersMatchDescriptor(
+        final String descriptor,
+        final List<String> parameters
+    ) {
+        final int separator = descriptor.indexOf(')');
+        if (!descriptor.startsWith("(") || separator < 1) {
+            return false;
+        }
+        int descriptorIndex = 1;
+        for (final String parameter : parameters) {
+            if (descriptorIndex + parameter.length() > separator) {
+                return false;
+            }
+            for (int parameterIndex = 0; parameterIndex < parameter.length(); parameterIndex++) {
+                if (descriptor.charAt(descriptorIndex + parameterIndex) != parameter.charAt(parameterIndex)) {
+                    return false;
+                }
+            }
+            descriptorIndex += parameter.length();
+        }
+        return descriptorIndex == separator;
+    }
+
     private static int skipArrayDescriptor(final String descriptor, final int start) {
         int index = start;
         while (index < descriptor.length() && descriptor.charAt(index) == '[') {
@@ -450,7 +769,7 @@ public record LambdaMetafactoryCall(
         }
         if (descriptor.charAt(index) == 'L') {
             final int end = descriptor.indexOf(';', index);
-            if (end < 0) {
+            if (end <= index + 1) {
                 return -1;
             }
             return end + 1;

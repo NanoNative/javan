@@ -6,6 +6,7 @@ import org.junit.jupiter.api.parallel.ResourceAccessMode;
 import org.junit.jupiter.api.parallel.ResourceLock;
 import org.junit.jupiter.api.parallel.Resources;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
@@ -8701,6 +8702,190 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void optionalMapWithBoundInstanceFunctionBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-map-bound-instance-function");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private final String prefix;
+
+                private Main(final String prefix) {
+                    this.prefix = prefix;
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new Main("[").render(Optional.of("value"), "]"));
+                }
+
+                private String render(final Optional<String> value, final String suffix) {
+                    return value.map(item -> decorate(suffix, item)).orElse("missing");
+                }
+
+                private String decorate(final String suffix, final String item) {
+                    return prefix + item + suffix;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/optional-map-bound-instance-function").toString())).stdout()
+            : "";
+
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
+    void optionalMapWithUnboundInstanceMethodReferenceBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-map-unbound-instance-reference");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Optional.of(new Row("row-7")).map(Row::key).orElse("missing"));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Row", """
+            package com.acme;
+
+            public final class Row {
+                private final String key;
+
+                public Row(final String key) {
+                    this.key = key;
+                }
+
+                public String key() {
+                    return key;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/optional-map-unbound-instance-reference").toString())).stdout()
+            : "";
+
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
+    void optionalMapWithUnboundInstanceLongMethodReferenceBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-map-unbound-instance-long-reference");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Optional.of(new Row(42L)).map(Row::amount).orElse(0L));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Row", """
+            package com.acme;
+
+            public final class Row {
+                private final long amount;
+
+                public Row(final long amount) {
+                    this.amount = amount;
+                }
+
+                public long amount() {
+                    return amount;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/optional-map-unbound-instance-long-reference").toString())).stdout()
+            : "";
+
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
+    void unboundInstanceFunctionReferenceRejectsNullReceiverLikeJvm() throws Exception {
+        final Path project = project("unbound-instance-reference-null-receiver");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(((Function<Row, String>) Row::constant).apply(null));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Row", """
+            package com.acme;
+
+            public final class Row {
+                public String constant() {
+                    return "incorrect";
+                }
+            }
+            """);
+
+        final Path classes = project.resolve("jvm-classes");
+        Files.createDirectories(classes);
+        final ProcessResult javac = process(project, List.of(
+            CliTestHarness.currentJavacCommand(),
+            "-d",
+            classes.toString(),
+            project.resolve("src/main/java/com/acme/Main.java").toString(),
+            project.resolve("src/main/java/com/acme/Row.java").toString()
+        ));
+        final ProcessResult jvm = process(project, List.of(
+            CliTestHarness.currentJavaCommand(),
+            "-cp",
+            classes.toString(),
+            "com.acme.Main"
+        ));
+        final CliRun run = run(tempDir, "build", project.toString());
+        final ProcessResult nativeRun = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/unbound-instance-reference-null-receiver").toString()))
+            : new ProcessResult(-1, "", run.stderr());
+
+        assertThat(
+            javac.exitCode() + "\n"
+                + jvm.exitCode() + "\n"
+                + jvm.stdout().isEmpty() + "\n"
+                + jvm.stderr().contains("NullPointerException") + "\n"
+                + run.exitCode() + "\n"
+                + nativeRun.exitCode() + "\n"
+                + nativeRun.stdout().isEmpty() + "\n"
+                + nativeRun.stderr().contains("null object")
+        ).isEqualTo("0\n1\ntrue\ntrue\n0\n1\ntrue\ntrue");
+    }
+
+    @Test
     void optionalFlatMapWithStaticFunctionBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("optional-flat-map-static-function");
         writeJava(project, "com.acme.Main", """
@@ -9106,6 +9291,36 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void intNegationWrapsMinimumValueLikeJvm() throws Exception {
+        final Path project = project("int-negation-minimum");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(negate(Integer.MIN_VALUE));
+                }
+
+                private static int negate(final int value) {
+                    return -value;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/int-negation-minimum").toString())).stdout()
+            : "";
+
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
     void jdkMathIntrinsicsBuildAndMatchJvmOutput() throws Exception {
         final Path project = project("jdk-math-intrinsics");
         writeJava(project, "com.acme.Main", """
@@ -9162,6 +9377,239 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/math-to-int-exact").toString())).stdout()).isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("123456789\n");
+    }
+
+    @Test
+    void mathAddExactIntBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("math-add-exact-int");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Math.addExact(1_000_000_000, 234_567_890));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/math-add-exact-int").toString())).stdout()
+            : "";
+
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
+    void mathAddExactIntEvaluatesOperandsOnceInOrderInsidePrintln() throws Exception {
+        final Path project = project("math-add-exact-int-operand-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private static int trace;
+
+                private Main() {
+                }
+
+                private static int left() {
+                    trace = trace * 10 + 1;
+                    return 4;
+                }
+
+                private static int right() {
+                    trace = trace * 10 + 2;
+                    return 5;
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Math.addExact(left(), right()));
+                    System.out.println(trace);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        final String nativeOutput = build.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/math-add-exact-int-operand-order").toString())).stdout()
+            : "";
+
+        assertThat(build.exitCode() + "\n" + build.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
+    void mathAddExactIntOverflowFailsAtRuntime() throws Exception {
+        final Path project = project("math-add-exact-int-overflow");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Math.addExact(Integer.MAX_VALUE, 1));
+                }
+            }
+            """);
+
+        final CliRun build = run(tempDir, "build", project.toString());
+        final ProcessResult nativeRun = build.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/math-add-exact-int-overflow").toString()))
+            : new ProcessResult(-1, "", build.stderr());
+
+        assertThat(List.of(
+            build.exitCode(),
+            nativeRun.exitCode() == 0 ? 0 : 1,
+            nativeRun.stderr().contains("java/lang/ArithmeticException") ? 1 : 0
+        )).containsExactly(0, 1, 1);
+    }
+
+    @Test
+    void mathAddExactIntPositiveOverflowCanBeCaught() throws Exception {
+        final Path project = project("math-add-exact-int-caught-positive-overflow");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                private static int add() {
+                    try {
+                        return Math.addExact(Integer.MAX_VALUE, 1);
+                    } catch (final ArithmeticException ignored) {
+                        return 41;
+                    }
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(add());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        final String nativeOutput = build.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/math-add-exact-int-caught-positive-overflow").toString())).stdout()
+            : "";
+
+        assertThat(build.exitCode() + "\n" + build.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
+    void mathAddExactIntNegativeOverflowCanBeCaught() throws Exception {
+        final Path project = project("math-add-exact-int-caught-negative-overflow");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                private static int add() {
+                    try {
+                        return Math.addExact(Integer.MIN_VALUE, -1);
+                    } catch (final ArithmeticException ignored) {
+                        return -41;
+                    }
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(add());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        final String nativeOutput = build.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/math-add-exact-int-caught-negative-overflow").toString())).stdout()
+            : "";
+
+        assertThat(build.exitCode() + "\n" + build.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
+    void exhaustiveEnumSwitchExpressionBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("exhaustive-enum-switch-expression");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private enum Action {
+                    PRESS,
+                    FOCUS,
+                    SET_VALUE
+                }
+
+                private Main() {
+                }
+
+                private static int flag(final Action action) {
+                    return switch (action) {
+                        case PRESS -> 1;
+                        case FOCUS -> 2;
+                        case SET_VALUE -> 4;
+                    };
+                }
+
+                public static void main(final String[] args) {
+                    for (final Action action : Action.values()) {
+                        System.out.println(flag(action));
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        final String nativeOutput = build.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/exhaustive-enum-switch-expression").toString())).stdout()
+            : "";
+
+        assertThat(build.exitCode() + "\n" + build.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
+    void matchExceptionCauseConstructorCanBeCaughtAsRuntimeExceptionWithItsMessage() throws Exception {
+        final Path project = project("match-exception-cause-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    try {
+                        throw new MatchException("boom", null);
+                    } catch (final RuntimeException exception) {
+                        System.out.println(exception.getMessage());
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        final String nativeOutput = build.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/match-exception-cause-constructor").toString())).stdout()
+            : "";
+
+        assertThat(build.exitCode() + "\n" + build.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
     }
 
     @Test

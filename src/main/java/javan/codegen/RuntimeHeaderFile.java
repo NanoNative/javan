@@ -67,15 +67,27 @@ final class RuntimeHeaderFile {
         void javan_eprintln_double(double value);
         void javan_println_bool(int value);
         void javan_eprintln_bool(int value);
+        int javan_math_round_float(float value);
         int javan_math_abs_int(int value);
         long long javan_math_abs_long(long long value);
         float javan_math_abs_float(float value);
         double javan_math_abs_double(double value);
         int javan_math_min_int(int left, int right);
         long long javan_math_min_long(long long left, long long right);
+        float javan_math_min_float(float left, float right);
+        double javan_math_min_double(double left, double right);
         int javan_math_max_int(int left, int right);
         long long javan_math_max_long(long long left, long long right);
+        float javan_math_max_float(float left, float right);
+        double javan_math_max_double(double left, double right);
+        int javan_math_add_exact_int_overflows(int left, int right);
+        int javan_math_add_exact_int(int left, int right);
+        int javan_math_multiply_exact_long_int_overflows(long long left, int right);
+        long long javan_math_multiply_exact_long_int(long long left, int right);
+        int javan_math_multiply_exact_long_long_overflows(long long left, long long right);
+        long long javan_math_multiply_exact_long_long(long long left, long long right);
         int javan_math_to_int_exact(long long value);
+        int javan_int_neg(int value);
         int javan_int_shl(int value, int shift);
         long long javan_long_shl(long long value, int shift);
         int javan_int_shr(int value, int shift);
@@ -122,6 +134,7 @@ final class RuntimeHeaderFile {
             char* fix;
             char* detail;
         } JavanResult;
+        typedef struct javan_object_handle JavanObjectHandle;
         typedef struct {
             int type_id;
             const char* name;
@@ -141,6 +154,10 @@ final class RuntimeHeaderFile {
         JavanResult javan_result_error_from_last_error(void);
         JavanResult javan_result_error_message(const char* code, const char* summary, const char* detail);
         void javan_result_free(JavanResult* result);
+        JavanObjectHandle* javan_object_handle_new(void* value);
+        void* javan_object_handle_value(JavanObjectHandle* handle);
+        void javan_object_handle_retain(JavanObjectHandle* handle);
+        void javan_object_handle_release(JavanObjectHandle* handle);
         void javan_register_type_descriptors(JavanTypeDescriptor* descriptors, int count);
         void javan_register_static_roots(void*** roots, int count);
         void javan_root_frame_push(void*** roots, int count);
@@ -221,12 +238,15 @@ final class RuntimeHeaderFile {
         void* javan_arrays_copy_of_char(void* array, int new_length);
         void* javan_arrays_copy_of_range_byte(void* array, int begin, int end);
         void* javan_arrays_copy_of_range_object(void* array, int begin, int end);
+        int javan_arrays_fill_byte(void* array, int value);
+        int javan_arrays_fill_range_byte(void* array, int begin, int end, int value);
         void* javan_string_array_from_args(int argc, char** argv);
         void* javan_string_from(const char* value);
         void* javan_string_from_chars(void* array, int offset, int count);
         int javan_string_length(const char* value);
         int javan_string_hash_code(const char* value);
         int javan_string_is_empty(const char* value);
+        int javan_string_is_blank(const char* value);
         int javan_string_char_at(const char* value, int index);
         int javan_string_index_of_char(const char* value, int ch);
         int javan_string_index_of_char_from(const char* value, int ch, int from_index);
@@ -358,8 +378,28 @@ final class RuntimeHeaderFile {
         void* javan_map_entry_get_value(void* value);
         void* javan_map_values(void* map);
         int javan_object_equals(void* left, void* right);
+        void javan_register_record_object_method_resolvers(
+            int (*equals_resolver)(void*, void*),
+            int (*hash_code_resolver)(void*),
+            int (*exact_type_resolver)(void*, int)
+        );
+        int javan_record_hash_combine(int current, int component);
+        int javan_record_boolean_hash_code(int value);
+        int javan_record_long_hash_code(long long value);
+        int javan_record_float_hash_code(float value);
+        int javan_record_double_hash_code(double value);
+        int javan_record_float_equals(float left, float right);
+        int javan_record_double_equals(double left, double right);
+        int javan_record_reference_identity_equals(void* left, void* right);
+        int javan_record_reference_identity_hash_code(void* value);
+        int javan_record_shape_exact_type(void* value, int expected_type_id);
+        void javan_record_shape_validate(void* value, const char* shape);
+        int javan_record_shape_equals(void* left, void* right, const char* shape);
+        int javan_record_shape_equals_prevalidated(void* left, void* right, const char* shape);
+        int javan_record_shape_hash_code(void* value, const char* shape);
         void* javan_materialized_lambda_new(int target_id);
         void* javan_materialized_lambda_new_with_captures(int target_id, int capture_count, ...);
+        int javan_materialized_lambda_is_instance(void* value);
         int javan_materialized_lambda_target_id(void* value);
         void* javan_materialized_lambda_capture(void* value, int capture_index);
         void* javan_path_of(void* first, void* more);
@@ -511,6 +551,7 @@ final class RuntimeHeaderFile {
         void* javan_float_value_of(float value);
         float javan_float_float_value(void* value);
         float javan_float_int_bits_to_float(int value);
+        int javan_float_to_raw_int_bits(float value);
         void* javan_double_value_of(double value);
         double javan_double_double_value(void* value);
         double javan_double_long_bits_to_double(long long value);
@@ -664,7 +705,6 @@ final class RuntimeHeaderFile {
         void* javan_string_value_of_bool(int value);
         void* javan_string_value_of_char(int value);
         void* javan_printable_object_string(void* value);
-        int javan_record_object_equals(void* self, void* other, int expected_type_id, int field_count, ...);
         void* javan_string_concat(const char* recipe, int argc, const char** values);
         char* javan_string_export(const char* value);
         void* javan_stringbuilder_new(void);
@@ -710,6 +750,7 @@ final class RuntimeHeaderFile {
         void javan_stringbuilder_set_length(void* builder, int length);
         int javan_stringbuilder_capacity(void* builder);
         int javan_lcmp(long long left, long long right);
+        int javan_long_compare_unsigned(long long left, long long right);
         int javan_float_compare(float left, float right, int nan_value);
         int javan_double_compare(double left, double right, int nan_value);
         const char* javan_last_error(void);

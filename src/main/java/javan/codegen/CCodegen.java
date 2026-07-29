@@ -26,7 +26,9 @@ import java.util.List;
 public final class CCodegen {
     private static final String RUNNABLE_RUN_DISPATCH_SYMBOL = BytecodeToIR.dispatchSymbol(new MethodRef("java/lang/Runnable", "run", "()V"));
     private static final String MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL = "javan_materialized_lambda_apply_object";
+    private static final String MATERIALIZED_LAMBDA_LONG_OBJECT_APPLY_SYMBOL = "javan_materialized_lambda_apply_long_object";
     private static final String MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL = "javan_materialized_lambda_apply_object2";
+    private static final String MATERIALIZED_LAMBDA_SUPPLIER_APPLY_SYMBOL = "javan_materialized_lambda_apply_supplier";
     private static final String MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL = "javan_materialized_lambda_apply_boolean";
     private static final String MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL = "javan_materialized_lambda_apply_void";
     private static final String MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL = "javan_materialized_lambda_apply_void2";
@@ -42,6 +44,8 @@ public final class CCodegen {
     private static final String GENERATED_ENUM_BY_NAME_SYMBOL = "javan_generated_enum_by_name";
     private static final String GENERATED_ENUM_BY_ORDINAL_SYMBOL = "javan_generated_enum_by_ordinal";
     private static final String GENERATED_OBJECT_CLONE_SYMBOL = "javan_generated_object_clone";
+    private static final String RECORD_REFERENCE_EQUALS_DISPATCH = "javan_dispatch_record_reference_equals";
+    private static final String RECORD_REFERENCE_HASH_CODE_DISPATCH = "javan_dispatch_record_reference_hash_code";
     private static final String FALLIBLE_APPLY_METHOD_NAME = "applyWithException";
 
     /**
@@ -96,7 +100,9 @@ public final class CCodegen {
         emitRuntimeHelperPrototypes(features, c);
         if (!program.materializedLambdaTargets().isEmpty()) {
             c.append("static void* ").append(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
+            c.append("static void* ").append(MATERIALIZED_LAMBDA_LONG_OBJECT_APPLY_SYMBOL).append("(void* self, int64_t arg);").append(System.lineSeparator());
             c.append("static void* ").append(MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL).append("(void* self, void* first_arg, void* second_arg);").append(System.lineSeparator());
+            c.append("static void* ").append(MATERIALIZED_LAMBDA_SUPPLIER_APPLY_SYMBOL).append("(void* self);").append(System.lineSeparator());
             c.append("static int ").append(MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
             c.append("static void ").append(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
             c.append("static void ").append(MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL).append("(void* self, void* first_arg, void* second_arg);").append(System.lineSeparator());
@@ -104,6 +110,7 @@ public final class CCodegen {
         c.append(System.lineSeparator());
         emitAllocators(program, c);
         emitGeneratedObjectHelpers(program, features, c);
+        emitRecordShapeExactTypeHelper(program, c);
         emitEnumOrdinalHelpers(program, c);
         emitExactEnumLookupHelpers(program, c);
         emitExactFunctionOrNullHelpers(program, c);
@@ -174,7 +181,9 @@ public final class CCodegen {
         emitRuntimeHelperPrototypes(features, c);
         if (!program.materializedLambdaTargets().isEmpty()) {
             c.append("static void* ").append(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
+            c.append("static void* ").append(MATERIALIZED_LAMBDA_LONG_OBJECT_APPLY_SYMBOL).append("(void* self, int64_t arg);").append(System.lineSeparator());
             c.append("static void* ").append(MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL).append("(void* self, void* first_arg, void* second_arg);").append(System.lineSeparator());
+            c.append("static void* ").append(MATERIALIZED_LAMBDA_SUPPLIER_APPLY_SYMBOL).append("(void* self);").append(System.lineSeparator());
             c.append("static int ").append(MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
             c.append("static void ").append(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
             c.append("static void ").append(MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL).append("(void* self, void* first_arg, void* second_arg);").append(System.lineSeparator());
@@ -182,6 +191,7 @@ public final class CCodegen {
         c.append(System.lineSeparator());
         emitAllocators(program, c);
         emitGeneratedObjectHelpers(program, features, c);
+        emitRecordShapeExactTypeHelper(program, c);
         emitEnumOrdinalHelpers(program, c);
         emitExactEnumLookupHelpers(program, c);
         emitExactFunctionOrNullHelpers(program, c);
@@ -454,6 +464,61 @@ public final class CCodegen {
             c.append("    return -1;").append(System.lineSeparator());
             c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
         }
+    }
+
+    private static void emitRecordShapeExactTypeHelper(final IrProgram program, final StringBuilder c) {
+        if (!hasRecordShapeEnumResolver(program)) {
+            return;
+        }
+        final java.util.Map<String, Integer> typeIds = typeIds(program);
+        c.append("static int javan_generated_record_shape_exact_type(void* value, int expected_type_id) {")
+            .append(System.lineSeparator());
+        c.append("    if (value == 0) { return 1; }").append(System.lineSeparator());
+        c.append("    switch (expected_type_id) {").append(System.lineSeparator());
+        for (final IrClass classInfo : program.classes()) {
+            if (classInfo.enumConstants().isEmpty() || !recordShapeUsesOwner(program, classInfo.jvmName())) {
+                continue;
+            }
+            c.append("        case ")
+                .append(typeIds.get(classInfo.jvmName()).intValue())
+                .append(": return ");
+            for (int index = 0; index < classInfo.enumConstants().size(); index++) {
+                if (index > 0) {
+                    c.append(" || ");
+                }
+                c.append("value == ")
+                    .append(staticFieldSymbol(classInfo.jvmName(), classInfo.enumConstants().get(index)));
+            }
+            c.append(";").append(System.lineSeparator());
+        }
+        c.append("        default: return 0;")
+            .append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+    }
+
+    private static boolean hasRecordShapeEnumResolver(final IrProgram program) {
+        for (final IrClass classInfo : program.classes()) {
+            if (!classInfo.enumConstants().isEmpty() && recordShapeUsesOwner(program, classInfo.jvmName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean recordShapeUsesOwner(final IrProgram program, final String owner) {
+        for (final IrDispatch dispatch : program.dispatches()) {
+            if (!RECORD_REFERENCE_EQUALS_DISPATCH.equals(dispatch.symbol())
+                && !RECORD_REFERENCE_HASH_CODE_DISPATCH.equals(dispatch.symbol())) {
+                continue;
+            }
+            for (final IrDispatchTarget target : dispatch.targets()) {
+                if (owner.equals(target.owner())) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static void emitExactEnumLookupHelpers(final IrProgram program, final StringBuilder c) {
@@ -734,20 +799,23 @@ public final class CCodegen {
         c.append("    if (self == 0) {").append(System.lineSeparator());
         c.append("        javan_panic(\"null dispatch\");").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
-        for (final IrDispatchTarget target : dispatch.targets()) {
-            final String constant = program.enumDispatchConstants().get(target.owner());
-            if (constant == null) {
-                continue;
+        if (!RECORD_REFERENCE_EQUALS_DISPATCH.equals(dispatch.symbol())
+            && !RECORD_REFERENCE_HASH_CODE_DISPATCH.equals(dispatch.symbol())) {
+            for (final IrDispatchTarget target : dispatch.targets()) {
+                final String constant = program.enumDispatchConstants().get(target.owner());
+                if (constant == null) {
+                    continue;
+                }
+                c.append("    if (javan_string_equals((const char*) javan_printable_object_string(self), ")
+                    .append(emitCStringLiteral(constant))
+                    .append(") != 0) {").append(System.lineSeparator());
+                if (dispatch.returnType() == javan.ir.IrType.VOID) {
+                    c.append("        ").append(target.functionSymbol()).append("(").append(dispatchArguments(dispatch)).append("); return;");
+                } else {
+                    c.append("        return ").append(target.functionSymbol()).append("(").append(dispatchArguments(dispatch)).append(");");
+                }
+                c.append(System.lineSeparator()).append("    }").append(System.lineSeparator());
             }
-            c.append("    if (javan_string_equals((const char*) javan_printable_object_string(self), ")
-                .append(emitCStringLiteral(constant))
-                .append(") != 0) {").append(System.lineSeparator());
-            if (dispatch.returnType() == javan.ir.IrType.VOID) {
-                c.append("        ").append(target.functionSymbol()).append("(").append(dispatchArguments(dispatch)).append("); return;");
-            } else {
-                c.append("        return ").append(target.functionSymbol()).append("(").append(dispatchArguments(dispatch)).append(");");
-            }
-            c.append(System.lineSeparator()).append("    }").append(System.lineSeparator());
         }
         c.append("    switch (((struct javan_object_header*) self)->_javan_type_id) {").append(System.lineSeparator());
         for (final IrDispatchTarget target : dispatch.targets()) {
@@ -761,7 +829,15 @@ public final class CCodegen {
             }
             c.append(System.lineSeparator());
         }
-        c.append("        default: javan_panic(\"unsupported dispatch target\");").append(System.lineSeparator());
+        if (RECORD_REFERENCE_EQUALS_DISPATCH.equals(dispatch.symbol())) {
+            c.append("        default: return javan_record_reference_identity_equals(self, arg0);")
+                .append(System.lineSeparator());
+        } else if (RECORD_REFERENCE_HASH_CODE_DISPATCH.equals(dispatch.symbol())) {
+            c.append("        default: return javan_record_reference_identity_hash_code(self);")
+                .append(System.lineSeparator());
+        } else {
+            c.append("        default: javan_panic(\"unsupported dispatch target\");").append(System.lineSeparator());
+        }
         c.append("    }").append(System.lineSeparator());
         emitDefaultReturn(dispatch.returnType(), c);
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
@@ -791,7 +867,7 @@ public final class CCodegen {
             if (target.booleanResult() || target.voidResult()) {
                 continue;
             }
-            if (materializedLambdaArity(target) != 1) {
+            if (!materializedLambdaSingleObjectArgument(target)) {
                 continue;
             }
             c.append("        case ").append(target.targetId()).append(": return ");
@@ -799,6 +875,43 @@ public final class CCodegen {
             c.append(";").append(System.lineSeparator());
         }
         c.append("        default: javan_panic(\"unsupported materialized object lambda target\");").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        c.append("    return 0;").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+
+        c.append("static void* ").append(MATERIALIZED_LAMBDA_LONG_OBJECT_APPLY_SYMBOL).append("(void* self, int64_t arg) {")
+            .append(System.lineSeparator());
+        c.append("    switch (javan_materialized_lambda_target_id(self)) {").append(System.lineSeparator());
+        for (final IrMaterializedLambdaTarget target : program.materializedLambdaTargets()) {
+            if (target.booleanResult() || target.voidResult() || !materializedLambdaSingleLongArgument(target)) {
+                continue;
+            }
+            c.append("        case ").append(target.targetId()).append(": return ");
+            emitMaterializedLambdaInvocation(c, target, "self", List.of("arg"));
+            c.append(";").append(System.lineSeparator());
+        }
+        c.append("        default: javan_panic(\"unsupported materialized long object lambda target\");").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        c.append("    return 0;").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+
+        c.append("static void* ").append(MATERIALIZED_LAMBDA_SUPPLIER_APPLY_SYMBOL).append("(void* self) {")
+            .append(System.lineSeparator());
+        c.append("    switch (javan_materialized_lambda_target_id(self)) {").append(System.lineSeparator());
+        for (final IrMaterializedLambdaTarget target : program.materializedLambdaTargets()) {
+            if (target.booleanResult()
+                || target.voidResult()
+                || materializedLambdaArity(target) != 0
+                || !"java/util/function/Supplier".equals(target.interfaceOwner())
+                || !"get".equals(target.interfaceMethodName())
+                || !"()Ljava/lang/Object;".equals(target.interfaceMethodDescriptor())) {
+                continue;
+            }
+            c.append("        case ").append(target.targetId()).append(": return ");
+            emitMaterializedLambdaInvocation(c, target, "self", List.of());
+            c.append(";").append(System.lineSeparator());
+        }
+        c.append("        default: javan_panic(\"unsupported materialized supplier lambda target\");").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
         c.append("    return 0;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
@@ -893,7 +1006,7 @@ public final class CCodegen {
             c.append("javan_materialized_lambda_capture(").append(selfExpression).append(", ").append(index).append(")");
             first = false;
         }
-        if (!first) {
+        if (!first && !argumentExpressions.isEmpty()) {
             c.append(", ");
         }
         for (int index = 0; index < argumentExpressions.size(); index++) {
@@ -907,6 +1020,16 @@ public final class CCodegen {
 
     private static int materializedLambdaArity(final IrMaterializedLambdaTarget target) {
         return MethodDescriptor.parse(target.interfaceMethodDescriptor()).parameterTypes().size();
+    }
+
+    private static boolean materializedLambdaSingleObjectArgument(final IrMaterializedLambdaTarget target) {
+        final List<IrType> parameterTypes = MethodDescriptor.parse(target.interfaceMethodDescriptor()).parameterTypes();
+        return parameterTypes.size() == 1 && parameterTypes.getFirst() == IrType.OBJECT;
+    }
+
+    private static boolean materializedLambdaSingleLongArgument(final IrMaterializedLambdaTarget target) {
+        final List<IrType> parameterTypes = MethodDescriptor.parse(target.interfaceMethodDescriptor()).parameterTypes();
+        return parameterTypes.size() == 1 && parameterTypes.getFirst() == IrType.LONG;
     }
 
     private static void emitFunction(
@@ -936,6 +1059,7 @@ public final class CCodegen {
         if (entry) {
             c.append("    javan_register_generated_type_descriptors();").append(System.lineSeparator());
             c.append("    javan_register_generated_roots();").append(System.lineSeparator());
+            emitRecordReferenceObjectMethodResolverRegistration(program, c);
             emitClassInitializers(program, c);
             c.append("    javan_gc_safe_point();").append(System.lineSeparator());
         } else {
@@ -966,6 +1090,30 @@ public final class CCodegen {
         return false;
     }
 
+    private static void emitRecordReferenceObjectMethodResolverRegistration(
+        final IrProgram program,
+        final StringBuilder c
+    ) {
+        if (!hasDispatch(program, RECORD_REFERENCE_EQUALS_DISPATCH)
+            && !hasDispatch(program, RECORD_REFERENCE_HASH_CODE_DISPATCH)) {
+            return;
+        }
+        c.append("    javan_register_record_object_method_resolvers(")
+            .append(hasDispatch(program, RECORD_REFERENCE_EQUALS_DISPATCH)
+                ? RECORD_REFERENCE_EQUALS_DISPATCH
+                : "(int (*)(void*, void*)) 0")
+            .append(", ")
+            .append(hasDispatch(program, RECORD_REFERENCE_HASH_CODE_DISPATCH)
+                ? RECORD_REFERENCE_HASH_CODE_DISPATCH
+                : "(int (*)(void*)) 0")
+            .append(", ")
+            .append(hasRecordShapeEnumResolver(program)
+                ? "javan_generated_record_shape_exact_type"
+                : "(int (*)(void*, int)) 0")
+            .append(");")
+            .append(System.lineSeparator());
+    }
+
     private static boolean appEntry(final boolean emitMain, final IrFunction function, final IrProgram program) {
         if (!emitMain) {
             return false;
@@ -984,6 +1132,7 @@ public final class CCodegen {
         c.append("    }").append(System.lineSeparator());
         c.append("    javan_register_generated_type_descriptors();").append(System.lineSeparator());
         c.append("    javan_register_generated_roots();").append(System.lineSeparator());
+        emitRecordReferenceObjectMethodResolverRegistration(program, c);
         emitClassInitializers(program, c);
         c.append("    javan_gc_safe_point();").append(System.lineSeparator());
         c.append("    javan_library_initialized = 1;").append(System.lineSeparator());
@@ -1046,6 +1195,14 @@ public final class CCodegen {
             emitExportWrapperCleanup(objectArguments, c);
             c.append("    javan_panic_clear_target(&javan_export_panic_target);").append(System.lineSeparator());
             c.append("    return javan_export_result;").append(System.lineSeparator());
+        } else if (returnType == AbiType.OBJECT) {
+            c.append("    void* javan_export_object_result = ").append(call).append(";").append(System.lineSeparator());
+            emitExportWrapperReturnRootFramePush(c);
+            c.append("    JavanObjectHandle* javan_export_result = javan_object_handle_new(javan_export_object_result);").append(System.lineSeparator());
+            emitExportWrapperReturnRootFramePop(c);
+            emitExportWrapperCleanup(objectArguments, c);
+            c.append("    javan_panic_clear_target(&javan_export_panic_target);").append(System.lineSeparator());
+            c.append("    return javan_export_result;").append(System.lineSeparator());
         } else {
             c.append("    ").append(returnType.cReturnName()).append(" javan_export_result = ").append(call).append(";").append(System.lineSeparator());
             emitExportWrapperCleanup(objectArguments, c);
@@ -1065,6 +1222,8 @@ public final class CCodegen {
             c.append("        javan_export_error_result.data = NULL;").append(System.lineSeparator());
             c.append("        javan_export_error_result.length = 0;").append(System.lineSeparator());
             c.append("        return javan_export_error_result;").append(System.lineSeparator());
+        } else if (type == AbiType.OBJECT) {
+            c.append("        return NULL;").append(System.lineSeparator());
         } else if (type == AbiType.LONG) {
             c.append("        return 0LL;").append(System.lineSeparator());
         } else if (type == AbiType.FLOAT) {
@@ -1131,6 +1290,8 @@ public final class CCodegen {
         } else if (type == AbiType.BYTE_ARRAY) {
             c.append("    out->data = NULL;").append(System.lineSeparator());
             c.append("    out->length = 0;").append(System.lineSeparator());
+        } else if (type == AbiType.OBJECT) {
+            c.append("    *out = NULL;").append(System.lineSeparator());
         } else if (type == AbiType.LONG) {
             c.append("    *out = 0LL;").append(System.lineSeparator());
         } else if (type == AbiType.FLOAT) {
@@ -1247,6 +1408,8 @@ public final class CCodegen {
                 arguments.append("arg").append(index).append("_string");
             } else if (type == AbiType.BYTE_ARRAY) {
                 arguments.append("arg").append(index).append("_array");
+            } else if (type == AbiType.OBJECT) {
+                arguments.append("javan_object_handle_value(arg").append(index).append(")");
             } else {
                 arguments.append("arg").append(index);
             }

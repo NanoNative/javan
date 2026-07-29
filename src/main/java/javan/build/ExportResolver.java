@@ -300,6 +300,9 @@ public final class ExportResolver {
         if ("java/lang/String".equals(type)) {
             return new TypeRead(AbiType.STRING, end + 1);
         }
+        if ("java/lang/Object".equals(type)) {
+            return new TypeRead(AbiType.OBJECT, end + 1);
+        }
         throw new IllegalArgumentException("Unsupported export object type: " + Strings2.replaceChar(type, '/', '.'));
     }
 
@@ -348,6 +351,9 @@ public final class ExportResolver {
         if ("byte[]".equals(value)) {
             return AbiType.BYTE_ARRAY;
         }
+        if ("object".equals(value) || "Object".equals(value) || "java.lang.Object".equals(value)) {
+            return AbiType.OBJECT;
+        }
         throw new IllegalArgumentException("Unsupported export type: " + value);
     }
 
@@ -387,6 +393,9 @@ public final class ExportResolver {
         }
         if (type == AbiType.BYTE_ARRAY) {
             return "[B";
+        }
+        if (type == AbiType.OBJECT) {
+            return "Ljava/lang/Object;";
         }
         throw new IllegalArgumentException("Unsupported ABI type: " + type.name());
     }

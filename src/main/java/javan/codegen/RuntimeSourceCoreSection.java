@@ -653,6 +653,45 @@ final class RuntimeSourceCoreSection {
             javan_println_bool(value);
         }
 
+        int javan_math_round_float(float value) {
+            uint32_t bits = 0U;
+            memcpy(&bits, &value, sizeof(bits));
+            const uint32_t exponent = (bits >> 23U) & 0xffU;
+            const uint32_t fraction = bits & 0x007fffffU;
+            const int negative = (bits & 0x80000000U) != 0U;
+            if (exponent == 0xffU) {
+                if (fraction != 0U) {
+                    return 0;
+                }
+                return negative ? INT_MIN : INT_MAX;
+            }
+            if (exponent == 0U) {
+                return 0;
+            }
+            const int unbiased_exponent = (int) exponent - 127;
+            if (unbiased_exponent < -1) {
+                return 0;
+            }
+            if (unbiased_exponent >= 31) {
+                return negative ? INT_MIN : INT_MAX;
+            }
+            const uint32_t significand = 0x00800000U | fraction;
+            if (unbiased_exponent >= 23) {
+                const uint32_t magnitude = significand << (unsigned int) (unbiased_exponent - 23);
+                return negative ? -(int) magnitude : (int) magnitude;
+            }
+            const unsigned int fractional_shift = (unsigned int) (23 - unbiased_exponent);
+            uint32_t magnitude = significand >> fractional_shift;
+            const uint32_t fractional_mask = (1U << fractional_shift) - 1U;
+            const uint32_t fractional_part = significand & fractional_mask;
+            const uint32_t half = 1U << (fractional_shift - 1U);
+            if ((!negative && fractional_part >= half)
+                || (negative && fractional_part > half)) {
+                magnitude++;
+            }
+            return negative ? -(int) magnitude : (int) magnitude;
+        }
+
         int javan_math_abs_int(int value) {
             if (value == INT_MIN) {
                 return value;
@@ -683,6 +722,32 @@ final class RuntimeSourceCoreSection {
             return left <= right ? left : right;
         }
 
+        float javan_math_min_float(float left, float right) {
+            if (isnan(left)) {
+                return left;
+            }
+            if (isnan(right)) {
+                return right;
+            }
+            if (left == 0.0f && right == 0.0f) {
+                return signbit(left) ? left : right;
+            }
+            return left <= right ? left : right;
+        }
+
+        double javan_math_min_double(double left, double right) {
+            if (isnan(left)) {
+                return left;
+            }
+            if (isnan(right)) {
+                return right;
+            }
+            if (left == 0.0 && right == 0.0) {
+                return signbit(left) ? left : right;
+            }
+            return left <= right ? left : right;
+        }
+
         int javan_math_max_int(int left, int right) {
             return left >= right ? left : right;
         }
@@ -691,11 +756,90 @@ final class RuntimeSourceCoreSection {
             return left >= right ? left : right;
         }
 
+        float javan_math_max_float(float left, float right) {
+            if (isnan(left)) {
+                return left;
+            }
+            if (isnan(right)) {
+                return right;
+            }
+            if (left == 0.0f && right == 0.0f) {
+                return signbit(left) ? right : left;
+            }
+            return left >= right ? left : right;
+        }
+
+        double javan_math_max_double(double left, double right) {
+            if (isnan(left)) {
+                return left;
+            }
+            if (isnan(right)) {
+                return right;
+            }
+            if (left == 0.0 && right == 0.0) {
+                return signbit(left) ? right : left;
+            }
+            return left >= right ? left : right;
+        }
+
+        int javan_math_add_exact_int_overflows(int left, int right) {
+            const long long result = (long long) left + (long long) right;
+            return result < INT_MIN || result > INT_MAX;
+        }
+
+        int javan_math_add_exact_int(int left, int right) {
+            const long long result = (long long) left + (long long) right;
+            return (int) result;
+        }
+
+        int javan_math_multiply_exact_long_int_overflows(long long left, int right) {
+            if (left == 0 || right == 0) {
+                return 0;
+            }
+            if (left > 0) {
+                return right > 0
+                    ? left > LLONG_MAX / (long long) right
+                    : (long long) right < LLONG_MIN / left;
+            }
+            return right > 0
+                ? left < LLONG_MIN / (long long) right
+                : left < LLONG_MAX / (long long) right;
+        }
+
+        long long javan_math_multiply_exact_long_int(long long left, int right) {
+            return left * (long long) right;
+        }
+
+        int javan_math_multiply_exact_long_long_overflows(long long left, long long right) {
+            if (left == 0 || right == 0) {
+                return 0;
+            }
+            if (left > 0) {
+                return right > 0
+                    ? left > LLONG_MAX / right
+                    : right < LLONG_MIN / left;
+            }
+            return right > 0
+                ? left < LLONG_MIN / right
+                : left < LLONG_MAX / right;
+        }
+
+        long long javan_math_multiply_exact_long_long(long long left, long long right) {
+            return left * right;
+        }
+
         int javan_math_to_int_exact(long long value) {
             if (value < INT_MIN || value > INT_MAX) {
                 javan_panic("integer overflow");
             }
             return (int) value;
+        }
+
+        int javan_int_neg(int value) {
+            const unsigned int bits = 0U - (unsigned int) value;
+            int result = 0;
+            memcpy(&result, &bits, sizeof(result));
+            return result;
         }
 
         int javan_int_shl(int value, int shift) {
