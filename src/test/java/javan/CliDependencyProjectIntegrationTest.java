@@ -66,6 +66,43 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void dependencyOwnedStaticLongSamRemainsRejected() throws Exception {
+        final Path dependency = dependencyJar("key-source", "dep.KeySource", """
+            package dep;
+
+            @FunctionalInterface
+            public interface KeySource {
+                String key(long value);
+            }
+            """);
+        final Path project = project("dependency-static-long-sam");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import dep.KeySource;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final KeySource source = index -> "row-" + index;
+                    System.out.println(source.key(7L));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString(), "--classpath", dependency.toString());
+
+        assertThat(run.exitCode() + "\n" + run.stderr())
+            .contains(
+                "2\nerror[JAVAN012]",
+                "dep/KeySource.key(J)Ljava/lang/String;",
+                "Interface dispatch requires at least one concrete implementation in the closed world."
+            );
+    }
+
+    @Test
     void checkWritesDependencyAndLicenseReportsForResolvedClasspath() throws Exception {
         final Path used = dependencyJarWithMavenLicense("usedlib", "dep.Used", """
             package dep;

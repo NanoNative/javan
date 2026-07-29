@@ -9234,7 +9234,10 @@ final class BytecodeToIRInvokeSupport {
                         instruction
                     );
                 final boolean materializedBoundCustom = resolved.isMaterializedBoundCustomObjectLambda(classes);
+                final boolean materializedStaticLongCustom =
+                    resolved.isZeroCaptureMaterializedLongObjectLambda(classes);
                 if (!resolved.isZeroCaptureMaterializedObjectLambda()
+                    && !materializedStaticLongCustom
                     && !resolved.isZeroCaptureMaterializedBooleanLambda()
                     && !resolved.isMaterializedBiFunctionLambda()
                     && !materializedFunction
@@ -9347,7 +9350,10 @@ final class BytecodeToIRInvokeSupport {
             && shouldMaterializeFunctionLambda(method, instruction)
             && !FunctionLambdaUse.isProvablyDiscardedZeroCapture(resolved, method, instruction);
         final boolean materializedBoundCustom = resolved.isMaterializedBoundCustomObjectLambda(classes);
+        final boolean materializedStaticLongCustom =
+            resolved.isZeroCaptureMaterializedLongObjectLambda(classes);
         if (resolved.isZeroCaptureMaterializedObjectLambda()
+            || materializedStaticLongCustom
             || resolved.isZeroCaptureMaterializedBooleanLambda()
             || resolved.isMaterializedBiFunctionLambda()
             || materializedFunction
