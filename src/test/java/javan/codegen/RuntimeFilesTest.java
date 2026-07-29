@@ -6901,6 +6901,25 @@ final class RuntimeFilesTest {
         assertThat(stdout).isEqualTo("7fc01234\n");
     }
 
+    @Test
+    void multiplyExactLongIntDetectsMinimumTimesNegativeOne() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <limits.h>
+            #include <stdio.h>
+
+            int main(void) {
+                printf("%d\\n", javan_math_multiply_exact_long_int_overflows(LLONG_MIN, -1));
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("1\n");
+    }
+
     private String runRuntimePanicProbe(final String setup, final String statement) throws Exception {
         return runRuntimeBoundaryProbe(
             """
