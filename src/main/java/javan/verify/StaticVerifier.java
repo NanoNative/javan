@@ -772,7 +772,8 @@ public final class StaticVerifier {
         if ("addExact".equals(target.name()) && "(II)I".equals(target.descriptor())) {
             return true;
         }
-        return "multiplyExact".equals(target.name()) && "(JI)J".equals(target.descriptor());
+        return "multiplyExact".equals(target.name())
+            && ("(JI)J".equals(target.descriptor()) || "(JJ)J".equals(target.descriptor()));
     }
 
     private static boolean supportedMathExactProtectedInstruction(final Instruction instruction) {

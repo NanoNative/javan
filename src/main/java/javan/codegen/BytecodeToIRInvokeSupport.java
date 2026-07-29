@@ -2259,7 +2259,7 @@ final class BytecodeToIRInvokeSupport {
         if ("multiplyExact".equals(methodRef.name()) && "(JI)J".equals(methodRef.descriptor())) {
             final IrExpression right = popInt(classFile, method, stack);
             final IrExpression left = popLong(classFile, method, stack);
-            lowerMathMultiplyExactLongInt(
+            lowerMathMultiplyExact(
                 classFile,
                 method,
                 instruction,
@@ -2269,7 +2269,30 @@ final class BytecodeToIRInvokeSupport {
                 pendingExceptionHandlerStacks,
                 sourceLines,
                 left,
-                right
+                right,
+                IrType.INT,
+                "javan_math_multiply_exact_long_int_overflows",
+                "javan_math_multiply_exact_long_int"
+            );
+            return true;
+        }
+        if ("multiplyExact".equals(methodRef.name()) && "(JJ)J".equals(methodRef.descriptor())) {
+            final IrExpression right = popLong(classFile, method, stack);
+            final IrExpression left = popLong(classFile, method, stack);
+            lowerMathMultiplyExact(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                localDeclarations,
+                pendingExceptionHandlerStacks,
+                sourceLines,
+                left,
+                right,
+                IrType.LONG,
+                "javan_math_multiply_exact_long_long_overflows",
+                "javan_math_multiply_exact_long_long"
             );
             return true;
         }
@@ -2339,7 +2362,7 @@ final class BytecodeToIRInvokeSupport {
             List.of(checkedLeft, checkedRight)
         )));
     }
-    static void lowerMathMultiplyExactLongInt(
+    static void lowerMathMultiplyExact(
         final ClassFile classFile,
         final MethodInfo method,
         final Instruction instruction,
@@ -2349,7 +2372,10 @@ final class BytecodeToIRInvokeSupport {
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final SourceLineIndex sourceLines,
         final IrExpression left,
-        final IrExpression right
+        final IrExpression right,
+        final IrType rightType,
+        final String overflowSymbol,
+        final String productSymbol
     ) {
         final int leftLocalIndex = localDeclarations.size();
         final String leftLocalName = "long" + leftLocalIndex;
@@ -2357,19 +2383,25 @@ final class BytecodeToIRInvokeSupport {
         instructions.add(IrInstruction.assignLong(leftLocalName, left));
 
         final int rightLocalIndex = localDeclarations.size();
-        final String rightLocalName = "int" + rightLocalIndex;
-        localDeclarations.put(Integer.MIN_VALUE + rightLocalIndex, new IrLocal(IrType.INT, rightLocalName));
-        instructions.add(IrInstruction.assignInt(rightLocalName, right));
+        final String rightLocalName = (rightType == IrType.LONG ? "long" : "int") + rightLocalIndex;
+        localDeclarations.put(Integer.MIN_VALUE + rightLocalIndex, new IrLocal(rightType, rightLocalName));
+        if (rightType == IrType.LONG) {
+            instructions.add(IrInstruction.assignLong(rightLocalName, right));
+        } else {
+            instructions.add(IrInstruction.assignInt(rightLocalName, right));
+        }
 
         final IrExpression checkedLeft = IrExpression.longLocal(leftLocalName);
-        final IrExpression checkedRight = IrExpression.intLocal(rightLocalName);
+        final IrExpression checkedRight = rightType == IrType.LONG
+            ? IrExpression.longLocal(rightLocalName)
+            : IrExpression.intLocal(rightLocalName);
         final int overflowLocalIndex = localDeclarations.size();
         final String overflowLocalName = "int" + overflowLocalIndex;
         localDeclarations.put(Integer.MIN_VALUE + overflowLocalIndex, new IrLocal(IrType.INT, overflowLocalName));
         instructions.add(IrInstruction.assignInt(
             overflowLocalName,
             IrExpression.intCall(
-                "javan_math_multiply_exact_long_int_overflows",
+                overflowSymbol,
                 List.of(checkedLeft, checkedRight)
             )
         ));
@@ -2399,7 +2431,7 @@ final class BytecodeToIRInvokeSupport {
         instructions.add(IrInstruction.label(successLabel));
         stack.addAll(successStack);
         stack.add(StackValue.longExpression(IrExpression.longCall(
-            "javan_math_multiply_exact_long_int",
+            productSymbol,
             List.of(checkedLeft, checkedRight)
         )));
     }

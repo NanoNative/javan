@@ -810,6 +810,24 @@ final class RuntimeSourceCoreSection {
             return left * (long long) right;
         }
 
+        int javan_math_multiply_exact_long_long_overflows(long long left, long long right) {
+            if (left == 0 || right == 0) {
+                return 0;
+            }
+            if (left > 0) {
+                return right > 0
+                    ? left > LLONG_MAX / right
+                    : right < LLONG_MIN / left;
+            }
+            return right > 0
+                ? left < LLONG_MIN / right
+                : left < LLONG_MAX / right;
+        }
+
+        long long javan_math_multiply_exact_long_long(long long left, long long right) {
+            return left * right;
+        }
+
         int javan_math_to_int_exact(long long value) {
             if (value < INT_MIN || value > INT_MAX) {
                 javan_panic("integer overflow");

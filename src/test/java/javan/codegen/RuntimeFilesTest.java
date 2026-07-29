@@ -6920,6 +6920,70 @@ final class RuntimeFilesTest {
         assertThat(stdout).isEqualTo("1\n");
     }
 
+    @Test
+    void multiplyExactLongLongDetectsMinimumTimesNegativeOne() throws Exception {
+        assertThat(multiplyExactLongLongOverflow("LLONG_MIN", "-1LL")).isEqualTo("1\n");
+    }
+
+    @Test
+    void multiplyExactLongLongAcceptsPositiveThreshold() throws Exception {
+        assertThat(multiplyExactLongLongOverflow("LLONG_MAX / 3LL", "3LL")).isEqualTo("0\n");
+    }
+
+    @Test
+    void multiplyExactLongLongRejectsPositiveThresholdOverflow() throws Exception {
+        assertThat(multiplyExactLongLongOverflow("LLONG_MAX / 3LL + 1LL", "3LL")).isEqualTo("1\n");
+    }
+
+    @Test
+    void multiplyExactLongLongAcceptsNegativeThreshold() throws Exception {
+        assertThat(multiplyExactLongLongOverflow("LLONG_MIN / 3LL", "3LL")).isEqualTo("0\n");
+    }
+
+    @Test
+    void multiplyExactLongLongRejectsNegativeThresholdOverflow() throws Exception {
+        assertThat(multiplyExactLongLongOverflow("LLONG_MIN / 3LL - 1LL", "3LL")).isEqualTo("1\n");
+    }
+
+    @Test
+    void multiplyExactLongLongRejectsPositiveTimesNegativeOverflow() throws Exception {
+        assertThat(multiplyExactLongLongOverflow("LLONG_MAX", "-2LL")).isEqualTo("1\n");
+    }
+
+    @Test
+    void multiplyExactLongLongAcceptsPositiveTimesNegative() throws Exception {
+        assertThat(multiplyExactLongLongOverflow("2LL", "-3LL")).isEqualTo("0\n");
+    }
+
+    @Test
+    void multiplyExactLongLongAcceptsNegativeTimesNegative() throws Exception {
+        assertThat(multiplyExactLongLongOverflow("-2LL", "-3LL")).isEqualTo("0\n");
+    }
+
+    @Test
+    void multiplyExactLongLongAcceptsZeroMultiplier() throws Exception {
+        assertThat(multiplyExactLongLongOverflow("LLONG_MIN", "0LL")).isEqualTo("0\n");
+    }
+
+    private String multiplyExactLongLongOverflow(final String left, final String right) throws Exception {
+        return runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <limits.h>
+            #include <stdio.h>
+
+            int main(void) {
+                printf(
+                    "%%d\\n",
+                    javan_math_multiply_exact_long_long_overflows(%s, %s)
+                );
+                return 0;
+            }
+            """.formatted(left, right),
+            "4096"
+        );
+    }
+
     private String runRuntimePanicProbe(final String setup, final String statement) throws Exception {
         return runRuntimeBoundaryProbe(
             """
