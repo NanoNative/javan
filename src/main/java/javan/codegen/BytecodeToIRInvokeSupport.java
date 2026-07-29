@@ -9547,6 +9547,12 @@ final class BytecodeToIRInvokeSupport {
             if (lambdaCall.isSupplier()) {
                 return true;
             }
+            if (lambdaCall.isFunction() && captureDescriptors.isEmpty()) {
+                final Optional<String> input = lambdaCall.inputDescriptor();
+                return parameters.isEmpty()
+                    && input.isPresent()
+                    && ("L" + implementation.owner() + ";").equals(input.orElseThrow());
+            }
             if (!(lambdaCall.isPredicate() || lambdaCall.isFunction())
                 || captureDescriptors.isEmpty()
                 || parameters.size() != captureDescriptors.size()) {
@@ -9679,7 +9685,10 @@ final class BytecodeToIRInvokeSupport {
     private static IrExpression invokeFunctionLambdaExpression(final DynamicLambda lambda, final IrExpression argument) {
         if (lambda.implementationReferenceKind() == 5 || lambda.implementationReferenceKind() == 6) {
             final List<IrExpression> arguments = new ArrayList<>(lambda.captures());
-            arguments.add(argument);
+            final IrExpression input = lambda.implementationReferenceKind() == 5 && lambda.captures().isEmpty()
+                ? IrExpression.objectCall("javan_objects_require_non_null", List.of(argument))
+                : argument;
+            arguments.add(input);
             return IrExpression.objectCall(symbol(new EntryPoint(
                 lambda.implementationOwner(),
                 lambda.implementationName(),

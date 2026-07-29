@@ -6,6 +6,7 @@ import org.junit.jupiter.api.parallel.ResourceAccessMode;
 import org.junit.jupiter.api.parallel.ResourceLock;
 import org.junit.jupiter.api.parallel.Resources;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
@@ -8737,6 +8738,108 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
 
         assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput)
             .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
+    void optionalMapWithUnboundInstanceMethodReferenceBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-map-unbound-instance-reference");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Optional.of(new Row("row-7")).map(Row::key).orElse("missing"));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Row", """
+            package com.acme;
+
+            public final class Row {
+                private final String key;
+
+                public Row(final String key) {
+                    this.key = key;
+                }
+
+                public String key() {
+                    return key;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/optional-map-unbound-instance-reference").toString())).stdout()
+            : "";
+
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
+    void unboundInstanceFunctionReferenceRejectsNullReceiverLikeJvm() throws Exception {
+        final Path project = project("unbound-instance-reference-null-receiver");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(((Function<Row, String>) Row::constant).apply(null));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Row", """
+            package com.acme;
+
+            public final class Row {
+                public String constant() {
+                    return "incorrect";
+                }
+            }
+            """);
+
+        final Path classes = project.resolve("jvm-classes");
+        Files.createDirectories(classes);
+        final ProcessResult javac = process(project, List.of(
+            CliTestHarness.currentJavacCommand(),
+            "-d",
+            classes.toString(),
+            project.resolve("src/main/java/com/acme/Main.java").toString(),
+            project.resolve("src/main/java/com/acme/Row.java").toString()
+        ));
+        final ProcessResult jvm = process(project, List.of(
+            CliTestHarness.currentJavaCommand(),
+            "-cp",
+            classes.toString(),
+            "com.acme.Main"
+        ));
+        final CliRun run = run(tempDir, "build", project.toString());
+        final ProcessResult nativeRun = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/unbound-instance-reference-null-receiver").toString()))
+            : new ProcessResult(-1, "", run.stderr());
+
+        assertThat(
+            javac.exitCode() + "\n"
+                + jvm.exitCode() + "\n"
+                + jvm.stdout().isEmpty() + "\n"
+                + jvm.stderr().contains("NullPointerException") + "\n"
+                + run.exitCode() + "\n"
+                + nativeRun.exitCode() + "\n"
+                + nativeRun.stdout().isEmpty() + "\n"
+                + nativeRun.stderr().contains("null object")
+        ).isEqualTo("0\n1\ntrue\ntrue\n0\n1\ntrue\ntrue");
     }
 
     @Test
