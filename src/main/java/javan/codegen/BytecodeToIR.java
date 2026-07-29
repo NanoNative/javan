@@ -200,7 +200,7 @@ public final class BytecodeToIR {
         final Map<Integer, StackValue> pendingExceptionHandlerStacks = new HashMap<>();
         final CodeAttribute code = method.code().orElseThrow();
         final List<Instruction> bytecode = code.instructions();
-        final int lastDupX2Offset = lastDupX2Offset(bytecode);
+        final int lastMaterializingDuplicateOffset = lastMaterializingDuplicateOffset(bytecode);
         final List<Integer> ignoredHandlerOffsets = ignoredEnumSwitchMapHandlerOffsets(classes, classFile, method, code);
         final List<Integer> handlerOffsets = exceptionHandlerOffsets(code);
         final List<Integer> branchTargets = branchTargets(code);
@@ -291,7 +291,7 @@ public final class BytecodeToIR {
                 functionOrNullTargetIds,
                 materializedLambdaMethods,
                 sourceLines,
-                lastDupX2Offset
+                lastMaterializingDuplicateOffset
             );
             BytecodeToIRControlFlowSupport.annotateNewInstructions(instructions, instructionStart, sourceLocation);
         }
@@ -532,7 +532,7 @@ public final class BytecodeToIR {
         final Map<String, Integer> functionOrNullTargetIds,
         final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final SourceLineIndex sourceLines,
-        final int lastDupX2Offset
+        final int lastMaterializingDuplicateOffset
     ) {
         switch (instruction.opcode()) {
             case 1:
@@ -724,6 +724,17 @@ public final class BytecodeToIR {
                 break;
             case 91:
                 duplicateTopSlotUnderTwoSlots(
+                    classFile,
+                    method,
+                    instruction,
+                    instructions,
+                    stack,
+                    locals,
+                    localDeclarations
+                );
+                break;
+            case 92:
+                duplicateTopTwoSlots(
                     classFile,
                     method,
                     instruction,
@@ -1020,7 +1031,7 @@ public final class BytecodeToIR {
                 }
                 break;
         }
-        if (instruction.offset() < lastDupX2Offset) {
+        if (instruction.offset() < lastMaterializingDuplicateOffset) {
             snapshotOperandStack(instructions, stack, locals, localDeclarations);
         }
     }
@@ -1877,13 +1888,13 @@ public final class BytecodeToIR {
             );
         }
         if (isCategoryTwo(lower.kind())) {
-            requireMaterializableDupX2Value(classFile, method, instruction, lower);
-            requireMaterializableDupX2Value(classFile, method, instruction, top);
+            requireMaterializableDuplicateValue(classFile, method, instruction, lower);
+            requireMaterializableDuplicateValue(classFile, method, instruction, top);
             final StackValue materializedLower =
-                materializeDupX2ValueIfNeeded(lower, instructions, locals, localDeclarations);
+                materializeDuplicateValueIfNeeded(lower, instructions, locals, localDeclarations);
             final StackValue materializedTop = top == lower
                 ? materializedLower
-                : materializeDupX2ValueIfNeeded(top, instructions, locals, localDeclarations);
+                : materializeDuplicateValueIfNeeded(top, instructions, locals, localDeclarations);
             stack.set(lowerIndex, materializedTop);
             stack.set(topIndex, materializedLower);
             stack.add(materializedTop);
@@ -1907,50 +1918,107 @@ public final class BytecodeToIR {
                 "dup_x2 cannot use a category-2 value beneath a category-1 intermediate value."
             );
         }
-        requireMaterializableDupX2Value(classFile, method, instruction, bottom);
-        requireMaterializableDupX2Value(classFile, method, instruction, lower);
-        requireMaterializableDupX2Value(classFile, method, instruction, top);
+        requireMaterializableDuplicateValue(classFile, method, instruction, bottom);
+        requireMaterializableDuplicateValue(classFile, method, instruction, lower);
+        requireMaterializableDuplicateValue(classFile, method, instruction, top);
         final StackValue materializedBottom =
-            materializeDupX2ValueIfNeeded(bottom, instructions, locals, localDeclarations);
+            materializeDuplicateValueIfNeeded(bottom, instructions, locals, localDeclarations);
         final StackValue materializedLower = lower == bottom
             ? materializedBottom
-            : materializeDupX2ValueIfNeeded(lower, instructions, locals, localDeclarations);
+            : materializeDuplicateValueIfNeeded(lower, instructions, locals, localDeclarations);
         final StackValue materializedTop = top == bottom
             ? materializedBottom
             : top == lower
                 ? materializedLower
-                : materializeDupX2ValueIfNeeded(top, instructions, locals, localDeclarations);
+                : materializeDuplicateValueIfNeeded(top, instructions, locals, localDeclarations);
         stack.set(bottomIndex, materializedTop);
         stack.set(lowerIndex, materializedBottom);
         stack.set(topIndex, materializedLower);
         stack.add(materializedTop);
     }
 
-    private static void requireMaterializableDupX2Value(
+    private static void duplicateTopTwoSlots(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrExpression> locals,
+        final Map<Integer, IrLocal> localDeclarations
+    ) {
+        if (stack.isEmpty()) {
+            throw invalidStack(
+                classFile,
+                method,
+                instruction,
+                "dup2 requires either one category-2 value or two category-1 values."
+            );
+        }
+        final int topIndex = stack.size() - 1;
+        final StackValue top = stack.get(topIndex);
+        requireMaterializableDuplicateValue(classFile, method, instruction, top);
+        if (isCategoryTwo(top.kind())) {
+            final StackValue materializedTop =
+                materializeDuplicateValueIfNeeded(top, instructions, locals, localDeclarations);
+            stack.set(topIndex, materializedTop);
+            stack.add(materializedTop);
+            return;
+        }
+        if (stack.size() < 2) {
+            throw invalidStack(
+                classFile,
+                method,
+                instruction,
+                "dup2 requires two category-1 values, but only one is available."
+            );
+        }
+        final int lowerIndex = topIndex - 1;
+        final StackValue lower = stack.get(lowerIndex);
+        if (isCategoryTwo(lower.kind())) {
+            throw invalidStack(
+                classFile,
+                method,
+                instruction,
+                "dup2 cannot pair a category-1 top value with a category-2 value beneath it."
+            );
+        }
+        requireMaterializableDuplicateValue(classFile, method, instruction, lower);
+        final StackValue materializedLower =
+            materializeDuplicateValueIfNeeded(lower, instructions, locals, localDeclarations);
+        final StackValue materializedTop = top == lower
+            ? materializedLower
+            : materializeDuplicateValueIfNeeded(top, instructions, locals, localDeclarations);
+        stack.set(lowerIndex, materializedLower);
+        stack.set(topIndex, materializedTop);
+        stack.add(materializedLower);
+        stack.add(materializedTop);
+    }
+
+    private static void requireMaterializableDuplicateValue(
         final ClassFile classFile,
         final MethodInfo method,
         final Instruction instruction,
         final StackValue value
     ) {
-        if (isMaterializableDupX2StackKind(value.kind()) && hasMaterializableDupX2Expression(value)) {
+        if (isMaterializableDuplicateStackKind(value.kind()) && hasMaterializableDuplicateExpression(value)) {
             return;
         }
         throw invalidStack(
             classFile,
             method,
             instruction,
-            "dup_x2 cannot duplicate deferred compiler value " + stackKindName(value.kind()) + "."
+            instruction.mnemonic() + " cannot duplicate deferred compiler value " + stackKindName(value.kind()) + "."
         );
     }
 
-    private static boolean hasMaterializableDupX2Expression(final StackValue value) {
+    private static boolean hasMaterializableDuplicateExpression(final StackValue value) {
         return value.expression().isPresent()
             || value.dynamicLambda().isPresent()
             || value.kind() == StackKind.PRINT_STREAM
             || value.kind() == StackKind.ERROR_PRINT_STREAM;
     }
 
-    private static StackValue materializeDupX2ValueIfNeeded(
+    private static StackValue materializeDuplicateValueIfNeeded(
         final StackValue value,
         final List<IrInstruction> instructions,
         final Map<Integer, IrExpression> locals,
@@ -1960,7 +2028,7 @@ public final class BytecodeToIR {
             return value;
         }
         final IrExpression expression = stackValueExpression(value);
-        if (isRepeatableDupX2Expression(expression, locals)) {
+        if (isRepeatableDuplicateExpression(expression, locals)) {
             return value;
         }
         final IrType type = BytecodeToIRControlFlowSupport.stackKindType(value.kind());
@@ -1989,12 +2057,12 @@ public final class BytecodeToIR {
                 stack.set(index, stack.get(aliasIndex));
                 continue;
             }
-            if (!isMaterializableDupX2StackKind(value.kind()) || !hasMaterializableDupX2Expression(value)) {
+            if (!isMaterializableDuplicateStackKind(value.kind()) || !hasMaterializableDuplicateExpression(value)) {
                 continue;
             }
             stack.set(
                 index,
-                materializeDupX2ValueIfNeeded(value, instructions, locals, localDeclarations)
+                materializeDuplicateValueIfNeeded(value, instructions, locals, localDeclarations)
             );
         }
     }
@@ -2012,16 +2080,16 @@ public final class BytecodeToIR {
         return -1;
     }
 
-    static int lastDupX2Offset(final List<Instruction> instructions) {
+    static int lastMaterializingDuplicateOffset(final List<Instruction> instructions) {
         for (int index = instructions.size() - 1; index >= 0; index--) {
-            if (instructions.get(index).opcode() == 91) {
+            if (instructions.get(index).opcode() == 91 || instructions.get(index).opcode() == 92) {
                 return instructions.get(index).offset();
             }
         }
         return -1;
     }
 
-    private static boolean isRepeatableDupX2Expression(
+    private static boolean isRepeatableDuplicateExpression(
         final IrExpression expression,
         final Map<Integer, IrExpression> locals
     ) {
@@ -2032,7 +2100,7 @@ public final class BytecodeToIR {
         };
     }
 
-    private static boolean isMaterializableDupX2StackKind(final StackKind kind) {
+    private static boolean isMaterializableDuplicateStackKind(final StackKind kind) {
         return kind == StackKind.INT
             || kind == StackKind.LONG
             || kind == StackKind.FLOAT
