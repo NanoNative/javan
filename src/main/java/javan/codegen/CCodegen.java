@@ -43,9 +43,9 @@ public final class CCodegen {
     private static final String TEMPORAL_CONVERSION_LAMBDA_UNSUPPORTED_SYMBOL = "javan_temporal_conversion_lambda_unsupported";
     private static final String GENERATED_ENUM_BY_NAME_SYMBOL = "javan_generated_enum_by_name";
     private static final String GENERATED_ENUM_BY_ORDINAL_SYMBOL = "javan_generated_enum_by_ordinal";
+    private static final String GENERATED_OBJECT_CLONE_SYMBOL = "javan_generated_object_clone";
     private static final String RECORD_REFERENCE_EQUALS_DISPATCH = "javan_dispatch_record_reference_equals";
     private static final String RECORD_REFERENCE_HASH_CODE_DISPATCH = "javan_dispatch_record_reference_hash_code";
-    private static final String GENERATED_OBJECT_CLONE_SYMBOL = "javan_generated_object_clone";
     private static final String FALLIBLE_APPLY_METHOD_NAME = "applyWithException";
 
     /**
