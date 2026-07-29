@@ -95,7 +95,6 @@ final class JdkCallableAccounting {
             if ("strip".equals(methodName)
                 || "stripLeading".equals(methodName)
                 || "stripTrailing".equals(methodName)
-                || "isBlank".equals(methodName)
                 || "lines".equals(methodName)
                 || "chars".equals(methodName)
                 || "codePoints".equals(methodName)

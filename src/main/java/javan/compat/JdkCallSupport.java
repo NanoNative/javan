@@ -382,6 +382,7 @@ public final class JdkCallSupport {
         runtime("String.length", "java/lang/String", "length", "()I"),
         runtime("String.hashCode", "java/lang/String", "hashCode", "()I"),
         runtime("String.isEmpty", "java/lang/String", "isEmpty", "()Z"),
+        runtime("String.isBlank", "java/lang/String", "isBlank", "()Z"),
         runtime("String.charAt", "java/lang/String", "charAt", "(I)C"),
         runtime("String.indexOf", "java/lang/String", "indexOf", "(I)I"),
         runtime("String.indexOf", "java/lang/String", "indexOf", "(II)I"),

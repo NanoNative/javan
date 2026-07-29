@@ -344,7 +344,14 @@ final class RuntimeSourcePlatformSection {
         int javan_character_is_whitespace(int value) {
             return value == 0x20
                 || (value >= 0x09 && value <= 0x0d)
-                || (value >= 0x1c && value <= 0x1f);
+                || (value >= 0x1c && value <= 0x1f)
+                || value == 0x1680
+                || (value >= 0x2000 && value <= 0x2006)
+                || (value >= 0x2008 && value <= 0x200a)
+                || value == 0x2028
+                || value == 0x2029
+                || value == 0x205f
+                || value == 0x3000;
         }
 
         void* javan_stringbuilder_substring(void* builder_value, int begin) {

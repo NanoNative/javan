@@ -6768,6 +6768,120 @@ final class RuntimeFilesTest {
     private record RuntimeProbeOutput(String stdout, String stderr) {
     }
 
+    @Test
+    void stringIsBlankRejectsNullReceiver() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            "javan_register_static_roots(0, 0);",
+            "(void) javan_string_is_blank(NULL);"
+        );
+
+        assertThat(stdout).isEqualTo("null string\n");
+    }
+
+    @Test
+    void stringIsBlankRejectsTruncatedUtf8() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            "javan_register_static_roots(0, 0);",
+            """
+            const char value[] = {(char) 0xe2, (char) 0x80, 0};
+            (void) javan_string_is_blank(value);
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid UTF-8 string\n");
+    }
+
+    @Test
+    void stringIsBlankRejectsOverlongUtf8() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            "javan_register_static_roots(0, 0);",
+            """
+            const char value[] = {(char) 0xc0, (char) 0x80, 0};
+            (void) javan_string_is_blank(value);
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid UTF-8 string\n");
+    }
+
+    @Test
+    void stringIsBlankRejectsInvalidUtf8Continuation() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            "javan_register_static_roots(0, 0);",
+            """
+            const char value[] = {(char) 0xe2, ' ', (char) 0x80, 0};
+            (void) javan_string_is_blank(value);
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid UTF-8 string\n");
+    }
+
+    @Test
+    void stringIsBlankRejectsOutOfRangeUtf8() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            "javan_register_static_roots(0, 0);",
+            """
+            const char value[] = {(char) 0xf4, (char) 0x90, (char) 0x80, (char) 0x80, 0};
+            (void) javan_string_is_blank(value);
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid UTF-8 string\n");
+    }
+
+    @Test
+    void stringIsBlankRejectsOverlongThreeByteUtf8() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            "javan_register_static_roots(0, 0);",
+            """
+            const char value[] = {(char) 0xe0, (char) 0x80, (char) 0x80, 0};
+            (void) javan_string_is_blank(value);
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid UTF-8 string\n");
+    }
+
+    @Test
+    void stringIsBlankRejectsOverlongFourByteUtf8() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            "javan_register_static_roots(0, 0);",
+            """
+            const char value[] = {(char) 0xf0, (char) 0x80, (char) 0x80, (char) 0x80, 0};
+            (void) javan_string_is_blank(value);
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid UTF-8 string\n");
+    }
+
+    @Test
+    void stringIsBlankRejectsInvalidThirdUtf8Continuation() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            "javan_register_static_roots(0, 0);",
+            """
+            const char value[] = {(char) 0xe2, (char) 0x80, ' ', 0};
+            (void) javan_string_is_blank(value);
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid UTF-8 string\n");
+    }
+
+    @Test
+    void stringIsBlankRejectsInvalidFourthUtf8Continuation() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            "javan_register_static_roots(0, 0);",
+            """
+            const char value[] = {(char) 0xf0, (char) 0x90, (char) 0x80, ' ', 0};
+            (void) javan_string_is_blank(value);
+            """
+        );
+
+        assertThat(stdout).isEqualTo("invalid UTF-8 string\n");
+    }
+
     private String runRuntimePanicProbe(final String setup, final String statement) throws Exception {
         return runRuntimeBoundaryProbe(
             """
