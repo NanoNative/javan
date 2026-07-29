@@ -4524,6 +4524,11 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        int javan_float_is_finite(float value) {
+            const unsigned int bits = (unsigned int) javan_float_to_raw_int_bits(value);
+            return (bits & 0x7f800000U) != 0x7f800000U;
+        }
+
         void* javan_double_value_of(double value) {
             javan_boxed_double* object = (javan_boxed_double*) javan_alloc(sizeof(javan_boxed_double));
             object->value = value;

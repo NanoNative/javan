@@ -52,6 +52,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void floatIsFiniteIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Float",
+            "isFinite",
+            "(F)Z"
+        ))).isTrue();
+    }
+
+    @Test
     void stringIsBlankIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/String",

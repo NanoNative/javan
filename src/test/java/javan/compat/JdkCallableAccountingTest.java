@@ -1270,6 +1270,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksFloatIsFiniteAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Float", "isFinite", "(F)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksMathMultiplyExactLongIntAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Math", "multiplyExact", "(JI)J")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

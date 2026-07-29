@@ -6902,6 +6902,39 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void floatIsFiniteAcceptsMaximumValue() throws Exception {
+        assertThat(floatIsFiniteBits("7f7fffff")).isEqualTo("1\n");
+    }
+
+    @Test
+    void floatIsFiniteRejectsInfinity() throws Exception {
+        assertThat(floatIsFiniteBits("7f800000")).isEqualTo("0\n");
+    }
+
+    @Test
+    void floatIsFiniteRejectsNan() throws Exception {
+        assertThat(floatIsFiniteBits("7fc01234")).isEqualTo("0\n");
+    }
+
+    private String floatIsFiniteBits(final String bits) throws Exception {
+        return runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                printf(
+                    "%%d\\n",
+                    javan_float_is_finite(javan_float_int_bits_to_float(0x%s))
+                );
+                return 0;
+            }
+            """.formatted(bits),
+            "4096"
+        );
+    }
+
+    @Test
     void multiplyExactLongIntDetectsMinimumTimesNegativeOne() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
