@@ -20735,6 +20735,37 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersMathAddExactLongToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(JJ)J",
+            4,
+            4,
+            plain(0, 30, "lload_0"),
+            plain(1, 32, "lload_2"),
+            invokeStatic(2, new MethodRef("java/lang/Math", "addExact", "(JJ)J")),
+            plain(3, 173, "lreturn")
+        ));
+
+        assertThat(function.instructions()).contains(
+            IrInstruction.assignLong("long0", IrExpression.longLocal("arg0")),
+            IrInstruction.assignLong("long1", IrExpression.longLocal("arg1")),
+            IrInstruction.assignInt(
+                "int2",
+                IrExpression.intCall(
+                    "javan_math_add_exact_long_overflows",
+                    List.of(IrExpression.longLocal("long0"), IrExpression.longLocal("long1"))
+                )
+            ),
+            IrInstruction.returnLong(IrExpression.longCall(
+                "javan_math_add_exact_long",
+                List.of(IrExpression.longLocal("long0"), IrExpression.longLocal("long1"))
+            ))
+        );
+    }
+
+    @Test
     void lowersMathMultiplyExactLongIntToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

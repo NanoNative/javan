@@ -792,6 +792,15 @@ final class RuntimeSourceCoreSection {
             return (int) result;
         }
 
+        int javan_math_add_exact_long_overflows(long long left, long long right) {
+            return (right > 0 && left > LLONG_MAX - right)
+                || (right < 0 && left < LLONG_MIN - right);
+        }
+
+        long long javan_math_add_exact_long(long long left, long long right) {
+            return left + right;
+        }
+
         int javan_math_multiply_exact_long_int_overflows(long long left, int right) {
             if (left == 0 || right == 0) {
                 return 0;

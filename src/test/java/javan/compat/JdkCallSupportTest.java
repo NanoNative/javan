@@ -43,6 +43,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void mathAddExactLongIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Math",
+            "addExact",
+            "(JJ)J"
+        ))).isTrue();
+    }
+
+    @Test
     void floatToRawIntBitsIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/Float",
