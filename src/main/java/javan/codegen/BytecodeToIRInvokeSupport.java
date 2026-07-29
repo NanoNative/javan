@@ -9547,7 +9547,7 @@ final class BytecodeToIRInvokeSupport {
             if (lambdaCall.isSupplier()) {
                 return true;
             }
-            if (!lambdaCall.isPredicate()
+            if (!(lambdaCall.isPredicate() || lambdaCall.isFunction())
                 || captureDescriptors.isEmpty()
                 || parameters.size() != captureDescriptors.size()) {
                 return false;
@@ -9677,7 +9677,7 @@ final class BytecodeToIRInvokeSupport {
     }
 
     private static IrExpression invokeFunctionLambdaExpression(final DynamicLambda lambda, final IrExpression argument) {
-        if (lambda.implementationReferenceKind() == 6) {
+        if (lambda.implementationReferenceKind() == 5 || lambda.implementationReferenceKind() == 6) {
             final List<IrExpression> arguments = new ArrayList<>(lambda.captures());
             arguments.add(argument);
             return IrExpression.objectCall(symbol(new EntryPoint(
