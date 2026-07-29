@@ -586,7 +586,7 @@ final class RuntimeSourceMemorySections {
             ) != 0;
         }
 
-        static void javan_runtime_lock_enter(void) {
+        void javan_runtime_lock_enter(void) {
             if (javan_runtime_lock_ensure_initialized() == 0) {
                 javan_panic("unable to initialize runtime lock");
             }
@@ -594,7 +594,7 @@ final class RuntimeSourceMemorySections {
             javan_runtime_lock_depth_value++;
         }
 
-        static void javan_runtime_lock_leave(void) {
+        void javan_runtime_lock_leave(void) {
             if (javan_runtime_lock_depth_value <= 0) {
                 javan_panic("runtime lock underflow");
             }
@@ -632,7 +632,7 @@ final class RuntimeSourceMemorySections {
             pthread_mutexattr_destroy(&attributes);
         }
 
-        static void javan_runtime_lock_enter(void) {
+        void javan_runtime_lock_enter(void) {
             if (pthread_once(&javan_runtime_lock_once, javan_runtime_lock_initialize) != 0) {
                 javan_panic("unable to initialize runtime lock");
             }
@@ -642,7 +642,7 @@ final class RuntimeSourceMemorySections {
             javan_runtime_lock_depth_value++;
         }
 
-        static void javan_runtime_lock_leave(void) {
+        void javan_runtime_lock_leave(void) {
             if (javan_runtime_lock_depth_value <= 0) {
                 javan_panic("runtime lock underflow");
             }
@@ -6761,17 +6761,29 @@ final class RuntimeSourceMemorySections {
             return javan_array_checked(array)->length;
         }
 
-        static void* javan_arrays_copy_of(void* array, int new_length, int expected_kind, void* (*allocate)(int)) {
+        static void javan_arrays_copy_of_into(
+            void** result,
+            void* array,
+            int new_length,
+            int expected_kind,
+            void* (*allocate)(int)
+        ) {
+            if (result == NULL) {
+                javan_panic("invalid array copy result");
+            }
+            *result = NULL;
             void* source_root = array;
+            void** javan_array_copy_roots[] = {
+                (void**) &source_root,
+                result
+            };
+            javan_root_frame_push(javan_array_copy_roots, 2);
+            javan_runtime_lock_enter();
             javan_array_header* source = javan_array_checked(source_root);
             javan_array_kind_checked(source, expected_kind);
-            void** javan_array_copy_roots[] = {
-                (void**) &source_root
-            };
-            javan_root_frame_push(javan_array_copy_roots, 1);
-            void* result = allocate(new_length);
+            *result = allocate(new_length);
             source = javan_array_checked(source_root);
-            javan_array_header* target = javan_array_checked(result);
+            javan_array_header* target = javan_array_checked(*result);
             int copied = source->length < new_length ? source->length : new_length;
             if (copied > 0) {
                 memcpy(
@@ -6780,63 +6792,123 @@ final class RuntimeSourceMemorySections {
                     (unsigned long) copied * (unsigned long) source->element_size
                 );
             }
+            javan_runtime_lock_leave();
             javan_root_frame_pop(javan_array_copy_roots);
-            return result;
+        }
+
+        void javan_arrays_copy_of_object_into(void** result, void* array, int new_length) {
+            if (result == NULL) {
+                javan_panic("invalid array copy result");
+            }
+            *result = NULL;
+            void* source_root = array;
+            void** javan_array_copy_roots[] = {
+                (void**) &source_root,
+                result
+            };
+            javan_root_frame_push(javan_array_copy_roots, 2);
+            javan_runtime_lock_enter();
+            javan_array_header* source = javan_array_checked(source_root);
+            javan_array_kind_checked(source, JAVAN_ARRAY_KIND_OBJECT);
+            *result = javan_object_array_new(new_length, source->class_name);
+            source = javan_array_checked(source_root);
+            javan_array_header* target = javan_array_checked(*result);
+            int copied = source->length < new_length ? source->length : new_length;
+            if (copied > 0) {
+                memcpy(
+                    javan_array_values(target),
+                    javan_array_values(source),
+                    (unsigned long) copied * (unsigned long) source->element_size
+                );
+            }
+            javan_runtime_lock_leave();
+            javan_root_frame_pop(javan_array_copy_roots);
+        }
+
+        void javan_arrays_copy_of_boolean_into(void** result, void* array, int new_length) {
+            javan_arrays_copy_of_into(result, array, new_length, JAVAN_ARRAY_KIND_BOOLEAN, javan_boolean_array_new);
+        }
+
+        void javan_arrays_copy_of_int_into(void** result, void* array, int new_length) {
+            javan_arrays_copy_of_into(result, array, new_length, JAVAN_ARRAY_KIND_INT, javan_int_array_new);
+        }
+
+        void javan_arrays_copy_of_long_into(void** result, void* array, int new_length) {
+            javan_arrays_copy_of_into(result, array, new_length, JAVAN_ARRAY_KIND_LONG, javan_long_array_new);
+        }
+
+        void javan_arrays_copy_of_float_into(void** result, void* array, int new_length) {
+            javan_arrays_copy_of_into(result, array, new_length, JAVAN_ARRAY_KIND_FLOAT, javan_float_array_new);
+        }
+
+        void javan_arrays_copy_of_double_into(void** result, void* array, int new_length) {
+            javan_arrays_copy_of_into(result, array, new_length, JAVAN_ARRAY_KIND_DOUBLE, javan_double_array_new);
+        }
+
+        void javan_arrays_copy_of_byte_into(void** result, void* array, int new_length) {
+            javan_arrays_copy_of_into(result, array, new_length, JAVAN_ARRAY_KIND_BYTE, javan_byte_array_new);
+        }
+
+        void javan_arrays_copy_of_short_into(void** result, void* array, int new_length) {
+            javan_arrays_copy_of_into(result, array, new_length, JAVAN_ARRAY_KIND_SHORT, javan_short_array_new);
+        }
+
+        void javan_arrays_copy_of_char_into(void** result, void* array, int new_length) {
+            javan_arrays_copy_of_into(result, array, new_length, JAVAN_ARRAY_KIND_CHAR, javan_char_array_new);
         }
 
         void* javan_arrays_copy_of_object(void* array, int new_length) {
-            void* source_root = array;
-            javan_array_header* source = javan_array_checked(source_root);
-            javan_array_kind_checked(source, JAVAN_ARRAY_KIND_OBJECT);
-            void** javan_array_copy_roots[] = {
-                (void**) &source_root
-            };
-            javan_root_frame_push(javan_array_copy_roots, 1);
-            void* result = javan_object_array_new(new_length, source->class_name);
-            source = javan_array_checked(source_root);
-            javan_array_header* target = javan_array_checked(result);
-            int copied = source->length < new_length ? source->length : new_length;
-            if (copied > 0) {
-                memcpy(
-                    javan_array_values(target),
-                    javan_array_values(source),
-                    (unsigned long) copied * (unsigned long) source->element_size
-                );
-            }
-            javan_root_frame_pop(javan_array_copy_roots);
+            void* result = NULL;
+            javan_arrays_copy_of_object_into(&result, array, new_length);
             return result;
         }
 
         void* javan_arrays_copy_of_boolean(void* array, int new_length) {
-            return javan_arrays_copy_of(array, new_length, JAVAN_ARRAY_KIND_BOOLEAN, javan_boolean_array_new);
+            void* result = NULL;
+            javan_arrays_copy_of_boolean_into(&result, array, new_length);
+            return result;
         }
 
         void* javan_arrays_copy_of_int(void* array, int new_length) {
-            return javan_arrays_copy_of(array, new_length, JAVAN_ARRAY_KIND_INT, javan_int_array_new);
+            void* result = NULL;
+            javan_arrays_copy_of_int_into(&result, array, new_length);
+            return result;
         }
 
         void* javan_arrays_copy_of_long(void* array, int new_length) {
-            return javan_arrays_copy_of(array, new_length, JAVAN_ARRAY_KIND_LONG, javan_long_array_new);
+            void* result = NULL;
+            javan_arrays_copy_of_long_into(&result, array, new_length);
+            return result;
         }
 
         void* javan_arrays_copy_of_float(void* array, int new_length) {
-            return javan_arrays_copy_of(array, new_length, JAVAN_ARRAY_KIND_FLOAT, javan_float_array_new);
+            void* result = NULL;
+            javan_arrays_copy_of_float_into(&result, array, new_length);
+            return result;
         }
 
         void* javan_arrays_copy_of_double(void* array, int new_length) {
-            return javan_arrays_copy_of(array, new_length, JAVAN_ARRAY_KIND_DOUBLE, javan_double_array_new);
+            void* result = NULL;
+            javan_arrays_copy_of_double_into(&result, array, new_length);
+            return result;
         }
 
         void* javan_arrays_copy_of_byte(void* array, int new_length) {
-            return javan_arrays_copy_of(array, new_length, JAVAN_ARRAY_KIND_BYTE, javan_byte_array_new);
+            void* result = NULL;
+            javan_arrays_copy_of_byte_into(&result, array, new_length);
+            return result;
         }
 
         void* javan_arrays_copy_of_short(void* array, int new_length) {
-            return javan_arrays_copy_of(array, new_length, JAVAN_ARRAY_KIND_SHORT, javan_short_array_new);
+            void* result = NULL;
+            javan_arrays_copy_of_short_into(&result, array, new_length);
+            return result;
         }
 
         void* javan_arrays_copy_of_char(void* array, int new_length) {
-            return javan_arrays_copy_of(array, new_length, JAVAN_ARRAY_KIND_CHAR, javan_char_array_new);
+            void* result = NULL;
+            javan_arrays_copy_of_char_into(&result, array, new_length);
+            return result;
         }
 
         void* javan_arrays_copy_of_range_byte(void* array, int begin, int end) {

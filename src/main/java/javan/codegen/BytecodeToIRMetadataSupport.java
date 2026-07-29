@@ -1,6 +1,7 @@
 package javan.codegen;
 
 import javan.analysis.EntryPoint;
+import javan.analysis.GeneratedObjectCloneSupport;
 import javan.classfile.ClassFile;
 import javan.classfile.FieldInfo;
 import javan.classfile.MethodInfo;
@@ -12,9 +13,11 @@ import javan.ir.IrType;
 import javan.util.Strings2;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static javan.codegen.BytecodeToIR.*;
 
@@ -26,9 +29,11 @@ final class BytecodeToIRMetadataSupport {
             result.add(new IrClass(
                 classFile.name(),
                 classSymbol(classFile.name()),
-                fields(classFile, false),
+                instanceFields(classes, classFile),
                 fields(classFile, true),
-                enumConstants(classFile)
+                enumConstants(classFile),
+                GeneratedObjectCloneSupport.status(classes, classFile)
+                    == GeneratedObjectCloneSupport.Status.SUPPORTED
             ));
         }
         return List.copyOf(result);
@@ -45,6 +50,71 @@ final class BytecodeToIRMetadataSupport {
         }
         return List.copyOf(result);
     }
+
+    private static List<IrField> instanceFields(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile
+    ) {
+        final List<ClassFile> hierarchy = new ArrayList<>();
+        collectGeneratedHierarchy(classes, classFile, new HashSet<>(), hierarchy);
+        List<IrField> result = List.of();
+        for (final ClassFile owner : hierarchy) {
+            result = appendDeclaredFields(result, fields(owner, false));
+        }
+        return result;
+    }
+
+    private static void collectGeneratedHierarchy(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final Set<String> visited,
+        final List<ClassFile> hierarchy
+    ) {
+        if (!visited.add(classFile.name())) {
+            return;
+        }
+        final String superName = classFile.superName();
+        final ClassFile superClass = superName == null || superName.isEmpty()
+            ? null
+            : classes.get(superName);
+        if (superClass != null) {
+            collectGeneratedHierarchy(classes, superClass, visited, hierarchy);
+        }
+        hierarchy.add(classFile);
+    }
+
+    private static List<IrField> appendDeclaredFields(
+        final List<IrField> inherited,
+        final List<IrField> declared
+    ) {
+        final Set<String> declaredSymbols = new HashSet<>();
+        final Set<String> unavailableSymbols = new HashSet<>();
+        for (final IrField field : inherited) {
+            unavailableSymbols.add(field.symbol());
+        }
+        for (final IrField field : declared) {
+            declaredSymbols.add(field.symbol());
+            unavailableSymbols.add(field.symbol());
+        }
+        final List<IrField> result = new ArrayList<>();
+        for (final IrField field : inherited) {
+            if (!declaredSymbols.contains(field.symbol())) {
+                result.add(field);
+                continue;
+            }
+            int suffix = 0;
+            String symbol;
+            do {
+                symbol = field.symbol() + "_javan_super_" + suffix;
+                suffix++;
+            } while (unavailableSymbols.contains(symbol));
+            unavailableSymbols.add(symbol);
+            result.add(new IrField(field.type(), field.name(), symbol));
+        }
+        result.addAll(declared);
+        return List.copyOf(result);
+    }
+
     static List<ClassFile> sortedClasses(final Map<String, ClassFile> classes) {
         final List<ClassFile> result = new ArrayList<>();
         for (final ClassFile classFile : classes.values()) {

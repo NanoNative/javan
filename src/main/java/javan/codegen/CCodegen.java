@@ -43,6 +43,7 @@ public final class CCodegen {
     private static final String TEMPORAL_CONVERSION_LAMBDA_UNSUPPORTED_SYMBOL = "javan_temporal_conversion_lambda_unsupported";
     private static final String GENERATED_ENUM_BY_NAME_SYMBOL = "javan_generated_enum_by_name";
     private static final String GENERATED_ENUM_BY_ORDINAL_SYMBOL = "javan_generated_enum_by_ordinal";
+    private static final String GENERATED_OBJECT_CLONE_SYMBOL = "javan_generated_object_clone";
     private static final String RECORD_REFERENCE_EQUALS_DISPATCH = "javan_dispatch_record_reference_equals";
     private static final String RECORD_REFERENCE_HASH_CODE_DISPATCH = "javan_dispatch_record_reference_hash_code";
     private static final String FALLIBLE_APPLY_METHOD_NAME = "applyWithException";
@@ -56,6 +57,7 @@ public final class CCodegen {
      * @throws IOException when writing fails
      */
     public Path generate(final IrProgram program, final Path generatedDirectory) throws IOException {
+        final CodegenFeatures features = codegenFeatures(program);
         final StringBuilder c = new StringBuilder();
         c.append("#include \"javan_runtime.h\"").append(System.lineSeparator());
         c.append("#include <stddef.h>").append(System.lineSeparator());
@@ -95,7 +97,7 @@ public final class CCodegen {
             emitDispatchSignature(dispatch, c);
             c.append(";").append(System.lineSeparator());
         }
-        c.append("void javan_thread_run_target(void* target);").append(System.lineSeparator());
+        emitRuntimeHelperPrototypes(features, c);
         if (!program.materializedLambdaTargets().isEmpty()) {
             c.append("static void* ").append(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
             c.append("static void* ").append(MATERIALIZED_LAMBDA_LONG_OBJECT_APPLY_SYMBOL).append("(void* self, int64_t arg);").append(System.lineSeparator());
@@ -107,7 +109,7 @@ public final class CCodegen {
         }
         c.append(System.lineSeparator());
         emitAllocators(program, c);
-        emitGeneratedObjectClassHelpers(program, c);
+        emitGeneratedObjectHelpers(program, features, c);
         emitRecordShapeExactTypeHelper(program, c);
         emitEnumOrdinalHelpers(program, c);
         emitExactEnumLookupHelpers(program, c);
@@ -138,6 +140,7 @@ public final class CCodegen {
         final Path generatedDirectory,
         final List<ExportedMethod> exports
     ) throws IOException {
+        final CodegenFeatures features = codegenFeatures(program);
         final StringBuilder c = new StringBuilder();
         c.append("#include \"javan_runtime.h\"").append(System.lineSeparator());
         c.append("#include <stddef.h>").append(System.lineSeparator());
@@ -175,7 +178,7 @@ public final class CCodegen {
             emitDispatchSignature(dispatch, c);
             c.append(";").append(System.lineSeparator());
         }
-        c.append("void javan_thread_run_target(void* target);").append(System.lineSeparator());
+        emitRuntimeHelperPrototypes(features, c);
         if (!program.materializedLambdaTargets().isEmpty()) {
             c.append("static void* ").append(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
             c.append("static void* ").append(MATERIALIZED_LAMBDA_LONG_OBJECT_APPLY_SYMBOL).append("(void* self, int64_t arg);").append(System.lineSeparator());
@@ -187,7 +190,7 @@ public final class CCodegen {
         }
         c.append(System.lineSeparator());
         emitAllocators(program, c);
-        emitGeneratedObjectClassHelpers(program, c);
+        emitGeneratedObjectHelpers(program, features, c);
         emitRecordShapeExactTypeHelper(program, c);
         emitEnumOrdinalHelpers(program, c);
         emitExactEnumLookupHelpers(program, c);
@@ -210,6 +213,31 @@ public final class CCodegen {
 
     private static void emitObjectHeader(final StringBuilder c) {
         // Declared in javan_runtime.h so runtime helpers and generated code share one object layout.
+    }
+
+    private static CodegenFeatures codegenFeatures(final IrProgram program) {
+        return new CodegenFeatures(usesGeneratedObjectClone(program));
+    }
+
+    private static void emitRuntimeHelperPrototypes(final CodegenFeatures features, final StringBuilder c) {
+        c.append("void javan_thread_run_target(void* target);").append(System.lineSeparator());
+        if (features.generatedObjectClone()) {
+            c.append("static void ")
+                .append(GENERATED_OBJECT_CLONE_SYMBOL)
+                .append("(void** result, void* value);")
+                .append(System.lineSeparator());
+        }
+    }
+
+    private static void emitGeneratedObjectHelpers(
+        final IrProgram program,
+        final CodegenFeatures features,
+        final StringBuilder c
+    ) {
+        emitGeneratedObjectClassHelpers(program, c);
+        if (features.generatedObjectClone()) {
+            emitGeneratedObjectCloneHelpers(program, c);
+        }
     }
 
     private static void emitStruct(final IrClass classInfo, final StringBuilder c) {
@@ -2067,6 +2095,19 @@ public final class CCodegen {
         private final java.util.List<String> assignments = new java.util.ArrayList<>();
 
         String expression(final javan.ir.IrExpression expression) {
+            if (usesRootedResultCall(expression)) {
+                final String arguments = expressionArguments(expression.arguments());
+                final String temporary = "javan_expr_tmp_" + temporaries.size();
+                temporaries.add(new Temporary(expression.type(), temporary));
+                assignments.add(
+                    rootedResultCallSymbol(expression)
+                        + "((void**) &"
+                        + temporary
+                        + (arguments.isEmpty() ? "" : ", " + arguments)
+                        + ");"
+                );
+                return temporary;
+            }
             final String raw = rawExpression(expression);
             if (!needsTemporary(expression)) {
                 return raw;
@@ -2836,6 +2877,10 @@ public final class CCodegen {
         return "javan_new_" + sanitize(className);
     }
 
+    private static String cloneSymbol(final String className) {
+        return "javan_clone_" + sanitize(className);
+    }
+
     private static String rootFrameSymbol(final IrFunction function) {
         return "javan_roots_" + sanitize(function.symbol());
     }
@@ -2992,5 +3037,187 @@ public final class CCodegen {
         result.append((char) ('0' + ((value >> 6) & 7)));
         result.append((char) ('0' + ((value >> 3) & 7)));
         result.append((char) ('0' + (value & 7)));
+    }
+
+    private static boolean usesGeneratedObjectClone(final IrProgram program) {
+        for (final IrFunction function : program.functions()) {
+            for (final IrInstruction instruction : function.instructions()) {
+                if (instruction.expression().isPresent()
+                    && usesGeneratedObjectClone(instruction.expression().orElseThrow())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean usesGeneratedObjectClone(final IrExpression expression) {
+        if (expression.kind() == IrExpression.Kind.CALL && GENERATED_OBJECT_CLONE_SYMBOL.equals(expression.value())) {
+            return true;
+        }
+        for (final IrExpression argument : expression.arguments()) {
+            if (usesGeneratedObjectClone(argument)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean usesRootedResultCall(final IrExpression expression) {
+        if (expression.kind() != IrExpression.Kind.CALL || expression.type() != javan.ir.IrType.OBJECT) {
+            return false;
+        }
+        return GENERATED_OBJECT_CLONE_SYMBOL.equals(expression.value())
+            || isArrayCopyIntoCall(expression.value());
+    }
+
+    private static String rootedResultCallSymbol(final IrExpression expression) {
+        if (GENERATED_OBJECT_CLONE_SYMBOL.equals(expression.value())) {
+            return GENERATED_OBJECT_CLONE_SYMBOL;
+        }
+        return expression.value() + "_into";
+    }
+
+    private static boolean isArrayCopyIntoCall(final String symbol) {
+        return switch (symbol) {
+            case "javan_arrays_copy_of_object",
+                "javan_arrays_copy_of_boolean",
+                "javan_arrays_copy_of_int",
+                "javan_arrays_copy_of_long",
+                "javan_arrays_copy_of_float",
+                "javan_arrays_copy_of_double",
+                "javan_arrays_copy_of_byte",
+                "javan_arrays_copy_of_short",
+                "javan_arrays_copy_of_char" -> true;
+            default -> false;
+        };
+    }
+
+    private static void emitGeneratedObjectCloneHelpers(final IrProgram program, final StringBuilder c) {
+        final java.util.Map<String, Integer> typeIds = typeIds(program);
+        for (final IrClass classInfo : program.classes()) {
+            if (!classInfo.cloneable()) {
+                continue;
+            }
+            emitGeneratedObjectCloneHelper(classInfo, c);
+        }
+
+        emitGeneratedObjectCloneDispatch(program, typeIds, c);
+    }
+
+    private static void emitGeneratedObjectCloneHelper(final IrClass classInfo, final StringBuilder c) {
+        final String classSymbol = classInfo.symbol();
+        final String functionSymbol = cloneSymbol(classInfo.jvmName());
+
+        c.append("static void ")
+            .append(functionSymbol)
+            .append("(void** result, void* value) {")
+            .append(System.lineSeparator())
+            .append("\tif (result == 0) {")
+            .append(System.lineSeparator())
+            .append("\t\tjavan_panic(\"invalid object clone result\");")
+            .append(System.lineSeparator())
+            .append("\t}")
+            .append(System.lineSeparator())
+            .append("\t*result = (void*) 0;")
+            .append(System.lineSeparator())
+            .append("\tstruct ")
+            .append(classSymbol)
+            .append("* source = (struct ")
+            .append(classSymbol)
+            .append("*) value;")
+            .append(System.lineSeparator())
+            .append("\tstruct ")
+            .append(classSymbol)
+            .append("* copy = (struct ")
+            .append(classSymbol)
+            .append("*) 0;")
+            .append(System.lineSeparator())
+            .append("\tvoid** javan_clone_roots[] = {")
+            .append(System.lineSeparator())
+            .append("\t\t(void**) &source,")
+            .append(System.lineSeparator())
+            .append("\t\tresult")
+            .append(System.lineSeparator())
+            .append("\t};")
+            .append(System.lineSeparator())
+            .append("\tjavan_root_frame_push(javan_clone_roots, 2);")
+            .append(System.lineSeparator())
+            .append("\tjavan_runtime_lock_enter();")
+            .append(System.lineSeparator())
+            .append("\t*result = ")
+            .append(allocatorSymbol(classInfo.jvmName()))
+            .append("();")
+            .append(System.lineSeparator())
+            .append("\tcopy = (struct ")
+            .append(classSymbol)
+            .append("*) *result;")
+            .append(System.lineSeparator());
+        for (final javan.ir.IrField field : classInfo.fields()) {
+            emitCloneFieldCopy(field, c);
+        }
+        c.append("\tjavan_runtime_lock_leave();").append(System.lineSeparator());
+        c.append("\tjavan_root_frame_pop(javan_clone_roots);").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+    }
+
+    private static void emitCloneFieldCopy(final javan.ir.IrField field, final StringBuilder c) {
+        c.append("\tcopy->")
+            .append(field.symbol())
+            .append(" = source->")
+            .append(field.symbol())
+            .append(";")
+            .append(System.lineSeparator());
+    }
+
+    private static void emitGeneratedObjectCloneDispatch(
+        final IrProgram program,
+        final java.util.Map<String, Integer> typeIds,
+        final StringBuilder c
+    ) {
+        c.append("static void ")
+            .append(GENERATED_OBJECT_CLONE_SYMBOL)
+            .append("(void** result, void* value) {")
+            .append(System.lineSeparator());
+        c.append("\tif (result == 0) {").append(System.lineSeparator());
+        c.append("\t\tjavan_panic(\"invalid object clone result\");").append(System.lineSeparator());
+        c.append("\t}").append(System.lineSeparator());
+        c.append("\t*result = (void*) 0;").append(System.lineSeparator());
+        c.append("\tif (value == 0) {").append(System.lineSeparator());
+        c.append("\t\tjavan_panic(\"null object clone\");").append(System.lineSeparator());
+        c.append("\t}").append(System.lineSeparator());
+        c.append("\tstruct javan_object_header* header = (struct javan_object_header*) value;").append(System.lineSeparator());
+        c.append("\tif (header->_javan_runtime_state != 0 || header->_javan_runtime_kind != 0) {").append(System.lineSeparator());
+        c.append("\t\tjavan_panic(\"runtime-attached object clone is not supported\");").append(System.lineSeparator());
+        c.append("\t}").append(System.lineSeparator());
+        c.append("\tswitch (header->_javan_type_id) {").append(System.lineSeparator());
+        for (final IrClass classInfo : program.classes()) {
+            if (!classInfo.cloneable()) {
+                continue;
+            }
+            emitGeneratedObjectCloneDispatchCase(classInfo, typeIds, c);
+        }
+        c.append("\t\tdefault:").append(System.lineSeparator());
+        c.append("\t\t\tjavan_panic(\"CloneNotSupportedException\");").append(System.lineSeparator());
+        c.append("\t}").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+    }
+
+    private static void emitGeneratedObjectCloneDispatchCase(
+        final IrClass classInfo,
+        final java.util.Map<String, Integer> typeIds,
+        final StringBuilder c
+    ) {
+        final int typeId = typeIds.get(classInfo.jvmName()).intValue();
+        c.append("\t\tcase ").append(typeId).append(":").append(System.lineSeparator());
+        c.append("\t\t\t")
+            .append(cloneSymbol(classInfo.jvmName()))
+            .append("(result, value);")
+            .append(System.lineSeparator());
+        c.append("\t\t\treturn;")
+            .append(System.lineSeparator());
+    }
+
+    private record CodegenFeatures(boolean generatedObjectClone) {
     }
 }

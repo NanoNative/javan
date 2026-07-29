@@ -26,12 +26,18 @@
         <maven-clean-plugin.version>3.4.1</maven-clean-plugin.version>
         <maven-jar-plugin.version>3.4.2</maven-jar-plugin.version>
         <maven-surefire-plugin.version>3.5.6</maven-surefire-plugin.version>
+        <exec-maven-plugin.version>3.6.3</exec-maven-plugin.version>
         <jacoco-maven-plugin.version>0.8.14</jacoco-maven-plugin.version>
         <surefireArgLine/>
         <javan.coverage.check.skip>true</javan.coverage.check.skip>
         <javan.coverage.soft-target>0.09</javan.coverage.soft-target>
         <javan.coverage.line.minimum>0.95</javan.coverage.line.minimum>
         <javan.coverage.branch.minimum>0.90</javan.coverage.branch.minimum>
+        <javan.compatibility.reference.java.vendor>Eclipse Adoptium</javan.compatibility.reference.java.vendor>
+        <javan.compatibility.reference.java.version>25.0.1</javan.compatibility.reference.java.version>
+        <javan.compatibility.reference.os.name>Linux</javan.compatibility.reference.os.name>
+        <javan.compatibility.reference.os.arch>amd64</javan.compatibility.reference.os.arch>
+        <javan.compatibility.require-reference-jdk>false</javan.compatibility.require-reference-jdk>
         <javan.jacoco.surefire.exec>${project.build.directory}/jacoco-surefire.exec</javan.jacoco.surefire.exec>
         <javan.jacoco.child.dir>${project.build.directory}/jacoco-child</javan.jacoco.child.dir>
         <javan.jacoco.merged.exec>${project.build.directory}/jacoco-merged.exec</javan.jacoco.merged.exec>
@@ -221,6 +227,33 @@
                                     </limits>
                                 </rule>
                             </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>${exec-maven-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>refresh-compatibility-status</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>java</goal>
+                        </goals>
+                        <configuration>
+                            <mainClass>javan.compat.CompatibilityStatusRefresh</mainClass>
+                            <arguments>
+                                <argument>${project.basedir}</argument>
+                                <argument>${project.build.outputDirectory}</argument>
+                                <argument>${java-version}</argument>
+                                <argument>${javan.compatibility.reference.java.vendor}</argument>
+                                <argument>${javan.compatibility.reference.java.version}</argument>
+                                <argument>${javan.compatibility.reference.os.name}</argument>
+                                <argument>${javan.compatibility.reference.os.arch}</argument>
+                                <argument>${javan.compatibility.require-reference-jdk}</argument>
+                            </arguments>
                         </configuration>
                     </execution>
                 </executions>
