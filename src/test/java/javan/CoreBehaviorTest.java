@@ -1225,6 +1225,13 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void jdkCallSupportAcceptsMatchExceptionCauseConstructor() {
+        assertThat(JdkCallSupport.isSupported(
+            new MethodRef("java/lang/MatchException", "<init>", "(Ljava/lang/String;Ljava/lang/Throwable;)V")
+        )).isTrue();
+    }
+
+    @Test
     void jdkCallSupportAcceptsEnumSyntheticConstructor() {
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Enum", "<init>", "(Ljava/lang/String;I)V"))).isTrue();
     }
@@ -11983,6 +11990,24 @@ final class CoreBehaviorTest {
     @Test
     void staticVerifierAcceptsExplicitThrowRangeWithPop() {
         final List<Diagnostic> diagnostics = verifyExceptionTable(explicitThrowInstructions(instruction(1, 87, "pop")));
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsMatchExceptionCauseConstructorWithNullCause() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            classInstruction(0, 187, "new", "java/lang/MatchException"),
+            instruction(1, 89, "dup"),
+            instruction(2, 18, "ldc"),
+            instruction(3, 1, "aconst_null"),
+            instruction(4, 183, "invokespecial", new MethodRef(
+                "java/lang/MatchException",
+                "<init>",
+                "(Ljava/lang/String;Ljava/lang/Throwable;)V"
+            )),
+            instruction(5, 191, "athrow")
+        ), new CodeException(0, 6, 6, Optional.of("java/lang/MatchException")));
 
         assertThat(diagnostics).isEmpty();
     }

@@ -9326,6 +9326,78 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void exhaustiveEnumSwitchExpressionBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("exhaustive-enum-switch-expression");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private enum Action {
+                    PRESS,
+                    FOCUS,
+                    SET_VALUE
+                }
+
+                private Main() {
+                }
+
+                private static int flag(final Action action) {
+                    return switch (action) {
+                        case PRESS -> 1;
+                        case FOCUS -> 2;
+                        case SET_VALUE -> 4;
+                    };
+                }
+
+                public static void main(final String[] args) {
+                    for (final Action action : Action.values()) {
+                        System.out.println(flag(action));
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        final String nativeOutput = build.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/exhaustive-enum-switch-expression").toString())).stdout()
+            : "";
+
+        assertThat(build.exitCode() + "\n" + build.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
+    void matchExceptionCauseConstructorCanBeCaughtAsRuntimeExceptionWithItsMessage() throws Exception {
+        final Path project = project("match-exception-cause-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    try {
+                        throw new MatchException("boom", null);
+                    } catch (final RuntimeException exception) {
+                        System.out.println(exception.getMessage());
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        final String nativeOutput = build.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/match-exception-cause-constructor").toString())).stdout()
+            : "";
+
+        assertThat(build.exitCode() + "\n" + build.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
     void exactCatchNullEnumLookupBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("exact-catch-null-enum-lookup");
         writeJava(project, "com.acme.Color", """
