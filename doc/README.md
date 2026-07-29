@@ -19,8 +19,8 @@ Core entrypoints:
   contract for the first boring native release
 - [status/support-matrix.md](status/support-matrix.md): named support ledger used for
   release accounting
-- [status/jdk-compatibility.md](status/jdk-compatibility.md): latest deterministic JDK
-  inventory summary
+- [status/jdk-compatibility.md](status/jdk-compatibility.md): automatically verified
+  reference-JDK inventory summary
 - [spec/roadmap.md](spec/roadmap.md): core-repo roadmap
 - [spec/native-abi.md](spec/native-abi.md): native library ABI, ownership, and error
   contracts
