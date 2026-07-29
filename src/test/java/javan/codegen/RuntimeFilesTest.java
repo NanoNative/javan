@@ -6621,6 +6621,100 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void runtimeByteArrayEqualsAcceptsTwoNullReferences() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                printf("%d\\n", javan_arrays_equals_byte(NULL, NULL));
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("1\n");
+    }
+
+    @Test
+    void runtimeByteArrayEqualsAcceptsDistinctEqualSignedValues() throws Exception {
+        assertThat(byteArraysEqualProbe("-128, -1, 0, 127", 4, "-128, -1, 0, 127", 4)).isEqualTo("1\n");
+    }
+
+    @Test
+    void runtimeByteArrayEqualsRejectsDifferentValues() throws Exception {
+        assertThat(byteArraysEqualProbe("1, 2", 2, "1, 3", 2)).isEqualTo("0\n");
+    }
+
+    @Test
+    void runtimeByteArrayEqualsRejectsDifferentLengths() throws Exception {
+        assertThat(byteArraysEqualProbe("1", 1, "1, 2", 2)).isEqualTo("0\n");
+    }
+
+    @Test
+    void runtimeByteArrayEqualsRejectsIdenticalWrongKindReferences() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <setjmp.h>
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                jmp_buf target;
+                javan_panic_set_target(&target);
+                if (setjmp(target) != 0) {
+                    printf("%s\\n", javan_last_error());
+                    return 0;
+                }
+                void* values = javan_int_array_new(1);
+                (void) javan_arrays_equals_byte(values, values);
+                return 2;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("array copy type mismatch\n");
+    }
+
+    private String byteArraysEqualProbe(
+        final String leftData,
+        final int leftLength,
+        final String rightData,
+        final int rightLength
+    ) throws Exception {
+        return runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                signed char left_data[] = {%s};
+                signed char right_data[] = {%s};
+                void* left = NULL;
+                void* right = NULL;
+                void** roots[] = {
+                    (void**) &left,
+                    (void**) &right
+                };
+                javan_root_frame_push(roots, 2);
+                left = javan_byte_array_from(left_data, %d);
+                right = javan_byte_array_from(right_data, %d);
+                printf("%%d\\n", javan_arrays_equals_byte(left, right));
+                javan_root_frame_pop(roots);
+                return 0;
+            }
+            """.formatted(leftData, rightData, leftLength, rightLength),
+            "4096"
+        );
+    }
+
+    @Test
     void runtimeDirectoryStreamRootsSourcePathAcrossResultAndChildAllocations() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """

@@ -6901,6 +6901,30 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        int javan_arrays_equals_byte(void* left, void* right) {
+            if (left == NULL || right == NULL) {
+                return left == right;
+            }
+            javan_byte_array* left_values = (javan_byte_array*) javan_array_checked(left);
+            javan_byte_array* right_values = (javan_byte_array*) javan_array_checked(right);
+            javan_array_kind_checked((javan_array_header*) left_values, JAVAN_ARRAY_KIND_BYTE);
+            javan_array_kind_checked((javan_array_header*) right_values, JAVAN_ARRAY_KIND_BYTE);
+            if (left == right) {
+                return 1;
+            }
+            if (left_values->length != right_values->length) {
+                return 0;
+            }
+            if (left_values->length == 0) {
+                return 1;
+            }
+            return memcmp(
+                left_values->values,
+                right_values->values,
+                (unsigned long) left_values->length
+            ) == 0;
+        }
+
         int javan_arrays_fill_byte(void* array, int value) {
             if (array == NULL) {
                 return 1;

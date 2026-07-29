@@ -2855,6 +2855,15 @@ final class BytecodeToIRInvokeSupport {
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final SourceLineIndex sourceLines
     ) {
+        if ("equals".equals(methodRef.name()) && "([B[B)Z".equals(methodRef.descriptor())) {
+            final IrExpression right = popObject(classFile, method, stack);
+            final IrExpression left = popObject(classFile, method, stack);
+            stack.add(StackValue.intExpression(IrExpression.intCall(
+                "javan_arrays_equals_byte",
+                List.of(left, right)
+            )));
+            return true;
+        }
         if ("fill".equals(methodRef.name()) && "([BB)V".equals(methodRef.descriptor())) {
             final IrExpression value = popInt(classFile, method, stack);
             final IrExpression array = popObject(classFile, method, stack);

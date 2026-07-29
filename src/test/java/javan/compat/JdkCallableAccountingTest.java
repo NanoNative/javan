@@ -1276,6 +1276,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksByteArraysEqualsAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Arrays", "equals", "([B[B)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksMathMultiplyExactLongIntAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Math", "multiplyExact", "(JI)J")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

@@ -21641,6 +21641,28 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersByteArrayEqualsToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "([B[B)Z",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeStatic(2, new MethodRef("java/util/Arrays", "equals", "([B[B)Z")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_arrays_equals_byte",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
     void lowersWholeByteArrayFillToStatusRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

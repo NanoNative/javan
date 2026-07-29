@@ -261,6 +261,7 @@ public final class JdkCallSupport {
             "([BII)[B",
             "([Ljava/lang/Object;II)[Ljava/lang/Object;"
         ),
+        intrinsic("Arrays.equals", "java/util/Arrays", "equals", "([B[B)Z"),
         intrinsic("Arrays.fill", "java/util/Arrays", "fill", "([BB)V", "([BIIB)V"),
         intrinsic("Integer.toString", "java/lang/Integer", "toString", "(I)Ljava/lang/String;"),
         runtime("Integer.toString.instance", "java/lang/Integer", "toString", "()Ljava/lang/String;"),

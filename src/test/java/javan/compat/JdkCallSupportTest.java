@@ -3779,6 +3779,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void byteArraysEqualsIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Arrays",
+            "equals",
+            "([B[B)Z"
+        ))).isTrue();
+    }
+
+    @Test
     void pathsGetRequiresFilesystemRuntimeModule() {
         assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
             "java/nio/file/Paths",
