@@ -1276,6 +1276,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksMathMultiplyExactLongLongAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Math", "multiplyExact", "(JJ)J")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksCharSequenceLengthAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/CharSequence", "length", "()I")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
