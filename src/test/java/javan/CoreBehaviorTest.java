@@ -37,6 +37,7 @@ import javan.ir.IrInstruction;
 import javan.ir.IrLocal;
 import javan.ir.IrParameter;
 import javan.ir.IrProgram;
+import javan.ir.IrSourceLocation;
 import javan.ir.IrType;
 import javan.profile.Profile;
 import javan.util.Files2;
@@ -13616,6 +13617,60 @@ final class CoreBehaviorTest {
         assertThat(generated).contains("int main(int argc, char** argv) {");
         assertThat(generated).doesNotContain("static void main_symbol(void)");
         assertThat(generated).contains("static void helper_symbol(void);", "static void helper_symbol(void) {");
+    }
+
+    @Test
+    void cCodegenClearsEarlyEntryReturnSourceContextOnce() throws Exception {
+        final String generated = generatedEarlyEntryReturn();
+
+        assertThat(generated.split("javan_source_clear\\(&javan_source_context_0\\);", -1)).hasSize(2);
+    }
+
+    @Test
+    void cCodegenPopsEarlyEntryReturnRootFrameOnce() throws Exception {
+        final String generated = generatedEarlyEntryReturn();
+
+        assertThat(generated.split("javan_root_frame_pop\\(javan_roots_main_symbol\\);", -1)).hasSize(2);
+    }
+
+    @Test
+    void cCodegenRunsEarlyEntryReturnCleanupInOrder() throws Exception {
+        final String generated = generatedEarlyEntryReturn();
+
+        assertThat(generated).containsSubsequence(
+            "javan_source_clear(&javan_source_context_0);",
+            "goto javan_entry_epilogue;",
+            "javan_entry_epilogue:",
+            "javan_wait_for_non_current_threads();",
+            "javan_root_frame_pop(javan_roots_main_symbol);",
+            "return 0;"
+        );
+    }
+
+    private String generatedEarlyEntryReturn() throws Exception {
+        final IrSourceLocation location = new IrSourceLocation(
+            "com/acme/Main",
+            "main",
+            "([Ljava/lang/String;)V",
+            1,
+            Optional.of("Main.java"),
+            Optional.of(10)
+        );
+        final IrProgram program = new IrProgram(
+            List.of(),
+            List.of(new IrFunction(
+                "com/acme/Main",
+                "main",
+                "([Ljava/lang/String;)V",
+                "main_symbol",
+                IrType.VOID,
+                List.of(),
+                List.of(new IrLocal(IrType.OBJECT, "root")),
+                List.of(IrInstruction.returnVoid().withSourceLocation(location))
+            )),
+            "main_symbol"
+        );
+        return Files.readString(new CCodegen().generate(program, tempDir));
     }
 
     @Test

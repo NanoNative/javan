@@ -1046,6 +1046,7 @@ public final class CCodegen {
             emitStatementSafePoint(instruction, c);
         }
         if (entry) {
+            c.append("javan_entry_epilogue:").append(System.lineSeparator());
             c.append("    javan_wait_for_non_current_threads();").append(System.lineSeparator());
             emitRootFramePop(rootFrameSymbol, !rootNames.isEmpty(), c);
             c.append("    return 0;").append(System.lineSeparator());
@@ -2504,7 +2505,9 @@ public final class CCodegen {
                 if (sourceContext) {
                     emitSourceContextClear(c, "    ", sourceContextSymbol);
                 }
-                if (!entry) {
+                if (entry) {
+                    c.append("    goto javan_entry_epilogue;").append(System.lineSeparator());
+                } else {
                     emitRootFramePop(rootFrameSymbol, hasRootFrame, c);
                     c.append("    return;").append(System.lineSeparator());
                 }
