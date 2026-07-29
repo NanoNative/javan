@@ -203,6 +203,78 @@ final class CliFloatingMathMinMaxIntegrationTest extends CliIntegrationSupport {
             """);
     }
 
+    @Test
+    void floatRoundRoundsBelowHalfDown() throws Exception {
+        assertNativeOutputMatchesJvm("float-round-below-half", """
+            System.out.println(Math.round(1.49f));
+            """);
+    }
+
+    @Test
+    void floatRoundRoundsPositiveHalfTowardPositiveInfinity() throws Exception {
+        assertNativeOutputMatchesJvm("float-round-positive-half", """
+            System.out.println(Math.round(1.5f));
+            """);
+    }
+
+    @Test
+    void floatRoundRoundsNegativeHalfTowardPositiveInfinity() throws Exception {
+        assertNativeOutputMatchesJvm("float-round-negative-half", """
+            System.out.println(Math.round(-1.5f));
+            """);
+    }
+
+    @Test
+    void floatRoundRoundsNegativeHalfToZero() throws Exception {
+        assertNativeOutputMatchesJvm("float-round-negative-half-zero", """
+            System.out.println(Math.round(-0.5f));
+            """);
+    }
+
+    @Test
+    void floatRoundRoundsNegativeZeroToZero() throws Exception {
+        assertNativeOutputMatchesJvm("float-round-negative-zero", """
+            System.out.println(Math.round(-0.0f));
+            """);
+    }
+
+    @Test
+    void floatRoundRoundsNanToZero() throws Exception {
+        assertNativeOutputMatchesJvm("float-round-nan", """
+            System.out.println(Math.round(Float.intBitsToFloat(0x7fc01234)));
+            """);
+    }
+
+    @Test
+    void floatRoundSaturatesPositiveInfinity() throws Exception {
+        assertNativeOutputMatchesJvm("float-round-positive-infinity", """
+            float zero = 0.0f;
+            System.out.println(Math.round(1.0f / zero));
+            """);
+    }
+
+    @Test
+    void floatRoundSaturatesNegativeInfinity() throws Exception {
+        assertNativeOutputMatchesJvm("float-round-negative-infinity", """
+            float zero = 0.0f;
+            System.out.println(Math.round(-1.0f / zero));
+            """);
+    }
+
+    @Test
+    void floatRoundSaturatesMaximumFiniteValue() throws Exception {
+        assertNativeOutputMatchesJvm("float-round-maximum-finite", """
+            System.out.println(Math.round(Float.MAX_VALUE));
+            """);
+    }
+
+    @Test
+    void floatRoundSaturatesMinimumFiniteValue() throws Exception {
+        assertNativeOutputMatchesJvm("float-round-minimum-finite", """
+            System.out.println(Math.round(-Float.MAX_VALUE));
+            """);
+    }
+
     private void assertNativeOutputMatchesJvm(final String projectName, final String body) throws Exception {
         assertNativeOutputMatchesJvm(projectName, body, "");
     }
@@ -225,10 +297,13 @@ final class CliFloatingMathMinMaxIntegrationTest extends CliIntegrationSupport {
             """.formatted(body, methods));
 
         final String jvmOutput = runJvm(project, "com.acme.Main");
-        run(tempDir, "build", project.toString());
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/" + projectName).toString())).stdout()
+            : "";
 
-        assertThat(process(project, List.of(project.resolve(".javan/bin/" + projectName).toString())).stdout())
-            .isEqualTo(jvmOutput);
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
     }
 
     private void assertFloatRawBits(

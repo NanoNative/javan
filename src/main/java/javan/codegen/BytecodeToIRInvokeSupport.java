@@ -2164,6 +2164,13 @@ final class BytecodeToIRInvokeSupport {
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final SourceLineIndex sourceLines
     ) {
+        if ("round".equals(methodRef.name()) && "(F)I".equals(methodRef.descriptor())) {
+            stack.add(StackValue.intExpression(IrExpression.intCall(
+                "javan_math_round_float",
+                List.of(popFloat(classFile, method, stack))
+            )));
+            return true;
+        }
         if ("abs".equals(methodRef.name()) && "(I)I".equals(methodRef.descriptor())) {
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_math_abs_int", List.of(popInt(classFile, method, stack)))));
             return true;
