@@ -82,6 +82,7 @@ final class RuntimeHeaderFile {
         int javan_math_add_exact_int_overflows(int left, int right);
         int javan_math_add_exact_int(int left, int right);
         int javan_math_to_int_exact(long long value);
+        int javan_int_neg(int value);
         int javan_int_shl(int value, int shift);
         long long javan_long_shl(long long value, int shift);
         int javan_int_shr(int value, int shift);

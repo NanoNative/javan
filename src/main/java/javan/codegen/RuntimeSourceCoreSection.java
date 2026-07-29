@@ -760,6 +760,13 @@ final class RuntimeSourceCoreSection {
             return (int) value;
         }
 
+        int javan_int_neg(int value) {
+            const unsigned int bits = 0U - (unsigned int) value;
+            int result = 0;
+            memcpy(&result, &bits, sizeof(result));
+            return result;
+        }
+
         int javan_int_shl(int value, int shift) {
             return (int) (((unsigned int) value) << (shift & 31));
         }

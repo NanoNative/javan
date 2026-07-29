@@ -9291,6 +9291,36 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void intNegationWrapsMinimumValueLikeJvm() throws Exception {
+        final Path project = project("int-negation-minimum");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(negate(Integer.MIN_VALUE));
+                }
+
+                private static int negate(final int value) {
+                    return -value;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/int-negation-minimum").toString())).stdout()
+            : "";
+
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
     void jdkMathIntrinsicsBuildAndMatchJvmOutput() throws Exception {
         final Path project = project("jdk-math-intrinsics");
         writeJava(project, "com.acme.Main", """
