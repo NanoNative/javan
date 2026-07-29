@@ -36,6 +36,7 @@ public final class JdkCallSupport {
         {"java/lang/IllegalMonitorStateException", "java/lang/RuntimeException"},
         {"java/lang/IllegalStateException", "java/lang/RuntimeException"},
         {"java/lang/IllegalThreadStateException", "java/lang/RuntimeException"},
+        {"java/lang/MatchException", "java/lang/RuntimeException"},
         {"java/lang/ArrayIndexOutOfBoundsException", "java/lang/IndexOutOfBoundsException"},
         {"java/lang/IndexOutOfBoundsException", "java/lang/RuntimeException"},
         {"java/lang/NegativeArraySizeException", "java/lang/RuntimeException"},
@@ -1657,6 +1658,22 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Checks for the Java compiler's exact synthetic exhaustive-switch exception constructor.
+     *
+     * @param methodRef method reference
+     * @return true only for {@code MatchException(String, Throwable)}
+     */
+    public static boolean isMatchExceptionCauseConstructor(final MethodRef methodRef) {
+        if (!"java/lang/MatchException".equals(methodRef.owner())) {
+            return false;
+        }
+        if (!"<init>".equals(methodRef.name())) {
+            return false;
+        }
+        return "(Ljava/lang/String;Ljava/lang/Throwable;)V".equals(methodRef.descriptor());
+    }
+
+    /**
      * Checks whether a supported platform throwable can be caught by the requested catch type.
      *
      * @param thrownType JVM internal name for the directly thrown type
@@ -1879,6 +1896,9 @@ public final class JdkCallSupport {
     private static boolean isSupportedThrowableCall(final MethodRef methodRef) {
         if (!isPlatformThrowable(methodRef.owner())) {
             return false;
+        }
+        if (isMatchExceptionCauseConstructor(methodRef)) {
+            return true;
         }
         if ("<init>".equals(methodRef.name()) && "()V".equals(methodRef.descriptor())) {
             return true;

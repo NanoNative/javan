@@ -1668,6 +1668,10 @@ final class BytecodeToIRInvokeSupport {
             ? List.of()
             : popArguments(classFile, method, stack, descriptor);
         final IrExpression receiver = popObject(classFile, method, stack);
+        if (JdkCallSupport.isMatchExceptionCauseConstructor(methodRef)) {
+            updatePendingThrowableMessage(stack, arguments.getFirst());
+            return;
+        }
         if (isPlatformThrowableStringConstructor(methodRef)) {
             updatePendingThrowableMessage(stack, arguments.getFirst());
             return;

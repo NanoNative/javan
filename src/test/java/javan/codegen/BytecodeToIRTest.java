@@ -8553,6 +8553,82 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersExhaustiveSwitchExpressionWithThrowingDefaultToSelectedValue() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(I)I",
+            4,
+            1,
+            plain(0, 26, "iload_0"),
+            plainOperands(1, 170, "tableswitch", tableSwitchOperands(1, 31, 0, 2, 41, 45, 49)),
+            classInstruction(32, 187, "new", "java/lang/MatchException"),
+            plain(35, 89, "dup"),
+            plain(36, 1, "aconst_null"),
+            plain(37, 1, "aconst_null"),
+            invokeSpecial(38, new MethodRef(
+                "java/lang/MatchException",
+                "<init>",
+                "(Ljava/lang/String;Ljava/lang/Throwable;)V"
+            )),
+            plain(41, 191, "athrow"),
+            plain(42, 4, "iconst_1"),
+            plainOperands(43, 167, "goto", 0, 8),
+            plain(46, 5, "iconst_2"),
+            plainOperands(47, 167, "goto", 0, 4),
+            plain(50, 7, "iconst_4"),
+            plain(51, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).contains(
+            IrInstruction.assignInt("switchValue1_1", IrExpression.intLiteral(1)),
+            IrInstruction.assignInt("switchValue1_1", IrExpression.intLiteral(2)),
+            IrInstruction.assignInt("switchValue1_1", IrExpression.intLiteral(4)),
+            IrInstruction.returnInt(IrExpression.intLocal("switchValue1_1"))
+        );
+    }
+
+    @Test
+    void lowersThrowingSwitchArmToItsRuntimeExceptionHandler() {
+        final IrFunction function = lowerMain(methodWithHandlers(
+            0x0008,
+            "main",
+            "(I)Ljava/lang/String;",
+            4,
+            1,
+            List.of(new CodeException(32, 42, 60, Optional.of("java/lang/RuntimeException"))),
+            plain(0, 26, "iload_0"),
+            plainOperands(1, 170, "tableswitch", tableSwitchOperands(1, 31, 0, 1, 41, 45)),
+            classInstruction(32, 187, "new", "java/lang/MatchException"),
+            plain(35, 89, "dup"),
+            stringConstant(36, "boom"),
+            plain(37, 1, "aconst_null"),
+            invokeSpecial(38, new MethodRef(
+                "java/lang/MatchException",
+                "<init>",
+                "(Ljava/lang/String;Ljava/lang/Throwable;)V"
+            )),
+            plain(41, 191, "athrow"),
+            stringConstant(42, "one"),
+            plainOperands(43, 167, "goto", 0, 8),
+            stringConstant(46, "two"),
+            plain(51, 176, "areturn"),
+            invokeVirtual(60, new MethodRef(
+                "java/lang/RuntimeException",
+                "getMessage",
+                "()Ljava/lang/String;"
+            )),
+            plain(61, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).contains(
+            IrInstruction.jump("label_60"),
+            IrInstruction.label("label_60"),
+            IrInstruction.returnObject(IrExpression.stringLiteral("boom"))
+        );
+    }
+
+    @Test
     void lowersLookupSwitchToSelectorLocalBranchesAndDefaultJump() {
         final IrFunction function = lowerMain(method(
             0x0008,

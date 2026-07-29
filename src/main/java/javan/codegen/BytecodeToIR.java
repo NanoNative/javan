@@ -266,6 +266,8 @@ public final class BytecodeToIR {
                 objectLocalLambdas,
                 localDeclarations,
                 dispatches,
+                pendingExceptionHandlerStacks,
+                sourceLines,
                 skippedOffsets,
                 replacementLabelOffsets
             )) {

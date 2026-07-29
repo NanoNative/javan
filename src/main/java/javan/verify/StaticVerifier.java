@@ -1237,6 +1237,9 @@ public final class StaticVerifier {
         if (opcode == 0) {
             return true;
         }
+        if (opcode == 1) {
+            return true;
+        }
         if (opcode == 18) {
             return true;
         }
@@ -2691,6 +2694,9 @@ public final class StaticVerifier {
         }
         if (!JdkCallSupport.isPlatformThrowable(methodRef.owner())) {
             return false;
+        }
+        if (JdkCallSupport.isMatchExceptionCauseConstructor(methodRef)) {
+            return true;
         }
         if ("()V".equals(methodRef.descriptor())) {
             return true;
