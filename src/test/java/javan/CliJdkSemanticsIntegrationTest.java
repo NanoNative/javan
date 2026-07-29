@@ -8784,6 +8784,49 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void optionalMapWithUnboundInstanceLongMethodReferenceBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-map-unbound-instance-long-reference");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Optional.of(new Row(42L)).map(Row::amount).orElse(0L));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Row", """
+            package com.acme;
+
+            public final class Row {
+                private final long amount;
+
+                public Row(final long amount) {
+                    this.amount = amount;
+                }
+
+                public long amount() {
+                    return amount;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/optional-map-unbound-instance-long-reference").toString())).stdout()
+            : "";
+
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
     void unboundInstanceFunctionReferenceRejectsNullReceiverLikeJvm() throws Exception {
         final Path project = project("unbound-instance-reference-null-receiver");
         writeJava(project, "com.acme.Main", """

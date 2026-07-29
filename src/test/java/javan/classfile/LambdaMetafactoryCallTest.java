@@ -596,6 +596,28 @@ final class LambdaMetafactoryCallTest {
     }
 
     @Test
+    void directlyLowerableAcceptsUnboundInstanceLongFunctionReferenceOnFinalClass() {
+        final LambdaMetafactoryCall resolved = unboundInstanceFunctionReference(
+            "()Ljava/util/function/Function;",
+            "()J",
+            "(Lcom/acme/Row;)Ljava/lang/Long;"
+        );
+
+        assertThat(resolved.isDirectlyLowerable(classMap("com/acme/Row", 0x0010))).isTrue();
+    }
+
+    @Test
+    void directlyLowerableRejectsUnboundInstanceLongFunctionReferenceWithoutBoxedLongResult() {
+        final LambdaMetafactoryCall resolved = unboundInstanceFunctionReference(
+            "()Ljava/util/function/Function;",
+            "()J",
+            "(Lcom/acme/Row;)Ljava/lang/Object;"
+        );
+
+        assertThat(resolved.isDirectlyLowerable(classMap("com/acme/Row", 0x0010))).isFalse();
+    }
+
+    @Test
     void directlyLowerableRejectsUnboundInstanceFunctionReferenceOnNonFinalClass() {
         final LambdaMetafactoryCall resolved = unboundInstanceFunctionReference(
             "()Ljava/util/function/Function;",
