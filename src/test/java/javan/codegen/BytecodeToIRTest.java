@@ -20898,6 +20898,27 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersFloatToRawIntBitsToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(F)I",
+            1,
+            1,
+            plain(0, 34, "fload_0"),
+            invokeStatic(1, new MethodRef("java/lang/Float", "floatToRawIntBits", "(F)I")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_float_to_raw_int_bits",
+                List.of(IrExpression.floatLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
     void lowersDoubleToStringToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

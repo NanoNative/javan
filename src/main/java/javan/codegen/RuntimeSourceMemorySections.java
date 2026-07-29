@@ -4516,6 +4516,14 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        int javan_float_to_raw_int_bits(float value) {
+            uint32_t bits;
+            int result;
+            memcpy(&bits, &value, sizeof(bits));
+            memcpy(&result, &bits, sizeof(result));
+            return result;
+        }
+
         void* javan_double_value_of(double value) {
             javan_boxed_double* object = (javan_boxed_double*) javan_alloc(sizeof(javan_boxed_double));
             object->value = value;

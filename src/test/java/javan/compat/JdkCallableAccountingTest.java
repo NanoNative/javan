@@ -1264,6 +1264,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksFloatToRawIntBitsAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Float", "floatToRawIntBits", "(F)I")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksCharSequenceLengthAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/CharSequence", "length", "()I")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

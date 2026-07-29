@@ -536,6 +536,7 @@ final class RuntimeHeaderFile {
         void* javan_float_value_of(float value);
         float javan_float_float_value(void* value);
         float javan_float_int_bits_to_float(int value);
+        int javan_float_to_raw_int_bits(float value);
         void* javan_double_value_of(double value);
         double javan_double_double_value(void* value);
         double javan_double_long_bits_to_double(long long value);

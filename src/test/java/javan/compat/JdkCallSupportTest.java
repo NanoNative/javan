@@ -25,6 +25,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void floatToRawIntBitsIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Float",
+            "floatToRawIntBits",
+            "(F)I"
+        ))).isTrue();
+    }
+
+    @Test
     void stringIsBlankIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/String",
