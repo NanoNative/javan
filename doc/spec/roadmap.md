@@ -327,14 +327,16 @@ Open acceptance criteria:
 
 ## 0.285 Memory And Runtime Correctness
 
-Status: partial. The single-thread managed-heap slice is real, leak-tested, and reportable.
-Full heap coverage, thread roots, and broader Java object semantics remain open. Deep
-design and exhaustive test inventory live in
+Status: partial. The managed-heap slice and registered platform-worker root frames are real,
+leak-tested, and reportable. Full heap coverage, general concurrent mutator/collector
+synchronization, and broader Java object semantics remain open. Deep design and exhaustive
+test inventory live in
 [memory-runtime-correctness.md](memory-runtime-correctness.md).
 
 Implemented slice:
 
-- allocation accounting, root tracking, safe points, direct-return protection, and GC retry
+- allocation accounting, root tracking, safe points, caller-owned lock-published generated
+  object returns, registered platform-worker frame roots, and GC retry
 - collectibility for generated objects, arrays, boxed wrappers, runtime strings, and current
   runtime containers
 - rooted native-library `String`/`byte[]` ABI paths and explicit ownership/free rules
@@ -346,10 +348,13 @@ Open gates:
 - operand/eval-order validation beyond the current hostile-root stress slices
 - full Java heap mark/sweep beyond current generated/runtime allocation shapes
 - hostile-point GC collection stress across every supported allocation shape
+- general concurrent local/field/static/runtime-container pointer publication beyond the
+  generated paths and supported atomic operations
+- caller-owned result-slot conversion for concurrent opaque runtime-helper object returns
+- atomic admission for concurrent starts of the same `Thread` object
 - full Java `String` object model and UTF-16 ownership
 - exception semantics beyond direct same-method platform catch routing
 - sanitizer/leak CI on Windows and release footprint jobs
-- thread roots once threads exist
 
 ## 0.29 Optimizer Foundation
 

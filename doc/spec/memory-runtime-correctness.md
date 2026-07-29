@@ -19,7 +19,7 @@ The current native runtime is not a JVM heap.
 | Static roots | Generated static object-field inventory is registered before class initializers run. |
 | Local/parameter roots | Generated root frames register object parameters and object locals until function return. |
 | Local root liveness | Generated methods clear dead object local/parameter root slots at CFG-proven safe-point boundaries across straight-line code, labels, branches, and loops. |
-| Return roots | Object-returning generated functions publish the returned object through a single-threaded static return root until the callee safe point and function-frame pop complete. |
+| Return roots | Generated object calls use a caller-owned result slot that is zeroed and rooted before invocation. The callee publishes into that slot under the runtime lock before its final safe point and frame pops; no process-global return root is shared between threads. |
 | Safe-point placement | Generated entry, library init, labels, non-terminal statement boundaries, and protected object returns call `javan_gc_safe_point`. |
 | Runtime containers | Lists, maps, iterators, optionals, string builders, and owned backing storage are tagged collectible and traced from reachable owners. `List.of` varargs are rooted before the target list allocation. Map backing-array growth publishes each moved buffer before any later allocation can collect. Heap metadata validation rejects stale list, map, and StringBuilder owned-buffer references. |
 | Runtime size checks | StringBuilder growth rejects terminator-inclusive capacity overflow before C signed arithmetic can overflow. |
@@ -27,18 +27,23 @@ The current native runtime is not a JVM heap.
 | Runtime string helper ownership | Current UTF-8 string helpers root runtime-owned sources across allocating substring, replace, char-array construction, copy, concat, StringBuilder append, path helper, and export-copy paths. |
 | Managed heap | Full managed heap is not implemented. |
 | Heap reclamation | Implemented for generated objects, object arrays, primitive arrays, boxed primitive wrappers, runtime-owned strings, runtime containers, and owned container storage at generated safe points. |
-| Tracing GC | Partial single-threaded mark/sweep for generated object graphs, arrays, boxed primitive wrappers, runtime-owned strings, and runtime containers. |
+| Tracing GC | Partial safe-point mark/sweep for generated object graphs, arrays, boxed primitive wrappers, runtime-owned strings, and runtime containers. Registered platform-worker root frames are scanned under the runtime lock; general concurrent heap mutation is not yet covered. |
 | Operand/call-temporary roots | Generated object-producing expression temporaries are rooted until the enclosing generated statement or return completes. |
 | Allocation-path collection | Scoped allocator path: checked allocation sizes, GC retry under heap pressure, and deterministic native panic for allocation denial on generated object/array/string paths. |
-| Thread roots | Not implemented. |
+| Thread roots | Platform workers bind thread-local generated root frames into the live runtime registry. The collector scans those registered frames under the runtime lock. |
+| Thread completion | Lifecycle flags use the runtime lock; native completion signals use the platform completion mutex/SRW lock. Host finalization releases its thread-local root-frame cache, then holds the runtime lock until the live root is removed and completion is published. Automatic main-thread waiting keeps each selected worker rooted across the unlocked native wait. |
+| Panic root recovery | Panic recovery serializes published root-chain cleanup under the runtime lock before recycling root frames. |
+| Native-library input roots | Export wrappers push zeroed `String`/`byte[]` input slots before conversion, then allocate and publish each converted object while holding the runtime lock. |
+| Atomic runtime state | Supported `AtomicInteger`, `AtomicLong`, `AtomicBoolean`, and `AtomicReference` operations linearize under the recursive runtime lock. Integer and long counters implement Java extrema wrapping without C signed overflow. `AtomicReference` publication and GC traversal therefore share the same lock. |
 | Metadata stress | `JAVAN_GC_STRESS=N` validates metadata/accounting every N allocator events. |
 | Collection stress | `JAVAN_GC_SAFEPOINT_INTERVAL=N` collects every N generated safe points after roots/descriptors are registered. |
 | Sanitizer instrumentation | Not part of normal builds yet; release/CI smoke recompiles generated C with sanitizers. |
 
 This is acceptable for small deterministic CLI/native-library probes and should be
 leak-clean at process exit under AddressSanitizer/LeakSanitizer. It is not enough for
-long-running services, allocation-heavy applications, or thread-heavy programs because it
-does not yet manage all Java/runtime allocation shapes during execution.
+long-running services, allocation-heavy applications, or general thread-heavy programs because it
+does not yet manage every Java/runtime allocation shape or synchronize every concurrent pointer
+publication during execution.
 
 ## Next Milestone: M13R Remote Release-Matrix No-Residue Proof
 
@@ -85,7 +90,8 @@ proof on every supported OS/ARCH target.
 Before claiming managed Java memory, Javan still needs:
 
 - complete operand/call-temporary coverage for all eval-order and hostile safe-point paths
-- thread roots once platform or virtual threads exist
+- a complete mutator/collector protocol for opaque runtime-helper object returns and
+  runtime-container mutation beyond the scoped generated-return and supported-atomic handoffs
 - full string object model for UTF-16 semantics, literals, borrowed argv/env values, and
   ABI input ownership
 - cycle-safe mark traversal for every Java heap shape, not only generated object graphs
@@ -101,7 +107,7 @@ The first safe root model should be precise, not conservative scanning:
 | --- | --- |
 | Static fields | Generated object-field root table registered before class initializers. |
 | Locals/parameters | Generated root frames push object parameters and locals, then pop before generated returns. |
-| Direct object returns | Generated single-threaded return root protects returned objects through callee safe points and frame pop. |
+| Direct object returns | The caller roots a zeroed result slot before invocation. The callee publishes into that slot under the runtime lock before its final safe point and frame pops. |
 | Operand/call-temporary values | Generated expression root frames protect object-producing temporaries for call arguments, nested call results, store operands, print operands, array operands, and return operands. |
 | Object fields | Generated type descriptors identify object-field offsets and the collector traverses them. |
 | Object arrays | Collector traverses each element. |
@@ -110,7 +116,7 @@ The first safe root model should be precise, not conservative scanning:
 | Strings | Runtime-owned UTF-8 strings are tagged collectible; current helper paths root runtime-owned sources across helper and export-copy allocation. ABI string inputs are copied into GC-managed runtime strings. Non-NUL ASCII constants are valid for the current string subset; non-ASCII constants fail in `javan check` and native lowering when used with UTF-16-sensitive operations until the UTF-16 string object model exists. Literals and argv/env values remain borrowed/untracked unless explicitly copied. |
 | Runtime containers | Tagged lists/maps/iterators/optionals/string builders trace contained values and owned backing storage only when the container is reachable. |
 | FFI handles | Explicit handle table with ownership rules. |
-| Threads | Per-thread root set once threads are implemented. |
+| Threads | Platform workers register thread-local generated root frames for locked GC scanning. Full concurrent pointer-publication synchronization remains open. |
 
 ## GC Milestones
 
@@ -122,7 +128,8 @@ The first safe root model should be precise, not conservative scanning:
 6. Safe-point mark/sweep for generated objects and object arrays. Implemented.
 7. Precise runtime-container tracing for lists, maps, iterators, optionals, string builders, and owned backing storage. Implemented.
 8. Statement and loop-label safe points. Implemented for generated labels and non-terminal statement boundaries.
-9. Protected direct object returns. Implemented with a single-threaded static return root.
+9. Protected direct object returns. Implemented with caller-owned rooted result slots and
+   lock-scoped callee publication before the final safe point and frame pops.
 10. Object expression temporary root frames. Implemented for generated object-producing
    statement and return operands.
 11. Allocator-path GC retry, checked array allocation sizes, and deterministic allocation
@@ -165,9 +172,12 @@ The first safe root model should be precise, not conservative scanning:
     Implemented.
 29. Full stop-the-world mark/sweep for all Java heap shapes.
 30. Stress GC mode with hostile-point collection across all allocation shapes.
-31. Thread root integration.
-32. Optional arena/request allocation for scoped workloads.
-33. Escape-analysis stack allocation where proven safe.
+31. Platform-worker root registration and scoped concurrent generated clone-return handoff.
+    Implemented with thread-local frame ownership plus caller-owned, lock-published result slots.
+32. General mutator/collector synchronization for all concurrent pointer publication and
+    root-frame cleanup paths.
+33. Optional arena/request allocation for scoped workloads.
+34. Escape-analysis stack allocation where proven safe.
 
 ## Ownership Rules
 
@@ -201,6 +211,17 @@ Current gates:
 - `protected-object-return` native-profile project runs with `JAVAN_GC_SAFEPOINT_INTERVAL=1`
   and verifies direct object returns remain valid across callee safe points, frame pop,
   caller allocation churn, and later dereference.
+- `concurrent-object-clone-return-handoff` compiles a handler-free direct clone call and runs
+  two platform workers over pre-created sources with `JAVAN_HEAP_LIMIT_BYTES=65536`,
+  `JAVAN_GC_STRESS=1`, and `JAVAN_GC_SAFEPOINT_INTERVAL=1`. It verifies caller-owned result
+  publication and interleaved recovered worker panics survive forced collection and match JVM
+  output. It does not claim concurrent opaque runtime-helper object returns, general concurrent
+  allocation or field/static/container pointer mutation, or concurrent starts of the same
+  `Thread` object.
+- `unjoinedWorkersCompleteBeforeProcessExitUnderGcPressureAndMatchJvmOutput` runs a quick
+  unjoined worker beside an allocating worker under the same hostile GC settings. The generated
+  main drain keeps the selected worker rooted across completion while the peer continues
+  allocating, and the native process matches the JVM's observable completion.
 - `operand-call-temporary-roots` native-profile project runs with
   `JAVAN_GC_SAFEPOINT_INTERVAL=1` and verifies nested object call arguments, field-store
   operands, array-store operands, return operands, and allocation churn against JVM output.
@@ -362,4 +383,5 @@ Required future gates:
   where needed.
 - remaining exception-during-allocation behavior outside the current panic and
   same-method catch model.
-- thread root stress once threads exist.
+- concurrent root-lifecycle stress plus a complete mutator/collector protocol beyond the
+  scoped generated clone-return handoff.

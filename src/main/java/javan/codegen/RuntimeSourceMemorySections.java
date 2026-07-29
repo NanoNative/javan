@@ -811,6 +811,7 @@ final class RuntimeSourceMemorySections {
         }
 
         static void javan_root_frame_cleanup(void) {
+            javan_runtime_lock_enter();
             javan_root_frame* frame = javan_root_frames_value;
             while (frame != NULL) {
                 javan_root_frame* next = frame->next;
@@ -820,6 +821,7 @@ final class RuntimeSourceMemorySections {
             javan_root_frames_value = NULL;
             javan_root_frame_depth_value = 0;
             javan_frame_root_count_value = 0;
+            javan_runtime_lock_leave();
         }
 
         static void javan_root_frame_cleanup_to(
@@ -827,6 +829,7 @@ final class RuntimeSourceMemorySections {
             int depth,
             int root_count
         ) {
+            javan_runtime_lock_enter();
             while (javan_root_frames_value != frame_limit && javan_root_frames_value != NULL) {
                 javan_root_frame* frame = javan_root_frames_value;
                 javan_root_frames_value = frame->next;
@@ -834,6 +837,7 @@ final class RuntimeSourceMemorySections {
             }
             javan_root_frame_depth_value = depth;
             javan_frame_root_count_value = root_count;
+            javan_runtime_lock_leave();
         }
 
         void javan_panic_scope_push(JavanPanicScope* scope, jmp_buf* target) {
@@ -4981,6 +4985,30 @@ final class RuntimeSourceMemorySections {
             #endif
         }
 
+        static int javan_thread_completion_is_signaled(javan_thread* thread) {
+            if (thread == NULL) {
+                javan_panic("invalid Thread state");
+            }
+            #if defined(_WIN32)
+            AcquireSRWLockShared(&thread->native_completion_lock);
+            int signaled = thread->native_completion_signaled != 0;
+            ReleaseSRWLockShared(&thread->native_completion_lock);
+            return signaled;
+            #else
+            if (thread->native_sync_initialized == 0) {
+                javan_panic("invalid Thread completion state");
+            }
+            if (pthread_mutex_lock(&thread->native_completion_mutex) != 0) {
+                javan_panic("unable to acquire thread completion mutex");
+            }
+            int signaled = thread->native_completion_signaled != 0;
+            if (pthread_mutex_unlock(&thread->native_completion_mutex) != 0) {
+                javan_panic("unable to release thread completion mutex");
+            }
+            return signaled;
+            #endif
+        }
+
         static int javan_thread_current_interrupted_peek(void) {
             javan_runtime_lock_enter();
             javan_thread* thread = javan_current_thread_object();
@@ -5384,6 +5412,8 @@ final class RuntimeSourceMemorySections {
             javan_current_thread_value = value;
             javan_thread_root_bind_current_frames(value);
             javan_thread_run_registered_target(value);
+            javan_root_frame_cache_cleanup();
+            javan_runtime_lock_enter();
             javan_thread_leave_live_root(value);
             #if defined(_WIN32)
             if (thread->native_handle != NULL) {
@@ -5393,6 +5423,7 @@ final class RuntimeSourceMemorySections {
             #endif
             javan_thread_completion_signal(thread);
             javan_current_thread_value = NULL;
+            javan_runtime_lock_leave();
             #if defined(_WIN32)
             return 0U;
             #else
@@ -5401,9 +5432,15 @@ final class RuntimeSourceMemorySections {
         }
 
         static void javan_thread_wait_for_completion(javan_thread* thread) {
+            javan_runtime_lock_enter();
+            int started = thread->started != 0;
+            javan_runtime_lock_leave();
+            if (started == 0) {
+                return;
+            }
             #if defined(_WIN32)
             AcquireSRWLockExclusive(&thread->native_completion_lock);
-            while (thread->started != 0 && thread->native_completion_signaled == 0) {
+            while (thread->native_completion_signaled == 0) {
                 if (SleepConditionVariableSRW(
                     &thread->native_completion_cond,
                     &thread->native_completion_lock,
@@ -5422,7 +5459,7 @@ final class RuntimeSourceMemorySections {
             if (pthread_mutex_lock(&thread->native_completion_mutex) != 0) {
                 javan_panic("unable to acquire thread completion mutex");
             }
-            while (thread->started != 0 && thread->native_completion_signaled == 0) {
+            while (thread->native_completion_signaled == 0) {
                 if (pthread_cond_wait(&thread->native_completion_cond, &thread->native_completion_mutex) != 0) {
                     pthread_mutex_unlock(&thread->native_completion_mutex);
                     javan_panic("Thread.join host wait failed");
@@ -5912,8 +5949,9 @@ final class RuntimeSourceMemorySections {
             javan_runtime_lock_leave();
             while (1) {
                 javan_runtime_lock_enter();
-                int done = thread->started == 0 || thread->native_completion_signaled != 0;
+                int not_started = thread->started == 0;
                 javan_runtime_lock_leave();
+                int done = not_started != 0 || javan_thread_completion_is_signaled(thread) != 0;
                 if (done != 0) {
                     return 0;
                 }
@@ -5950,8 +5988,9 @@ final class RuntimeSourceMemorySections {
             long long started = javan_system_nano_time();
             while (1) {
                 javan_runtime_lock_enter();
-                int done = thread->started == 0 || thread->native_completion_signaled != 0;
+                int not_started = thread->started == 0;
                 javan_runtime_lock_leave();
+                int done = not_started != 0 || javan_thread_completion_is_signaled(thread) != 0;
                 if (done != 0) {
                     return 0;
                 }
@@ -5998,9 +6037,12 @@ final class RuntimeSourceMemorySections {
         }
 
         void javan_wait_for_non_current_threads(void) {
+            void* next = NULL;
+            void** javan_wait_for_non_current_threads_roots[] = { &next };
+            javan_root_frame_push(javan_wait_for_non_current_threads_roots, 1);
             while (1) {
-                void* next = NULL;
                 javan_runtime_lock_enter();
+                next = NULL;
                 javan_thread* current = javan_current_thread_object();
                 for (int index = 0; index < javan_thread_root_count_value; index++) {
                     void* candidate = javan_thread_roots_value[index];
@@ -6015,10 +6057,14 @@ final class RuntimeSourceMemorySections {
                 }
                 javan_runtime_lock_leave();
                 if (next == NULL) {
-                    return;
+                    break;
                 }
                 javan_thread_join(next);
             }
+            javan_runtime_lock_enter();
+            next = NULL;
+            javan_runtime_lock_leave();
+            javan_root_frame_pop(javan_wait_for_non_current_threads_roots);
         }
 
         typedef struct {
@@ -6635,9 +6681,11 @@ final class RuntimeSourceMemorySections {
         }
 
         void javan_object_array_set(void* array, int index, void* value) {
+            javan_runtime_lock_enter();
             javan_object_array* values = (javan_object_array*) javan_array_checked(array);
             javan_array_bounds_checked((javan_array_header*) values, index);
             values->values[index] = value;
+            javan_runtime_lock_leave();
         }
 
         int javan_int_array_get(void* array, int index) {
@@ -6771,7 +6819,9 @@ final class RuntimeSourceMemorySections {
             if (result == NULL) {
                 javan_panic("invalid array copy result");
             }
+            javan_runtime_lock_enter();
             *result = NULL;
+            javan_runtime_lock_leave();
             void* source_root = array;
             void** javan_array_copy_roots[] = {
                 (void**) &source_root,
@@ -6800,7 +6850,9 @@ final class RuntimeSourceMemorySections {
             if (result == NULL) {
                 javan_panic("invalid array copy result");
             }
+            javan_runtime_lock_enter();
             *result = NULL;
+            javan_runtime_lock_leave();
             void* source_root = array;
             void** javan_array_copy_roots[] = {
                 (void**) &source_root,
@@ -11045,35 +11097,50 @@ final class RuntimeSourceMemorySections {
         }
 
         void javan_atomic_integer_init(void* value, int initial_value) {
+            javan_runtime_lock_enter();
             javan_atomic_integer_state* state = javan_atomic_integer_checked(value);
             state->value = initial_value;
+            javan_runtime_lock_leave();
         }
 
         int javan_atomic_integer_get(void* value) {
-            return javan_atomic_integer_checked(value)->value;
+            javan_runtime_lock_enter();
+            int result = javan_atomic_integer_checked(value)->value;
+            javan_runtime_lock_leave();
+            return result;
         }
 
         void javan_atomic_integer_set(void* value, int next_value) {
+            javan_runtime_lock_enter();
             javan_atomic_integer_checked(value)->value = next_value;
+            javan_runtime_lock_leave();
         }
 
         int javan_atomic_integer_get_and_increment(void* value) {
+            javan_runtime_lock_enter();
             javan_atomic_integer_state* state = javan_atomic_integer_checked(value);
             int current = state->value;
-            state->value += 1;
+            state->value = current == INT_MAX ? INT_MIN : current + 1;
+            javan_runtime_lock_leave();
             return current;
         }
 
         int javan_atomic_integer_increment_and_get(void* value) {
+            javan_runtime_lock_enter();
             javan_atomic_integer_state* state = javan_atomic_integer_checked(value);
-            state->value += 1;
-            return state->value;
+            state->value = state->value == INT_MAX ? INT_MIN : state->value + 1;
+            int result = state->value;
+            javan_runtime_lock_leave();
+            return result;
         }
 
         int javan_atomic_integer_decrement_and_get(void* value) {
+            javan_runtime_lock_enter();
             javan_atomic_integer_state* state = javan_atomic_integer_checked(value);
-            state->value -= 1;
-            return state->value;
+            state->value = state->value == INT_MIN ? INT_MAX : state->value - 1;
+            int result = state->value;
+            javan_runtime_lock_leave();
+            return result;
         }
 
         void* javan_atomic_boolean_new(void) {
@@ -11088,16 +11155,23 @@ final class RuntimeSourceMemorySections {
         }
 
         void javan_atomic_boolean_init(void* value, int initial_value) {
+            javan_runtime_lock_enter();
             javan_atomic_boolean_state* state = javan_atomic_boolean_checked(value);
             state->value = initial_value == 0 ? 0 : 1;
+            javan_runtime_lock_leave();
         }
 
         int javan_atomic_boolean_get(void* value) {
-            return javan_atomic_boolean_checked(value)->value;
+            javan_runtime_lock_enter();
+            int result = javan_atomic_boolean_checked(value)->value;
+            javan_runtime_lock_leave();
+            return result;
         }
 
         void javan_atomic_boolean_set(void* value, int next_value) {
+            javan_runtime_lock_enter();
             javan_atomic_boolean_checked(value)->value = next_value == 0 ? 0 : 1;
+            javan_runtime_lock_leave();
         }
 
         void* javan_atomic_reference_new(void) {
@@ -11111,51 +11185,74 @@ final class RuntimeSourceMemorySections {
         }
 
         void javan_atomic_reference_init(void* value, void* initial_value) {
+            javan_runtime_lock_enter();
             javan_atomic_reference_state* state = javan_atomic_reference_checked(value);
             state->value = initial_value;
+            javan_runtime_lock_leave();
         }
 
         void* javan_atomic_reference_get(void* value) {
-            return javan_atomic_reference_checked(value)->value;
+            javan_runtime_lock_enter();
+            void* result = javan_atomic_reference_checked(value)->value;
+            javan_runtime_lock_leave();
+            return result;
         }
 
         int javan_atomic_reference_compare_and_set(void* value, void* expected_value, void* next_value) {
+            javan_runtime_lock_enter();
             javan_atomic_reference_state* state = javan_atomic_reference_checked(value);
-            if (state->value != expected_value) {
-                return 0;
+            int result = 0;
+            if (state->value == expected_value) {
+                state->value = next_value;
+                result = 1;
             }
-            state->value = next_value;
-            return 1;
+            javan_runtime_lock_leave();
+            return result;
         }
 
         void javan_atomic_reference_set(void* value, void* next_value) {
+            javan_runtime_lock_enter();
             javan_atomic_reference_state* state = javan_atomic_reference_checked(value);
             state->value = next_value;
+            javan_runtime_lock_leave();
         }
 
         void javan_atomic_long_init(void* value, long long initial_value) {
+            javan_runtime_lock_enter();
             javan_atomic_long_state* state = javan_atomic_long_checked(value);
             state->value = initial_value;
+            javan_runtime_lock_leave();
         }
 
         long long javan_atomic_long_get(void* value) {
-            return javan_atomic_long_checked(value)->value;
+            javan_runtime_lock_enter();
+            long long result = javan_atomic_long_checked(value)->value;
+            javan_runtime_lock_leave();
+            return result;
         }
 
         void javan_atomic_long_set(void* value, long long next_value) {
+            javan_runtime_lock_enter();
             javan_atomic_long_checked(value)->value = next_value;
+            javan_runtime_lock_leave();
         }
 
         long long javan_atomic_long_increment_and_get(void* value) {
+            javan_runtime_lock_enter();
             javan_atomic_long_state* state = javan_atomic_long_checked(value);
-            state->value += 1LL;
-            return state->value;
+            state->value = state->value == LLONG_MAX ? LLONG_MIN : state->value + 1LL;
+            long long result = state->value;
+            javan_runtime_lock_leave();
+            return result;
         }
 
         long long javan_atomic_long_decrement_and_get(void* value) {
+            javan_runtime_lock_enter();
             javan_atomic_long_state* state = javan_atomic_long_checked(value);
-            state->value -= 1LL;
-            return state->value;
+            state->value = state->value == LLONG_MIN ? LLONG_MAX : state->value - 1LL;
+            long long result = state->value;
+            javan_runtime_lock_leave();
+            return result;
         }
         """;
 

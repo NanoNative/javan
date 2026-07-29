@@ -7527,7 +7527,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void atomicIntegerSetBuildsAndMatchesJvmOutput() throws Exception {
+    void atomicIntegerSetAndBoundaryWrapBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("atomic-integer-set");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -7543,6 +7543,10 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                     System.out.println(counter.get());
                     counter.set(-3);
                     System.out.println(counter.get());
+                    counter.set(Integer.MAX_VALUE);
+                    System.out.println(counter.incrementAndGet());
+                    counter.set(Integer.MIN_VALUE);
+                    System.out.println(counter.decrementAndGet());
                 }
             }
             """);
@@ -7553,11 +7557,11 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/atomic-integer-set").toString())).stdout())
             .isEqualTo(jvmOutput);
-        assertThat(jvmOutput).isEqualTo("0\n9\n-3\n");
+        assertThat(jvmOutput).isEqualTo("0\n9\n-3\n-2147483648\n2147483647\n");
     }
 
     @Test
-    void atomicLongSetBuildsAndMatchesJvmOutput() throws Exception {
+    void atomicLongSetAndBoundaryWrapBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("atomic-long-set");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -7573,6 +7577,10 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                     System.out.println(counter.get());
                     counter.set(-7L);
                     System.out.println(counter.get());
+                    counter.set(Long.MAX_VALUE);
+                    System.out.println(counter.incrementAndGet());
+                    counter.set(Long.MIN_VALUE);
+                    System.out.println(counter.decrementAndGet());
                 }
             }
             """);
@@ -7583,7 +7591,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/atomic-long-set").toString())).stdout())
             .isEqualTo(jvmOutput);
-        assertThat(jvmOutput).isEqualTo("2\n15\n-7\n");
+        assertThat(jvmOutput).isEqualTo("2\n15\n-7\n-9223372036854775808\n9223372036854775807\n");
     }
 
     @Test
@@ -9705,6 +9713,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                     };
                     System.out.println(trimOrNull.apply("  ok  "));
                     System.out.println(trimOrNull.apply(null));
+                    System.out.println(trimOrNull.apply(" again "));
                 }
             }
             """);
@@ -9715,7 +9724,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/exact-catch-null-fallible-function-apply").toString())).stdout())
             .isEqualTo(jvmOutput);
-        assertThat(jvmOutput).isEqualTo("ok\nnull\n");
+        assertThat(jvmOutput).isEqualTo("ok\nnull\nagain\n");
     }
 
     @Test

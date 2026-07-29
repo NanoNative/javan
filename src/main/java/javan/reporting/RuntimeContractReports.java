@@ -235,7 +235,7 @@ public final class RuntimeContractReports {
         field(result, "frameRootInventory", "true", true);
         field(result, "managedHeap", "false", true);
         field(result, "gc", Json.string("partial-mark-sweep"), true);
-        field(result, "gcStrategy", Json.string("single-threaded-entry-statement-and-return-safe-point-generated-object-object-array-primitive-array-boxed-primitive-wrapper-runtime-string-runtime-container-and-owned-container-storage-mark-sweep"), true);
+        field(result, "gcStrategy", Json.string("runtime-lock-serialized-entry-statement-and-return-safe-point-generated-object-object-array-primitive-array-boxed-primitive-wrapper-runtime-string-runtime-container-and-owned-container-storage-mark-sweep-with-registered-platform-worker-roots"), true);
         field(result, "gcStress", Json.string("metadata-verify-and-safe-point-collection"), true);
         field(result, "gcExcludedAllocationKinds", Json.stringList(List.of(
             "explicit-runtime-temporaries",
@@ -270,13 +270,13 @@ public final class RuntimeContractReports {
         field(result, "statementSafePointScope", Json.string("generated-label-and-non-terminal-statement-boundaries"), true);
         field(result, "returnValueRoots", "true", true);
         field(result, "protectedObjectReturns", "true", true);
-        field(result, "protectedObjectReturnScope", Json.string("single-threaded-static-return-root-through-callee-safe-point-and-frame-pop"), true);
+        field(result, "protectedObjectReturnScope", Json.string("generated-object-call-caller-owned-rooted-result-slot-with-lock-scoped-publication-through-callee-safe-point-and-frame-pop"), true);
         field(result, "staticRootInventory", "true", true);
         field(result, "localRootInventory", "true", true);
         field(result, "localRootLiveness", "true", true);
         field(result, "localRootLivenessModel", Json.string("cfg-safe-point-dead-root-clearing"), true);
         field(result, "rootScanning", "false", true);
-        field(result, "rootModel", Json.string("generated-static-frame-return-and-expression-root-inventory-no-heap-scan"), true);
+        field(result, "rootModel", Json.string("generated-static-local-parameter-expression-caller-owned-result-and-registered-platform-worker-root-inventory-no-conservative-heap-scan"), true);
         field(result, "threadRoots", "true", true);
         field(result, "threadRootRegistry", "true", true);
         field(result, "threadRootScope", Json.string("parallel-host-thread-bootstrap-live-thread-root-registry-current-thread-root-membership-and-thread-target-field-traversal"), true);
@@ -317,7 +317,7 @@ public final class RuntimeContractReports {
         result.append("- frame root inventory: `true`\n");
         result.append("- managed heap: `false`\n");
         result.append("- gc: `partial-mark-sweep`\n");
-        result.append("- gc strategy: `single-threaded-entry-statement-and-return-safe-point-generated-object-object-array-primitive-array-boxed-primitive-wrapper-runtime-string-runtime-container-and-owned-container-storage-mark-sweep`\n");
+        result.append("- gc strategy: `runtime-lock-serialized-entry-statement-and-return-safe-point-generated-object-object-array-primitive-array-boxed-primitive-wrapper-runtime-string-runtime-container-and-owned-container-storage-mark-sweep-with-registered-platform-worker-roots`\n");
         result.append("- gc stress: `metadata-verify-and-safe-point-collection`\n");
         result.append("- gc excluded allocation kinds: `explicit-runtime-temporaries, ffi-exports`\n");
         result.append("- runtime container traversal: `precise-rooted-runtime-container-mark-sweep`\n");
@@ -335,13 +335,13 @@ public final class RuntimeContractReports {
         result.append("- statement safe point scope: `generated-label-and-non-terminal-statement-boundaries`\n");
         result.append("- return value roots: `true`\n");
         result.append("- protected object returns: `true`\n");
-        result.append("- protected object return scope: `single-threaded-static-return-root-through-callee-safe-point-and-frame-pop`\n");
+        result.append("- protected object return scope: `generated-object-call-caller-owned-rooted-result-slot-with-lock-scoped-publication-through-callee-safe-point-and-frame-pop`\n");
         result.append("- static root inventory: `true`\n");
         result.append("- local root inventory: `true`\n");
         result.append("- local root liveness: `true`\n");
         result.append("- local root liveness model: `cfg-safe-point-dead-root-clearing`\n");
         result.append("- root scanning: `false`\n");
-        result.append("- root model: `generated-static-frame-return-and-expression-root-inventory-no-heap-scan`\n");
+        result.append("- root model: `generated-static-local-parameter-expression-caller-owned-result-and-registered-platform-worker-root-inventory-no-conservative-heap-scan`\n");
         result.append("- thread roots: `true`\n");
         result.append("- thread root registry: `true`\n");
         result.append("- thread root scope: `parallel-host-thread-bootstrap-live-thread-root-registry-current-thread-root-membership-and-thread-target-field-traversal`\n");

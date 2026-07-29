@@ -18,6 +18,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintStream;
 import java.io.UncheckedIOException;
+import java.lang.classfile.ClassFile;
+import java.lang.classfile.ClassTransform;
+import java.lang.classfile.MethodTransform;
+import java.lang.classfile.attribute.ExceptionsAttribute;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -5544,6 +5548,80 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void unjoinedWorkersCompleteBeforeProcessExitUnderGcPressureAndMatchJvmOutput() throws Exception {
+        final Path project = project("thread-unjoined-automatic-wait-gc-pressure");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    new Thread(new Worker(false)).start();
+                    new Thread(new Worker(true)).start();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Worker", """
+            package com.acme;
+
+            import java.util.concurrent.atomic.AtomicInteger;
+
+            public final class Worker implements Runnable {
+                private static final AtomicInteger READY = new AtomicInteger();
+                private static final AtomicInteger QUICK_DONE = new AtomicInteger();
+
+                private final boolean allocating;
+
+                public Worker(final boolean allocating) {
+                    this.allocating = allocating;
+                }
+
+                @Override
+                public void run() {
+                    READY.incrementAndGet();
+                    while (READY.get() < 2) {
+                        Thread.yield();
+                    }
+                    if (!allocating) {
+                        QUICK_DONE.set(1);
+                        return;
+                    }
+                    while (QUICK_DONE.get() == 0) {
+                        Thread.yield();
+                    }
+                    int checksum = 0;
+                    for (int index = 0; index < 4_000; index++) {
+                        checksum += ("value-" + index).length();
+                    }
+                    if (checksum > 0) {
+                        System.out.println("done");
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(
+            project,
+            List.of(project.resolve(".javan/bin/thread-unjoined-automatic-wait-gc-pressure").toString()),
+            Duration.ofSeconds(30),
+            Map.of(
+                "JAVAN_HEAP_LIMIT_BYTES", "65536",
+                "JAVAN_GC_STRESS", "1",
+                "JAVAN_GC_SAFEPOINT_INTERVAL", "1"
+            )
+        );
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("done\n");
+    }
+
+    @Test
     void emptyThreadJoinBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("thread-join-empty");
         writeJava(project, "com.acme.Main", """
@@ -5762,6 +5840,209 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
                 "JAVAN_GC_SAFEPOINT_INTERVAL", "1"
             )
         ).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void concurrentGeneratedObjectCloneReturnHandoffSurvivesGcPressureAndMatchesJvmOutput() throws Exception {
+        final Path project = project("concurrent-object-clone-return-handoff");
+        writeJava(project, "com.acme.Base", """
+            package com.acme;
+
+            public class Base implements Cloneable {
+                final int value;
+
+                Base(final int value) {
+                    this.value = value;
+                }
+
+                Base copy() throws CloneNotSupportedException {
+                    return (Base) super.clone();
+                }
+            }
+            """);
+
+        final Path sourceRoot = project.resolve("src/main/java");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        final ProcessResult modelCompile = process(project, List.of(
+            CliTestHarness.currentJavacCommand(),
+            "-d",
+            classes.toString(),
+            sourceRoot.resolve("com/acme/Base.java").toString()
+        ));
+        assertThat(modelCompile.exitCode()).as(modelCompile.stderr()).isZero();
+
+        final Path baseClass = classes.resolve("com/acme/Base.class");
+        final ClassFile classFile = ClassFile.of();
+        // Keep the direct clone bytecode but remove its checked-exception metadata so Runnable.run needs no handler.
+        Files.write(
+            baseClass,
+            classFile.transformClass(
+                classFile.parse(baseClass),
+                ClassTransform.transformingMethods(
+                    method -> method.methodName().equalsString("copy"),
+                    MethodTransform.dropping(element -> element instanceof ExceptionsAttribute)
+                )
+            )
+        );
+
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final FallibleFunction<String, String> throwing = value -> {
+                        if (value == null) {
+                            throw new IllegalArgumentException("expected");
+                        }
+                        return value;
+                    };
+                    final Worker first = new Worker(7, throwing);
+                    final Worker second = new Worker(1007, throwing);
+                    final Thread firstThread = new Thread(first);
+                    final Thread secondThread = new Thread(second);
+                    firstThread.start();
+                    secondThread.start();
+                    firstThread.join();
+                    secondThread.join();
+                    System.out.println(first.checksum);
+                    System.out.println(second.checksum);
+                    System.out.println(first.failures);
+                    System.out.println(second.failures);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.FallibleFunction", """
+            package com.acme;
+
+            @FunctionalInterface
+            public interface FallibleFunction<T, R> {
+                R applyWithException(T value) throws Exception;
+
+                default R apply(T value) {
+                    try {
+                        return applyWithException(value);
+                    } catch (final Exception ignored) {
+                        return null;
+                    }
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Worker", """
+            package com.acme;
+
+            import java.util.concurrent.atomic.AtomicInteger;
+
+            public final class Worker extends Base implements Runnable {
+                private static final AtomicInteger READY = new AtomicInteger();
+
+                private final FallibleFunction<String, String> throwing;
+                int checksum;
+                int failures;
+
+                Worker(final int seed, final FallibleFunction<String, String> throwing) {
+                    super(seed);
+                    this.throwing = throwing;
+                }
+
+                @Override
+                public void run() {
+                    int nextChecksum = 0;
+                    int nextFailures = 0;
+                    READY.incrementAndGet();
+                    while (READY.get() < 2) {
+                        Thread.yield();
+                    }
+                    for (int index = 0; index < 2048; index++) {
+                        final int checked = inspect(this, copy());
+                        if (checked < 0) {
+                            nextFailures++;
+                        } else {
+                            nextChecksum += checked;
+                        }
+                        if ((index & 31) == 0 && throwing.apply(null) != null) {
+                            nextFailures++;
+                        }
+                        if (index % 32 == 0) {
+                            Thread.yield();
+                        }
+                    }
+                    checksum = nextChecksum;
+                    failures = nextFailures;
+                }
+
+                private static int inspect(final Base source, final Base copy) {
+                    if (copy == source || copy.value != source.value) {
+                        return -1;
+                    }
+                    return copy.value * 2;
+                }
+            }
+            """);
+
+        final Path emptySourcePath = project.resolve("empty-sourcepath");
+        Files.createDirectories(emptySourcePath);
+        final ProcessResult appCompile = process(project, List.of(
+            CliTestHarness.currentJavacCommand(),
+            "-classpath",
+            classes.toString(),
+            "-sourcepath",
+            emptySourcePath.toString(),
+            "-d",
+            classes.toString(),
+            sourceRoot.resolve("com/acme/FallibleFunction.java").toString(),
+            sourceRoot.resolve("com/acme/Worker.java").toString(),
+            sourceRoot.resolve("com/acme/Main.java").toString()
+        ));
+        assertThat(appCompile.exitCode()).as(appCompile.stderr()).isZero();
+
+        final ProcessResult jvmRun = process(project, List.of(
+            CliTestHarness.currentJavaCommand(),
+            "-cp",
+            classes.toString(),
+            "com.acme.Main"
+        ));
+        assertThat(jvmRun.exitCode()).as(jvmRun.stderr()).isZero();
+        assertThat(jvmRun.stderr()).isEmpty();
+        final String jvmOutput = jvmRun.stdout();
+        final CliRun run = run(
+            project,
+            "build",
+            classes.toString(),
+            "--main",
+            "com.acme.Main",
+            "--output",
+            "concurrent-object-clone-return-handoff"
+        );
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final String generated = Files.readString(project.resolve(".javan/generated/main.c"));
+        assertThat(generated).contains(
+            "static void javan_exact_catch_null_apply(void** result, void* self, void* arg) {",
+            "JavanPanicScope javan_function_or_null_scope;",
+            "javan_panic_scope_push(&javan_function_or_null_scope, &javan_function_or_null_target);",
+            "if (setjmp(javan_function_or_null_target) != 0) {",
+            "javan_clear_error();",
+            "javan_materialized_lambda_apply_object((void**) &javan_function_or_null_result, self, arg);",
+            "javan_panic_at(\"JAVAN-RUNTIME-PANIC\", \"uncaught Java exception\", \"com.acme.Main\", \"lambda$main$0",
+            "javan_exact_catch_null_apply((void**) &javan_expr_tmp_"
+        );
+        final ProcessResult nativeRun = process(
+            project,
+            List.of(project.resolve(".javan/bin/concurrent-object-clone-return-handoff").toString()),
+            Duration.ofSeconds(30),
+            Map.of(
+                "JAVAN_HEAP_LIMIT_BYTES", "65536",
+                "JAVAN_GC_STRESS", "1",
+                "JAVAN_GC_SAFEPOINT_INTERVAL", "1"
+            )
+        );
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("28672\n4124672\n0\n0\n");
     }
 
     @Test
