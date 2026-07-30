@@ -111,7 +111,6 @@ public final class ClassFileReader {
     private static List<FieldInfo> readFields(final ClassByteCursor in, final ConstantPool constantPool) throws IOException {
         final int count = in.u2();
         final List<FieldInfo> result = new ArrayList<>();
-        final Set<String> declarations = new HashSet<>();
         for (int index = 0; index < count; index++) {
             final int accessFlags = in.u2();
             final String name = constantPool.utf8(in.u2());
@@ -119,13 +118,26 @@ public final class ClassFileReader {
             if (!FieldInfo.isValidDescriptor(descriptor)) {
                 throw new IOException("Invalid field descriptor for " + name + ": " + descriptor);
             }
-            if (!declarations.add(name + "\u0000" + descriptor)) {
+            if (containsField(result, name, descriptor)) {
                 throw new IOException("Duplicate field: " + name + " " + descriptor);
             }
             final Optional<String> signature = readSignatureAttribute(in, constantPool, "field " + name);
             result.add(new FieldInfo(accessFlags, name, descriptor, signature));
         }
         return result;
+    }
+
+    private static boolean containsField(
+        final List<FieldInfo> fields,
+        final String name,
+        final String descriptor
+    ) {
+        for (final FieldInfo field : fields) {
+            if (field.name().equals(name) && field.descriptor().equals(descriptor)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static List<MethodInfo> readMethods(final ClassByteCursor in, final ConstantPool constantPool) throws IOException {

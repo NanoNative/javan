@@ -3916,6 +3916,27 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void doubleParseTransportsItsTwoPlatformExceptions() {
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
+            "java/lang/Double",
+            "parseDouble",
+            "(Ljava/lang/String;)D"
+        ))).containsExactly(
+            "java/lang/NullPointerException",
+            "java/lang/NumberFormatException"
+        );
+    }
+
+    @Test
+    void doubleParseRequiresStringRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/lang/Double",
+            "parseDouble",
+            "(Ljava/lang/String;)D"
+        ))).containsExactly("strings");
+    }
+
+    @Test
     void wholeByteArrayFillTransportsNullPointerException() {
         assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
             "java/util/Arrays",

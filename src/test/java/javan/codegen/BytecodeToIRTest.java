@@ -21647,8 +21647,8 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void rejectsUnsupportedDoubleParseDoubleIntrinsic() {
-        assertThatThrownBy(() -> lowerMain(method(
+    void lowersDoubleParseDoubleToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
             0x0008,
             "main",
             "()D",
@@ -21657,11 +21657,14 @@ final class BytecodeToIRTest {
             stringConstant(0, "1.25"),
             invokeStatic(1, new MethodRef("java/lang/Double", "parseDouble", "(Ljava/lang/String;)D")),
             plain(2, 175, "dreturn")
-        )))
-            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
-                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
-                assertThat(exception.diagnostic().subject()).isEqualTo("invokestatic java/lang/Double.parseDouble(Ljava/lang/String;)D");
-            });
+        ));
+
+        assertThat(function.instructions()).contains(
+            IrInstruction.returnDouble(IrExpression.doubleCall(
+                "javan_double_parse_value",
+                List.of(IrExpression.objectLocal("object0"))
+            ))
+        );
     }
 
     @Test

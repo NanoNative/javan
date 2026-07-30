@@ -1793,6 +1793,7 @@ public final class StaticVerifier {
                         || "(Ljava/lang/Object;)V".equals(target.descriptor())
                         || "(I)V".equals(target.descriptor())
                         || "(J)V".equals(target.descriptor())
+                        || "(D)V".equals(target.descriptor())
                         || "(Z)V".equals(target.descriptor());
                 }
                 if ("java/lang/Thread".equals(target.owner())
