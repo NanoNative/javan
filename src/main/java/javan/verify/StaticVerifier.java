@@ -845,7 +845,7 @@ public final class StaticVerifier {
     private static boolean supportedThrowableWrapRangeInstruction(final Instruction instruction) {
         final int opcode = instruction.opcode();
         if (opcode == 25 || (opcode >= 42 && opcode <= 45)
-            || opcode == 58 || (opcode >= 75 && opcode <= 78)
+            || (opcode >= 54 && opcode <= 78)
             || opcode == 167) {
             return true;
         }

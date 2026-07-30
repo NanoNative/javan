@@ -229,6 +229,27 @@ final class CliDoubleParseDoubleIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void parsedValueCanBeStoredInsideCatchRange() throws Exception {
+        assertMatchesJvm(
+            "double-parse-stored-catch",
+            """
+            System.out.println(parse("unused", "1.25"));
+            """,
+            """
+            private static double parse(final String unused, final String input) {
+                final double value;
+                try {
+                    value = Double.parseDouble(input);
+                } catch (final NumberFormatException exception) {
+                    throw new IllegalArgumentException("invalid value", exception);
+                }
+                return value;
+            }
+            """
+        );
+    }
+
+    @Test
     void dynamicMalformedInputIsCatchableUnderGcPressure() throws Exception {
         assertMatchesJvm(
             "double-parse-gc",
