@@ -15,13 +15,16 @@ import javan.ir.IrProgram;
 import javan.ir.IrSourceLocation;
 import javan.ir.IrType;
 import javan.ir.IrExpression;
+import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestFactory;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -1776,6 +1779,47 @@ final class CCodegenMemoryTest {
             .isLessThan(generated.indexOf(arrayPublication));
         assertThat(generated.indexOf(arrayPublication))
             .isLessThan(generated.indexOf(BytecodeToIR.symbol(entry) + "(arg0_string, arg1_array);"));
+    }
+
+    @TestFactory
+    Stream<DynamicTest> threadProducingRuntimeCallsPublishIntoCallerRoot() {
+        return Stream.of(
+            "javan_thread_new",
+            "javan_thread_new_virtual",
+            "javan_virtual_thread_builder_start",
+            "javan_virtual_thread_builder_unstarted",
+            "javan_virtual_thread_factory_new_thread",
+            "javan_virtual_thread_executor_submit",
+            "javan_scheduled_thread_pool_executor_schedule",
+            "javan_scheduled_thread_pool_executor_schedule_at_fixed_rate",
+            "javan_scheduled_thread_pool_executor_schedule_with_fixed_delay"
+        ).map(symbol -> DynamicTest.dynamicTest(symbol, () -> {
+            final IrProgram program = new IrProgram(
+                List.of(),
+                List.of(new IrFunction(
+                    "com/acme/Main",
+                    "main",
+                    "([Ljava/lang/String;)V",
+                    "main_symbol",
+                    IrType.VOID,
+                    List.of(),
+                    List.of(new IrLocal(IrType.OBJECT, "thread")),
+                    List.of(
+                        IrInstruction.assignObject("thread", IrExpression.objectCall(symbol, List.of())),
+                        IrInstruction.returnVoid()
+                    )
+                )),
+                "main_symbol"
+            );
+
+            final String generated = Files.readString(new CCodegen().generate(program, tempDir.resolve(symbol)));
+
+            assertThat(generated).containsSubsequence(
+                "javan_root_frame_push(javan_expr_roots, 1);",
+                symbol + "_into((void**) &javan_expr_tmp_0);",
+                "javan_root_frame_pop(javan_expr_roots);"
+            );
+        }));
     }
 
     private static IrClass nodeClass() {

@@ -3356,7 +3356,8 @@ public final class CCodegen {
             return false;
         }
         return GENERATED_OBJECT_CLONE_SYMBOL.equals(expression.value())
-            || isArrayCopyIntoCall(expression.value());
+            || isArrayCopyIntoCall(expression.value())
+            || isThreadResultIntoCall(expression.value());
     }
 
     private static String rootedResultCallSymbol(final IrExpression expression) {
@@ -3377,6 +3378,21 @@ public final class CCodegen {
                 "javan_arrays_copy_of_byte",
                 "javan_arrays_copy_of_short",
                 "javan_arrays_copy_of_char" -> true;
+            default -> false;
+        };
+    }
+
+    private static boolean isThreadResultIntoCall(final String symbol) {
+        return switch (symbol) {
+            case "javan_thread_new",
+                "javan_thread_new_virtual",
+                "javan_virtual_thread_builder_start",
+                "javan_virtual_thread_builder_unstarted",
+                "javan_virtual_thread_factory_new_thread",
+                "javan_virtual_thread_executor_submit",
+                "javan_scheduled_thread_pool_executor_schedule",
+                "javan_scheduled_thread_pool_executor_schedule_at_fixed_rate",
+                "javan_scheduled_thread_pool_executor_schedule_with_fixed_delay" -> true;
             default -> false;
         };
     }

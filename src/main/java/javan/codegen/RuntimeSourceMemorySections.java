@@ -3346,58 +3346,86 @@ final class RuntimeSourceMemorySections {
             return factory_value;
         }
 
-        static void* javan_virtual_thread_name_state_thread(
+        static void javan_virtual_thread_name_state_thread_into(
+            void** result,
             javan_virtual_thread_name_state* state,
             void* runnable,
             int start
         ) {
+            if (result == NULL) {
+                javan_panic("invalid virtual thread result");
+            }
+            javan_runtime_lock_enter();
+            *result = NULL;
+            javan_runtime_lock_leave();
             void* state_root = (void*) state;
             void* runnable_root = runnable;
             void* name_value = NULL;
-            void* thread_value = NULL;
             void** roots[] = {
                 (void**) &state_root,
                 (void**) &runnable_root,
                 (void**) &name_value,
-                (void**) &thread_value
+                result
             };
             javan_root_frame_push(roots, 4);
+            javan_runtime_lock_enter();
             name_value = javan_virtual_thread_name_state_next_name((javan_virtual_thread_name_state*) state_root);
-            thread_value = javan_thread_new_virtual();
-            ((javan_thread*) thread_value)->inherit_inheritable_thread_locals = ((javan_virtual_thread_name_state*) state_root)->inherit_inheritable_thread_locals;
+            javan_runtime_lock_leave();
+            javan_thread_new_virtual_into(result);
+            ((javan_thread*) *result)->inherit_inheritable_thread_locals = ((javan_virtual_thread_name_state*) state_root)->inherit_inheritable_thread_locals;
             if (name_value != NULL) {
-                javan_thread_set_name(thread_value, name_value);
+                javan_thread_set_name(*result, name_value);
             }
-            javan_thread_set_target(thread_value, runnable_root);
+            javan_thread_set_target(*result, runnable_root);
             if (start != 0) {
-                javan_thread_start(thread_value);
+                javan_thread_start(*result);
             }
             javan_root_frame_pop(roots);
-            return thread_value;
         }
 
-        void* javan_virtual_thread_builder_start(void* value, void* runnable) {
-            return javan_virtual_thread_name_state_thread(
+        void javan_virtual_thread_builder_start_into(void** result, void* value, void* runnable) {
+            javan_virtual_thread_name_state_thread_into(
+                result,
                 javan_virtual_thread_builder_checked(value),
                 runnable,
                 1
             );
         }
 
-        void* javan_virtual_thread_builder_unstarted(void* value, void* runnable) {
-            return javan_virtual_thread_name_state_thread(
+        void* javan_virtual_thread_builder_start(void* value, void* runnable) {
+            void* result = NULL;
+            javan_virtual_thread_builder_start_into(&result, value, runnable);
+            return result;
+        }
+
+        void javan_virtual_thread_builder_unstarted_into(void** result, void* value, void* runnable) {
+            javan_virtual_thread_name_state_thread_into(
+                result,
                 javan_virtual_thread_builder_checked(value),
                 runnable,
                 0
             );
         }
 
-        void* javan_virtual_thread_factory_new_thread(void* value, void* runnable) {
-            return javan_virtual_thread_name_state_thread(
+        void* javan_virtual_thread_builder_unstarted(void* value, void* runnable) {
+            void* result = NULL;
+            javan_virtual_thread_builder_unstarted_into(&result, value, runnable);
+            return result;
+        }
+
+        void javan_virtual_thread_factory_new_thread_into(void** result, void* value, void* runnable) {
+            javan_virtual_thread_name_state_thread_into(
+                result,
                 javan_virtual_thread_factory_checked(value),
                 runnable,
                 0
             );
+        }
+
+        void* javan_virtual_thread_factory_new_thread(void* value, void* runnable) {
+            void* result = NULL;
+            javan_virtual_thread_factory_new_thread_into(&result, value, runnable);
+            return result;
         }
 
         void* javan_virtual_thread_builder_get_class(void* value) {
@@ -4209,20 +4237,25 @@ final class RuntimeSourceMemorySections {
                 javan_panic("virtual thread executor is closed");
             }
             javan_profile_executor_execute_calls_value++;
-            thread_value = javan_virtual_thread_factory_new_thread(state->factory, runnable_root);
+            javan_virtual_thread_factory_new_thread_into(&thread_value, state->factory, runnable_root);
             javan_thread_start(thread_value);
             javan_list_append_raw(state->threads, thread_value);
             javan_root_frame_pop(roots);
         }
 
-        void* javan_virtual_thread_executor_submit(void* value, void* runnable) {
+        void javan_virtual_thread_executor_submit_into(void** result, void* value, void* runnable) {
+            if (result == NULL) {
+                javan_panic("invalid virtual thread executor submit result");
+            }
+            javan_runtime_lock_enter();
+            *result = NULL;
+            javan_runtime_lock_leave();
             void* executor_root = value;
             void* runnable_root = runnable;
-            void* thread_value = NULL;
             void** roots[] = {
                 (void**) &executor_root,
                 (void**) &runnable_root,
-                (void**) &thread_value
+                result
             };
             javan_root_frame_push(roots, 3);
             javan_virtual_thread_executor_state* state = javan_virtual_thread_executor_checked(executor_root);
@@ -4230,11 +4263,16 @@ final class RuntimeSourceMemorySections {
                 javan_panic("virtual thread executor is closed");
             }
             javan_profile_executor_execute_calls_value++;
-            thread_value = javan_virtual_thread_factory_new_thread(state->factory, runnable_root);
-            javan_thread_start(thread_value);
-            javan_list_append_raw(state->threads, thread_value);
+            javan_virtual_thread_factory_new_thread_into(result, state->factory, runnable_root);
+            javan_thread_start(*result);
+            javan_list_append_raw(state->threads, *result);
             javan_root_frame_pop(roots);
-            return thread_value;
+        }
+
+        void* javan_virtual_thread_executor_submit(void* value, void* runnable) {
+            void* result = NULL;
+            javan_virtual_thread_executor_submit_into(&result, value, runnable);
+            return result;
         }
 
         void javan_virtual_thread_executor_shutdown(void* value) {
@@ -4466,8 +4504,15 @@ final class RuntimeSourceMemorySections {
         """;
 
     private static final String SOURCE_HEAP_ALLOC_TAIL = """
-        void* javan_thread_new(void) {
-            javan_thread* object = (javan_thread*) javan_alloc(sizeof(javan_thread));
+        void javan_thread_new_into(void** result) {
+            if (result == NULL) {
+                javan_panic("invalid Thread result");
+            }
+            javan_runtime_lock_enter();
+            *result = NULL;
+            void** javan_thread_new_roots[] = { result };
+            javan_root_frame_push(javan_thread_new_roots, 1);
+            javan_thread* object = (javan_thread*) javan_alloc_rooted(sizeof(javan_thread), result);
             object->interrupted = 0;
             object->started = 0;
             object->completed = 0;
@@ -4507,32 +4552,44 @@ final class RuntimeSourceMemorySections {
                 object->priority = ((javan_thread*) javan_current_thread_value)->priority;
             }
             javan_register_object((void*) object, JAVAN_TYPE_JAVA_LANG_THREAD);
-            void* rooted_object = (void*) object;
-            void** javan_thread_new_roots[] = { &rooted_object };
-            javan_root_frame_push(javan_thread_new_roots, 1);
             object->name = javan_thread_copy_default_platform_name();
-            javan_root_frame_pop(javan_thread_new_roots);
-            javan_runtime_lock_enter();
             javan_profile_platform_thread_objects_created_value++;
+            javan_root_frame_pop(javan_thread_new_roots);
             javan_runtime_lock_leave();
-            return object;
         }
 
-        void* javan_thread_new_virtual(void) {
-            void* value = javan_thread_new();
-            javan_thread* object = (javan_thread*) value;
-            object->virtual_thread = 1;
-            void** javan_thread_new_virtual_roots[] = { &value };
-            javan_root_frame_push(javan_thread_new_virtual_roots, 1);
-            object->name = javan_thread_copy_default_virtual_name();
-            javan_root_frame_pop(javan_thread_new_virtual_roots);
+        void* javan_thread_new(void) {
+            void* result = NULL;
+            javan_thread_new_into(&result);
+            return result;
+        }
+
+        void javan_thread_new_virtual_into(void** result) {
+            if (result == NULL) {
+                javan_panic("invalid virtual Thread result");
+            }
             javan_runtime_lock_enter();
+            *result = NULL;
+            javan_runtime_lock_leave();
+            void** javan_thread_new_virtual_roots[] = { result };
+            javan_root_frame_push(javan_thread_new_virtual_roots, 1);
+            javan_runtime_lock_enter();
+            javan_thread_new_into(result);
+            javan_thread* object = (javan_thread*) *result;
+            object->virtual_thread = 1;
+            object->name = javan_thread_copy_default_virtual_name();
             if (javan_profile_platform_thread_objects_created_value > 0) {
                 javan_profile_platform_thread_objects_created_value--;
             }
             javan_profile_virtual_thread_objects_created_value++;
             javan_runtime_lock_leave();
-            return value;
+            javan_root_frame_pop(javan_thread_new_virtual_roots);
+        }
+
+        void* javan_thread_new_virtual(void) {
+            void* result = NULL;
+            javan_thread_new_virtual_into(&result);
+            return result;
         }
 
         static void* javan_thread_local_new_with_inheritance(int inheritable) {
@@ -5141,7 +5198,8 @@ final class RuntimeSourceMemorySections {
 
         static javan_thread* javan_thread_bootstrap_current(void) {
             javan_runtime_lock_enter();
-            void* value = javan_thread_new();
+            void* value = NULL;
+            javan_thread_new_into(&value);
             javan_current_thread_value = value;
             javan_thread_mark_started((javan_thread*) value);
             javan_thread_root_register(value);
@@ -6080,16 +6138,27 @@ final class RuntimeSourceMemorySections {
             thread->scheduled_period_nanos = period_nanos;
         }
 
-        void* javan_scheduled_thread_pool_executor_schedule(void* value, void* runnable, long long delay, void* unit) {
+        void javan_scheduled_thread_pool_executor_schedule_into(
+            void** result,
+            void* value,
+            void* runnable,
+            long long delay,
+            void* unit
+        ) {
+            if (result == NULL) {
+                javan_panic("invalid scheduled executor result");
+            }
+            javan_runtime_lock_enter();
+            *result = NULL;
+            javan_runtime_lock_leave();
             void* executor_root = value;
             void* runnable_root = runnable;
             void* unit_root = unit;
-            void* thread_value = NULL;
             void** roots[] = {
                 (void**) &executor_root,
                 (void**) &runnable_root,
                 (void**) &unit_root,
-                (void**) &thread_value
+                result
             };
             javan_root_frame_push(roots, 4);
             javan_scheduled_thread_pool_executor_state* state = javan_scheduled_thread_pool_executor_checked(executor_root);
@@ -6097,34 +6166,45 @@ final class RuntimeSourceMemorySections {
                 javan_panic("scheduled thread pool executor is closed");
             }
             if (state->thread_factory != NULL) {
-                thread_value = javan_virtual_thread_factory_new_thread(state->thread_factory, runnable_root);
+                javan_virtual_thread_factory_new_thread_into(result, state->thread_factory, runnable_root);
             } else {
-                thread_value = javan_thread_new_virtual();
-                javan_thread_set_target(thread_value, runnable_root);
+                javan_thread_new_virtual_into(result);
+                javan_thread_set_target(*result, runnable_root);
             }
-            javan_thread_set_scheduled_task(thread_value, executor_root, 1, javan_time_unit_to_nanos(unit_root, delay), 0LL);
-            javan_thread_start(thread_value);
-            javan_list_append_raw(state->threads, thread_value);
+            javan_thread_set_scheduled_task(*result, executor_root, 1, javan_time_unit_to_nanos(unit_root, delay), 0LL);
+            javan_thread_start(*result);
+            javan_list_append_raw(state->threads, *result);
             javan_root_frame_pop(roots);
-            return thread_value;
         }
 
-        void* javan_scheduled_thread_pool_executor_schedule_at_fixed_rate(
+        void* javan_scheduled_thread_pool_executor_schedule(void* value, void* runnable, long long delay, void* unit) {
+            void* result = NULL;
+            javan_scheduled_thread_pool_executor_schedule_into(&result, value, runnable, delay, unit);
+            return result;
+        }
+
+        void javan_scheduled_thread_pool_executor_schedule_at_fixed_rate_into(
+            void** result,
             void* value,
             void* runnable,
             long long initial_delay,
             long long period,
             void* unit
         ) {
+            if (result == NULL) {
+                javan_panic("invalid fixed-rate scheduled executor result");
+            }
+            javan_runtime_lock_enter();
+            *result = NULL;
+            javan_runtime_lock_leave();
             void* executor_root = value;
             void* runnable_root = runnable;
             void* unit_root = unit;
-            void* thread_value = NULL;
             void** roots[] = {
                 (void**) &executor_root,
                 (void**) &runnable_root,
                 (void**) &unit_root,
-                (void**) &thread_value
+                result
             };
             javan_root_frame_push(roots, 4);
             javan_scheduled_thread_pool_executor_state* state = javan_scheduled_thread_pool_executor_checked(executor_root);
@@ -6135,43 +6215,67 @@ final class RuntimeSourceMemorySections {
                 javan_panic("non-positive scheduleAtFixedRate period");
             }
             if (state->thread_factory != NULL) {
-                thread_value = javan_virtual_thread_factory_new_thread(state->thread_factory, runnable_root);
+                javan_virtual_thread_factory_new_thread_into(result, state->thread_factory, runnable_root);
             } else {
-                thread_value = javan_thread_new_virtual();
-                javan_thread_set_target(thread_value, runnable_root);
+                javan_thread_new_virtual_into(result);
+                javan_thread_set_target(*result, runnable_root);
             }
             javan_thread_set_scheduled_task(
-                thread_value,
+                *result,
                 executor_root,
                 2,
                 javan_time_unit_to_nanos(unit_root, initial_delay),
                 javan_time_unit_to_nanos(unit_root, period)
             );
-            javan_thread_start(thread_value);
-            javan_list_append_raw(state->threads, thread_value);
+            javan_thread_start(*result);
+            javan_list_append_raw(state->threads, *result);
             javan_root_frame_pop(roots);
-            return thread_value;
+        }
+
+        void* javan_scheduled_thread_pool_executor_schedule_at_fixed_rate(
+            void* value,
+            void* runnable,
+            long long initial_delay,
+            long long period,
+            void* unit
+        ) {
+            void* result = NULL;
+            javan_scheduled_thread_pool_executor_schedule_at_fixed_rate_into(
+                &result,
+                value,
+                runnable,
+                initial_delay,
+                period,
+                unit
+            );
+            return result;
         }
 
         """;
 
     private static final String SOURCE_HEAP_ALLOC_SCHEDULE_FIXED_DELAY = """
-        void* javan_scheduled_thread_pool_executor_schedule_with_fixed_delay(
+        void javan_scheduled_thread_pool_executor_schedule_with_fixed_delay_into(
+            void** result,
             void* value,
             void* runnable,
             long long initial_delay,
             long long delay,
             void* unit
         ) {
+            if (result == NULL) {
+                javan_panic("invalid fixed-delay scheduled executor result");
+            }
+            javan_runtime_lock_enter();
+            *result = NULL;
+            javan_runtime_lock_leave();
             void* executor_root = value;
             void* runnable_root = runnable;
             void* unit_root = unit;
-            void* thread_value = NULL;
             void** roots[] = {
                 (void**) &executor_root,
                 (void**) &runnable_root,
                 (void**) &unit_root,
-                (void**) &thread_value
+                result
             };
             javan_root_frame_push(roots, 4);
             javan_scheduled_thread_pool_executor_state* state = javan_scheduled_thread_pool_executor_checked(executor_root);
@@ -6182,22 +6286,40 @@ final class RuntimeSourceMemorySections {
                 javan_panic("non-positive scheduleWithFixedDelay delay");
             }
             if (state->thread_factory != NULL) {
-                thread_value = javan_virtual_thread_factory_new_thread(state->thread_factory, runnable_root);
+                javan_virtual_thread_factory_new_thread_into(result, state->thread_factory, runnable_root);
             } else {
-                thread_value = javan_thread_new_virtual();
-                javan_thread_set_target(thread_value, runnable_root);
+                javan_thread_new_virtual_into(result);
+                javan_thread_set_target(*result, runnable_root);
             }
             javan_thread_set_scheduled_task(
-                thread_value,
+                *result,
                 executor_root,
                 3,
                 javan_time_unit_to_nanos(unit_root, initial_delay),
                 javan_time_unit_to_nanos(unit_root, delay)
             );
-            javan_thread_start(thread_value);
-            javan_list_append_raw(state->threads, thread_value);
+            javan_thread_start(*result);
+            javan_list_append_raw(state->threads, *result);
             javan_root_frame_pop(roots);
-            return thread_value;
+        }
+
+        void* javan_scheduled_thread_pool_executor_schedule_with_fixed_delay(
+            void* value,
+            void* runnable,
+            long long initial_delay,
+            long long delay,
+            void* unit
+        ) {
+            void* result = NULL;
+            javan_scheduled_thread_pool_executor_schedule_with_fixed_delay_into(
+                &result,
+                value,
+                runnable,
+                initial_delay,
+                delay,
+                unit
+            );
+            return result;
         }
 
         """;
