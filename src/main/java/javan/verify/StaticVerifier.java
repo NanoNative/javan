@@ -649,6 +649,7 @@ public final class StaticVerifier {
         if (!isPlatformThrowable(handler.catchType().orElseThrow())) {
             return false;
         }
+        final String catchType = handler.catchType().orElseThrow();
         int hasThrowableTransport = 0;
         final List<Instruction> instructions = code.instructions();
         for (int instructionIndex = 0; instructionIndex < instructions.size(); instructionIndex++) {
@@ -665,8 +666,12 @@ public final class StaticVerifier {
             if (supportedGeneratedThrowableCall(classes, instruction)) {
                 hasThrowableTransport = 1;
             }
+            if (supportedTransportedJdkThrowableCall(instruction, catchType)) {
+                hasThrowableTransport = 1;
+            }
             if (!supportedInterruptedWaitProtectedInstruction(instruction)
                 && !supportedGeneratedThrowableCall(classes, instruction)
+                && !supportedTransportedJdkThrowableCall(instruction, catchType)
                 && !supportedThrowableWrapRangeInstruction(instruction)
                 && !supportedCaughtThrowableCauseConstructor(code, instructions, instructionIndex, instruction)
                 && !supportedProtectedFinallyRethrowInstruction(classes, code, instruction)) {
@@ -675,6 +680,23 @@ public final class StaticVerifier {
         }
         if (hasThrowableTransport == 1) {
             return true;
+        }
+        return false;
+    }
+
+    private static boolean supportedTransportedJdkThrowableCall(
+        final Instruction instruction,
+        final String catchType
+    ) {
+        if (instruction.methodRef().isEmpty()) {
+            return false;
+        }
+        for (final String throwableType : JdkCallSupport.transportedPlatformThrowableTypes(
+            instruction.methodRef().orElseThrow()
+        )) {
+            if (JdkCallSupport.isPlatformThrowableAssignable(throwableType, catchType)) {
+                return true;
+            }
         }
         return false;
     }

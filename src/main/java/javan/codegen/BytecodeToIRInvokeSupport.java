@@ -2033,6 +2033,19 @@ final class BytecodeToIRInvokeSupport {
                 sourceLines
             );
         }
+        if (lowerDecimalParse(
+            classFile,
+            method,
+            instruction,
+            methodRef,
+            instructions,
+            stack,
+            localDeclarations,
+            pendingExceptionHandlerStacks,
+            sourceLines
+        )) {
+            return true;
+        }
         if ("java/lang/Integer".equals(methodRef.owner())) {
             return lowerIntegerIntrinsic(classFile, method, methodRef, stack);
         }
@@ -2650,6 +2663,106 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         return false;
+    }
+
+    static boolean lowerDecimalParse(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final MethodRef methodRef,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
+    ) {
+        final boolean parseInt = "java/lang/Integer".equals(methodRef.owner())
+            && "parseInt".equals(methodRef.name())
+            && "(Ljava/lang/String;)I".equals(methodRef.descriptor());
+        final boolean parseLong = "java/lang/Long".equals(methodRef.owner())
+            && "parseLong".equals(methodRef.name())
+            && "(Ljava/lang/String;)J".equals(methodRef.descriptor());
+        if (!parseInt && !parseLong) {
+            return false;
+        }
+        final long negativeLimit = parseInt ? Integer.MIN_VALUE : Long.MIN_VALUE;
+        final long positiveLimit = parseInt ? -Integer.MAX_VALUE : -Long.MAX_VALUE;
+        final int valueLocalIndex = localDeclarations.size();
+        final String valueLocalName = "object" + valueLocalIndex;
+        localDeclarations.put(
+            Integer.MIN_VALUE + valueLocalIndex,
+            new IrLocal(IrType.OBJECT, valueLocalName)
+        );
+        instructions.add(IrInstruction.assignObject(
+            valueLocalName,
+            popObject(classFile, method, stack)
+        ));
+
+        final int statusLocalIndex = localDeclarations.size();
+        final String statusLocalName = "int" + statusLocalIndex;
+        localDeclarations.put(
+            Integer.MIN_VALUE + statusLocalIndex,
+            new IrLocal(IrType.INT, statusLocalName)
+        );
+        instructions.add(IrInstruction.assignInt(
+            statusLocalName,
+            IrExpression.intCall(
+                "javan_decimal_parse_status",
+                List.of(
+                    IrExpression.objectLocal(valueLocalName),
+                    IrExpression.longLiteral(negativeLimit),
+                    IrExpression.longLiteral(positiveLimit)
+                )
+            )
+        ));
+
+        final String successLabel = "label_decimal_parse_success_"
+            + instruction.offset() + "_" + statusLocalIndex;
+        instructions.add(IrInstruction.branchIf(
+            successLabel,
+            IrExpression.intComparison(
+                "==",
+                IrExpression.intLocal(statusLocalName),
+                IrExpression.intLiteral(0)
+            )
+        ));
+        final List<StackValue> successStack = List.copyOf(stack);
+        routePendingPlatformException(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            "java/lang/NumberFormatException",
+            IrExpression.objectCall(
+                "javan_decimal_parse_message",
+                List.of(
+                    IrExpression.objectLocal(valueLocalName),
+                    IrExpression.intLocal(statusLocalName)
+                )
+            )
+        );
+        instructions.add(IrInstruction.label(successLabel));
+        stack.addAll(successStack);
+        final IrExpression parsedValue = IrExpression.longCall(
+            "javan_decimal_parse_value",
+            List.of(
+                IrExpression.objectLocal(valueLocalName),
+                IrExpression.longLiteral(negativeLimit),
+                IrExpression.longLiteral(positiveLimit)
+            )
+        );
+        if (parseInt) {
+            stack.add(StackValue.intExpression(IrExpression.intCall(
+                "javan_l2i",
+                List.of(parsedValue)
+            )));
+        } else {
+            stack.add(StackValue.longExpression(parsedValue));
+        }
+        return true;
     }
     static boolean lowerLongIntrinsic(
         final ClassFile classFile,
