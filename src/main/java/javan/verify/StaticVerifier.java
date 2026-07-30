@@ -1729,13 +1729,7 @@ public final class StaticVerifier {
         if (supportedExplicitThrowRangeInstruction(instruction)) {
             return true;
         }
-        if (isAload(instruction.opcode())) {
-            return true;
-        }
-        if (instruction.opcode() == 22) {
-            return true;
-        }
-        if (instruction.opcode() >= 30 && instruction.opcode() <= 33) {
+        if (instruction.opcode() >= 21 && instruction.opcode() <= 45) {
             return true;
         }
         if (instruction.opcode() >= 2 && instruction.opcode() <= 8) {
