@@ -3222,25 +3222,69 @@ public final class CCodegen {
     private static String escapeCString(final String value) {
         final StringBuilder result = new StringBuilder();
         for (int index = 0; index < value.length(); index++) {
-            appendEscapedCChar(result, value.charAt(index));
+            final char current = value.charAt(index);
+            if (current <= 0x7F) {
+                appendEscapedCByte(result, current);
+            } else if (current <= 0x7FF) {
+                appendEscapedCByte(result, 0xC0 | (current >> 6));
+                appendEscapedCByte(result, 0x80 | (current & 0x3F));
+            } else if (isHighSurrogate(current)
+                && index + 1 < value.length()
+                && isLowSurrogate(value.charAt(index + 1))) {
+                final char low = value.charAt(++index);
+                final int codePoint = 0x10000 + ((current - 0xD800) << 10) + (low - 0xDC00);
+                appendEscapedCByte(result, 0xF0 | (codePoint >> 18));
+                appendEscapedCByte(result, 0x80 | ((codePoint >> 12) & 0x3F));
+                appendEscapedCByte(result, 0x80 | ((codePoint >> 6) & 0x3F));
+                appendEscapedCByte(result, 0x80 | (codePoint & 0x3F));
+            } else {
+                appendEscapedCByte(result, 0xE0 | (current >> 12));
+                appendEscapedCByte(result, 0x80 | ((current >> 6) & 0x3F));
+                appendEscapedCByte(result, 0x80 | (current & 0x3F));
+            }
         }
         return result.toString();
     }
 
     private static String emitCStringLiteral(final String value) {
         final int maxChunkLength = 120;
-        final StringBuilder result = new StringBuilder(value.length() + 16);
-        StringBuilder chunk = new StringBuilder(Math.min(value.length(), maxChunkLength));
-        for (int index = 0; index < value.length(); index++) {
-            final int escapedLength = escapedCCharLength(value.charAt(index));
-            if (!chunk.isEmpty() && chunk.length() + escapedLength > maxChunkLength) {
+        final String escaped = escapeCString(value);
+        final StringBuilder result = new StringBuilder(escaped.length() + 16);
+        StringBuilder chunk = new StringBuilder(Math.min(escaped.length(), maxChunkLength));
+        for (int index = 0; index < escaped.length();) {
+            final int tokenLength = escapedCStringTokenLength(escaped, index);
+            if (!chunk.isEmpty() && chunk.length() + tokenLength > maxChunkLength) {
                 appendCStringChunk(result, chunk);
-                chunk = new StringBuilder(Math.min(value.length() - index, maxChunkLength));
+                chunk = new StringBuilder(Math.min(escaped.length() - index, maxChunkLength));
             }
-            appendEscapedCChar(chunk, value.charAt(index));
+            for (int offset = 0; offset < tokenLength; offset++) {
+                chunk.append(escaped.charAt(index + offset));
+            }
+            index += tokenLength;
         }
         appendCStringChunk(result, chunk);
         return result.toString();
+    }
+
+    private static int escapedCStringTokenLength(final String escaped, final int index) {
+        if (escaped.charAt(index) != '\\') {
+            return 1;
+        }
+        if (index + 1 < escaped.length()) {
+            final char next = escaped.charAt(index + 1);
+            if (next >= '0' && next <= '7') {
+                return 4;
+            }
+        }
+        return 2;
+    }
+
+    private static boolean isHighSurrogate(final char value) {
+        return value >= 0xD800 && value <= 0xDBFF;
+    }
+
+    private static boolean isLowSurrogate(final char value) {
+        return value >= 0xDC00 && value <= 0xDFFF;
     }
 
     private static void appendCStringChunk(final StringBuilder result, final StringBuilder chunk) {
@@ -3250,24 +3294,8 @@ public final class CCodegen {
         result.append('"').append(chunk.toString()).append('"');
     }
 
-    private static int escapedCCharLength(final char ch) {
-        switch (ch) {
-            case '\\':
-            case '"':
-            case '\n':
-            case '\r':
-            case '\t':
-                return 2;
-            default:
-                if (ch < 32 || ch > 126) {
-                    return 4;
-                }
-                return 1;
-        }
-    }
-
-    private static void appendEscapedCChar(final StringBuilder result, final char ch) {
-        switch (ch) {
+    private static void appendEscapedCByte(final StringBuilder result, final int value) {
+        switch (value) {
             case '\\':
                 result.append('\\').append('\\');
                 return;
@@ -3284,12 +3312,12 @@ public final class CCodegen {
                 result.append('\\').append('t');
                 return;
             default:
-                if (ch < 32 || ch > 126) {
+                if (value < 32 || value > 126) {
                     result.append('\\');
-                    appendEscapedOctal(result, ch);
+                    appendEscapedOctal(result, value);
                     return;
                 }
-                result.append(ch);
+                result.append((char) value);
         }
     }
 
