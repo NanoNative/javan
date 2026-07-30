@@ -211,7 +211,7 @@ public final class StaticVerifier {
                     reachable
                 ));
             }
-            if (unsupportedExceptionHandlers(classes, methodCode) && !supportedSyntheticSwitchMapClass(classFile, method, methodCode)) {
+            if (unsupportedExceptionHandlers(classes, method) && !supportedSyntheticSwitchMapClass(classFile, method, methodCode)) {
                 diagnostics.add(exceptionHandlerDiagnostic(classFile, method, methodCode.exceptionTableLength(), reachable));
             }
             diagnostics.addAll(unsupportedThreadLifecycleDiagnostics(classFile, method, methodCode, reachable));
@@ -609,9 +609,16 @@ public final class StaticVerifier {
         return "(Ljava/lang/String;I)I".equals(descriptor);
     }
 
-    private static boolean unsupportedExceptionHandlers(final Map<String, ClassFile> classes, final CodeAttribute code) {
+    private static boolean unsupportedExceptionHandlers(final Map<String, ClassFile> classes, final MethodInfo method) {
+        final CodeAttribute code = method.code().orElseThrow();
         if (code.exceptionTableLength() == 0) {
             return false;
+        }
+        if (normalBranchEntersHandlerBody(code)) {
+            return true;
+        }
+        if (boundedTypedHandlerSetCandidate(code) && hasUnsupportedIndividualHandler(classes, code)) {
+            return !supportedBoundedTypedHandlerSet(classes, method, code);
         }
         for (final CodeException handler : code.exceptionTable()) {
             if (!supportedExceptionHandler(classes, code, handler)) {
@@ -619,6 +626,368 @@ public final class StaticVerifier {
             }
         }
         return false;
+    }
+
+    private static boolean hasUnsupportedIndividualHandler(
+        final Map<String, ClassFile> classes,
+        final CodeAttribute code
+    ) {
+        for (final CodeException handler : code.exceptionTable()) {
+            if (!supportedExceptionHandler(classes, code, handler)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean boundedTypedHandlerSetCandidate(final CodeAttribute code) {
+        final List<CodeException> handlers = code.exceptionTable();
+        if (handlers.size() < 2 || code.exceptionTableLength() != handlers.size()) {
+            return false;
+        }
+        int previousEnd = -1;
+        for (final CodeException handler : handlers) {
+            if (handler.catchType().isEmpty()
+                || !JdkCallSupport.isPlatformThrowableAssignable(
+                    handler.catchType().orElseThrow(),
+                    "java/lang/RuntimeException"
+                )
+                || handler.startPc() >= handler.endPc()
+                || handler.startPc() < previousEnd) {
+                return false;
+            }
+            previousEnd = handler.endPc();
+        }
+        return true;
+    }
+
+    private static boolean supportedBoundedTypedHandlerSet(
+        final Map<String, ClassFile> classes,
+        final MethodInfo method,
+        final CodeAttribute code
+    ) {
+        final List<CodeException> handlers = code.exceptionTable();
+        if (handlers.size() < 2 || handlers.size() > 4 || code.exceptionTableLength() != handlers.size()
+            || code.maxStack() > 64 || code.maxLocals() > 256
+            || !boundedHandlerEntriesAreIsolated(code, handlers)) {
+            return false;
+        }
+        int previousEnd = -1;
+        for (final CodeException handler : handlers) {
+            if (!supportedBoundedTypedHandlerShape(code, handlers, handler, previousEnd)
+                || !boundedProtectedRangeEntryIsIsolated(code, handler)
+                || !supportedBoundedProtectedRange(classes, method, code, handler)
+                || !boundedRangeTransportsToHandler(classes, method, code, handler)) {
+                return false;
+            }
+            previousEnd = handler.endPc();
+        }
+        return true;
+    }
+
+    private static boolean supportedBoundedTypedHandlerShape(
+        final CodeAttribute code,
+        final List<CodeException> handlers,
+        final CodeException handler,
+        final int previousEnd
+    ) {
+        if (handler.catchType().isEmpty()
+            || !JdkCallSupport.isPlatformThrowableAssignable(
+                handler.catchType().orElseThrow(),
+                "java/lang/RuntimeException"
+            )
+            || handler.startPc() >= handler.endPc()
+            || handler.startPc() < previousEnd
+            || instructionAtOffset(code, handler.startPc()).isEmpty()
+            || !boundedEndBoundary(code, handler.endPc())
+            || instructionAtOffset(code, handler.handlerPc()).filter(instruction ->
+                astoreLocalIndex(instruction) >= 0
+            ).isEmpty()) {
+            return false;
+        }
+        for (final CodeException candidate : handlers) {
+            if (handler.handlerPc() >= candidate.startPc() && handler.handlerPc() < candidate.endPc()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean boundedEndBoundary(final CodeAttribute code, final int offset) {
+        return offset == code.bytecode().length || instructionAtOffset(code, offset).isPresent();
+    }
+
+    private static boolean boundedHandlerEntriesAreIsolated(
+        final CodeAttribute code,
+        final List<CodeException> handlers
+    ) {
+        final List<Instruction> instructions = code.instructions();
+        for (final Instruction instruction : instructions) {
+            if (instruction.opcode() == 170 || instruction.opcode() == 171) {
+                return false;
+            }
+        }
+        for (final CodeException handler : handlers) {
+            final int handlerIndex = instructionIndex(instructions, handler.handlerPc());
+            if (handlerIndex < 0) {
+                return false;
+            }
+            final int handlerTerminal = boundedHandlerTerminalOffset(instructions, handlerIndex);
+            if (handlerTerminal < 0) {
+                return false;
+            }
+            for (final Instruction instruction : instructions) {
+                final int target = boundedBranchTarget(instruction);
+                if ((instruction.offset() < handler.handlerPc() || instruction.offset() > handlerTerminal)
+                    && target >= handler.handlerPc() && target < handlerTerminal) {
+                    return false;
+                }
+            }
+            if (handlerIndex == 0) {
+                continue;
+            }
+            final Instruction predecessor = instructions.get(handlerIndex - 1);
+            if (nextInstructionOffset(predecessor) == handler.handlerPc()
+                && !boundedControlTransferEndsBlock(predecessor.opcode())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean normalBranchEntersHandlerBody(final CodeAttribute code) {
+        final List<Instruction> instructions = code.instructions();
+        for (final CodeException handler : code.exceptionTable()) {
+            final int handlerIndex = instructionIndex(instructions, handler.handlerPc());
+            if (handlerIndex < 0) {
+                continue;
+            }
+            final int terminal = boundedHandlerTerminalOffset(instructions, handlerIndex);
+            if (terminal < 0) {
+                continue;
+            }
+            for (final Instruction instruction : instructions) {
+                final int target = boundedBranchTarget(instruction);
+                if ((instruction.offset() < handler.handlerPc() || instruction.offset() > terminal)
+                    && target >= handler.handlerPc() && target < terminal) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static int boundedHandlerTerminalOffset(
+        final List<Instruction> instructions,
+        final int handlerIndex
+    ) {
+        for (int index = handlerIndex; index < instructions.size(); index++) {
+            final Instruction instruction = instructions.get(index);
+            if (boundedControlTransferEndsBlock(instruction.opcode())) {
+                return instruction.offset();
+            }
+        }
+        return -1;
+    }
+
+    private static boolean boundedProtectedRangeEntryIsIsolated(
+        final CodeAttribute code,
+        final CodeException handler
+    ) {
+        for (final Instruction instruction : code.instructions()) {
+            if (instruction.offset() >= handler.startPc() && instruction.offset() < handler.endPc()) {
+                continue;
+            }
+            final int target = boundedBranchTarget(instruction);
+            if (target > handler.startPc() && target < handler.endPc()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean supportedBoundedProtectedRange(
+        final Map<String, ClassFile> classes,
+        final MethodInfo method,
+        final CodeAttribute code,
+        final CodeException handler
+    ) {
+        int protectedInstructions = 0;
+        for (final Instruction instruction : code.instructions()) {
+            if (instruction.offset() < handler.startPc() || instruction.offset() >= handler.endPc()) {
+                continue;
+            }
+            protectedInstructions++;
+            if (protectedInstructions > 64
+                || !supportedBoundedProtectedInstruction(classes, method, code, handler, instruction)) {
+                return false;
+            }
+        }
+        return protectedInstructions > 0;
+    }
+
+    private static boolean supportedBoundedProtectedInstruction(
+        final Map<String, ClassFile> classes,
+        final MethodInfo method,
+        final CodeAttribute code,
+        final CodeException handler,
+        final Instruction instruction
+    ) {
+        final int opcode = instruction.opcode();
+        final int branchTarget = boundedBranchTarget(instruction);
+        if (branchTarget >= 0) {
+            return branchTarget > instruction.offset()
+                && branchTarget >= handler.startPc()
+                && branchTarget <= handler.endPc()
+                && boundedEndBoundary(code, branchTarget);
+        }
+        if (opcode == 168 || opcode == 169 || opcode == 170 || opcode == 171
+            || opcode >= 194 && opcode <= 197 || opcode == 200 || opcode == 201) {
+            return false;
+        }
+        if (instruction.methodRef().isPresent()) {
+            return supportedBoundedProtectedCall(classes, instruction);
+        }
+        if (opcode == 186) {
+            return instruction.dynamicRef().filter(dynamic ->
+                supportedStringConcat(dynamic)
+                    || supportedLambdaMetafactory(classes, method, instruction, dynamic)
+            ).isPresent();
+        }
+        if (opcode == 187 || opcode == 192 || opcode == 193) {
+            return instruction.className().filter(classes::containsKey).isPresent();
+        }
+        if (opcode == 191) {
+            return false;
+        }
+        return boundedNonThrowingOpcode(opcode);
+    }
+
+    private static boolean supportedBoundedProtectedCall(
+        final Map<String, ClassFile> classes,
+        final Instruction instruction
+    ) {
+        final MethodRef target = instruction.methodRef().orElseThrow();
+        if (JdkCallSupport.isJdkCall(target)) {
+            return JdkCallSupport.isSupported(target);
+        }
+        final ClassFile owner = classes.get(target.owner());
+        if (owner == null) {
+            return supportedLambdaThrowableCall(classes, target);
+        }
+        if (owner.isInterface()) {
+            return false;
+        }
+        return owner.method(target.name(), target.descriptor()).filter(candidate ->
+            candidate.code().isPresent()
+        ).isPresent();
+    }
+
+    private static boolean boundedRangeTransportsToHandler(
+        final Map<String, ClassFile> classes,
+        final MethodInfo method,
+        final CodeAttribute code,
+        final CodeException handler
+    ) {
+        final String catchType = handler.catchType().orElseThrow();
+        for (final Instruction instruction : code.instructions()) {
+            if (instruction.offset() < handler.startPc() || instruction.offset() >= handler.endPc()) {
+                continue;
+            }
+            if (boundedCallTransportsTo(classes, instruction, catchType)
+                || boundedDynamicTransportsTo(classes, method, instruction, catchType)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean boundedCallTransportsTo(
+        final Map<String, ClassFile> classes,
+        final Instruction instruction,
+        final String catchType
+    ) {
+        if (instruction.methodRef().isEmpty()) {
+            return false;
+        }
+        final MethodRef target = instruction.methodRef().orElseThrow();
+        for (final String throwableType : JdkCallSupport.transportedPlatformThrowableTypes(target)) {
+            if (JdkCallSupport.isPlatformThrowableAssignable(throwableType, catchType)) {
+                return true;
+            }
+        }
+        for (final String throwableType : escapingPlatformExceptionTypes(classes, target, new HashSet<>())) {
+            if (JdkCallSupport.isPlatformThrowableAssignable(throwableType, catchType)) {
+                return true;
+            }
+        }
+        for (final String throwableType : escapingLambdaPlatformExceptionTypes(classes, target, new HashSet<>())) {
+            if (JdkCallSupport.isPlatformThrowableAssignable(throwableType, catchType)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean boundedDynamicTransportsTo(
+        final Map<String, ClassFile> classes,
+        final MethodInfo method,
+        final Instruction instruction,
+        final String catchType
+    ) {
+        if (instruction.opcode() != 186 || instruction.dynamicRef().isEmpty()
+            || !supportedLambdaMetafactory(classes, method, instruction, instruction.dynamicRef().orElseThrow())) {
+            return false;
+        }
+        final Optional<LambdaMetafactoryCall> resolved = LambdaMetafactoryCall.resolve(
+            instruction.dynamicRef().orElseThrow()
+        );
+        if (resolved.isEmpty()) {
+            return false;
+        }
+        for (final String throwableType : escapingPlatformExceptionTypes(
+            classes,
+            resolved.orElseThrow().implementation(),
+            new HashSet<>()
+        )) {
+            if (JdkCallSupport.isPlatformThrowableAssignable(throwableType, catchType)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean boundedNonThrowingOpcode(final int opcode) {
+        if (opcode >= 0 && opcode <= 45 || opcode >= 54 && opcode <= 78
+            || opcode >= 87 && opcode <= 107 || opcode >= 116 && opcode <= 152
+            || opcode == 198 || opcode == 199) {
+            return BytecodeSupport.classify(opcode) == BytecodeSupport.Status.NATIVE_SUPPORTED;
+        }
+        return false;
+    }
+
+    private static boolean boundedControlTransferEndsBlock(final int opcode) {
+        return opcode == 167 || opcode >= 172 && opcode <= 177 || opcode == 191;
+    }
+
+    private static int boundedBranchTarget(final Instruction instruction) {
+        final int opcode = instruction.opcode();
+        if (!(opcode >= 153 && opcode <= 167 || opcode == 198 || opcode == 199)
+            || instruction.operands().length != 2) {
+            return -1;
+        }
+        final int encoded = ((instruction.operands()[0] & 0xFF) << 8)
+            | instruction.operands()[1] & 0xFF;
+        return instruction.offset() + (short) encoded;
+    }
+
+    private static int instructionIndex(final List<Instruction> instructions, final int offset) {
+        for (int index = 0; index < instructions.size(); index++) {
+            if (instructions.get(index).offset() == offset) {
+                return index;
+            }
+        }
+        return -1;
     }
 
     private static boolean supportedExceptionHandler(final Map<String, ClassFile> classes, final CodeAttribute code, final CodeException handler) {
