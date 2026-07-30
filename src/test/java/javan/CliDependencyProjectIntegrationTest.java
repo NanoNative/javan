@@ -29,6 +29,117 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @ResourceLock(value = Resources.SYSTEM_PROPERTIES, mode = ResourceAccessMode.READ)
 final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
     @Test
+    void dependencyOwnedCapturedFunctionStoredInFieldBuildsAndMatchesJvmOutput() throws Exception {
+        final Path dependency = dependencyJar("function-reader", "dep.Reader", """
+            package dep;
+
+            import java.util.function.Function;
+
+            public final class Reader {
+                private final Function<String, String> function;
+
+                private Reader(final Function<String, String> function) {
+                    this.function = function;
+                }
+
+                public static Reader prefixed(final String prefix) {
+                    final String captured = new String(prefix);
+                    return new Reader(value -> captured + value);
+                }
+
+                public String read(final String value) {
+                    return function.apply(value);
+                }
+            }
+            """);
+        final Path project = project("dependency-captured-function");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import dep.Reader;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Reader.prefixed("dependency-").read("value"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main", List.of(dependency));
+        final CliRun run = run(tempDir, "build", project.toString(), "--classpath", dependency.toString());
+        final String result = run.exitCode() == 0
+            ? run.exitCode() + "\n" + run.stderr() + process(
+                project,
+                List.of(project.resolve(".javan/bin/dependency-captured-function").toString())
+            ).stdout()
+            : run.exitCode() + "\n" + run.stderr();
+
+        assertThat(result).isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
+    void dependencyOwnedBoundFunctionStoredInFieldSurvivesGcStress() throws Exception {
+        final Path dependency = dependencyJar("bound-function-reader", "dep.BoundReader", """
+            package dep;
+
+            import java.util.function.Function;
+
+            public final class BoundReader {
+                private final String prefix;
+                private final Function<String, String> function;
+
+                private BoundReader(final String prefix) {
+                    this.prefix = prefix;
+                    function = this::read;
+                }
+
+                public static BoundReader prefixed(final String prefix) {
+                    return new BoundReader(new String(prefix));
+                }
+
+                public String apply(final String value) {
+                    return function.apply(value);
+                }
+
+                private String read(final String value) {
+                    return prefix + value;
+                }
+            }
+            """);
+        final Path project = project("dependency-bound-function");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import dep.BoundReader;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(BoundReader.prefixed("dependency-bound-").apply("value"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main", List.of(dependency));
+        final CliRun run = run(tempDir, "build", project.toString(), "--classpath", dependency.toString());
+        final String result = run.exitCode() == 0
+            ? run.exitCode() + "\n" + run.stderr() + process(
+                project,
+                List.of(project.resolve(".javan/bin/dependency-bound-function").toString()),
+                defaultProcessTimeout(),
+                Map.of("JAVAN_GC_STRESS", "1")
+            ).stdout()
+            : run.exitCode() + "\n" + run.stderr();
+
+        assertThat(result).isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
     void dependencyJarStaticIntMethodBuilds() throws Exception {
         final Path dependency = dependencyJar("mathlib", "dep.MathLib", """
             package dep;

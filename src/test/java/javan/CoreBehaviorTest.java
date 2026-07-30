@@ -1952,15 +1952,15 @@ final class CoreBehaviorTest {
                     List.of(),
                     methodInfo(
                         "apply",
-                        "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;",
-                        instruction(0, 43, "aload_1"),
-                        instruction(1, 42, "aload_0"),
-                        instruction(2, 185, "invokeinterface", new MethodRef(
+                        "(Ljava/lang/Object;)Ljava/lang/Object;",
+                        classInstruction(0, 187, "new", "com/acme/Loader"),
+                        instruction(3, 42, "aload_0"),
+                        instruction(4, 185, "invokeinterface", new MethodRef(
                             "java/util/function/Function",
                             "apply",
                             "(Ljava/lang/Object;)Ljava/lang/Object;"
                         )),
-                        instruction(7, 176, "areturn")
+                        instruction(9, 176, "areturn")
                     )
                 ),
                 "com/acme/Loader", classWithMethods(
@@ -1976,7 +1976,7 @@ final class CoreBehaviorTest {
                     )
                 )
             ),
-            List.of(new EntryPoint("com/acme/Main", "apply", "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;"))
+            List.of(new EntryPoint("com/acme/Main", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;"))
         );
 
         assertThat(graph.diagnostics()).isEmpty();
@@ -2037,6 +2037,322 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void reachabilityRejectsFunctionUseReachedThroughUnsupportedCallerFlow() {
+        final MethodRef consume = new MethodRef(
+            "com/acme/Helper",
+            "consume",
+            "(Ljava/util/function/Function;)V"
+        );
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    new MethodInfo(
+                        0x0008,
+                        "main",
+                        "()V",
+                        Optional.of(new CodeAttribute(
+                            2,
+                            1,
+                            new byte[0],
+                            0,
+                            List.of(
+                                zeroCaptureFunctionLambda(0, "com/acme/Main", "lambda$main$0"),
+                                instruction(1, 75, "astore_0"),
+                                instruction(2, 42, "aload_0"),
+                                instruction(3, 184, "invokestatic", consume),
+                                instruction(6, 1, "aconst_null"),
+                                instruction(7, 184, "invokestatic", new MethodRef(
+                                    "com/acme/Main",
+                                    "unsupported",
+                                    "(Ljava/util/function/Function;)V"
+                                )),
+                                instruction(10, 177, "return")
+                            )
+                        ))
+                    ),
+                    new MethodInfo(
+                        0x0008,
+                        "unsupported",
+                        "(Ljava/util/function/Function;)V",
+                        Optional.of(new CodeAttribute(
+                            1,
+                            1,
+                            new byte[0],
+                            0,
+                            List.of(
+                                instruction(0, 196, "wide"),
+                                instruction(1, 42, "aload_0"),
+                                instruction(2, 184, "invokestatic", consume),
+                                instruction(5, 177, "return")
+                            )
+                        ))
+                    ),
+                    new MethodInfo(
+                        0x0008,
+                        "lambda$main$0",
+                        "(Ljava/lang/Object;)Ljava/lang/Object;",
+                        Optional.of(new CodeAttribute(
+                            1,
+                            1,
+                            new byte[0],
+                            0,
+                            List.of(
+                                instruction(0, 42, "aload_0"),
+                                instruction(1, 176, "areturn")
+                            )
+                        ))
+                    )
+                ),
+                "com/acme/Helper", classWithMethods(
+                    "com/acme/Helper",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    new MethodInfo(
+                        0x0008,
+                        "consume",
+                        "(Ljava/util/function/Function;)V",
+                        Optional.of(new CodeAttribute(
+                            2,
+                            1,
+                            new byte[0],
+                            0,
+                            List.of(
+                                instruction(0, 42, "aload_0"),
+                                instruction(1, 1, "aconst_null"),
+                                instruction(2, 185, "invokeinterface", new MethodRef(
+                                    "java/util/function/Function",
+                                    "apply",
+                                    "(Ljava/lang/Object;)Ljava/lang/Object;"
+                                )),
+                                instruction(7, 87, "pop"),
+                                instruction(8, 177, "return")
+                            )
+                        ))
+                    )
+                )
+            ),
+            List.of(new EntryPoint("com/acme/Main", "main", "()V"))
+        );
+
+        assertThat(graph.diagnostics())
+            .extracting(Diagnostic::code)
+            .containsExactly("JAVAN012");
+    }
+
+    @Test
+    void reachabilityRejectsInheritedFunctionUseReachedThroughUnsupportedCallerFlow() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    new MethodInfo(
+                        0x0008,
+                        "main",
+                        "()V",
+                        Optional.of(new CodeAttribute(
+                            2,
+                            0,
+                            new byte[0],
+                            0,
+                            List.of(
+                                classInstruction(0, 187, "new", "com/acme/Base"),
+                                zeroCaptureFunctionLambda(3, "com/acme/Main", "lambda$main$0"),
+                                instruction(4, 182, "invokevirtual", new MethodRef(
+                                    "com/acme/Base",
+                                    "consume",
+                                    "(Ljava/util/function/Function;)V"
+                                )),
+                                classInstruction(7, 187, "new", "com/acme/Sub"),
+                                instruction(10, 1, "aconst_null"),
+                                instruction(11, 184, "invokestatic", new MethodRef(
+                                    "com/acme/Main",
+                                    "unsupported",
+                                    "(Lcom/acme/Sub;Ljava/util/function/Function;)V"
+                                )),
+                                instruction(14, 177, "return")
+                            )
+                        ))
+                    ),
+                    new MethodInfo(
+                        0x0008,
+                        "unsupported",
+                        "(Lcom/acme/Sub;Ljava/util/function/Function;)V",
+                        Optional.of(new CodeAttribute(
+                            2,
+                            2,
+                            new byte[0],
+                            0,
+                            List.of(
+                                instruction(0, 196, "wide"),
+                                instruction(1, 42, "aload_0"),
+                                instruction(2, 43, "aload_1"),
+                                instruction(3, 182, "invokevirtual", new MethodRef(
+                                    "com/acme/Sub",
+                                    "consume",
+                                    "(Ljava/util/function/Function;)V"
+                                )),
+                                instruction(6, 177, "return")
+                            )
+                        ))
+                    ),
+                    new MethodInfo(
+                        0x0008,
+                        "lambda$main$0",
+                        "(Ljava/lang/Object;)Ljava/lang/Object;",
+                        Optional.of(new CodeAttribute(
+                            1,
+                            1,
+                            new byte[0],
+                            0,
+                            List.of(
+                                instruction(0, 42, "aload_0"),
+                                instruction(1, 176, "areturn")
+                            )
+                        ))
+                    )
+                ),
+                "com/acme/Base", classWithMethods(
+                    "com/acme/Base",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    new MethodInfo(
+                        0x0010,
+                        "consume",
+                        "(Ljava/util/function/Function;)V",
+                        Optional.of(new CodeAttribute(
+                            2,
+                            2,
+                            new byte[0],
+                            0,
+                            List.of(
+                                instruction(0, 43, "aload_1"),
+                                instruction(1, 1, "aconst_null"),
+                                instruction(2, 185, "invokeinterface", new MethodRef(
+                                    "java/util/function/Function",
+                                    "apply",
+                                    "(Ljava/lang/Object;)Ljava/lang/Object;"
+                                )),
+                                instruction(7, 87, "pop"),
+                                instruction(8, 177, "return")
+                            )
+                        ))
+                    )
+                ),
+                "com/acme/Sub", classWithMethods(
+                    "com/acme/Sub",
+                    "com/acme/Base",
+                    0x0010,
+                    List.of()
+                )
+            ),
+            List.of(new EntryPoint("com/acme/Main", "main", "()V"))
+        );
+
+        assertThat(graph.diagnostics())
+            .extracting(Diagnostic::code)
+            .containsExactly("JAVAN012");
+    }
+
+    @Test
+    void reachabilityRejectsFunctionUseWhenHandlerTargetIsMalformed() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    new MethodInfo(
+                        0x0008,
+                        "main",
+                        "()V",
+                        Optional.of(new CodeAttribute(
+                            2,
+                            1,
+                            new byte[0],
+                            1,
+                            List.of(new CodeException(
+                                0,
+                                6,
+                                999,
+                                Optional.of("java/lang/RuntimeException")
+                            )),
+                            List.of(
+                                zeroCaptureFunctionLambda(0, "com/acme/Main", "lambda$main$0"),
+                                instruction(1, 75, "astore_0"),
+                                instruction(2, 42, "aload_0"),
+                                instruction(3, 184, "invokestatic", new MethodRef(
+                                    "com/acme/Helper",
+                                    "consume",
+                                    "(Ljava/util/function/Function;)V"
+                                )),
+                                instruction(6, 177, "return")
+                            )
+                        ))
+                    ),
+                    new MethodInfo(
+                        0x0008,
+                        "lambda$main$0",
+                        "(Ljava/lang/Object;)Ljava/lang/Object;",
+                        Optional.of(new CodeAttribute(
+                            1,
+                            1,
+                            new byte[0],
+                            0,
+                            List.of(
+                                instruction(0, 42, "aload_0"),
+                                instruction(1, 176, "areturn")
+                            )
+                        ))
+                    )
+                ),
+                "com/acme/Helper", classWithMethods(
+                    "com/acme/Helper",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    new MethodInfo(
+                        0x0008,
+                        "consume",
+                        "(Ljava/util/function/Function;)V",
+                        Optional.of(new CodeAttribute(
+                            2,
+                            1,
+                            new byte[0],
+                            0,
+                            List.of(
+                                instruction(0, 42, "aload_0"),
+                                instruction(1, 1, "aconst_null"),
+                                instruction(2, 185, "invokeinterface", new MethodRef(
+                                    "java/util/function/Function",
+                                    "apply",
+                                    "(Ljava/lang/Object;)Ljava/lang/Object;"
+                                )),
+                                instruction(7, 87, "pop"),
+                                instruction(8, 177, "return")
+                            )
+                        ))
+                    )
+                )
+            ),
+            List.of(new EntryPoint("com/acme/Main", "main", "()V"))
+        );
+
+        assertThat(graph.diagnostics())
+            .extracting(Diagnostic::code)
+            .containsExactly("JAVAN012");
+    }
+
+    @Test
     void reachabilityAcceptsOptionalFlatMapDirectConcreteImplementation() {
         final CallGraph graph = new ReachabilityAnalyzer().analyze(
             Map.of(
@@ -2047,15 +2363,15 @@ final class CoreBehaviorTest {
                     List.of(),
                     methodInfo(
                         "flatMapValue",
-                        "(Ljava/util/Optional;Ljava/util/function/Function;)Ljava/util/Optional;",
+                        "(Ljava/util/Optional;)Ljava/util/Optional;",
                         instruction(0, 42, "aload_0"),
-                        instruction(1, 43, "aload_1"),
-                        instruction(2, 182, "invokevirtual", new MethodRef(
+                        classInstruction(1, 187, "new", "com/acme/Loader"),
+                        instruction(4, 182, "invokevirtual", new MethodRef(
                             "java/util/Optional",
                             "flatMap",
                             "(Ljava/util/function/Function;)Ljava/util/Optional;"
                         )),
-                        instruction(5, 176, "areturn")
+                        instruction(7, 176, "areturn")
                     )
                 ),
                 "com/acme/Loader", classWithMethods(
@@ -2071,7 +2387,7 @@ final class CoreBehaviorTest {
                     )
                 )
             ),
-            List.of(new EntryPoint("com/acme/Main", "flatMapValue", "(Ljava/util/Optional;Ljava/util/function/Function;)Ljava/util/Optional;"))
+            List.of(new EntryPoint("com/acme/Main", "flatMapValue", "(Ljava/util/Optional;)Ljava/util/Optional;"))
         );
 
         assertThat(graph.diagnostics()).isEmpty();
@@ -2088,15 +2404,15 @@ final class CoreBehaviorTest {
                     List.of(),
                     methodInfo(
                         "orValue",
-                        "(Ljava/util/Optional;Ljava/util/function/Supplier;)Ljava/util/Optional;",
+                        "(Ljava/util/Optional;)Ljava/util/Optional;",
                         instruction(0, 42, "aload_0"),
-                        instruction(1, 43, "aload_1"),
-                        instruction(2, 182, "invokevirtual", new MethodRef(
+                        classInstruction(1, 187, "new", "com/acme/FallbackSupplier"),
+                        instruction(4, 182, "invokevirtual", new MethodRef(
                             "java/util/Optional",
                             "or",
                             "(Ljava/util/function/Supplier;)Ljava/util/Optional;"
                         )),
-                        instruction(5, 176, "areturn")
+                        instruction(7, 176, "areturn")
                     )
                 ),
                 "com/acme/FallbackSupplier", classWithMethods(
@@ -2112,7 +2428,7 @@ final class CoreBehaviorTest {
                     )
                 )
             ),
-            List.of(new EntryPoint("com/acme/Main", "orValue", "(Ljava/util/Optional;Ljava/util/function/Supplier;)Ljava/util/Optional;"))
+            List.of(new EntryPoint("com/acme/Main", "orValue", "(Ljava/util/Optional;)Ljava/util/Optional;"))
         );
 
         assertThat(graph.diagnostics()).isEmpty();
@@ -2129,14 +2445,14 @@ final class CoreBehaviorTest {
                     List.of(),
                     methodInfo(
                         "supply",
-                        "(Ljava/util/function/Supplier;)Ljava/lang/Object;",
-                        instruction(0, 42, "aload_0"),
-                        instruction(1, 185, "invokeinterface", new MethodRef(
+                        "()Ljava/lang/Object;",
+                        classInstruction(0, 187, "new", "com/acme/FallbackSupplier"),
+                        instruction(3, 185, "invokeinterface", new MethodRef(
                             "java/util/function/Supplier",
                             "get",
                             "()Ljava/lang/Object;"
                         )),
-                        instruction(6, 176, "areturn")
+                        instruction(8, 176, "areturn")
                     )
                 ),
                 "com/acme/FallbackSupplier", classWithMethods(
@@ -2152,7 +2468,7 @@ final class CoreBehaviorTest {
                     )
                 )
             ),
-            List.of(new EntryPoint("com/acme/Main", "supply", "(Ljava/util/function/Supplier;)Ljava/lang/Object;"))
+            List.of(new EntryPoint("com/acme/Main", "supply", "()Ljava/lang/Object;"))
         );
 
         assertThat(graph.diagnostics()).isEmpty();
@@ -14414,6 +14730,38 @@ final class CoreBehaviorTest {
             Optional.empty(),
             Optional.of(dynamicRef)
         );
+    }
+
+    private static Instruction zeroCaptureFunctionLambda(
+        final int offset,
+        final String owner,
+        final String implementationName
+    ) {
+        final MethodRef implementation = new MethodRef(
+            owner,
+            implementationName,
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        );
+        return invokeDynamicInstruction(offset, new DynamicRef(
+            "apply",
+            "()Ljava/util/function/Function;",
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                + "Ljava/lang/invoke/CallSite;",
+            List.of(
+                "(Ljava/lang/Object;)Ljava/lang/Object;",
+                "invokestatic " + owner + "." + implementationName
+                    + ":(Ljava/lang/Object;)Ljava/lang/Object;",
+                "(Ljava/lang/Object;)Ljava/lang/Object;"
+            ),
+            List.of(
+                BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                BootstrapArgument.methodHandle(6, implementation),
+                BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;")
+            )
+        ));
     }
 
     private static MethodInfo hostOnlyUnsupportedInputStreamMethod(final String descriptor) {

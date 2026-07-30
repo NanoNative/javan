@@ -1,10 +1,12 @@
 package javan.codegen;
 
+import javan.analysis.FunctionValueFlow;
 import javan.analysis.CaughtThrowableRethrowAnalysis;
 import javan.classfile.ClassFile;
 import javan.classfile.CodeAttribute;
 import javan.classfile.Instruction;
 import javan.classfile.MethodInfo;
+import javan.classfile.MethodRef;
 import javan.compat.JdkCallSupport;
 import javan.ir.IrDispatch;
 import javan.ir.IrExpression;
@@ -340,6 +342,9 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, DynamicLambda> objectLocalLambdas,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
+        final Map<String, Integer> functionOrNullTargetIds,
+        final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final FunctionValueFlow.Result functionValueFlow,
         final List<Integer> skippedOffsets,
         final List<Integer> replacementLabelOffsets
     ) {
@@ -361,6 +366,9 @@ final class BytecodeToIRControlFlowSupport {
             objectLocalLambdas,
             localDeclarations,
             dispatches,
+            functionOrNullTargetIds,
+            materializedLambdaMethods,
+            functionValueFlow,
             skippedOffsets,
             instruction
         )) {
@@ -404,7 +412,10 @@ final class BytecodeToIRControlFlowSupport {
             objectLocalThrowableTypes,
             objectLocalLambdas,
             workingDeclarations,
-            dispatches
+            dispatches,
+            functionOrNullTargetIds,
+            materializedLambdaMethods,
+            functionValueFlow
         );
         final BlockResult targetBlock = lowerLinearBlock(
             classes,
@@ -419,7 +430,10 @@ final class BytecodeToIRControlFlowSupport {
             objectLocalThrowableTypes,
             objectLocalLambdas,
             workingDeclarations,
-            dispatches
+            dispatches,
+            functionOrNullTargetIds,
+            materializedLambdaMethods,
+            functionValueFlow
         );
         if (!hasSelectedValue(prefix, elseBlock.stack()) || !hasSelectedValue(prefix, targetBlock.stack())) {
             return false;
@@ -469,6 +483,9 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, DynamicLambda> objectLocalLambdas,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
+        final Map<String, Integer> functionOrNullTargetIds,
+        final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final FunctionValueFlow.Result functionValueFlow,
         final List<Integer> skippedOffsets,
         final Instruction instruction
     ) {
@@ -540,8 +557,9 @@ final class BytecodeToIRControlFlowSupport {
                     workingObjectLocalLambdas,
                     workingDeclarations,
                     dispatches,
-                    Map.of(),
-                    Map.of(),
+                    functionOrNullTargetIds,
+                    materializedLambdaMethods,
+                    functionValueFlow,
                     SourceLineIndex.empty(),
                     lastMaterializingDuplicateOffset
                 );
@@ -567,7 +585,10 @@ final class BytecodeToIRControlFlowSupport {
             objectLocalThrowableTypes,
             objectLocalLambdas,
             workingDeclarations,
-            dispatches
+            dispatches,
+            functionOrNullTargetIds,
+            materializedLambdaMethods,
+            functionValueFlow
         );
         if (!hasSelectedValue(prefix, targetBlock.stack())) {
             return false;
@@ -615,7 +636,10 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, String> objectLocalThrowableTypes,
         final Map<Integer, DynamicLambda> objectLocalLambdas,
         final Map<Integer, IrLocal> localDeclarations,
-        final Map<String, IrDispatch> dispatches
+        final Map<String, IrDispatch> dispatches,
+        final Map<String, Integer> functionOrNullTargetIds,
+        final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final FunctionValueFlow.Result functionValueFlow
     ) {
         return lowerLinearBlock(
             classes,
@@ -631,6 +655,9 @@ final class BytecodeToIRControlFlowSupport {
             objectLocalLambdas,
             localDeclarations,
             dispatches,
+            functionOrNullTargetIds,
+            materializedLambdaMethods,
+            functionValueFlow,
             new HashMap<>(),
             SourceLineIndex.empty()
         );
@@ -649,6 +676,9 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, DynamicLambda> objectLocalLambdas,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
+        final Map<String, Integer> functionOrNullTargetIds,
+        final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final FunctionValueFlow.Result functionValueFlow,
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final SourceLineIndex sourceLines
     ) {
@@ -678,8 +708,9 @@ final class BytecodeToIRControlFlowSupport {
                 blockObjectLocalLambdas,
                 localDeclarations,
                 dispatches,
-                Map.of(),
-                Map.of(),
+                functionOrNullTargetIds,
+                materializedLambdaMethods,
+                functionValueFlow,
                 sourceLines,
                 lastMaterializingDuplicateOffset
             );
@@ -711,6 +742,9 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, DynamicLambda> objectLocalLambdas,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
+        final Map<String, Integer> functionOrNullTargetIds,
+        final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final FunctionValueFlow.Result functionValueFlow,
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final SourceLineIndex sourceLines,
         final List<Integer> skippedOffsets,
@@ -804,6 +838,9 @@ final class BytecodeToIRControlFlowSupport {
                 objectLocalLambdas,
                 workingDeclarations,
                 dispatches,
+                functionOrNullTargetIds,
+                materializedLambdaMethods,
+                functionValueFlow,
                 workingPendingExceptionHandlerStacks,
                 sourceLines
             );

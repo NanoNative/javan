@@ -2,6 +2,7 @@ package javan.codegen;
 
 import javan.analysis.VirtualThreadInvokePatterns;
 import javan.analysis.EntryPoint;
+import javan.analysis.FunctionValueFlow;
 import javan.analysis.GeneratedObjectCloneSupport;
 import javan.classfile.ClassFile;
 import javan.classfile.DynamicRef;
@@ -297,6 +298,7 @@ final class BytecodeToIRInvokeSupport {
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final Map<String, IrDispatch> dispatches,
         final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final FunctionValueFlow.Result functionValueFlow,
         final SourceLineIndex sourceLines
     ) {
         final MethodRef rawMethodRef = instruction.methodRef().orElseThrow();
@@ -770,6 +772,7 @@ final class BytecodeToIRInvokeSupport {
             instructions,
             dispatches,
             materializedLambdaMethods,
+            functionValueFlow,
             stack,
             localDeclarations
         )) {
@@ -829,7 +832,19 @@ final class BytecodeToIRInvokeSupport {
         if (lowerThreadLocalInstanceCall(classFile, method, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
-        if (lowerJdkCollectionInstanceCall(classes, classFile, method, instruction, dispatches, materializedLambdaMethods, methodRef, instructions, stack, localDeclarations)) {
+        if (lowerJdkCollectionInstanceCall(
+            classes,
+            classFile,
+            method,
+            instruction,
+            dispatches,
+            materializedLambdaMethods,
+            functionValueFlow,
+            methodRef,
+            instructions,
+            stack,
+            localDeclarations
+        )) {
             return;
         }
         if (isPlatformThrowableGetMessage(methodRef)) {
@@ -3639,6 +3654,7 @@ final class BytecodeToIRInvokeSupport {
         final List<IrInstruction> instructions,
         final Map<String, IrDispatch> dispatches,
         final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final FunctionValueFlow.Result functionValueFlow,
         final List<StackValue> stack,
         final Map<Integer, IrLocal> localDeclarations
     ) {
@@ -3704,6 +3720,12 @@ final class BytecodeToIRInvokeSupport {
                 instructions,
                 dispatches,
                 materializedLambdaMethods,
+                functionValueFlow.isMaterializedFunction(
+                    classFile.name(),
+                    method.name(),
+                    method.descriptor(),
+                    instruction.offset()
+                ),
                 stack,
                 localDeclarations,
                 receiver,
@@ -3720,6 +3742,12 @@ final class BytecodeToIRInvokeSupport {
                 instructions,
                 dispatches,
                 materializedLambdaMethods,
+                functionValueFlow.isMaterializedFunction(
+                    classFile.name(),
+                    method.name(),
+                    method.descriptor(),
+                    instruction.offset()
+                ),
                 stack,
                 localDeclarations,
                 receiver,
@@ -4144,6 +4172,7 @@ final class BytecodeToIRInvokeSupport {
         final List<IrInstruction> instructions,
         final Map<String, IrDispatch> dispatches,
         final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final boolean materializedFunction,
         final List<StackValue> stack,
         final Map<Integer, IrLocal> localDeclarations,
         final IrExpression receiver,
@@ -4176,6 +4205,7 @@ final class BytecodeToIRInvokeSupport {
             instructions,
             dispatches,
             materializedLambdaMethods,
+            materializedFunction,
             function,
             IrExpression.objectLocal(valueLocal),
             mappedLocal
@@ -4233,6 +4263,7 @@ final class BytecodeToIRInvokeSupport {
         final List<IrInstruction> instructions,
         final Map<String, IrDispatch> dispatches,
         final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final boolean materializedFunction,
         final List<StackValue> stack,
         final Map<Integer, IrLocal> localDeclarations,
         final IrExpression receiver,
@@ -4265,6 +4296,7 @@ final class BytecodeToIRInvokeSupport {
             instructions,
             dispatches,
             materializedLambdaMethods,
+            materializedFunction,
             function,
             IrExpression.objectLocal(valueLocal),
             mappedLocal
@@ -4791,6 +4823,7 @@ final class BytecodeToIRInvokeSupport {
         final Instruction instruction,
         final Map<String, IrDispatch> dispatches,
         final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final FunctionValueFlow.Result functionValueFlow,
         final MethodRef methodRef,
         final List<IrInstruction> instructions,
         final List<StackValue> stack,
@@ -4819,6 +4852,12 @@ final class BytecodeToIRInvokeSupport {
             instruction,
             dispatches,
             materializedLambdaMethods,
+            functionValueFlow.isMaterializedFunction(
+                classFile.name(),
+                method.name(),
+                method.descriptor(),
+                instruction.offset()
+            ),
             methodRef,
             instructions,
             stack,
@@ -5401,6 +5440,7 @@ final class BytecodeToIRInvokeSupport {
         final Instruction instruction,
         final Map<String, IrDispatch> dispatches,
         final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final boolean materializedFunction,
         final MethodRef methodRef,
         final List<IrInstruction> instructions,
         final List<StackValue> stack,
@@ -5916,6 +5956,7 @@ final class BytecodeToIRInvokeSupport {
                     instructions,
                     dispatches,
                     materializedLambdaMethods,
+                    materializedFunction,
                     localDeclarations,
                     receiver,
                     arguments.get(0),
@@ -6301,6 +6342,7 @@ final class BytecodeToIRInvokeSupport {
         final List<IrInstruction> instructions,
         final Map<String, IrDispatch> dispatches,
         final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final boolean materializedFunction,
         final Map<Integer, IrLocal> localDeclarations,
         final IrExpression map,
         final IrExpression key,
@@ -6328,6 +6370,7 @@ final class BytecodeToIRInvokeSupport {
             instructions,
             dispatches,
             materializedLambdaMethods,
+            materializedFunction,
             function,
             key,
             computedLocal
@@ -6554,11 +6597,22 @@ final class BytecodeToIRInvokeSupport {
         final List<IrInstruction> instructions,
         final Map<String, IrDispatch> dispatches,
         final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final boolean materializedFunction,
         final IrExpression function,
         final IrExpression argument,
         final String resultLocal
     ) {
         final MethodRef functionApply = new MethodRef("java/util/function/Function", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;");
+        if (materializedFunction) {
+            if (materializedLambdaMethods.get(functionApply) != MaterializedLambdaDispatchKind.OBJECT) {
+                throw unsupported(classFile, method, instruction);
+            }
+            instructions.add(IrInstruction.assignObject(
+                resultLocal,
+                IrExpression.objectCall(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL, List.of(function, argument))
+            ));
+            return;
+        }
         final List<EntryPoint> targets = interfaceTargets(classes, functionApply);
         if (targets.size() > 1) {
             final String dispatchSymbol = dispatchSymbol(functionApply);
@@ -6581,13 +6635,6 @@ final class BytecodeToIRInvokeSupport {
             instructions.add(IrInstruction.assignObject(
                 resultLocal,
                 IrExpression.objectCall(symbol(defaultTarget.orElseThrow()), List.of(function, argument))
-            ));
-            return;
-        }
-        if (materializedLambdaMethods.get(functionApply) == MaterializedLambdaDispatchKind.OBJECT) {
-            instructions.add(IrInstruction.assignObject(
-                resultLocal,
-                IrExpression.objectCall(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL, List.of(function, argument))
             ));
             return;
         }
@@ -8335,7 +8382,8 @@ final class BytecodeToIRInvokeSupport {
         final List<StackValue> stack,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
-        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods
+        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final FunctionValueFlow.Result functionValueFlow
     ) {
         final MethodRef methodRef = instruction.methodRef().orElseThrow();
         if (lowerVirtualThreadObservationInterfaceCall(classFile, method, instruction, methodRef, instructions, stack, localDeclarations)) {
@@ -8359,7 +8407,19 @@ final class BytecodeToIRInvokeSupport {
         if (lowerJdkHttpInterfaceCall(classFile, method, instruction, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
-        if (lowerJdkCollectionInstanceCall(classes, classFile, method, instruction, dispatches, materializedLambdaMethods, methodRef, instructions, stack, localDeclarations)) {
+        if (lowerJdkCollectionInstanceCall(
+            classes,
+            classFile,
+            method,
+            instruction,
+            dispatches,
+            materializedLambdaMethods,
+            functionValueFlow,
+            methodRef,
+            instructions,
+            stack,
+            localDeclarations
+        )) {
             return;
         }
         if (isPredicateTest(methodRef) && hasPredicateLambdaReceiverOnStack(stack)) {
@@ -8418,7 +8478,35 @@ final class BytecodeToIRInvokeSupport {
         final List<IrExpression> arguments = new ArrayList<>(popArguments(classFile, method, stack, descriptor));
         final IrExpression receiver = popObject(classFile, method, stack);
         final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, methodRef);
-        final MaterializedLambdaDispatchKind dispatchKind = materializedLambdaMethods.get(methodRef);
+        final boolean materializedFunctionReceiver = isFunctionApply(methodRef)
+            && functionValueFlow.isMaterializedFunction(
+                classFile.name(),
+                method.name(),
+                method.descriptor(),
+                instruction.offset()
+            );
+        final MaterializedLambdaDispatchKind dispatchKind = isFunctionApply(methodRef)
+            && !materializedFunctionReceiver
+            ? null
+            : materializedLambdaMethods.get(methodRef);
+        if (materializedFunctionReceiver) {
+            if (dispatchKind != MaterializedLambdaDispatchKind.OBJECT) {
+                throw unsupported(classFile, method, instruction);
+            }
+            lowerMaterializedInterfaceCall(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                localDeclarations,
+                dispatchKind,
+                descriptor,
+                receiver,
+                arguments
+            );
+            return;
+        }
         if (dispatchKind != null
             && dispatchKind != MaterializedLambdaDispatchKind.SUPPLIER
             && (!targets.isEmpty() || defaultTarget.isPresent())) {
@@ -8473,6 +8561,7 @@ final class BytecodeToIRInvokeSupport {
                 instruction,
                 instructions,
                 stack,
+                localDeclarations,
                 dispatchKind,
                 descriptor,
                 receiver,
@@ -8489,6 +8578,7 @@ final class BytecodeToIRInvokeSupport {
         final Instruction instruction,
         final List<IrInstruction> instructions,
         final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
         final MaterializedLambdaDispatchKind dispatchKind,
         final MethodDescriptor descriptor,
         final IrExpression receiver,
@@ -8497,11 +8587,21 @@ final class BytecodeToIRInvokeSupport {
         final String helper = materializedInterfaceHelper(classFile, method, instruction, dispatchKind, descriptor);
         final List<IrExpression> callArguments = materializedInterfaceArguments(receiver, arguments);
         if (descriptor.returnType() == IrType.OBJECT) {
-            stack.add(StackValue.objectExpression(IrExpression.objectCall(helper, callArguments)));
+            final String resultLocal = newObjectLocal(localDeclarations);
+            instructions.add(IrInstruction.assignObject(
+                resultLocal,
+                IrExpression.objectCall(helper, callArguments)
+            ));
+            stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
             return;
         }
         if (descriptor.returnType() == IrType.INT) {
-            stack.add(StackValue.intExpression(IrExpression.intCall(helper, callArguments)));
+            final String resultLocal = newIntLocal(localDeclarations);
+            instructions.add(IrInstruction.assignInt(
+                resultLocal,
+                IrExpression.intCall(helper, callArguments)
+            ));
+            stack.add(StackValue.intExpression(IrExpression.intLocal(resultLocal)));
             return;
         }
         if (descriptor.returnType() == IrType.VOID) {
@@ -9543,8 +9643,8 @@ final class BytecodeToIRInvokeSupport {
                     continue;
                 }
                 final LambdaMetafactoryCall resolved = lambdaCall.orElseThrow();
-                final boolean materializedFunction = resolved.isMaterializedFunctionLambda()
-                    && shouldMaterializeFunctionLambda(method.orElseThrow(), instruction)
+                final boolean materializedFunction = resolved.isMaterializedFunctionLambda(classes)
+                    && FunctionLambdaUse.requiresMaterialization(method.orElseThrow(), instruction)
                     && !FunctionLambdaUse.isProvablyDiscardedZeroCapture(
                         resolved,
                         method.orElseThrow(),
@@ -9663,8 +9763,8 @@ final class BytecodeToIRInvokeSupport {
         }
         final LambdaMetafactoryCall resolved = lambdaCall.orElseThrow();
         final MethodRef implementation = resolved.implementation();
-        final boolean materializedFunction = resolved.isMaterializedFunctionLambda()
-            && shouldMaterializeFunctionLambda(method, instruction)
+        final boolean materializedFunction = resolved.isMaterializedFunctionLambda(classes)
+            && FunctionLambdaUse.requiresMaterialization(method, instruction)
             && !FunctionLambdaUse.isProvablyDiscardedZeroCapture(resolved, method, instruction);
         final boolean materializedBoundCustom = resolved.isMaterializedBoundCustomObjectLambda(classes);
         final boolean materializedStaticLongCustom =
@@ -9761,59 +9861,6 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         return false;
-    }
-
-    private static boolean shouldMaterializeFunctionLambda(
-        final MethodInfo method,
-        final Instruction instruction
-    ) {
-        if (method.code().isEmpty()) {
-            return true;
-        }
-        final List<Instruction> bytecode = method.code().orElseThrow().instructions();
-        for (int index = 0; index < bytecode.size(); index++) {
-            if (bytecode.get(index).offset() != instruction.offset()) {
-                continue;
-            }
-            for (int consumerIndex = index + 1; consumerIndex < bytecode.size(); consumerIndex++) {
-                final Instruction candidate = bytecode.get(consumerIndex);
-                final Optional<MethodRef> consumer = candidate.methodRef();
-                if (consumer.isPresent()) {
-                    return !isInlineFunctionConsumer(consumer.orElseThrow());
-                }
-                if (endsInlineFunctionSearch(candidate.opcode())) {
-                    return true;
-                }
-            }
-            return true;
-        }
-        return true;
-    }
-
-    private static boolean endsInlineFunctionSearch(final int opcode) {
-        return (opcode >= 54 && opcode <= 58)
-            || (opcode >= 79 && opcode <= 95)
-            || (opcode >= 153 && opcode <= 177)
-            || opcode == 179
-            || opcode == 181
-            || opcode == 186
-            || opcode == 191
-            || opcode == 194
-            || opcode == 195
-            || opcode == 198
-            || opcode == 199;
-    }
-
-    private static boolean isInlineFunctionConsumer(final MethodRef target) {
-        if (isFunctionApply(target)) {
-            return true;
-        }
-        if (isSupportedMapComputeIfAbsentOwner(target)) {
-            return true;
-        }
-        return "java/util/Optional".equals(target.owner())
-            && ("map".equals(target.name()) || "flatMap".equals(target.name()))
-            && "(Ljava/util/function/Function;)Ljava/util/Optional;".equals(target.descriptor());
     }
 
     private static boolean shouldMaterializeSupplierLambda(

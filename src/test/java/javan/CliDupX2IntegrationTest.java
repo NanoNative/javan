@@ -538,6 +538,39 @@ final class CliDupX2IntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void discardedFunctionDoesNotAuthorizeASeparateFunctionApply() throws Exception {
+        final Path dependency = deferredLambdaDependency();
+        final Path project = project("dup-x2-discarded-lambda-isolation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import dep.DupX2DeferredLambda;
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(DupX2DeferredLambda.evaluate());
+                    System.out.println(apply(null));
+                }
+
+                private static Object apply(final Function<Object, Object> function) {
+                    return function.apply(null);
+                }
+            }
+            """);
+
+        assertThat(buildAndRun(
+            project,
+            "dup-x2-discarded-lambda-isolation",
+            List.of(dependency)
+        )).contains("error[JAVAN012]", "java/util/function/Function.apply")
+            .doesNotContain("error[JAVAN040]");
+    }
+
+    @Test
     void dependencyFunctionValueInvokedAfterDupX2RemainsRejected() throws Exception {
         final Path dependency = deferredLambdaInvocationDependency();
         final Path project = project("dup-x2-deferred-lambda-invoke");

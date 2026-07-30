@@ -2,6 +2,7 @@ package javan.codegen;
 
 import javan.analysis.CallGraph;
 import javan.analysis.EntryPoint;
+import javan.analysis.FunctionValueFlow;
 import javan.classfile.ClassFile;
 import javan.classfile.CodeAttribute;
 import javan.classfile.DynamicRef;
@@ -100,6 +101,9 @@ public final class BytecodeToIR {
             BytecodeToIRInvokeSupport.functionOrNullTargetIds(classes, reachableMethods);
         final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods =
             BytecodeToIRInvokeSupport.materializedLambdaMethods(classes, reachableMethods);
+        final FunctionValueFlow.Result functionValueFlow = callGraph.functionValueFlow().complete()
+            ? callGraph.functionValueFlow()
+            : FunctionValueFlow.analyze(classes, reachableMethods);
         final List<EntryPoint> runnableThreadTargets = BytecodeToIRInvokeSupport.runnableThreadTargets(classes, reachableMethods);
         final Map<String, List<String>> transportedThrowableTypes =
             transportedThrowableTypes(classes, callGraph, reachableMethods, materializedLambdaTargets);
@@ -122,6 +126,7 @@ public final class BytecodeToIR {
                 dispatches,
                 functionOrNullTargetIds,
                 materializedLambdaMethods,
+                functionValueFlow,
                 transportedThrowableTypes,
                 sourceLines
             ));
@@ -373,6 +378,7 @@ public final class BytecodeToIR {
         final Map<String, IrDispatch> dispatches,
         final Map<String, Integer> functionOrNullTargetIds,
         final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final FunctionValueFlow.Result functionValueFlow,
         final Map<String, List<String>> transportedThrowableTypes,
         final SourceLineIndex sourceLines
     ) {
@@ -470,6 +476,9 @@ public final class BytecodeToIR {
                 objectLocalLambdas,
                 localDeclarations,
                 dispatches,
+                functionOrNullTargetIds,
+                materializedLambdaMethods,
+                functionValueFlow,
                 skippedOffsets,
                 replacementLabelOffsets
             )) {
@@ -499,6 +508,9 @@ public final class BytecodeToIR {
                 objectLocalLambdas,
                 localDeclarations,
                 dispatches,
+                functionOrNullTargetIds,
+                materializedLambdaMethods,
+                functionValueFlow,
                 pendingExceptionHandlerStacks,
                 sourceLines,
                 skippedOffsets,
@@ -532,6 +544,7 @@ public final class BytecodeToIR {
                 dispatches,
                 functionOrNullTargetIds,
                 materializedLambdaMethods,
+                functionValueFlow,
                 sourceLines,
                 lastMaterializingDuplicateOffset
             );
@@ -875,6 +888,7 @@ public final class BytecodeToIR {
         final Map<String, IrDispatch> dispatches,
         final Map<String, Integer> functionOrNullTargetIds,
         final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final FunctionValueFlow.Result functionValueFlow,
         final SourceLineIndex sourceLines,
         final int lastMaterializingDuplicateOffset
     ) {
@@ -1296,6 +1310,7 @@ public final class BytecodeToIR {
                     pendingExceptionHandlerStacks,
                     dispatches,
                     materializedLambdaMethods,
+                    functionValueFlow,
                     sourceLines
                 );
                 break;
@@ -1335,7 +1350,8 @@ public final class BytecodeToIR {
                     stack,
                     localDeclarations,
                     dispatches,
-                    materializedLambdaMethods
+                    materializedLambdaMethods,
+                    functionValueFlow
                 );
                 break;
             case 186:
