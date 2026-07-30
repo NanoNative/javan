@@ -80,6 +80,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void booleanParseBooleanIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Boolean",
+            "parseBoolean",
+            "(Ljava/lang/String;)Z"
+        ))).isTrue();
+    }
+
+    @Test
     void stringIsBlankIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/String",
