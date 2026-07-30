@@ -3907,6 +3907,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void localeLowerCaseTransportsNullPointerException() {
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
+            "java/lang/String",
+            "toLowerCase",
+            "(Ljava/util/Locale;)Ljava/lang/String;"
+        ))).containsExactly("java/lang/NullPointerException");
+    }
+
+    @Test
     void wholeByteArrayFillTransportsNullPointerException() {
         assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
             "java/util/Arrays",

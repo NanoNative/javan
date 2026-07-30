@@ -1383,6 +1383,10 @@ public final class BytecodeToIR {
                 BytecodeToIRControlFlowSupport.lowerThrow(classFile, method, instruction, instructions, stack, pendingExceptionHandlerStacks, sourceLines);
                 break;
             case 192:
+                if (instruction.className().isPresent()
+                    && "java/util/Locale".equals(instruction.className().orElseThrow())) {
+                    throw unsupportedCheckcastTarget(classFile, method, instruction, "java/util/Locale");
+                }
                 // checkcast is a verifier/runtime type check; exact supported code keeps the reference unchanged.
                 break;
             case 193:
@@ -3507,6 +3511,23 @@ public final class BytecodeToIR {
             instruction.mnemonic() + " " + target,
             "The native runtime only has deterministic instanceof support for application classes, supported boxed primitive wrappers, primitive arrays, Object[], and the built-in Collection/Map runtime objects.",
             "Keep instanceof targets to application classes/interfaces, Object, supported wrappers, primitive arrays, Object[], or the currently admitted Collection/Map runtime targets."
+        ));
+    }
+
+    private static DiagnosticException unsupportedCheckcastTarget(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final String target
+    ) {
+        return new DiagnosticException(Diagnostic.error(
+            "JAVAN045",
+            "checkcast target is not supported",
+            classFile.name(),
+            method.name() + method.descriptor(),
+            instruction.mnemonic() + " " + target,
+            "The native runtime cannot perform a deterministic checkcast to the built-in Locale objects or transport the required ClassCastException.",
+            "Keep Locale values statically typed and pass Locale.ROOT or Locale.ENGLISH directly until built-in checkcast exception transport is implemented."
         ));
     }
 

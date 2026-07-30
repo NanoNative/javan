@@ -7573,6 +7573,23 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void rejectsLocaleCheckcastWithoutClassCastExceptionTransport() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Object;)Ljava/util/Locale;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            classInstruction(1, 192, "checkcast", "java/util/Locale"),
+            plain(2, 176, "areturn")
+        )))
+            .isInstanceOf(DiagnosticException.class)
+            .hasMessageContaining("error[JAVAN045]")
+            .hasMessageContaining("java/util/Locale");
+    }
+
+    @Test
     void lowersBranchValueSelectionForIntReturn() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -17076,6 +17093,52 @@ final class BytecodeToIRTest {
                 IrExpression.objectCall("javan_string_to_lower_case", List.of(IrExpression.objectLocal("arg0")))
             ),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersStringToLowerCaseLocaleToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/String;Ljava/util/Locale;)Ljava/lang/String;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef(
+                "java/lang/String",
+                "toLowerCase",
+                "(Ljava/util/Locale;)Ljava/lang/String;"
+            )),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).contains(
+            IrInstruction.assignObject(
+                "object2",
+                IrExpression.objectCall(
+                    "javan_string_to_lower_case_locale",
+                    List.of(IrExpression.objectLocal("object1"), IrExpression.objectLocal("object0"))
+                )
+            )
+        );
+    }
+
+    @Test
+    void lowersLocaleRootFieldToRuntimeValue() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/util/Locale;",
+            1,
+            0,
+            getStatic(0, new FieldRef("java/util/Locale", "ROOT", "Ljava/util/Locale;")),
+            plain(1, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall("javan_locale_root", List.of()))
         );
     }
 

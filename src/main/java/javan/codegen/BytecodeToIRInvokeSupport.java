@@ -726,6 +726,26 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if ("java/lang/String".equals(methodRef.owner())
+            && "toLowerCase".equals(methodRef.name())
+            && "(Ljava/util/Locale;)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression locale = popObject(classFile, method, stack);
+            final IrExpression receiver = popObject(classFile, method, stack);
+            rejectUnsupportedStringSemantic(classFile, method, instruction, receiver);
+            lowerStringToLowerCaseLocale(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                localDeclarations,
+                pendingExceptionHandlerStacks,
+                sourceLines,
+                receiver,
+                locale
+            );
+            return;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
             && "toUpperCase".equals(methodRef.name())
             && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
             pushObjectCall(instructions, stack, localDeclarations, "javan_string_to_upper_case", List.of(popObject(classFile, method, stack)));
@@ -3411,6 +3431,71 @@ final class BytecodeToIRInvokeSupport {
         }
         throw unsupportedStringConstant(classFile, method, instruction);
     }
+
+    private static void lowerStringToLowerCaseLocale(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines,
+        final IrExpression receiver,
+        final IrExpression locale
+    ) {
+        final String localeLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(localeLocal, locale));
+        final String receiverLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(receiverLocal, receiver));
+        final List<StackValue> successStack = List.copyOf(stack);
+        final String receiverPresentLabel = "label_string_lower_receiver_present_"
+            + instruction.offset() + "_" + localDeclarations.size();
+        instructions.add(IrInstruction.branchIf(
+            receiverPresentLabel,
+            IrExpression.objectComparison("!=", IrExpression.objectLocal(receiverLocal), IrExpression.objectNull())
+        ));
+        routePendingPlatformException(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            "java/lang/NullPointerException",
+            IrExpression.stringLiteral("string")
+        );
+        instructions.add(IrInstruction.label(receiverPresentLabel));
+        stack.addAll(successStack);
+        final String localePresentLabel = "label_string_lower_locale_present_"
+            + instruction.offset() + "_" + localDeclarations.size();
+        instructions.add(IrInstruction.branchIf(
+            localePresentLabel,
+            IrExpression.objectComparison("!=", IrExpression.objectLocal(localeLocal), IrExpression.objectNull())
+        ));
+        routePendingPlatformException(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            "java/lang/NullPointerException",
+            IrExpression.objectNull()
+        );
+        instructions.add(IrInstruction.label(localePresentLabel));
+        stack.addAll(successStack);
+        pushObjectCall(
+            instructions,
+            stack,
+            localDeclarations,
+            "javan_string_to_lower_case_locale",
+            List.of(IrExpression.objectLocal(receiverLocal), IrExpression.objectLocal(localeLocal))
+        );
+    }
+
     static boolean lowerStringBuilderConstructor(
         final MethodRef methodRef,
         final List<IrInstruction> instructions,
@@ -11047,6 +11132,12 @@ final class BytecodeToIRInvokeSupport {
             && "ENGLISH".equals(fieldRef.name())
             && "Ljava/util/Locale;".equals(fieldRef.descriptor())) {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_locale_english", List.of())));
+            return true;
+        }
+        if (LOCALE_OWNER.equals(fieldRef.owner())
+            && "ROOT".equals(fieldRef.name())
+            && "Ljava/util/Locale;".equals(fieldRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_locale_root", List.of())));
             return true;
         }
         return false;
