@@ -18,6 +18,60 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @ResourceLock(value = Resources.SYSTEM_PROPERTIES, mode = ResourceAccessMode.READ)
 final class CliPlatformExceptionPropagationIntegrationTest extends CliIntegrationSupport {
     @Test
+    void generatedConstructorFailureIsCaughtAndWrapped() throws Exception {
+        final Path project = project("platform-catch-generated-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    try {
+                        System.out.println(state(-1, 0, 0L));
+                    } catch (final IllegalArgumentException exception) {
+                        System.out.println(exception.getMessage());
+                    }
+                }
+
+                private static State state(final int start, final int length, final long revision) {
+                    try {
+                        return new State("value", new Range(start, length), revision);
+                    } catch (final IllegalArgumentException exception) {
+                        throw new IllegalArgumentException("invalid state", exception);
+                    }
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Range", """
+            package com.acme;
+
+            public record Range(int start, int length) {
+                public Range {
+                    if (start < 0 || length < 0) {
+                        throw new IllegalArgumentException("invalid range");
+                    }
+                }
+            }
+            """);
+        writeJava(project, "com.acme.State", """
+            package com.acme;
+
+            public record State(String value, Range range, long revision) {
+                public State {
+                    if (revision < 0L) {
+                        throw new IllegalArgumentException("invalid revision");
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        assertThat(nativeOutput(project)).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void calledIllegalArgumentExceptionIsCaughtByCaller() throws Exception {
         final Path project = project("platform-catch-cross-call-message");
         writeJava(project, "com.acme.Main", """
