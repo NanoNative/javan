@@ -8191,6 +8191,18 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        int javan_boolean_parse(const char* value) {
+            if (value == NULL) {
+                return 0;
+            }
+            return (value[0] == 't' || value[0] == 'T')
+                && (value[1] == 'r' || value[1] == 'R')
+                && (value[2] == 'u' || value[2] == 'U')
+                && (value[3] == 'e' || value[3] == 'E')
+                && value[4] == '\\0'
+                ? 1 : 0;
+        }
+
         void* javan_string_to_upper_case(const char* value) {
             if (value == NULL) {
                 javan_panic("null string");

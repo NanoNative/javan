@@ -21725,8 +21725,8 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void rejectsUnsupportedBooleanParseBooleanIntrinsic() {
-        assertThatThrownBy(() -> lowerMain(method(
+    void lowersBooleanParseBooleanToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
             0x0008,
             "main",
             "()Z",
@@ -21735,11 +21735,11 @@ final class BytecodeToIRTest {
             stringConstant(0, "true"),
             invokeStatic(1, new MethodRef("java/lang/Boolean", "parseBoolean", "(Ljava/lang/String;)Z")),
             plain(2, 172, "ireturn")
-        )))
-            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
-                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
-                assertThat(exception.diagnostic().subject()).isEqualTo("invokestatic java/lang/Boolean.parseBoolean(Ljava/lang/String;)Z");
-            });
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall("javan_boolean_parse", List.of(IrExpression.stringLiteral("true"))))
+        );
     }
 
     @Test
