@@ -1649,6 +1649,27 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void writeIncludesCallerRootedThreadResultAbi() throws Exception {
+        final Path runtime = new RuntimeFiles().write(tempDir);
+        final String generated = Files.readString(tempDir.resolve("javan_runtime.h"))
+            + Files.readString(runtime);
+
+        assertThat(generated).contains(
+            "void javan_thread_new_into(void** result);",
+            "void javan_thread_new_into(void** result) {",
+            "void javan_thread_new_virtual_into(void** result);",
+            "void javan_thread_new_virtual_into(void** result) {",
+            "void javan_virtual_thread_builder_start_into(void** result, void* value, void* runnable);",
+            "void javan_virtual_thread_builder_unstarted_into(void** result, void* value, void* runnable);",
+            "void javan_virtual_thread_factory_new_thread_into(void** result, void* value, void* runnable);",
+            "void javan_virtual_thread_executor_submit_into(void** result, void* value, void* runnable);",
+            "void javan_scheduled_thread_pool_executor_schedule_into(void** result, void* value, void* runnable, long long delay, void* unit);",
+            "void javan_scheduled_thread_pool_executor_schedule_at_fixed_rate_into(void** result, void* value, void* runnable, long long initial_delay, long long period, void* unit);",
+            "void javan_scheduled_thread_pool_executor_schedule_with_fixed_delay_into(void** result, void* value, void* runnable, long long initial_delay, long long delay, void* unit);"
+        );
+    }
+
+    @Test
     void runtimeThreadCurrentBootstrapIsIdempotentAndRootsCurrentThreadOnce() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """

@@ -5622,6 +5622,71 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void threadConstructionPublishesResultBeforeConcurrentGc() throws Exception {
+        final Path project = project("thread-construction-result-publication");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.atomic.AtomicBoolean;
+
+            public final class Main {
+                private static final AtomicBoolean RUNNING = new AtomicBoolean(true);
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread collector = new Thread(new Collector());
+                    collector.start();
+                    int checksum = 0;
+                    for (int index = 0; index < 2_048; index++) {
+                        checksum += new Thread().getName().length();
+                    }
+                    RUNNING.set(false);
+                    collector.join();
+                    System.out.println(checksum > 0);
+                }
+
+                public static boolean running() {
+                    return RUNNING.get();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Collector", """
+            package com.acme;
+
+            public final class Collector implements Runnable {
+                @Override
+                public void run() {
+                    while (Main.running()) {
+                        Thread.yield();
+                    }
+                }
+            }
+            """);
+
+        final CliRun build = run(tempDir, "build", project.toString());
+        final String result;
+        if (build.exitCode() != 0) {
+            result = build.exitCode() + "\n" + build.stderr();
+        } else {
+            final ProcessResult nativeRun = process(
+                project,
+                List.of(project.resolve(".javan/bin/thread-construction-result-publication").toString()),
+                Duration.ofSeconds(30),
+                Map.of(
+                    "JAVAN_HEAP_LIMIT_BYTES", "65536",
+                    "JAVAN_GC_STRESS", "1",
+                    "JAVAN_GC_SAFEPOINT_INTERVAL", "1"
+                )
+            );
+            result = nativeRun.exitCode() + "\n" + nativeRun.stdout() + nativeRun.stderr();
+        }
+
+        assertThat(result).isEqualTo("0\ntrue\n");
+    }
+
+    @Test
     void emptyThreadJoinBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("thread-join-empty");
         writeJava(project, "com.acme.Main", """
