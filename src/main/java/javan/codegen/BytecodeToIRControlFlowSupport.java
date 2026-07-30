@@ -526,6 +526,9 @@ final class BytecodeToIRControlFlowSupport {
         if (doneIndex <= targetIndex) {
             return false;
         }
+        if (!isValueConsumer(bytecode.get(doneIndex).opcode())) {
+            return false;
+        }
         if (!hasOnlyTargetBranches(bytecode, index, jumpIndex, targetOffset)) {
             return false;
         }
@@ -547,12 +550,13 @@ final class BytecodeToIRControlFlowSupport {
         final int lastMaterializingDuplicateOffset = BytecodeToIR.lastMaterializingDuplicateOffset(bytecode);
         List<StackValue> prefix = List.of();
         int conditionalCount = 0;
+        int firstLocalMutationIndex = -1;
         final String targetLabel = "guarded_value_target_" + instruction.offset();
         final String doneLabel = "guarded_value_done_" + instruction.offset();
         for (int cursor = index; cursor < jumpIndex; cursor++) {
             final Instruction current = bytecode.get(cursor);
-            if (isLocalMutation(current.opcode())) {
-                throw unsupportedBranchValueMerge(classFile, method, current);
+            if (firstLocalMutationIndex < 0 && isLocalMutation(current.opcode())) {
+                firstLocalMutationIndex = cursor;
             }
             if (isConditionalBranch(current.opcode())) {
                 conditionalCount++;
@@ -585,6 +589,16 @@ final class BytecodeToIRControlFlowSupport {
             }
         }
         if (conditionalCount < 2) {
+            return false;
+        }
+        if (firstLocalMutationIndex >= 0) {
+            if (hasSelectedValue(prefix, workingStack)) {
+                throw unsupportedBranchValueMerge(
+                    classFile,
+                    method,
+                    bytecode.get(firstLocalMutationIndex)
+                );
+            }
             return false;
         }
         if (!hasSelectedValue(prefix, workingStack)) {
@@ -775,13 +789,14 @@ final class BytecodeToIRControlFlowSupport {
         final List<Integer> skippedOffsets = new ArrayList<>();
         final List<Integer> workingReplacementLabelOffsets = new ArrayList<>(replacementLabelOffsets);
         final int lastMaterializingDuplicateOffset = BytecodeToIR.lastMaterializingDuplicateOffset(bytecode);
+        int firstLocalMutationIndex = -1;
         for (int index = startIndex; index < endIndex; index++) {
             final Instruction blockInstruction = bytecode.get(index);
             if (containsInt(skippedOffsets, blockInstruction.offset())) {
                 continue;
             }
-            if (isLocalMutation(blockInstruction.opcode())) {
-                throw unsupportedBranchValueMerge(classFile, method, blockInstruction);
+            if (firstLocalMutationIndex < 0 && isLocalMutation(blockInstruction.opcode())) {
+                firstLocalMutationIndex = index;
             }
             if (lowerBranchValueSelection(
                 classes,
@@ -828,6 +843,16 @@ final class BytecodeToIRControlFlowSupport {
                 sourceLines,
                 lastMaterializingDuplicateOffset
             );
+        }
+        if (firstLocalMutationIndex >= 0) {
+            if (hasSelectedValue(stackPrefix, blockStack)) {
+                throw unsupportedBranchValueMerge(
+                    classFile,
+                    method,
+                    bytecode.get(firstLocalMutationIndex)
+                );
+            }
+            return Optional.empty();
         }
         appendNewLocalDeclarations(localDeclarations, blockLocalDeclarations, originalLocalDeclarationCount);
         dispatches.putAll(blockDispatches);
