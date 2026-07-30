@@ -2,6 +2,7 @@ package javan.verify;
 
 import javan.analysis.CaughtThrowableRethrowAnalysis;
 import javan.analysis.EntryPoint;
+import javan.analysis.GeneratedObjectCloneSupport;
 import javan.analysis.VirtualThreadInvokePatterns;
 import javan.classfile.ClassFile;
 import javan.classfile.CodeAttribute;
@@ -423,6 +424,10 @@ public final class StaticVerifier {
         if (methodRef.isPresent()) {
             final MethodRefFacts facts = methodRefFacts.resolve(methodRef.orElseThrow());
             final MethodRef target = facts.target();
+            final GeneratedObjectCloneSupport.Status objectCloneStatus =
+                GeneratedObjectCloneSupport.isObjectClone(target)
+                    ? GeneratedObjectCloneSupport.invocationStatus(classes, classFile)
+                    : GeneratedObjectCloneSupport.Status.SUPPORTED;
             final int unsupportedMonitorMethod = unsupportedMonitorMethod(target) ? 1 : 0;
             final int unsupportedConcurrencyApi = unsupportedConcurrencyRuntimeApi(
                 classes,
@@ -446,6 +451,9 @@ public final class StaticVerifier {
             }
             if (unsupportedConcurrencyApi == 1) {
                 diagnostics.add(concurrencyRuntimeDiagnostic(classFile, method, target, reachable));
+            }
+            if (objectCloneStatus != GeneratedObjectCloneSupport.Status.SUPPORTED) {
+                diagnostics.add(objectCloneDiagnostic(classFile, method, target, objectCloneStatus, reachable));
             }
             if (NetworkApiSupport.isNetworkCall(target) && !facts.supported()) {
                 diagnostics.add(networkCallDiagnostic(classFile, method, target, reachable));
@@ -486,6 +494,35 @@ public final class StaticVerifier {
             diagnostics.add(opcodeDiagnostic(classFile, method, instruction, reachable));
         }
         return diagnostics;
+    }
+
+    private static Diagnostic objectCloneDiagnostic(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final MethodRef target,
+        final GeneratedObjectCloneSupport.Status status,
+        final int reachable
+    ) {
+        if (reachable == 1) {
+            return error(
+                classFile,
+                method,
+                "JAVAN050",
+                "Object.clone requires a supported Cloneable class",
+                target.display(),
+                GeneratedObjectCloneSupport.reason(status),
+                GeneratedObjectCloneSupport.fix(status)
+            );
+        }
+        return warning(
+            classFile,
+            method,
+            "JAVAN150",
+            "unsupported Object.clone in unreachable code",
+            target.display(),
+            GeneratedObjectCloneSupport.reason(status),
+            GeneratedObjectCloneSupport.fix(status)
+        );
     }
 
     private static boolean unsupportedNewArrayType(final Instruction instruction) {

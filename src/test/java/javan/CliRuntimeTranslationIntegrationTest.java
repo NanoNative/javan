@@ -9,7 +9,9 @@ import org.junit.jupiter.api.parallel.Resources;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
@@ -7690,4 +7692,508 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         assertThat(jvmOutput).isEqualTo("hello\n");
     }
 
+    @Test
+    void objectCloneBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("object-clone");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws CloneNotSupportedException {
+                    final Box box = new Box(7, "left");
+                    final Box copy = box.copy();
+                    box.count = 9;
+                    box.label = "right";
+                    System.out.println(copy.count);
+                    System.out.println(copy.label);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Box", """
+            package com.acme;
+
+            public final class Box implements Cloneable {
+                int count;
+                String label;
+
+                Box(final int count, final String label) {
+                    this.count = count;
+                    this.label = label;
+                }
+
+                Box copy() throws CloneNotSupportedException {
+                    return (Box) super.clone();
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Path nativeBinary = project.resolve(".javan/bin/object-clone");
+        final ProcessResult nativeRun = process(project, List.of(nativeBinary.toString()));
+
+        assertThat(nativeRun.stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("7\nleft\n");
+    }
+
+    @Test
+    void covariantObjectCloneOverrideAndBridgeMatchJvmOutput() throws Exception {
+        final Path project = project("object-clone-covariant-bridge");
+        writeJava(project, "com.acme.Copyable", """
+            package com.acme;
+
+            public interface Copyable {
+                Object clone() throws CloneNotSupportedException;
+            }
+            """);
+        writeJava(project, "com.acme.Payload", """
+            package com.acme;
+
+            public final class Payload {
+                int value;
+
+                Payload(final int value) {
+                    this.value = value;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Box", """
+            package com.acme;
+
+            public final class Box implements Cloneable, Copyable {
+                int value;
+                Payload payload;
+
+                Box(final int value, final Payload payload) {
+                    this.value = value;
+                    this.payload = payload;
+                }
+
+                @Override
+                public Box clone() throws CloneNotSupportedException {
+                    return (Box) super.clone();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws CloneNotSupportedException {
+                    final Payload payload = new Payload(7);
+                    final Box source = new Box(8, payload);
+                    final Box direct = source.clone();
+                    final Copyable erased = source;
+                    final Box bridged = (Box) erased.clone();
+
+                    source.value = 9;
+                    payload.value = 10;
+
+                    System.out.println(source != direct);
+                    System.out.println(source != bridged);
+                    System.out.println(direct != bridged);
+                    System.out.println(direct.value);
+                    System.out.println(bridged.value);
+                    System.out.println(direct.payload == source.payload);
+                    System.out.println(bridged.payload == source.payload);
+                    System.out.println(direct.payload.value);
+                    System.out.println(bridged.payload.value);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(
+            project,
+            List.of(project.resolve(".javan/bin/object-clone-covariant-bridge").toString())
+        );
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void objectCloneDeclaredByNonCloneableBaseWorksForCloneableSubtype() throws Exception {
+        final Path project = project("object-clone-runtime-subtype");
+        writeJava(project, "com.acme.Payload", """
+            package com.acme;
+
+            public final class Payload {
+                int value;
+
+                Payload(final int value) {
+                    this.value = value;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Base", """
+            package com.acme;
+
+            public class Base {
+                int baseValue;
+                Payload payload;
+
+                Base(final int baseValue, final Payload payload) {
+                    this.baseValue = baseValue;
+                    this.payload = payload;
+                }
+
+                Base copy() throws CloneNotSupportedException {
+                    return (Base) super.clone();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Child", """
+            package com.acme;
+
+            public final class Child extends Base implements Cloneable {
+                int childValue;
+
+                Child(final int baseValue, final int childValue, final Payload payload) {
+                    super(baseValue, payload);
+                    this.childValue = childValue;
+                }
+
+                Child copyChild() throws CloneNotSupportedException {
+                    return (Child) super.copy();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws CloneNotSupportedException {
+                    final Payload payload = new Payload(7);
+                    final Child source = new Child(8, 9, payload);
+                    final Child copy = source.copyChild();
+
+                    source.baseValue = 10;
+                    source.childValue = 11;
+                    payload.value = 12;
+
+                    System.out.println(source != copy);
+                    System.out.println(copy instanceof Child);
+                    System.out.println(copy.baseValue);
+                    System.out.println(copy.childValue);
+                    System.out.println(copy.payload == source.payload);
+                    System.out.println(copy.payload.value);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(
+            project,
+            List.of(project.resolve(".javan/bin/object-clone-runtime-subtype").toString())
+        );
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void inheritedObjectCloneCopiesCompleteLayoutAndSurvivesGcStress() throws Exception {
+        final Path project = project("object-clone-inheritance");
+        writeJava(project, "com.acme.CopyMarker", """
+            package com.acme;
+
+            public interface CopyMarker extends Cloneable {
+            }
+            """);
+        writeJava(project, "com.acme.Payload", """
+            package com.acme;
+
+            public final class Payload {
+                int value;
+
+                Payload(final int value) {
+                    this.value = value;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Base", """
+            package com.acme;
+
+            public class Base implements CopyMarker {
+                static int constructions;
+                boolean flag;
+                byte byteValue;
+                char charValue;
+                short shortValue;
+                int hidden;
+                long longValue;
+                float floatValue;
+                double doubleValue;
+                Payload payload;
+                int[] numbers;
+                Object nullable;
+
+                Base(final Payload payload, final int[] numbers) {
+                    constructions++;
+                    flag = true;
+                    byteValue = 2;
+                    charValue = 'A';
+                    shortValue = 3;
+                    hidden = 11;
+                    longValue = 4L;
+                    floatValue = 5.5f;
+                    doubleValue = 6.25d;
+                    this.payload = payload;
+                    this.numbers = numbers;
+                    nullable = null;
+                }
+
+                static int hidden(final Base value) {
+                    return value.hidden;
+                }
+
+                static void hidden(final Base value, final int hidden) {
+                    value.hidden = hidden;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Box", """
+            package com.acme;
+
+            public final class Box extends Base {
+                int hidden;
+                String label;
+
+                Box(final Payload payload, final int[] numbers) {
+                    super(payload, numbers);
+                    hidden = 22;
+                    label = "left";
+                }
+
+                Box copy() throws CloneNotSupportedException {
+                    return (Box) super.clone();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Empty", """
+            package com.acme;
+
+            public final class Empty implements Cloneable {
+                Empty copy() throws CloneNotSupportedException {
+                    return (Empty) super.clone();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws CloneNotSupportedException {
+                    final Payload payload = new Payload(7);
+                    final int[] numbers = new int[]{8};
+                    final Box source = new Box(payload, numbers);
+                    final Box copy = source.copy();
+                    final Box second = copy.copy();
+                    final Empty empty = new Empty();
+                    final Empty emptyCopy = empty.copy();
+                    final Box current = churn();
+
+                    source.flag = false;
+                    source.byteValue = 9;
+                    source.charValue = 'Z';
+                    source.shortValue = 10;
+                    Base.hidden(source, 33);
+                    source.hidden = 44;
+                    source.longValue = 12L;
+                    source.floatValue = 13.5f;
+                    source.doubleValue = 14.25d;
+                    source.label = "right";
+                    payload.value = 70;
+                    numbers[0] = 80;
+
+                    System.out.println(source != copy);
+                    System.out.println(copy != second);
+                    System.out.println(copy instanceof Box);
+                    System.out.println(copy.flag);
+                    System.out.println(copy.byteValue);
+                    System.out.println(copy.charValue);
+                    System.out.println(copy.shortValue);
+                    System.out.println(Base.hidden(copy));
+                    System.out.println(copy.hidden);
+                    System.out.println(copy.longValue);
+                    System.out.println(copy.floatValue);
+                    System.out.println(copy.doubleValue);
+                    System.out.println(copy.label);
+                    System.out.println(copy.nullable == null);
+                    System.out.println(copy.payload == source.payload);
+                    System.out.println(copy.payload.value);
+                    System.out.println(copy.numbers == source.numbers);
+                    System.out.println(copy.numbers[0]);
+                    System.out.println(Base.hidden(second));
+                    System.out.println(second.hidden);
+                    System.out.println(Base.hidden(current));
+                    System.out.println(current.hidden);
+                    System.out.println(current.payload.value);
+                    System.out.println(current.numbers[0]);
+                    System.out.println(Base.constructions);
+                    System.out.println(empty != emptyCopy);
+                }
+
+                private static Box churn() throws CloneNotSupportedException {
+                    Box current = new Box(new Payload(71), new int[]{81});
+                    for (int index = 0; index < 4_000; index++) {
+                        current = current.copy();
+                    }
+                    return current;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path nativeBinary = project.resolve(".javan/bin/object-clone-inheritance");
+        final ProcessResult nativeRun = process(project, List.of(nativeBinary.toString()));
+        final ProcessResult stressRun = process(
+            project,
+            List.of(nativeBinary.toString()),
+            Duration.ofSeconds(10),
+            Map.of(
+                "JAVAN_HEAP_LIMIT_BYTES", "65536",
+                "JAVAN_GC_STRESS", "1"
+            )
+        );
+
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(jvmOutput);
+        assertThat(stressRun.exitCode()).as(stressRun.stderr()).isZero();
+        assertThat(stressRun.stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void objectCloneRejectsNonCloneableClassDuringCheck() throws Exception {
+        final Path project = project("object-clone-non-cloneable");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws CloneNotSupportedException {
+                    System.out.println(new Box().copy());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Box", """
+            package com.acme;
+
+            public final class Box {
+                Box copy() throws CloneNotSupportedException {
+                    return (Box) super.clone();
+                }
+            }
+            """);
+
+        final CliRun check = run(tempDir, "check", project.toString());
+
+        assertThat(check.exitCode()).isEqualTo(2);
+        assertThat(check.stderr()).contains(
+            "error[JAVAN050]: Object.clone requires a supported Cloneable class",
+            "java/lang/Object.clone()Ljava/lang/Object;"
+        );
+        assertThat(project.resolve(".javan/generated")).doesNotExist();
+    }
+
+    @Test
+    void nullGeneratedObjectCloneBuildsAndFailsClearly() throws Exception {
+        final Path project = project("object-clone-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws CloneNotSupportedException {
+                    Box.copy(null);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Box", """
+            package com.acme;
+
+            public final class Box implements Cloneable {
+                static Box copy(final Box value) throws CloneNotSupportedException {
+                    return (Box) value.clone();
+                }
+            }
+            """);
+
+        final CliRun build = run(tempDir, "build", project.toString());
+
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(
+            project,
+            List.of(project.resolve(".javan/bin/object-clone-null").toString())
+        );
+        assertThat(nativeRun.exitCode()).isEqualTo(1);
+        assertThat(nativeRun.stderr()).contains("null object clone");
+    }
+
+    @Test
+    void objectCloneRejectsRuntimeBackedSuperclassDuringCheck() throws Exception {
+        final Path project = project("object-clone-runtime-backed-superclass");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws CloneNotSupportedException {
+                    System.out.println(new CloneableScheduler(1).copy() != null);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.CloneableScheduler", """
+            package com.acme;
+
+            import java.util.concurrent.ScheduledThreadPoolExecutor;
+
+            public final class CloneableScheduler extends ScheduledThreadPoolExecutor implements Cloneable {
+                CloneableScheduler(final int corePoolSize) {
+                    super(corePoolSize);
+                }
+
+                CloneableScheduler copy() throws CloneNotSupportedException {
+                    return (CloneableScheduler) super.clone();
+                }
+            }
+            """);
+
+        final CliRun check = run(tempDir, "check", project.toString());
+
+        assertThat(check.exitCode()).isEqualTo(2);
+        assertThat(check.stderr()).contains(
+            "error[JAVAN050]: Object.clone requires a supported Cloneable class",
+            "external superclass"
+        );
+        assertThat(project.resolve(".javan/generated")).doesNotExist();
+    }
 }

@@ -18,6 +18,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintStream;
 import java.io.UncheckedIOException;
+import java.lang.classfile.ClassFile;
+import java.lang.classfile.ClassTransform;
+import java.lang.classfile.MethodTransform;
+import java.lang.classfile.attribute.ExceptionsAttribute;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -87,8 +91,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void socketConnectStateBuildsAndTalksToLoopbackServer() throws Exception {
-        final int port = freeTcpPort();
-        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final int port = server.getLocalPort();
             final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
                 try (java.net.Socket socket = server.accept()) {
                     socket.getOutputStream().flush();
@@ -1129,6 +1133,140 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
         assertThat(process.exitValue()).isZero();
         assertThat(stdout.join()).isEqualTo(port + "\ntrue\n127.0.0.1\ntrue\n");
         assertThat(stderr.join()).isEmpty();
+    }
+
+    @Test
+    void serverSocketAcceptAllowsGeneratedPlatformWorkerToConnect() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("server-socket-accept-platform-worker");
+        writeJava(project, "com.acme.ConnectorAction", """
+            package com.acme;
+
+            import java.net.Socket;
+
+            public final class ConnectorAction {
+                private ConnectorAction() {
+                }
+
+                public static void connect(final int port) throws Exception {
+                    Thread.sleep(250L);
+                    final Socket socket = new Socket("127.0.0.1", port);
+                    socket.close();
+                }
+            }
+            """);
+
+        final Path sourceRoot = project.resolve("src/main/java");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        final ProcessResult actionCompile = process(project, List.of(
+            CliTestHarness.currentJavacCommand(),
+            "-d",
+            classes.toString(),
+            sourceRoot.resolve("com/acme/ConnectorAction.java").toString()
+        ));
+        assertThat(actionCompile.exitCode()).as(actionCompile.stderr()).isZero();
+
+        final Path actionClass = classes.resolve("com/acme/ConnectorAction.class");
+        final ClassFile classFile = ClassFile.of();
+        Files.write(
+            actionClass,
+            classFile.transformClass(
+                classFile.parse(actionClass),
+                ClassTransform.transformingMethods(
+                    method -> method.methodName().equalsString("connect"),
+                    MethodTransform.dropping(element -> element instanceof ExceptionsAttribute)
+                )
+            )
+        );
+
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.ServerSocket;
+            import java.net.Socket;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ServerSocket server = new ServerSocket(%d);
+                    final Thread worker = new Thread(new Connector(%d), "loopback-connector");
+                    worker.start();
+                    final Socket accepted = server.accept();
+                    accepted.close();
+                    server.close();
+                    worker.join();
+                    System.out.println("accepted");
+                    System.out.println("joined");
+                }
+            }
+            """.formatted(port, port));
+        writeJava(project, "com.acme.Connector", """
+            package com.acme;
+
+            public final class Connector implements Runnable {
+                private final int port;
+
+                public Connector(final int port) {
+                    this.port = port;
+                }
+
+                @Override
+                public void run() {
+                    ConnectorAction.connect(port);
+                }
+            }
+            """);
+
+        final Path emptySourcePath = project.resolve("empty-sourcepath");
+        Files.createDirectories(emptySourcePath);
+        final ProcessResult appCompile = process(project, List.of(
+            CliTestHarness.currentJavacCommand(),
+            "-classpath",
+            classes.toString(),
+            "-sourcepath",
+            emptySourcePath.toString(),
+            "-d",
+            classes.toString(),
+            sourceRoot.resolve("com/acme/Connector.java").toString(),
+            sourceRoot.resolve("com/acme/Main.java").toString()
+        ));
+        assertThat(appCompile.exitCode()).as(appCompile.stderr()).isZero();
+
+        final ProcessResult jvmRun = process(project, List.of(
+            CliTestHarness.currentJavaCommand(),
+            "-cp",
+            classes.toString(),
+            "com.acme.Main"
+        ));
+        assertThat(jvmRun.exitCode()).as(jvmRun.stderr()).isZero();
+        assertThat(jvmRun.stderr()).isEmpty();
+        final String jvmOutput = jvmRun.stdout();
+        final CliRun run = run(
+            project,
+            "build",
+            classes.toString(),
+            "--main",
+            "com.acme.Main",
+            "--output",
+            "server-socket-accept-platform-worker"
+        );
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = assertTimeoutPreemptively(
+            Duration.ofSeconds(10),
+            () -> process(
+                project,
+                List.of(project.resolve(".javan/bin/server-socket-accept-platform-worker").toString()),
+                Duration.ofSeconds(5)
+            )
+        );
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stderr()).isEmpty();
+        assertThat(nativeRun.stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("accepted\njoined\n");
     }
 
     @Test

@@ -57,6 +57,7 @@ final class CompatibilityReportsTest {
                     List.of(member(0, "<init>", "()V", List.of(), List.of())),
                     List.of(
                         member(0, "getClass", "()Ljava/lang/Class;", List.of(), List.of()),
+                        member(0, "clone", "()Ljava/lang/Object;", List.of(), List.of()),
                         member(0, "wait", "()V", List.of(), List.of())
                     )
                 ),
@@ -81,14 +82,14 @@ final class CompatibilityReportsTest {
         final String summary = Files.readString(tempDir.resolve(".javan/reports/compatibility-summary.json"));
 
         assertThat(summary).contains(
-            "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 5, \"leftCallables\": 3, \"coveragePercent\": \"40.0\"}",
-            "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 3, \"doneCallables\": 5, \"unknownCallables\": 0, \"totalCallables\": 5, \"donePercent\": \"100.0\"}",
-            "\"supportRows\": 300",
-            "\"passRows\": 300",
+            "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 2, \"callables\": 3, \"totalCallables\": 6, \"leftCallables\": 3, \"coveragePercent\": \"50.0\"}",
+            "\"exactJdkCallableAccounting\": {\"supportedCallables\": 3, \"explicitRejectedCallables\": 3, \"doneCallables\": 6, \"unknownCallables\": 0, \"totalCallables\": 6, \"donePercent\": \"100.0\"}",
+            "\"supportRows\": 302",
+            "\"passRows\": 302",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 300",
+            "\"accountedRows\": 302",
             "\"unaccountedRows\": 0"
         );
     }
@@ -121,6 +122,9 @@ final class CompatibilityReportsTest {
             "| `interface-dispatch` | pass |",
             "| `polymorphic-virtual` | pass |",
             "| `interface-polymorphic` | pass |",
+            "| `primitive-array-clone` | pass |",
+            "| `generated-object-clone-single-threaded` | pass |",
+            "| `generated-object-clone-concurrent-return-handoff` | pass |",
             "| `string-intrinsics` | pass |",
             "| `resource-system-loader-stream` | pass |",
             "| `resource-loader-instance-stream` | pass |",
@@ -538,6 +542,8 @@ final class CompatibilityReportsTest {
             "\"feature\": \"platform-thread-current-thread-start-build-reject\"",
             "\"feature\": \"platform-thread-current-thread-join-build-reject\"",
             "\"feature\": \"platform-thread-duplicate-start-build-reject\"",
+            "\"feature\": \"generated-object-clone-single-threaded\"",
+            "\"feature\": \"generated-object-clone-concurrent-return-handoff\"",
             "\"feature\": \"network-socket-rejection\"",
             "\"feature\": \"network-http-rejection\"",
             "\"feature\": \"network-runtime-feature-reporting\""
@@ -653,6 +659,8 @@ final class CompatibilityReportsTest {
                 "\"syntheticMethods\": [\"com/acme/Preview.<init>()V\", \"com/acme/Preview.bridge()V\"]"
             );
             assertThat(Files.readString(tempDir.resolve("doc/status/jdk-compatibility.md"))).contains(
+                "- scanned vendor: `" + System.getProperty("java.vendor") + "`",
+                "- scanned platform: `" + System.getProperty("os.name") + "/" + System.getProperty("os.arch") + "`",
                 "- JDK modules: `2`"
             );
         });

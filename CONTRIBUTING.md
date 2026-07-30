@@ -11,7 +11,8 @@ javan is a minimal native-first Java toolchain. Contributions should keep Java s
 
 ## Development Setup
 
-- Use Java 25 or newer.
+- Use Java 25. Compatibility verification rejects another feature release before it can
+  rewrite versioned matrix keys.
 - Use Maven for local verification.
 - Install a native C toolchain when testing generated binaries or the full release gate.
 - The release gate builds Javan through Javan's own native backend.
@@ -19,6 +20,17 @@ javan is a minimal native-first Java toolchain. Contributions should keep Java s
 ```sh
 mvn verify
 ```
+
+This command also generates the active-JDK compatibility reports and refreshes the tracked
+support matrix through the compiler's canonical report generator. If tracked status changed,
+Maven writes the current files and fails once so the generated change can be reviewed; rerun
+the same command to confirm it is stable. No separate report command or manual copy step is
+required.
+
+The tracked JDK inventory is pinned in `pom.xml` to Eclipse Temurin 25.0.1 on Linux x64.
+Other Java 25 environments leave that reference snapshot unchanged while still producing
+their active-JDK reports. CI requires the exact reference environment and gates the snapshot
+through the same Maven lifecycle.
 
 Full local release gate:
 

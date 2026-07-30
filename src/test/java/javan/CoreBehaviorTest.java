@@ -3,6 +3,7 @@ package javan;
 import javan.analysis.CallGraph;
 import javan.analysis.CallEdge;
 import javan.analysis.EntryPoint;
+import javan.analysis.GeneratedObjectCloneSupport;
 import javan.analysis.ReachabilityAnalyzer;
 import javan.build.BindingLanguage;
 import javan.build.BuildKind;
@@ -4775,7 +4776,7 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void reachabilityReportsUnsupportedBooleanArrayClone() {
+    void reachabilityAcceptsBooleanArrayClone() {
         final CallGraph graph = new ReachabilityAnalyzer().analyze(
             Map.of("com/acme/Main", classWithMethods(
                 "com/acme/Main",
@@ -4787,8 +4788,182 @@ final class CoreBehaviorTest {
             List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
         );
 
-        assertThat(graph.diagnostics()).hasSize(1);
-        assertThat(graph.diagnostics().getFirst().code()).isEqualTo("JAVAN011");
+        assertThat(graph.diagnostics()).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableObjectCloneForCloneableClass() {
+        final ClassFile box = objectCloneClass("java/lang/Object", List.of("java/lang/Cloneable"));
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(box.name(), box),
+            List.of(new EntryPoint(box.name(), "copy", "()Ljava/lang/Object;"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void generatedObjectCloneSupportRejectsSupportedDiagnosticRequestsAndNonExactDescriptors() {
+        final MethodRef wrongDescriptor = new MethodRef(
+            "java/lang/Object",
+            "clone",
+            "()Ljava/lang/String;"
+        );
+
+        assertThat(GeneratedObjectCloneSupport.isObjectClone(wrongDescriptor)).isFalse();
+        assertThatThrownBy(() -> GeneratedObjectCloneSupport.reason(
+            GeneratedObjectCloneSupport.Status.SUPPORTED
+        ))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("supported object clone has no diagnostic");
+        assertThatThrownBy(() -> GeneratedObjectCloneSupport.fix(
+            GeneratedObjectCloneSupport.Status.SUPPORTED
+        ))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("supported object clone has no diagnostic");
+    }
+
+    @Test
+    void staticVerifierAcceptsObjectCloneDeclaredByNonCloneableBaseForCloneableSubtype() {
+        final ClassFile base = objectCloneClass("java/lang/Object", List.of());
+        final ClassFile child = classWithMethods(
+            "com/acme/Child",
+            base.name(),
+            0,
+            List.of("java/lang/Cloneable")
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(base.name(), base, child.name(), child),
+            List.of(new EntryPoint(base.name(), "copy", "()Ljava/lang/Object;"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierReportsExternalLayoutForCloneableSubtypeOfNonCloneableBase() {
+        final ClassFile base = objectCloneClass(
+            "java/util/concurrent/atomic/AtomicInteger",
+            List.of()
+        );
+        final ClassFile child = classWithMethods(
+            "com/acme/Child",
+            base.name(),
+            0,
+            List.of("java/lang/Cloneable")
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(base.name(), base, child.name(), child),
+            List.of(new EntryPoint(base.name(), "copy", "()Ljava/lang/Object;"))
+        );
+
+        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
+            assertThat(diagnostic.error()).isTrue();
+            assertThat(diagnostic.code()).isEqualTo("JAVAN050");
+            assertThat(diagnostic.reason()).contains("external superclass");
+        });
+    }
+
+    @Test
+    void staticVerifierReportsCyclicLayoutForCloneableSubtypeOfNonCloneableBase() {
+        final ClassFile base = objectCloneClass("com/acme/Other", List.of());
+        final ClassFile other = classWithMethods(
+            "com/acme/Other",
+            base.name(),
+            0,
+            List.of()
+        );
+        final ClassFile child = classWithMethods(
+            "com/acme/Child",
+            base.name(),
+            0,
+            List.of("java/lang/Cloneable")
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(base.name(), base, other.name(), other, child.name(), child),
+            List.of(new EntryPoint(base.name(), "copy", "()Ljava/lang/Object;"))
+        );
+
+        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
+            assertThat(diagnostic.error()).isTrue();
+            assertThat(diagnostic.code()).isEqualTo("JAVAN050");
+            assertThat(diagnostic.reason()).contains("cyclic superclass hierarchy");
+        });
+    }
+
+    @Test
+    void staticVerifierRejectsReachableObjectCloneWithoutCloneableMarker() {
+        final ClassFile box = objectCloneClass("java/lang/Object", List.of());
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(box.name(), box),
+            List.of(new EntryPoint(box.name(), "copy", "()Ljava/lang/Object;"))
+        );
+
+        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
+            assertThat(diagnostic.error()).isTrue();
+            assertThat(diagnostic.code()).isEqualTo("JAVAN050");
+            assertThat(diagnostic.message()).isEqualTo("Object.clone requires a supported Cloneable class");
+            assertThat(diagnostic.subject()).isEqualTo("java/lang/Object.clone()Ljava/lang/Object;");
+        });
+    }
+
+    @Test
+    void staticVerifierWarnsForUnreachableObjectCloneWithoutCloneableMarker() {
+        final ClassFile box = objectCloneClass("java/lang/Object", List.of());
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(Map.of(box.name(), box), List.of());
+
+        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
+            assertThat(diagnostic.error()).isFalse();
+            assertThat(diagnostic.code()).isEqualTo("JAVAN150");
+            assertThat(diagnostic.subject()).isEqualTo("java/lang/Object.clone()Ljava/lang/Object;");
+        });
+    }
+
+    @Test
+    void staticVerifierRejectsObjectCloneWithExternalSuperclassState() {
+        final ClassFile box = objectCloneClass(
+            "java/util/concurrent/atomic/AtomicInteger",
+            List.of("java/lang/Cloneable")
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(box.name(), box),
+            List.of(new EntryPoint(box.name(), "copy", "()Ljava/lang/Object;"))
+        );
+
+        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
+            assertThat(diagnostic.error()).isTrue();
+            assertThat(diagnostic.code()).isEqualTo("JAVAN050");
+            assertThat(diagnostic.reason()).contains("external superclass");
+        });
+    }
+
+    @Test
+    void staticVerifierRejectsObjectCloneWithCyclicGeneratedHierarchy() {
+        final ClassFile box = objectCloneClass("com/acme/Other", List.of("java/lang/Cloneable"));
+        final ClassFile other = classWithMethods(
+            "com/acme/Other",
+            "com/acme/Box",
+            0,
+            List.of()
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(box.name(), box, other.name(), other),
+            List.of(new EntryPoint(box.name(), "copy", "()Ljava/lang/Object;"))
+        );
+
+        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
+            assertThat(diagnostic.error()).isTrue();
+            assertThat(diagnostic.code()).isEqualTo("JAVAN050");
+            assertThat(diagnostic.reason()).contains("cyclic superclass hierarchy");
+        });
     }
 
     @Test
@@ -13715,6 +13890,22 @@ final class CoreBehaviorTest {
         );
     }
 
+    private static ClassFile objectCloneClass(final String superName, final List<String> interfaces) {
+        return classWithMethods(
+            "com/acme/Box",
+            superName,
+            0,
+            interfaces,
+            methodInfo(
+                "copy",
+                "()Ljava/lang/Object;",
+                instruction(0, 42, "aload_0"),
+                instruction(1, 183, "invokespecial", new MethodRef("java/lang/Object", "clone", "()Ljava/lang/Object;")),
+                instruction(2, 176, "areturn")
+            )
+        );
+    }
+
     private static MethodInfo methodInfo(final String name, final String descriptor, final Instruction... instructions) {
         return new MethodInfo(
             0,
@@ -14564,23 +14755,77 @@ final class CoreBehaviorTest {
             "javan_root_frame_push(javan_roots_pick_symbol, 2);",
             "javan_gc_safe_point();",
             "void* javan_return_value = tmp;",
-            "javan_generated_return_root = javan_return_value;",
+            "javan_runtime_lock_enter();",
+            "*result = javan_return_value;",
+            "javan_runtime_lock_leave();",
             "javan_gc_safe_point();",
             "javan_root_frame_pop(javan_roots_pick_symbol);",
-            "javan_generated_return_root = 0;",
-            "return javan_return_value;"
+            "return;"
         );
-        assertThat(generated).doesNotContain("(void**) &count", "(void**) &index");
+        assertThat(generated).doesNotContain(
+            "(void**) &count",
+            "(void**) &index",
+            "javan_generated_return_root"
+        );
         assertThat(generated.indexOf("javan_root_frame_push(javan_roots_pick_symbol, 2);"))
             .isLessThan(generated.indexOf("javan_gc_safe_point();"));
         assertThat(generated.indexOf("javan_gc_safe_point();"))
             .isLessThan(generated.indexOf("void* javan_return_value = tmp;"));
         assertThat(generated.indexOf("void* javan_return_value = tmp;"))
-            .isLessThan(generated.indexOf("javan_generated_return_root = javan_return_value;"));
-        assertThat(generated.indexOf("javan_generated_return_root = javan_return_value;"))
+            .isLessThan(generated.indexOf("*result = javan_return_value;"));
+        assertThat(generated.indexOf("*result = javan_return_value;"))
             .isLessThan(generated.indexOf("javan_root_frame_pop(javan_roots_pick_symbol);"));
-        assertThat(generated.indexOf("javan_root_frame_pop(javan_roots_pick_symbol);"))
-            .isLessThan(generated.lastIndexOf("javan_generated_return_root = 0;"));
+    }
+
+    @Test
+    void cCodegenDoesNotHoldTheRuntimeLockAcrossOpaqueBlockingObjectCalls() throws Exception {
+        final IrFunction function = new IrFunction(
+            "com/acme/Main",
+            "main",
+            "()V",
+            "main_symbol",
+            IrType.VOID,
+            List.of(),
+            List.of(
+                new IrLocal(IrType.OBJECT, "server"),
+                new IrLocal(IrType.OBJECT, "accepted"),
+                new IrLocal(IrType.OBJECT, "reference"),
+                new IrLocal(IrType.OBJECT, "current")
+            ),
+            List.of(
+                IrInstruction.assignObject(
+                    "accepted",
+                    IrExpression.objectCall(
+                        "javan_server_socket_accept",
+                        List.of(IrExpression.objectLocal("server"))
+                    )
+                ),
+                IrInstruction.assignObject(
+                    "current",
+                    IrExpression.objectCall(
+                        "javan_atomic_reference_get",
+                        List.of(IrExpression.objectLocal("reference"))
+                    )
+                ),
+                IrInstruction.returnVoid()
+            )
+        );
+        final IrProgram program = new IrProgram(List.of(), List.of(function), "main_symbol");
+
+        final String generated = Files.readString(new CCodegen().generate(program, tempDir));
+
+        assertThat(generated).contains(
+            "javan_root_frame_push(javan_expr_roots, 1);\n"
+                + "        javan_expr_tmp_0 = javan_server_socket_accept(server);\n"
+                + "        javan_runtime_lock_enter();\n"
+                + "        accepted = javan_expr_tmp_0;",
+            "javan_root_frame_push(javan_expr_roots, 1);\n"
+                + "        javan_runtime_lock_enter();\n"
+                + "        javan_expr_tmp_0 = javan_atomic_reference_get(reference);\n"
+                + "        javan_runtime_lock_leave();\n"
+                + "        javan_runtime_lock_enter();\n"
+                + "        current = javan_expr_tmp_0;"
+        );
     }
 
     @Test
@@ -14614,28 +14859,22 @@ final class CoreBehaviorTest {
 
         assertThat(generated).contains(
             "void* arg0_array = 0;",
+            "void* javan_export_object_result = 0;",
             "void** javan_export_roots[] = {",
-            "(void**) &arg0_array",
-            "javan_root_frame_push(javan_export_roots, 1);",
-            "arg0_array = javan_byte_array_from(arg0.data, arg0.length);",
-            "void* javan_export_object_result = javan_com_acme_Bytes_echo___B__B(arg0_array);",
-            "void** javan_export_result_roots[] = {",
+            "(void**) &arg0_array,",
             "(void**) &javan_export_object_result",
-            "javan_root_frame_push(javan_export_result_roots, 1);",
+            "javan_root_frame_push(javan_export_roots, 2);",
+            "arg0_array = javan_byte_array_from(arg0.data, arg0.length);",
+            "javan_com_acme_Bytes_echo___B__B((void**) &javan_export_object_result, arg0_array);",
             "JavanByteArray javan_export_result = javan_byte_array_export(javan_export_object_result);",
-            "javan_root_frame_pop(javan_export_result_roots);",
             "javan_root_frame_pop(javan_export_roots);",
             "return javan_export_result;"
         );
-        assertThat(generated.indexOf("javan_root_frame_push(javan_export_roots, 1);"))
+        assertThat(generated.indexOf("javan_root_frame_push(javan_export_roots, 2);"))
             .isLessThan(generated.indexOf("arg0_array = javan_byte_array_from(arg0.data, arg0.length);"));
-        assertThat(generated.indexOf("void* javan_export_object_result = javan_com_acme_Bytes_echo___B__B(arg0_array);"))
-            .isLessThan(generated.indexOf("javan_root_frame_push(javan_export_result_roots, 1);"));
-        assertThat(generated.indexOf("javan_root_frame_push(javan_export_result_roots, 1);"))
+        assertThat(generated.indexOf("javan_com_acme_Bytes_echo___B__B((void**) &javan_export_object_result, arg0_array);"))
             .isLessThan(generated.indexOf("javan_byte_array_export"));
         assertThat(generated.indexOf("javan_byte_array_export"))
-            .isLessThan(generated.indexOf("javan_root_frame_pop(javan_export_result_roots);"));
-        assertThat(generated.indexOf("javan_root_frame_pop(javan_export_result_roots);"))
             .isLessThan(generated.indexOf("javan_root_frame_pop(javan_export_roots);"));
         assertThat(generated).doesNotContain("javan_free(arg0_array);");
     }
@@ -14674,30 +14913,24 @@ final class CoreBehaviorTest {
 
         assertThat(generated).contains(
             "void* arg0_string = 0;",
+            "void* javan_export_object_result = 0;",
             "void** javan_export_roots[] = {",
-            "(void**) &arg0_string",
-            "javan_root_frame_push(javan_export_roots, 1);",
-            "arg0_string = javan_string_from(arg0);",
-            "void* javan_export_object_result = javan_com_acme_Text_greet__Ljava_lang_String__Ljava_lang_String_(arg0_string);",
-            "void** javan_export_result_roots[] = {",
+            "(void**) &arg0_string,",
             "(void**) &javan_export_object_result",
-            "javan_root_frame_push(javan_export_result_roots, 1);",
+            "javan_root_frame_push(javan_export_roots, 2);",
+            "arg0_string = javan_string_from(arg0);",
+            "javan_com_acme_Text_greet__Ljava_lang_String__Ljava_lang_String_((void**) &javan_export_object_result, arg0_string);",
             "char* javan_export_result = javan_string_export((const char*) javan_export_object_result);",
-            "javan_root_frame_pop(javan_export_result_roots);",
             "javan_root_frame_pop(javan_export_roots);",
             "return javan_export_result;"
         );
-        assertThat(generated.indexOf("javan_root_frame_push(javan_export_roots, 1);"))
+        assertThat(generated.indexOf("javan_root_frame_push(javan_export_roots, 2);"))
             .isLessThan(generated.indexOf("arg0_string = javan_string_from(arg0);"));
         assertThat(generated.indexOf("arg0_string = javan_string_from(arg0);"))
-            .isLessThan(generated.indexOf("void* javan_export_object_result = javan_com_acme_Text_greet__Ljava_lang_String__Ljava_lang_String_(arg0_string);"));
-        assertThat(generated.indexOf("void* javan_export_object_result = javan_com_acme_Text_greet__Ljava_lang_String__Ljava_lang_String_(arg0_string);"))
-            .isLessThan(generated.indexOf("javan_root_frame_push(javan_export_result_roots, 1);"));
-        assertThat(generated.indexOf("javan_root_frame_push(javan_export_result_roots, 1);"))
+            .isLessThan(generated.indexOf("javan_com_acme_Text_greet__Ljava_lang_String__Ljava_lang_String_((void**) &javan_export_object_result, arg0_string);"));
+        assertThat(generated.indexOf("javan_com_acme_Text_greet__Ljava_lang_String__Ljava_lang_String_((void**) &javan_export_object_result, arg0_string);"))
             .isLessThan(generated.indexOf("javan_string_export"));
         assertThat(generated.indexOf("javan_string_export"))
-            .isLessThan(generated.indexOf("javan_root_frame_pop(javan_export_result_roots);"));
-        assertThat(generated.indexOf("javan_root_frame_pop(javan_export_result_roots);"))
             .isLessThan(generated.indexOf("javan_root_frame_pop(javan_export_roots);"));
     }
 
@@ -14821,16 +15054,17 @@ final class CoreBehaviorTest {
             "struct javan_class_com_acme_Empty",
             "int _javan_type_id;",
             "char _javan_empty;",
-            "void* message_text(void)",
+            "void message_text(void** result)",
             "javan_expr_tmp_0 = javan_new_com_acme_Message();",
             "message = javan_expr_tmp_0;",
             "((struct javan_class_com_acme_Message*) message)->field_text = (void*) \"hello\";",
             "javan_expr_tmp_0 = ((struct javan_class_com_acme_Message*) message)->field_text;",
             "javan_println_object_value(javan_expr_tmp_0);",
             "void* javan_return_value = (void*) \"returned\";",
-            "javan_generated_return_root = javan_return_value;",
-            "return javan_return_value;"
+            "*result = javan_return_value;",
+            "return;"
         );
+        assertThat(generated).doesNotContain("javan_generated_return_root");
     }
 
     @Test
@@ -14885,21 +15119,21 @@ final class CoreBehaviorTest {
             "static long long dispatch_long(void* self)",
             "static float dispatch_float(void* self)",
             "static double dispatch_double(void* self)",
-            "static void* dispatch_object(void* self)",
+            "static void dispatch_object(void** result, void* self)",
             "switch (((struct javan_object_header*) self)->_javan_type_id)",
             "a_void(self); return;",
             "return a_int(self);",
             "return a_long(self);",
             "return a_float(self);",
             "return a_double(self);",
-            "return a_object(self);",
+            "a_object(result, self); return;",
             "return;",
             "return 0;",
             "return 0LL;",
             "return 0.0f;",
-            "return 0.0;",
-            "return (void*) 0;"
+            "return 0.0;"
         );
+        assertThat(generated).doesNotContain("*result = (void*) 0;");
     }
 
     @Test
@@ -15116,5 +15350,173 @@ final class CoreBehaviorTest {
     void methodDescriptorParsesObjectAndArrayReturns() {
         assertThat(MethodDescriptor.parse("()Ljava/lang/String;").returnType()).isEqualTo(IrType.OBJECT);
         assertThat(MethodDescriptor.parse("()[Ljava/lang/String;").returnType()).isEqualTo(IrType.OBJECT);
+    }
+
+    @Test
+    void cCodegenPublishesArrayCopiesIntoRootedExpressionTemporaries() throws Exception {
+        final IrFunction copyFunction = new IrFunction(
+            "com/acme/Arrays",
+            "copy",
+            "([I)[I",
+            "copy_array_symbol",
+            IrType.OBJECT,
+            List.of(new IrParameter(IrType.OBJECT, "source")),
+            List.of(),
+            List.of(IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_arrays_copy_of_int",
+                List.of(
+                    IrExpression.objectLocal("source"),
+                    IrExpression.arrayLength(IrExpression.objectLocal("source"))
+                )
+            )))
+        );
+        final IrFunction rangeFunction = new IrFunction(
+            "com/acme/Arrays",
+            "range",
+            "([B)[B",
+            "copy_range_symbol",
+            IrType.OBJECT,
+            List.of(new IrParameter(IrType.OBJECT, "source")),
+            List.of(),
+            List.of(IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_arrays_copy_of_range_byte",
+                List.of(
+                    IrExpression.objectLocal("source"),
+                    IrExpression.intLiteral(0),
+                    IrExpression.intLiteral(1)
+                )
+            )))
+        );
+        final IrProgram program = new IrProgram(
+            List.of(),
+            List.of(copyFunction, rangeFunction),
+            "copy_array_symbol"
+        );
+
+        final String generated = Files.readString(new CCodegen().generate(program, tempDir));
+
+        assertThat(generated).contains(
+            "void* javan_expr_tmp_0 = 0;",
+            "(void**) &javan_expr_tmp_0",
+            "javan_root_frame_push(javan_expr_roots, 1);",
+            "javan_arrays_copy_of_int_into((void**) &javan_expr_tmp_0, source, javan_array_length(source));",
+            "void* javan_return_value = javan_expr_tmp_0;",
+            "javan_expr_tmp_0 = javan_arrays_copy_of_range_byte(source, 0, 1);"
+        );
+        assertThat(generated).doesNotContain(
+            "javan_expr_tmp_0 = javan_arrays_copy_of_int(source, javan_array_length(source));",
+            "javan_arrays_copy_of_range_byte_into"
+        );
+        assertThat(generated.indexOf("javan_root_frame_push(javan_expr_roots, 1);"))
+            .isLessThan(generated.indexOf("javan_arrays_copy_of_int_into((void**) &javan_expr_tmp_0"));
+    }
+
+    @Test
+    void cCodegenEmitsObjectCloneHelpersOnlyWhenUsed() throws Exception {
+        final IrClass cloneableClass = new IrClass(
+            "com/acme/Box",
+            "javan_class_com_acme_Box",
+            List.of(
+                new IrField(IrType.INT, "baseCount", "field_javan_super_0"),
+                new IrField(IrType.OBJECT, "payload", "field_javan_super_1"),
+                new IrField(IrType.OBJECT, "label", "field_label")
+            ),
+            List.of(),
+            List.of(),
+            true
+        );
+        final IrClass nonCloneableClass = new IrClass(
+            "com/acme/Other",
+            "javan_class_com_acme_Other",
+            List.of(),
+            List.of(),
+            List.of(),
+            false
+        );
+        final IrFunction noCloneFunction = new IrFunction(
+            "com/acme/Main",
+            "main",
+            "([Ljava/lang/String;)V",
+            "main_symbol",
+            IrType.VOID,
+            List.of(),
+            List.of(),
+            List.of(IrInstruction.returnVoid())
+        );
+        final IrProgram noCloneProgram = new IrProgram(
+            List.of(cloneableClass),
+            List.of(noCloneFunction),
+            "main_symbol"
+        );
+
+        final String noCloneGenerated = Files.readString(new CCodegen().generate(noCloneProgram, tempDir));
+
+        assertThat(noCloneGenerated).doesNotContain("javan_generated_object_clone", "javan_clone_com_acme_Box");
+
+        final IrFunction cloneFunction = new IrFunction(
+            "com/acme/Box",
+            "copy",
+            "()Ljava/lang/Object;",
+            "copy_symbol",
+            IrType.OBJECT,
+            List.of(new IrParameter(IrType.OBJECT, "self")),
+            List.of(),
+            List.of(IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_generated_object_clone",
+                List.of(IrExpression.objectLocal("self"))
+            )))
+        );
+        final IrProgram cloneProgram = new IrProgram(
+            List.of(cloneableClass, nonCloneableClass),
+            List.of(cloneFunction),
+            "copy_symbol"
+        );
+
+        final String cloneGenerated = Files.readString(new CCodegen().generate(cloneProgram, tempDir));
+
+        assertThat(cloneGenerated).contains(
+            "static void javan_generated_object_clone(void** result, void* value);",
+            "static void javan_clone_com_acme_Box(void** result, void* value) {",
+            "\tif (result == 0) {",
+            "\t\tjavan_panic(\"invalid object clone result\");",
+            "\tstruct javan_class_com_acme_Box* source = (struct javan_class_com_acme_Box*) value;",
+            "\tstruct javan_class_com_acme_Box* copy = (struct javan_class_com_acme_Box*) 0;",
+            "\tvoid** javan_clone_roots[] = {",
+            "\t\t(void**) &source,",
+            "\t\tresult",
+            "\t};",
+            "\tjavan_root_frame_push(javan_clone_roots, 2);",
+            "\tjavan_runtime_lock_enter();",
+            "\t*result = javan_new_com_acme_Box();",
+            "\tcopy = (struct javan_class_com_acme_Box*) *result;",
+            "\tcopy->field_javan_super_0 = source->field_javan_super_0;",
+            "\tcopy->field_javan_super_1 = source->field_javan_super_1;",
+            "\tcopy->field_label = source->field_label;",
+            "\tjavan_runtime_lock_leave();",
+            "\tjavan_root_frame_pop(javan_clone_roots);",
+            "javan_generated_object_clone((void**) &javan_expr_tmp_0, self);",
+            "\tif (header->_javan_runtime_state != 0 || header->_javan_runtime_kind != 0) {",
+            "\t\tjavan_panic(\"runtime-attached object clone is not supported\");",
+            "\t\tcase 1:",
+            "\t\t\tjavan_clone_com_acme_Box(result, value);",
+            "\t\t\treturn;",
+            "\t\tdefault:",
+            "\t\t\tjavan_panic(\"CloneNotSupportedException\");"
+        );
+        assertThat(cloneGenerated).doesNotContain("\t*result = (void*) 0;");
+        assertThat(cloneGenerated.indexOf("\tjavan_root_frame_push(javan_clone_roots, 2);"))
+            .isLessThan(cloneGenerated.indexOf("\tjavan_runtime_lock_enter();"));
+        assertThat(cloneGenerated.indexOf("\tjavan_runtime_lock_enter();"))
+            .isLessThan(cloneGenerated.indexOf("\t*result = javan_new_com_acme_Box();"));
+        assertThat(cloneGenerated.indexOf("\tcopy->field_javan_super_0 = source->field_javan_super_0;"))
+            .isLessThan(cloneGenerated.indexOf("\tjavan_runtime_lock_leave();"));
+        assertThat(cloneGenerated.indexOf("\tcopy->field_javan_super_1 = source->field_javan_super_1;"))
+            .isLessThan(cloneGenerated.indexOf("\tjavan_runtime_lock_leave();"));
+        assertThat(cloneGenerated.indexOf("\tcopy->field_label = source->field_label;"))
+            .isLessThan(cloneGenerated.indexOf("\tjavan_runtime_lock_leave();"));
+        assertThat(cloneGenerated.indexOf("\tjavan_runtime_lock_leave();"))
+            .isLessThan(cloneGenerated.indexOf("\tjavan_root_frame_pop(javan_clone_roots);"));
+        assertThat(cloneGenerated.indexOf("javan_root_frame_push(javan_expr_roots, 1);"))
+            .isLessThan(cloneGenerated.indexOf("javan_generated_object_clone((void**) &javan_expr_tmp_0, self);"));
     }
 }

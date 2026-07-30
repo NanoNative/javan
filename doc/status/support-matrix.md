@@ -9,8 +9,8 @@ External project names do not belong in this matrix; this ledger stays compiler-
 
 | Measure | Count |
 | --- | ---: |
-| rows | 300 |
-| pass | 300 |
+| rows | 302 |
+| pass | 302 |
 | scoped | 0 |
 | target | 0 |
 | rejected | 0 |
@@ -72,7 +72,9 @@ Status mapping:
 | `long-array` | pass |
 | `primitive-array-variants` | pass |
 | `object-array-clone` | pass |
-| `int-array-clone` | pass |
+| `primitive-array-clone` | pass |
+| `generated-object-clone-single-threaded` | pass |
+| `generated-object-clone-concurrent-return-handoff` | pass |
 | `main-args` | pass |
 | `jar-output` | pass |
 | `jar-main-manifest` | pass |

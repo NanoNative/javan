@@ -25,6 +25,28 @@ The Maven build writes `target/jacoco-surefire.exec`, instruments child `java ..
 runs into `target/jacoco-child/*.exec`, merges them into `target/jacoco-merged.exec`, and
 runs report/check from that merged file.
 
+## Generated Compatibility Status
+
+Full `mvn verify` on JDK 25 runs the canonical `javan compat` command against the already
+compiled `target/classes` tree. A different Java feature release fails before generation so
+it cannot silently rewrite versioned matrix keys. The lifecycle always synchronizes:
+
+- `doc/status/support-matrix.md`
+- `doc/status/support-matrix.json`
+
+The lifecycle also synchronizes `doc/status/jdk-compatibility.md` when Maven runs in the
+reference environment recorded in `pom.xml`: Eclipse Temurin 25.0.1 on Linux x64. If any
+tracked status file in scope was stale, verification writes it and fails once with the
+changed paths and an instruction to review them and rerun `mvn verify`. The repeat run must
+pass.
+
+Every JDK 25 run still generates its active environment report under `target/.javan/` and
+`target/classes/doc/status/`. A non-reference vendor or patch leaves the tracked JDK snapshot
+unchanged, avoiding machine-dependent churn. The dedicated `verify-compatibility-status` CI
+job provisions and requires the exact reference environment before running the same Maven
+lifecycle. Metadata drift fails closed instead of silently skipping the JDK snapshot. There
+is no separate render, copy, or comparison command for contributors to remember.
+
 JUnit parallel execution is enabled by default through `src/test/resources/junit-platform.properties`.
 Tests run concurrently unless they opt into `@Execution(SAME_THREAD)`, `@Isolated`, or a
 `@ResourceLock`. Any test that mutates global JVM state such as `System` properties, shared
@@ -58,7 +80,7 @@ Current state after the latest verified run:
   descriptor coverage, Optional instance-helper coverage, concrete `HashMap` helper coverage,
   PrintStream receiver-branch coverage, boolean/float/double instance-field coverage, and
   unsupported PrintStream/field descriptor diagnostics, unsupported collection and empty-stack
-  diagnostics, array clone variant coverage, StringBuilder lowering coverage, exact unsupported JDK
+  diagnostics, array and generated-object clone variant coverage, StringBuilder lowering coverage, exact unsupported JDK
   branch diagnostics, print-stream object coercion, static-field lookup diagnostics, wrong-kind call
   argument and return stack diagnostics, primitive empty-return stack diagnostics, shared call-result
   lowering, complete multi-target interface dispatch return-type coverage, PrintStream receiver

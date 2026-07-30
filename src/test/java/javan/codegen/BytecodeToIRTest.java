@@ -144,7 +144,7 @@ final class BytecodeToIRTest {
             "com/acme/Model",
             "java/lang/Object",
             0,
-            List.of(),
+            List.of("java/lang/Cloneable"),
             List.of(
                 new FieldInfo(0, "count", "I"),
                 new FieldInfo(0, "total", "J"),
@@ -174,7 +174,8 @@ final class BytecodeToIRTest {
                     new IrField(IrType.DOUBLE, "exact", "field_exact"),
                     new IrField(IrType.OBJECT, "READY", "field_READY")
                 ),
-                List.of("READY")
+                List.of("READY"),
+                true
             ),
             new IrClass(
                 "com/acme/Zeta",
@@ -184,6 +185,70 @@ final class BytecodeToIRTest {
                 List.of()
             )
         );
+    }
+
+    @Test
+    void lowersInheritedInstanceFieldsIntoConcreteClassLayout() {
+        final MethodInfo main = method(0x0008, "main", "()V", 0, 0, plain(0, 177, "return"));
+        final ClassFile marker = classFile(
+            "com/acme/CopyMarker",
+            "java/lang/Object",
+            0x0200,
+            List.of("java/lang/Cloneable"),
+            List.of(),
+            List.of()
+        );
+        final ClassFile base = classFile(
+            "com/acme/Base",
+            "java/lang/Object",
+            0,
+            List.of("com/acme/CopyMarker"),
+            List.of(
+                new FieldInfo(0, "value", "I"),
+                new FieldInfo(0, "payload", "Ljava/lang/Object;")
+            ),
+            List.of()
+        );
+        final ClassFile middle = classFile(
+            "com/acme/Middle",
+            "com/acme/Base",
+            0,
+            List.of(),
+            List.of(
+                new FieldInfo(0, "value", "I"),
+                new FieldInfo(0, "value_javan_super_0", "I"),
+                new FieldInfo(0, "total", "J")
+            ),
+            List.of()
+        );
+        final ClassFile leaf = classFile(
+            "com/acme/Leaf",
+            "com/acme/Middle",
+            0,
+            List.of(),
+            List.of(
+                new FieldInfo(0, "ratio", "D"),
+                new FieldInfo(0, "label", "Ljava/lang/String;")
+            ),
+            List.of()
+        );
+
+        final IrProgram program = lowerProgram(main, marker, base, middle, leaf);
+
+        final IrClass loweredLeaf = program.classes().stream()
+            .filter(candidate -> "com/acme/Leaf".equals(candidate.jvmName()))
+            .findFirst()
+            .orElseThrow();
+        assertThat(loweredLeaf.fields()).containsExactly(
+            new IrField(IrType.INT, "value", "field_value_javan_super_1"),
+            new IrField(IrType.OBJECT, "payload", "field_payload"),
+            new IrField(IrType.INT, "value", "field_value"),
+            new IrField(IrType.INT, "value_javan_super_0", "field_value_javan_super_0"),
+            new IrField(IrType.LONG, "total", "field_total"),
+            new IrField(IrType.DOUBLE, "ratio", "field_ratio"),
+            new IrField(IrType.OBJECT, "label", "field_label")
+        );
+        assertThat(loweredLeaf.cloneable()).isTrue();
     }
 
     @Test
@@ -19187,26 +19252,105 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersObjectCloneToGeneratedCloneHelper() {
+        final MethodInfo copy = method(
+            0x0000,
+            "copy",
+            "()Ljava/lang/Object;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeSpecial(1, new MethodRef("java/lang/Object", "clone", "()Ljava/lang/Object;")),
+            plain(2, 176, "areturn")
+        );
+        final ClassFile box = classFile(
+            "com/acme/Box",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Cloneable"),
+            List.of(),
+            List.of(copy)
+        );
+
+        final IrFunction function = lowerProgram("com/acme/Box", copy, box).functions().getFirst();
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_generated_object_clone",
+                List.of(IrExpression.objectLocal("self"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersObjectCloneDeclaredByNonCloneableBaseForCloneableSubtype() {
+        final MethodInfo copy = method(
+            0x0000,
+            "copy",
+            "()Ljava/lang/Object;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeSpecial(1, new MethodRef("java/lang/Object", "clone", "()Ljava/lang/Object;")),
+            plain(2, 176, "areturn")
+        );
+        final ClassFile base = classFile(
+            "com/acme/Base",
+            "java/lang/Object",
+            0,
+            List.of(),
+            List.of(),
+            List.of(copy)
+        );
+        final ClassFile child = classFile(
+            "com/acme/Child",
+            base.name(),
+            0,
+            List.of("java/lang/Cloneable"),
+            List.of(),
+            List.of()
+        );
+
+        final IrProgram program = lowerProgram("com/acme/Base", copy, base, child);
+
+        assertThat(program.functions().getFirst().instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_generated_object_clone",
+                List.of(IrExpression.objectLocal("self"))
+            ))
+        );
+        assertThat(program.classes())
+            .filteredOn(irClass -> irClass.jvmName().equals("com/acme/Child"))
+            .singleElement()
+            .satisfies(irClass -> assertThat(irClass.cloneable()).isTrue());
+    }
+
+    @Test
+    void rejectsObjectCloneWithoutCloneableMarker() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0000,
+            "copy",
+            "()Ljava/lang/Object;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeSpecial(1, new MethodRef("java/lang/Object", "clone", "()Ljava/lang/Object;")),
+            plain(2, 176, "areturn")
+        )))
+            .isInstanceOf(DiagnosticException.class)
+            .hasMessageContaining("error[JAVAN050]: Object.clone requires a supported Cloneable class")
+            .hasMessageContaining("Class:\n  com/acme/Main")
+            .hasMessageContaining("Method:\n  copy()Ljava/lang/Object;");
+    }
+
+    @Test
     void lowersNestedPrimitiveArrayCloneToCopyOfObjectHelper() {
         assertArrayCloneLowering("([[I)[[I", "[[I", "javan_arrays_copy_of_object");
     }
 
     @Test
-    void rejectsBooleanArrayCloneUntilRuntimeHelperExists() {
-        assertThatThrownBy(() -> lowerMain(method(
-            0x0008,
-            "main",
-            "([Z)[Z",
-            1,
-            1,
-            plain(0, 42, "aload_0"),
-            invokeVirtual(1, new MethodRef("[Z", "clone", "()Ljava/lang/Object;")),
-            plain(2, 176, "areturn")
-        )))
-            .isInstanceOf(DiagnosticException.class)
-            .hasMessageContaining("error[JAVAN044]: array clone type is not supported")
-            .hasMessageContaining("[Z.clone()Ljava/lang/Object;")
-            .hasMessageContaining("The runtime does not have a clone helper for this array kind yet.");
+    void lowersBooleanArrayCloneToCopyOfBooleanHelper() {
+        assertArrayCloneLowering("([Z)[Z", "[Z", "javan_arrays_copy_of_boolean");
     }
 
     @Test

@@ -165,6 +165,8 @@ final class RuntimeHeaderFile {
         void javan_register_static_roots(void*** roots, int count);
         void javan_root_frame_push(void*** roots, int count);
         void javan_root_frame_pop(void*** roots);
+        void javan_runtime_lock_enter(void);
+        void javan_runtime_lock_leave(void);
         void javan_register_object(void* value, int type_id);
         void javan_validate_heap_metadata(void);
         void javan_gc_safe_point(void);
@@ -219,6 +221,15 @@ final class RuntimeHeaderFile {
         int javan_char_array_get(void* array, int index);
         void javan_char_array_set(void* array, int index, int value);
         int javan_array_length(void* array);
+        void javan_arrays_copy_of_object_into(void** result, void* array, int new_length);
+        void javan_arrays_copy_of_boolean_into(void** result, void* array, int new_length);
+        void javan_arrays_copy_of_int_into(void** result, void* array, int new_length);
+        void javan_arrays_copy_of_long_into(void** result, void* array, int new_length);
+        void javan_arrays_copy_of_float_into(void** result, void* array, int new_length);
+        void javan_arrays_copy_of_double_into(void** result, void* array, int new_length);
+        void javan_arrays_copy_of_byte_into(void** result, void* array, int new_length);
+        void javan_arrays_copy_of_short_into(void** result, void* array, int new_length);
+        void javan_arrays_copy_of_char_into(void** result, void* array, int new_length);
         void* javan_arrays_copy_of_object(void* array, int new_length);
         void* javan_arrays_copy_of_boolean(void* array, int new_length);
         void* javan_arrays_copy_of_int(void* array, int new_length);
