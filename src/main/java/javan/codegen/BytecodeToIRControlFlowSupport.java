@@ -467,9 +467,19 @@ final class BytecodeToIRControlFlowSupport {
         final StackKind valueKind = targetValue.kind();
         final IrType valueType = stackKindType(valueKind);
         final String localName = "branchValue" + localDeclarations.size() + "_" + instruction.offset();
+        final String targetLabel = valueLabel(
+            "branch_value_target_",
+            instruction.offset(),
+            localName,
+            localDeclarations
+        );
+        final String doneLabel = valueLabel(
+            "branch_value_done_",
+            instruction.offset(),
+            localName,
+            localDeclarations
+        );
         localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(valueType, localName));
-        final String targetLabel = "branch_value_target_" + instruction.offset();
-        final String doneLabel = "branch_value_done_" + instruction.offset();
         instructions.add(IrInstruction.branchIf(targetLabel, condition));
         if (hasEarlierBranchTarget(bytecode, index, elseOffset)) {
             instructions.add(IrInstruction.label(label(elseOffset)));
@@ -1097,6 +1107,20 @@ final class BytecodeToIRControlFlowSupport {
             }
         }
         return false;
+    }
+    static String valueLabel(
+        final String prefix,
+        final int bytecodeOffset,
+        final String localName,
+        final Map<Integer, IrLocal> localDeclarations
+    ) {
+        final String marker = "_" + bytecodeOffset;
+        for (final IrLocal local : localDeclarations.values()) {
+            if (local.name().startsWith("branchValue") && local.name().endsWith(marker)) {
+                return prefix + bytecodeOffset + "_" + localName;
+            }
+        }
+        return prefix + bytecodeOffset;
     }
     static boolean hasOnlyTargetBranches(
         final List<Instruction> bytecode,

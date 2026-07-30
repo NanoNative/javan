@@ -3580,7 +3580,7 @@ public final class StaticVerifier {
             return false;
         }
         final DynamicRef dynamicRef = instruction.dynamicRef().orElseThrow();
-        if (!supportedStringConcat(dynamicRef)
+        if (!"java/lang/invoke/StringConcatFactory".equals(dynamicRef.bootstrapOwner())
             || !"makeConcatWithConstants".equals(dynamicRef.bootstrapName())
             || dynamicRef.bootstrapArgumentDetails().isEmpty()) {
             return false;

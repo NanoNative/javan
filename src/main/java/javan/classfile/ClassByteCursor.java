@@ -185,7 +185,9 @@ public final class ClassByteCursor {
             if (first <= 0x7F) {
                 final boolean nul = first == 0;
                 chars[charIndex] = nul ? '\uFFFD' : (char) first;
-                containsNul = containsNul || nul;
+                if (nul) {
+                    containsNul = true;
+                }
                 charIndex++;
                 byteIndex++;
             } else if ((first >> 4) == 12 || (first >> 4) == 13) {
@@ -199,7 +201,9 @@ public final class ClassByteCursor {
                 final char decoded = (char) (((first & 0x1F) << 6) | (second & 0x3F));
                 final boolean nul = decoded == 0;
                 chars[charIndex] = nul ? '\uFFFD' : decoded;
-                containsNul = containsNul || nul;
+                if (nul) {
+                    containsNul = true;
+                }
                 charIndex++;
                 byteIndex += 2;
             } else if ((first >> 4) == 14) {
@@ -214,7 +218,9 @@ public final class ClassByteCursor {
                 final char decoded = (char) (((first & 0x0F) << 12) | ((second & 0x3F) << 6) | (third & 0x3F));
                 final boolean nul = decoded == 0;
                 chars[charIndex] = nul ? '\uFFFD' : decoded;
-                containsNul = containsNul || nul;
+                if (nul) {
+                    containsNul = true;
+                }
                 charIndex++;
                 byteIndex += 3;
             } else {

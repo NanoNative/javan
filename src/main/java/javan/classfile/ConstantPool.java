@@ -79,9 +79,8 @@ public final class ConstantPool {
     public boolean stringContainsNul(final int index) {
         final Object entry = entries[index];
         if (entry instanceof StringEntry stringEntry) {
-            return utf8Entry(stringEntry.stringIndex())
-                .map(Utf8Entry::containsNul)
-                .orElse(false);
+            final Optional<Utf8Entry> utf8 = utf8Entry(stringEntry.stringIndex());
+            return utf8.isPresent() && utf8.orElseThrow().containsNul();
         }
         return entry instanceof Utf8Entry utf8Entry && utf8Entry.containsNul();
     }
@@ -440,7 +439,10 @@ public final class ConstantPool {
 
     private Optional<Utf8Entry> utf8Entry(final int index) {
         final Object entry = entry(index);
-        return entry instanceof Utf8Entry utf8Entry ? Optional.of(utf8Entry) : Optional.empty();
+        if (entry instanceof Utf8Entry utf8Entry) {
+            return Optional.of(utf8Entry);
+        }
+        return Optional.empty();
     }
 
     private Object entry(final int index) {
