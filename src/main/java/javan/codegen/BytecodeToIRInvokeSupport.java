@@ -42,13 +42,13 @@ final class BytecodeToIRInvokeSupport {
     private static final int ARRAYS_FILL_STATUS_NULL = 1;
     private static final int ARRAYS_FILL_STATUS_INVERTED_RANGE = 2;
     private static final MethodRef RUNNABLE_RUN = new MethodRef("java/lang/Runnable", "run", "()V");
-    private static final String MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL = "javan_materialized_lambda_apply_object";
-    private static final String MATERIALIZED_LAMBDA_LONG_OBJECT_APPLY_SYMBOL = "javan_materialized_lambda_apply_long_object";
-    private static final String MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL = "javan_materialized_lambda_apply_object2";
-    private static final String MATERIALIZED_LAMBDA_SUPPLIER_APPLY_SYMBOL = "javan_materialized_lambda_apply_supplier";
-    private static final String MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL = "javan_materialized_lambda_apply_boolean";
-    private static final String MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL = "javan_materialized_lambda_apply_void";
-    private static final String MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL = "javan_materialized_lambda_apply_void2";
+    static final String MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL = "javan_materialized_lambda_apply_object";
+    static final String MATERIALIZED_LAMBDA_LONG_OBJECT_APPLY_SYMBOL = "javan_materialized_lambda_apply_long_object";
+    static final String MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL = "javan_materialized_lambda_apply_object2";
+    static final String MATERIALIZED_LAMBDA_SUPPLIER_APPLY_SYMBOL = "javan_materialized_lambda_apply_supplier";
+    static final String MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL = "javan_materialized_lambda_apply_boolean";
+    static final String MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL = "javan_materialized_lambda_apply_void";
+    static final String MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL = "javan_materialized_lambda_apply_void2";
     private static final String MATERIALIZED_LAMBDA_NEW_SYMBOL = "javan_materialized_lambda_new";
     private static final String MATERIALIZED_LAMBDA_NEW_WITH_CAPTURES_SYMBOL = "javan_materialized_lambda_new_with_captures";
     private static final String MATERIALIZED_LAMBDA_IS_INSTANCE_SYMBOL = "javan_materialized_lambda_is_instance";
@@ -833,7 +833,14 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if (isPlatformThrowableGetMessage(methodRef)) {
-            stack.add(StackValue.objectExpression(popObject(classFile, method, stack)));
+            final StackValue receiver = popObjectValue(classFile, method, instruction, stack);
+            final IrExpression message = receiver.kind() == StackKind.CAUGHT_THROWABLE
+                ? IrExpression.objectCall(
+                    "javan_caught_throwable_message",
+                    List.of(receiver.expression().orElseThrow())
+                )
+                : receiver.expression().orElseThrow();
+            stack.add(StackValue.objectExpression(message));
             return;
         }
         if (isConcreteExactCallTarget(classes, methodRef.owner())) {
@@ -1674,6 +1681,13 @@ final class BytecodeToIRInvokeSupport {
             popObject(classFile, method, stack);
             return;
         }
+        if (JdkCallSupport.isPlatformThrowableCauseConstructor(methodRef)) {
+            popObjectValue(classFile, method, instruction, stack);
+            final IrExpression message = popObject(classFile, method, instruction, stack);
+            popObject(classFile, method, instruction, stack);
+            updatePendingThrowableMessage(stack, message);
+            return;
+        }
         if (lowerObjectClone(classes, classFile, method, methodRef, stack)) {
             return;
         }
@@ -1682,10 +1696,6 @@ final class BytecodeToIRInvokeSupport {
             ? List.of()
             : popArguments(classFile, method, stack, descriptor);
         final IrExpression receiver = popObject(classFile, method, stack);
-        if (JdkCallSupport.isMatchExceptionCauseConstructor(methodRef)) {
-            updatePendingThrowableMessage(stack, arguments.getFirst());
-            return;
-        }
         if (isPlatformThrowableStringConstructor(methodRef)) {
             updatePendingThrowableMessage(stack, arguments.getFirst());
             return;
@@ -2324,11 +2334,79 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         if ("toIntExact".equals(methodRef.name()) && "(J)I".equals(methodRef.descriptor())) {
-            stack.add(StackValue.intExpression(IrExpression.intCall("javan_math_to_int_exact", List.of(popLong(classFile, method, stack)))));
+            lowerMathToIntExact(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                localDeclarations,
+                pendingExceptionHandlerStacks,
+                sourceLines,
+                popLong(classFile, method, stack)
+            );
             return true;
         }
         return false;
     }
+
+    static void lowerMathToIntExact(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines,
+        final IrExpression value
+    ) {
+        final int valueLocalIndex = localDeclarations.size();
+        final String valueLocalName = "long" + valueLocalIndex;
+        localDeclarations.put(Integer.MIN_VALUE + valueLocalIndex, new IrLocal(IrType.LONG, valueLocalName));
+        instructions.add(IrInstruction.assignLong(valueLocalName, value));
+
+        final int overflowLocalIndex = localDeclarations.size();
+        final String overflowLocalName = "int" + overflowLocalIndex;
+        localDeclarations.put(Integer.MIN_VALUE + overflowLocalIndex, new IrLocal(IrType.INT, overflowLocalName));
+        instructions.add(IrInstruction.assignInt(
+            overflowLocalName,
+            IrExpression.intCall(
+                "javan_math_to_int_exact_overflows",
+                List.of(IrExpression.longLocal(valueLocalName))
+            )
+        ));
+
+        final String successLabel = "label_math_to_int_exact_success_"
+            + instruction.offset() + "_" + overflowLocalIndex;
+        instructions.add(IrInstruction.branchIf(
+            successLabel,
+            IrExpression.intComparison(
+                "==",
+                IrExpression.intLocal(overflowLocalName),
+                IrExpression.intLiteral(0)
+            )
+        ));
+        final List<StackValue> successStack = List.copyOf(stack);
+        routePendingPlatformException(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            "java/lang/ArithmeticException",
+            IrExpression.stringLiteral("integer overflow")
+        );
+        instructions.add(IrInstruction.label(successLabel));
+        stack.addAll(successStack);
+        stack.add(StackValue.intExpression(IrExpression.intCall(
+            "javan_math_to_int_exact",
+            List.of(IrExpression.longLocal(valueLocalName))
+        )));
+    }
+
     static void lowerMathAddExactInt(
         final ClassFile classFile,
         final MethodInfo method,
@@ -6782,59 +6860,25 @@ final class BytecodeToIRInvokeSupport {
         );
         if (handler.isPresent()) {
             final int handlerOffset = handler.orElseThrow();
-            final StackValue pending = pendingExceptionHandlerStacks.get(handlerOffset);
-            if (pending == null) {
-                pendingExceptionHandlerStacks.put(handlerOffset, thrownValue);
-            } else {
-                pendingExceptionHandlerStacks.put(
-                    handlerOffset,
-                    mergePendingPlatformThrowables(classFile, method, instruction, pending, thrownValue)
-                );
-            }
+            instructions.add(IrInstruction.setPending(
+                throwableType,
+                message,
+                BytecodeToIRControlFlowSupport.sourceLocation(classFile, method, instruction, sourceLines)
+            ));
+            BytecodeToIRControlFlowSupport.registerPendingHandlerStack(
+                pendingExceptionHandlerStacks,
+                handlerOffset
+            );
             instructions.add(IrInstruction.jump(label(handlerOffset)));
             BytecodeToIRControlFlowSupport.clearStack(stack);
             return;
         }
-        instructions.add(IrInstruction.panic(
-            IrExpression.stringLiteral(throwableType),
+        instructions.add(IrInstruction.throwPending(
+            throwableType,
+            message,
             BytecodeToIRControlFlowSupport.sourceLocation(classFile, method, instruction, sourceLines)
         ));
         BytecodeToIRControlFlowSupport.clearStack(stack);
-    }
-    static StackValue mergePendingPlatformThrowables(
-        final ClassFile classFile,
-        final MethodInfo method,
-        final Instruction instruction,
-        final StackValue first,
-        final StackValue second
-    ) {
-        if (first.expression().isEmpty()
-            || second.expression().isEmpty()
-            || !first.expression().orElseThrow().equals(second.expression().orElseThrow())
-            || first.throwableType().isEmpty()
-            || second.throwableType().isEmpty()) {
-            throw unsupportedTypedExceptionHandler(classFile, method, instruction);
-        }
-        final String firstType = first.throwableType().orElseThrow();
-        final String secondType = second.throwableType().orElseThrow();
-        if (JdkCallSupport.isPlatformThrowableAssignable(firstType, secondType)) {
-            return StackValue.platformThrowable(secondType, first.expression().orElseThrow());
-        }
-        if (JdkCallSupport.isPlatformThrowableAssignable(secondType, firstType)) {
-            return StackValue.platformThrowable(firstType, first.expression().orElseThrow());
-        }
-        for (final String commonType : List.of(
-            "java/lang/RuntimeException",
-            "java/lang/Exception",
-            "java/lang/Error",
-            "java/lang/Throwable"
-        )) {
-            if (JdkCallSupport.isPlatformThrowableAssignable(firstType, commonType)
-                && JdkCallSupport.isPlatformThrowableAssignable(secondType, commonType)) {
-                return StackValue.platformThrowable(commonType, first.expression().orElseThrow());
-            }
-        }
-        throw unsupportedTypedExceptionHandler(classFile, method, instruction);
     }
     static boolean isJdkCollectionOwner(final String owner) {
         if (isJdkListOrCollection(owner)) {
@@ -8319,11 +8363,25 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if (isPredicateTest(methodRef) && hasPredicateLambdaReceiverOnStack(stack)) {
-            lowerPredicateTestLambdaCall(classFile, method, instruction, stack);
+            lowerPredicateTestLambdaCall(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                localDeclarations
+            );
             return;
         }
         if (isSupplierGet(methodRef) && hasTopStackKind(stack, StackKind.LAMBDA_SUPPLIER)) {
-            lowerSupplierGetLambdaCall(classFile, method, instruction, stack);
+            lowerSupplierGetLambdaCall(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                localDeclarations
+            );
             return;
         }
         if (isSupplierGet(methodRef)
@@ -8345,7 +8403,14 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if (isFunctionApply(methodRef) && hasFunctionLambdaReceiverOnStack(stack)) {
-            lowerFunctionApplyLambdaCall(classFile, method, instruction, stack);
+            lowerFunctionApplyLambdaCall(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                localDeclarations
+            );
             return;
         }
         final List<EntryPoint> targets = interfaceTargets(classes, methodRef);
@@ -8596,32 +8661,50 @@ final class BytecodeToIRInvokeSupport {
         final ClassFile classFile,
         final MethodInfo method,
         final Instruction instruction,
-        final List<StackValue> stack
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations
     ) {
         final IrExpression argument = popObject(classFile, method, stack);
         final DynamicLambda lambda = popDynamicLambda(classFile, method, instruction, stack, StackKind.LAMBDA_FUNCTION, "function lambda");
-        stack.add(StackValue.objectExpression(invokeFunctionLambdaExpression(lambda, argument)));
+        final String resultLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(
+            resultLocal,
+            invokeFunctionLambdaExpression(lambda, argument)
+        ));
+        stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
     }
 
     private static void lowerSupplierGetLambdaCall(
         final ClassFile classFile,
         final MethodInfo method,
         final Instruction instruction,
-        final List<StackValue> stack
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations
     ) {
         final DynamicLambda lambda = popDynamicLambda(classFile, method, instruction, stack, StackKind.LAMBDA_SUPPLIER, "supplier lambda");
-        stack.add(StackValue.objectExpression(invokeSupplierLambdaExpression(lambda)));
+        final String resultLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(resultLocal, invokeSupplierLambdaExpression(lambda)));
+        stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
     }
 
     private static void lowerPredicateTestLambdaCall(
         final ClassFile classFile,
         final MethodInfo method,
         final Instruction instruction,
-        final List<StackValue> stack
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations
     ) {
         final IrExpression argument = popObject(classFile, method, stack);
         final DynamicLambda lambda = popDynamicLambda(classFile, method, instruction, stack, StackKind.LAMBDA_PREDICATE, "predicate lambda");
-        stack.add(StackValue.intExpression(invokePredicateLambdaExpression(lambda, argument)));
+        final String resultLocal = newIntLocal(localDeclarations);
+        instructions.add(IrInstruction.assignInt(
+            resultLocal,
+            invokePredicateLambdaExpression(lambda, argument)
+        ));
+        stack.add(StackValue.intExpression(IrExpression.intLocal(resultLocal)));
     }
 
     private static boolean lowerVirtualThreadBuilderInterfaceCall(

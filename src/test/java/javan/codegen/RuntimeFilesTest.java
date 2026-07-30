@@ -2,6 +2,7 @@ package javan.codegen;
 
 import javan.TestProcesses;
 import javan.build.ResourceBundler;
+import javan.compat.JdkCallSupport;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
@@ -11,8 +12,10 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -33,6 +36,186 @@ final class RuntimeFilesTest {
             "return \"aarch64\";",
             "return \"x86_64\";"
         );
+    }
+
+    @Test
+    void pendingThrowableRuntimeAssignabilityMatchesJavaHierarchy() throws Exception {
+        final Set<String> throwableTypes = new LinkedHashSet<>();
+        throwableTypes.add("java/lang/Throwable");
+        for (final JdkCallSupport.PlatformThrowableParent edge : JdkCallSupport.platformThrowableParents()) {
+            throwableTypes.add(edge.type());
+            throwableTypes.add(edge.parent());
+        }
+        throwableTypes.add("java/example/GeneratedException");
+        throwableTypes.add("javax/example/GeneratedError");
+        final StringBuilder cases = new StringBuilder();
+        for (final String thrownType : throwableTypes) {
+            for (final String catchType : throwableTypes) {
+                cases.append("    {\"")
+                    .append(thrownType)
+                    .append("\", \"")
+                    .append(catchType)
+                    .append("\", ")
+                    .append(JdkCallSupport.isPlatformThrowableAssignable(thrownType, catchType) ? 1 : 0)
+                    .append("},\n");
+            }
+        }
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            typedef struct {
+                const char* thrown_type;
+                const char* catch_type;
+                int expected;
+            } throwable_case;
+
+            static const throwable_case cases[] = {
+            %s};
+
+            int main(void) {
+                int failures = 0;
+                javan_register_static_roots(0, 0);
+                const size_t count = sizeof(cases) / sizeof(cases[0]);
+                for (size_t index = 0; index < count; index++) {
+                    javan_pending_throw(cases[index].thrown_type, 0, "", "", "", -1, -1, "");
+                    if (javan_pending_type_assignable_to((void*) cases[index].catch_type) != cases[index].expected) {
+                        failures++;
+                    }
+                    javan_pending_clear();
+                }
+                printf("%%d\\n", failures);
+                return 0;
+            }
+            """.formatted(cases),
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("0\n");
+    }
+
+    @Test
+    void writeCopiesPendingPanicDetailBeforeClearingManagedThrowable() throws Exception {
+        final String runtime = Files.readString(new RuntimeFiles().write(tempDir));
+
+        assertThat(runtime).containsSubsequence(
+            "char detail_copy[256];",
+            "javan_copy_error_field(detail_copy, sizeof(detail_copy), detail_source);",
+            "javan_pending_clear_state(state);",
+            "javan_runtime_lock_leave();",
+            "javan_panic_at("
+        );
+    }
+
+    @Test
+    void pendingThrowableRuntimeAssignabilityIsFalseWithoutPendingState() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                printf("%d\\n", javan_pending_type_assignable_to((void*) "java/lang/Throwable"));
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("0\n");
+    }
+
+    @Test
+    void pendingThrowableRuntimeAssignabilityRejectsNullCatchType() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                javan_pending_throw("java/lang/NullPointerException", 0, "", "", "", -1, -1, "");
+                const int result = javan_pending_type_assignable_to(0);
+                javan_pending_clear();
+                printf("%d\\n", result);
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("0\n");
+    }
+
+    @Test
+    void caughtThrowableRethrowRestoresExactRuntimeType() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                javan_pending_throw(
+                    "java/lang/NullPointerException",
+                    javan_string_from("inner"),
+                    "com.acme.Main",
+                    "main()V",
+                    "Main.java",
+                    7,
+                    4,
+                    "throw value;"
+                );
+                void* caught = javan_pending_catch();
+                javan_pending_rethrow(caught);
+                printf("%d\\n", javan_pending_type_is((void*) "java/lang/NullPointerException"));
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("1\n");
+    }
+
+    @Test
+    void caughtThrowableMessageIsCollectibleAfterItsRootFrameEnds() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                javan_pending_throw("java/lang/Throwable", 0, "", "", "", -1, -1, "");
+                javan_pending_clear();
+                javan_gc_collect();
+                const unsigned long baseline = javan_heap_live_allocations();
+
+                void* message = 0;
+                void* caught = 0;
+                void** roots[] = {
+                    (void**) &message,
+                    (void**) &caught
+                };
+                javan_root_frame_push(roots, 2);
+                message = javan_string_from("dynamic");
+                javan_pending_throw("java/lang/IllegalArgumentException", message, "", "", "", -1, -1, "");
+                caught = javan_pending_catch();
+                javan_root_frame_pop(roots);
+                message = 0;
+                caught = 0;
+                javan_gc_collect();
+
+                printf("%d\\n", javan_heap_live_allocations() == baseline);
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("1\n");
     }
 
     @Test

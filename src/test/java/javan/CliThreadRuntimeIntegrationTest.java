@@ -6027,7 +6027,9 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
             "if (setjmp(javan_function_or_null_target) != 0) {",
             "javan_clear_error();",
             "javan_materialized_lambda_apply_object((void**) &javan_function_or_null_result, self, arg);",
-            "javan_panic_at(\"JAVAN-RUNTIME-PANIC\", \"uncaught Java exception\", \"com.acme.Main\", \"lambda$main$0",
+            "javan_pending_throw(\"java/lang/IllegalArgumentException\", (void*) (void*) \"expected\", \"com.acme.Main\", \"lambda$main$0",
+            "if (javan_pending_type_assignable_to((void*) \"java/lang/Exception\") != 0) {",
+            "javan_pending_clear();",
             "javan_exact_catch_null_apply((void**) &javan_expr_tmp_"
         );
         final ProcessResult nativeRun = process(

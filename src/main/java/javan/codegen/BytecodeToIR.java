@@ -32,10 +32,12 @@ import javan.verify.DiagnosticException;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Lowers the initial supported bytecode subset to javan IR.
@@ -99,6 +101,8 @@ public final class BytecodeToIR {
         final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods =
             BytecodeToIRInvokeSupport.materializedLambdaMethods(classes, reachableMethods);
         final List<EntryPoint> runnableThreadTargets = BytecodeToIRInvokeSupport.runnableThreadTargets(classes, reachableMethods);
+        final Map<String, List<String>> transportedThrowableTypes =
+            transportedThrowableTypes(classes, callGraph, reachableMethods, materializedLambdaTargets);
         if (!runnableThreadTargets.isEmpty()) {
             final MethodRef runnableRun = BytecodeToIRInvokeSupport.runnableRunMethodRef();
             final String dispatchSymbol = dispatchSymbol(runnableRun);
@@ -112,7 +116,15 @@ public final class BytecodeToIR {
             );
         }
         for (final EntryPoint reachable : reachableMethods) {
-            functions.add(lowerFunction(classes, reachable, dispatches, functionOrNullTargetIds, materializedLambdaMethods, sourceLines));
+            functions.add(lowerFunction(
+                classes,
+                reachable,
+                dispatches,
+                functionOrNullTargetIds,
+                materializedLambdaMethods,
+                transportedThrowableTypes,
+                sourceLines
+            ));
         }
         return new IrProgram(
             BytecodeToIRMetadataSupport.lowerClasses(classes),
@@ -122,6 +134,210 @@ public final class BytecodeToIR {
             List.copyOf(materializedLambdaTargets),
             enumDispatchConstants(classes)
         );
+    }
+
+    private static Map<String, List<String>> transportedThrowableTypes(
+        final Map<String, ClassFile> classes,
+        final CallGraph callGraph,
+        final List<EntryPoint> reachableMethods,
+        final List<IrMaterializedLambdaTarget> materializedLambdaTargets
+    ) {
+        final Map<EntryPoint, Set<String>> typesByMethod = new LinkedHashMap<>();
+        for (final EntryPoint entryPoint : reachableMethods) {
+            final ClassFile classFile = classes.get(entryPoint.className());
+            final MethodInfo method = classFile.method(entryPoint.methodName(), entryPoint.descriptor()).orElseThrow();
+            typesByMethod.put(entryPoint, directEscapingThrowableTypes(method));
+        }
+        final Map<String, EntryPoint> entryPointsBySymbol = new HashMap<>();
+        for (final EntryPoint entryPoint : reachableMethods) {
+            entryPointsBySymbol.put(symbol(entryPoint), entryPoint);
+        }
+        boolean changed;
+        do {
+            changed = false;
+            for (final EntryPoint caller : reachableMethods) {
+                final ClassFile classFile = classes.get(caller.className());
+                final MethodInfo method = classFile.method(caller.methodName(), caller.descriptor()).orElseThrow();
+                if (method.code().isEmpty()) {
+                    continue;
+                }
+                final Set<String> callerTypes = typesByMethod.get(caller);
+                for (final Instruction instruction : method.code().orElseThrow().instructions()) {
+                    if (instruction.methodRef().isEmpty()) {
+                        continue;
+                    }
+                    final MethodRef calledMethod = instruction.methodRef().orElseThrow();
+                    for (final javan.analysis.CallEdge edge : callGraph.callEdges()) {
+                        if (!caller.equals(edge.caller())
+                            || edge.kind() != javan.analysis.CallEdge.Kind.CALL
+                            || !calledMethod.name().equals(edge.callee().methodName())
+                            || !calledMethod.descriptor().equals(edge.callee().descriptor())) {
+                            continue;
+                        }
+                        for (final String throwableType : typesByMethod.getOrDefault(edge.callee(), Set.of())) {
+                            if (!caughtBy(method, instruction.offset(), throwableType) && callerTypes.add(throwableType)) {
+                                changed = true;
+                            }
+                        }
+                    }
+                    for (final IrMaterializedLambdaTarget target : materializedLambdaTargets) {
+                        if (!matchesMaterializedLambdaCall(calledMethod, target)) {
+                            continue;
+                        }
+                        final EntryPoint implementation = entryPointsBySymbol.get(target.functionSymbol());
+                        if (implementation == null) {
+                            continue;
+                        }
+                        for (final String throwableType : typesByMethod.getOrDefault(implementation, Set.of())) {
+                            if (!caughtBy(method, instruction.offset(), throwableType)
+                                && callerTypes.add(throwableType)) {
+                                changed = true;
+                            }
+                        }
+                    }
+                }
+            }
+        } while (changed);
+        final Map<String, List<String>> result = new LinkedHashMap<>();
+        for (final EntryPoint entryPoint : reachableMethods) {
+            result.put(symbol(entryPoint), orderedThrowableTypes(typesByMethod.get(entryPoint)));
+        }
+        final Map<String, Set<String>> materializedTypes = new LinkedHashMap<>();
+        for (final IrMaterializedLambdaTarget target : materializedLambdaTargets) {
+            final String applySymbol = materializedLambdaApplySymbol(target);
+            if (applySymbol.isEmpty()) {
+                continue;
+            }
+            Set<String> applyTypes = materializedTypes.get(applySymbol);
+            if (applyTypes == null) {
+                applyTypes = new LinkedHashSet<>();
+                materializedTypes.put(applySymbol, applyTypes);
+            }
+            applyTypes.addAll(result.getOrDefault(target.functionSymbol(), List.of()));
+        }
+        for (final Map.Entry<String, Set<String>> entry : materializedTypes.entrySet()) {
+            result.put(entry.getKey(), orderedThrowableTypes(entry.getValue()));
+        }
+        return Map.copyOf(result);
+    }
+
+    private static boolean matchesMaterializedLambdaCall(
+        final MethodRef calledMethod,
+        final IrMaterializedLambdaTarget target
+    ) {
+        return calledMethod.owner().equals(target.interfaceOwner())
+            && calledMethod.name().equals(target.interfaceMethodName())
+            && calledMethod.descriptor().equals(target.interfaceMethodDescriptor());
+    }
+
+    private static String materializedLambdaApplySymbol(final IrMaterializedLambdaTarget target) {
+        final List<IrType> parameters =
+            MethodDescriptor.parse(target.interfaceMethodDescriptor()).parameterTypes();
+        if (target.voidResult()) {
+            if (parameters.size() == 1) {
+                return BytecodeToIRInvokeSupport.MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL;
+            }
+            if (parameters.size() == 2) {
+                return BytecodeToIRInvokeSupport.MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL;
+            }
+            return "";
+        }
+        if (target.booleanResult()) {
+            if (parameters.size() == 1) {
+                return BytecodeToIRInvokeSupport.MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL;
+            }
+            return "";
+        }
+        if ("java/util/function/Supplier".equals(target.interfaceOwner())
+            && "get".equals(target.interfaceMethodName())
+            && "()Ljava/lang/Object;".equals(target.interfaceMethodDescriptor())) {
+            return BytecodeToIRInvokeSupport.MATERIALIZED_LAMBDA_SUPPLIER_APPLY_SYMBOL;
+        }
+        if (parameters.size() == 1 && parameters.getFirst() == IrType.OBJECT) {
+            return BytecodeToIRInvokeSupport.MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL;
+        }
+        if (parameters.size() == 1 && parameters.getFirst() == IrType.LONG) {
+            return BytecodeToIRInvokeSupport.MATERIALIZED_LAMBDA_LONG_OBJECT_APPLY_SYMBOL;
+        }
+        if (parameters.size() == 2) {
+            return BytecodeToIRInvokeSupport.MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL;
+        }
+        return "";
+    }
+
+    private static List<String> orderedThrowableTypes(final Set<String> throwableTypes) {
+        final List<String> result = new ArrayList<>();
+        if (throwableTypes.contains("java/lang/Throwable")) {
+            result.add("java/lang/Throwable");
+        }
+        for (final JdkCallSupport.PlatformThrowableParent parent : JdkCallSupport.platformThrowableParents()) {
+            if (throwableTypes.contains(parent.type())) {
+                result.add(parent.type());
+            }
+        }
+        for (final String throwableType : throwableTypes) {
+            if (!result.contains(throwableType)) {
+                result.add(throwableType);
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private static Set<String> directEscapingThrowableTypes(final MethodInfo method) {
+        if (method.code().isEmpty()) {
+            return new LinkedHashSet<>();
+        }
+        final CodeAttribute code = method.code().orElseThrow();
+        final Set<String> allocatedTypes = new LinkedHashSet<>();
+        final Set<String> result = new LinkedHashSet<>();
+        for (final Instruction instruction : code.instructions()) {
+            if (instruction.methodRef().isPresent()) {
+                for (final String throwableType : JdkCallSupport.transportedPlatformThrowableTypes(
+                    instruction.methodRef().orElseThrow()
+                )) {
+                    if (!caughtBy(method, instruction.offset(), throwableType)) {
+                        result.add(throwableType);
+                    }
+                }
+            }
+            if (instruction.opcode() == 187
+                && instruction.className().isPresent()
+                && JdkCallSupport.isPlatformThrowable(instruction.className().orElseThrow())) {
+                allocatedTypes.add(instruction.className().orElseThrow());
+                continue;
+            }
+            if (instruction.opcode() != 191) {
+                continue;
+            }
+            if (!allocatedTypes.isEmpty()) {
+                for (final String throwableType : allocatedTypes) {
+                    if (!caughtBy(method, instruction.offset(), throwableType)) {
+                        result.add(throwableType);
+                    }
+                }
+                allocatedTypes.clear();
+            }
+        }
+        return result;
+    }
+
+    private static boolean caughtBy(final MethodInfo method, final int offset, final String throwableType) {
+        if (method.code().isEmpty()) {
+            return false;
+        }
+        for (final javan.classfile.CodeException handler : method.code().orElseThrow().exceptionTable()) {
+            if (offset < handler.startPc() || offset >= handler.endPc()) {
+                continue;
+            }
+            if (handler.catchType().isEmpty()
+                || JdkCallSupport.isPlatformThrowableAssignable(throwableType, handler.catchType().orElseThrow())) {
+                return !BytecodeToIRControlFlowSupport.handlerMayThrow(
+                    method.code().orElseThrow(),
+                    handler
+                );
+            }
+        }
+        return false;
     }
 
     private static Map<String, String> enumDispatchConstants(final Map<String, ClassFile> classes) {
@@ -157,6 +373,7 @@ public final class BytecodeToIR {
         final Map<String, IrDispatch> dispatches,
         final Map<String, Integer> functionOrNullTargetIds,
         final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, List<String>> transportedThrowableTypes,
         final SourceLineIndex sourceLines
     ) {
         final ClassFile classFile = classes.get(entryPoint.className());
@@ -209,18 +426,25 @@ public final class BytecodeToIR {
         BytecodeToIRMetadataSupport.bindParameters(method, descriptor, parameters, locals);
         for (int index = 0; index < bytecode.size(); index++) {
             final Instruction instruction = bytecode.get(index);
-            if (containsInt(handlerOffsets, instruction.offset())) {
-                final StackValue pendingException = pendingExceptionHandlerStacks.get(instruction.offset());
-                if (pendingException != null) {
-                    BytecodeToIRControlFlowSupport.clearStack(stack);
-                    stack.add(pendingException);
-                } else if (stack.isEmpty()) {
-                    stack.add(StackValue.objectExpression(IrExpression.objectNull()));
-                }
-            }
+            final StackValue pendingException = containsInt(handlerOffsets, instruction.offset())
+                ? pendingExceptionHandlerStacks.get(instruction.offset())
+                : null;
             if (containsInt(branchTargets, instruction.offset())
                 && !containsInt(replacementLabelOffsets, instruction.offset())) {
                 instructions.add(IrInstruction.label(label(instruction.offset())));
+            }
+            if (containsInt(handlerOffsets, instruction.offset())) {
+                if (containsInt(ignoredHandlerOffsets, instruction.offset())) {
+                    if (pendingException != null) {
+                        BytecodeToIRControlFlowSupport.clearStack(stack);
+                        instructions.add(IrInstruction.callStaticVoid("javan_pending_clear"));
+                    }
+                } else if (pendingException != null) {
+                    BytecodeToIRControlFlowSupport.clearStack(stack);
+                    stack.add(materializePendingHandlerException(pendingException, instructions, localDeclarations));
+                } else if (stack.isEmpty()) {
+                    stack.add(StackValue.objectExpression(IrExpression.objectNull()));
+                }
             }
             if (shouldSkipOffset(ignoredHandlerOffsets, skippedOffsets, instruction.offset())) {
                 continue;
@@ -249,6 +473,15 @@ public final class BytecodeToIR {
                 skippedOffsets,
                 replacementLabelOffsets
             )) {
+                appendPendingExceptionTransport(
+                    method,
+                    instruction,
+                    instructions,
+                    instructionStart,
+                    dispatches,
+                    transportedThrowableTypes,
+                    pendingExceptionHandlerStacks
+                );
                 BytecodeToIRControlFlowSupport.annotateNewInstructions(instructions, instructionStart, sourceLocation);
                 continue;
             }
@@ -271,6 +504,15 @@ public final class BytecodeToIR {
                 skippedOffsets,
                 replacementLabelOffsets
             )) {
+                appendPendingExceptionTransport(
+                    method,
+                    instruction,
+                    instructions,
+                    instructionStart,
+                    dispatches,
+                    transportedThrowableTypes,
+                    pendingExceptionHandlerStacks
+                );
                 BytecodeToIRControlFlowSupport.annotateNewInstructions(instructions, instructionStart, sourceLocation);
                 continue;
             }
@@ -293,6 +535,15 @@ public final class BytecodeToIR {
                 sourceLines,
                 lastMaterializingDuplicateOffset
             );
+            appendPendingExceptionTransport(
+                method,
+                instruction,
+                instructions,
+                instructionStart,
+                dispatches,
+                transportedThrowableTypes,
+                pendingExceptionHandlerStacks
+            );
             BytecodeToIRControlFlowSupport.annotateNewInstructions(instructions, instructionStart, sourceLocation);
         }
         return new IrFunction(
@@ -305,6 +556,99 @@ public final class BytecodeToIR {
             List.copyOf(localDeclarations.values()),
             List.copyOf(instructions)
         );
+    }
+
+    private static StackValue materializePendingHandlerException(
+        final StackValue pendingException,
+        final List<IrInstruction> instructions,
+        final Map<Integer, IrLocal> localDeclarations
+    ) {
+        if (pendingException.kind() != StackKind.CAUGHT_THROWABLE
+            || pendingException.expression().isEmpty()
+            || pendingException.expression().orElseThrow().kind() != IrExpression.Kind.CALL
+            || !"javan_pending_catch".equals(pendingException.expression().orElseThrow().value())) {
+            return pendingException;
+        }
+        final String localName = "pendingException" + localDeclarations.size();
+        localDeclarations.put(
+            Integer.MIN_VALUE + localDeclarations.size(),
+            new IrLocal(IrType.OBJECT, localName)
+        );
+        instructions.add(IrInstruction.assignObject(localName, pendingException.expression().orElseThrow()));
+        return StackValue.caughtThrowable(IrExpression.objectLocal(localName));
+    }
+
+    private static void appendPendingExceptionTransport(
+        final MethodInfo method,
+        final Instruction bytecodeInstruction,
+        final List<IrInstruction> instructions,
+        final int instructionStart,
+        final Map<String, IrDispatch> dispatches,
+        final Map<String, List<String>> transportedThrowableTypes,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks
+    ) {
+        final Set<String> possibleTypes = new LinkedHashSet<>();
+        for (int index = instructionStart; index < instructions.size(); index++) {
+            collectTransportedThrowableTypes(
+                instructions.get(index),
+                dispatches,
+                transportedThrowableTypes,
+                possibleTypes
+            );
+        }
+        if (possibleTypes.isEmpty()) {
+            return;
+        }
+        BytecodeToIRControlFlowSupport.appendPendingExceptionDispatch(
+            method,
+            bytecodeInstruction,
+            instructions,
+            List.copyOf(possibleTypes),
+            pendingExceptionHandlerStacks
+        );
+    }
+
+    private static void collectTransportedThrowableTypes(
+        final IrInstruction instruction,
+        final Map<String, IrDispatch> dispatches,
+        final Map<String, List<String>> transportedThrowableTypes,
+        final Set<String> result
+    ) {
+        if (instruction.op() == IrInstruction.Op.CALL_STATIC_VOID && instruction.expression().isEmpty()) {
+            addTransportedThrowableTypes(instruction.value().orElseThrow(), dispatches, transportedThrowableTypes, result);
+        }
+        instruction.expression().ifPresent(expression ->
+            collectTransportedThrowableTypes(expression, dispatches, transportedThrowableTypes, result));
+    }
+
+    private static void collectTransportedThrowableTypes(
+        final IrExpression expression,
+        final Map<String, IrDispatch> dispatches,
+        final Map<String, List<String>> transportedThrowableTypes,
+        final Set<String> result
+    ) {
+        if (expression.kind() == IrExpression.Kind.CALL) {
+            addTransportedThrowableTypes(expression.value(), dispatches, transportedThrowableTypes, result);
+        }
+        for (final IrExpression argument : expression.arguments()) {
+            collectTransportedThrowableTypes(argument, dispatches, transportedThrowableTypes, result);
+        }
+    }
+
+    private static void addTransportedThrowableTypes(
+        final String symbol,
+        final Map<String, IrDispatch> dispatches,
+        final Map<String, List<String>> transportedThrowableTypes,
+        final Set<String> result
+    ) {
+        result.addAll(transportedThrowableTypes.getOrDefault(symbol, List.of()));
+        final IrDispatch dispatch = dispatches.get(symbol);
+        if (dispatch == null) {
+            return;
+        }
+        for (final IrDispatchTarget target : dispatch.targets()) {
+            result.addAll(transportedThrowableTypes.getOrDefault(target.functionSymbol(), List.of()));
+        }
     }
 
     private static IrFunction lowerExactCatchNullEnumLookupFunction(
@@ -1744,7 +2088,11 @@ public final class BytecodeToIR {
         final Instruction instruction,
         final List<StackValue> stack
     ) {
-        return stackValueExpression(popObjectValue(classFile, method, instruction, stack));
+        final StackValue value = popObjectValue(classFile, method, instruction, stack);
+        if (value.kind() == StackKind.CAUGHT_THROWABLE) {
+            throw unsupportedCaughtThrowableEscape(classFile, method, instruction);
+        }
+        return stackValueExpression(value);
     }
 
     static StackValue popObjectValue(
@@ -2233,6 +2581,9 @@ public final class BytecodeToIR {
         }
         final IrExpression expression = local(classFile, method, locals, slot, IrType.OBJECT);
         final StackKind kind = objectLocalKinds.getOrDefault(slot, StackKind.OBJECT);
+        if (kind == StackKind.CAUGHT_THROWABLE) {
+            return StackValue.caughtThrowable(expression);
+        }
         if (kind == StackKind.OBJECT) {
             final String throwableType = objectLocalThrowableTypes.get(slot);
             if (throwableType != null) {
@@ -2266,7 +2617,8 @@ public final class BytecodeToIR {
         final int slot,
         final StackKind kind
     ) {
-        if (kind == StackKind.SOCKET_INPUT_STREAM
+        if (kind == StackKind.CAUGHT_THROWABLE
+            || kind == StackKind.SOCKET_INPUT_STREAM
             || kind == StackKind.RESOURCE_INPUT_STREAM
             || kind == StackKind.SOCKET_OUTPUT_STREAM
             || kind == StackKind.VIRTUAL_THREAD_BUILDER
@@ -2647,6 +2999,22 @@ public final class BytecodeToIR {
             instructionSubject(instruction),
             "The verifier allowed the program shape, but this backend slice cannot emit C for this instruction yet.",
             "Keep reachable code to supported ints, exact object fields, constructors, and static/final-class calls for this version."
+        ));
+    }
+
+    static DiagnosticException unsupportedCaughtThrowableEscape(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction
+    ) {
+        return new DiagnosticException(Diagnostic.error(
+            "JAVAN040",
+            "caught throwable escape is not supported",
+            classFile.name(),
+            method.name() + method.descriptor(),
+            instructionSubject(instruction),
+            "A managed caught throwable cannot escape its catch method through a return, argument, field, array, or unrelated object operation.",
+            "Read its message, rethrow it, pass it as a supported platform constructor cause, or keep this path on the JVM."
         ));
     }
 
@@ -3277,6 +3645,7 @@ public final class BytecodeToIR {
         LONG,
         FLOAT,
         DOUBLE,
+        CAUGHT_THROWABLE,
         OBJECT
     }
 
@@ -3378,6 +3747,10 @@ public final class BytecodeToIR {
 
         static StackValue objectExpression(final IrExpression expression) {
             return new StackValue(StackKind.OBJECT, Optional.empty(), Optional.of(expression), Optional.empty());
+        }
+
+        static StackValue caughtThrowable(final IrExpression expression) {
+            return new StackValue(StackKind.CAUGHT_THROWABLE, Optional.empty(), Optional.of(expression), Optional.empty());
         }
 
         static StackValue platformThrowable(final String throwableType, final IrExpression message) {
