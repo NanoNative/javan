@@ -411,6 +411,26 @@ public record LambdaMetafactoryCall(
     }
 
     /**
+     * Returns whether this {@code Function} can be stored as a closed-world captured lambda.
+     *
+     * @param classes parsed closed-world classes
+     * @return true for reference-only static targets or final-owner bound instance targets
+     */
+    public boolean isMaterializedFunctionLambda(final Map<String, ClassFile> classes) {
+        if (implementation.owner().startsWith("java/")) {
+            return false;
+        }
+        if (isMaterializedFunctionLambda()) {
+            return classes.containsKey(implementation.owner());
+        }
+        if (!isBoundInstanceFunctionLambda()) {
+            return false;
+        }
+        final ClassFile implementationClass = classes.get(implementation.owner());
+        return implementationClass != null && implementationClass.isFinal();
+    }
+
+    /**
      * Returns whether this custom one-argument object-return lambda can be represented by the captured-lambda runtime.
      *
      * @return true for bound instance implementations with reference-only captures and reference returns

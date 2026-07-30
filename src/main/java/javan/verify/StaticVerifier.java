@@ -3504,12 +3504,13 @@ public final class StaticVerifier {
         }
         final LambdaMetafactoryCall lambda = lambdaCall.orElseThrow();
         if (lambda.isFunction()
-            && shouldMaterializeFunctionLambda(method, instruction)
+            && FunctionLambdaUse.hasUnsupportedDupX2Use(lambda, method, instruction)) {
+            return false;
+        }
+        if (lambda.isFunction()
+            && FunctionLambdaUse.requiresMaterialization(method, instruction)
             && !FunctionLambdaUse.isProvablyDiscardedZeroCapture(lambda, method, instruction)) {
-            final ClassFile implementationClass = classes.get(lambda.implementation().owner());
-            return implementationClass != null
-                && implementationClass.application()
-                && lambda.isMaterializedFunctionLambda();
+            return lambda.isMaterializedFunctionLambda(classes);
         }
         if (lambda.isSupplier()) {
             final ClassFile implementationClass = classes.get(lambda.implementation().owner());
@@ -3525,66 +3526,6 @@ public final class StaticVerifier {
             || lambda.isMaterializedVoidLambda()
             || lambda.isMaterializedSupplierLambda()
             || lambda.isMaterializedBoundCustomObjectLambda(classes);
-    }
-
-    private static boolean shouldMaterializeFunctionLambda(
-        final MethodInfo method,
-        final Instruction instruction
-    ) {
-        if (method.code().isEmpty()) {
-            return true;
-        }
-        final List<Instruction> instructions = method.code().orElseThrow().instructions();
-        for (int index = 0; index < instructions.size(); index++) {
-            if (instructions.get(index).offset() != instruction.offset()) {
-                continue;
-            }
-            for (int consumerIndex = index + 1; consumerIndex < instructions.size(); consumerIndex++) {
-                final Instruction candidate = instructions.get(consumerIndex);
-                final Optional<MethodRef> consumer = candidate.methodRef();
-                if (consumer.isPresent()) {
-                    return !isInlineFunctionConsumer(consumer.orElseThrow());
-                }
-                if (endsInlineFunctionSearch(candidate.opcode())) {
-                    return true;
-                }
-            }
-            return true;
-        }
-        return true;
-    }
-
-    private static boolean endsInlineFunctionSearch(final int opcode) {
-        return (opcode >= 54 && opcode <= 58)
-            || (opcode >= 79 && opcode <= 95)
-            || (opcode >= 153 && opcode <= 177)
-            || opcode == 179
-            || opcode == 181
-            || opcode == 186
-            || opcode == 191
-            || opcode == 194
-            || opcode == 195
-            || opcode == 198
-            || opcode == 199;
-    }
-
-    private static boolean isInlineFunctionConsumer(final MethodRef target) {
-        if ("java/util/function/Function".equals(target.owner())
-            && "apply".equals(target.name())
-            && "(Ljava/lang/Object;)Ljava/lang/Object;".equals(target.descriptor())) {
-            return true;
-        }
-        if ("computeIfAbsent".equals(target.name())
-            && "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;".equals(target.descriptor())
-            && ("java/util/Map".equals(target.owner())
-            || "java/util/HashMap".equals(target.owner())
-            || "java/util/LinkedHashMap".equals(target.owner())
-            || "java/util/TreeMap".equals(target.owner()))) {
-            return true;
-        }
-        return "java/util/Optional".equals(target.owner())
-            && ("map".equals(target.name()) || "flatMap".equals(target.name()))
-            && "(Ljava/util/function/Function;)Ljava/util/Optional;".equals(target.descriptor());
     }
 
     private static boolean supportedStringConcatParameters(final String descriptor) {

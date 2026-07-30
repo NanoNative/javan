@@ -4,6 +4,7 @@ import javan.classfile.ClassFile;
 import javan.classfile.CodeAttribute;
 import javan.classfile.DynamicRef;
 import javan.classfile.FieldRef;
+import javan.classfile.FunctionLambdaUse;
 import javan.classfile.Instruction;
 import javan.classfile.LambdaMetafactoryCall;
 import javan.classfile.MethodInfo;
@@ -60,6 +61,7 @@ public final class ReachabilityAnalyzer {
         final List<EntryPoint> reachable = new ArrayList<>();
         final EntryPointMembership reachableSet = new EntryPointMembership();
         final List<Diagnostic> diagnostics = new ArrayList<>();
+        final List<PendingCallbackUse> pendingCallbackUses = new ArrayList<>();
         final CallEdgeTracker callEdges = new CallEdgeTracker();
         final List<EntryPoint> work = new ArrayList<>(roots);
         final EntryPointMembership workSet = new EntryPointMembership();
@@ -112,8 +114,30 @@ public final class ReachabilityAnalyzer {
                             entryPoints
                         );
                         enqueueClassInitializer(classes, instruction, work, workSet, current, callEdges, entryPoints);
-                        enqueueLambdaApplicationCall(classes, instruction, work, workSet, current, callEdges, materializedLambdaMethods, entryPoints);
-                        enqueueApplicationCall(classes, instruction, work, workSet, diagnostics, current, callEdges, materializedLambdaMethods, entryPoints, methodRefFacts);
+                        enqueueLambdaApplicationCall(
+                            classes,
+                            method.orElseThrow(),
+                            instruction,
+                            work,
+                            workSet,
+                            current,
+                            callEdges,
+                            materializedLambdaMethods,
+                            entryPoints
+                        );
+                        enqueueApplicationCall(
+                            classes,
+                            instruction,
+                            work,
+                            workSet,
+                            diagnostics,
+                            pendingCallbackUses,
+                            current,
+                            callEdges,
+                            materializedLambdaMethods,
+                            entryPoints,
+                            methodRefFacts
+                        );
                     }
                 }
             }
@@ -121,7 +145,66 @@ public final class ReachabilityAnalyzer {
                 break;
             }
         }
-        return new CallGraph(roots.getFirst(), List.copyOf(reachable), List.copyOf(diagnostics), callEdges.snapshot());
+        final List<EntryPoint> closedReachable = List.copyOf(reachable);
+        final FunctionValueFlow.Result functionValueFlow =
+            FunctionValueFlow.analyze(classes, closedReachable);
+        return new CallGraph(
+            roots.getFirst(),
+            closedReachable,
+            resolveCallbackDiagnostics(diagnostics, pendingCallbackUses, functionValueFlow),
+            callEdges.snapshot(),
+            functionValueFlow
+        );
+    }
+
+    private static List<Diagnostic> resolveCallbackDiagnostics(
+        final List<Diagnostic> diagnostics,
+        final List<PendingCallbackUse> pending,
+        final FunctionValueFlow.Result flow
+    ) {
+        final List<Diagnostic> result = new ArrayList<>();
+        result.addAll(diagnostics);
+        for (final PendingCallbackUse use : pending) {
+            final FunctionValueFlow.ValueKind kind = use.kind() == CallbackKind.FUNCTION
+                ? flow.functionKind(
+                    use.current().className(),
+                    use.current().methodName(),
+                    use.current().descriptor(),
+                    use.offset()
+                )
+                : flow.supplierKind(
+                    use.current().className(),
+                    use.current().methodName(),
+                    use.current().descriptor(),
+                    use.offset()
+                );
+            final boolean concrete = kind == FunctionValueFlow.ValueKind.CONCRETE
+                && use.closedWorldTargets();
+            final boolean mixedSupplier =
+                use.kind() == CallbackKind.SUPPLIER
+                    && kind == FunctionValueFlow.ValueKind.MATERIALIZED_AND_CONCRETE
+                    && use.closedWorldTargets();
+            if (kind == FunctionValueFlow.ValueKind.MATERIALIZED || concrete || mixedSupplier) {
+                continue;
+            }
+            result.add(use.diagnostic());
+        }
+        return List.copyOf(result);
+    }
+
+    private static Diagnostic functionApplyDiagnostic(
+        final EntryPoint current,
+        final MethodRef target
+    ) {
+        return Diagnostic.error(
+            "JAVAN012",
+            "unsupported reachable application method call",
+            current.className(),
+            current.methodName() + current.descriptor(),
+            target.display(),
+            "Function.apply requires either a closed-world Function implementation class or a supported materialized Function lambda target.",
+            "Provide a reachable Function implementation class or keep this exact function dispatch on the JVM until broader receiver support lands."
+        );
     }
 
     private static void enqueueRecordReferenceObjectMethodTargets(
@@ -305,12 +388,27 @@ public final class ReachabilityAnalyzer {
     ) {
     }
 
+    private record PendingCallbackUse(
+        CallbackKind kind,
+        EntryPoint current,
+        int offset,
+        boolean closedWorldTargets,
+        Diagnostic diagnostic
+    ) {
+    }
+
+    private enum CallbackKind {
+        FUNCTION,
+        SUPPLIER
+    }
+
     private static void enqueueApplicationCall(
         final Map<String, ClassFile> classes,
         final Instruction instruction,
         final List<EntryPoint> work,
         final EntryPointMembership workSet,
         final List<Diagnostic> diagnostics,
+        final List<PendingCallbackUse> pendingCallbackUses,
         final EntryPoint current,
         final CallEdgeTracker callEdges,
         final List<MethodRef> materializedLambdaMethods,
@@ -430,17 +528,23 @@ public final class ReachabilityAnalyzer {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
             }
-            if (hasInlineDirectFunctionLambda(classes, current, instruction) || !targetMethods.isEmpty()) {
+            if (hasInlineDirectFunctionLambda(classes, current, instruction)) {
                 return;
             }
-            diagnostics.add(Diagnostic.error(
-                "JAVAN012",
-                "unsupported reachable application method call",
-                current.className(),
-                current.methodName() + current.descriptor(),
-                target.display(),
-                "Map.computeIfAbsent requires a closed-world Function implementation class or a supported direct function lambda target.",
-                "Provide a reachable Function implementation class or keep this exact map compute-if-absent flow on the JVM until broader callback support lands."
+            pendingCallbackUses.add(new PendingCallbackUse(
+                CallbackKind.FUNCTION,
+                current,
+                instruction.offset(),
+                !targetMethods.isEmpty(),
+                Diagnostic.error(
+                    "JAVAN012",
+                    "unsupported reachable application method call",
+                    current.className(),
+                    current.methodName() + current.descriptor(),
+                    target.display(),
+                    "Map.computeIfAbsent requires a closed-world Function implementation class or a supported direct function lambda target.",
+                    "Provide a reachable Function implementation class or keep this exact map compute-if-absent flow on the JVM until broader callback support lands."
+                )
             ));
             return;
         }
@@ -472,17 +576,23 @@ public final class ReachabilityAnalyzer {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
             }
-            if (hasInlineDirectFunctionLambda(classes, current, instruction) || !targetMethods.isEmpty()) {
+            if (hasInlineDirectFunctionLambda(classes, current, instruction)) {
                 return;
             }
-            diagnostics.add(Diagnostic.error(
-                "JAVAN012",
-                "unsupported reachable application method call",
-                current.className(),
-                current.methodName() + current.descriptor(),
-                target.display(),
-                "Optional.map requires a closed-world Function implementation class or a supported direct function lambda target.",
-                "Provide a reachable Function implementation class or keep this exact optional mapping flow on the JVM until broader callback support lands."
+            pendingCallbackUses.add(new PendingCallbackUse(
+                CallbackKind.FUNCTION,
+                current,
+                instruction.offset(),
+                !targetMethods.isEmpty(),
+                Diagnostic.error(
+                    "JAVAN012",
+                    "unsupported reachable application method call",
+                    current.className(),
+                    current.methodName() + current.descriptor(),
+                    target.display(),
+                    "Optional.map requires a closed-world Function implementation class or a supported direct function lambda target.",
+                    "Provide a reachable Function implementation class or keep this exact optional mapping flow on the JVM until broader callback support lands."
+                )
             ));
             return;
         }
@@ -493,17 +603,23 @@ public final class ReachabilityAnalyzer {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
             }
-            if (hasInlineDirectFunctionLambda(classes, current, instruction) || !targetMethods.isEmpty()) {
+            if (hasInlineDirectFunctionLambda(classes, current, instruction)) {
                 return;
             }
-            diagnostics.add(Diagnostic.error(
-                "JAVAN012",
-                "unsupported reachable application method call",
-                current.className(),
-                current.methodName() + current.descriptor(),
-                target.display(),
-                "Optional.flatMap requires a closed-world Function implementation class or a supported direct function lambda target.",
-                "Provide a reachable Function implementation class or keep this exact optional flat-mapping flow on the JVM until broader callback support lands."
+            pendingCallbackUses.add(new PendingCallbackUse(
+                CallbackKind.FUNCTION,
+                current,
+                instruction.offset(),
+                !targetMethods.isEmpty(),
+                Diagnostic.error(
+                    "JAVAN012",
+                    "unsupported reachable application method call",
+                    current.className(),
+                    current.methodName() + current.descriptor(),
+                    target.display(),
+                    "Optional.flatMap requires a closed-world Function implementation class or a supported direct function lambda target.",
+                    "Provide a reachable Function implementation class or keep this exact optional flat-mapping flow on the JVM until broader callback support lands."
+                )
             ));
             return;
         }
@@ -535,19 +651,23 @@ public final class ReachabilityAnalyzer {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
             }
-            if (hasInlineDirectSupplierLambda(classes, current, instruction)
-                || containsMethodRef(materializedLambdaMethods, supplierGet)
-                || !targetMethods.isEmpty()) {
+            if (hasInlineDirectSupplierLambda(classes, current, instruction)) {
                 return;
             }
-            diagnostics.add(Diagnostic.error(
-                "JAVAN012",
-                "unsupported reachable application method call",
-                current.className(),
-                current.methodName() + current.descriptor(),
-                target.display(),
-                "Optional.or requires a closed-world Supplier implementation class or a supported direct supplier lambda target.",
-                "Provide a reachable Supplier implementation class or keep this exact optional fallback-optional flow on the JVM until broader callback support lands."
+            pendingCallbackUses.add(new PendingCallbackUse(
+                CallbackKind.SUPPLIER,
+                current,
+                instruction.offset(),
+                !targetMethods.isEmpty(),
+                Diagnostic.error(
+                    "JAVAN012",
+                    "unsupported reachable application method call",
+                    current.className(),
+                    current.methodName() + current.descriptor(),
+                    target.display(),
+                    "Optional.or requires a closed-world Supplier implementation class or a supported direct supplier lambda target.",
+                    "Provide a reachable Supplier implementation class or keep this exact optional fallback-optional flow on the JVM until broader callback support lands."
+                )
             ));
             return;
         }
@@ -558,19 +678,23 @@ public final class ReachabilityAnalyzer {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
             }
-            if (hasInlineDirectSupplierLambda(classes, current, instruction)
-                || containsMethodRef(materializedLambdaMethods, supplierGet)
-                || !targetMethods.isEmpty()) {
+            if (hasInlineDirectSupplierLambda(classes, current, instruction)) {
                 return;
             }
-            diagnostics.add(Diagnostic.error(
-                "JAVAN012",
-                "unsupported reachable application method call",
-                current.className(),
-                current.methodName() + current.descriptor(),
-                target.display(),
-                "Optional.orElseGet requires a closed-world Supplier implementation class or a supported direct supplier lambda target.",
-                "Provide a reachable Supplier implementation class or keep this exact optional fallback flow on the JVM until broader callback support lands."
+            pendingCallbackUses.add(new PendingCallbackUse(
+                CallbackKind.SUPPLIER,
+                current,
+                instruction.offset(),
+                !targetMethods.isEmpty(),
+                Diagnostic.error(
+                    "JAVAN012",
+                    "unsupported reachable application method call",
+                    current.className(),
+                    current.methodName() + current.descriptor(),
+                    target.display(),
+                    "Optional.orElseGet requires a closed-world Supplier implementation class or a supported direct supplier lambda target.",
+                    "Provide a reachable Supplier implementation class or keep this exact optional fallback flow on the JVM until broader callback support lands."
+                )
             ));
             return;
         }
@@ -581,19 +705,23 @@ public final class ReachabilityAnalyzer {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
             }
-            if (hasInlineDirectSupplierLambda(classes, current, instruction)
-                || containsMethodRef(materializedLambdaMethods, supplierGet)
-                || !targetMethods.isEmpty()) {
+            if (hasInlineDirectSupplierLambda(classes, current, instruction)) {
                 return;
             }
-            diagnostics.add(Diagnostic.error(
-                "JAVAN012",
-                "unsupported reachable application method call",
-                current.className(),
-                current.methodName() + current.descriptor(),
-                target.display(),
-                "Objects.requireNonNullElseGet requires a closed-world Supplier implementation class or a supported direct supplier lambda target.",
-                "Provide a reachable Supplier implementation class or keep this exact null-fallback flow on the JVM until broader callback support lands."
+            pendingCallbackUses.add(new PendingCallbackUse(
+                CallbackKind.SUPPLIER,
+                current,
+                instruction.offset(),
+                !targetMethods.isEmpty(),
+                Diagnostic.error(
+                    "JAVAN012",
+                    "unsupported reachable application method call",
+                    current.className(),
+                    current.methodName() + current.descriptor(),
+                    target.display(),
+                    "Objects.requireNonNullElseGet requires a closed-world Supplier implementation class or a supported direct supplier lambda target.",
+                    "Provide a reachable Supplier implementation class or keep this exact null-fallback flow on the JVM until broader callback support lands."
+                )
             ));
             return;
         }
@@ -694,19 +822,23 @@ public final class ReachabilityAnalyzer {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
             }
-            if (hasInlineDirectSupplierLambda(classes, current, instruction)
-                || containsMethodRef(materializedLambdaMethods, target)
-                || !targetMethods.isEmpty()) {
+            if (hasInlineDirectSupplierLambda(classes, current, instruction)) {
                 return;
             }
-            diagnostics.add(Diagnostic.error(
-                "JAVAN012",
-                "unsupported reachable application method call",
-                current.className(),
-                current.methodName() + current.descriptor(),
-                target.display(),
-                "Supplier.get requires either a closed-world Supplier implementation class or a supported materialized Supplier lambda target.",
-                "Provide a reachable Supplier implementation class or keep this exact supplier dispatch on the JVM until broader receiver support lands."
+            pendingCallbackUses.add(new PendingCallbackUse(
+                CallbackKind.SUPPLIER,
+                current,
+                instruction.offset(),
+                !targetMethods.isEmpty(),
+                Diagnostic.error(
+                    "JAVAN012",
+                    "unsupported reachable application method call",
+                    current.className(),
+                    current.methodName() + current.descriptor(),
+                    target.display(),
+                    "Supplier.get requires either a closed-world Supplier implementation class or a supported materialized Supplier lambda target.",
+                    "Provide a reachable Supplier implementation class or keep this exact supplier dispatch on the JVM until broader receiver support lands."
+                )
             ));
             return;
         }
@@ -716,19 +848,15 @@ public final class ReachabilityAnalyzer {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
             }
-            if (hasInlineDirectFunctionLambda(classes, current, instruction)
-                || containsMethodRef(materializedLambdaMethods, target)
-                || !targetMethods.isEmpty()) {
+            if (hasInlineDirectFunctionLambda(classes, current, instruction)) {
                 return;
             }
-            diagnostics.add(Diagnostic.error(
-                "JAVAN012",
-                "unsupported reachable application method call",
-                current.className(),
-                current.methodName() + current.descriptor(),
-                target.display(),
-                "Function.apply requires either a closed-world Function implementation class or a supported materialized Function lambda target.",
-                "Provide a reachable Function implementation class or keep this exact function dispatch on the JVM until broader receiver support lands."
+            pendingCallbackUses.add(new PendingCallbackUse(
+                CallbackKind.FUNCTION,
+                current,
+                instruction.offset(),
+                !targetMethods.isEmpty(),
+                functionApplyDiagnostic(current, target)
             ));
             return;
         }
@@ -884,6 +1012,7 @@ public final class ReachabilityAnalyzer {
 
     private static void enqueueLambdaApplicationCall(
         final Map<String, ClassFile> classes,
+        final MethodInfo method,
         final Instruction instruction,
         final List<EntryPoint> work,
         final EntryPointMembership workSet,
@@ -900,8 +1029,9 @@ public final class ReachabilityAnalyzer {
             return;
         }
         final LambdaMetafactoryCall resolved = lambdaCall.orElseThrow();
-        final boolean materializedFunction = resolved.isMaterializedFunctionLambda()
-            && shouldMaterializeFunctionLambda(classes, current, instruction);
+        final boolean materializedFunction = resolved.isMaterializedFunctionLambda(classes)
+            && FunctionLambdaUse.requiresMaterialization(method, instruction)
+            && !FunctionLambdaUse.isProvablyDiscardedZeroCapture(resolved, method, instruction);
         final boolean materializedSupplier = resolved.isMaterializedSupplierLambda()
             && shouldMaterializeSupplierLambda(classes, current, instruction);
         final boolean materializedBoundCustom = resolved.isMaterializedBoundCustomObjectLambda(classes);
@@ -1032,44 +1162,6 @@ public final class ReachabilityAnalyzer {
         return hasInlineDirectLambda(classes, current, instruction, InlineLambdaKind.SUPPLIER);
     }
 
-    private static boolean shouldMaterializeFunctionLambda(
-        final Map<String, ClassFile> classes,
-        final EntryPoint current,
-        final Instruction instruction
-    ) {
-        final Optional<MethodInfo> method = method(classes, current);
-        if (method.isEmpty() || method.orElseThrow().code().isEmpty()) {
-            return true;
-        }
-        final List<Instruction> instructions = method.orElseThrow().code().orElseThrow().instructions();
-        for (int index = 0; index < instructions.size(); index++) {
-            if (instructions.get(index).offset() != instruction.offset()) {
-                continue;
-            }
-            for (int consumerIndex = index + 1; consumerIndex < instructions.size(); consumerIndex++) {
-                final Instruction candidate = instructions.get(consumerIndex);
-                final Optional<MethodRef> consumer = candidate.methodRef();
-                if (consumer.isPresent()) {
-                    return !isInlineFunctionConsumer(consumer.orElseThrow());
-                }
-                if (isControlFlowBoundary(candidate.opcode())
-                    || candidate.opcode() == 179
-                    || candidate.opcode() == 181) {
-                    return true;
-                }
-            }
-            return true;
-        }
-        return true;
-    }
-
-    private static boolean isInlineFunctionConsumer(final MethodRef target) {
-        return isFunctionApply(target)
-            || isMapComputeIfAbsent(target)
-            || isOptionalMap(target)
-            || isOptionalFlatMap(target);
-    }
-
     private static boolean shouldMaterializeSupplierLambda(
         final Map<String, ClassFile> classes,
         final EntryPoint current,
@@ -1116,33 +1208,135 @@ public final class ReachabilityAnalyzer {
             if (instructions.get(index).offset() != instruction.offset()) {
                 continue;
             }
-            for (int producerIndex = index - 1; producerIndex >= 0; producerIndex--) {
-                final Instruction producer = instructions.get(producerIndex);
-                if (producer.opcode() == 186 && producer.dynamicRef().isPresent()) {
-                    final Optional<LambdaMetafactoryCall> lambdaCall = LambdaMetafactoryCall.resolve(producer.dynamicRef().orElseThrow());
-                    return lambdaCall.isPresent()
-                        && matchesInlineLambdaKind(lambdaCall.orElseThrow(), lambdaKind)
-                        && lambdaCall.orElseThrow().isDirectlyLowerable(classes);
-                }
-                if (isControlFlowBoundary(producer.opcode())) {
-                    return false;
-                }
-            }
-            return false;
+            final int producerIndex = inlineCallbackProducerIndex(instructions, index, instruction);
+            return isSupportedInlineLambdaProducer(
+                classes,
+                method.orElseThrow(),
+                instructions,
+                producerIndex,
+                lambdaKind
+            );
         }
         return false;
     }
 
-    private static boolean isControlFlowBoundary(final int opcode) {
-        return opcode == 167 || opcode == 168 || opcode == 169 || opcode == 170 || opcode == 171
-            || opcode == 172 || opcode == 173 || opcode == 174 || opcode == 175 || opcode == 176
-            || opcode == 177
-            || opcode == 182 || opcode == 183 || opcode == 184 || opcode == 185 || opcode == 186
-            || opcode == 191 || opcode == 194 || opcode == 195
-            || (opcode >= 54 && opcode <= 58)
-            || (opcode >= 79 && opcode <= 95)
-            || (opcode >= 153 && opcode <= 166)
-            || opcode == 198 || opcode == 199;
+    private static int inlineCallbackProducerIndex(
+        final List<Instruction> instructions,
+        final int callIndex,
+        final Instruction instruction
+    ) {
+        if (callIndex < 1 || instruction.methodRef().isEmpty()) {
+            return -1;
+        }
+        final MethodRef target = instruction.methodRef().orElseThrow();
+        if (!isFunctionApply(target) && !isPredicateTest(target)) {
+            return callIndex - 1;
+        }
+        final int argumentStart = simpleReferenceProducerStart(instructions, callIndex - 1);
+        return argumentStart < 1 ? -1 : argumentStart - 1;
+    }
+
+    private static int simpleReferenceProducerStart(
+        final List<Instruction> instructions,
+        final int producerIndex
+    ) {
+        if (producerIndex < 0 || producerIndex >= instructions.size()) {
+            return -1;
+        }
+        final Instruction producer = instructions.get(producerIndex);
+        if (producer.opcode() == 192) {
+            return simpleReferenceProducerStart(instructions, producerIndex - 1);
+        }
+        if (producer.opcode() == 1
+            || producer.opcode() == 18
+            || producer.opcode() == 19
+            || localLoadSlot(producer) >= 0) {
+            return producerIndex;
+        }
+        if (producer.opcode() == 178
+            && producer.fieldRef().isPresent()
+            && isReferenceDescriptor(producer.fieldRef().orElseThrow().descriptor())) {
+            return producerIndex;
+        }
+        return -1;
+    }
+
+    private static boolean isSupportedInlineLambdaProducer(
+        final Map<String, ClassFile> classes,
+        final MethodInfo method,
+        final List<Instruction> instructions,
+        final int producerIndex,
+        final InlineLambdaKind lambdaKind
+    ) {
+        final int transparentIndex = transparentReferenceProducerIndex(instructions, producerIndex);
+        if (transparentIndex < 0) {
+            return false;
+        }
+        final Instruction producer = instructions.get(transparentIndex);
+        if (producer.opcode() == 186 && producer.dynamicRef().isPresent()) {
+            return isSupportedInlineLambda(classes, producer.dynamicRef().orElseThrow(), lambdaKind);
+        }
+        final int local = localLoadSlot(producer);
+        if (local < 0 || method.code().orElseThrow().exceptionTableLength() != 0) {
+            return false;
+        }
+        final int storeIndex = VirtualThreadInvokePatterns.previousLocalStoreIndex(
+            instructions,
+            transparentIndex - 1,
+            local
+        );
+        if (storeIndex < 1 || hasInlineLambdaControlFlow(instructions, storeIndex + 1, transparentIndex)) {
+            return false;
+        }
+        final int sourceIndex = transparentReferenceProducerIndex(instructions, storeIndex - 1);
+        if (sourceIndex < 0) {
+            return false;
+        }
+        final Instruction source = instructions.get(sourceIndex);
+        return source.opcode() == 186
+            && source.dynamicRef().isPresent()
+            && isSupportedInlineLambda(classes, source.dynamicRef().orElseThrow(), lambdaKind);
+    }
+
+    private static boolean isSupportedInlineLambda(
+        final Map<String, ClassFile> classes,
+        final DynamicRef dynamicRef,
+        final InlineLambdaKind lambdaKind
+    ) {
+        final Optional<LambdaMetafactoryCall> lambdaCall = LambdaMetafactoryCall.resolve(dynamicRef);
+        return lambdaCall.isPresent()
+            && matchesInlineLambdaKind(lambdaCall.orElseThrow(), lambdaKind)
+            && lambdaCall.orElseThrow().isDirectlyLowerable(classes);
+    }
+
+    private static int transparentReferenceProducerIndex(
+        final List<Instruction> instructions,
+        final int producerIndex
+    ) {
+        int result = producerIndex;
+        while (result >= 0
+            && result < instructions.size()
+            && instructions.get(result).opcode() == 192) {
+            result--;
+        }
+        return result;
+    }
+
+    private static boolean hasInlineLambdaControlFlow(
+        final List<Instruction> instructions,
+        final int start,
+        final int end
+    ) {
+        for (int index = start; index < end; index++) {
+            final int opcode = instructions.get(index).opcode();
+            if ((opcode >= 153 && opcode <= 177)
+                || (opcode >= 198 && opcode <= 201)
+                || opcode == 191
+                || opcode == 196) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean matchesInlineLambdaKind(final LambdaMetafactoryCall lambdaCall, final InlineLambdaKind lambdaKind) {

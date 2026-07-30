@@ -3010,10 +3010,11 @@ final class BytecodeToIRTest {
         );
         assertThat(program.functions()).filteredOn(function -> function.name().equals("invokeObjectLambda")).singleElement().satisfies(function ->
             assertThat(function.instructions()).containsExactly(
-                IrInstruction.returnObject(IrExpression.objectCall(
+                IrInstruction.assignObject("object0", IrExpression.objectCall(
                     "javan_materialized_lambda_apply_object",
                     List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
-                ))
+                )),
+                IrInstruction.returnObject(IrExpression.objectLocal("object0"))
             )
         );
     }
@@ -3082,10 +3083,11 @@ final class BytecodeToIRTest {
         );
         assertThat(program.functions()).filteredOn(function -> function.name().equals("invokeBiFunctionLambda")).singleElement().satisfies(function ->
             assertThat(function.instructions()).containsExactly(
-                IrInstruction.returnObject(IrExpression.objectCall(
+                IrInstruction.assignObject("object0", IrExpression.objectCall(
                     "javan_materialized_lambda_apply_object2",
                     List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("arg2"))
-                ))
+                )),
+                IrInstruction.returnObject(IrExpression.objectLocal("object0"))
             )
         );
     }
@@ -3913,10 +3915,11 @@ final class BytecodeToIRTest {
         );
         assertThat(program.functions()).filteredOn(function -> function.name().equals("invokeBooleanLambda")).singleElement().satisfies(function ->
             assertThat(function.instructions()).containsExactly(
-                IrInstruction.returnInt(IrExpression.intCall(
+                IrInstruction.assignInt("int0", IrExpression.intCall(
                     "javan_materialized_lambda_apply_boolean",
                     List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
-                ))
+                )),
+                IrInstruction.returnInt(IrExpression.intLocal("int0"))
             )
         );
     }

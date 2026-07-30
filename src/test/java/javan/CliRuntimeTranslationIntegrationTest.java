@@ -4370,7 +4370,228 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void storedJdkFunctionReferenceIsRejectedAtVerification() throws Exception {
+    void nestedCapturedFunctionStoredInFieldSurvivesGcStress() throws Exception {
+        final Path project = project("nested-captured-function-stored-in-field");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String prefix = new String("nested-");
+                    final Function<String, String> inner = value -> prefix + value;
+                    final Function<String, String> outer = value -> inner.apply(value) + "-done";
+                    System.out.println(new Reader(outer).read("value"));
+                }
+
+                private static final class Reader {
+                    private final Function<String, String> function;
+
+                    private Reader(final Function<String, String> function) {
+                        this.function = function;
+                    }
+
+                    private String read(final String value) {
+                        return function.apply(value);
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String result = run.exitCode() == 0
+            ? run.exitCode() + "\n" + run.stderr() + process(
+                project,
+                List.of(project.resolve(".javan/bin/nested-captured-function-stored-in-field").toString()),
+                defaultProcessTimeout(),
+                java.util.Map.of("JAVAN_GC_STRESS", "1")
+            ).stdout()
+            : run.exitCode() + "\n" + run.stderr();
+
+        assertThat(result).isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
+    void deeplyForwardedFunctionBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("deeply-forwarded-function");
+        final StringBuilder source = new StringBuilder("""
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(step0().apply("value"));
+                }
+
+            """);
+        for (int index = 0; index < 513; index++) {
+            source.append("    private static Function<String, String> step")
+                .append(index)
+                .append("() {\n        return step")
+                .append(index + 1)
+                .append("();\n    }\n\n");
+        }
+        source.append("""
+                private static Function<String, String> step513() {
+                    return Main::decorate;
+                }
+
+                private static String decorate(final String value) {
+                    return "deep-" + value;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Main", source.toString());
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String result = run.exitCode() == 0
+            ? run.exitCode() + "\n" + run.stderr() + process(
+                project,
+                List.of(project.resolve(".javan/bin/deeply-forwarded-function").toString())
+            ).stdout()
+            : run.exitCode() + "\n" + run.stderr();
+
+        assertThat(result).isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
+    void mixedFunctionOriginStoredInFinalFieldIsRejected() throws Exception {
+        final Path project = project("mixed-function-origin-stored-in-final-field");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Function<String, String> selected;
+                    if (args.length == 0) {
+                        selected = value -> "valid-" + value;
+                    } else {
+                        selected = null;
+                    }
+                    System.out.println(new Reader(selected).read("value"));
+                }
+
+                private static final class Reader {
+                    private final Function<String, String> function;
+
+                    private Reader(final Function<String, String> function) {
+                        this.function = function;
+                    }
+
+                    private String read(final String value) {
+                        return function.apply(value);
+                    }
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode() + "\n" + run.stderr())
+            .startsWith("2\n")
+            .contains(
+                "error[JAVAN012]",
+                "Function.apply requires either a closed-world Function implementation class or a supported materialized Function lambda target."
+            );
+    }
+
+    @Test
+    void boundInstanceFunctionStoredInFieldSurvivesGcStress() throws Exception {
+        final Path project = project("bound-instance-function-stored-in-field");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Main {
+                private final String prefix;
+                private final Function<String, String> function;
+
+                private Main(final String prefix) {
+                    this.prefix = prefix;
+                    function = this::read;
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new Main(new String("bound-")).apply("value"));
+                }
+
+                private String apply(final String value) {
+                    return function.apply(value);
+                }
+
+                private String read(final String value) {
+                    return prefix + value;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String result = run.exitCode() == 0
+            ? run.exitCode() + "\n" + run.stderr() + process(
+                project,
+                List.of(project.resolve(".javan/bin/bound-instance-function-stored-in-field").toString()),
+                defaultProcessTimeout(),
+                java.util.Map.of("JAVAN_GC_STRESS", "1")
+            ).stdout()
+            : run.exitCode() + "\n" + run.stderr();
+
+        assertThat(result).isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
+    void boundInstanceFunctionOnNonFinalOwnerIsRejectedDeterministically() throws Exception {
+        final Path project = project("bound-instance-function-non-final-owner");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public class Main {
+                private final Function<String, String> function;
+
+                public Main() {
+                    function = this::read;
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new Main().function.apply("value"));
+                }
+
+                private String read(final String value) {
+                    return value;
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode() + "\n" + run.stderr())
+            .startsWith("2\n")
+            .contains(
+                "error[JAVAN012]",
+                "Function.apply requires either a closed-world Function implementation class or a supported materialized Function lambda target."
+            );
+    }
+
+    @Test
+    void storedJdkFunctionReferenceIsRejectedDeterministically() throws Exception {
         final Path project = project("stored-jdk-function-reference");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -4402,9 +4623,170 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
 
         final CliRun run = run(tempDir, "build", project.toString());
 
-        assertThat(run.stderr())
+        assertThat(run.exitCode() + "\n" + run.stderr())
+            .startsWith("2\n")
+            .contains(
+                "error[JAVAN012]",
+                "Function.apply requires either a closed-world Function implementation class or a supported materialized Function lambda target."
+            )
+            .doesNotContain("error[JAVAN030]");
+    }
+
+    @Test
+    void supportedStoredFunctionDoesNotAuthorizeStoredJdkFunctionReference() throws Exception {
+        final Path project = project("stored-jdk-function-reference-isolation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Function<String, String> supported = Main::decorate;
+                    System.out.println(supported != null);
+                    final Function<Object, String> function = String::valueOf;
+                    System.out.println(new Reader(function).read("value"));
+                }
+
+                private static String decorate(final String value) {
+                    return "supported-" + value;
+                }
+
+                private static final class Reader {
+                    private final Function<Object, String> function;
+
+                    private Reader(final Function<Object, String> function) {
+                        this.function = function;
+                    }
+
+                    private String read(final Object value) {
+                        return function.apply(value);
+                    }
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode() + "\n" + run.stderr())
+            .startsWith("2\n")
+            .contains(
+                "error[JAVAN012]",
+                "Function.apply requires either a closed-world Function implementation class or a supported materialized Function lambda target."
+            )
+            .doesNotContain("error[JAVAN030]");
+    }
+
+    @Test
+    void storedJdkFunctionReferenceIsRejectedEvenWithReachableConcreteFunction() throws Exception {
+        final Path project = project("stored-jdk-function-concrete-isolation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new Loader() != null);
+                    final Function<Object, String> callback = String::valueOf;
+                    System.out.println(callback.apply("value"));
+                }
+
+                private static final class Loader implements Function<Object, Object> {
+                    @Override
+                    public Object apply(final Object value) {
+                        return value;
+                    }
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode() + "\n" + run.stderr())
+            .startsWith("2\n")
             .contains("error[JAVAN030]", "unsupported reachable bytecode", "invokedynamic")
             .doesNotContain("error[JAVAN012]");
+    }
+
+    @Test
+    void supportedStoredFunctionDoesNotAuthorizeNullFunctionReceiver() throws Exception {
+        final Path project = project("stored-function-null-receiver-isolation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(apply(null));
+                    final Function<Object, Object> supported = Main::decorate;
+                    System.out.println(supported != null);
+                }
+
+                private static Object apply(final Function<Object, Object> function) {
+                    return function.apply(null);
+                }
+
+                private static Object decorate(final Object value) {
+                    return value;
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode() + "\n" + run.stderr())
+            .startsWith("2\n")
+            .contains(
+                "error[JAVAN012]",
+                "Function.apply requires either a closed-world Function implementation class or a supported materialized Function lambda target."
+            )
+            .doesNotContain("error[JAVAN030]");
+    }
+
+    @Test
+    void materializedAndNullFunctionReceiversInOneMethodRemainIsolated() throws Exception {
+        final Path project = project("stored-function-same-method-isolation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Main {
+                private static final Function<Object, Object> SUPPORTED = Main::decorate;
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(SUPPORTED.apply("valid"));
+                    System.out.println(((Function<Object, Object>) null).apply("invalid"));
+                }
+
+                private static Object decorate(final Object value) {
+                    return value;
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode() + "\n" + run.stderr())
+            .startsWith("2\n")
+            .contains(
+                "error[JAVAN012]",
+                "Function.apply requires either a closed-world Function implementation class or a supported materialized Function lambda target."
+            );
     }
 
     @Test
@@ -5190,9 +5572,10 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
 
-        assertThat(run.exitCode()).as(run.stderr()).isZero();
-        assertThat(process(project, List.of(project.resolve(".javan/bin/supplier-get-concrete").toString())).stdout()).isEqualTo(jvmOutput);
-        assertThat(jvmOutput).isEqualTo("fallback\n");
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/supplier-get-concrete").toString())).stdout()
+            : "";
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput).isEqualTo("0\n" + jvmOutput);
     }
 
     @Test
@@ -5217,9 +5600,10 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
 
-        assertThat(run.exitCode()).as(run.stderr()).isZero();
-        assertThat(process(project, List.of(project.resolve(".javan/bin/supplier-get-lambda").toString())).stdout()).isEqualTo(jvmOutput);
-        assertThat(jvmOutput).isEqualTo("fallback\n");
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/supplier-get-lambda").toString())).stdout()
+            : "";
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput).isEqualTo("0\n" + jvmOutput);
     }
 
     @Test
@@ -5256,9 +5640,10 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
 
-        assertThat(run.exitCode()).as(run.stderr()).isZero();
-        assertThat(process(project, List.of(project.resolve(".javan/bin/predicate-test-concrete-direct").toString())).stdout()).isEqualTo(jvmOutput);
-        assertThat(jvmOutput).isEqualTo("true\n");
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/predicate-test-concrete-direct").toString())).stdout()
+            : "";
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput).isEqualTo("0\n" + jvmOutput);
     }
 
     @Test
@@ -5283,9 +5668,206 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
 
-        assertThat(run.exitCode()).as(run.stderr()).isZero();
-        assertThat(process(project, List.of(project.resolve(".javan/bin/predicate-test-lambda-direct").toString())).stdout()).isEqualTo(jvmOutput);
-        assertThat(jvmOutput).isEqualTo("true\n");
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/predicate-test-lambda-direct").toString())).stdout()
+            : "";
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput).isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
+    void earlierPredicateLambdaDoesNotAuthorizeNullPredicateReceiver() throws Exception {
+        final Path project = project("predicate-lambda-null-receiver-isolation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Predicate;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Predicate<String> supported = value -> true;
+                    final Predicate<String> receiver = null;
+                    System.out.println(receiver.test("value"));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode() + "\n" + run.stderr())
+            .startsWith("2\n")
+            .contains("error[JAVAN012]", "Predicate.test requires");
+    }
+
+    @Test
+    void earlierSupplierLambdaDoesNotAuthorizeNullSupplierReceiver() throws Exception {
+        final Path project = project("supplier-lambda-null-receiver-isolation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Supplier<String> supported = () -> "supported";
+                    final Supplier<String> receiver = null;
+                    System.out.println(receiver.get());
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode() + "\n" + run.stderr())
+            .startsWith("2\n")
+            .contains("error[JAVAN012]", "Supplier.get requires");
+    }
+
+    @Test
+    void earlierSupplierLambdaDoesNotAuthorizeNullOptionalOrElseGetCallback() throws Exception {
+        final Path project = project("supplier-lambda-null-optional-or-else-get-isolation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Supplier<String> supported = () -> "supported";
+                    final Supplier<String> fallback = null;
+                    System.out.println(Optional.<String>empty().orElseGet(fallback));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode() + "\n" + run.stderr())
+            .startsWith("2\n")
+            .contains("error[JAVAN012]", "Optional.orElseGet requires");
+    }
+
+    @Test
+    void earlierSupplierLambdaDoesNotAuthorizeNullOptionalOrCallback() throws Exception {
+        final Path project = project("supplier-lambda-null-optional-or-isolation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Supplier<Optional<String>> supported = () -> Optional.of("supported");
+                    final Supplier<Optional<String>> fallback = null;
+                    System.out.println(Optional.<String>empty().or(fallback));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode() + "\n" + run.stderr())
+            .startsWith("2\n")
+            .contains("error[JAVAN012]", "Optional.or requires");
+    }
+
+    @Test
+    void earlierSupplierLambdaDoesNotAuthorizeNullObjectsFallbackCallback() throws Exception {
+        final Path project = project("supplier-lambda-null-objects-fallback-isolation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Objects;
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Supplier<String> supported = () -> "supported";
+                    final Supplier<String> fallback = null;
+                    System.out.println(Objects.requireNonNullElseGet(null, fallback));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode() + "\n" + run.stderr())
+            .startsWith("2\n")
+            .contains("error[JAVAN012]", "Objects.requireNonNullElseGet requires");
+    }
+
+    @Test
+    void mixedMaterializedAndNullSupplierReceiverIsRejected() throws Exception {
+        final Path project = project("supplier-materialized-null-receiver");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Supplier<String> selected;
+                    if (args.length == 0) {
+                        selected = () -> "valid";
+                    } else {
+                        selected = null;
+                    }
+                    System.out.println(selected.get());
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode() + "\n" + run.stderr())
+            .startsWith("2\n")
+            .contains("error[JAVAN012]", "Supplier.get requires");
+    }
+
+    @Test
+    void earlierFunctionLambdaDoesNotAuthorizeNullFunctionReceiver() throws Exception {
+        final Path project = project("function-lambda-null-receiver-isolation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Function<String, String> supported = value -> value;
+                    final Function<String, String> receiver = null;
+                    System.out.println(receiver.apply("value"));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode() + "\n" + run.stderr())
+            .startsWith("2\n")
+            .contains("error[JAVAN012]", "Function.apply requires");
     }
 
     @Test
@@ -5322,9 +5904,10 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
 
-        assertThat(run.exitCode()).as(run.stderr()).isZero();
-        assertThat(process(project, List.of(project.resolve(".javan/bin/consumer-accept-concrete-direct").toString())).stdout()).isEqualTo(jvmOutput);
-        assertThat(jvmOutput).isEqualTo("seen:value\n");
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/consumer-accept-concrete-direct").toString())).stdout()
+            : "";
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput).isEqualTo("0\n" + jvmOutput);
     }
 
     @Test
@@ -5349,9 +5932,10 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
 
-        assertThat(run.exitCode()).as(run.stderr()).isZero();
-        assertThat(process(project, List.of(project.resolve(".javan/bin/consumer-accept-lambda-direct").toString())).stdout()).isEqualTo(jvmOutput);
-        assertThat(jvmOutput).isEqualTo("seen:value\n");
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/consumer-accept-lambda-direct").toString())).stdout()
+            : "";
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput).isEqualTo("0\n" + jvmOutput);
     }
 
     @Test
@@ -5388,9 +5972,10 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
 
-        assertThat(run.exitCode()).as(run.stderr()).isZero();
-        assertThat(process(project, List.of(project.resolve(".javan/bin/biconsumer-accept-concrete-direct").toString())).stdout()).isEqualTo(jvmOutput);
-        assertThat(jvmOutput).isEqualTo("left:right\n");
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/biconsumer-accept-concrete-direct").toString())).stdout()
+            : "";
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput).isEqualTo("0\n" + jvmOutput);
     }
 
     @Test
@@ -5415,9 +6000,10 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
 
-        assertThat(run.exitCode()).as(run.stderr()).isZero();
-        assertThat(process(project, List.of(project.resolve(".javan/bin/biconsumer-accept-lambda-direct").toString())).stdout()).isEqualTo(jvmOutput);
-        assertThat(jvmOutput).isEqualTo("left:right\n");
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/biconsumer-accept-lambda-direct").toString())).stdout()
+            : "";
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput).isEqualTo("0\n" + jvmOutput);
     }
 
     @Test
@@ -5456,9 +6042,10 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
 
-        assertThat(run.exitCode()).as(run.stderr()).isZero();
-        assertThat(process(project, List.of(project.resolve(".javan/bin/map-compute-if-present-concrete").toString())).stdout()).isEqualTo(jvmOutput);
-        assertThat(jvmOutput).isEqualTo("demo:value\ndemo:value\n");
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/map-compute-if-present-concrete").toString())).stdout()
+            : "";
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput).isEqualTo("0\n" + jvmOutput);
     }
 
     @Test
@@ -5486,9 +6073,10 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
 
-        assertThat(run.exitCode()).as(run.stderr()).isZero();
-        assertThat(process(project, List.of(project.resolve(".javan/bin/map-compute-if-present-lambda").toString())).stdout()).isEqualTo(jvmOutput);
-        assertThat(jvmOutput).isEqualTo("demo-value\ndemo-value\n");
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/map-compute-if-present-lambda").toString())).stdout()
+            : "";
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput).isEqualTo("0\n" + jvmOutput);
     }
 
     @Test
@@ -5517,9 +6105,10 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
 
-        assertThat(run.exitCode()).as(run.stderr()).isZero();
-        assertThat(process(project, List.of(project.resolve(".javan/bin/map-compute-if-present-missing").toString())).stdout()).isEqualTo(jvmOutput);
-        assertThat(jvmOutput).isEqualTo("null\n1\ntrue\n");
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/map-compute-if-present-missing").toString())).stdout()
+            : "";
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput).isEqualTo("0\n" + jvmOutput);
     }
 
     @Test
@@ -5548,9 +6137,10 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
 
-        assertThat(run.exitCode()).as(run.stderr()).isZero();
-        assertThat(process(project, List.of(project.resolve(".javan/bin/map-compute-if-present-null-remap").toString())).stdout()).isEqualTo(jvmOutput);
-        assertThat(jvmOutput).isEqualTo("null\nfalse\n0\n");
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/map-compute-if-present-null-remap").toString())).stdout()
+            : "";
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput).isEqualTo("0\n" + jvmOutput);
     }
 
     @Test
@@ -5589,9 +6179,10 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
 
-        assertThat(run.exitCode()).as(run.stderr()).isZero();
-        assertThat(process(project, List.of(project.resolve(".javan/bin/map-merge-concrete").toString())).stdout()).isEqualTo(jvmOutput);
-        assertThat(jvmOutput).isEqualTo("left:right\nleft:right\n");
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/map-merge-concrete").toString())).stdout()
+            : "";
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput).isEqualTo("0\n" + jvmOutput);
     }
 
     @Test
@@ -5619,9 +6210,10 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
 
-        assertThat(run.exitCode()).as(run.stderr()).isZero();
-        assertThat(process(project, List.of(project.resolve(".javan/bin/map-merge-missing").toString())).stdout()).isEqualTo(jvmOutput);
-        assertThat(jvmOutput).isEqualTo("value\nvalue\n1\n");
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/map-merge-missing").toString())).stdout()
+            : "";
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput).isEqualTo("0\n" + jvmOutput);
     }
 
     @Test
@@ -5650,9 +6242,10 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
 
-        assertThat(run.exitCode()).as(run.stderr()).isZero();
-        assertThat(process(project, List.of(project.resolve(".javan/bin/map-merge-null-remap").toString())).stdout()).isEqualTo(jvmOutput);
-        assertThat(jvmOutput).isEqualTo("null\nfalse\n0\n");
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/map-merge-null-remap").toString())).stdout()
+            : "";
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput).isEqualTo("0\n" + jvmOutput);
     }
 
     @Test
@@ -5691,9 +6284,10 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
 
-        assertThat(run.exitCode()).as(run.stderr()).isZero();
-        assertThat(process(project, List.of(project.resolve(".javan/bin/map-compute-concrete").toString())).stdout()).isEqualTo(jvmOutput);
-        assertThat(jvmOutput).isEqualTo("demo:value\ndemo:value\n");
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/map-compute-concrete").toString())).stdout()
+            : "";
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput).isEqualTo("0\n" + jvmOutput);
     }
 
     @Test
@@ -5721,10 +6315,488 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
 
-        assertThat(run.exitCode()).as(run.stderr()).isZero();
-        assertThat(process(project, List.of(project.resolve(".javan/bin/hashmap-compute-if-absent-captured-lambda").toString())).stdout())
-            .isEqualTo(jvmOutput);
-        assertThat(jvmOutput).isEqualTo("demo-value\ndemo-value\ndemo-value\n");
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/hashmap-compute-if-absent-captured-lambda").toString())).stdout()
+            : "";
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput).isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
+    void materializedFunctionDoesNotAuthorizeNullComputeIfAbsentCallback() throws Exception {
+        final Path project = project("map-compute-if-absent-function-isolation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final HashMap<String, String> values = new HashMap<>();
+                    final Function<String, String> supported = Main::decorate;
+                    final Function<String, String> callback = null;
+                    System.out.println(values.computeIfAbsent("demo", callback));
+                }
+
+                private static String decorate(final String value) {
+                    return "supported-" + value;
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode() + "\n" + run.stderr())
+            .startsWith("2\n")
+            .contains("error[JAVAN012]", "Map.computeIfAbsent requires");
+    }
+
+    @Test
+    void materializedFunctionDoesNotAuthorizeNullOptionalMapCallback() throws Exception {
+        final Path project = project("optional-map-function-isolation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Optional<String> value = Optional.of("value");
+                    final Function<String, String> supported = Main::decorate;
+                    final Function<String, String> callback = null;
+                    System.out.println(value.map(callback).orElse("missing"));
+                }
+
+                private static String decorate(final String value) {
+                    return "supported-" + value;
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode() + "\n" + run.stderr())
+            .startsWith("2\n")
+            .contains("error[JAVAN012]", "Optional.map requires");
+    }
+
+    @Test
+    void materializedFunctionDoesNotAuthorizeNullOptionalFlatMapCallback() throws Exception {
+        final Path project = project("optional-flat-map-function-isolation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Optional<String> value = Optional.of("value");
+                    final Function<String, Optional<String>> supported = Main::decorate;
+                    final Function<String, Optional<String>> callback = null;
+                    System.out.println(value.flatMap(callback).orElse("missing"));
+                }
+
+                private static Optional<String> decorate(final String value) {
+                    return Optional.of("supported-" + value);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode() + "\n" + run.stderr())
+            .startsWith("2\n")
+            .contains("error[JAVAN012]", "Optional.flatMap requires");
+    }
+
+    @Test
+    void reachableConcreteFunctionDoesNotAuthorizeNullFunctionReceiver() throws Exception {
+        final Path project = project("concrete-function-null-receiver-isolation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new Loader() != null);
+                    final Function<String, String> callback = null;
+                    System.out.println(callback.apply("demo"));
+                }
+
+                private static final class Loader implements Function<String, String> {
+                    @Override
+                    public String apply(final String value) {
+                        return "loaded-" + value;
+                    }
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode() + "\n" + run.stderr())
+            .startsWith("2\n")
+            .contains("error[JAVAN012]", "Function.apply requires");
+    }
+
+    @Test
+    void reachableConcreteFunctionDoesNotAuthorizeNullComputeIfAbsentCallback() throws Exception {
+        final Path project = project("concrete-function-map-callback-isolation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new Loader() != null);
+                    final HashMap<String, String> values = new HashMap<>();
+                    final Function<String, String> callback = null;
+                    System.out.println(values.computeIfAbsent("demo", callback));
+                }
+
+                private static final class Loader implements Function<String, String> {
+                    @Override
+                    public String apply(final String value) {
+                        return "loaded-" + value;
+                    }
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode() + "\n" + run.stderr())
+            .startsWith("2\n")
+            .contains("error[JAVAN012]", "Map.computeIfAbsent requires");
+    }
+
+    @Test
+    void reachableConcreteFunctionDoesNotAuthorizeNullOptionalMapCallback() throws Exception {
+        final Path project = project("concrete-function-optional-map-isolation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new Loader() != null);
+                    final Function<String, String> callback = null;
+                    System.out.println(Optional.of("demo").map(callback).orElse("missing"));
+                }
+
+                private static final class Loader implements Function<String, String> {
+                    @Override
+                    public String apply(final String value) {
+                        return "loaded-" + value;
+                    }
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode() + "\n" + run.stderr())
+            .startsWith("2\n")
+            .contains("error[JAVAN012]", "Optional.map requires");
+    }
+
+    @Test
+    void reachableConcreteFunctionDoesNotAuthorizeNullOptionalFlatMapCallback() throws Exception {
+        final Path project = project("concrete-function-optional-flat-map-isolation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new Loader() != null);
+                    final Function<String, Optional<String>> callback = null;
+                    System.out.println(Optional.of("demo").flatMap(callback).orElse("missing"));
+                }
+
+                private static final class Loader implements Function<String, Optional<String>> {
+                    @Override
+                    public Optional<String> apply(final String value) {
+                        return Optional.of("loaded-" + value);
+                    }
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode() + "\n" + run.stderr())
+            .startsWith("2\n")
+            .contains("error[JAVAN012]", "Optional.flatMap requires");
+    }
+
+    @Test
+    void storedMaterializedFunctionRunsThroughMapComputeIfAbsent() throws Exception {
+        final Path project = project("map-compute-if-absent-stored-function");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final HashMap<String, String> values = new HashMap<>();
+                    final Function<String, String> callback = Main::decorate;
+                    System.out.println(values.computeIfAbsent("demo", callback));
+                }
+
+                private static String decorate(final String value) {
+                    return "stored-" + value;
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String result = run.exitCode() == 0
+            ? run.exitCode() + "\n" + run.stderr() + process(
+                project,
+                List.of(project.resolve(".javan/bin/map-compute-if-absent-stored-function").toString())
+            ).stdout()
+            : run.exitCode() + "\n" + run.stderr();
+
+        assertThat(result).isEqualTo("0\nstored-demo\n");
+    }
+
+    @Test
+    void storedMaterializedFunctionRunsThroughOptionalMap() throws Exception {
+        final Path project = project("optional-map-stored-function");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Function<String, String> callback = Main::decorate;
+                    System.out.println(Optional.of("demo").map(callback).orElse("missing"));
+                }
+
+                private static String decorate(final String value) {
+                    return "stored-" + value;
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String result = run.exitCode() == 0
+            ? run.exitCode() + "\n" + run.stderr() + process(
+                project,
+                List.of(project.resolve(".javan/bin/optional-map-stored-function").toString())
+            ).stdout()
+            : run.exitCode() + "\n" + run.stderr();
+
+        assertThat(result).isEqualTo("0\nstored-demo\n");
+    }
+
+    @Test
+    void storedMaterializedFunctionRunsThroughOptionalFlatMap() throws Exception {
+        final Path project = project("optional-flat-map-stored-function");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Function<String, Optional<String>> callback = Main::decorate;
+                    System.out.println(Optional.of("demo").flatMap(callback).orElse("missing"));
+                }
+
+                private static Optional<String> decorate(final String value) {
+                    return Optional.of("stored-" + value);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String result = run.exitCode() == 0
+            ? run.exitCode() + "\n" + run.stderr() + process(
+                project,
+                List.of(project.resolve(".javan/bin/optional-flat-map-stored-function").toString())
+            ).stdout()
+            : run.exitCode() + "\n" + run.stderr();
+
+        assertThat(result).isEqualTo("0\nstored-demo\n");
+    }
+
+    @Test
+    void materializedFunctionInTernaryBranchUsesExactDirectApplyTarget() throws Exception {
+        final Path project = project("ternary-stored-function-direct-apply");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Function<String, String> callback = Main::decorate;
+                    final String result = args.length == 0 ? callback.apply("demo") : "other";
+                    System.out.println(result);
+                }
+
+                private static String decorate(final String value) {
+                    return "materialized-" + value;
+                }
+
+                private static final class Loader implements Function<String, String> {
+                    @Override
+                    public String apply(final String value) {
+                        return "concrete-" + value;
+                    }
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String result = run.exitCode() == 0
+            ? run.exitCode() + "\n" + run.stderr() + process(
+                project,
+                List.of(project.resolve(".javan/bin/ternary-stored-function-direct-apply").toString())
+            ).stdout()
+            : run.exitCode() + "\n" + run.stderr();
+
+        assertThat(result).isEqualTo("0\nmaterialized-demo\n");
+    }
+
+    @Test
+    void materializedFunctionInTernaryBranchUsesExactComputeIfAbsentTarget() throws Exception {
+        final Path project = project("ternary-stored-function-compute-if-absent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final HashMap<String, String> values = new HashMap<>();
+                    final Function<String, String> callback = Main::decorate;
+                    final String result = args.length == 0
+                        ? values.computeIfAbsent("demo", callback)
+                        : "other";
+                    System.out.println(result);
+                }
+
+                private static String decorate(final String value) {
+                    return "materialized-" + value;
+                }
+
+                private static final class Loader implements Function<String, String> {
+                    @Override
+                    public String apply(final String value) {
+                        return "concrete-" + value;
+                    }
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String result = run.exitCode() == 0
+            ? run.exitCode() + "\n" + run.stderr() + process(
+                project,
+                List.of(project.resolve(".javan/bin/ternary-stored-function-compute-if-absent").toString())
+            ).stdout()
+            : run.exitCode() + "\n" + run.stderr();
+
+        assertThat(result).isEqualTo("0\nmaterialized-demo\n");
+    }
+
+    @Test
+    void materializedFunctionInTernaryBranchUsesExactOptionalMapTarget() throws Exception {
+        final Path project = project("ternary-stored-function-optional-map");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Function<String, String> callback = Main::decorate;
+                    final String result = args.length == 0
+                        ? Optional.of("demo").map(callback).orElse("missing")
+                        : "other";
+                    System.out.println(result);
+                }
+
+                private static String decorate(final String value) {
+                    return "materialized-" + value;
+                }
+
+                private static final class Loader implements Function<String, String> {
+                    @Override
+                    public String apply(final String value) {
+                        return "concrete-" + value;
+                    }
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String result = run.exitCode() == 0
+            ? run.exitCode() + "\n" + run.stderr() + process(
+                project,
+                List.of(project.resolve(".javan/bin/ternary-stored-function-optional-map").toString())
+            ).stdout()
+            : run.exitCode() + "\n" + run.stderr();
+
+        assertThat(result).isEqualTo("0\nmaterialized-demo\n");
     }
 
     @Test
@@ -6387,6 +7459,52 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         requireBuildSuccess(run(tempDir, "build", project.toString()));
         assertThat(process(project, List.of(project.resolve(".javan/bin/supplier-get-mixed-concrete-materialized").toString())).stdout())
             .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void optionalOrElseGetMixedConcreteAndMaterializedSuppliersBuildAndMatchJvmOutput() throws Exception {
+        final Path project = project("optional-or-else-get-mixed-concrete-materialized");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String prefix = "captured";
+                    System.out.println(select(new ConcreteSupplier()));
+                    System.out.println(select(() -> prefix + "-lambda"));
+                }
+
+                private static String select(final Supplier<String> supplier) {
+                    return Optional.<String>empty().orElseGet(supplier);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.ConcreteSupplier", """
+            package com.acme;
+
+            import java.util.function.Supplier;
+
+            public final class ConcreteSupplier implements Supplier<String> {
+                @Override
+                public String get() {
+                    return "concrete";
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        requireBuildSuccess(run(tempDir, "build", project.toString()));
+
+        assertThat(process(
+            project,
+            List.of(project.resolve(".javan/bin/optional-or-else-get-mixed-concrete-materialized").toString())
+        ).stdout()).isEqualTo(jvmOutput);
     }
 
     @Test
