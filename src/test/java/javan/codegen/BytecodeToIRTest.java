@@ -21521,6 +21521,27 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersDoubleIsFiniteToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(D)Z",
+            2,
+            2,
+            plain(0, 38, "dload_0"),
+            invokeStatic(1, new MethodRef("java/lang/Double", "isFinite", "(D)Z")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_double_is_finite",
+                List.of(IrExpression.doubleLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
     void lowersDoubleToStringToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

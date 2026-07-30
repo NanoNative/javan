@@ -1294,6 +1294,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksDoubleIsFiniteAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Double", "isFinite", "(D)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksByteArraysEqualsAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Arrays", "equals", "([B[B)Z")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

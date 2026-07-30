@@ -80,6 +80,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void doubleIsFiniteIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Double",
+            "isFinite",
+            "(D)Z"
+        ))).isTrue();
+    }
+
+    @Test
     void booleanParseBooleanIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/Boolean",

@@ -4706,6 +4706,12 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        int javan_double_is_finite(double value) {
+            uint64_t bits;
+            memcpy(&bits, &value, sizeof(bits));
+            return (bits & UINT64_C(0x7ff0000000000000)) != UINT64_C(0x7ff0000000000000);
+        }
+
         void* javan_boolean_value_of(int value) {
             javan_boxed_boolean* object = (javan_boxed_boolean*) javan_alloc(sizeof(javan_boxed_boolean));
             object->value = value != 0 ? 1 : 0;
