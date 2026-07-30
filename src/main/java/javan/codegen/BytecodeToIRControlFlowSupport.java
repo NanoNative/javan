@@ -390,6 +390,10 @@ final class BytecodeToIRControlFlowSupport {
         if (doneIndex < 0 || doneIndex <= targetIndex) {
             return false;
         }
+        if (containsLocalMutation(bytecode, index + 1, jumpIndex)
+            || containsLocalMutation(bytecode, targetIndex, doneIndex)) {
+            return false;
+        }
         final int elseOffset = bytecode.get(index + 1).offset();
         final List<StackValue> conditionStack = new ArrayList<>(stack);
         final IrExpression condition = branchCondition(classFile, method, instruction, conditionStack);
@@ -532,6 +536,10 @@ final class BytecodeToIRControlFlowSupport {
         if (!hasOnlyTargetBranches(bytecode, index, jumpIndex, targetOffset)) {
             return false;
         }
+        if (containsLocalMutation(bytecode, index, jumpIndex)
+            || containsLocalMutation(bytecode, targetIndex, doneIndex)) {
+            return false;
+        }
         for (int cursor = index + 1; cursor < jumpIndex; cursor++) {
             if (hasEarlierBranchTarget(bytecode, index, bytecode.get(cursor).offset())) {
                 return false;
@@ -550,14 +558,10 @@ final class BytecodeToIRControlFlowSupport {
         final int lastMaterializingDuplicateOffset = BytecodeToIR.lastMaterializingDuplicateOffset(bytecode);
         List<StackValue> prefix = List.of();
         int conditionalCount = 0;
-        int firstLocalMutationIndex = -1;
         final String targetLabel = "guarded_value_target_" + instruction.offset();
         final String doneLabel = "guarded_value_done_" + instruction.offset();
         for (int cursor = index; cursor < jumpIndex; cursor++) {
             final Instruction current = bytecode.get(cursor);
-            if (firstLocalMutationIndex < 0 && isLocalMutation(current.opcode())) {
-                firstLocalMutationIndex = cursor;
-            }
             if (isConditionalBranch(current.opcode())) {
                 conditionalCount++;
                 final IrExpression condition = branchCondition(classFile, method, current, workingStack);
@@ -589,16 +593,6 @@ final class BytecodeToIRControlFlowSupport {
             }
         }
         if (conditionalCount < 2) {
-            return false;
-        }
-        if (firstLocalMutationIndex >= 0) {
-            if (hasSelectedValue(prefix, workingStack)) {
-                throw unsupportedBranchValueMerge(
-                    classFile,
-                    method,
-                    bytecode.get(firstLocalMutationIndex)
-                );
-            }
             return false;
         }
         if (!hasSelectedValue(prefix, workingStack)) {
@@ -789,14 +783,10 @@ final class BytecodeToIRControlFlowSupport {
         final List<Integer> skippedOffsets = new ArrayList<>();
         final List<Integer> workingReplacementLabelOffsets = new ArrayList<>(replacementLabelOffsets);
         final int lastMaterializingDuplicateOffset = BytecodeToIR.lastMaterializingDuplicateOffset(bytecode);
-        int firstLocalMutationIndex = -1;
         for (int index = startIndex; index < endIndex; index++) {
             final Instruction blockInstruction = bytecode.get(index);
             if (containsInt(skippedOffsets, blockInstruction.offset())) {
                 continue;
-            }
-            if (firstLocalMutationIndex < 0 && isLocalMutation(blockInstruction.opcode())) {
-                firstLocalMutationIndex = index;
             }
             if (lowerBranchValueSelection(
                 classes,
@@ -843,16 +833,6 @@ final class BytecodeToIRControlFlowSupport {
                 sourceLines,
                 lastMaterializingDuplicateOffset
             );
-        }
-        if (firstLocalMutationIndex >= 0) {
-            if (hasSelectedValue(stackPrefix, blockStack)) {
-                throw unsupportedBranchValueMerge(
-                    classFile,
-                    method,
-                    bytecode.get(firstLocalMutationIndex)
-                );
-            }
-            return Optional.empty();
         }
         appendNewLocalDeclarations(localDeclarations, blockLocalDeclarations, originalLocalDeclarationCount);
         dispatches.putAll(blockDispatches);
@@ -1105,6 +1085,18 @@ final class BytecodeToIRControlFlowSupport {
     static boolean isLocalMutation(final int opcode) {
         return (opcode >= 54 && opcode <= 78)
             || opcode == 132;
+    }
+    static boolean containsLocalMutation(
+        final List<Instruction> bytecode,
+        final int startIndex,
+        final int endIndex
+    ) {
+        for (int index = startIndex; index < endIndex; index++) {
+            if (isLocalMutation(bytecode.get(index).opcode())) {
+                return true;
+            }
+        }
+        return false;
     }
     static boolean hasOnlyTargetBranches(
         final List<Instruction> bytecode,

@@ -7687,8 +7687,8 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void rejectsBranchValueSelectionThatMutatesLocalState() {
-        assertThatThrownBy(() -> lowerMain(method(
+    void fallsBackBeforeBranchValueSelectionCanRetainStaleLocalState() {
+        final IrFunction function = lowerMain(method(
             0x0008,
             "main",
             "(I)I",
@@ -7706,11 +7706,13 @@ final class BytecodeToIRTest {
             plain(10, 87, "pop"),
             plain(11, 27, "iload_1"),
             plain(12, 172, "ireturn")
-        )))
-            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
-                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN051");
-                assertThat(exception.diagnostic().subject()).isEqualTo("bytecode offset 4");
-            });
+        ));
+
+        assertThat(function.instructions()).contains(
+            IrInstruction.assignInt("local1", IrExpression.intLiteral(1)),
+            IrInstruction.assignInt("local1", IrExpression.intLiteral(2)),
+            IrInstruction.returnInt(IrExpression.intLocal("local1"))
+        );
     }
 
     @Test
