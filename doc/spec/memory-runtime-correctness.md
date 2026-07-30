@@ -10,6 +10,7 @@ The current native runtime is not a JVM heap.
 | --- | --- |
 | Java objects and arrays | Allocated from tracked C heap through `javan_alloc`. |
 | Allocation metadata | Every tracked allocation has kind, type id, runtime kind, size, mark, and collectibility metadata. |
+| Allocation lookup | A complete pointer index serves tracing lookups; allocation nodes enter the index before they become visible in the linked allocation ledger. Linked-list traversal remains only for predecessor-aware removal. |
 | Allocation accounting | Runtime keeps live allocation, live byte, total allocation, total byte, and peak live byte counters. |
 | Type descriptors | Generated descriptor table records class type ids and object-field offsets. |
 | Java allocation lifetime | Generated objects, object arrays, primitive arrays, boxed primitive wrappers, runtime-owned strings, runtime containers, and owned container storage are eligible for safe-point mark/sweep; remaining tracked allocations are explicit runtime temporaries or released by registered shutdown cleanup. |
@@ -30,6 +31,7 @@ The current native runtime is not a JVM heap.
 | Tracing GC | Partial safe-point mark/sweep for generated object graphs, arrays, boxed primitive wrappers, runtime-owned strings, and runtime containers. Registered platform-worker root frames are scanned under the runtime lock; general concurrent heap mutation is not yet covered. |
 | Operand/call-temporary roots | Generated object-producing expression temporaries are rooted until the enclosing generated statement or return completes. |
 | Allocation-path collection | Scoped allocator path: checked allocation sizes, GC retry under heap pressure, and deterministic native panic for allocation denial on generated object/array/string paths. |
+| Heap limit | `JAVAN_HEAP_LIMIT_BYTES` limits tracked payload bytes. It does not cap process RSS, which also includes allocation metadata, indexes, generated code, native libraries, stacks, and linker/compiler processes. |
 | Thread roots | Platform workers bind thread-local generated root frames into the live runtime registry. The collector scans those registered frames under the runtime lock. |
 | Thread completion | Lifecycle flags use the runtime lock; native completion signals use the platform completion mutex/SRW lock. Host finalization releases its thread-local root-frame cache, then holds the runtime lock until the live root is removed and completion is published. Automatic main-thread waiting keeps each selected worker rooted across the unlocked native wait. |
 | Panic root recovery | Panic recovery serializes published root-chain cleanup under the runtime lock before recycling root frames. |

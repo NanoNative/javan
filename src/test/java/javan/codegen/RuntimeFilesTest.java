@@ -964,6 +964,33 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void emptyOptionalIsReusedWithoutHeapAllocation() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                const unsigned long baseline = javan_heap_total_allocations();
+                void* first = javan_optional_empty();
+                void* second = javan_optional_empty();
+                printf(
+                    "same=%d empty=%d allocations=%lu\\n",
+                    first == second,
+                    javan_optional_is_empty(first),
+                    javan_heap_total_allocations() - baseline
+                );
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("same=1 empty=1 allocations=0\n");
+    }
+
+    @Test
     void writeTracksRuntimeAllocationsAndRegistersShutdownCleanup() throws Exception {
         final Path runtime = new RuntimeFiles().write(tempDir);
 
@@ -1011,6 +1038,27 @@ final class RuntimeFilesTest {
             "javan_allocation_cache_remove(value);",
             "if (previous == NULL) {",
             "javan_allocation_node* cached = javan_allocation_cache_lookup(value);"
+        );
+    }
+
+    @Test
+    void allocationLookupUsesCompleteIndexForGcMarkQueries() throws Exception {
+        final String runtime = Files.readString(new RuntimeFiles().write(tempDir));
+
+        assertThat(runtime).contains(
+            """
+            node->array_class_name = NULL;
+                javan_allocation_registry_put(value, node);
+                node->next = javan_allocations;
+                javan_allocations = node;
+            """,
+            """
+            javan_allocation_node* indexed = javan_allocation_registry_lookup(value);
+                    if (indexed != NULL) {
+                        javan_allocation_cache_store(value, indexed);
+                    }
+                    return indexed;
+            """
         );
     }
 
@@ -1536,6 +1584,10 @@ final class RuntimeFilesTest {
         assertThat(Files.readString(runtime)).contains(
             "void javan_gc_safe_point(void)",
             "void javan_gc_collect(void)",
+            "if (type_id > 0 && type_id <= javan_type_descriptor_count_value) {",
+            "JavanTypeDescriptor* dense = &javan_type_descriptors_value[type_id - 1];",
+            "if (dense->type_id == type_id) {",
+            "return dense;",
             "JavanTypeDescriptor* descriptor = javan_type_descriptor_for(type_id);",
             "javan_gc_mark_object_array((javan_object_array*) value);",
             "javan_gc_mark_value(((javan_thread*) value)->target);",

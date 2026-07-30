@@ -74,7 +74,10 @@ public final class ClassFileReader {
         for (int index = 1; index < count; index++) {
             final int tag = in.u1();
             switch (tag) {
-                case 1 -> entries[index] = new ConstantPool.Utf8Entry(in.modifiedUtf8());
+                case 1 -> {
+                    final ClassByteCursor.ModifiedUtf8 value = in.modifiedUtf8Value();
+                    entries[index] = new ConstantPool.Utf8Entry(value.value(), value.containsNul());
+                }
                 case 3 -> entries[index] = new ConstantPool.RawEntry(tag, in.i4());
                 case 4 -> entries[index] = new ConstantPool.RawEntry(tag, in.f4());
                 case 5 -> {
@@ -119,7 +122,7 @@ public final class ClassFileReader {
             if (!FieldInfo.isValidDescriptor(descriptor)) {
                 throw new IOException("Invalid field descriptor for " + name + ": " + descriptor);
             }
-            if (!declarations.add(name + "\u0000" + descriptor)) {
+            if (!declarations.add(descriptor + name)) {
                 throw new IOException("Duplicate field: " + name + " " + descriptor);
             }
             final Optional<String> signature = readSignatureAttribute(in, constantPool, "field " + name);
@@ -406,14 +409,25 @@ public final class ClassFileReader {
         return Optional.empty();
     }
 
-    private static Optional<String> stringValue(final int opcode, final byte[] operands, final ConstantPool constantPool) {
+    private static Optional<String> stringValue(
+        final int opcode,
+        final byte[] operands,
+        final ConstantPool constantPool
+    ) throws IOException {
+        final int index;
         if (opcode == 18) {
-            return constantPool.string(unsigned(operands[0]));
+            index = unsigned(operands[0]);
+        } else if (opcode == 19) {
+            index = index16(operands, 0);
+        } else {
+            return Optional.empty();
         }
-        if (opcode == 19) {
-            return constantPool.string(index16(operands, 0));
+        if (constantPool.stringContainsNul(index)) {
+            throw new IOException(
+                "Embedded NUL string literal is not supported by the current native string ABI"
+            );
         }
-        return Optional.empty();
+        return constantPool.string(index);
     }
 
     private static Optional<Integer> intValue(final int opcode, final byte[] operands, final ConstantPool constantPool) {

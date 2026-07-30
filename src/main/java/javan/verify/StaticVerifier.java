@@ -477,6 +477,8 @@ public final class StaticVerifier {
                 method,
                 unsupportedRecordComponent.orElseThrow()
             ));
+        } else if (embeddedNulStringConcatRecipe(instruction)) {
+            diagnostics.add(stringConcatRecipeNulDiagnostic(classFile, method, instruction, reachable));
         } else if (unsupportedInvokedynamic(classes, classFile, method, instruction)
             && !ignoredUnreachableRecordObjectMethod(classFile, method, instruction, reachable)) {
             diagnostics.add(invokedynamicDiagnostic(classFile, method, instruction, reachable));
@@ -3573,6 +3575,19 @@ public final class StaticVerifier {
             && dynamicRef.bootstrapArguments().getFirst().indexOf(2) < 0;
     }
 
+    private static boolean embeddedNulStringConcatRecipe(final Instruction instruction) {
+        if (instruction.opcode() != 186 || instruction.dynamicRef().isEmpty()) {
+            return false;
+        }
+        final DynamicRef dynamicRef = instruction.dynamicRef().orElseThrow();
+        if (!"java/lang/invoke/StringConcatFactory".equals(dynamicRef.bootstrapOwner())
+            || !"makeConcatWithConstants".equals(dynamicRef.bootstrapName())
+            || dynamicRef.bootstrapArgumentDetails().isEmpty()) {
+            return false;
+        }
+        return dynamicRef.bootstrapArgumentDetails().getFirst().containsNul();
+    }
+
     private static boolean supportedLambdaMetafactory(
         final Map<String, ClassFile> classes,
         final MethodInfo method,
@@ -3761,6 +3776,38 @@ public final class StaticVerifier {
             return error(classFile, method, "JAVAN030", "unsupported reachable bytecode", instruction.mnemonic(), reason, fix);
         }
         return warning(classFile, method, "JAVAN130", "unsupported bytecode in unreachable code", instruction.mnemonic(), reason, fix);
+    }
+
+    private static Diagnostic stringConcatRecipeNulDiagnostic(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final int reachable
+    ) {
+        final String reason =
+            "The current native concat runtime passes recipes as NUL-terminated C strings, so an embedded NUL would truncate the recipe.";
+        final String fix =
+            "Avoid embedding a NUL character in a string-concat constant until Javan uses length-bearing runtime strings.";
+        if (reachable == 1) {
+            return error(
+                classFile,
+                method,
+                "JAVAN052",
+                "string concat recipe contains an embedded NUL",
+                instruction.mnemonic(),
+                reason,
+                fix
+            );
+        }
+        return warning(
+            classFile,
+            method,
+            "JAVAN152",
+            "embedded-NUL string concat in unreachable code",
+            instruction.mnemonic(),
+            reason,
+            fix
+        );
     }
 
     private static Diagnostic exceptionHandlerDiagnostic(

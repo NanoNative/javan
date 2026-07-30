@@ -966,6 +966,14 @@ final class RuntimeSourceIoSections {
             return optional;
         }
 
+        static javan_optional javan_empty_optional_value = {
+            JAVAN_OPTIONAL_MAGIC,
+            0,
+            0,
+            0,
+            NULL
+        };
+
         static void* javan_optional_new(void* value, int present) {
             void* value_root = value;
             void** javan_optional_value_roots[] = {
@@ -984,7 +992,7 @@ final class RuntimeSourceIoSections {
         }
 
         void* javan_optional_empty(void) {
-            return javan_optional_new(NULL, 0);
+            return (void*) &javan_empty_optional_value;
         }
 
         void* javan_optional_of(void* value) {

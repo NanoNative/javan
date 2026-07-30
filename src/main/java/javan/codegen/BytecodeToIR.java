@@ -147,53 +147,81 @@ public final class BytecodeToIR {
         final List<EntryPoint> reachableMethods,
         final List<IrMaterializedLambdaTarget> materializedLambdaTargets
     ) {
-        final Map<EntryPoint, Set<String>> typesByMethod = new LinkedHashMap<>();
-        for (final EntryPoint entryPoint : reachableMethods) {
+        final List<Set<String>> typesByMethod = new ArrayList<>();
+        final Map<String, Integer> methodIndexesBySymbol = new HashMap<>();
+        for (int index = 0; index < reachableMethods.size(); index++) {
+            final EntryPoint entryPoint = reachableMethods.get(index);
             final ClassFile classFile = classes.get(entryPoint.className());
             final MethodInfo method = classFile.method(entryPoint.methodName(), entryPoint.descriptor()).orElseThrow();
-            typesByMethod.put(entryPoint, directEscapingThrowableTypes(method));
+            methodIndexesBySymbol.put(symbol(entryPoint), index);
+            typesByMethod.add(directEscapingThrowableTypes(method));
         }
-        final Map<String, EntryPoint> entryPointsBySymbol = new HashMap<>();
-        for (final EntryPoint entryPoint : reachableMethods) {
-            entryPointsBySymbol.put(symbol(entryPoint), entryPoint);
+        final List<javan.analysis.CallEdge> callEdges = callGraph.callEdges();
+        final int[] calleeIndexes = new int[callEdges.size()];
+        final List<List<Integer>> callEdgeIndexesByCaller = new ArrayList<>();
+        for (int index = 0; index < reachableMethods.size(); index++) {
+            callEdgeIndexesByCaller.add(new ArrayList<>());
+        }
+        for (int edgeIndex = 0; edgeIndex < callEdges.size(); edgeIndex++) {
+            final javan.analysis.CallEdge edge = callEdges.get(edgeIndex);
+            calleeIndexes[edgeIndex] = -1;
+            if (edge.kind() != javan.analysis.CallEdge.Kind.CALL) {
+                continue;
+            }
+            final Integer callerIndex = methodIndexesBySymbol.get(symbol(edge.caller()));
+            final Integer calleeIndex = methodIndexesBySymbol.get(symbol(edge.callee()));
+            if (callerIndex == null || calleeIndex == null) {
+                continue;
+            }
+            callEdgeIndexesByCaller.get(callerIndex).add(edgeIndex);
+            calleeIndexes[edgeIndex] = calleeIndex;
+        }
+        final int[] materializedImplementationIndexes = new int[materializedLambdaTargets.size()];
+        for (int targetIndex = 0; targetIndex < materializedLambdaTargets.size(); targetIndex++) {
+            final Integer implementationIndex = methodIndexesBySymbol.get(
+                materializedLambdaTargets.get(targetIndex).functionSymbol()
+            );
+            materializedImplementationIndexes[targetIndex] =
+                implementationIndex == null ? -1 : implementationIndex;
         }
         boolean changed;
         do {
             changed = false;
-            for (final EntryPoint caller : reachableMethods) {
+            for (int callerIndex = 0; callerIndex < reachableMethods.size(); callerIndex++) {
+                final EntryPoint caller = reachableMethods.get(callerIndex);
                 final ClassFile classFile = classes.get(caller.className());
                 final MethodInfo method = classFile.method(caller.methodName(), caller.descriptor()).orElseThrow();
                 if (method.code().isEmpty()) {
                     continue;
                 }
-                final Set<String> callerTypes = typesByMethod.get(caller);
+                final Set<String> callerTypes = typesByMethod.get(callerIndex);
                 for (final Instruction instruction : method.code().orElseThrow().instructions()) {
                     if (instruction.methodRef().isEmpty()) {
                         continue;
                     }
                     final MethodRef calledMethod = instruction.methodRef().orElseThrow();
-                    for (final javan.analysis.CallEdge edge : callGraph.callEdges()) {
-                        if (!caller.equals(edge.caller())
-                            || edge.kind() != javan.analysis.CallEdge.Kind.CALL
-                            || !calledMethod.name().equals(edge.callee().methodName())
+                    for (final int edgeIndex : callEdgeIndexesByCaller.get(callerIndex)) {
+                        final javan.analysis.CallEdge edge = callEdges.get(edgeIndex);
+                        if (!calledMethod.name().equals(edge.callee().methodName())
                             || !calledMethod.descriptor().equals(edge.callee().descriptor())) {
                             continue;
                         }
-                        for (final String throwableType : typesByMethod.getOrDefault(edge.callee(), Set.of())) {
+                        for (final String throwableType : typesByMethod.get(calleeIndexes[edgeIndex])) {
                             if (!caughtBy(method, instruction.offset(), throwableType) && callerTypes.add(throwableType)) {
                                 changed = true;
                             }
                         }
                     }
-                    for (final IrMaterializedLambdaTarget target : materializedLambdaTargets) {
+                    for (int targetIndex = 0; targetIndex < materializedLambdaTargets.size(); targetIndex++) {
+                        final IrMaterializedLambdaTarget target = materializedLambdaTargets.get(targetIndex);
                         if (!matchesMaterializedLambdaCall(calledMethod, target)) {
                             continue;
                         }
-                        final EntryPoint implementation = entryPointsBySymbol.get(target.functionSymbol());
-                        if (implementation == null) {
+                        final int implementationIndex = materializedImplementationIndexes[targetIndex];
+                        if (implementationIndex < 0) {
                             continue;
                         }
-                        for (final String throwableType : typesByMethod.getOrDefault(implementation, Set.of())) {
+                        for (final String throwableType : typesByMethod.get(implementationIndex)) {
                             if (!caughtBy(method, instruction.offset(), throwableType)
                                 && callerTypes.add(throwableType)) {
                                 changed = true;
@@ -204,8 +232,8 @@ public final class BytecodeToIR {
             }
         } while (changed);
         final Map<String, List<String>> result = new LinkedHashMap<>();
-        for (final EntryPoint entryPoint : reachableMethods) {
-            result.put(symbol(entryPoint), orderedThrowableTypes(typesByMethod.get(entryPoint)));
+        for (int index = 0; index < reachableMethods.size(); index++) {
+            result.put(symbol(reachableMethods.get(index)), orderedThrowableTypes(typesByMethod.get(index)));
         }
         final Map<String, Set<String>> materializedTypes = new LinkedHashMap<>();
         for (final IrMaterializedLambdaTarget target : materializedLambdaTargets) {

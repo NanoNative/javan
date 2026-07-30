@@ -24,12 +24,13 @@ final class ClassFileReaderTest {
     @Test
     void readersDecodeModifiedUtf8ConstantPoolValues() throws Exception {
         final String className = "modified/Nul\u0000Euro\u20AC";
+        final String safeClassName = "modified/Nul\uFFFDEuro\u20AC";
         final byte[] bytes = minimalClassfile(className);
 
         final ClassFile classFile = new ClassFileReader().read(bytes, SOURCE);
         final ClassMetadata metadata = new ClassMetadataReader().read(bytes, SOURCE);
 
-        assertThat(classFile.name()).isEqualTo(className);
+        assertThat(classFile.name()).isEqualTo(safeClassName);
         assertThat(classFile.superName()).isEqualTo("java/lang/Object");
         assertThat(classFile.methods()).singleElement().satisfies(method -> {
             assertThat(method.name()).isEqualTo("<init>");
@@ -38,7 +39,7 @@ final class ClassFileReaderTest {
                 .extracting(Instruction::mnemonic)
                 .containsExactly("aload_0", "invokespecial", "return");
         });
-        assertThat(metadata.name()).isEqualTo(className);
+        assertThat(metadata.name()).isEqualTo(safeClassName);
         assertThat(metadata.constructors()).singleElement().satisfies(ClassFileReaderTest::assertConstructorMetadata);
     }
 
@@ -112,6 +113,36 @@ final class ClassFileReaderTest {
         assertThatThrownBy(() -> new ClassFileReader().read(classfileWithDuplicateFields(), SOURCE))
             .isInstanceOf(IOException.class)
             .hasMessage("Duplicate field: value Ljava/lang/String;");
+    }
+
+    @Test
+    void readerAcceptsSameFieldNameWithDifferentDescriptors() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(classfileWithOverloadedFieldNames(), SOURCE);
+
+        assertThat(classFile.fields())
+            .extracting(field -> field.name() + field.descriptor())
+            .containsExactly("valueI", "valueJ");
+    }
+
+    @Test
+    void readerPreservesEmbeddedNulMetadataInConcatRecipe() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(classfileWithEmbeddedNulConcatRecipe(), SOURCE);
+
+        final DynamicRef dynamicRef = classFile.method("demo", "(II)Ljava/lang/String;")
+            .orElseThrow()
+            .code()
+            .orElseThrow()
+            .instructions()
+            .stream()
+            .filter(instruction -> instruction.opcode() == 186)
+            .findFirst()
+            .orElseThrow()
+            .dynamicRef()
+            .orElseThrow();
+
+        assertThat(dynamicRef.bootstrapArguments()).containsExactly("\u0001\uFFFD\u0001");
+        assertThat(dynamicRef.bootstrapArgumentDetails())
+            .containsExactly(BootstrapArgument.string("\u0001\uFFFD\u0001", true));
     }
 
     @Test
@@ -301,6 +332,16 @@ final class ClassFileReaderTest {
         assertThat(instruction.constantPoolTag()).contains(8);
         assertThat(instruction.stringValue()).contains("hello");
         assertThat(instruction.className()).isEmpty();
+    }
+
+    @Test
+    void readerRejectsEmbeddedNulStringLiteralBeforeChangingItsValue() {
+        assertThatThrownBy(() -> new ClassFileReader().read(
+            classfileWithStringLiteral(new byte[]{18, 6, (byte) 177}, "a\u0000b"),
+            SOURCE
+        ))
+            .isInstanceOf(IOException.class)
+            .hasMessage("Embedded NUL string literal is not supported by the current native string ABI");
     }
 
     @Test
@@ -679,6 +720,98 @@ final class ClassFileReaderTest {
             .u2(0)
             .u2(0)
             .u2(0)
+            .toByteArray();
+    }
+
+    private static byte[] classfileWithOverloadedFieldNames() {
+        return new Bytes()
+            .u4(0xCAFEBABEL)
+            .u2(0)
+            .u2(65)
+            .u2(8)
+            .utf8("sample/Value")
+            .classInfo(1)
+            .utf8("java/lang/Object")
+            .classInfo(3)
+            .utf8("value")
+            .utf8("I")
+            .utf8("J")
+            .u2(0x0021)
+            .u2(2)
+            .u2(4)
+            .u2(0)
+            .u2(2)
+            .u2(0x0002)
+            .u2(5)
+            .u2(6)
+            .u2(0)
+            .u2(0x0002)
+            .u2(5)
+            .u2(7)
+            .u2(0)
+            .u2(0)
+            .u2(0)
+            .toByteArray();
+    }
+
+    private static byte[] classfileWithEmbeddedNulConcatRecipe() {
+        final byte[] code = new byte[]{
+            26,
+            27,
+            (byte) 186, 0, 17, 0, 0,
+            (byte) 176
+        };
+        return new Bytes()
+            .u4(0xCAFEBABEL)
+            .u2(0)
+            .u2(65)
+            .u2(22)
+            .utf8("sample/Concat")
+            .classInfo(1)
+            .utf8("java/lang/Object")
+            .classInfo(3)
+            .utf8("makeConcatWithConstants")
+            .utf8("(II)Ljava/lang/String;")
+            .nameAndType(5, 6)
+            .utf8("java/lang/invoke/StringConcatFactory")
+            .classInfo(8)
+            .utf8("makeConcatWithConstants")
+            .utf8("()V")
+            .nameAndType(10, 11)
+            .methodRef(9, 12)
+            .methodHandle(6, 13)
+            .utf8("\u0001\u0000\u0001")
+            .stringInfo(15)
+            .dynamicEntry(18, 0, 7)
+            .utf8("demo")
+            .utf8("(II)Ljava/lang/String;")
+            .utf8("Code")
+            .utf8("BootstrapMethods")
+            .u2(0x0021)
+            .u2(2)
+            .u2(4)
+            .u2(0)
+            .u2(0)
+            .u2(1)
+            .u2(0x0009)
+            .u2(18)
+            .u2(19)
+            .u2(1)
+            .u2(20)
+            .u4(12L + code.length)
+            .u2(2)
+            .u2(2)
+            .u4(code.length)
+            .bytes(code)
+            .u2(0)
+            .u2(0)
+            .u2(1)
+            .u2(21)
+            .u4(8)
+            .u2(1)
+            .u2(14)
+            .u2(1)
+            .u2(16)
             .toByteArray();
     }
 

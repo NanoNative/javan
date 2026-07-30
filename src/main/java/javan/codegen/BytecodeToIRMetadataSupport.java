@@ -39,16 +39,65 @@ final class BytecodeToIRMetadataSupport {
         return List.copyOf(result);
     }
     static List<EntryPoint> sortedEntryPoints(final List<EntryPoint> entries) {
-        final List<EntryPoint> result = new ArrayList<>();
+        final List<SymbolEntry> keyed = new ArrayList<>();
         for (final EntryPoint entry : entries) {
-            int index = 0;
-            final String value = symbol(entry);
-            while (index < result.size() && Strings2.compareAscii(symbol(result.get(index)), value) <= 0) {
-                index++;
-            }
-            result.add(index, entry);
+            keyed.add(new SymbolEntry(entry, symbol(entry)));
+        }
+        sortSymbolEntries(keyed, 0, keyed.size());
+        final List<EntryPoint> result = new ArrayList<>();
+        for (final SymbolEntry entry : keyed) {
+            result.add(entry.entryPoint());
         }
         return List.copyOf(result);
+    }
+
+    private static void sortSymbolEntries(
+        final List<SymbolEntry> entries,
+        final int from,
+        final int to
+    ) {
+        if (to - from <= 1) {
+            return;
+        }
+        final int middle = from + ((to - from) / 2);
+        sortSymbolEntries(entries, from, middle);
+        sortSymbolEntries(entries, middle, to);
+        mergeSymbolEntries(entries, from, middle, to);
+    }
+
+    private static void mergeSymbolEntries(
+        final List<SymbolEntry> entries,
+        final int from,
+        final int middle,
+        final int to
+    ) {
+        final List<SymbolEntry> left = new ArrayList<>();
+        for (int index = from; index < middle; index++) {
+            left.add(entries.get(index));
+        }
+        int leftIndex = 0;
+        int rightIndex = middle;
+        int target = from;
+        while (leftIndex < left.size() && rightIndex < to) {
+            final SymbolEntry leftValue = left.get(leftIndex);
+            final SymbolEntry rightValue = entries.get(rightIndex);
+            if (Strings2.compareAscii(leftValue.symbol(), rightValue.symbol()) <= 0) {
+                entries.set(target, leftValue);
+                leftIndex++;
+            } else {
+                entries.set(target, rightValue);
+                rightIndex++;
+            }
+            target++;
+        }
+        while (leftIndex < left.size()) {
+            entries.set(target, left.get(leftIndex));
+            leftIndex++;
+            target++;
+        }
+    }
+
+    private record SymbolEntry(EntryPoint entryPoint, String symbol) {
     }
 
     private static List<IrField> instanceFields(

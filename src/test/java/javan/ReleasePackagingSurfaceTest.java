@@ -262,6 +262,16 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     }
 
     @Test
+    void buildScriptBoundsTheHeapForEveryNativeSelfHostStage() throws Exception {
+        final String script = Files.readString(Path.of("scripts/build.sh"));
+
+        assertThat(script)
+            .contains("JAVAN_HEAP_LIMIT_BYTES=536870912 target/.javan/bin/javan-bootstrap-from-jvm build")
+            .contains("JAVAN_HEAP_LIMIT_BYTES=536870912 target/.javan/bin/javan-bootstrap-rebuilt build")
+            .doesNotContain("JAVAN_GC_SAFEPOINT_INTERVAL=");
+    }
+
+    @Test
     void verifyReleaseScriptKeepsPackagedAcceptanceAndSanitizerProof() throws Exception {
         final String script = Files.readString(VERIFY_RELEASE);
 

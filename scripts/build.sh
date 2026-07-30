@@ -31,10 +31,10 @@ java -cp target/classes javan.Main build target/classes \
   --output javan-bootstrap-from-jvm
 
 mkdir -p "$(dirname -- "$OUTPUT")"
-target/.javan/bin/javan-bootstrap-from-jvm build target/classes \
+JAVAN_HEAP_LIMIT_BYTES=536870912 target/.javan/bin/javan-bootstrap-from-jvm build target/classes \
   --main javan.Main \
   --output javan-bootstrap-rebuilt
-target/.javan/bin/javan-bootstrap-rebuilt build target/classes \
+JAVAN_HEAP_LIMIT_BYTES=536870912 target/.javan/bin/javan-bootstrap-rebuilt build target/classes \
   --main javan.Main \
   --output javan-bootstrap-verified
 target/.javan/bin/javan-bootstrap-verified --version >/dev/null

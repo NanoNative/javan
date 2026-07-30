@@ -172,17 +172,56 @@ public final class ProjectReports {
     private static List<String> sortedEntries(final List<EntryPoint> entries) {
         final List<String> result = new ArrayList<>();
         for (final EntryPoint entry : entries) {
-            insertSorted(result, entry.toString());
+            result.add(entry.toString());
         }
+        sortEntries(result, 0, result.size());
         return List.copyOf(result);
     }
 
-    private static void insertSorted(final List<String> values, final String value) {
-        int index = 0;
-        while (index < values.size() && Strings2.compareAscii(values.get(index), value) <= 0) {
-            index++;
+    private static void sortEntries(
+        final List<String> entries,
+        final int from,
+        final int to
+    ) {
+        if (to - from <= 1) {
+            return;
         }
-        values.add(index, value);
+        final int middle = from + ((to - from) / 2);
+        sortEntries(entries, from, middle);
+        sortEntries(entries, middle, to);
+        mergeEntries(entries, from, middle, to);
+    }
+
+    private static void mergeEntries(
+        final List<String> entries,
+        final int from,
+        final int middle,
+        final int to
+    ) {
+        final List<String> left = new ArrayList<>();
+        for (int index = from; index < middle; index++) {
+            left.add(entries.get(index));
+        }
+        int leftIndex = 0;
+        int rightIndex = middle;
+        int target = from;
+        while (leftIndex < left.size() && rightIndex < to) {
+            final String leftValue = left.get(leftIndex);
+            final String rightValue = entries.get(rightIndex);
+            if (Strings2.compareAscii(leftValue, rightValue) <= 0) {
+                entries.set(target, leftValue);
+                leftIndex++;
+            } else {
+                entries.set(target, rightValue);
+                rightIndex++;
+            }
+            target++;
+        }
+        while (leftIndex < left.size()) {
+            entries.set(target, left.get(leftIndex));
+            leftIndex++;
+            target++;
+        }
     }
 
     private static String diagnosticsValue(final List<Diagnostic> diagnostics) {

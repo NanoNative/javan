@@ -57,6 +57,8 @@ final class ProjectReportsTest {
             new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"),
             List.of(
                 new EntryPoint("com/acme/Zed", "call", "()V"),
+                new EntryPoint("com/acme/Alpha", "call", "()V"),
+                new EntryPoint("com/acme/A", "call", "()V"),
                 new EntryPoint("com/acme/Alpha", "call", "()V")
             ),
             List.of()
@@ -65,7 +67,14 @@ final class ProjectReportsTest {
         new ProjectReports().writeReachability(layout, graph);
 
         final String report = Files.readString(layout.outputDirectory().resolve("reports/reachability.txt"));
-        assertThat(report.indexOf("com/acme/Alpha.call()V")).isLessThan(report.indexOf("com/acme/Zed.call()V"));
+        assertThat(report).isEqualTo(
+            "entry: com/acme/Main.main([Ljava/lang/String;)V" + System.lineSeparator()
+                + "reachable:" + System.lineSeparator()
+                + "  com/acme/A.call()V" + System.lineSeparator()
+                + "  com/acme/Alpha.call()V" + System.lineSeparator()
+                + "  com/acme/Alpha.call()V" + System.lineSeparator()
+                + "  com/acme/Zed.call()V" + System.lineSeparator()
+        );
     }
 
     @Test

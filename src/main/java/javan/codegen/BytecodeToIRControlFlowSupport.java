@@ -370,6 +370,7 @@ final class BytecodeToIRControlFlowSupport {
             materializedLambdaMethods,
             functionValueFlow,
             skippedOffsets,
+            replacementLabelOffsets,
             instruction
         )) {
             return true;
@@ -389,17 +390,19 @@ final class BytecodeToIRControlFlowSupport {
         if (doneIndex < 0 || doneIndex <= targetIndex) {
             return false;
         }
-        final int elseOffset = bytecode.get(index + 1).offset();
-        if (containsControlTransfer(bytecode, index + 1, jumpIndex) || containsControlTransfer(bytecode, targetIndex, doneIndex)) {
+        if (containsLocalMutation(bytecode, index + 1, jumpIndex)
+            || containsLocalMutation(bytecode, targetIndex, doneIndex)) {
             return false;
         }
-
+        final int elseOffset = bytecode.get(index + 1).offset();
         final List<StackValue> conditionStack = new ArrayList<>(stack);
         final IrExpression condition = branchCondition(classFile, method, instruction, conditionStack);
         final List<StackValue> prefix = List.copyOf(conditionStack);
         final int originalLocalDeclarationCount = localDeclarations.size();
         final Map<Integer, IrLocal> workingDeclarations = copyLocalDeclarations(localDeclarations);
-        final BlockResult elseBlock = lowerLinearBlock(
+        final Map<String, IrDispatch> workingDispatches = new LinkedHashMap<>(dispatches);
+        final List<Integer> workingReplacementLabelOffsets = new ArrayList<>(replacementLabelOffsets);
+        final Optional<BlockResult> elseBlockResult = tryLowerValueBlock(
             classes,
             classFile,
             method,
@@ -412,12 +415,18 @@ final class BytecodeToIRControlFlowSupport {
             objectLocalThrowableTypes,
             objectLocalLambdas,
             workingDeclarations,
-            dispatches,
+            workingDispatches,
             functionOrNullTargetIds,
             materializedLambdaMethods,
-            functionValueFlow
+            functionValueFlow,
+            new HashMap<>(),
+            SourceLineIndex.empty(),
+            workingReplacementLabelOffsets
         );
-        final BlockResult targetBlock = lowerLinearBlock(
+        if (elseBlockResult.isEmpty()) {
+            return false;
+        }
+        final Optional<BlockResult> targetBlockResult = tryLowerValueBlock(
             classes,
             classFile,
             method,
@@ -430,11 +439,19 @@ final class BytecodeToIRControlFlowSupport {
             objectLocalThrowableTypes,
             objectLocalLambdas,
             workingDeclarations,
-            dispatches,
+            workingDispatches,
             functionOrNullTargetIds,
             materializedLambdaMethods,
-            functionValueFlow
+            functionValueFlow,
+            new HashMap<>(),
+            SourceLineIndex.empty(),
+            workingReplacementLabelOffsets
         );
+        if (targetBlockResult.isEmpty()) {
+            return false;
+        }
+        final BlockResult elseBlock = elseBlockResult.orElseThrow();
+        final BlockResult targetBlock = targetBlockResult.orElseThrow();
         if (!hasSelectedValue(prefix, elseBlock.stack()) || !hasSelectedValue(prefix, targetBlock.stack())) {
             return false;
         }
@@ -444,13 +461,25 @@ final class BytecodeToIRControlFlowSupport {
             throw unsupportedBranchValueMerge(classFile, method, instruction);
         }
         appendNewLocalDeclarations(localDeclarations, workingDeclarations, originalLocalDeclarationCount);
+        dispatches.putAll(workingDispatches);
+        appendInts(replacementLabelOffsets, workingReplacementLabelOffsets);
         branchCondition(classFile, method, instruction, stack);
         final StackKind valueKind = targetValue.kind();
         final IrType valueType = stackKindType(valueKind);
         final String localName = "branchValue" + localDeclarations.size() + "_" + instruction.offset();
+        final String targetLabel = valueLabel(
+            "branch_value_target_",
+            instruction.offset(),
+            localName,
+            localDeclarations
+        );
+        final String doneLabel = valueLabel(
+            "branch_value_done_",
+            instruction.offset(),
+            localName,
+            localDeclarations
+        );
         localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(valueType, localName));
-        final String targetLabel = "branch_value_target_" + instruction.offset();
-        final String doneLabel = "branch_value_done_" + instruction.offset();
         instructions.add(IrInstruction.branchIf(targetLabel, condition));
         if (hasEarlierBranchTarget(bytecode, index, elseOffset)) {
             instructions.add(IrInstruction.label(label(elseOffset)));
@@ -487,6 +516,7 @@ final class BytecodeToIRControlFlowSupport {
         final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final FunctionValueFlow.Result functionValueFlow,
         final List<Integer> skippedOffsets,
+        final List<Integer> replacementLabelOffsets,
         final Instruction instruction
     ) {
         final int targetOffset = branchTarget(instruction);
@@ -516,12 +546,19 @@ final class BytecodeToIRControlFlowSupport {
         if (!hasOnlyTargetBranches(bytecode, index, jumpIndex, targetOffset)) {
             return false;
         }
-        if (containsControlTransfer(bytecode, targetIndex, doneIndex)) {
+        if (containsLocalMutation(bytecode, index, jumpIndex)
+            || containsLocalMutation(bytecode, targetIndex, doneIndex)) {
             return false;
         }
-
+        for (int cursor = index + 1; cursor < jumpIndex; cursor++) {
+            if (hasEarlierBranchTarget(bytecode, index, bytecode.get(cursor).offset())) {
+                return false;
+            }
+        }
         final int originalLocalDeclarationCount = localDeclarations.size();
         final Map<Integer, IrLocal> workingDeclarations = copyLocalDeclarations(localDeclarations);
+        final Map<String, IrDispatch> workingDispatches = new LinkedHashMap<>(dispatches);
+        final List<Integer> workingReplacementLabelOffsets = new ArrayList<>(replacementLabelOffsets);
         final Map<Integer, IrExpression> workingLocals = copyExpressionLocals(locals);
         final Map<Integer, StackKind> workingObjectLocalKinds = copyObjectLocalKinds(objectLocalKinds);
         final Map<Integer, String> workingObjectLocalThrowableTypes = copyObjectLocalThrowableTypes(objectLocalThrowableTypes);
@@ -556,7 +593,7 @@ final class BytecodeToIRControlFlowSupport {
                     workingObjectLocalThrowableTypes,
                     workingObjectLocalLambdas,
                     workingDeclarations,
-                    dispatches,
+                    workingDispatches,
                     functionOrNullTargetIds,
                     materializedLambdaMethods,
                     functionValueFlow,
@@ -572,7 +609,7 @@ final class BytecodeToIRControlFlowSupport {
             return false;
         }
         final StackValue elseValue = workingStack.getLast();
-        final BlockResult targetBlock = lowerLinearBlock(
+        final Optional<BlockResult> targetBlockResult = tryLowerValueBlock(
             classes,
             classFile,
             method,
@@ -585,11 +622,18 @@ final class BytecodeToIRControlFlowSupport {
             objectLocalThrowableTypes,
             objectLocalLambdas,
             workingDeclarations,
-            dispatches,
+            workingDispatches,
             functionOrNullTargetIds,
             materializedLambdaMethods,
-            functionValueFlow
+            functionValueFlow,
+            new HashMap<>(),
+            SourceLineIndex.empty(),
+            workingReplacementLabelOffsets
         );
+        if (targetBlockResult.isEmpty()) {
+            return false;
+        }
+        final BlockResult targetBlock = targetBlockResult.orElseThrow();
         if (!hasSelectedValue(prefix, targetBlock.stack())) {
             return false;
         }
@@ -604,6 +648,8 @@ final class BytecodeToIRControlFlowSupport {
             throw unsupportedBranchValueMerge(classFile, method, instruction);
         }
         appendNewLocalDeclarations(localDeclarations, workingDeclarations, originalLocalDeclarationCount);
+        dispatches.putAll(workingDispatches);
+        appendInts(replacementLabelOffsets, workingReplacementLabelOffsets);
         final StackKind valueKind = targetValue.kind();
         final IrType valueType = stackKindType(valueKind);
         final String localName = "branchValue" + localDeclarations.size() + "_" + instruction.offset();
@@ -682,17 +728,100 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final SourceLineIndex sourceLines
     ) {
+        final Optional<BlockResult> result = tryLowerValueBlock(
+            classes,
+            classFile,
+            method,
+            bytecode,
+            startIndex,
+            endIndex,
+            stackPrefix,
+            locals,
+            objectLocalKinds,
+            objectLocalThrowableTypes,
+            objectLocalLambdas,
+            localDeclarations,
+            dispatches,
+            functionOrNullTargetIds,
+            materializedLambdaMethods,
+            functionValueFlow,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            new ArrayList<>()
+        );
+        if (result.isPresent()) {
+            return result.orElseThrow();
+        }
+        for (int index = startIndex; index < endIndex; index++) {
+            final Instruction instruction = bytecode.get(index);
+            if (isControlTransfer(instruction.opcode())) {
+                throw unsupportedBranchValueMerge(classFile, method, instruction);
+            }
+        }
+        throw unsupportedBranchValueMerge(classFile, method, bytecode.get(startIndex));
+    }
+    private static Optional<BlockResult> tryLowerValueBlock(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final List<Instruction> bytecode,
+        final int startIndex,
+        final int endIndex,
+        final List<StackValue> stackPrefix,
+        final Map<Integer, IrExpression> locals,
+        final Map<Integer, StackKind> objectLocalKinds,
+        final Map<Integer, String> objectLocalThrowableTypes,
+        final Map<Integer, DynamicLambda> objectLocalLambdas,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<String, IrDispatch> dispatches,
+        final Map<String, Integer> functionOrNullTargetIds,
+        final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final FunctionValueFlow.Result functionValueFlow,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines,
+        final List<Integer> replacementLabelOffsets
+    ) {
         final List<IrInstruction> blockInstructions = new ArrayList<>();
         final List<StackValue> blockStack = new ArrayList<>(stackPrefix);
         final Map<Integer, IrExpression> blockLocals = copyExpressionLocals(locals);
         final Map<Integer, StackKind> blockObjectLocalKinds = copyObjectLocalKinds(objectLocalKinds);
         final Map<Integer, String> blockObjectLocalThrowableTypes = copyObjectLocalThrowableTypes(objectLocalThrowableTypes);
         final Map<Integer, DynamicLambda> blockObjectLocalLambdas = copyObjectLocalLambdas(objectLocalLambdas);
+        final int originalLocalDeclarationCount = localDeclarations.size();
+        final Map<Integer, IrLocal> blockLocalDeclarations = copyLocalDeclarations(localDeclarations);
+        final Map<String, IrDispatch> blockDispatches = new LinkedHashMap<>(dispatches);
+        final List<Integer> skippedOffsets = new ArrayList<>();
+        final List<Integer> workingReplacementLabelOffsets = new ArrayList<>(replacementLabelOffsets);
         final int lastMaterializingDuplicateOffset = BytecodeToIR.lastMaterializingDuplicateOffset(bytecode);
         for (int index = startIndex; index < endIndex; index++) {
             final Instruction blockInstruction = bytecode.get(index);
+            if (containsInt(skippedOffsets, blockInstruction.offset())) {
+                continue;
+            }
+            if (lowerBranchValueSelection(
+                classes,
+                classFile,
+                method,
+                bytecode,
+                index,
+                blockInstructions,
+                blockStack,
+                blockLocals,
+                blockObjectLocalKinds,
+                blockObjectLocalThrowableTypes,
+                blockObjectLocalLambdas,
+                blockLocalDeclarations,
+                blockDispatches,
+                functionOrNullTargetIds,
+                materializedLambdaMethods,
+                functionValueFlow,
+                skippedOffsets,
+                workingReplacementLabelOffsets
+            )) {
+                continue;
+            }
             if (isControlTransfer(blockInstruction.opcode())) {
-                throw unsupportedBranchValueMerge(classFile, method, blockInstruction);
+                return Optional.empty();
             }
             lowerInstruction(
                 classes,
@@ -706,8 +835,8 @@ final class BytecodeToIRControlFlowSupport {
                 blockObjectLocalKinds,
                 blockObjectLocalThrowableTypes,
                 blockObjectLocalLambdas,
-                localDeclarations,
-                dispatches,
+                blockLocalDeclarations,
+                blockDispatches,
                 functionOrNullTargetIds,
                 materializedLambdaMethods,
                 functionValueFlow,
@@ -715,7 +844,10 @@ final class BytecodeToIRControlFlowSupport {
                 lastMaterializingDuplicateOffset
             );
         }
-        return new BlockResult(List.copyOf(blockInstructions), List.copyOf(blockStack));
+        appendNewLocalDeclarations(localDeclarations, blockLocalDeclarations, originalLocalDeclarationCount);
+        dispatches.putAll(blockDispatches);
+        appendInts(replacementLabelOffsets, workingReplacementLabelOffsets);
+        return Optional.of(new BlockResult(List.copyOf(blockInstructions), List.copyOf(blockStack)));
     }
     static boolean hasSelectedValue(final List<StackValue> prefix, final List<StackValue> branchStack) {
         if (branchStack.size() != prefix.size() + 1) {
@@ -960,6 +1092,36 @@ final class BytecodeToIRControlFlowSupport {
             || opcode == 58
             || (opcode >= 75 && opcode <= 78);
     }
+    static boolean isLocalMutation(final int opcode) {
+        return (opcode >= 54 && opcode <= 78)
+            || opcode == 132;
+    }
+    static boolean containsLocalMutation(
+        final List<Instruction> bytecode,
+        final int startIndex,
+        final int endIndex
+    ) {
+        for (int index = startIndex; index < endIndex; index++) {
+            if (isLocalMutation(bytecode.get(index).opcode())) {
+                return true;
+            }
+        }
+        return false;
+    }
+    static String valueLabel(
+        final String prefix,
+        final int bytecodeOffset,
+        final String localName,
+        final Map<Integer, IrLocal> localDeclarations
+    ) {
+        final String marker = "_" + bytecodeOffset;
+        for (final IrLocal local : localDeclarations.values()) {
+            if (local.name().startsWith("branchValue") && local.name().endsWith(marker)) {
+                return prefix + bytecodeOffset + "_" + localName;
+            }
+        }
+        return prefix + bytecodeOffset;
+    }
     static boolean hasOnlyTargetBranches(
         final List<Instruction> bytecode,
         final int startIndex,
@@ -1023,6 +1185,11 @@ final class BytecodeToIRControlFlowSupport {
     ) {
         for (int index = startIndex; index < endIndex; index++) {
             addInt(offsets, bytecode.get(index).offset());
+        }
+    }
+    static void appendInts(final List<Integer> target, final List<Integer> source) {
+        for (final int value : source) {
+            addInt(target, value);
         }
     }
     static Map<Integer, IrExpression> copyExpressionLocals(final Map<Integer, IrExpression> source) {

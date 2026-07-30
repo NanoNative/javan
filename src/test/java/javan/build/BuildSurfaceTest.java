@@ -4,6 +4,7 @@ import javan.analysis.CallGraph;
 import javan.analysis.EntryPoint;
 import javan.classfile.ClassFile;
 import javan.classfile.CodeAttribute;
+import javan.classfile.Instruction;
 import javan.classfile.MethodInfo;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -926,6 +927,47 @@ final class BuildSurfaceTest {
     }
 
     @Test
+    void deduplicationPlannerCountsUnsortedDuplicateAndPrefixLiterals() throws Exception {
+        final MethodInfo main = new MethodInfo(
+            0x0008,
+            "main",
+            "()V",
+            Optional.of(new CodeAttribute(
+                1,
+                0,
+                new byte[0],
+                0,
+                List.of(
+                    stringLiteral(0, "beta"),
+                    stringLiteral(1, "a"),
+                    stringLiteral(2, "alpha"),
+                    stringLiteral(3, "beta"),
+                    stringLiteral(4, "a"),
+                    stringLiteral(5, "alphabet"),
+                    stringLiteral(6, "alpha")
+                )
+            ))
+        );
+        final ClassFile classFile = classFile("com/acme/Main", main);
+        final EntryPoint entryPoint = new EntryPoint(classFile.name(), main.name(), main.descriptor());
+
+        final DeduplicationPlanner.Plan plan = new DeduplicationPlanner().writePlan(
+            tempDir.resolve(".javan"),
+            Map.of(classFile.name(), classFile),
+            new CallGraph(entryPoint, List.of(entryPoint), List.of())
+        );
+
+        assertThat(plan).isEqualTo(new DeduplicationPlanner.Plan(
+            List.of("core"),
+            3L,
+            List.of(),
+            List.of()
+        ));
+        assertThat(Files.readString(tempDir.resolve(".javan/reports/deduplication-plan.json")))
+            .contains("\"deduplicatedStringLiterals\": 3");
+    }
+
+    @Test
     void libraryBuildReportsWriteDeterministicMetricsAndRuntimeModules() throws Exception {
         final ClassFile main = classFile(
             "com/acme/Main",
@@ -1306,6 +1348,22 @@ final class BuildSurfaceTest {
 
     private static MethodInfo method(final int accessFlags, final String name, final String descriptor) {
         return new MethodInfo(accessFlags, name, descriptor, Optional.of(new CodeAttribute(0, 0, new byte[0], 0, List.of())));
+    }
+
+    private static Instruction stringLiteral(final int offset, final String value) {
+        return new Instruction(
+            offset,
+            18,
+            "ldc",
+            new byte[0],
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(value),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty()
+        );
     }
 
     private static void restoreOsName(final String value) {

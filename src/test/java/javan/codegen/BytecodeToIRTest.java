@@ -188,6 +188,57 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersReachableFunctionsByStableAsciiSymbolOrder() {
+        final MethodInfo main = method(0x0008, "main", "()V", 0, 0, plain(0, 177, "return"));
+        final MethodInfo call = method(0x0008, "call", "()V", 0, 0, plain(0, 177, "return"));
+        final ClassFile zed = classFile(
+            "com/acme/Zed",
+            "java/lang/Object",
+            0,
+            List.of(),
+            List.of(),
+            List.of(main)
+        );
+        final ClassFile dollar = classFile(
+            "com/acme/A$B",
+            "java/lang/Object",
+            0,
+            List.of(),
+            List.of(),
+            List.of(call)
+        );
+        final ClassFile underscore = classFile(
+            "com/acme/A_B",
+            "java/lang/Object",
+            0,
+            List.of(),
+            List.of(),
+            List.of(call)
+        );
+        final EntryPoint mainEntry = new EntryPoint(zed.name(), main.name(), main.descriptor());
+        final EntryPoint dollarEntry = new EntryPoint(dollar.name(), call.name(), call.descriptor());
+        final EntryPoint underscoreEntry = new EntryPoint(underscore.name(), call.name(), call.descriptor());
+        final Map<String, ClassFile> classes = new LinkedHashMap<>();
+        classes.put(zed.name(), zed);
+        classes.put(dollar.name(), dollar);
+        classes.put(underscore.name(), underscore);
+
+        final IrProgram program = new BytecodeToIR().lower(
+            classes,
+            new CallGraph(
+                mainEntry,
+                List.of(mainEntry, dollarEntry, underscoreEntry),
+                List.of()
+            )
+        );
+
+        assertThat(program.functions())
+            .extracting(IrFunction::owner)
+            .containsExactly(dollar.name(), underscore.name(), zed.name());
+        assertThat(BytecodeToIR.symbol(dollarEntry)).isEqualTo(BytecodeToIR.symbol(underscoreEntry));
+    }
+
+    @Test
     void lowersInheritedInstanceFieldsIntoConcreteClassLayout() {
         final MethodInfo main = method(0x0008, "main", "()V", 0, 0, plain(0, 177, "return"));
         final ClassFile marker = classFile(
@@ -3826,6 +3877,24 @@ final class BytecodeToIRTest {
                 new MethodRef("com/acme/ObjectFn", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;"),
                 BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind.OBJECT
             );
+    }
+
+    @Test
+    void materializedLambdaDispatchKindMatchesDistinctMethodReferenceByFields() {
+        final MethodRef stored =
+            new MethodRef("java/util/function/Function", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;");
+        final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> methods =
+            new LinkedHashMap<>();
+        methods.put(stored, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind.OBJECT);
+
+        assertThat(BytecodeToIRInvokeSupport.materializedLambdaDispatchKind(
+            methods,
+            new MethodRef(
+                "java/util/function/Function",
+                "apply",
+                "(Ljava/lang/Object;)Ljava/lang/Object;"
+            )
+        )).isEqualTo(BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind.OBJECT);
     }
 
     @Test
@@ -7618,6 +7687,35 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void fallsBackBeforeBranchValueSelectionCanRetainStaleLocalState() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(I)I",
+            2,
+            2,
+            plain(0, 26, "iload_0"),
+            plainOperands(1, 158, "ifle", 0, 6),
+            plain(2, 4, "iconst_1"),
+            plain(3, 89, "dup"),
+            plain(4, 60, "istore_1"),
+            plainOperands(5, 167, "goto", 0, 5),
+            plain(7, 5, "iconst_2"),
+            plain(8, 89, "dup"),
+            plain(9, 60, "istore_1"),
+            plain(10, 87, "pop"),
+            plain(11, 27, "iload_1"),
+            plain(12, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).contains(
+            IrInstruction.assignInt("local1", IrExpression.intLiteral(1)),
+            IrInstruction.assignInt("local1", IrExpression.intLiteral(2)),
+            IrInstruction.returnInt(IrExpression.intLocal("local1"))
+        );
+    }
+
+    @Test
     void rejectsBranchValueMergeWithMismatchedKinds() {
         assertThatThrownBy(() -> lowerMain(method(
             0x0008,
@@ -8475,7 +8573,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void fallsBackToRegularGuardedBranchWhenValueMergeTargetsUseDifferentOffsets() {
+    void lowersNestedValueSelectionWhenMergeTargetsUseDifferentOffsets() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -8495,11 +8593,9 @@ final class BytecodeToIRTest {
             plain(12, 172, "ireturn")
         ));
 
-        assertThat(function.instructions())
-            .allSatisfy(instruction -> assertThat(instruction.value().orElse("")).doesNotStartWith("guarded_value_"));
         assertThat(function.instructions()).contains(
             IrInstruction.branchIf(
-                "label_9",
+                "branch_value_target_2",
                 IrExpression.intComparison("<=", IrExpression.intLocal("arg0"), IrExpression.intLiteral(0))
             ),
             IrInstruction.branchIf(
@@ -8508,10 +8604,32 @@ final class BytecodeToIRTest {
             ),
             IrInstruction.assignInt("branchValue0_4", IrExpression.intLiteral(1)),
             IrInstruction.assignInt("branchValue0_4", IrExpression.intLiteral(2)),
-            IrInstruction.label("label_9"),
-            IrInstruction.assignInt("local3_int_1", IrExpression.intLocal("branchValue0_4")),
+            IrInstruction.assignInt("branchValue1_2", IrExpression.intLocal("branchValue0_4")),
+            IrInstruction.assignInt("branchValue1_2", IrExpression.intLiteral(2)),
+            IrInstruction.assignInt("local3_int_2", IrExpression.intLocal("branchValue1_2")),
             IrInstruction.returnInt(IrExpression.intLocal("arg2"))
         );
+    }
+
+    @Test
+    void givesRepeatedValueSelectionsAtSameOffsetUniqueLabels() {
+        final Map<Integer, IrLocal> localDeclarations = Map.of(
+            Integer.MIN_VALUE,
+            new IrLocal(IrType.INT, "branchValue0_10")
+        );
+
+        assertThat(BytecodeToIRControlFlowSupport.valueLabel(
+            "branch_value_target_",
+            10,
+            "branchValue1_10",
+            localDeclarations
+        )).isEqualTo("branch_value_target_10_branchValue1_10");
+        assertThat(BytecodeToIRControlFlowSupport.valueLabel(
+            "branch_value_done_",
+            10,
+            "branchValue1_10",
+            localDeclarations
+        )).isEqualTo("branch_value_done_10_branchValue1_10");
     }
 
     @Test
@@ -8768,6 +8886,85 @@ final class BytecodeToIRTest {
             IrInstruction.assignInt(selectedLocal, IrExpression.intLiteral(2)),
             IrInstruction.returnInt(IrExpression.intLocal(selectedLocal))
         );
+    }
+
+    @Test
+    void preservesMapReceiverAndKeyAcrossRightNestedObjectSelection() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/Map;Ljava/lang/Object;II)Ljava/lang/Object;",
+            5,
+            4,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 28, "iload_2"),
+            plainOperands(3, 158, "ifle", 0, 5),
+            stringConstant(4, "first"),
+            plainOperands(5, 167, "goto", 0, 9),
+            plain(8, 29, "iload_3"),
+            plainOperands(9, 158, "ifle", 0, 4),
+            stringConstant(10, "second"),
+            plainOperands(11, 167, "goto", 0, 3),
+            stringConstant(13, "third"),
+            invokeInterface(14, new MethodRef(
+                "java/util/Map",
+                "put",
+                "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"
+            )),
+            plain(15, 176, "areturn")
+        ));
+
+        final IrExpression mapPut = function.instructions().stream()
+            .flatMap(instruction -> instruction.expression().stream())
+            .filter(expression -> expression.kind() == IrExpression.Kind.CALL)
+            .filter(expression -> expression.type() == IrType.OBJECT)
+            .filter(expression -> expression.value().equals("javan_map_put"))
+            .findFirst()
+            .orElseThrow();
+
+        assertThat(mapPut.arguments().get(0)).isEqualTo(IrExpression.objectLocal("arg0"));
+        assertThat(mapPut.arguments().get(1)).isEqualTo(IrExpression.objectLocal("arg1"));
+        assertThat(mapPut.arguments().get(2).value()).startsWith("branchValue");
+    }
+
+    @Test
+    void preservesEarlierTargetInsideShortCircuitValueSelection() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(IIII)I",
+            1,
+            4,
+            plain(0, 26, "iload_0"),
+            plainOperands(1, 153, "ifeq", 0, 11),
+            plain(2, 27, "iload_1"),
+            plainOperands(3, 154, "ifne", 0, 4),
+            plain(4, 28, "iload_2"),
+            plainOperands(5, 153, "ifeq", 0, 7),
+            plain(7, 29, "iload_3"),
+            plainOperands(8, 153, "ifeq", 0, 4),
+            plain(9, 4, "iconst_1"),
+            plainOperands(10, 167, "goto", 0, 3),
+            plain(12, 3, "iconst_0"),
+            plain(13, 172, "ireturn")
+        ));
+
+        final int sharedLabelIndex = function.instructions().indexOf(IrInstruction.label("label_7"));
+        final IrExpression finalGuard = IrExpression.intComparison(
+            "==",
+            IrExpression.intLocal("arg3"),
+            IrExpression.intLiteral(0)
+        );
+        final int finalGuardIndex = java.util.stream.IntStream.range(0, function.instructions().size())
+            .filter(index -> function.instructions().get(index).op() == IrInstruction.Op.BRANCH_IF)
+            .filter(index -> function.instructions().get(index).expression().orElseThrow().equals(finalGuard))
+            .findFirst()
+            .orElse(-1);
+
+        assertThat(sharedLabelIndex).isNotNegative();
+        assertThat(finalGuardIndex).isNotNegative();
+        assertThat(sharedLabelIndex).isLessThan(finalGuardIndex);
     }
 
     @Test
@@ -27432,6 +27629,36 @@ final class BytecodeToIRTest {
                 )
             ))
         );
+    }
+
+    @Test
+    void rejectsInvokeDynamicConcatRecipeWithRawEmbeddedNul() {
+        final String recipe = "\u0001\u0000\u0001";
+
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "(II)Ljava/lang/String;",
+            2,
+            2,
+            plain(0, 26, "iload_0"),
+            plain(1, 27, "iload_1"),
+            invokeDynamic(2, new DynamicRef(
+                "makeConcatWithConstants",
+                "(II)Ljava/lang/String;",
+                "java/lang/invoke/StringConcatFactory",
+                "makeConcatWithConstants",
+                "",
+                List.of(recipe),
+                List.of(BootstrapArgument.string(recipe, true))
+            )),
+            plain(3, 176, "areturn")
+        )))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN052");
+                assertThat(exception.diagnostic().subject()).isEqualTo("invokedynamic");
+            });
+
     }
 
     @Test

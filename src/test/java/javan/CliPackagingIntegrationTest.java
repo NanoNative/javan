@@ -414,6 +414,81 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanCheckRejectsEmbeddedNulConcatRecipe() throws Exception {
+        final Path root = Path.of("").toAbsolutePath().normalize();
+        final Path classes = root.resolve("target/classes");
+        assertThat(classes.resolve("javan/Main.class")).exists();
+
+        final CliRun bootstrapBuild = runWithTimeout(
+            tempDir,
+            Duration.ofSeconds(120),
+            "build",
+            classes.toString(),
+            "--main",
+            "javan.Main",
+            "--output",
+            "javan-bootstrap-concat-nul"
+        );
+        assertThat(bootstrapBuild.exitCode()).as(bootstrapBuild.stderr()).isZero();
+
+        final Path bootstrapBinary = root.resolve("target/.javan/bin/javan-bootstrap-concat-nul");
+        assertThat(bootstrapBinary).isExecutable();
+
+        final Path probeProject = tempDir.resolve("selfhost-concat-nul");
+        final Path probeClasses = probeProject.resolve("classes");
+        Files.createDirectories(probeClasses);
+        writeJava(probeProject, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                private static String concat(final String left, final String right) {
+                    return left + "\\0" + right;
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(concat("a", "b"));
+                }
+            }
+            """);
+
+        final ProcessResult javac = process(
+            tempDir,
+            List.of(
+                CliTestHarness.currentJavacCommand(),
+                "--release",
+                "25",
+                "-d",
+                probeClasses.toString(),
+                probeProject.resolve("src/main/java/com/acme/Main.java").toString()
+            ),
+            Duration.ofSeconds(30)
+        );
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+
+        final ProcessResult nativeCheck = process(
+            tempDir,
+            List.of(
+                bootstrapBinary.toString(),
+                "check",
+                probeClasses.toString(),
+                "--main",
+                "com.acme.Main"
+            ),
+            Duration.ofSeconds(120)
+        );
+
+        assertThat(nativeCheck.exitCode())
+            .as(nativeCheck.stdout() + System.lineSeparator() + nativeCheck.stderr())
+            .isEqualTo(2);
+        assertThat(nativeCheck.stderr())
+            .contains("error[JAVAN052]", "string concat recipe contains an embedded NUL")
+            .doesNotContain("error[JAVAN030]", "invalid string concat argument count");
+    }
+
+    @Test
     void buildRejectsCrossTargetBeforeNativeLinking() throws Exception {
         final Path project = project("target-reject");
         writeJava(project, "com.acme.Main", """
