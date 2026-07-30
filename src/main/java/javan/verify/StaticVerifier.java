@@ -691,6 +691,7 @@ public final class StaticVerifier {
         final CodeException handler,
         final int previousEnd
     ) {
+        final Optional<Instruction> handlerInstruction = instructionAtOffset(code, handler.handlerPc());
         if (handler.catchType().isEmpty()
             || !JdkCallSupport.isPlatformThrowableAssignable(
                 handler.catchType().orElseThrow(),
@@ -700,9 +701,8 @@ public final class StaticVerifier {
             || handler.startPc() < previousEnd
             || instructionAtOffset(code, handler.startPc()).isEmpty()
             || !boundedEndBoundary(code, handler.endPc())
-            || instructionAtOffset(code, handler.handlerPc()).filter(instruction ->
-                astoreLocalIndex(instruction) >= 0
-            ).isEmpty()) {
+            || handlerInstruction.isEmpty()
+            || astoreLocalIndex(handlerInstruction.orElseThrow()) < 0) {
             return false;
         }
         for (final CodeException candidate : handlers) {
@@ -849,13 +849,14 @@ public final class StaticVerifier {
             return supportedBoundedProtectedCall(classes, instruction);
         }
         if (opcode == 186) {
-            return instruction.dynamicRef().filter(dynamic ->
-                supportedStringConcat(dynamic)
-                    || supportedLambdaMetafactory(classes, method, instruction, dynamic)
-            ).isPresent();
+            final Optional<DynamicRef> dynamic = instruction.dynamicRef();
+            return dynamic.isPresent()
+                && (supportedStringConcat(dynamic.orElseThrow())
+                    || supportedLambdaMetafactory(classes, method, instruction, dynamic.orElseThrow()));
         }
         if (opcode == 187 || opcode == 192 || opcode == 193) {
-            return instruction.className().filter(classes::containsKey).isPresent();
+            final Optional<String> className = instruction.className();
+            return className.isPresent() && classes.containsKey(className.orElseThrow());
         }
         if (opcode == 191) {
             return false;
@@ -878,9 +879,8 @@ public final class StaticVerifier {
         if (owner.isInterface()) {
             return false;
         }
-        return owner.method(target.name(), target.descriptor()).filter(candidate ->
-            candidate.code().isPresent()
-        ).isPresent();
+        final Optional<MethodInfo> candidate = owner.method(target.name(), target.descriptor());
+        return candidate.isPresent() && candidate.orElseThrow().code().isPresent();
     }
 
     private static boolean boundedRangeTransportsToHandler(
