@@ -123,6 +123,33 @@ final class ClassFileScannerTest {
     }
 
     @Test
+    void scanReturnsClassesWithDeterministicTraversalOrder(@TempDir final Path tempDir) throws Exception {
+        final Path classesDirectory = classDirectory(tempDir, "classes", "example/directory/Library");
+
+        final Map<String, ClassFile> classes = new ClassFileScanner().scan(projectLayoutWithClasspath(tempDir, classesDirectory));
+
+        assertThat(classes.keySet().spliterator().hasCharacteristics(java.util.Spliterator.ORDERED)).isTrue();
+    }
+
+    @Test
+    void scanTraversesClassesInSortedPathOrder(@TempDir final Path tempDir) throws Exception {
+        final Path classesDirectory = classDirectory(tempDir, "classes", "example/zeta/Library");
+        classDirectory(tempDir, "classes", "example/alpha/Library");
+
+        final Map<String, ClassFile> classes = new ClassFileScanner().scan(projectLayoutWithClasspath(tempDir, classesDirectory));
+
+        assertThat(classes.keySet()).containsExactly("example/alpha/Library", "example/zeta/Library");
+    }
+
+    @Test
+    void scanReturnsUnmodifiableClasses(@TempDir final Path tempDir) throws Exception {
+        final Path classesDirectory = classDirectory(tempDir, "classes", "example/directory/Library");
+        final Map<String, ClassFile> classes = new ClassFileScanner().scan(projectLayoutWithClasspath(tempDir, classesDirectory));
+
+        assertThatThrownBy(classes::clear).isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
     void scanUsesLastClasspathEntryForDuplicateClassName(@TempDir final Path tempDir) throws Exception {
         final String className = "example/duplicate/Main";
         final Path firstDirectory = classDirectory(tempDir, "first", className);

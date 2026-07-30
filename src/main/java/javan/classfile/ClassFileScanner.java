@@ -8,6 +8,7 @@ import javan.util.Strings2;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -55,7 +56,7 @@ public final class ClassFileScanner {
                 scanFolder(entry, classes, entry.equals(layout.input()));
             }
         }
-        return Map.copyOf(classes);
+        return Collections.unmodifiableMap(new LinkedHashMap<>(classes));
     }
 
     private void scanFolder(final Path folder, final Map<String, ClassFile> classes, final boolean application) throws IOException {
