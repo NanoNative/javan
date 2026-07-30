@@ -837,10 +837,11 @@ final class RuntimeSourceCoreSection {
             return left * right;
         }
 
+        int javan_math_to_int_exact_overflows(long long value) {
+            return value < INT_MIN || value > INT_MAX;
+        }
+
         int javan_math_to_int_exact(long long value) {
-            if (value < INT_MIN || value > INT_MAX) {
-                javan_panic("integer overflow");
-            }
             return (int) value;
         }
 

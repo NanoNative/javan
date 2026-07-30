@@ -88,6 +88,7 @@ final class RuntimeHeaderFile {
         long long javan_math_multiply_exact_long_int(long long left, int right);
         int javan_math_multiply_exact_long_long_overflows(long long left, long long right);
         long long javan_math_multiply_exact_long_long(long long left, long long right);
+        int javan_math_to_int_exact_overflows(long long value);
         int javan_math_to_int_exact(long long value);
         int javan_int_neg(int value);
         int javan_int_shl(int value, int shift);
@@ -777,6 +778,24 @@ final class RuntimeHeaderFile {
             const char* fix
         );
         void javan_source_clear(JavanSourceContext* context);
+        void javan_pending_throw(
+            const char* throwable_type,
+            void* message,
+            const char* class_name,
+            const char* method,
+            const char* file,
+            int line,
+            int bytecode_offset,
+            const char* source_line
+        );
+        int javan_pending_has(void);
+        int javan_pending_type_is(void* throwable_type);
+        int javan_pending_type_assignable_to(void* catch_type);
+        void* javan_pending_catch(void);
+        void* javan_caught_throwable_message(void* value);
+        void javan_pending_rethrow(void* value);
+        void javan_pending_clear(void);
+        void javan_pending_panic(void);
         void javan_panic(const char* value);
         void javan_panic_at(
             const char* code,

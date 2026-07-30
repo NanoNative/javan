@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 
 @Execution(CONCURRENT)
@@ -3835,5 +3836,124 @@ final class JdkCallSupportTest {
     void applicationThrowableIsNotPlatformAssignable() {
         assertThat(JdkCallSupport.isPlatformThrowableAssignable("com/acme/ProblemException", "java/lang/Exception"))
             .isFalse();
+    }
+
+    @Test
+    void platformThrowableIsNotAssignableToApplicationCatchType() {
+        assertThat(JdkCallSupport.isPlatformThrowableAssignable("java/lang/IllegalStateException", "com/acme/ProblemException"))
+            .isFalse();
+    }
+
+    @Test
+    void stringIndexOutOfBoundsExceptionIsAssignableToIndexOutOfBoundsException() {
+        assertThat(JdkCallSupport.isPlatformThrowableAssignable(
+            "java/lang/StringIndexOutOfBoundsException",
+            "java/lang/IndexOutOfBoundsException"
+        )).isTrue();
+    }
+
+    @Test
+    void platformThrowableCauseConstructorIsRecognized() {
+        assertThat(JdkCallSupport.isPlatformThrowableCauseConstructor(new javan.classfile.MethodRef(
+            "java/lang/IllegalStateException",
+            "<init>",
+            "(Ljava/lang/String;Ljava/lang/Throwable;)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void applicationCauseConstructorIsNotRecognized() {
+        assertThat(JdkCallSupport.isPlatformThrowableCauseConstructor(new javan.classfile.MethodRef(
+            "com/acme/ProblemException",
+            "<init>",
+            "(Ljava/lang/String;Ljava/lang/Throwable;)V"
+        ))).isFalse();
+    }
+
+    @Test
+    void platformThrowableCauseFactoryIsNotRecognized() {
+        assertThat(JdkCallSupport.isPlatformThrowableCauseConstructor(new javan.classfile.MethodRef(
+            "java/lang/IllegalStateException",
+            "create",
+            "(Ljava/lang/String;Ljava/lang/Throwable;)V"
+        ))).isFalse();
+    }
+
+    @Test
+    void platformThrowableWrongCauseDescriptorIsNotRecognized() {
+        assertThat(JdkCallSupport.isPlatformThrowableCauseConstructor(new javan.classfile.MethodRef(
+            "java/lang/IllegalStateException",
+            "<init>",
+            "(Ljava/lang/Throwable;)V"
+        ))).isFalse();
+    }
+
+    @Test
+    void exactMathCallTransportsArithmeticException() {
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
+            "java/lang/Math",
+            "toIntExact",
+            "(J)I"
+        ))).containsExactly("java/lang/ArithmeticException");
+    }
+
+    @Test
+    void wholeByteArrayFillTransportsNullPointerException() {
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
+            "java/util/Arrays",
+            "fill",
+            "([BB)V"
+        ))).containsExactly("java/lang/NullPointerException");
+    }
+
+    @Test
+    void rangedByteArrayFillTransportsItsThreePlatformExceptions() {
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
+            "java/util/Arrays",
+            "fill",
+            "([BIIB)V"
+        ))).containsExactly(
+            "java/lang/ArrayIndexOutOfBoundsException",
+            "java/lang/IllegalArgumentException",
+            "java/lang/NullPointerException"
+        );
+    }
+
+    @Test
+    void unsupportedArrayFillDescriptorHasNoTransportedPlatformExceptions() {
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
+            "java/util/Arrays",
+            "fill",
+            "([II)V"
+        ))).isEmpty();
+    }
+
+    @Test
+    void threadJoinTransportsInterruptedException() {
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
+            "java/lang/Thread",
+            "join",
+            "()V"
+        ))).containsExactly("java/lang/InterruptedException");
+    }
+
+    @Test
+    void nonTransportingCallHasNoPlatformThrowableTypes() {
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
+            "java/lang/String",
+            "length",
+            "()I"
+        ))).isEmpty();
+    }
+
+    @Test
+    void unknownJdkThrowableIsNotAdmittedWithoutAnExactHierarchyEdge() {
+        assertThat(JdkCallSupport.isPlatformThrowable("java/nio/file/NoSuchFileException")).isFalse();
+    }
+
+    @Test
+    void platformThrowableParentSnapshotIsImmutable() {
+        assertThatThrownBy(() -> JdkCallSupport.platformThrowableParents().clear())
+            .isInstanceOf(UnsupportedOperationException.class);
     }
 }

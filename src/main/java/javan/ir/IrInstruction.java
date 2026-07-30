@@ -622,6 +622,57 @@ public record IrInstruction(
     }
 
     /**
+     * Creates a supported platform-throwable transport instruction.
+     *
+     * @param throwableType JVM internal throwable type
+     * @param message throwable message expression
+     * @param sourceLocation first-throw source location
+     * @return IR instruction
+     */
+    public static IrInstruction throwPending(
+        final String throwableType,
+        final IrExpression message,
+        final IrSourceLocation sourceLocation
+    ) {
+        return new IrInstruction(
+            Op.THROW_PENDING,
+            Optional.of(throwableType),
+            Optional.of(message),
+            Optional.of(sourceLocation)
+        );
+    }
+
+    /**
+     * Creates a supported platform-throwable state instruction without leaving the current function.
+     *
+     * @param throwableType JVM internal throwable type
+     * @param message throwable message expression
+     * @param sourceLocation first-throw source location
+     * @return IR instruction
+     */
+    public static IrInstruction setPending(
+        final String throwableType,
+        final IrExpression message,
+        final IrSourceLocation sourceLocation
+    ) {
+        return new IrInstruction(
+            Op.SET_PENDING,
+            Optional.of(throwableType),
+            Optional.of(message),
+            Optional.of(sourceLocation)
+        );
+    }
+
+    /**
+     * Creates a pending-platform-throwable propagation instruction.
+     *
+     * @return IR instruction
+     */
+    public static IrInstruction propagatePending() {
+        return new IrInstruction(Op.PROPAGATE_PENDING, Optional.empty(), Optional.empty());
+    }
+
+    /**
      * Creates a return-void instruction.
      *
      * @return IR instruction
@@ -727,6 +778,9 @@ public record IrInstruction(
         JUMP,
         BRANCH_IF,
         PANIC,
+        SET_PENDING,
+        THROW_PENDING,
+        PROPAGATE_PENDING,
         RETURN_VOID,
         RETURN_INT,
         RETURN_LONG,

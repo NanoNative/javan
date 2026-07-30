@@ -825,6 +825,9 @@ public final class CCodegen {
         } else {
             c.append("    javan_panic(\"Thread.start with Runnable target has no closed-world Runnable.run implementation\");").append(System.lineSeparator());
         }
+        c.append("    if (javan_pending_has() != 0) {").append(System.lineSeparator());
+        c.append("        javan_pending_panic();").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
     }
 
@@ -1039,7 +1042,15 @@ public final class CCodegen {
         }
         for (int index = 0; index < function.instructions().size(); index++) {
             final IrInstruction instruction = function.instructions().get(index);
-            emitInstruction(index, instruction, entry, rootFrameSymbol, !rootNames.isEmpty(), c);
+            emitInstruction(
+                index,
+                instruction,
+                entry,
+                function.returnType(),
+                rootFrameSymbol,
+                !rootNames.isEmpty(),
+                c
+            );
             if (hasStatementSafePoint(instruction)) {
                 rootLiveness.emitClearsAfter(index, c);
             }
@@ -1670,6 +1681,8 @@ public final class CCodegen {
                         addNextSuccessor(result.get(index), index, instructions.size());
                         break;
                     case PANIC:
+                    case THROW_PENDING:
+                    case PROPAGATE_PENDING:
                     case RETURN_VOID:
                     case RETURN_INT:
                     case RETURN_LONG:
@@ -2330,6 +2343,7 @@ public final class CCodegen {
         final int index,
         final IrInstruction instruction,
         final boolean entry,
+        final javan.ir.IrType functionReturnType,
         final String rootFrameSymbol,
         final boolean hasRootFrame,
         final StringBuilder c
@@ -2501,6 +2515,30 @@ public final class CCodegen {
                 emitExpressionScopeEnd(plan, c);
                 break;
             }
+            case SET_PENDING:
+                emitSetPending(instruction, c);
+                break;
+            case THROW_PENDING:
+                emitThrowPending(
+                    instruction,
+                    entry,
+                    functionReturnType,
+                    rootFrameSymbol,
+                    hasRootFrame,
+                    sourceContextSymbol,
+                    c
+                );
+                break;
+            case PROPAGATE_PENDING:
+                emitPendingPropagation(
+                    entry,
+                    functionReturnType,
+                    rootFrameSymbol,
+                    hasRootFrame,
+                    sourceContextSymbol,
+                    c
+                );
+                break;
             case RETURN_VOID:
                 if (sourceContext) {
                     emitSourceContextClear(c, "    ", sourceContextSymbol);
@@ -2525,6 +2563,72 @@ public final class CCodegen {
         }
     }
 
+    private static void emitThrowPending(
+        final IrInstruction instruction,
+        final boolean entry,
+        final javan.ir.IrType functionReturnType,
+        final String rootFrameSymbol,
+        final boolean hasRootFrame,
+        final String sourceContextSymbol,
+        final StringBuilder c
+    ) {
+        emitSetPending(instruction, c);
+        emitPendingPropagation(
+            entry,
+            functionReturnType,
+            rootFrameSymbol,
+            hasRootFrame,
+            sourceContextSymbol,
+            c
+        );
+    }
+
+    private static void emitSetPending(final IrInstruction instruction, final StringBuilder c) {
+        final ExpressionPlan plan = new ExpressionPlan();
+        final String message = plan.expression(instruction.expression().orElseThrow());
+        final String indent = emitExpressionScopeStart(plan, c);
+        final IrSourceLocation location = instruction.sourceLocation().orElseThrow();
+        c.append(indent)
+            .append("javan_pending_throw(")
+            .append(emitCStringLiteral(instruction.value().orElseThrow()))
+            .append(", (void*) ")
+            .append(message)
+            .append(", ")
+            .append(emitCStringLiteral(displayClassName(location.className())))
+            .append(", ")
+            .append(emitCStringLiteral(location.methodName() + location.descriptor()))
+            .append(", ")
+            .append(emitCStringLiteral(location.sourceFile().orElse("")))
+            .append(", ")
+            .append(sourceLineNumber(location))
+            .append(", ")
+            .append(location.bytecodeOffset())
+            .append(", ")
+            .append(emitCStringLiteral(location.sourceLine().orElse("")))
+            .append(");")
+            .append(System.lineSeparator());
+        emitExpressionScopeEnd(plan, c);
+    }
+
+    private static void emitPendingPropagation(
+        final boolean entry,
+        final javan.ir.IrType functionReturnType,
+        final String rootFrameSymbol,
+        final boolean hasRootFrame,
+        final String sourceContextSymbol,
+        final StringBuilder c
+    ) {
+        if (entry) {
+            c.append("    javan_pending_panic();").append(System.lineSeparator());
+            return;
+        }
+        if (sourceContextSymbol.length() > 0) {
+            emitSourceContextClear(c, "    ", sourceContextSymbol);
+        }
+        emitRootFramePop(rootFrameSymbol, hasRootFrame, c);
+        emitDefaultReturn(functionReturnType, c);
+    }
+
     private static void emitStatementSafePoint(final IrInstruction instruction, final StringBuilder c) {
         if (!hasStatementSafePoint(instruction)) {
             return;
@@ -2536,6 +2640,8 @@ public final class CCodegen {
         switch (instruction.op()) {
             case JUMP:
             case PANIC:
+            case THROW_PENDING:
+            case PROPAGATE_PENDING:
             case RETURN_VOID:
             case RETURN_INT:
             case RETURN_LONG:
@@ -2565,6 +2671,8 @@ public final class CCodegen {
     private static boolean shouldClearSourceContextAfterInstruction(final IrInstruction instruction) {
         switch (instruction.op()) {
             case BRANCH_IF:
+            case THROW_PENDING:
+            case PROPAGATE_PENDING:
             case RETURN_VOID:
             case RETURN_INT:
             case RETURN_LONG:

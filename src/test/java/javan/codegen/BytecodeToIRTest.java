@@ -21,6 +21,7 @@ import javan.ir.IrFunction;
 import javan.ir.IrInstruction;
 import javan.ir.IrLocal;
 import javan.ir.IrProgram;
+import javan.ir.IrSourceLocation;
 import javan.ir.IrType;
 import javan.compat.JdkCallSupport;
 import javan.verify.DiagnosticException;
@@ -236,11 +237,13 @@ final class BytecodeToIRTest {
 
         final IrFunction function = lowerMain(main);
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.jump("label_5"),
-            IrInstruction.label("label_5"),
-            IrInstruction.returnObject(IrExpression.stringLiteral("boom"))
-        );
+        assertThat(function.instructions().get(2)).isEqualTo(IrInstruction.branchIf(
+            "label_5",
+            IrExpression.intCall(
+                "javan_pending_type_assignable_to",
+                List.of(IrExpression.stringLiteral("java/lang/NullPointerException"))
+            )
+        ));
     }
 
     @Test
@@ -265,11 +268,46 @@ final class BytecodeToIRTest {
 
         final IrFunction function = lowerMain(main);
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.jump("label_5"),
-            IrInstruction.label("label_5"),
-            IrInstruction.assignObject("local0", IrExpression.stringLiteral("boom")),
-            IrInstruction.returnObject(IrExpression.objectLocal("local0"))
+        assertThat(function.instructions()).extracting(IrInstruction::op).containsExactly(
+            IrInstruction.Op.SET_PENDING,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.PROPAGATE_PENDING,
+            IrInstruction.Op.LABEL,
+            IrInstruction.Op.LABEL,
+            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.RETURN_OBJECT
+        );
+    }
+
+    @Test
+    void pendingHandlerMaterializesManagedCaughtThrowable() {
+        final MethodInfo main = methodWithHandlers(
+            0x0008,
+            "main",
+            "()Ljava/lang/String;",
+            3,
+            1,
+            List.of(new CodeException(0, 5, 5, Optional.of("java/lang/NullPointerException"))),
+            classInstruction(0, 187, "new", "java/lang/NullPointerException"),
+            plain(1, 89, "dup"),
+            stringConstant(2, "boom"),
+            invokeSpecial(3, new MethodRef("java/lang/NullPointerException", "<init>", "(Ljava/lang/String;)V")),
+            plain(4, 191, "athrow"),
+            plain(5, 75, "astore_0"),
+            plain(6, 42, "aload_0"),
+            invokeVirtual(7, new MethodRef("java/lang/NullPointerException", "getMessage", "()Ljava/lang/String;")),
+            plain(8, 176, "areturn")
+        );
+
+        final IrFunction function = lowerMain(main);
+
+        assertThat(function.instructions()).contains(
+            IrInstruction.assignObject(
+                "pendingException0",
+                IrExpression.objectCall("javan_pending_catch", List.of())
+            )
         );
     }
 
@@ -323,7 +361,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void panicsWhenProtectedThrowHasNoMatchingCatch() {
+    void transportsProtectedThrowWhenNoCatchMatches() {
         final MethodInfo main = methodWithHandlers(
             0x0008,
             "main",
@@ -343,17 +381,23 @@ final class BytecodeToIRTest {
         final IrFunction function = lowerMain(main);
 
         assertThat(function.instructions().getFirst()).satisfies(instruction -> {
-            assertThat(instruction.op()).isEqualTo(IrInstruction.Op.PANIC);
+            assertThat(instruction.op()).isEqualTo(IrInstruction.Op.SET_PENDING);
+            assertThat(instruction.value()).contains("java/lang/NullPointerException");
             assertThat(instruction.expression()).contains(IrExpression.stringLiteral("boom"));
             assertThat(instruction.sourceLocation()).isPresent();
             assertThat(instruction.sourceLocation().orElseThrow().bytecodeOffset()).isEqualTo(4);
         });
-        assertThat(function.instructions().stream().anyMatch(instruction -> instruction.op() == IrInstruction.Op.JUMP)).isFalse();
+        assertThat(function.instructions()).extracting(IrInstruction::op).containsSubsequence(
+            IrInstruction.Op.SET_PENDING,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.PROPAGATE_PENDING
+        );
     }
 
     @Test
-    void rejectsMutuallyExclusiveThrowsToSamePendingHandlerOffset() {
-        assertThatThrownBy(() -> lowerMain(methodWithHandlers(
+    void lowersMutuallyExclusiveThrowsToSamePendingHandlerOffset() {
+        final IrFunction function = lowerMain(methodWithHandlers(
             0x0008,
             "main",
             "(I)V",
@@ -372,11 +416,19 @@ final class BytecodeToIRTest {
             plain(11, 191, "athrow"),
             plain(12, 76, "astore_1"),
             plain(13, 177, "return")
-        )))
-            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
-                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN014");
-                assertThat(exception.diagnostic().subject()).isEqualTo("athrow");
-            });
+        ));
+
+        assertThat(function.instructions()).extracting(IrInstruction::op).containsSubsequence(
+            IrInstruction.Op.SET_PENDING,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.SET_PENDING,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.LABEL,
+            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.RETURN_VOID
+        );
     }
 
     @Test
@@ -400,14 +452,44 @@ final class BytecodeToIRTest {
 
         final IrFunction function = lowerMain(main);
 
-        assertThat(function.instructions()).hasSize(4);
-        assertThat(function.instructions().subList(0, 3)).containsExactly(
-            IrInstruction.jump("label_5"),
-            IrInstruction.label("label_5"),
-            IrInstruction.assignObject("local0", IrExpression.stringLiteral("boom"))
+        assertThat(function.instructions()).extracting(IrInstruction::op).containsSubsequence(
+            IrInstruction.Op.SET_PENDING,
+            IrInstruction.Op.JUMP,
+            IrInstruction.Op.LABEL,
+            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.CALL_STATIC_VOID,
+            IrInstruction.Op.PROPAGATE_PENDING
         );
-        assertThat(function.instructions().get(3).op()).isEqualTo(IrInstruction.Op.PANIC);
-        assertThat(function.instructions().get(3).expression()).contains(IrExpression.objectLocal("local0"));
+    }
+
+    @Test
+    void caughtThrowableRethrowUsesManagedRuntimeIdentity() {
+        final MethodInfo main = methodWithHandlers(
+            0x0008,
+            "main",
+            "()Ljava/lang/String;",
+            3,
+            1,
+            List.of(new CodeException(0, 5, 5, Optional.empty())),
+            classInstruction(0, 187, "new", "java/lang/NullPointerException"),
+            plain(1, 89, "dup"),
+            stringConstant(2, "boom"),
+            invokeSpecial(3, new MethodRef("java/lang/NullPointerException", "<init>", "(Ljava/lang/String;)V")),
+            plain(4, 191, "athrow"),
+            plain(5, 75, "astore_0"),
+            plain(6, 42, "aload_0"),
+            plain(7, 191, "athrow")
+        );
+
+        final IrFunction function = lowerMain(main);
+
+        assertThat(function.instructions()).contains(
+            IrInstruction.callStaticVoid(
+                "javan_pending_rethrow",
+                List.of(IrExpression.objectLocal("local0_object_1"))
+            )
+        );
     }
 
     @Test
@@ -585,6 +667,29 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void handlerMayThrowDetectsSharedAthrowBeforeHandlerOffset() {
+        final CodeAttribute code = new CodeAttribute(
+            1,
+            1,
+            new byte[0],
+            0,
+            List.of(new CodeException(2, 3, 3, Optional.of("java/lang/RuntimeException"))),
+            List.of(),
+            List.of(
+                plain(0, 177, "return"),
+                plain(1, 191, "athrow"),
+                plain(2, 177, "return"),
+                plain(3, 167, "goto")
+            )
+        );
+
+        assertThat(BytecodeToIRControlFlowSupport.handlerMayThrow(
+            code,
+            code.exceptionTable().getFirst()
+        )).isTrue();
+    }
+
+    @Test
     void supportedFinallyRethrowHandlerRejectsMissingHandlerInstruction() {
         final CodeAttribute code = new CodeAttribute(
             1,
@@ -666,14 +771,19 @@ final class BytecodeToIRTest {
 
         final IrFunction function = lowerMain(main);
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.jump("label_5"),
-            IrInstruction.label("label_5"),
-            IrInstruction.assignObject("local0", IrExpression.stringLiteral("boom")),
-            IrInstruction.jump("label_8"),
-            IrInstruction.label("label_8"),
-            IrInstruction.assignObject("local1_object_1", IrExpression.objectLocal("local0")),
-            IrInstruction.returnObject(IrExpression.objectLocal("local1_object_1"))
+        assertThat(function.instructions()).extracting(IrInstruction::op).containsSubsequence(
+            IrInstruction.Op.SET_PENDING,
+            IrInstruction.Op.JUMP,
+            IrInstruction.Op.LABEL,
+            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.CALL_STATIC_VOID,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.LABEL,
+            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.RETURN_OBJECT
         );
     }
 
@@ -697,6 +807,26 @@ final class BytecodeToIRTest {
 
         assertThat(value.throwableType()).contains("java/lang/NullPointerException");
         assertThat(value.expression()).contains(IrExpression.objectLocal("local0"));
+    }
+
+    @Test
+    void localObjectValueRestoresCaughtThrowableFromLocalMetadata() {
+        final Map<Integer, IrExpression> locals = Map.of(0, IrExpression.objectLocal("local0"));
+        final Map<Integer, BytecodeToIR.StackKind> objectLocalKinds = Map.of(
+            0,
+            BytecodeToIR.StackKind.CAUGHT_THROWABLE
+        );
+
+        final BytecodeToIR.StackValue value = BytecodeToIR.localObjectValue(
+            classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of()),
+            method(0x0008, "main", "()V", 1, 1, plain(0, 177, "return")),
+            locals,
+            objectLocalKinds,
+            Map.of(),
+            0
+        );
+
+        assertThat(value).isEqualTo(BytecodeToIR.StackValue.caughtThrowable(IrExpression.objectLocal("local0")));
     }
 
     @Test
@@ -2017,12 +2147,16 @@ final class BytecodeToIRTest {
         );
 
         assertThat(program.functions()).filteredOn(function -> function.name().equals("applyValue")).singleElement().satisfies(function -> {
-            assertThat(function.locals()).isEmpty();
+            assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
             assertThat(function.instructions()).containsExactly(
-                IrInstruction.returnObject(IrExpression.objectCall(
-                    symbol("com/acme/Main", "lambda$apply$0", "(Ljava/lang/Object;)Ljava/lang/Object;"),
-                    List.of(IrExpression.objectLocal("arg0"))
-                ))
+                IrInstruction.assignObject(
+                    "object0",
+                    IrExpression.objectCall(
+                        symbol("com/acme/Main", "lambda$apply$0", "(Ljava/lang/Object;)Ljava/lang/Object;"),
+                        List.of(IrExpression.objectLocal("arg0"))
+                    )
+                ),
+                IrInstruction.returnObject(IrExpression.objectLocal("object0"))
             );
         });
     }
@@ -2086,12 +2220,16 @@ final class BytecodeToIRTest {
         );
 
         assertThat(program.functions()).filteredOn(function -> function.name().equals("supplyValue")).singleElement().satisfies(function -> {
-            assertThat(function.locals()).isEmpty();
+            assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
             assertThat(function.instructions()).containsExactly(
-                IrInstruction.returnObject(IrExpression.objectCall(
-                    symbol("com/acme/Main", "lambda$get$0", "()Ljava/lang/Object;"),
-                    List.of()
-                ))
+                IrInstruction.assignObject(
+                    "object0",
+                    IrExpression.objectCall(
+                        symbol("com/acme/Main", "lambda$get$0", "()Ljava/lang/Object;"),
+                        List.of()
+                    )
+                ),
+                IrInstruction.returnObject(IrExpression.objectLocal("object0"))
             );
         });
     }
@@ -2155,12 +2293,16 @@ final class BytecodeToIRTest {
         );
 
         assertThat(program.functions()).filteredOn(function -> function.name().equals("testValue")).singleElement().satisfies(function -> {
-            assertThat(function.locals()).isEmpty();
+            assertThat(function.locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
             assertThat(function.instructions()).containsExactly(
-                IrInstruction.returnInt(IrExpression.intCall(
-                    symbol("com/acme/Main", "lambda$test$0", "(Ljava/lang/Object;)Z"),
-                    List.of(IrExpression.objectLocal("arg0"))
-                ))
+                IrInstruction.assignInt(
+                    "int0",
+                    IrExpression.intCall(
+                        symbol("com/acme/Main", "lambda$test$0", "(Ljava/lang/Object;)Z"),
+                        List.of(IrExpression.objectLocal("arg0"))
+                    )
+                ),
+                IrInstruction.returnInt(IrExpression.intLocal("int0"))
             );
         });
     }
@@ -8844,10 +8986,13 @@ final class BytecodeToIRTest {
             plain(61, 176, "areturn")
         ));
 
-        assertThat(function.instructions()).contains(
-            IrInstruction.jump("label_60"),
-            IrInstruction.label("label_60"),
-            IrInstruction.returnObject(IrExpression.stringLiteral("boom"))
+        assertThat(function.instructions()).extracting(IrInstruction::op).containsSubsequence(
+            IrInstruction.Op.SET_PENDING,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.LABEL,
+            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.RETURN_OBJECT
         );
     }
 
@@ -13322,8 +13467,8 @@ final class BytecodeToIRTest {
         ));
         assertThat(function.instructions().get(6)).isEqualTo(IrInstruction.label("label_thread_wait_interrupted_1_0"));
         assertThat(function.instructions().get(7)).satisfies(instruction -> {
-            assertThat(instruction.op()).isEqualTo(IrInstruction.Op.PANIC);
-            assertThat(instruction.expression()).contains(IrExpression.stringLiteral("java/lang/InterruptedException"));
+            assertThat(instruction.op()).isEqualTo(IrInstruction.Op.THROW_PENDING);
+            assertThat(instruction.expression()).contains(IrExpression.stringLiteral("sleep interrupted"));
         });
         assertThat(function.instructions().get(8)).isEqualTo(IrInstruction.label("label_thread_wait_success_1_1"));
         assertThat(function.instructions().get(9)).isEqualTo(IrInstruction.returnVoid());
@@ -13369,8 +13514,8 @@ final class BytecodeToIRTest {
         ));
         assertThat(function.instructions().get(6)).isEqualTo(IrInstruction.label("label_thread_wait_interrupted_2_0"));
         assertThat(function.instructions().get(7)).satisfies(instruction -> {
-            assertThat(instruction.op()).isEqualTo(IrInstruction.Op.PANIC);
-            assertThat(instruction.expression()).contains(IrExpression.stringLiteral("java/lang/InterruptedException"));
+            assertThat(instruction.op()).isEqualTo(IrInstruction.Op.THROW_PENDING);
+            assertThat(instruction.expression()).contains(IrExpression.stringLiteral("sleep interrupted"));
         });
         assertThat(function.instructions().get(8)).isEqualTo(IrInstruction.label("label_thread_wait_success_2_1"));
         assertThat(function.instructions().get(9)).isEqualTo(IrInstruction.returnVoid());
@@ -13415,8 +13560,8 @@ final class BytecodeToIRTest {
         ));
         assertThat(function.instructions().get(6)).isEqualTo(IrInstruction.label("label_thread_wait_interrupted_1_0"));
         assertThat(function.instructions().get(7)).satisfies(instruction -> {
-            assertThat(instruction.op()).isEqualTo(IrInstruction.Op.PANIC);
-            assertThat(instruction.expression()).contains(IrExpression.stringLiteral("java/lang/InterruptedException"));
+            assertThat(instruction.op()).isEqualTo(IrInstruction.Op.THROW_PENDING);
+            assertThat(instruction.expression()).contains(IrExpression.stringLiteral("sleep interrupted"));
         });
         assertThat(function.instructions().get(8)).isEqualTo(IrInstruction.label("label_thread_wait_success_1_1"));
         assertThat(function.instructions().get(9)).isEqualTo(IrInstruction.returnVoid());
@@ -13687,8 +13832,8 @@ final class BytecodeToIRTest {
         ));
         assertThat(function.instructions().get(3)).isEqualTo(IrInstruction.label("label_thread_wait_interrupted_1_0"));
         assertThat(function.instructions().get(4)).satisfies(instruction -> {
-            assertThat(instruction.op()).isEqualTo(IrInstruction.Op.PANIC);
-            assertThat(instruction.expression()).contains(IrExpression.stringLiteral("java/lang/InterruptedException"));
+            assertThat(instruction.op()).isEqualTo(IrInstruction.Op.THROW_PENDING);
+            assertThat(instruction.expression()).contains(IrExpression.objectNull());
         });
         assertThat(function.instructions().get(5)).isEqualTo(IrInstruction.label("label_thread_wait_success_1_0"));
         assertThat(function.instructions().get(6)).isEqualTo(IrInstruction.returnVoid());
@@ -13725,8 +13870,8 @@ final class BytecodeToIRTest {
         ));
         assertThat(function.instructions().get(3)).isEqualTo(IrInstruction.label("label_thread_wait_interrupted_2_0"));
         assertThat(function.instructions().get(4)).satisfies(instruction -> {
-            assertThat(instruction.op()).isEqualTo(IrInstruction.Op.PANIC);
-            assertThat(instruction.expression()).contains(IrExpression.stringLiteral("java/lang/InterruptedException"));
+            assertThat(instruction.op()).isEqualTo(IrInstruction.Op.THROW_PENDING);
+            assertThat(instruction.expression()).contains(IrExpression.objectNull());
         });
         assertThat(function.instructions().get(5)).isEqualTo(IrInstruction.label("label_thread_wait_success_2_0"));
         assertThat(function.instructions().get(6)).isEqualTo(IrInstruction.returnVoid());
@@ -13764,8 +13909,8 @@ final class BytecodeToIRTest {
         ));
         assertThat(function.instructions().get(3)).isEqualTo(IrInstruction.label("label_thread_wait_interrupted_3_0"));
         assertThat(function.instructions().get(4)).satisfies(instruction -> {
-            assertThat(instruction.op()).isEqualTo(IrInstruction.Op.PANIC);
-            assertThat(instruction.expression()).contains(IrExpression.stringLiteral("java/lang/InterruptedException"));
+            assertThat(instruction.op()).isEqualTo(IrInstruction.Op.THROW_PENDING);
+            assertThat(instruction.expression()).contains(IrExpression.objectNull());
         });
         assertThat(function.instructions().get(5)).isEqualTo(IrInstruction.label("label_thread_wait_success_3_0"));
         assertThat(function.instructions().get(6)).isEqualTo(IrInstruction.returnVoid());
@@ -13805,8 +13950,8 @@ final class BytecodeToIRTest {
         ));
         assertThat(function.instructions().get(3)).isEqualTo(IrInstruction.label("label_thread_wait_interrupted_2_0"));
         assertThat(function.instructions().get(4)).satisfies(instruction -> {
-            assertThat(instruction.op()).isEqualTo(IrInstruction.Op.PANIC);
-            assertThat(instruction.expression()).contains(IrExpression.stringLiteral("java/lang/InterruptedException"));
+            assertThat(instruction.op()).isEqualTo(IrInstruction.Op.THROW_PENDING);
+            assertThat(instruction.expression()).contains(IrExpression.objectNull());
         });
         assertThat(function.instructions().get(5)).isEqualTo(IrInstruction.label("label_thread_wait_success_2_0"));
         assertThat(function.instructions().get(6)).isEqualTo(IrInstruction.returnInt(IrExpression.intLiteral(1)));
@@ -13850,12 +13995,32 @@ final class BytecodeToIRTest {
                 IrExpression.intComparison("==", IrExpression.intLocal("int1"), IrExpression.intLiteral(0))
             ),
             IrInstruction.label("label_thread_wait_interrupted_3_0"),
+            IrInstruction.setPending(
+                "java/lang/InterruptedException",
+                IrExpression.stringLiteral("sleep interrupted"),
+                new IrSourceLocation(
+                    "com/acme/Main",
+                    "main",
+                    "()Ljava/lang/String;",
+                    3,
+                    Optional.of("Main.java"),
+                    Optional.empty(),
+                    Optional.empty()
+                )
+            ),
             IrInstruction.jump("label_6"),
             IrInstruction.label("label_thread_wait_success_3_1"),
             IrInstruction.returnObject(IrExpression.stringLiteral("ok")),
             IrInstruction.label("label_6"),
-            IrInstruction.assignObject("local0_object_2", IrExpression.stringLiteral("sleep interrupted")),
-            IrInstruction.returnObject(IrExpression.objectLocal("local0_object_2"))
+            IrInstruction.assignObject(
+                "pendingException2",
+                IrExpression.objectCall("javan_pending_catch", List.of())
+            ),
+            IrInstruction.assignObject("local0_object_3", IrExpression.objectLocal("pendingException2")),
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_caught_throwable_message",
+                List.of(IrExpression.objectLocal("local0_object_3"))
+            ))
         );
     }
 
@@ -13891,12 +14056,32 @@ final class BytecodeToIRTest {
                 IrExpression.intComparison("==", IrExpression.intLocal("int0"), IrExpression.intLiteral(0))
             ),
             IrInstruction.label("label_thread_wait_interrupted_3_0"),
+            IrInstruction.setPending(
+                "java/lang/InterruptedException",
+                IrExpression.objectNull(),
+                new IrSourceLocation(
+                    "com/acme/Main",
+                    "main",
+                    "(Ljava/lang/Thread;)Ljava/lang/String;",
+                    3,
+                    Optional.of("Main.java"),
+                    Optional.empty(),
+                    Optional.empty()
+                )
+            ),
             IrInstruction.jump("label_6"),
             IrInstruction.label("label_thread_wait_success_3_0"),
             IrInstruction.returnObject(IrExpression.stringLiteral("ok")),
             IrInstruction.label("label_6"),
-            IrInstruction.assignObject("local1_object_1", IrExpression.objectNull()),
-            IrInstruction.returnObject(IrExpression.objectLocal("local1_object_1"))
+            IrInstruction.assignObject(
+                "pendingException1",
+                IrExpression.objectCall("javan_pending_catch", List.of())
+            ),
+            IrInstruction.assignObject("local1_object_2", IrExpression.objectLocal("pendingException1")),
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_caught_throwable_message",
+                List.of(IrExpression.objectLocal("local1_object_2"))
+            ))
         );
     }
 
@@ -20708,7 +20893,40 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnInt(IrExpression.intCall("javan_math_to_int_exact", List.of(IrExpression.longLocal("arg0"))))
+            IrInstruction.assignLong("long0", IrExpression.longLocal("arg0")),
+            IrInstruction.assignInt(
+                "int1",
+                IrExpression.intCall(
+                    "javan_math_to_int_exact_overflows",
+                    List.of(IrExpression.longLocal("long0"))
+                )
+            ),
+            IrInstruction.branchIf(
+                "label_math_to_int_exact_success_1_1",
+                IrExpression.intComparison(
+                    "==",
+                    IrExpression.intLocal("int1"),
+                    IrExpression.intLiteral(0)
+                )
+            ),
+            IrInstruction.throwPending(
+                "java/lang/ArithmeticException",
+                IrExpression.stringLiteral("integer overflow"),
+                new IrSourceLocation(
+                    "com/acme/Main",
+                    "main",
+                    "(J)I",
+                    1,
+                    Optional.of("Main.java"),
+                    Optional.empty(),
+                    Optional.empty()
+                )
+            ),
+            IrInstruction.label("label_math_to_int_exact_success_1_1"),
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_math_to_int_exact",
+                List.of(IrExpression.longLocal("long0"))
+            ))
         );
     }
 
@@ -26854,11 +27072,7 @@ final class BytecodeToIRTest {
 
         final IrProgram program = lowerProgram("com/acme/SwitchMap$1", clinit, synthetic);
 
-        assertThat(program.functions().getFirst().instructions()).containsExactly(
-            IrInstruction.jump("label_4"),
-            IrInstruction.label("label_4"),
-            IrInstruction.returnVoid()
-        );
+        assertIgnoredSyntheticEnumSwitchMapHandler(program.functions().getFirst());
     }
 
     @Test
@@ -26923,11 +27137,7 @@ final class BytecodeToIRTest {
 
         final IrProgram program = lowerProgram("com/acme/SwitchMapHolder", clinit, switchMapHolder);
 
-        assertThat(program.functions().getFirst().instructions()).containsExactly(
-            IrInstruction.jump("label_4"),
-            IrInstruction.label("label_4"),
-            IrInstruction.returnVoid()
-        );
+        assertIgnoredSyntheticEnumSwitchMapHandler(program.functions().getFirst());
     }
 
     @Test
@@ -26950,15 +27160,24 @@ final class BytecodeToIRTest {
 
         final IrProgram program = lowerProgram("com/acme/SwitchMap$1", clinit, synthetic);
 
-        assertThat(program.functions().getFirst().locals()).containsExactly(new IrLocal(IrType.OBJECT, "local1"));
+        assertThat(program.functions().getFirst().locals()).containsExactly(
+            new IrLocal(IrType.OBJECT, "pendingException0"),
+            new IrLocal(IrType.OBJECT, "local1_object_1")
+        );
         assertThat(program.functions().getFirst().instructions().getFirst()).satisfies(instruction -> {
-            assertThat(instruction.op()).isEqualTo(IrInstruction.Op.PANIC);
+            assertThat(instruction.op()).isEqualTo(IrInstruction.Op.SET_PENDING);
+            assertThat(instruction.value()).contains("java/lang/NoSuchFieldError");
             assertThat(instruction.expression()).contains(IrExpression.objectNull());
         });
-        assertThat(program.functions().getFirst().instructions()).endsWith(
-            IrInstruction.label("label_4"),
-            IrInstruction.assignObject("local1", IrExpression.objectNull()),
-            IrInstruction.returnVoid()
+        assertThat(program.functions().getFirst().instructions()).extracting(IrInstruction::op).containsSubsequence(
+            IrInstruction.Op.SET_PENDING,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.PROPAGATE_PENDING,
+            IrInstruction.Op.LABEL,
+            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.RETURN_VOID
         );
     }
 
@@ -27502,11 +27721,20 @@ final class BytecodeToIRTest {
             classFile(className, "java/lang/Object", 0, List.of(), List.of(), List.of(syntheticEnumSwitchMapInitializer(opcode, mnemonic, operands)))
         );
 
-        assertThat(program.functions().getFirst().locals()).isEmpty();
-        assertThat(program.functions().getFirst().instructions()).containsExactly(
-            IrInstruction.jump("label_4"),
-            IrInstruction.label("label_4"),
-            IrInstruction.returnVoid()
+        assertIgnoredSyntheticEnumSwitchMapHandler(program.functions().getFirst());
+    }
+
+    private static void assertIgnoredSyntheticEnumSwitchMapHandler(final IrFunction function) {
+        assertThat(function.locals()).isEmpty();
+        assertThat(function.instructions()).extracting(IrInstruction::op).containsExactly(
+            IrInstruction.Op.SET_PENDING,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.PROPAGATE_PENDING,
+            IrInstruction.Op.LABEL,
+            IrInstruction.Op.LABEL,
+            IrInstruction.Op.CALL_STATIC_VOID,
+            IrInstruction.Op.RETURN_VOID
         );
     }
 
@@ -27517,12 +27745,20 @@ final class BytecodeToIRTest {
             classFile(className, "java/lang/Object", 0, List.of(), List.of(), List.of(syntheticEnumSwitchMapInitializer(76, "astore_1")))
         );
 
-        assertThat(program.functions().getFirst().locals()).containsExactly(new IrLocal(IrType.OBJECT, "local1"));
-        assertThat(program.functions().getFirst().instructions()).containsExactly(
-            IrInstruction.jump("label_4"),
-            IrInstruction.label("label_4"),
-            IrInstruction.assignObject("local1", IrExpression.objectNull()),
-            IrInstruction.returnVoid()
+        assertThat(program.functions().getFirst().locals()).containsExactly(
+            new IrLocal(IrType.OBJECT, "pendingException0"),
+            new IrLocal(IrType.OBJECT, "local1_object_1")
+        );
+        assertThat(program.functions().getFirst().instructions()).extracting(IrInstruction::op).containsExactly(
+            IrInstruction.Op.SET_PENDING,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.PROPAGATE_PENDING,
+            IrInstruction.Op.LABEL,
+            IrInstruction.Op.LABEL,
+            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.RETURN_VOID
         );
     }
 

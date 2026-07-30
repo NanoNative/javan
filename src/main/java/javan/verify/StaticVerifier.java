@@ -1,5 +1,6 @@
 package javan.verify;
 
+import javan.analysis.CaughtThrowableRethrowAnalysis;
 import javan.analysis.EntryPoint;
 import javan.analysis.VirtualThreadInvokePatterns;
 import javan.classfile.ClassFile;
@@ -433,6 +434,10 @@ public final class StaticVerifier {
                 exactVirtualThreadWrapperMethod == 1
             ) ? 1 : 0;
             final Optional<String> forbiddenReason = forbiddenApiRules.forbiddenReason(target);
+            final boolean unsupportedCustomThrowableCauseConstructor =
+                unsupportedCustomThrowableCauseConstructor(classFile, method, target);
+            final boolean supportedCaughtThrowableCauseConstructor =
+                supportedCaughtThrowableCauseConstructor(method, instructions, instructionIndex, target);
             if (forbiddenReason.isPresent()) {
                 diagnostics.add(apiDiagnostic(classFile, method, target, forbiddenReason.orElseThrow(), reachable));
             }
@@ -447,7 +452,8 @@ public final class StaticVerifier {
             } else if (unsupportedMonitorMethod == 0
                 && unsupportedConcurrencyApi == 0
                 && facts.jdkCall()
-                && !facts.supported()
+                && (!facts.supported() || unsupportedCustomThrowableCauseConstructor)
+                && !supportedCaughtThrowableCauseConstructor
                 && !ignoredGeneratedEnumValueOfCall(classFile, method, target, reachable)) {
                 diagnostics.add(jdkCallDiagnostic(classFile, method, target, reachable));
             }
@@ -588,7 +594,7 @@ public final class StaticVerifier {
         if (supportedMathExactHandler(code, handler)) {
             return true;
         }
-        if (supportedFinallyRethrowHandler(code, handler)) {
+        if (supportedFinallyRethrowHandler(classes, code, handler)) {
             return true;
         }
         if (handler.catchType().isEmpty()) {
@@ -597,8 +603,10 @@ public final class StaticVerifier {
         if (!isPlatformThrowable(handler.catchType().orElseThrow())) {
             return false;
         }
-        int hasAthrow = 0;
-        for (final Instruction instruction : code.instructions()) {
+        int hasThrowableTransport = 0;
+        final List<Instruction> instructions = code.instructions();
+        for (int instructionIndex = 0; instructionIndex < instructions.size(); instructionIndex++) {
+            final Instruction instruction = instructions.get(instructionIndex);
             if (instruction.offset() < handler.startPc()) {
                 continue;
             }
@@ -606,15 +614,374 @@ public final class StaticVerifier {
                 continue;
             }
             if (instruction.opcode() == 191) {
-                hasAthrow = 1;
+                hasThrowableTransport = 1;
             }
-            if (!supportedExplicitThrowRangeInstruction(instruction)
-                && !supportedProtectedFinallyRethrowInstruction(code, instruction)) {
+            if (supportedGeneratedThrowableCall(classes, instruction)) {
+                hasThrowableTransport = 1;
+            }
+            if (!supportedInterruptedWaitProtectedInstruction(instruction)
+                && !supportedGeneratedThrowableCall(classes, instruction)
+                && !supportedThrowableWrapRangeInstruction(instruction)
+                && !supportedCaughtThrowableCauseConstructor(code, instructions, instructionIndex, instruction)
+                && !supportedProtectedFinallyRethrowInstruction(classes, code, instruction)) {
                 return false;
             }
         }
-        if (hasAthrow == 1) {
+        if (hasThrowableTransport == 1) {
             return true;
+        }
+        return false;
+    }
+
+    private static boolean supportedGeneratedThrowableCall(
+        final Map<String, ClassFile> classes,
+        final Instruction instruction
+    ) {
+        if (instruction.opcode() < 182 || instruction.opcode() > 185 || instruction.methodRef().isEmpty()) {
+            return false;
+        }
+        final MethodRef target = instruction.methodRef().orElseThrow();
+        final ClassFile targetClass = classes.get(target.owner());
+        if (targetClass == null) {
+            return supportedLambdaThrowableCall(classes, target);
+        }
+        final Optional<MethodInfo> targetMethod = targetClass.method(target.name(), target.descriptor());
+        if (targetMethod.isEmpty() || targetMethod.orElseThrow().code().isEmpty()) {
+            return supportedLambdaThrowableCall(classes, target);
+        }
+        return !escapingPlatformExceptionTypes(classes, target, new HashSet<>()).isEmpty()
+            || staticallyNonThrowingGeneratedMethod(targetMethod.orElseThrow());
+    }
+
+    private static boolean supportedLambdaThrowableCall(
+        final Map<String, ClassFile> classes,
+        final MethodRef target
+    ) {
+        if (!escapingLambdaPlatformExceptionTypes(classes, target, new HashSet<>()).isEmpty()) {
+            return true;
+        }
+        for (final ClassFile classFile : classes.values()) {
+            for (final MethodInfo method : classFile.methods()) {
+                if (method.code().isEmpty()) {
+                    continue;
+                }
+                for (final Instruction instruction : method.code().orElseThrow().instructions()) {
+                    if (instruction.dynamicRef().isEmpty()) {
+                        continue;
+                    }
+                    final DynamicRef dynamicRef = instruction.dynamicRef().orElseThrow();
+                    final Optional<LambdaMetafactoryCall> resolved = LambdaMetafactoryCall.resolve(dynamicRef);
+                    if (resolved.isEmpty()) {
+                        continue;
+                    }
+                    final LambdaMetafactoryCall lambda = resolved.orElseThrow();
+                    if (!matchesSupportedLambdaCall(
+                        classes,
+                        target,
+                        method,
+                        instruction,
+                        dynamicRef,
+                        lambda
+                    )) {
+                        continue;
+                    }
+                    final ClassFile implementationClass = classes.get(lambda.implementation().owner());
+                    if (implementationClass == null) {
+                        continue;
+                    }
+                    final Optional<MethodInfo> implementation = implementationClass.method(
+                        lambda.implementation().name(),
+                        lambda.implementation().descriptor()
+                    );
+                    if (implementation.isEmpty() || implementation.orElseThrow().code().isEmpty()) {
+                        continue;
+                    }
+                    if (staticallyNonThrowingGeneratedMethod(implementation.orElseThrow())) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    private static Set<String> escapingLambdaPlatformExceptionTypes(
+        final Map<String, ClassFile> classes,
+        final MethodRef target,
+        final Set<MethodRef> visiting
+    ) {
+        final Set<String> result = new HashSet<>();
+        for (final ClassFile classFile : classes.values()) {
+            for (final MethodInfo method : classFile.methods()) {
+                if (method.code().isEmpty()) {
+                    continue;
+                }
+                for (final Instruction instruction : method.code().orElseThrow().instructions()) {
+                    if (instruction.dynamicRef().isEmpty()) {
+                        continue;
+                    }
+                    final DynamicRef dynamicRef = instruction.dynamicRef().orElseThrow();
+                    final Optional<LambdaMetafactoryCall> resolved = LambdaMetafactoryCall.resolve(dynamicRef);
+                    if (resolved.isEmpty()) {
+                        continue;
+                    }
+                    final LambdaMetafactoryCall lambda = resolved.orElseThrow();
+                    if (matchesSupportedLambdaCall(
+                        classes,
+                        target,
+                        method,
+                        instruction,
+                        dynamicRef,
+                        lambda
+                    )) {
+                        result.addAll(escapingPlatformExceptionTypes(
+                            classes,
+                            lambda.implementation(),
+                            visiting
+                        ));
+                    }
+                }
+            }
+        }
+        return Set.copyOf(result);
+    }
+
+    private static boolean matchesSupportedLambdaCall(
+        final Map<String, ClassFile> classes,
+        final MethodRef target,
+        final MethodInfo method,
+        final Instruction instruction,
+        final DynamicRef dynamicRef,
+        final LambdaMetafactoryCall lambda
+    ) {
+        return target.owner().equals(lambda.interfaceOwner())
+            && target.name().equals(lambda.interfaceMethodName())
+            && target.descriptor().equals(lambda.samMethodDescriptor())
+            && supportedLambdaMetafactory(classes, method, instruction, dynamicRef);
+    }
+
+    private static boolean staticallyNonThrowingGeneratedMethod(final MethodInfo method) {
+        for (final Instruction instruction : method.code().orElseThrow().instructions()) {
+            final int opcode = instruction.opcode();
+            if (opcode == 0 || opcode == 1 || (opcode >= 2 && opcode <= 20)
+                || (opcode >= 21 && opcode <= 45) || (opcode >= 54 && opcode <= 78)
+                || (opcode >= 87 && opcode <= 95) || (opcode >= 116 && opcode <= 152)
+                || (opcode >= 153 && opcode <= 177)) {
+                continue;
+            }
+            return false;
+        }
+        return true;
+    }
+
+    private static boolean supportedThrowableWrapRangeInstruction(final Instruction instruction) {
+        final int opcode = instruction.opcode();
+        if (opcode == 25 || (opcode >= 42 && opcode <= 45)
+            || opcode == 58 || (opcode >= 75 && opcode <= 78)
+            || opcode == 167) {
+            return true;
+        }
+        if (opcode == 186) {
+            return instruction.dynamicRef().filter(StaticVerifier::supportedStringConcat).isPresent();
+        }
+        if (instruction.methodRef().isEmpty()) {
+            return false;
+        }
+        final MethodRef target = instruction.methodRef().orElseThrow();
+        return JdkCallSupport.isPlatformThrowable(target.owner())
+            && "getMessage".equals(target.name())
+            && "()Ljava/lang/String;".equals(target.descriptor());
+    }
+
+    private static boolean supportedCaughtThrowableCauseConstructor(
+        final MethodInfo method,
+        final List<Instruction> instructions,
+        final int instructionIndex,
+        final MethodRef target
+    ) {
+        if (method.code().isEmpty() || !JdkCallSupport.isPlatformThrowableCauseConstructor(target)) {
+            return false;
+        }
+        return caughtThrowableCauseLocal(method.code().orElseThrow(), instructions, instructionIndex).isPresent();
+    }
+
+    private static boolean supportedCaughtThrowableCauseConstructor(
+        final CodeAttribute code,
+        final List<Instruction> instructions,
+        final int instructionIndex,
+        final Instruction instruction
+    ) {
+        if (instruction.methodRef().isEmpty()
+            || !JdkCallSupport.isPlatformThrowableCauseConstructor(instruction.methodRef().orElseThrow())) {
+            return false;
+        }
+        return caughtThrowableCauseLocal(code, instructions, instructionIndex).isPresent();
+    }
+
+    private static Optional<Integer> caughtThrowableCauseLocal(
+        final CodeAttribute code,
+        final List<Instruction> instructions,
+        final int instructionIndex
+    ) {
+        if (instructionIndex < 1 || instructionIndex >= instructions.size()) {
+            return Optional.empty();
+        }
+        final Instruction constructor = instructions.get(instructionIndex);
+        final int causeLocal = aloadLocalIndex(instructions.get(instructionIndex - 1));
+        if (causeLocal < 0) {
+            return Optional.empty();
+        }
+        for (final CodeException handler : code.exceptionTable()) {
+            if (handler.catchType().isEmpty()
+                || !isPlatformThrowable(handler.catchType().orElseThrow())
+                || handler.handlerPc() >= constructor.offset()) {
+                continue;
+            }
+            final Optional<Instruction> handlerInstruction = instructionAtOffset(code, handler.handlerPc());
+            if (handlerInstruction.isEmpty()
+                || astoreLocalIndex(handlerInstruction.orElseThrow()) != causeLocal
+                || !caughtThrowableCauseFlowsStraight(
+                    code,
+                    instructions,
+                    handlerInstruction.orElseThrow().offset(),
+                    instructionIndex,
+                    causeLocal
+                )) {
+                continue;
+            }
+            return Optional.of(causeLocal);
+        }
+        return Optional.empty();
+    }
+
+    private static boolean caughtThrowableCauseFlowsStraight(
+        final CodeAttribute code,
+        final List<Instruction> instructions,
+        final int handlerOffset,
+        final int constructorIndex,
+        final int causeLocal
+    ) {
+        int handlerIndex = -1;
+        for (int index = 0; index < constructorIndex; index++) {
+            if (instructions.get(index).offset() == handlerOffset) {
+                handlerIndex = index;
+                break;
+            }
+        }
+        if (handlerIndex < 0) {
+            return false;
+        }
+        final int constructorOffset = instructions.get(constructorIndex).offset();
+        for (final CodeException handler : code.exceptionTable()) {
+            if (handler.handlerPc() != handlerOffset
+                && handler.handlerPc() > handlerOffset
+                && handler.handlerPc() < constructorOffset) {
+                return false;
+            }
+        }
+        for (int index = handlerIndex + 1; index < constructorIndex; index++) {
+            final Instruction instruction = instructions.get(index);
+            if (astoreLocalIndex(instruction) == causeLocal
+                || caughtThrowableCauseControlBoundary(instruction.opcode())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean caughtThrowableCauseControlBoundary(final int opcode) {
+        if (opcode == 191) {
+            return true;
+        }
+        if (opcode >= 153 && opcode <= 177) {
+            return true;
+        }
+        return opcode >= 198 && opcode <= 201;
+    }
+
+    private static Set<String> escapingPlatformExceptionTypes(
+        final Map<String, ClassFile> classes,
+        final MethodRef target,
+        final Set<MethodRef> visiting
+    ) {
+        if (!visiting.add(target)) {
+            return Set.of();
+        }
+        final ClassFile targetClass = classes.get(target.owner());
+        if (targetClass == null) {
+            visiting.remove(target);
+            return Set.of();
+        }
+        final Optional<MethodInfo> targetMethod = targetClass.method(target.name(), target.descriptor());
+        if (targetMethod.isEmpty() || targetMethod.orElseThrow().code().isEmpty()) {
+            visiting.remove(target);
+            return Set.of();
+        }
+        final CodeAttribute code = targetMethod.orElseThrow().code().orElseThrow();
+        final Set<String> result = new HashSet<>();
+        final Set<String> allocatedTypes = new HashSet<>();
+        for (final Instruction instruction : code.instructions()) {
+            if (instruction.methodRef().isPresent()) {
+                final MethodRef called = instruction.methodRef().orElseThrow();
+                for (final String throwableType : JdkCallSupport.transportedPlatformThrowableTypes(called)) {
+                    if (!caughtByPlatformHandler(code, instruction.offset(), throwableType)) {
+                        result.add(throwableType);
+                    }
+                }
+                for (final String throwableType : escapingPlatformExceptionTypes(classes, called, visiting)) {
+                    if (!caughtByPlatformHandler(code, instruction.offset(), throwableType)) {
+                        result.add(throwableType);
+                    }
+                }
+                for (final String throwableType : escapingLambdaPlatformExceptionTypes(classes, called, visiting)) {
+                    if (!caughtByPlatformHandler(code, instruction.offset(), throwableType)) {
+                        result.add(throwableType);
+                    }
+                }
+            }
+            if (instruction.opcode() == 187
+                && instruction.className().isPresent()
+                && JdkCallSupport.isPlatformThrowable(instruction.className().orElseThrow())) {
+                allocatedTypes.add(instruction.className().orElseThrow());
+                continue;
+            }
+            if (instruction.opcode() != 191) {
+                continue;
+            }
+            for (final String throwableType : allocatedTypes) {
+                if (!caughtByPlatformHandler(code, instruction.offset(), throwableType)) {
+                    result.add(throwableType);
+                }
+            }
+            allocatedTypes.clear();
+        }
+        visiting.remove(target);
+        return Set.copyOf(result);
+    }
+
+    private static boolean caughtByPlatformHandler(
+        final CodeAttribute code,
+        final int offset,
+        final String throwableType
+    ) {
+        for (final CodeException handler : code.exceptionTable()) {
+            if (offset < handler.startPc() || offset >= handler.endPc()) {
+                continue;
+            }
+            if (handler.catchType().isEmpty()
+                || JdkCallSupport.isPlatformThrowableAssignable(throwableType, handler.catchType().orElseThrow())) {
+                return !handlerMayThrow(code, handler);
+            }
+        }
+        return false;
+    }
+
+    private static boolean handlerMayThrow(final CodeAttribute code, final CodeException handler) {
+        // Handlers may jump backward to shared throw code. Over-reporting only widens verification.
+        for (final Instruction instruction : code.instructions()) {
+            if (instruction.opcode() == 191) {
+                return true;
+            }
         }
         return false;
     }
@@ -773,6 +1140,9 @@ public final class StaticVerifier {
             && ("(II)I".equals(target.descriptor()) || "(JJ)J".equals(target.descriptor()))) {
             return true;
         }
+        if ("toIntExact".equals(target.name()) && "(J)I".equals(target.descriptor())) {
+            return true;
+        }
         return "multiplyExact".equals(target.name())
             && ("(JI)J".equals(target.descriptor()) || "(JJ)J".equals(target.descriptor()));
     }
@@ -791,19 +1161,20 @@ public final class StaticVerifier {
         return false;
     }
 
-    private static boolean supportedFinallyRethrowHandler(final CodeAttribute code, final CodeException handler) {
+    private static boolean supportedFinallyRethrowHandler(
+        final Map<String, ClassFile> classes,
+        final CodeAttribute code,
+        final CodeException handler
+    ) {
         if (handler.catchType().isPresent()) {
             return false;
         }
+        if (!handlerRethrowsCaughtThrowable(code, handler)) {
+            return false;
+        }
         final Optional<Instruction> first = instructionAtOffset(code, handler.handlerPc());
-        if (first.isEmpty()) {
-            return false;
-        }
         final int throwableLocal = astoreLocalIndex(first.orElseThrow());
-        if (throwableLocal < 0) {
-            return false;
-        }
-        int hasAthrow = 0;
+        int hasThrowableTransport = 0;
         for (final Instruction instruction : code.instructions()) {
             if (instruction.offset() < handler.startPc()) {
                 continue;
@@ -814,46 +1185,45 @@ public final class StaticVerifier {
             if (instruction.offset() == handler.handlerPc() && astoreLocalIndex(instruction) == throwableLocal) {
                 continue;
             }
-            if (instruction.opcode() == 191) {
-                hasAthrow = 1;
+            if (instruction.opcode() == 191 || supportedGeneratedThrowableCall(classes, instruction)) {
+                hasThrowableTransport = 1;
             }
             if (!supportedExplicitThrowRangeInstruction(instruction)
-                && !supportedProtectedFinallyRethrowInstruction(code, handler, throwableLocal, instruction)) {
+                && !supportedGeneratedThrowableCall(classes, instruction)
+                && !supportedFinallyProtectedLocalInstruction(instruction)
+                && !supportedProtectedFinallyRethrowInstruction(classes, code, handler, throwableLocal, instruction)) {
                 return false;
             }
         }
-        if (hasAthrow == 0) {
-            return false;
-        }
-        final List<Instruction> instructions = code.instructions();
-        int handlerIndex = -1;
-        for (int index = 0; index < instructions.size(); index++) {
-            if (instructions.get(index).offset() == handler.handlerPc()) {
-                handlerIndex = index;
-                break;
-            }
-        }
-        if (handlerIndex < 0) {
-            return false;
-        }
-        for (int index = handlerIndex + 1; index + 1 < instructions.size(); index++) {
-            final Instruction instruction = instructions.get(index);
-            if (aloadLocalIndex(instruction) == throwableLocal && instructions.get(index + 1).opcode() == 191) {
-                return true;
-            }
-            if (!supportedFinallyCleanupInstruction(instruction)) {
-                return false;
-            }
-        }
-        return false;
+        return hasThrowableTransport != 0;
+    }
+
+    private static boolean supportedFinallyProtectedLocalInstruction(final Instruction instruction) {
+        final int opcode = instruction.opcode();
+        return (opcode >= 21 && opcode <= 45) || (opcode >= 54 && opcode <= 78);
+    }
+
+    private static boolean handlerRethrowsCaughtThrowable(
+        final CodeAttribute code,
+        final CodeException handler
+    ) {
+        return caughtThrowableRethrowOffset(code, handler).isPresent();
+    }
+
+    private static Optional<Integer> caughtThrowableRethrowOffset(
+        final CodeAttribute code,
+        final CodeException handler
+    ) {
+        return CaughtThrowableRethrowAnalysis.rethrowOffset(code, handler);
     }
 
     private static boolean supportedProtectedFinallyRethrowInstruction(
+        final Map<String, ClassFile> classes,
         final CodeAttribute code,
         final Instruction instruction
     ) {
         for (final CodeException handler : code.exceptionTable()) {
-            if (handler.catchType().isPresent() || !supportedFinallyRethrowHandler(code, handler)) {
+            if (handler.catchType().isPresent() || !supportedFinallyRethrowHandler(classes, code, handler)) {
                 continue;
             }
             final Optional<Instruction> first = instructionAtOffset(code, handler.handlerPc());
@@ -864,7 +1234,7 @@ public final class StaticVerifier {
             if (throwableLocal < 0) {
                 continue;
             }
-            if (supportedProtectedFinallyRethrowInstruction(code, handler, throwableLocal, instruction)) {
+            if (supportedProtectedFinallyRethrowInstruction(classes, code, handler, throwableLocal, instruction)) {
                 return true;
             }
         }
@@ -872,6 +1242,7 @@ public final class StaticVerifier {
     }
 
     private static boolean supportedProtectedFinallyRethrowInstruction(
+        final Map<String, ClassFile> classes,
         final CodeAttribute code,
         final CodeException handler,
         final int throwableLocal,
@@ -884,13 +1255,14 @@ public final class StaticVerifier {
         if (instruction.offset() < handler.handlerPc() || instruction.offset() > rethrowOffset.orElseThrow()) {
             return false;
         }
-        if (astoreLocalIndex(instruction) == throwableLocal || aloadLocalIndex(instruction) == throwableLocal) {
+        if (supportedFinallyProtectedLocalInstruction(instruction)) {
             return true;
         }
         if (instruction.opcode() == 191) {
             return true;
         }
-        return supportedFinallyCleanupInstruction(instruction);
+        return supportedFinallyCleanupInstruction(instruction)
+            || supportedGeneratedThrowableCall(classes, instruction);
     }
 
     private static Optional<Integer> finallyRethrowThrowOffset(
@@ -898,24 +1270,11 @@ public final class StaticVerifier {
         final CodeException handler,
         final int throwableLocal
     ) {
-        final List<Instruction> instructions = code.instructions();
-        int handlerIndex = -1;
-        for (int index = 0; index < instructions.size(); index++) {
-            if (instructions.get(index).offset() == handler.handlerPc()) {
-                handlerIndex = index;
-                break;
-            }
-        }
-        if (handlerIndex < 0) {
+        final Optional<Instruction> first = instructionAtOffset(code, handler.handlerPc());
+        if (first.isEmpty() || astoreLocalIndex(first.orElseThrow()) != throwableLocal) {
             return Optional.empty();
         }
-        for (int index = handlerIndex + 1; index + 1 < instructions.size(); index++) {
-            final Instruction candidate = instructions.get(index);
-            if (aloadLocalIndex(candidate) == throwableLocal && instructions.get(index + 1).opcode() == 191) {
-                return Optional.of(instructions.get(index + 1).offset());
-            }
-        }
-        return Optional.empty();
+        return caughtThrowableRethrowOffset(code, handler);
     }
 
     private static boolean supportedEnumSwitchMapHandler(
@@ -2701,13 +3060,23 @@ public final class StaticVerifier {
         if (!JdkCallSupport.isPlatformThrowable(methodRef.owner())) {
             return false;
         }
-        if (JdkCallSupport.isMatchExceptionCauseConstructor(methodRef)) {
-            return true;
+        if (JdkCallSupport.isPlatformThrowableCauseConstructor(methodRef)) {
+            return JdkCallSupport.isMatchExceptionCauseConstructor(methodRef);
         }
         if ("()V".equals(methodRef.descriptor())) {
             return true;
         }
         return "(Ljava/lang/String;)V".equals(methodRef.descriptor());
+    }
+
+    private static boolean unsupportedCustomThrowableCauseConstructor(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final MethodRef target
+    ) {
+        return "<init>".equals(method.name())
+            && JdkCallSupport.isPlatformThrowable(classFile.superName())
+            && JdkCallSupport.isPlatformThrowableCauseConstructor(target);
     }
 
     private static boolean isPlatformThrowable(final String owner) {
@@ -3341,8 +3710,10 @@ public final class StaticVerifier {
         final int handlers,
         final int reachable
     ) {
-        final String reason = "Only direct explicit athrow ranges with platform exception catch types are supported.";
-        final String fix = "Keep try/catch limited to catching a directly thrown platform exception in the same method.";
+        final String reason =
+            "Only direct explicit athrow ranges or generated calls that transport platform exceptions are supported.";
+        final String fix =
+            "Keep try/catch limited to supported platform exception types and generated calls without monitor-held exits.";
         String subject = handlers + " handler";
         if (handlers != 1) {
             subject = subject + "s";

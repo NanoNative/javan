@@ -5935,6 +5935,455 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void staticVerifierAcceptsTypedCatchWrappingAliasedFinallyRethrowHandler() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
+            instruction(3, 89, "dup"),
+            instruction(4, 18, "ldc"),
+            instruction(6, 183, "invokespecial", new MethodRef("java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;)V")),
+            instruction(9, 191, "athrow"),
+            instruction(10, 76, "astore_1"),
+            instruction(11, 43, "aload_1"),
+            instruction(12, 77, "astore_2"),
+            instruction(13, 184, "invokestatic", new MethodRef("java/lang/Thread", "yield", "()V")),
+            instruction(16, 44, "aload_2"),
+            instruction(17, 191, "athrow"),
+            instruction(18, 76, "astore_1"),
+            instruction(19, 178, "getstatic", new FieldRef("java/lang/System", "out", "Ljava/io/PrintStream;")),
+            instruction(22, 43, "aload_1"),
+            instruction(23, 182, "invokevirtual", new MethodRef("java/lang/IllegalStateException", "getMessage", "()Ljava/lang/String;")),
+            instruction(26, 182, "invokevirtual", new MethodRef("java/io/PrintStream", "println", "(Ljava/lang/String;)V")),
+            instruction(29, 177, "return")
+        ), List.of(
+            new CodeException(0, 11, 10, Optional.empty()),
+            new CodeException(0, 18, 18, Optional.of("java/lang/IllegalStateException"))
+        ));
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierRejectsCatchAllWithUnreachableAliasRethrow() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
+            instruction(1, 89, "dup"),
+            instruction(2, 18, "ldc"),
+            instruction(3, 183, "invokespecial", new MethodRef("java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;)V")),
+            instruction(4, 191, "athrow"),
+            instruction(5, 75, "astore_0"),
+            instruction(6, 177, "return"),
+            instruction(7, 42, "aload_0"),
+            instruction(8, 191, "athrow")
+        ), new CodeException(0, 5, 5, Optional.empty()));
+
+        assertThat(diagnostics).singleElement()
+            .extracting(Diagnostic::code)
+            .isEqualTo("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierAcceptsCatchAllWithGotoToRethrow() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
+            instruction(1, 89, "dup"),
+            instruction(2, 18, "ldc"),
+            instruction(3, 183, "invokespecial", new MethodRef("java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;)V")),
+            instruction(4, 191, "athrow"),
+            instruction(5, 75, "astore_0"),
+            instructionOperands(6, 167, "goto", 0, 3),
+            instruction(7, 42, "aload_0"),
+            instruction(8, 191, "athrow"),
+            instruction(9, 42, "aload_0"),
+            instruction(10, 191, "athrow")
+        ), new CodeException(0, 5, 5, Optional.empty()));
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierRejectsCatchAllWithNullBranchBeforeRethrow() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
+            instruction(1, 89, "dup"),
+            instruction(2, 18, "ldc"),
+            instruction(3, 183, "invokespecial", new MethodRef("java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;)V")),
+            instruction(4, 191, "athrow"),
+            instruction(5, 75, "astore_0"),
+            instruction(6, 42, "aload_0"),
+            instructionOperands(7, 198, "ifnull", 0, 2),
+            instruction(8, 42, "aload_0"),
+            instruction(9, 191, "athrow")
+        ), new CodeException(0, 5, 5, Optional.empty()));
+
+        assertThat(diagnostics).extracting(Diagnostic::code).containsExactly("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsCatchAllThatCastsBeforeRethrow() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            classInstruction(0, 187, "new", "java/lang/AssertionError"),
+            instruction(1, 89, "dup"),
+            instruction(2, 183, "invokespecial", new MethodRef("java/lang/AssertionError", "<init>", "()V")),
+            instruction(3, 191, "athrow"),
+            instruction(4, 75, "astore_0"),
+            instruction(5, 42, "aload_0"),
+            classInstruction(6, 192, "checkcast", "java/lang/RuntimeException"),
+            instruction(7, 191, "athrow")
+        ), new CodeException(0, 4, 4, Optional.empty()));
+
+        assertThat(diagnostics).extracting(Diagnostic::code).containsExactly("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsCatchAllWithExcessiveSwitchFanout() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            instruction(0, 177, "return"),
+            instruction(1, 75, "astore_0"),
+            instruction(2, 3, "iconst_0"),
+            tableSwitchInstruction(3, 8_193, 4),
+            instruction(4, 42, "aload_0"),
+            instruction(5, 191, "athrow")
+        ), new CodeException(0, 1, 1, Optional.empty()));
+
+        assertThat(diagnostics).extracting(Diagnostic::code).containsExactly("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsCatchAllDupWithoutThrowableOnStack() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
+            instruction(1, 89, "dup"),
+            instruction(2, 18, "ldc"),
+            instruction(3, 183, "invokespecial", new MethodRef("java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;)V")),
+            instruction(4, 191, "athrow"),
+            instruction(5, 75, "astore_0"),
+            instruction(6, 89, "dup"),
+            instruction(7, 42, "aload_0"),
+            instruction(8, 191, "athrow")
+        ), new CodeException(0, 5, 5, Optional.empty()));
+
+        assertThat(diagnostics).extracting(Diagnostic::code).containsExactly("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsCatchAllWithWideGoto() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
+            instruction(1, 89, "dup"),
+            instruction(2, 18, "ldc"),
+            instruction(3, 183, "invokespecial", new MethodRef("java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;)V")),
+            instruction(4, 191, "athrow"),
+            instruction(5, 75, "astore_0"),
+            instructionOperands(6, 200, "goto_w", 0, 0, 0, 3),
+            instruction(9, 42, "aload_0"),
+            instruction(10, 191, "athrow")
+        ), new CodeException(0, 5, 5, Optional.empty()));
+
+        assertThat(diagnostics).extracting(Diagnostic::code).containsExactly("JAVAN014", "JAVAN030");
+    }
+
+    @Test
+    void staticVerifierRejectsCatchAllWithInvalidGotoTarget() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
+            instruction(1, 89, "dup"),
+            instruction(2, 18, "ldc"),
+            instruction(3, 183, "invokespecial", new MethodRef("java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;)V")),
+            instruction(4, 191, "athrow"),
+            instruction(5, 75, "astore_0"),
+            instructionOperands(6, 167, "goto", 0, 100)
+        ), new CodeException(0, 5, 5, Optional.empty()));
+
+        assertThat(diagnostics).extracting(Diagnostic::code).containsExactly("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsCatchAllWithInvalidConditionalTarget() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
+            instruction(1, 89, "dup"),
+            instruction(2, 18, "ldc"),
+            instruction(3, 183, "invokespecial", new MethodRef("java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;)V")),
+            instruction(4, 191, "athrow"),
+            instruction(5, 75, "astore_0"),
+            instruction(6, 3, "iconst_0"),
+            instructionOperands(7, 153, "ifeq", 0, 100),
+            instruction(8, 42, "aload_0"),
+            instruction(9, 191, "athrow")
+        ), new CodeException(0, 5, 5, Optional.empty()));
+
+        assertThat(diagnostics).extracting(Diagnostic::code).containsExactly("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierAcceptsCatchAllWithTableSwitchPathsRethrowing() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
+            instruction(1, 89, "dup"),
+            instruction(2, 18, "ldc"),
+            instruction(3, 183, "invokespecial", new MethodRef("java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;)V")),
+            instruction(4, 191, "athrow"),
+            instruction(5, 75, "astore_0"),
+            instruction(6, 3, "iconst_0"),
+            tableSwitchInstruction(7, 1, 8),
+            instruction(8, 42, "aload_0"),
+            instruction(9, 191, "athrow")
+        ), new CodeException(0, 5, 5, Optional.empty()));
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierRejectsCatchAllWithInvalidTableSwitchDefault() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
+            instruction(1, 89, "dup"),
+            instruction(2, 18, "ldc"),
+            instruction(3, 183, "invokespecial", new MethodRef("java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;)V")),
+            instruction(4, 191, "athrow"),
+            instruction(5, 75, "astore_0"),
+            instruction(6, 3, "iconst_0"),
+            tableSwitchInstruction(7, 1, 100, 8),
+            instruction(8, 42, "aload_0"),
+            instruction(9, 191, "athrow")
+        ), new CodeException(0, 5, 5, Optional.empty()));
+
+        assertThat(diagnostics).extracting(Diagnostic::code).containsExactly("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsCatchAllWithInvalidTableSwitchCase() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
+            instruction(1, 89, "dup"),
+            instruction(2, 18, "ldc"),
+            instruction(3, 183, "invokespecial", new MethodRef("java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;)V")),
+            instruction(4, 191, "athrow"),
+            instruction(5, 75, "astore_0"),
+            instruction(6, 3, "iconst_0"),
+            tableSwitchInstruction(7, 1, 8, 100),
+            instruction(8, 42, "aload_0"),
+            instruction(9, 191, "athrow")
+        ), new CodeException(0, 5, 5, Optional.empty()));
+
+        assertThat(diagnostics).extracting(Diagnostic::code).containsExactly("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsCatchAllLoopWithoutRethrow() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
+            instruction(1, 89, "dup"),
+            instruction(2, 18, "ldc"),
+            instruction(3, 183, "invokespecial", new MethodRef("java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;)V")),
+            instruction(4, 191, "athrow"),
+            instruction(5, 75, "astore_0"),
+            instructionOperands(6, 167, "goto", 0, 0)
+        ), new CodeException(0, 5, 5, Optional.empty()));
+
+        assertThat(diagnostics).extracting(Diagnostic::code).containsExactly("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierAcceptsCatchAllWithOneRethrowPerConditionalPath() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
+            instruction(1, 89, "dup"),
+            instruction(2, 18, "ldc"),
+            instruction(3, 183, "invokespecial", new MethodRef("java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;)V")),
+            instruction(4, 191, "athrow"),
+            instruction(5, 75, "astore_0"),
+            instruction(6, 3, "iconst_0"),
+            instructionOperands(7, 153, "ifeq", 0, 3),
+            instruction(8, 42, "aload_0"),
+            instruction(9, 191, "athrow"),
+            instruction(10, 42, "aload_0"),
+            instruction(11, 191, "athrow")
+        ), new CodeException(0, 5, 5, Optional.empty()));
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsCatchAllWithIfNonNullPathsRethrowing() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
+            instruction(1, 89, "dup"),
+            instruction(2, 18, "ldc"),
+            instruction(3, 183, "invokespecial", new MethodRef("java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;)V")),
+            instruction(4, 191, "athrow"),
+            instruction(5, 75, "astore_0"),
+            instruction(6, 1, "aconst_null"),
+            instructionOperands(7, 199, "ifnonnull", 0, 3),
+            instruction(8, 42, "aload_0"),
+            instruction(9, 191, "athrow"),
+            instruction(10, 42, "aload_0"),
+            instruction(11, 191, "athrow")
+        ), new CodeException(0, 5, 5, Optional.empty()));
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierRejectsCatchAllExceedingThrowableAliasBudget() {
+        final List<Instruction> instructions = new java.util.ArrayList<>(List.of(
+            classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
+            instruction(1, 89, "dup"),
+            instruction(2, 18, "ldc"),
+            instruction(3, 183, "invokespecial", new MethodRef("java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;)V")),
+            instruction(4, 191, "athrow"),
+            instruction(5, 75, "astore_0")
+        ));
+        int offset = 6;
+        for (int local = 1; local <= 128; local++) {
+            instructions.add(instruction(offset, 42, "aload_0"));
+            offset++;
+            instructions.add(instructionOperands(offset, 58, "astore", local));
+            offset++;
+        }
+        instructions.add(instruction(offset, 42, "aload_0"));
+        instructions.add(instruction(offset + 1, 191, "athrow"));
+
+        final List<Diagnostic> diagnostics = verifyExceptionTable(
+            List.copyOf(instructions),
+            new CodeException(0, 5, 5, Optional.empty())
+        );
+
+        assertThat(diagnostics).extracting(Diagnostic::code).containsExactly("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsCatchAllAfterCaughtThrowableIsOverwrittenWithNull() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
+            instruction(1, 89, "dup"),
+            instruction(2, 18, "ldc"),
+            instruction(3, 183, "invokespecial", new MethodRef("java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;)V")),
+            instruction(4, 191, "athrow"),
+            instructionOperands(5, 58, "astore", 0),
+            instruction(6, 1, "aconst_null"),
+            instruction(7, 89, "dup"),
+            instructionOperands(8, 58, "astore", 0),
+            instructionOperands(9, 25, "aload", 0),
+            instruction(10, 191, "athrow")
+        ), new CodeException(0, 5, 5, Optional.empty()));
+
+        assertThat(diagnostics).extracting(Diagnostic::code).containsExactly("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierAcceptsCatchAllRethrowAfterSameLocalAssignment() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
+            instruction(1, 89, "dup"),
+            instruction(2, 18, "ldc"),
+            instruction(3, 183, "invokespecial", new MethodRef("java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;)V")),
+            instruction(4, 191, "athrow"),
+            instruction(5, 75, "astore_0"),
+            instruction(6, 42, "aload_0"),
+            instruction(7, 75, "astore_0"),
+            instruction(8, 42, "aload_0"),
+            instruction(9, 191, "athrow")
+        ), new CodeException(0, 5, 5, Optional.empty()));
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsCatchAllRethrowThroughLowerLocalAlias() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
+            instruction(1, 89, "dup"),
+            instruction(2, 18, "ldc"),
+            instruction(3, 183, "invokespecial", new MethodRef("java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;)V")),
+            instruction(4, 191, "athrow"),
+            instruction(5, 77, "astore_2"),
+            instruction(6, 44, "aload_2"),
+            instruction(7, 76, "astore_1"),
+            instruction(8, 43, "aload_1"),
+            instruction(9, 191, "athrow")
+        ), new CodeException(0, 5, 5, Optional.empty()));
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsProtectedCallToGeneratedNonThrowingPrimitiveHelper() {
+        final ClassFile helper = classWithMethods(
+            "com/acme/Helper",
+            "java/lang/Object",
+            0,
+            List.of(),
+            methodInfo(
+                "value",
+                "()I",
+                instruction(0, 0, "nop"),
+                instruction(1, 1, "aconst_null"),
+                instruction(2, 87, "pop"),
+                instruction(3, 3, "iconst_0"),
+                instruction(4, 59, "istore_0"),
+                instruction(5, 26, "iload_0"),
+                instruction(6, 116, "ineg"),
+                instruction(7, 172, "ireturn")
+            )
+        );
+        final List<Diagnostic> diagnostics = verifyExceptionTable(
+            Map.of(helper.name(), helper),
+            List.of(
+                instruction(0, 184, "invokestatic", new MethodRef("com/acme/Helper", "value", "()I")),
+                instruction(3, 75, "astore_0")
+            ),
+            new CodeException(0, 3, 3, Optional.of("java/lang/IllegalStateException"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierRejectsProtectedCallToGeneratedArrayReadHelper() {
+        final List<Diagnostic> diagnostics = verifyProtectedGeneratedHelper(
+            "()I",
+            instruction(0, 46, "iaload"),
+            instruction(1, 172, "ireturn")
+        );
+
+        assertThat(diagnostics).extracting(Diagnostic::code).contains("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsProtectedCallToGeneratedArrayWriteHelper() {
+        final List<Diagnostic> diagnostics = verifyProtectedGeneratedHelper(
+            "()V",
+            instruction(0, 79, "iastore"),
+            instruction(1, 177, "return")
+        );
+
+        assertThat(diagnostics).extracting(Diagnostic::code).contains("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsProtectedCallToGeneratedIntegerDivisionHelper() {
+        final List<Diagnostic> diagnostics = verifyProtectedGeneratedHelper(
+            "()I",
+            instruction(0, 108, "idiv"),
+            instruction(1, 172, "ireturn")
+        );
+
+        assertThat(diagnostics).extracting(Diagnostic::code).contains("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsProtectedCallToGeneratedAllocationHelper() {
+        final List<Diagnostic> diagnostics = verifyProtectedGeneratedHelper(
+            "()Ljava/lang/Object;",
+            classInstruction(0, 187, "new", "java/lang/Object"),
+            instruction(1, 176, "areturn")
+        );
+
+        assertThat(diagnostics).extracting(Diagnostic::code).contains("JAVAN014");
+    }
+
+    @Test
     void staticVerifierAcceptsExplicitThrowRangeWithInstructionBeforeProtectedRange() {
         final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
             instruction(0, 0, "nop"),
@@ -12128,7 +12577,7 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void staticVerifierRejectsThrowableConstructorWithCause() {
+    void staticVerifierRejectsPlatformThrowableConstructorWithNewCause() {
         final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
             classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
             instruction(1, 89, "dup"),
@@ -12140,6 +12589,157 @@ final class CoreBehaviorTest {
             instruction(7, 183, "invokespecial", new MethodRef("java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;Ljava/lang/Throwable;)V")),
             instruction(8, 191, "athrow")
         ), new CodeException(0, 9, 9, Optional.of("java/lang/IllegalStateException")));
+
+        assertThat(diagnostics).extracting(Diagnostic::code).contains("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsCaughtCauseUsedAfterHandlerReturns() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            classInstruction(0, 187, "new", "java/lang/IllegalArgumentException"),
+            instruction(1, 89, "dup"),
+            instruction(2, 18, "ldc"),
+            instruction(3, 183, "invokespecial", new MethodRef("java/lang/IllegalArgumentException", "<init>", "(Ljava/lang/String;)V")),
+            instruction(4, 191, "athrow"),
+            instruction(5, 75, "astore_0"),
+            instruction(6, 177, "return"),
+            classInstruction(7, 187, "new", "java/lang/IllegalStateException"),
+            instruction(8, 89, "dup"),
+            instruction(9, 18, "ldc"),
+            instruction(10, 42, "aload_0"),
+            instruction(11, 183, "invokespecial", new MethodRef(
+                "java/lang/IllegalStateException",
+                "<init>",
+                "(Ljava/lang/String;Ljava/lang/Throwable;)V"
+            )),
+            instruction(12, 191, "athrow")
+        ), new CodeException(0, 5, 5, Optional.of("java/lang/IllegalArgumentException")));
+
+        assertThat(diagnostics).extracting(Diagnostic::code).containsExactly("JAVAN031");
+    }
+
+    @Test
+    void staticVerifierRejectsCaughtCauseAfterSecondHandlerEntry() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            classInstruction(0, 187, "new", "java/lang/IllegalArgumentException"),
+            instruction(1, 89, "dup"),
+            instruction(2, 18, "ldc"),
+            instruction(3, 183, "invokespecial", new MethodRef("java/lang/IllegalArgumentException", "<init>", "(Ljava/lang/String;)V")),
+            instruction(4, 191, "athrow"),
+            instruction(5, 75, "astore_0"),
+            instruction(6, 0, "nop"),
+            instruction(7, 76, "astore_1"),
+            classInstruction(8, 187, "new", "java/lang/IllegalStateException"),
+            instruction(9, 89, "dup"),
+            instruction(10, 18, "ldc"),
+            instruction(11, 42, "aload_0"),
+            instruction(12, 183, "invokespecial", new MethodRef(
+                "java/lang/IllegalStateException",
+                "<init>",
+                "(Ljava/lang/String;Ljava/lang/Throwable;)V"
+            )),
+            instruction(13, 191, "athrow")
+        ), List.of(
+            new CodeException(0, 5, 5, Optional.of("java/lang/IllegalArgumentException")),
+            new CodeException(0, 5, 7, Optional.of("java/lang/RuntimeException"))
+        ));
+
+        assertThat(diagnostics).extracting(Diagnostic::code).contains("JAVAN031");
+    }
+
+    @Test
+    void staticVerifierRejectsCaughtCauseAfterCauseLocalOverwrite() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            classInstruction(0, 187, "new", "java/lang/IllegalArgumentException"),
+            instruction(1, 89, "dup"),
+            instruction(2, 18, "ldc"),
+            instruction(3, 183, "invokespecial", new MethodRef("java/lang/IllegalArgumentException", "<init>", "(Ljava/lang/String;)V")),
+            instruction(4, 191, "athrow"),
+            instruction(5, 75, "astore_0"),
+            instruction(6, 1, "aconst_null"),
+            instruction(7, 75, "astore_0"),
+            classInstruction(8, 187, "new", "java/lang/IllegalStateException"),
+            instruction(9, 89, "dup"),
+            instruction(10, 18, "ldc"),
+            instruction(11, 42, "aload_0"),
+            instruction(12, 183, "invokespecial", new MethodRef(
+                "java/lang/IllegalStateException",
+                "<init>",
+                "(Ljava/lang/String;Ljava/lang/Throwable;)V"
+            )),
+            instruction(13, 191, "athrow")
+        ), new CodeException(0, 5, 5, Optional.of("java/lang/IllegalArgumentException")));
+
+        assertThat(diagnostics).extracting(Diagnostic::code).contains("JAVAN031");
+    }
+
+    @Test
+    void staticVerifierRejectsCaughtCauseAfterDirectRethrow() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            classInstruction(0, 187, "new", "java/lang/IllegalArgumentException"),
+            instruction(1, 89, "dup"),
+            instruction(2, 18, "ldc"),
+            instruction(3, 183, "invokespecial", new MethodRef("java/lang/IllegalArgumentException", "<init>", "(Ljava/lang/String;)V")),
+            instruction(4, 191, "athrow"),
+            instruction(5, 75, "astore_0"),
+            instruction(6, 42, "aload_0"),
+            instruction(7, 191, "athrow"),
+            classInstruction(8, 187, "new", "java/lang/IllegalStateException"),
+            instruction(9, 89, "dup"),
+            instruction(10, 18, "ldc"),
+            instruction(11, 42, "aload_0"),
+            instruction(12, 183, "invokespecial", new MethodRef(
+                "java/lang/IllegalStateException",
+                "<init>",
+                "(Ljava/lang/String;Ljava/lang/Throwable;)V"
+            )),
+            instruction(13, 191, "athrow")
+        ), new CodeException(0, 5, 5, Optional.of("java/lang/IllegalArgumentException")));
+
+        assertThat(diagnostics).extracting(Diagnostic::code).contains("JAVAN031");
+    }
+
+    @Test
+    void staticVerifierRejectsCaughtCauseAfterNullControlBranch() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            classInstruction(0, 187, "new", "java/lang/IllegalArgumentException"),
+            instruction(1, 89, "dup"),
+            instruction(2, 18, "ldc"),
+            instruction(3, 183, "invokespecial", new MethodRef("java/lang/IllegalArgumentException", "<init>", "(Ljava/lang/String;)V")),
+            instruction(4, 191, "athrow"),
+            instruction(5, 75, "astore_0"),
+            instruction(6, 42, "aload_0"),
+            instructionOperands(7, 198, "ifnull", 0, 2),
+            classInstruction(8, 187, "new", "java/lang/IllegalStateException"),
+            instruction(9, 89, "dup"),
+            instruction(10, 18, "ldc"),
+            instruction(11, 42, "aload_0"),
+            instruction(12, 183, "invokespecial", new MethodRef(
+                "java/lang/IllegalStateException",
+                "<init>",
+                "(Ljava/lang/String;Ljava/lang/Throwable;)V"
+            )),
+            instruction(13, 191, "athrow")
+        ), new CodeException(0, 5, 5, Optional.of("java/lang/IllegalArgumentException")));
+
+        assertThat(diagnostics).extracting(Diagnostic::code).contains("JAVAN031");
+    }
+
+    @Test
+    void staticVerifierRejectsProtectedThrowableWrapperWithUnsupportedInvokeDynamic() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
+            instruction(1, 89, "dup"),
+            invokeDynamicInstruction(2, new DynamicRef(
+                "run",
+                "()Ljava/lang/Runnable;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "",
+                List.of()
+            )),
+            instruction(3, 191, "athrow")
+        ), new CodeException(0, 4, 4, Optional.of("java/lang/IllegalStateException")));
 
         assertThat(diagnostics).extracting(Diagnostic::code).contains("JAVAN014");
     }
@@ -12677,6 +13277,27 @@ final class CoreBehaviorTest {
         return verifyExceptionTable(instructions, new CodeException(0, instructions.size(), instructions.size(), Optional.of("java/lang/IllegalStateException")));
     }
 
+    private static List<Diagnostic> verifyProtectedGeneratedHelper(
+        final String descriptor,
+        final Instruction... helperInstructions
+    ) {
+        final ClassFile helper = classWithMethods(
+            "com/acme/Helper",
+            "java/lang/Object",
+            0,
+            List.of(),
+            methodInfo("value", descriptor, helperInstructions)
+        );
+        return verifyExceptionTable(
+            Map.of(helper.name(), helper),
+            List.of(
+                instruction(0, 184, "invokestatic", new MethodRef(helper.name(), "value", descriptor)),
+                instruction(3, 75, "astore_0")
+            ),
+            new CodeException(0, 3, 3, Optional.of("java/lang/IllegalStateException"))
+        );
+    }
+
     private static List<Instruction> explicitThrowInstructions(final Instruction protectedInstruction) {
         return List.of(
             classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
@@ -12860,6 +13481,50 @@ final class CoreBehaviorTest {
             Optional.empty(),
             Optional.empty()
         );
+    }
+
+    private static Instruction tableSwitchInstruction(
+        final int offset,
+        final int entries,
+        final int targetOffset
+    ) {
+        return tableSwitchInstruction(offset, entries, targetOffset, targetOffset);
+    }
+
+    private static Instruction tableSwitchInstruction(
+        final int offset,
+        final int entries,
+        final int defaultTargetOffset,
+        final int caseTargetOffset
+    ) {
+        final int padding = Math.floorMod(-(offset + 1), 4);
+        final byte[] operands = new byte[padding + 12 + entries * 4];
+        putInt(operands, padding, defaultTargetOffset - offset);
+        putInt(operands, padding + 4, 0);
+        putInt(operands, padding + 8, entries - 1);
+        for (int index = 0; index < entries; index++) {
+            putInt(operands, padding + 12 + index * 4, caseTargetOffset - offset);
+        }
+        return new Instruction(
+            offset,
+            170,
+            "tableswitch",
+            operands,
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty()
+        );
+    }
+
+    private static void putInt(final byte[] target, final int offset, final int value) {
+        target[offset] = (byte) (value >>> 24);
+        target[offset + 1] = (byte) (value >>> 16);
+        target[offset + 2] = (byte) (value >>> 8);
+        target[offset + 3] = (byte) value;
     }
 
     private static Instruction stringInstruction(final int offset, final String value) {

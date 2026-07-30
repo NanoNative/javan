@@ -3,6 +3,7 @@ package javan.compat;
 import javan.classfile.ClassFile;
 import javan.classfile.MethodRef;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -24,53 +25,64 @@ public final class JdkCallSupport {
     public static final int BUILTIN_INSTANCEOF_SHORT_ARRAY = 11;
     public static final int BUILTIN_INSTANCEOF_CHAR_ARRAY = 12;
 
-    private static final String[][] PLATFORM_THROWABLE_PARENTS = new String[][]{
-        {"java/lang/Exception", "java/lang/Throwable"},
-        {"java/lang/Error", "java/lang/Throwable"},
-        {"java/lang/RuntimeException", "java/lang/Exception"},
-        {"java/lang/ArithmeticException", "java/lang/RuntimeException"},
-        {"java/lang/ArrayStoreException", "java/lang/RuntimeException"},
-        {"java/lang/ClassCastException", "java/lang/RuntimeException"},
-        {"java/lang/EnumConstantNotPresentException", "java/lang/RuntimeException"},
-        {"java/lang/IllegalArgumentException", "java/lang/RuntimeException"},
-        {"java/lang/IllegalMonitorStateException", "java/lang/RuntimeException"},
-        {"java/lang/IllegalStateException", "java/lang/RuntimeException"},
-        {"java/lang/IllegalThreadStateException", "java/lang/RuntimeException"},
-        {"java/lang/MatchException", "java/lang/RuntimeException"},
-        {"java/lang/ArrayIndexOutOfBoundsException", "java/lang/IndexOutOfBoundsException"},
-        {"java/lang/IndexOutOfBoundsException", "java/lang/RuntimeException"},
-        {"java/lang/NegativeArraySizeException", "java/lang/RuntimeException"},
-        {"java/lang/NullPointerException", "java/lang/RuntimeException"},
-        {"java/lang/NumberFormatException", "java/lang/RuntimeException"},
-        {"java/lang/SecurityException", "java/lang/RuntimeException"},
-        {"java/lang/StringIndexOutOfBoundsException", "java/lang/RuntimeException"},
-        {"java/lang/UnsupportedOperationException", "java/lang/RuntimeException"},
-        {"java/util/NoSuchElementException", "java/lang/RuntimeException"},
-        {"java/io/IOException", "java/lang/Exception"},
-        {"java/io/EOFException", "java/io/IOException"},
-        {"java/io/FileNotFoundException", "java/io/IOException"},
-        {"java/io/InterruptedIOException", "java/io/IOException"},
-        {"java/io/UTFDataFormatException", "java/io/IOException"},
-        {"java/lang/ReflectiveOperationException", "java/lang/Exception"},
-        {"java/lang/ClassNotFoundException", "java/lang/ReflectiveOperationException"},
-        {"java/lang/IllegalAccessException", "java/lang/ReflectiveOperationException"},
-        {"java/lang/InstantiationException", "java/lang/ReflectiveOperationException"},
-        {"java/lang/NoSuchFieldException", "java/lang/ReflectiveOperationException"},
-        {"java/lang/NoSuchMethodException", "java/lang/ReflectiveOperationException"},
-        {"java/lang/LinkageError", "java/lang/Error"},
-        {"java/lang/ClassCircularityError", "java/lang/LinkageError"},
-        {"java/lang/ClassFormatError", "java/lang/LinkageError"},
-        {"java/lang/ExceptionInInitializerError", "java/lang/LinkageError"},
-        {"java/lang/IncompatibleClassChangeError", "java/lang/LinkageError"},
-        {"java/lang/NoClassDefFoundError", "java/lang/LinkageError"},
-        {"java/lang/UnsatisfiedLinkError", "java/lang/LinkageError"},
-        {"java/lang/VerifyError", "java/lang/LinkageError"},
-        {"java/lang/VirtualMachineError", "java/lang/Error"},
-        {"java/lang/InternalError", "java/lang/VirtualMachineError"},
-        {"java/lang/OutOfMemoryError", "java/lang/VirtualMachineError"},
-        {"java/lang/StackOverflowError", "java/lang/VirtualMachineError"},
-        {"java/lang/UnknownError", "java/lang/VirtualMachineError"}
-    };
+    private static final String PLATFORM_THROWABLE_HIERARCHY = """
+        java/lang/Exception=java/lang/Throwable
+        java/lang/Error=java/lang/Throwable
+        java/lang/AssertionError=java/lang/Error
+        java/lang/RuntimeException=java/lang/Exception
+        java/lang/ArithmeticException=java/lang/RuntimeException
+        java/lang/ArrayStoreException=java/lang/RuntimeException
+        java/lang/ClassCastException=java/lang/RuntimeException
+        java/lang/EnumConstantNotPresentException=java/lang/RuntimeException
+        java/lang/IllegalArgumentException=java/lang/RuntimeException
+        java/lang/IllegalMonitorStateException=java/lang/RuntimeException
+        java/lang/IllegalStateException=java/lang/RuntimeException
+        java/lang/IllegalThreadStateException=java/lang/RuntimeException
+        java/lang/MatchException=java/lang/RuntimeException
+        java/lang/ArrayIndexOutOfBoundsException=java/lang/IndexOutOfBoundsException
+        java/lang/IndexOutOfBoundsException=java/lang/RuntimeException
+        java/lang/NegativeArraySizeException=java/lang/RuntimeException
+        java/lang/NullPointerException=java/lang/RuntimeException
+        java/lang/NumberFormatException=java/lang/RuntimeException
+        java/lang/SecurityException=java/lang/RuntimeException
+        java/lang/StringIndexOutOfBoundsException=java/lang/IndexOutOfBoundsException
+        java/lang/UnsupportedOperationException=java/lang/RuntimeException
+        java/lang/invoke/WrongMethodTypeException=java/lang/RuntimeException
+        java/lang/classfile/constantpool/ConstantPoolException=java/lang/IllegalArgumentException
+        java/util/NoSuchElementException=java/lang/RuntimeException
+        java/lang/InterruptedException=java/lang/Exception
+        java/io/IOException=java/lang/Exception
+        java/io/EOFException=java/io/IOException
+        java/io/FileNotFoundException=java/io/IOException
+        java/io/InterruptedIOException=java/io/IOException
+        java/io/UTFDataFormatException=java/io/IOException
+        java/lang/ReflectiveOperationException=java/lang/Exception
+        java/lang/ClassNotFoundException=java/lang/ReflectiveOperationException
+        java/lang/IllegalAccessException=java/lang/ReflectiveOperationException
+        java/lang/InstantiationException=java/lang/ReflectiveOperationException
+        java/lang/NoSuchFieldException=java/lang/ReflectiveOperationException
+        java/lang/NoSuchMethodException=java/lang/ReflectiveOperationException
+        java/lang/LinkageError=java/lang/Error
+        java/lang/ClassCircularityError=java/lang/LinkageError
+        java/lang/ClassFormatError=java/lang/LinkageError
+        java/lang/ExceptionInInitializerError=java/lang/LinkageError
+        java/lang/IncompatibleClassChangeError=java/lang/LinkageError
+        java/lang/NoSuchFieldError=java/lang/IncompatibleClassChangeError
+        java/lang/NoClassDefFoundError=java/lang/LinkageError
+        java/lang/UnsatisfiedLinkError=java/lang/LinkageError
+        java/lang/VerifyError=java/lang/LinkageError
+        java/lang/VirtualMachineError=java/lang/Error
+        java/lang/InternalError=java/lang/VirtualMachineError
+        java/lang/OutOfMemoryError=java/lang/VirtualMachineError
+        java/lang/StackOverflowError=java/lang/VirtualMachineError
+        java/lang/UnknownError=java/lang/VirtualMachineError
+        java/beans/IntrospectionException=java/lang/Exception
+        java/security/GeneralSecurityException=java/lang/Exception
+        java/security/cert/CertificateException=java/security/GeneralSecurityException
+        java/time/DateTimeException=java/lang/RuntimeException
+        java/time/format/DateTimeParseException=java/time/DateTimeException
+        java/util/regex/PatternSyntaxException=java/lang/IllegalArgumentException
+        """;
 
     private static final List<SupportedCall> SUPPORTED_CALLS = List.of(
         intrinsic("Objects.requireNonNull", "java/util/Objects", "requireNonNull", "(Ljava/lang/Object;)Ljava/lang/Object;", "(Ljava/lang/Object;Ljava/lang/String;)Ljava/lang/Object;"),
@@ -1652,15 +1664,7 @@ public final class JdkCallSupport {
         if ("java/lang/Throwable".equals(owner)) {
             return true;
         }
-        if (!startsWithAscii(owner, "java/")) {
-            if (!startsWithAscii(owner, "javax/")) {
-                return false;
-            }
-        }
-        if (endsWithAscii(owner, "Exception")) {
-            return true;
-        }
-        return endsWithAscii(owner, "Error");
+        return !platformThrowableParent(owner).isEmpty();
     }
 
     /**
@@ -1673,7 +1677,20 @@ public final class JdkCallSupport {
         if (!"java/lang/MatchException".equals(methodRef.owner())) {
             return false;
         }
-        if (!"<init>".equals(methodRef.name())) {
+        return isPlatformThrowableCauseConstructor(methodRef);
+    }
+
+    /**
+     * Checks for a supported platform throwable constructor carrying a message and cause.
+     *
+     * <p>The current native throwable model preserves the message used by catch blocks. Cause
+     * traversal remains outside the supported profile.</p>
+     *
+     * @param methodRef method reference
+     * @return true for a supported platform throwable {@code (String, Throwable)} constructor
+     */
+    public static boolean isPlatformThrowableCauseConstructor(final MethodRef methodRef) {
+        if (!isPlatformThrowable(methodRef.owner()) || !"<init>".equals(methodRef.name())) {
             return false;
         }
         return "(Ljava/lang/String;Ljava/lang/Throwable;)V".equals(methodRef.descriptor());
@@ -1703,30 +1720,85 @@ public final class JdkCallSupport {
         return false;
     }
 
+    /**
+     * Returns the deterministic platform throwable parent edges used by native catch matching.
+     *
+     * @return immutable child-to-parent edges in stable generation order
+     */
+    public static List<PlatformThrowableParent> platformThrowableParents() {
+        final List<PlatformThrowableParent> result = new ArrayList<>();
+        int start = 0;
+        while (start < PLATFORM_THROWABLE_HIERARCHY.length()) {
+            final int separator = PLATFORM_THROWABLE_HIERARCHY.indexOf('=', start);
+            final int end = PLATFORM_THROWABLE_HIERARCHY.indexOf('\n', separator + 1);
+            result.add(new PlatformThrowableParent(
+                PLATFORM_THROWABLE_HIERARCHY.substring(start, separator),
+                PLATFORM_THROWABLE_HIERARCHY.substring(separator + 1, end)
+            ));
+            start = end + 1;
+        }
+        return List.copyOf(result);
+    }
+
+    /**
+     * Returns platform throwable types transported by a supported JDK call.
+     *
+     * @param methodRef method reference
+     * @return deterministic throwable types, or an empty list for non-transporting calls
+     */
+    public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
+        if ("java/lang/Math".equals(methodRef.owner())
+            && ("addExact".equals(methodRef.name())
+                || "multiplyExact".equals(methodRef.name())
+                || "toIntExact".equals(methodRef.name()))) {
+            return List.of("java/lang/ArithmeticException");
+        }
+        if ("java/util/Arrays".equals(methodRef.owner()) && "fill".equals(methodRef.name())) {
+            if ("([BB)V".equals(methodRef.descriptor())) {
+                return List.of("java/lang/NullPointerException");
+            }
+            if ("([BIIB)V".equals(methodRef.descriptor())) {
+                return List.of(
+                    "java/lang/ArrayIndexOutOfBoundsException",
+                    "java/lang/IllegalArgumentException",
+                    "java/lang/NullPointerException"
+                );
+            }
+        }
+        if ("java/lang/Thread".equals(methodRef.owner())
+            && ("sleep".equals(methodRef.name()) || "join".equals(methodRef.name()))) {
+            return List.of("java/lang/InterruptedException");
+        }
+        return List.of();
+    }
+
     private static String platformThrowableParent(final String owner) {
         if ("java/lang/Throwable".equals(owner)) {
             return "";
         }
-        for (final String[] parent : PLATFORM_THROWABLE_PARENTS) {
-            if (owner.equals(parent[0])) {
-                return parent[1];
+        int start = 0;
+        while (start < PLATFORM_THROWABLE_HIERARCHY.length()) {
+            final int separator = PLATFORM_THROWABLE_HIERARCHY.indexOf('=', start);
+            final int end = PLATFORM_THROWABLE_HIERARCHY.indexOf('\n', separator + 1);
+            if (asciiSliceEquals(owner, PLATFORM_THROWABLE_HIERARCHY, start, separator)) {
+                return PLATFORM_THROWABLE_HIERARCHY.substring(separator + 1, end);
             }
-        }
-        if (endsWithAscii(owner, "Exception")) {
-            return "java/lang/Exception";
-        }
-        if (endsWithAscii(owner, "Error")) {
-            return "java/lang/Error";
+            start = end + 1;
         }
         return "";
     }
 
-    private static boolean startsWithAscii(final String value, final String prefix) {
-        if (value.length() < prefix.length()) {
+    private static boolean asciiSliceEquals(
+        final String value,
+        final String source,
+        final int start,
+        final int end
+    ) {
+        if (value.length() != end - start) {
             return false;
         }
-        for (int index = 0; index < prefix.length(); index++) {
-            if (value.charAt(index) != prefix.charAt(index)) {
+        for (int index = 0; index < value.length(); index++) {
+            if (value.charAt(index) != source.charAt(start + index)) {
                 return false;
             }
         }
@@ -1864,19 +1936,6 @@ public final class JdkCallSupport {
         return "java/util/concurrent/ConcurrentHashMap".equals(owner);
     }
 
-    private static boolean endsWithAscii(final String value, final String suffix) {
-        if (value.length() < suffix.length()) {
-            return false;
-        }
-        final int offset = value.length() - suffix.length();
-        for (int index = 0; index < suffix.length(); index++) {
-            if (value.charAt(offset + index) != suffix.charAt(index)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
     /**
      * Checks whether a constructor has no observable runtime work in the current native model.
      *
@@ -1937,6 +1996,15 @@ public final class JdkCallSupport {
         final String... descriptors
     ) {
         return new SupportedCall(name, owner, methodName, List.of(descriptors), Kind.RUNTIME);
+    }
+
+    /**
+     * One deterministic edge in the supported platform throwable hierarchy.
+     *
+     * @param type child JVM internal name
+     * @param parent direct parent JVM internal name
+     */
+    public record PlatformThrowableParent(String type, String parent) {
     }
 
     /**
