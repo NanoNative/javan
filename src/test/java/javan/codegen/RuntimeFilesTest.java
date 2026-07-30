@@ -7484,6 +7484,39 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void doubleIsFiniteAcceptsMaximumValue() throws Exception {
+        assertThat(doubleIsFiniteBits("7fefffffffffffff")).isEqualTo("1\n");
+    }
+
+    @Test
+    void doubleIsFiniteRejectsInfinity() throws Exception {
+        assertThat(doubleIsFiniteBits("7ff0000000000000")).isEqualTo("0\n");
+    }
+
+    @Test
+    void doubleIsFiniteRejectsNan() throws Exception {
+        assertThat(doubleIsFiniteBits("7ff8000000001234")).isEqualTo("0\n");
+    }
+
+    private String doubleIsFiniteBits(final String bits) throws Exception {
+        return runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                printf(
+                    "%%d\\n",
+                    javan_double_is_finite(javan_double_long_bits_to_double(0x%sLL))
+                );
+                return 0;
+            }
+            """.formatted(bits),
+            "4096"
+        );
+    }
+
+    @Test
     void addExactLongAcceptsMaximumBoundary() throws Exception {
         assertThat(addExactLongOverflow("LLONG_MAX", "0LL")).isEqualTo("0\n");
     }

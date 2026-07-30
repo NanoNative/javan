@@ -335,6 +335,7 @@ public final class JdkCallSupport {
         intrinsic("Float.floatToRawIntBits", "java/lang/Float", "floatToRawIntBits", "(F)I"),
         intrinsic("Float.isFinite", "java/lang/Float", "isFinite", "(F)Z"),
         intrinsic("Double.parseDouble", "java/lang/Double", "parseDouble", "(Ljava/lang/String;)D"),
+        intrinsic("Double.isFinite", "java/lang/Double", "isFinite", "(D)Z"),
         intrinsic("Double.toString", "java/lang/Double", "toString", "(D)Ljava/lang/String;"),
         runtime("Double.toString.instance", "java/lang/Double", "toString", "()Ljava/lang/String;"),
         runtime("Double.valueOf", "java/lang/Double", "valueOf", "(D)Ljava/lang/Double;"),

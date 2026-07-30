@@ -2856,6 +2856,13 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.doubleExpression(IrExpression.doubleCall("javan_double_long_bits_to_double", List.of(popLong(classFile, method, stack)))));
             return true;
         }
+        if ("isFinite".equals(methodRef.name()) && "(D)Z".equals(methodRef.descriptor())) {
+            stack.add(StackValue.intExpression(IrExpression.intCall(
+                "javan_double_is_finite",
+                List.of(popDouble(classFile, method, stack))
+            )));
+            return true;
+        }
         if ("valueOf".equals(methodRef.name()) && "(D)Ljava/lang/Double;".equals(methodRef.descriptor())) {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_double_value_of", List.of(popDouble(classFile, method, stack)))));
             return true;
