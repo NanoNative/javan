@@ -1777,6 +1777,169 @@ final class CliPlatformExceptionPropagationIntegrationTest extends CliIntegratio
         assertThat(run(tempDir, "check", project.toString()).exitCode()).isEqualTo(2);
     }
 
+    @Test
+    void fourDisjointTypedCatchRangesMatchJvm() throws Exception {
+        final Path project = project("platform-catch-four-disjoint-ranges");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(
+                        flow("bad") + "|" + flow("-1") + "|" + flow("boom") + "|" + flow("13") + "|" + flow("4")
+                    );
+                }
+
+                private static String flow(final String input) {
+                    final int decoded;
+                    try {
+                        decoded = decode(input);
+                    } catch (final IllegalArgumentException exception) {
+                        return "decode:" + exception.getMessage();
+                    }
+
+                    final Optional<Box> box = Optional.of(new Box(decoded));
+                    final int incremented;
+                    try {
+                        incremented = box.orElseThrow().incremented();
+                    } catch (final IllegalArgumentException exception) {
+                        return "increment:" + exception.getMessage();
+                    }
+
+                    final Result dispatched;
+                    try {
+                        dispatched = box.map(value -> dispatch(input, value)).orElseGet(Result::zero);
+                    } catch (final RuntimeException exception) {
+                        return "dispatch:" + exception.getMessage();
+                    }
+
+                    final State state;
+                    try {
+                        state = new State(dispatched.value()).withValue(incremented);
+                    } catch (final IllegalStateException exception) {
+                        return "state:" + exception.getMessage();
+                    }
+                    return "ok:" + state.value();
+                }
+
+                private static int decode(final String input) {
+                    if ("bad".equals(input)) {
+                        throw new IllegalArgumentException("bad");
+                    }
+                    if ("boom".equals(input)) {
+                        return 2;
+                    }
+                    return Integer.parseInt(input);
+                }
+
+                private static Result dispatch(final String input, final Box box) {
+                    if ("boom".equals(input)) {
+                        throw new IllegalStateException("boom");
+                    }
+                    return new Result(box.value());
+                }
+
+                private record Box(int value) {
+                    private int incremented() {
+                        if (value < 0) {
+                            throw new IllegalArgumentException("negative");
+                        }
+                        return value + 1;
+                    }
+                }
+
+                private record Result(int value) {
+                    private static Result zero() {
+                        return new Result(0);
+                    }
+                }
+
+                private record State(int value) {
+                    private State withValue(final int next) {
+                        if (next == 14) {
+                            throw new IllegalStateException("blocked");
+                        }
+                        return new State(next);
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        assertThat(nativeOutput(project)).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void fiveDisjointTypedCatchRangesRemainRejected() throws Exception {
+        final Path project = project("platform-catch-five-disjoint-ranges");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Optional<Value> value = Optional.of(new Value(1));
+                    int result = 0;
+                    try {
+                        result += Helper.increment(value.orElseThrow().number());
+                    } catch (final IllegalArgumentException exception) {
+                        result++;
+                    }
+                    try {
+                        result += Helper.increment(value.orElseThrow().number());
+                    } catch (final IllegalArgumentException exception) {
+                        result++;
+                    }
+                    try {
+                        result += Helper.increment(value.orElseThrow().number());
+                    } catch (final IllegalArgumentException exception) {
+                        result++;
+                    }
+                    try {
+                        result += Helper.increment(value.orElseThrow().number());
+                    } catch (final IllegalArgumentException exception) {
+                        result++;
+                    }
+                    try {
+                        result += Helper.increment(value.orElseThrow().number());
+                    } catch (final IllegalArgumentException exception) {
+                        result++;
+                    }
+                    System.out.println(result);
+                }
+
+                private record Value(int number) {
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Helper", """
+            package com.acme;
+
+            public final class Helper {
+                private Helper() {
+                }
+
+                public static int increment(final int value) {
+                    if (value < 0) {
+                        throw new IllegalArgumentException("negative");
+                    }
+                    return value + 1;
+                }
+            }
+            """);
+
+        assertThat(run(tempDir, "check", project.toString()).stderr()).contains("error[JAVAN014]");
+    }
+
     private String nativeOutput(final Path project) {
         return nativeOutput(project, Map.of());
     }

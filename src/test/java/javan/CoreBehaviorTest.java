@@ -6419,6 +6419,97 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void staticVerifierRejectsBoundedBranchIntoHandlerBody() {
+        final ClassFile helper = exceptionThrowingHelper();
+        final List<Diagnostic> diagnostics = verifyExceptionTable(
+            Map.of(helper.name(), helper),
+            List.of(
+                instruction(0, 184, "invokestatic", new MethodRef(helper.name(), "fail", "()V")),
+                instructionOperands(2, 167, "goto", 0, 4),
+                instruction(5, 75, "astore_0"),
+                instruction(6, 0, "nop"),
+                instruction(7, 177, "return"),
+                instruction(8, 184, "invokestatic", new MethodRef(helper.name(), "fail", "()V")),
+                instructionOperands(10, 167, "goto", 0, 6),
+                instruction(13, 75, "astore_0"),
+                instruction(14, 177, "return"),
+                instruction(16, 177, "return")
+            ),
+            List.of(
+                new CodeException(0, 2, 5, Optional.of("java/lang/IllegalStateException")),
+                new CodeException(8, 10, 13, Optional.of("java/lang/IllegalStateException"))
+            )
+        );
+
+        assertThat(diagnostics).extracting(Diagnostic::code).contains("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsUnresolvedInterfaceCallInBoundedRange() {
+        final ClassFile helper = exceptionThrowingHelper();
+        final ClassFile action = new ClassFile(
+            69,
+            "com/acme/Action",
+            "java/lang/Object",
+            0x0601,
+            List.of(),
+            List.of(),
+            List.of(new MethodInfo(0x0401, "run", "()V", Optional.empty())),
+            Path.of("Action.class"),
+            true
+        );
+        final List<Diagnostic> diagnostics = verifyExceptionTable(
+            Map.of(helper.name(), helper, action.name(), action),
+            List.of(
+                instruction(0, 185, "invokeinterface", new MethodRef(action.name(), "run", "()V")),
+                instruction(1, 184, "invokestatic", new MethodRef(helper.name(), "fail", "()V")),
+                instructionOperands(2, 167, "goto", 0, 6),
+                instruction(5, 75, "astore_0"),
+                instruction(6, 177, "return"),
+                instruction(8, 185, "invokeinterface", new MethodRef(action.name(), "run", "()V")),
+                instruction(9, 184, "invokestatic", new MethodRef(helper.name(), "fail", "()V")),
+                instructionOperands(10, 167, "goto", 0, 6),
+                instruction(13, 75, "astore_0"),
+                instruction(14, 177, "return"),
+                instruction(16, 177, "return")
+            ),
+            List.of(
+                new CodeException(0, 2, 5, Optional.of("java/lang/IllegalStateException")),
+                new CodeException(8, 10, 13, Optional.of("java/lang/IllegalStateException"))
+            )
+        );
+
+        assertThat(diagnostics).extracting(Diagnostic::code).contains("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsUnknownAthrowInBoundedRange() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(
+            List.of(
+                instruction(0, 42, "aload_0"),
+                classInstruction(1, 192, "checkcast", "com/acme/Main"),
+                instruction(2, 191, "athrow"),
+                instructionOperands(3, 167, "goto", 0, 6),
+                instruction(6, 75, "astore_0"),
+                instruction(7, 177, "return"),
+                instruction(9, 42, "aload_0"),
+                classInstruction(10, 192, "checkcast", "com/acme/Main"),
+                instruction(11, 191, "athrow"),
+                instructionOperands(12, 167, "goto", 0, 6),
+                instruction(15, 75, "astore_0"),
+                instruction(16, 177, "return"),
+                instruction(18, 177, "return")
+            ),
+            List.of(
+                new CodeException(0, 3, 6, Optional.of("java/lang/IllegalStateException")),
+                new CodeException(9, 12, 15, Optional.of("java/lang/IllegalStateException"))
+            )
+        );
+
+        assertThat(diagnostics).extracting(Diagnostic::code).contains("JAVAN014");
+    }
+
+    @Test
     void staticVerifierAcceptsExplicitThrowRangeWithFinallyRethrowHandler() {
         final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
             classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
@@ -13806,6 +13897,27 @@ final class CoreBehaviorTest {
 
     private static List<Diagnostic> verifyExceptionTable(final List<Instruction> instructions) {
         return verifyExceptionTable(instructions, new CodeException(0, instructions.size(), instructions.size(), Optional.of("java/lang/IllegalStateException")));
+    }
+
+    private static ClassFile exceptionThrowingHelper() {
+        return classWithMethods(
+            "com/acme/Helper",
+            "java/lang/Object",
+            0,
+            List.of(),
+            methodInfo(
+                "fail",
+                "()V",
+                classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
+                instruction(1, 89, "dup"),
+                instruction(2, 183, "invokespecial", new MethodRef(
+                    "java/lang/IllegalStateException",
+                    "<init>",
+                    "()V"
+                )),
+                instruction(3, 191, "athrow")
+            )
+        );
     }
 
     private static List<Diagnostic> verifyProtectedGeneratedHelper(
