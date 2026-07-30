@@ -271,6 +271,7 @@ final class RuntimeHeaderFile {
         void* javan_string_strip_leading(const char* value);
         void* javan_string_strip_trailing(const char* value);
         void* javan_string_to_lower_case(const char* value);
+        void* javan_string_to_lower_case_locale(const char* value, void* locale);
         void* javan_string_to_upper_case(const char* value);
         int javan_char_sequence_length(void* value);
         int javan_char_sequence_char_at(void* value, int index);
@@ -582,6 +583,7 @@ final class RuntimeHeaderFile {
         void* javan_datetime_formatter_builder_to_formatter(void* value, void* locale);
         void* javan_text_style_short(void);
         void* javan_locale_english(void);
+        void* javan_locale_root(void);
         void* javan_caller_runs_policy_new(void);
         void* javan_atomic_boolean_new(void);
         void javan_atomic_boolean_init(void* value, int initial_value);

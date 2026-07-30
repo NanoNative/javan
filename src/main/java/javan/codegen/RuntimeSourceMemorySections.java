@@ -420,7 +420,8 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_TEXT_STYLE_MAGIC 0x4a545354
         #define JAVAN_LOCALE_MAGIC 0x4a4c434c
         #define JAVAN_DATE_TIME_TEXT_STYLE_SHORT 1
-        #define JAVAN_DATE_TIME_LOCALE_ENGLISH 1
+        #define JAVAN_LOCALE_ENGLISH 1
+        #define JAVAN_LOCALE_ROOT 2
         #define JAVAN_DATE_TIME_BUILDER_STAGE_NEW 0
         #define JAVAN_DATE_TIME_BUILDER_STAGE_CASE_INSENSITIVE 1
         #define JAVAN_DATE_TIME_BUILDER_STAGE_PATTERN_HEAD 2
@@ -518,6 +519,8 @@ final class RuntimeSourceMemorySections {
         static int (*javan_record_object_equals_resolver_value)(void*, void*) = NULL;
         static int (*javan_record_object_hash_code_resolver_value)(void*) = NULL;
         static int (*javan_record_exact_type_resolver_value)(void*, int) = NULL;
+        static void* javan_locale_english_value = NULL;
+        static void* javan_locale_root_value = NULL;
         static void*** javan_static_roots_value = NULL;
         static int javan_static_root_count_value = 0;
         static JAVAN_THREAD_LOCAL javan_root_frame* javan_root_frames_value = NULL;
@@ -4345,7 +4348,8 @@ final class RuntimeSourceMemorySections {
                 javan_panic("unsupported locale");
             }
             javan_locale_state* state = (javan_locale_state*) value;
-            if (state->magic != JAVAN_LOCALE_MAGIC || state->locale_kind != JAVAN_DATE_TIME_LOCALE_ENGLISH) {
+            if (state->magic != JAVAN_LOCALE_MAGIC
+                || (state->locale_kind != JAVAN_LOCALE_ENGLISH && state->locale_kind != JAVAN_LOCALE_ROOT)) {
                 javan_panic("unsupported locale");
             }
             return state;
@@ -4384,14 +4388,31 @@ final class RuntimeSourceMemorySections {
             return (void*) state;
         }
 
-        void* javan_locale_english(void) {
+        static void* javan_locale_singleton(void** slot, int kind) {
+            javan_runtime_lock_enter();
+            if (*slot != NULL) {
+                void* value = *slot;
+                javan_runtime_lock_leave();
+                return value;
+            }
             javan_locale_state* state = (javan_locale_state*) javan_alloc(sizeof(javan_locale_state));
             state->magic = JAVAN_LOCALE_MAGIC;
-            state->locale_kind = JAVAN_DATE_TIME_LOCALE_ENGLISH;
+            state->locale_kind = kind;
             state->reserved0 = 0;
             state->reserved1 = 0;
             javan_register_object((void*) state, JAVAN_TYPE_JAVA_UTIL_LOCALE);
-            return (void*) state;
+            *slot = (void*) state;
+            (void) javan_object_handle_new((void*) state);
+            javan_runtime_lock_leave();
+            return *slot;
+        }
+
+        void* javan_locale_english(void) {
+            return javan_locale_singleton(&javan_locale_english_value, JAVAN_LOCALE_ENGLISH);
+        }
+
+        void* javan_locale_root(void) {
+            return javan_locale_singleton(&javan_locale_root_value, JAVAN_LOCALE_ROOT);
         }
 
         void* javan_datetime_formatter_builder_parse_case_insensitive(void* value) {
@@ -7884,6 +7905,19 @@ final class RuntimeSourceMemorySections {
             result[length] = '\\0';
             javan_root_frame_pop(javan_string_to_lower_roots);
             return result;
+        }
+
+        void* javan_string_to_lower_case_locale(const char* value, void* locale) {
+            javan_locale_checked(locale);
+            if (value == NULL) {
+                javan_panic("null string");
+            }
+            for (const unsigned char* cursor = (const unsigned char*) value; *cursor != 0; cursor++) {
+                if (*cursor > 127) {
+                    javan_panic("non-ASCII string case conversion requires the UTF-16 string model");
+                }
+            }
+            return javan_string_to_lower_case(value);
         }
 
         void* javan_string_to_upper_case(const char* value) {

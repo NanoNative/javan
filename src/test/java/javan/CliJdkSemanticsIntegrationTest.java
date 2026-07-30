@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
@@ -8096,6 +8097,228 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/string-to-lower-case").toString())).stdout()).isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("javan_123\n");
+    }
+
+    @Test
+    void stringToLowerCaseRootBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-to-lower-case-root");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Locale;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("JaVaN_123".toLowerCase(Locale.ROOT));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        requireBuildSuccess(run(tempDir, "build", project.toString()));
+
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-to-lower-case-root").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringToLowerCaseEnglishBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-to-lower-case-english");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Locale;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("JaVaN_123".toLowerCase(Locale.ENGLISH));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        requireBuildSuccess(run(tempDir, "build", project.toString()));
+
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-to-lower-case-english").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void localeRootRetainsStaticFinalIdentity() throws Exception {
+        final Path project = project("locale-root-identity");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Locale;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Locale.ROOT == Locale.ROOT);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        requireBuildSuccess(run(tempDir, "build", project.toString()));
+
+        assertThat(process(project, List.of(project.resolve(".javan/bin/locale-root-identity").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void localeEnglishRetainsStaticFinalIdentity() throws Exception {
+        final Path project = project("locale-english-identity");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Locale;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Locale.ENGLISH == Locale.ENGLISH);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        requireBuildSuccess(run(tempDir, "build", project.toString()));
+
+        assertThat(process(project, List.of(project.resolve(".javan/bin/locale-english-identity").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void rootAndEnglishLocalesRemainDistinct() throws Exception {
+        final Path project = project("locale-root-english-distinct");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Locale;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Locale.ROOT != Locale.ENGLISH);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        requireBuildSuccess(run(tempDir, "build", project.toString()));
+
+        assertThat(process(project, List.of(project.resolve(".javan/bin/locale-root-english-distinct").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void concurrentLocaleRootAccessRetainsSingletonIdentity() throws Exception {
+        final Path project = project("locale-root-concurrent-identity");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Locale;
+
+            public final class Main {
+                static Locale first;
+                static Locale second;
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread firstThread = new Thread(new FirstReader());
+                    final Thread secondThread = new Thread(new SecondReader());
+                    firstThread.start();
+                    secondThread.start();
+                    firstThread.join();
+                    secondThread.join();
+                    System.out.println(first == Locale.ROOT && second == Locale.ROOT && first == second);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.FirstReader", """
+            package com.acme;
+
+            import java.util.Locale;
+
+            public final class FirstReader implements Runnable {
+                @Override
+                public void run() {
+                    Main.first = Locale.ROOT;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.SecondReader", """
+            package com.acme;
+
+            import java.util.Locale;
+
+            public final class SecondReader implements Runnable {
+                @Override
+                public void run() {
+                    Main.second = Locale.ROOT;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        requireBuildSuccess(run(tempDir, "build", project.toString()));
+
+        assertThat(process(
+            project,
+            List.of(project.resolve(".javan/bin/locale-root-concurrent-identity").toString()),
+            defaultProcessTimeout(),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1")
+        ).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void dateTimeFormatterBuilderAcceptsRootLocale() throws Exception {
+        final Path project = project("date-time-formatter-root-locale");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.time.format.DateTimeFormatter;
+            import java.time.format.DateTimeFormatterBuilder;
+            import java.time.format.TextStyle;
+            import java.util.Locale;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final DateTimeFormatter formatter = new DateTimeFormatterBuilder()
+                        .parseCaseInsensitive()
+                        .appendPattern("EEE MMM dd HH:mm:ss")
+                        .appendZoneText(TextStyle.SHORT)
+                        .appendPattern(" yyyy")
+                        .toFormatter(Locale.ROOT);
+                    System.out.println(formatter != null);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        requireBuildSuccess(run(tempDir, "build", project.toString()));
+
+        assertThat(process(project, List.of(project.resolve(".javan/bin/date-time-formatter-root-locale").toString())).stdout())
+            .isEqualTo(jvmOutput);
     }
 
     @Test

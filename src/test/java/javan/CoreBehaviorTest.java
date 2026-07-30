@@ -1710,6 +1710,26 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void staticVerifierRejectsReachableLocaleCheckcast() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            classInstruction(0, 192, "checkcast", "java/util/Locale"),
+            true
+        );
+
+        assertThat(diagnostics).extracting(Diagnostic::code).containsExactly("JAVAN045");
+    }
+
+    @Test
+    void staticVerifierWarnsForUnreachableLocaleCheckcast() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            classInstruction(0, 192, "checkcast", "java/util/Locale"),
+            false
+        );
+
+        assertThat(diagnostics).extracting(Diagnostic::code).containsExactly("JAVAN145");
+    }
+
+    @Test
     void staticVerifierIgnoresInstanceofWithoutClassMetadata() {
         final List<Diagnostic> diagnostics = verifyInstruction(instruction(0, 193, "instanceof"), true);
 
@@ -6340,6 +6360,26 @@ final class CoreBehaviorTest {
             assertThat(diagnostic.code()).isEqualTo("JAVAN046");
             assertThat(diagnostic.subject()).isEqualTo("java/lang/String.lastIndexOf(I)I");
         });
+    }
+
+    @Test
+    void staticVerifierRejectsReachableNonAsciiStringLocaleLowerCaseCall() {
+        final MethodRef target = new MethodRef(
+            "java/lang/String",
+            "toLowerCase",
+            "(Ljava/util/Locale;)Ljava/lang/String;"
+        );
+        final List<Diagnostic> diagnostics = verifyStringSemanticMethod(
+            target,
+            true,
+            stringInstruction(0, "cafe\u00e9"),
+            instruction(1, 178, "getstatic", new FieldRef("java/util/Locale", "ROOT", "Ljava/util/Locale;")),
+            instruction(2, 182, "invokevirtual", target),
+            instruction(3, 87, "pop"),
+            instruction(4, 177, "return")
+        );
+
+        assertThat(diagnostics).extracting(Diagnostic::code).containsExactly("JAVAN046");
     }
 
     @Test

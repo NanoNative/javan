@@ -484,6 +484,9 @@ public final class StaticVerifier {
         if (unsupportedStringConstant == 1 && unsupportedRuntimeStringSemanticCall(instruction)) {
             diagnostics.add(stringConstantDiagnostic(classFile, method, instruction, reachable));
         }
+        if (unsupportedCheckcastTarget(instruction)) {
+            diagnostics.add(checkcastTargetDiagnostic(classFile, method, instruction, reachable));
+        }
         if (unsupportedInstanceOfTarget(classes, instruction)) {
             diagnostics.add(instanceOfTargetDiagnostic(classFile, method, instruction, reachable));
         }
@@ -587,6 +590,9 @@ public final class StaticVerifier {
         if ("lastIndexOf".equals(target.name())) {
             return stringIndexDescriptor(target.descriptor());
         }
+        if ("toLowerCase".equals(target.name())) {
+            return "(Ljava/util/Locale;)Ljava/lang/String;".equals(target.descriptor());
+        }
         return false;
     }
 
@@ -626,6 +632,9 @@ public final class StaticVerifier {
             return true;
         }
         if (supportedArraysFillHandler(code, handler)) {
+            return true;
+        }
+        if (supportedStringLocaleCaseHandler(code, handler)) {
             return true;
         }
         if (supportedMathExactHandler(code, handler)) {
@@ -1136,6 +1145,56 @@ public final class StaticVerifier {
             return true;
         }
         return JdkCallSupport.isPlatformThrowableAssignable("java/lang/ArrayIndexOutOfBoundsException", catchType);
+    }
+
+    private static boolean supportedStringLocaleCaseHandler(final CodeAttribute code, final CodeException handler) {
+        if (handler.catchType().isEmpty()
+            || !JdkCallSupport.isPlatformThrowableAssignable(
+                "java/lang/NullPointerException",
+                handler.catchType().orElseThrow()
+            )) {
+            return false;
+        }
+        int hasLocaleCaseCall = 0;
+        for (final Instruction instruction : code.instructions()) {
+            if (instruction.offset() < handler.startPc()) {
+                continue;
+            }
+            if (instruction.offset() >= handler.endPc()) {
+                continue;
+            }
+            if (isStringLocaleCaseCall(instruction)) {
+                hasLocaleCaseCall = 1;
+                continue;
+            }
+            if (isSupportedStringCaseLocaleField(instruction)) {
+                continue;
+            }
+            if (!supportedInterruptedWaitProtectedInstruction(instruction)) {
+                return false;
+            }
+        }
+        return hasLocaleCaseCall == 1;
+    }
+
+    private static boolean isStringLocaleCaseCall(final Instruction instruction) {
+        if (instruction.opcode() != 182 || instruction.methodRef().isEmpty()) {
+            return false;
+        }
+        final MethodRef target = instruction.methodRef().orElseThrow();
+        return "java/lang/String".equals(target.owner())
+            && "toLowerCase".equals(target.name())
+            && "(Ljava/util/Locale;)Ljava/lang/String;".equals(target.descriptor());
+    }
+
+    private static boolean isSupportedStringCaseLocaleField(final Instruction instruction) {
+        if (instruction.opcode() != 178 || instruction.fieldRef().isEmpty()) {
+            return false;
+        }
+        final FieldRef target = instruction.fieldRef().orElseThrow();
+        return "java/util/Locale".equals(target.owner())
+            && ("ROOT".equals(target.name()) || "ENGLISH".equals(target.name()))
+            && "Ljava/util/Locale;".equals(target.descriptor());
     }
 
     private static boolean supportedMathExactHandler(final CodeAttribute code, final CodeException handler) {
@@ -3217,6 +3276,12 @@ public final class StaticVerifier {
         return left.descriptor().equals(right.descriptor());
     }
 
+    private static boolean unsupportedCheckcastTarget(final Instruction instruction) {
+        return instruction.opcode() == 192
+            && instruction.className().isPresent()
+            && "java/util/Locale".equals(instruction.className().orElseThrow());
+    }
+
     private static boolean unsupportedInstanceOfTarget(final Map<String, ClassFile> classes, final Instruction instruction) {
         if (instruction.opcode() != 193 || instruction.className().isEmpty()) {
             return false;
@@ -3756,6 +3821,21 @@ public final class StaticVerifier {
             "Record equals/hashCode only admits closed reference shapes with complete native semantics.",
             "Use String, a boxed primitive, an array, an exact List/ArrayList element shape, an enum, or a final closed-world class with a reachable equals/hashCode implementation."
         );
+    }
+
+    private static Diagnostic checkcastTargetDiagnostic(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final int reachable
+    ) {
+        final String target = instruction.className().orElse("unknown");
+        final String reason = "The current runtime cannot perform a deterministic checkcast to the built-in Locale objects or transport the required ClassCastException.";
+        final String fix = "Keep Locale values statically typed and pass Locale.ROOT or Locale.ENGLISH directly until built-in checkcast exception transport is implemented.";
+        if (reachable == 1) {
+            return error(classFile, method, "JAVAN045", "unsupported checkcast target", target, reason, fix);
+        }
+        return warning(classFile, method, "JAVAN145", "unsupported checkcast target in unreachable code", target, reason, fix);
     }
 
     private static Diagnostic instanceOfTargetDiagnostic(

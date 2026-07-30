@@ -598,6 +598,134 @@ final class CliPlatformExceptionPropagationIntegrationTest extends CliIntegratio
     }
 
     @Test
+    void stringToLowerCaseNullLocaleCanBeCaught() throws Exception {
+        final Path project = project("platform-catch-string-lower-null-locale");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Locale;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Locale locale = null;
+                    try {
+                        System.out.println("JAVAN".toLowerCase(locale));
+                    } catch (final NullPointerException exception) {
+                        System.out.println(exception.getMessage() == null);
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        assertThat(nativeOutput(project)).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringToLowerCaseNullReceiverCanBeCaught() throws Exception {
+        final Path project = project("platform-catch-string-lower-null-receiver");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Locale;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String value = null;
+                    try {
+                        System.out.println(value.toLowerCase(Locale.ROOT));
+                    } catch (final NullPointerException exception) {
+                        System.out.println("caught");
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        assertThat(nativeOutput(project)).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void transitiveStringToLowerCaseNullLocaleCanBeCaught() throws Exception {
+        final Path project = project("platform-catch-transitive-string-lower-null-locale");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    try {
+                        System.out.println(Helper.lower());
+                    } catch (final NullPointerException exception) {
+                        System.out.println(exception.getMessage() == null);
+                    }
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Helper", """
+            package com.acme;
+
+            import java.util.Locale;
+
+            public final class Helper {
+                private Helper() {
+                }
+
+                public static String lower() {
+                    final Locale locale = null;
+                    return "JAVAN".toLowerCase(locale);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        assertThat(nativeOutput(project)).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void transitiveStringToLowerCaseNullReceiverCannotDisappearAtNativeBoundary() throws Exception {
+        final Path project = project("platform-uncaught-transitive-string-lower-null-receiver");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    Helper.lower();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Helper", """
+            package com.acme;
+
+            import java.util.Locale;
+
+            public final class Helper {
+                private Helper() {
+                }
+
+                public static String lower() {
+                    final String value = null;
+                    return value.toLowerCase(Locale.ROOT);
+                }
+            }
+            """);
+
+        build(project);
+        assertThat(nativeRun(project).stderr()).contains("value.toLowerCase(Locale.ROOT)");
+    }
+
+    @Test
     void locallyCaughtMathOverflowRethrowKeepsOriginalSource() throws Exception {
         final Path project = project("platform-catch-local-math-rethrow-source");
         writeJava(project, "com.acme.Main", """

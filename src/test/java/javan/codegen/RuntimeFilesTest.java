@@ -39,6 +39,31 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void writeIncludesRootAndEnglishLocaleCaseRuntime() throws Exception {
+        final String runtime = Files.readString(new RuntimeFiles().write(tempDir));
+
+        assertThat(runtime).contains(
+            "#define JAVAN_LOCALE_ENGLISH 1",
+            "#define JAVAN_LOCALE_ROOT 2",
+            "void* javan_locale_root(void)",
+            "void* javan_string_to_lower_case_locale(const char* value, void* locale)"
+        );
+    }
+
+    @Test
+    void stringLocaleLowerCaseRejectsDynamicNonAsciiInput() throws Exception {
+        final String output = runRuntimePanicProbe(
+            """
+            javan_register_static_roots(0, 0);
+            void* locale = javan_locale_root();
+            """,
+            "javan_string_to_lower_case_locale(\"\\xC3\\xA9\", locale);"
+        );
+
+        assertThat(output).contains("non-ASCII string case conversion requires the UTF-16 string model");
+    }
+
+    @Test
     void pendingThrowableRuntimeAssignabilityMatchesJavaHierarchy() throws Exception {
         final Set<String> throwableTypes = new LinkedHashSet<>();
         throwableTypes.add("java/lang/Throwable");

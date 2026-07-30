@@ -193,6 +193,15 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksStringToLowerCaseLocaleAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef(
+            "java/lang/String",
+            "toLowerCase",
+            "(Ljava/util/Locale;)Ljava/lang/String;"
+        ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksStringToUpperCaseLocaleAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/String", "toUpperCase", "(Ljava/util/Locale;)Ljava/lang/String;")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);

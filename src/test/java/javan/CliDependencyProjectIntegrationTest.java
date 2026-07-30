@@ -1407,6 +1407,60 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void reachableNonAsciiLocaleLowerCaseFailsUntilUtf16StringModelExists() throws Exception {
+        final Path project = project("non-ascii-locale-lower-case");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Locale;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("caf\\u00e9".toLowerCase(Locale.ROOT));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.stderr()).contains(
+            "error[JAVAN046]",
+            "non-ASCII string constants require the UTF-16 string model"
+        );
+    }
+
+    @Test
+    void reachableLocaleCheckcastFailsBeforeNativeExecution() throws Exception {
+        final Path project = project("unsupported-locale-checkcast");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Locale;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Object value = "not-a-locale";
+                    System.out.println("JAVAN".toLowerCase((Locale) value));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.stderr()).contains(
+            "error[JAVAN045]",
+            "unsupported checkcast target",
+            "java/util/Locale"
+        );
+    }
+
+    @Test
     void unreachableNonAsciiStringConstantWarnsOnly() throws Exception {
         final Path project = project("unreachable-non-ascii-string");
         writeJava(project, "com.acme.Main", """

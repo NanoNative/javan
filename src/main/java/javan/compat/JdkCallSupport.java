@@ -418,7 +418,13 @@ public final class JdkCallSupport {
         runtime("String.intern", "java/lang/String", "intern", "()Ljava/lang/String;"),
         runtime("String.toString", "java/lang/String", "toString", "()Ljava/lang/String;"),
         runtime("String.concat", "java/lang/String", "concat", "(Ljava/lang/String;)Ljava/lang/String;"),
-        runtime("String.toLowerCase", "java/lang/String", "toLowerCase", "()Ljava/lang/String;"),
+        runtime(
+            "String.toLowerCase",
+            "java/lang/String",
+            "toLowerCase",
+            "()Ljava/lang/String;",
+            "(Ljava/util/Locale;)Ljava/lang/String;"
+        ),
         runtime("String.toUpperCase", "java/lang/String", "toUpperCase", "()Ljava/lang/String;"),
         runtime("String.describeConstable", "java/lang/String", "describeConstable", "()Ljava/util/Optional;"),
         runtime(
@@ -1748,6 +1754,11 @@ public final class JdkCallSupport {
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
+        if ("java/lang/String".equals(methodRef.owner())
+            && "toLowerCase".equals(methodRef.name())
+            && "(Ljava/util/Locale;)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            return List.of("java/lang/NullPointerException");
+        }
         if ("java/lang/Math".equals(methodRef.owner())
             && ("addExact".equals(methodRef.name())
                 || "multiplyExact".equals(methodRef.name())
