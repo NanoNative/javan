@@ -12,6 +12,7 @@ final class RuntimeSourceFile {
         .append(RuntimeSourceCoreSection.main())
         .append(RuntimeSourceMemorySections.heap())
         .append(RuntimeSourceMemorySections.heapAlloc())
+        .append(RuntimeSourceNumericSection.main())
         .append(RuntimeSourceMemorySections.arrays())
         .append(RuntimeSourceMemorySections.collections())
         .append(RuntimeSourcePlatformSection.tail())

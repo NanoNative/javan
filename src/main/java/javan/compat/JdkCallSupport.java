@@ -334,6 +334,7 @@ public final class JdkCallSupport {
         intrinsic("Float.intBitsToFloat", "java/lang/Float", "intBitsToFloat", "(I)F"),
         intrinsic("Float.floatToRawIntBits", "java/lang/Float", "floatToRawIntBits", "(F)I"),
         intrinsic("Float.isFinite", "java/lang/Float", "isFinite", "(F)Z"),
+        intrinsic("Double.parseDouble", "java/lang/Double", "parseDouble", "(Ljava/lang/String;)D"),
         intrinsic("Double.toString", "java/lang/Double", "toString", "(D)Ljava/lang/String;"),
         runtime("Double.toString.instance", "java/lang/Double", "toString", "()Ljava/lang/String;"),
         runtime("Double.valueOf", "java/lang/Double", "valueOf", "(D)Ljava/lang/Double;"),
@@ -1629,7 +1630,8 @@ public final class JdkCallSupport {
         }
         if (isStringRuntimeOwner(owner)
             || isNumberToStringCall(owner, name)
-            || isDecimalParseCall(methodRef)) {
+            || isDecimalParseCall(methodRef)
+            || isDoubleParseCall(methodRef)) {
             return List.of("strings");
         }
         if (isBoxedPrimitiveOwner(owner)) {
@@ -1761,6 +1763,12 @@ public final class JdkCallSupport {
         if (isDecimalParseCall(methodRef)) {
             return List.of("java/lang/NumberFormatException");
         }
+        if (isDoubleParseCall(methodRef)) {
+            return List.of(
+                "java/lang/NullPointerException",
+                "java/lang/NumberFormatException"
+            );
+        }
         if ("java/lang/String".equals(methodRef.owner())
             && "toLowerCase".equals(methodRef.name())
             && "(Ljava/util/Locale;)Ljava/lang/String;".equals(methodRef.descriptor())) {
@@ -1800,6 +1808,12 @@ public final class JdkCallSupport {
             && "parseLong".equals(methodRef.name())
             && "(Ljava/lang/String;)J".equals(methodRef.descriptor());
         return integerParse || longParse;
+    }
+
+    private static boolean isDoubleParseCall(final MethodRef methodRef) {
+        return "java/lang/Double".equals(methodRef.owner())
+            && "parseDouble".equals(methodRef.name())
+            && "(Ljava/lang/String;)D".equals(methodRef.descriptor());
     }
 
     private static String platformThrowableParent(final String owner) {

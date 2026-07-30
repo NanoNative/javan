@@ -2055,6 +2055,19 @@ final class BytecodeToIRInvokeSupport {
         if ("java/lang/Float".equals(methodRef.owner())) {
             return lowerFloatIntrinsic(classFile, method, methodRef, stack);
         }
+        if (lowerDoubleParse(
+            classFile,
+            method,
+            instruction,
+            methodRef,
+            instructions,
+            stack,
+            localDeclarations,
+            pendingExceptionHandlerStacks,
+            sourceLines
+        )) {
+            return true;
+        }
         if ("java/lang/Double".equals(methodRef.owner())) {
             return lowerDoubleIntrinsic(classFile, method, methodRef, stack);
         }
@@ -2848,6 +2861,96 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         return false;
+    }
+    static boolean lowerDoubleParse(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final MethodRef methodRef,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
+    ) {
+        if (!"java/lang/Double".equals(methodRef.owner())
+            || !"parseDouble".equals(methodRef.name())
+            || !"(Ljava/lang/String;)D".equals(methodRef.descriptor())) {
+            return false;
+        }
+        final int valueLocalIndex = localDeclarations.size();
+        final String valueLocalName = "object" + valueLocalIndex;
+        localDeclarations.put(
+            Integer.MIN_VALUE + valueLocalIndex,
+            new IrLocal(IrType.OBJECT, valueLocalName)
+        );
+        instructions.add(IrInstruction.assignObject(
+            valueLocalName,
+            popObject(classFile, method, stack)
+        ));
+
+        final int statusLocalIndex = localDeclarations.size();
+        final String statusLocalName = "int" + statusLocalIndex;
+        localDeclarations.put(
+            Integer.MIN_VALUE + statusLocalIndex,
+            new IrLocal(IrType.INT, statusLocalName)
+        );
+        instructions.add(IrInstruction.assignInt(
+            statusLocalName,
+            IrExpression.intCall(
+                "javan_double_parse_status",
+                List.of(IrExpression.objectLocal(valueLocalName))
+            )
+        ));
+
+        final String labelSuffix = instruction.offset() + "_" + statusLocalIndex;
+        final String successLabel = "label_double_parse_success_" + labelSuffix;
+        final String malformedLabel = "label_double_parse_malformed_" + labelSuffix;
+        final IrExpression status = IrExpression.intLocal(statusLocalName);
+        instructions.add(IrInstruction.branchIf(
+            successLabel,
+            IrExpression.intComparison("==", status, IrExpression.intLiteral(0))
+        ));
+        instructions.add(IrInstruction.branchIf(
+            malformedLabel,
+            IrExpression.intComparison("!=", status, IrExpression.intLiteral(1))
+        ));
+        final List<StackValue> successStack = List.copyOf(stack);
+        final IrExpression message = IrExpression.objectCall(
+            "javan_double_parse_message",
+            List.of(IrExpression.objectLocal(valueLocalName), status)
+        );
+        routePendingPlatformException(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            "java/lang/NullPointerException",
+            message
+        );
+        instructions.add(IrInstruction.label(malformedLabel));
+        stack.addAll(successStack);
+        routePendingPlatformException(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            "java/lang/NumberFormatException",
+            message
+        );
+        instructions.add(IrInstruction.label(successLabel));
+        stack.addAll(successStack);
+        stack.add(StackValue.doubleExpression(IrExpression.doubleCall(
+            "javan_double_parse_value",
+            List.of(IrExpression.objectLocal(valueLocalName))
+        )));
+        return true;
     }
     static boolean lowerBooleanIntrinsic(
         final ClassFile classFile,
@@ -10833,6 +10936,13 @@ final class BytecodeToIRInvokeSupport {
         }
         if (instruction.stringValue().isPresent()) {
             final String value = instruction.stringValue().orElseThrow();
+            if (value.indexOf('\0') >= 0) {
+                throw BytecodeToIR.unsupportedEmbeddedNulStringConstant(
+                    classFile,
+                    method,
+                    instruction
+                );
+            }
             stack.add(StackValue.objectExpression(IrExpression.stringLiteral(value)));
             return;
         }

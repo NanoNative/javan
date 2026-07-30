@@ -93,6 +93,7 @@ final class IntrinsicUsageReportsTest {
             new IntrinsicCallCount("Float.intBitsToFloat", 0),
             new IntrinsicCallCount("Float.floatToRawIntBits", 0),
             new IntrinsicCallCount("Float.isFinite", 0),
+            new IntrinsicCallCount("Double.parseDouble", 0),
             new IntrinsicCallCount("Double.toString", 0),
             new IntrinsicCallCount("Double.longBitsToDouble", 0),
             new IntrinsicCallCount("Boolean.toString", 0),

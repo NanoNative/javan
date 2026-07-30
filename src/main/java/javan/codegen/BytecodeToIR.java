@@ -3054,6 +3054,22 @@ public final class BytecodeToIR {
         ));
     }
 
+    static DiagnosticException unsupportedEmbeddedNulStringConstant(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction
+    ) {
+        return new DiagnosticException(Diagnostic.error(
+            "JAVAN046",
+            "embedded NUL string constants require the length-aware string model",
+            classFile.name(),
+            method.name() + method.descriptor(),
+            instructionSubject(instruction),
+            "The current native runtime stores strings as NUL-terminated UTF-8. Accepting this constant would silently truncate Java content and change parsing, equality, length, indexing, and ABI behavior.",
+            "Remove the embedded U+0000 value or keep this code on the JVM until Javan's length-aware String object model is implemented."
+        ));
+    }
+
     static DiagnosticException unsupportedLiteralConstant(
         final ClassFile classFile,
         final MethodInfo method,
