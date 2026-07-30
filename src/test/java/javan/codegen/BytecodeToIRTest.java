@@ -8612,6 +8612,27 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void givesRepeatedValueSelectionsAtSameOffsetUniqueLabels() {
+        final Map<Integer, IrLocal> localDeclarations = Map.of(
+            Integer.MIN_VALUE,
+            new IrLocal(IrType.INT, "branchValue0_10")
+        );
+
+        assertThat(BytecodeToIRControlFlowSupport.valueLabel(
+            "branch_value_target_",
+            10,
+            "branchValue1_10",
+            localDeclarations
+        )).isEqualTo("branch_value_target_10_branchValue1_10");
+        assertThat(BytecodeToIRControlFlowSupport.valueLabel(
+            "branch_value_done_",
+            10,
+            "branchValue1_10",
+            localDeclarations
+        )).isEqualTo("branch_value_done_10_branchValue1_10");
+    }
+
+    @Test
     void fallsBackToRegularGuardedBranchWhenGuardedBranchesUseDifferentTargets() {
         final IrFunction function = lowerMain(method(
             0x0008,

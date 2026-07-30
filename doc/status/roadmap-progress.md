@@ -24,8 +24,8 @@ Status words are exact. No colors, no mood lighting.
 
 | Measure | Current value | Meaning |
 | --- | ---: | --- |
-| Self-check reachable classes | 247 | Current branch verification of `java -cp target/classes javan.Main check target/classes --main javan.Main` on current Javan classes. |
-| Self-check reachable methods | 3,021 | Same current-branch self-check. |
+| Self-check reachable classes | 271 | Current branch verification of `java -cp target/classes javan.Main check target/classes --main javan.Main` on current Javan classes. |
+| Self-check reachable methods | 3,389 | Same current-branch self-check. |
 | Self-check diagnostics | 0 | Current Javan source shape is clean for reachable native self-build analysis. |
 | Scenario ledger done | 302/302 | Named compiler-owned support scenarios with explicit pass/reject status. |
 | Scenario ledger left | 0 | Every current compiler-owned scenario row is accounted for. |
