@@ -235,8 +235,11 @@ public final class FunctionValueFlow {
         private final Set<FieldRef> finalCallbackFields = new LinkedHashSet<>();
         private final Map<FieldRef, Integer> fieldFacts = new LinkedHashMap<>();
         private final Map<Site, Integer> callbackFacts = new LinkedHashMap<>();
+        private final Map<EntryPoint, Set<EntryPoint>> returnDependents = new LinkedHashMap<>();
+        private final Map<FieldRef, Set<EntryPoint>> fieldReaders = new LinkedHashMap<>();
+        private final List<EntryPoint> pendingMethods = new ArrayList<>();
+        private final Set<EntryPoint> queuedMethods = new LinkedHashSet<>();
         private final Map<String, Boolean> callbackTypeCache = new HashMap<>();
-        private boolean changed;
 
         private Engine(
             final Map<String, ClassFile> classes,
@@ -248,15 +251,20 @@ public final class FunctionValueFlow {
             this.reachableSet = Set.copyOf(reachableMethods);
             this.callbackKind = callbackKind;
             initializeFacts();
+            initializeDependencies();
+            for (final EntryPoint entryPoint : parameterFacts.keySet()) {
+                schedule(entryPoint);
+            }
         }
 
         private Map<Site, ValueKind> analyze() {
-            do {
-                changed = false;
-                for (final EntryPoint entryPoint : reachableMethods) {
-                    simulate(entryPoint);
-                }
-            } while (changed);
+            int pendingIndex = 0;
+            while (pendingIndex < pendingMethods.size()) {
+                final EntryPoint entryPoint = pendingMethods.get(pendingIndex);
+                pendingIndex++;
+                queuedMethods.remove(entryPoint);
+                simulate(entryPoint);
+            }
             final Map<Site, ValueKind> result = new LinkedHashMap<>();
             for (final Map.Entry<Site, Integer> entry : callbackFacts.entrySet()) {
                 result.put(entry.getKey(), kind(entry.getValue().intValue()));
@@ -291,6 +299,81 @@ public final class FunctionValueFlow {
                         );
                     }
                 }
+            }
+        }
+
+        private void initializeDependencies() {
+            for (final EntryPoint caller : reachableMethods) {
+                final Optional<MethodInfo> resolvedMethod = method(caller);
+                if (resolvedMethod.isEmpty() || resolvedMethod.orElseThrow().code().isEmpty()) {
+                    continue;
+                }
+                for (final Instruction instruction
+                    : resolvedMethod.orElseThrow().code().orElseThrow().instructions()) {
+                    registerFieldReader(caller, instruction);
+                    registerReturnDependent(caller, instruction);
+                }
+            }
+        }
+
+        private void registerFieldReader(
+            final EntryPoint reader,
+            final Instruction instruction
+        ) {
+            if ((instruction.opcode() != 178 && instruction.opcode() != 180)
+                || instruction.fieldRef().isEmpty()) {
+                return;
+            }
+            final FieldRef field = instruction.fieldRef().orElseThrow();
+            if (!finalCallbackFields.contains(field)) {
+                return;
+            }
+            addDependent(fieldReaders, field, reader);
+        }
+
+        private void registerReturnDependent(
+            final EntryPoint caller,
+            final Instruction instruction
+        ) {
+            if (instruction.methodRef().isEmpty()) {
+                return;
+            }
+            final MethodRef methodRef = instruction.methodRef().orElseThrow();
+            if ((instruction.opcode() == 185 && isDirectUse(callbackKind, methodRef))
+                || isRequireNonNull(methodRef)) {
+                return;
+            }
+            final Optional<EntryPoint> target = exactTarget(instruction, methodRef);
+            if (target.isEmpty()) {
+                return;
+            }
+            addDependent(returnDependents, target.orElseThrow(), caller);
+        }
+
+        private <K> void addDependent(
+            final Map<K, Set<EntryPoint>> dependencies,
+            final K source,
+            final EntryPoint dependent
+        ) {
+            final Set<EntryPoint> current = dependencies.get(source);
+            if (current != null) {
+                current.add(dependent);
+                return;
+            }
+            final Set<EntryPoint> first = new LinkedHashSet<>();
+            first.add(dependent);
+            dependencies.put(source, first);
+        }
+
+        private void schedule(final EntryPoint entryPoint) {
+            if (parameterFacts.containsKey(entryPoint) && queuedMethods.add(entryPoint)) {
+                pendingMethods.add(entryPoint);
+            }
+        }
+
+        private void scheduleAll(final Set<EntryPoint> entryPoints) {
+            for (final EntryPoint entryPoint : entryPoints) {
+                schedule(entryPoint);
             }
         }
 
@@ -582,8 +665,8 @@ public final class FunctionValueFlow {
         }
 
         private void addFieldFact(final FieldRef field, final int fact) {
-            if (finalCallbackFields.contains(field)) {
-                addFact(fieldFacts, field, fact);
+            if (finalCallbackFields.contains(field) && addFact(fieldFacts, field, fact)) {
+                scheduleAll(fieldReaders.getOrDefault(field, Set.of()));
             }
         }
 
@@ -605,7 +688,7 @@ public final class FunctionValueFlow {
             final Descriptor descriptor = resolvedDescriptor.orElseThrow();
             final List<Slot> arguments = popArguments(state, descriptor.parameters().size());
             final Slot receiver = instruction.opcode() == 184 ? new Slot(UNSAFE, 1) : pop(state);
-            if (instruction.opcode() == 185 && directUse(callbackKind).equals(methodRef)) {
+            if (instruction.opcode() == 185 && isDirectUse(callbackKind, methodRef)) {
                 addCallbackFact(site(caller, instruction), receiver.fact());
                 pushReturn(state, descriptor.result(), UNSAFE);
                 return;
@@ -810,30 +893,37 @@ public final class FunctionValueFlow {
             if (current == null) {
                 return;
             }
+            boolean grew = false;
             for (int index = 0; index < current.length && index < contribution.length; index++) {
                 final int merged = current[index] | contribution[index];
                 if (merged != current[index]) {
                     current[index] = merged;
-                    changed = true;
+                    grew = true;
                 }
+            }
+            if (grew) {
+                schedule(target);
             }
         }
 
         private void addReturnFact(final EntryPoint entryPoint, final int fact) {
-            addFact(returnFacts, entryPoint, fact);
+            if (addFact(returnFacts, entryPoint, fact)) {
+                scheduleAll(returnDependents.getOrDefault(entryPoint, Set.of()));
+            }
         }
 
         private void addCallbackFact(final Site site, final int fact) {
             addFact(callbackFacts, site, fact);
         }
 
-        private <K> void addFact(final Map<K, Integer> facts, final K key, final int fact) {
+        private <K> boolean addFact(final Map<K, Integer> facts, final K key, final int fact) {
             final int current = facts.getOrDefault(key, Integer.valueOf(0)).intValue();
             final int merged = current | fact;
-            if (merged != current) {
-                facts.put(key, Integer.valueOf(merged));
-                changed = true;
+            if (merged == current) {
+                return false;
             }
+            facts.put(key, Integer.valueOf(merged));
+            return true;
         }
 
         private void markUnsafe(final EntryPoint entryPoint, final MethodInfo method) {
@@ -1354,7 +1444,17 @@ public final class FunctionValueFlow {
         final CallbackKind callbackKind,
         final MethodRef methodRef
     ) {
-        return directUse(callbackKind).equals(methodRef) || isIndirectUse(callbackKind, methodRef);
+        return isDirectUse(callbackKind, methodRef) || isIndirectUse(callbackKind, methodRef);
+    }
+
+    private static boolean isDirectUse(
+        final CallbackKind callbackKind,
+        final MethodRef methodRef
+    ) {
+        final MethodRef direct = directUse(callbackKind);
+        return (direct.owner().equals(methodRef.owner())
+            && direct.name().equals(methodRef.name())
+            && direct.descriptor().equals(methodRef.descriptor()));
     }
 
     private static MethodRef directUse(final CallbackKind callbackKind) {
@@ -1405,7 +1505,7 @@ public final class FunctionValueFlow {
     }
 
     private static boolean isInlineSupplierConsumer(final MethodRef methodRef) {
-        return SUPPLIER_GET.equals(methodRef) || isIndirectSupplierUse(methodRef);
+        return isDirectUse(CallbackKind.SUPPLIER, methodRef) || isIndirectSupplierUse(methodRef);
     }
 
     private static Site site(final EntryPoint entryPoint, final Instruction instruction) {

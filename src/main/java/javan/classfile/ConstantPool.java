@@ -70,6 +70,23 @@ public final class ConstantPool {
     }
 
     /**
+     * Reports whether a string literal encoded an embedded NUL that the current
+     * native C-string ABI cannot preserve.
+     *
+     * @param index constant-pool index
+     * @return whether the entry is a string value whose modified UTF-8 contains NUL
+     */
+    public boolean stringContainsNul(final int index) {
+        final Object entry = entries[index];
+        if (entry instanceof StringEntry stringEntry) {
+            return utf8Entry(stringEntry.stringIndex())
+                .map(Utf8Entry::containsNul)
+                .orElse(false);
+        }
+        return entry instanceof Utf8Entry utf8Entry && utf8Entry.containsNul();
+    }
+
+    /**
      * Resolves an int literal.
      *
      * @param index constant pool index
@@ -250,8 +267,17 @@ public final class ConstantPool {
      * UTF-8 constant pool entry.
      *
      * @param value value
+     * @param containsNul whether the raw classfile bytes encoded an embedded NUL
      */
-    public record Utf8Entry(String value) {
+    public record Utf8Entry(String value, boolean containsNul) {
+        /**
+         * Creates an entry without embedded-NUL metadata.
+         *
+         * @param value value
+         */
+        public Utf8Entry(final String value) {
+            this(value, false);
+        }
     }
 
     /**
@@ -328,10 +354,12 @@ public final class ConstantPool {
     private BootstrapArgument bootstrapArgument(final int index) {
         final Object entry = entry(index);
         if (entry instanceof StringEntry stringEntry) {
-            final Optional<String> value = utf8Value(stringEntry.stringIndex());
-            return value.isPresent()
-                ? BootstrapArgument.string(value.orElseThrow())
-                : BootstrapArgument.unknown("");
+            final Optional<Utf8Entry> value = utf8Entry(stringEntry.stringIndex());
+            if (value.isEmpty()) {
+                return BootstrapArgument.unknown("");
+            }
+            final Utf8Entry resolved = value.orElseThrow();
+            return BootstrapArgument.string(resolved.value(), resolved.containsNul());
         }
         if (entry instanceof Utf8Entry utf8Entry) {
             return BootstrapArgument.utf8(utf8Entry.value());
@@ -386,20 +414,33 @@ public final class ConstantPool {
     }
 
     private static boolean referenceKindMatchesTag(final int referenceKind, final int referenceTag) {
-        return switch (referenceKind) {
-            case 1, 2, 3, 4 -> referenceTag == 9;
-            case 5, 8 -> referenceTag == 10;
-            case 6, 7 -> referenceTag == 10 || referenceTag == 11;
-            case 9 -> referenceTag == 11;
-            default -> false;
-        };
+        if (referenceKind >= 1 && referenceKind <= 4 && referenceTag == 9) {
+            return true;
+        }
+        if ((referenceKind == 5 || referenceKind == 8) && referenceTag == 10) {
+            return true;
+        }
+        if ((referenceKind == 6 || referenceKind == 7)
+            && (referenceTag == 10 || referenceTag == 11)) {
+            return true;
+        }
+        if (referenceKind == 9 && referenceTag == 11) {
+            return true;
+        }
+        return false;
     }
 
     private Optional<String> utf8Value(final int index) {
+        final Optional<Utf8Entry> entry = utf8Entry(index);
+        if (entry.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(entry.orElseThrow().value());
+    }
+
+    private Optional<Utf8Entry> utf8Entry(final int index) {
         final Object entry = entry(index);
-        return entry instanceof Utf8Entry utf8Entry
-            ? Optional.of(utf8Entry.value())
-            : Optional.empty();
+        return entry instanceof Utf8Entry utf8Entry ? Optional.of(utf8Entry) : Optional.empty();
     }
 
     private Object entry(final int index) {

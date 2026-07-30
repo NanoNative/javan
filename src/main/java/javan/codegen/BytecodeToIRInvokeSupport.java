@@ -6695,10 +6695,11 @@ final class BytecodeToIRInvokeSupport {
             instructions.add(IrInstruction.callStaticVoid(symbol(defaultTarget.orElseThrow()), List.of(consumer, argument)));
             return;
         }
-            if (materializedLambdaMethods.get(consumerAccept) == MaterializedLambdaDispatchKind.VOID) {
-                instructions.add(IrInstruction.callStaticVoid(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL, List.of(consumer, argument)));
-                return;
-            }
+        if (materializedLambdaDispatchKind(materializedLambdaMethods, consumerAccept)
+            == MaterializedLambdaDispatchKind.VOID) {
+            instructions.add(IrInstruction.callStaticVoid(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL, List.of(consumer, argument)));
+            return;
+        }
         throw unsupported(classFile, method, instruction);
     }
 
@@ -6731,7 +6732,8 @@ final class BytecodeToIRInvokeSupport {
             instructions.add(IrInstruction.callStaticVoid(symbol(defaultTarget.orElseThrow()), List.of(biConsumer, firstArgument, secondArgument)));
             return;
         }
-        if (materializedLambdaMethods.get(biConsumerAccept) == MaterializedLambdaDispatchKind.VOID) {
+        if (materializedLambdaDispatchKind(materializedLambdaMethods, biConsumerAccept)
+            == MaterializedLambdaDispatchKind.VOID) {
             instructions.add(IrInstruction.callStaticVoid(MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL, List.of(biConsumer, firstArgument, secondArgument)));
             return;
         }
@@ -6777,7 +6779,8 @@ final class BytecodeToIRInvokeSupport {
             ));
             return;
         }
-        if (materializedLambdaMethods.get(biFunctionApply) == MaterializedLambdaDispatchKind.OBJECT) {
+        if (materializedLambdaDispatchKind(materializedLambdaMethods, biFunctionApply)
+            == MaterializedLambdaDispatchKind.OBJECT) {
             instructions.add(IrInstruction.assignObject(
                 resultLocal,
                 IrExpression.objectCall(MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL, List.of(biFunction, firstArgument, secondArgument))
@@ -6802,7 +6805,8 @@ final class BytecodeToIRInvokeSupport {
     ) {
         final MethodRef functionApply = new MethodRef("java/util/function/Function", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;");
         if (materializedFunction) {
-            if (materializedLambdaMethods.get(functionApply) != MaterializedLambdaDispatchKind.OBJECT) {
+            if (materializedLambdaDispatchKind(materializedLambdaMethods, functionApply)
+                != MaterializedLambdaDispatchKind.OBJECT) {
                 throw unsupported(classFile, method, instruction);
             }
             instructions.add(IrInstruction.assignObject(
@@ -6854,7 +6858,8 @@ final class BytecodeToIRInvokeSupport {
         final List<EntryPoint> targets = interfaceTargets(classes, supplierGet);
         final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, supplierGet);
         final boolean hasMaterializedTarget =
-            materializedLambdaMethods.get(supplierGet) == MaterializedLambdaDispatchKind.SUPPLIER;
+            materializedLambdaDispatchKind(materializedLambdaMethods, supplierGet)
+                == MaterializedLambdaDispatchKind.SUPPLIER;
         if (hasMaterializedTarget && (!targets.isEmpty() || defaultTarget.isPresent())) {
             final String materializedLabel =
                 "label_supplier_get_materialized_" + instruction.offset() + "_" + resultLocal;
@@ -6950,7 +6955,8 @@ final class BytecodeToIRInvokeSupport {
             instructions.add(IrInstruction.assignInt(resultLocal, IrExpression.intCall(symbol(defaultTarget.orElseThrow()), List.of(predicate, argument))));
             return;
         }
-        if (materializedLambdaMethods.get(predicateTest) == MaterializedLambdaDispatchKind.BOOLEAN) {
+        if (materializedLambdaDispatchKind(materializedLambdaMethods, predicateTest)
+            == MaterializedLambdaDispatchKind.BOOLEAN) {
             instructions.add(IrInstruction.assignInt(resultLocal, IrExpression.intCall(MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL, List.of(predicate, argument))));
             return;
         }
@@ -8643,7 +8649,8 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if (isSupplierGet(methodRef)
-            && materializedLambdaMethods.get(methodRef) == MaterializedLambdaDispatchKind.SUPPLIER) {
+            && materializedLambdaDispatchKind(materializedLambdaMethods, methodRef)
+                == MaterializedLambdaDispatchKind.SUPPLIER) {
             final IrExpression supplier = popObject(classFile, method, stack);
             final String resultLocal = newObjectLocal(localDeclarations);
             lowerSupplierGetCall(
@@ -8686,7 +8693,7 @@ final class BytecodeToIRInvokeSupport {
         final MaterializedLambdaDispatchKind dispatchKind = isFunctionApply(methodRef)
             && !materializedFunctionReceiver
             ? null
-            : materializedLambdaMethods.get(methodRef);
+            : materializedLambdaDispatchKind(materializedLambdaMethods, methodRef);
         if (materializedFunctionReceiver) {
             if (dispatchKind != MaterializedLambdaDispatchKind.OBJECT) {
                 throw unsupported(classFile, method, instruction);
@@ -9812,6 +9819,21 @@ final class BytecodeToIRInvokeSupport {
         return Map.copyOf(result);
     }
 
+    static MaterializedLambdaDispatchKind materializedLambdaDispatchKind(
+        final Map<MethodRef, MaterializedLambdaDispatchKind> methods,
+        final MethodRef expected
+    ) {
+        for (final Map.Entry<MethodRef, MaterializedLambdaDispatchKind> entry : methods.entrySet()) {
+            final MethodRef candidate = entry.getKey();
+            if (candidate.owner().equals(expected.owner())
+                && candidate.name().equals(expected.name())
+                && candidate.descriptor().equals(expected.descriptor())) {
+                return entry.getValue();
+            }
+        }
+        return null;
+    }
+
     private static boolean materializedLambdaSingleLongInput(final MaterializedLambdaKey key) {
         final List<IrType> parameterTypes = MethodDescriptor.parse(key.interfaceMethodDescriptor()).parameterTypes();
         return parameterTypes.size() == 1 && parameterTypes.getFirst() == IrType.LONG;
@@ -9942,6 +9964,9 @@ final class BytecodeToIRInvokeSupport {
         final Optional<String> recipe = stringConcatRecipe(dynamicRef, arguments.size());
         if (recipe.isEmpty()) {
             throw unsupported(classFile, method, instruction);
+        }
+        if (embeddedNulStringConcatRecipe(dynamicRef)) {
+            throw unsupportedEmbeddedNulStringConcatRecipe(classFile, method, instruction);
         }
         stack.add(StackValue.objectExpression(IrExpression.stringConcat(recipe.orElseThrow(), arguments)));
     }
@@ -10723,6 +10748,28 @@ final class BytecodeToIRInvokeSupport {
             return Optional.empty();
         }
         return Optional.of(recipe);
+    }
+    private static boolean embeddedNulStringConcatRecipe(final DynamicRef dynamicRef) {
+        if (!"makeConcatWithConstants".equals(dynamicRef.bootstrapName())
+            || dynamicRef.bootstrapArgumentDetails().isEmpty()) {
+            return false;
+        }
+        return dynamicRef.bootstrapArgumentDetails().getFirst().containsNul();
+    }
+    private static DiagnosticException unsupportedEmbeddedNulStringConcatRecipe(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction
+    ) {
+        return new DiagnosticException(Diagnostic.error(
+            "JAVAN052",
+            "string concat recipe contains an embedded NUL",
+            classFile.name(),
+            method.name() + method.descriptor(),
+            instruction.mnemonic(),
+            "The current native concat runtime passes recipes as NUL-terminated C strings, so an embedded NUL would truncate the recipe.",
+            "Avoid embedding a NUL character in a string-concat constant until Javan uses length-bearing runtime strings."
+        ));
     }
     static String repeatedConcatPlaceholder(final int count) {
         final StringBuilder result = new StringBuilder();

@@ -95,8 +95,16 @@ Current gates:
 - unsupported reachable object, exception, dispatch, and string bytecode must reject
   before native code generation
 
+Current limitation: generic generated records do not yet have universal native
+`equals`/`hashCode` value semantics. Separately created but field-equal records used as
+collection keys may therefore fail to match. Compiler-owned `MethodRef` lookup compares
+the record fields explicitly; application-level support remains open.
+
 Open acceptance criteria:
 
+- generated-record `equals`/`hashCode` value semantics, including use as collection
+  keys; until then, compiler internals must compare record fields explicitly and reachable
+  application shapes that require missing record value semantics must fail before C generation
 - non-ASCII/full UTF-16 string runtime semantics beyond the current clear rejection
   for UTF-16-sensitive operations
 - general try/catch/finally exception-handler lowering

@@ -1181,10 +1181,10 @@ final class RuntimeSourceMemorySections {
             node->runtime_kind = runtime_kind;
             node->mark = 0;
             node->array_class_name = NULL;
+            javan_allocation_registry_put(value, node);
             node->next = javan_allocations;
             javan_allocations = node;
             javan_allocation_cache_store(value, node);
-            javan_allocation_registry_put(value, node);
             javan_account_allocation(size);
             javan_heap_maybe_validate();
             javan_runtime_lock_leave();
@@ -1205,8 +1205,8 @@ final class RuntimeSourceMemorySections {
                 javan_allocation_node* indexed = javan_allocation_registry_lookup(value);
                 if (indexed != NULL) {
                     javan_allocation_cache_store(value, indexed);
-                    return indexed;
                 }
+                return indexed;
             }
             javan_allocation_node* prior = NULL;
             javan_allocation_node* node = javan_allocations;
@@ -6471,6 +6471,12 @@ final class RuntimeSourceMemorySections {
         } javan_char_array;
 
         static JavanTypeDescriptor* javan_type_descriptor_for(int type_id) {
+            if (type_id > 0 && type_id <= javan_type_descriptor_count_value) {
+                JavanTypeDescriptor* dense = &javan_type_descriptors_value[type_id - 1];
+                if (dense->type_id == type_id) {
+                    return dense;
+                }
+            }
             for (int index = 0; index < javan_type_descriptor_count_value; index++) {
                 if (javan_type_descriptors_value[index].type_id == type_id) {
                     return &javan_type_descriptors_value[index];

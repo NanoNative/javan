@@ -154,11 +154,23 @@ public final class ClassByteCursor {
 
     /**
      * Reads a classfile modified UTF-8 string prefixed by a {@code u2} byte length.
+     * Embedded NUL is represented as {@code U+FFFD}.
      *
      * @return decoded string
      * @throws IOException when the bytes are truncated or malformed
      */
     public String modifiedUtf8() throws IOException {
+        return modifiedUtf8Value().value();
+    }
+
+    /**
+     * Reads a classfile modified UTF-8 string and preserves whether its raw bytes encode a NUL character.
+     * The returned text is an exact decoding for non-NUL input and a runtime-representable view for flagged input.
+     *
+     * @return representable decoded view and raw embedded-NUL metadata
+     * @throws IOException when the bytes are truncated or malformed
+     */
+    public ModifiedUtf8 modifiedUtf8Value() throws IOException {
         final int length = u2();
         require(length);
         final int start = position;
@@ -167,10 +179,13 @@ public final class ClassByteCursor {
         final char[] chars = new char[length];
         int byteIndex = start;
         int charIndex = 0;
+        boolean containsNul = false;
         while (byteIndex < end) {
             final int first = bytes[byteIndex] & 0xFF;
             if (first <= 0x7F) {
-                chars[charIndex] = (char) first;
+                final boolean nul = first == 0;
+                chars[charIndex] = nul ? '\uFFFD' : (char) first;
+                containsNul = containsNul || nul;
                 charIndex++;
                 byteIndex++;
             } else if ((first >> 4) == 12 || (first >> 4) == 13) {
@@ -181,7 +196,10 @@ public final class ClassByteCursor {
                 if ((second & 0xC0) != 0x80) {
                     throw malformed(byteIndex - start);
                 }
-                chars[charIndex] = (char) (((first & 0x1F) << 6) | (second & 0x3F));
+                final char decoded = (char) (((first & 0x1F) << 6) | (second & 0x3F));
+                final boolean nul = decoded == 0;
+                chars[charIndex] = nul ? '\uFFFD' : decoded;
+                containsNul = containsNul || nul;
                 charIndex++;
                 byteIndex += 2;
             } else if ((first >> 4) == 14) {
@@ -193,14 +211,27 @@ public final class ClassByteCursor {
                 if ((second & 0xC0) != 0x80 || (third & 0xC0) != 0x80) {
                     throw malformed(byteIndex - start);
                 }
-                chars[charIndex] = (char) (((first & 0x0F) << 12) | ((second & 0x3F) << 6) | (third & 0x3F));
+                final char decoded = (char) (((first & 0x0F) << 12) | ((second & 0x3F) << 6) | (third & 0x3F));
+                final boolean nul = decoded == 0;
+                chars[charIndex] = nul ? '\uFFFD' : decoded;
+                containsNul = containsNul || nul;
                 charIndex++;
                 byteIndex += 3;
             } else {
                 throw malformed(byteIndex - start);
             }
         }
-        return new String(chars, 0, charIndex);
+        return new ModifiedUtf8(new String(chars, 0, charIndex), containsNul);
+    }
+
+    /**
+     * Runtime-representable modified UTF-8 view with metadata that cannot safely pass through the current C-string ABI.
+     * Embedded NUL characters are represented as {@code U+FFFD}; {@link #containsNul()} remains authoritative.
+     *
+     * @param value exact decoded text for non-NUL input, otherwise text with embedded NUL replaced by {@code U+FFFD}
+     * @param containsNul whether raw classfile bytes encoded an embedded NUL
+     */
+    public record ModifiedUtf8(String value, boolean containsNul) {
     }
 
     boolean exhausted() {

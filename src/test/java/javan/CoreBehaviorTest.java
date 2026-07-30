@@ -6027,6 +6027,42 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void staticVerifierRejectsOnlySupportedConcatRecipesWithRawEmbeddedNul() {
+        final String recipe = "\u0001\u0000\u0001";
+        final DynamicRef supported = new DynamicRef(
+            "makeConcatWithConstants",
+            "(II)Ljava/lang/String;",
+            "java/lang/invoke/StringConcatFactory",
+            "makeConcatWithConstants",
+            "()V",
+            List.of(recipe),
+            List.of(BootstrapArgument.string(recipe, true))
+        );
+        final DynamicRef malformed = new DynamicRef(
+            "makeConcatWithConstants",
+            "(II)Ljava/lang/String;",
+            "other/Factory",
+            "makeConcatWithConstants",
+            "()V",
+            List.of(recipe),
+            List.of(BootstrapArgument.string(recipe, true))
+        );
+
+        assertThat(verifyInvokedynamic(supported, true))
+            .extracting(Diagnostic::code)
+            .containsExactly("JAVAN052");
+        assertThat(verifyInvokedynamic(supported, false))
+            .extracting(Diagnostic::code)
+            .containsExactly("JAVAN152");
+        assertThat(verifyInvokedynamic(malformed, true))
+            .extracting(Diagnostic::code)
+            .containsExactly("JAVAN030");
+        assertThat(verifyInvokedynamic(malformed, false))
+            .extracting(Diagnostic::code)
+            .containsExactly("JAVAN130");
+    }
+
+    @Test
     void staticVerifierIgnoresUnreachableJavacRecordObjectMethods() {
         final List<Diagnostic> diagnostics = verifyRecordObjectMethod("java/lang/Record", "toString", "()Ljava/lang/String;", false);
 

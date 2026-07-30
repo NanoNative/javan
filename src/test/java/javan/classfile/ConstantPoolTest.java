@@ -68,6 +68,33 @@ final class ConstantPoolTest {
     }
 
     @Test
+    void dynamicRefPreservesEmbeddedNulMetadataFromStringBootstrapArgument() {
+        final ConstantPool pool = new ConstantPool(new Object[]{
+            null,
+            new ConstantPool.DynamicEntry(18, 0, 2),
+            new ConstantPool.NameAndTypeEntry(3, 4),
+            new ConstantPool.Utf8Entry("dyn"),
+            new ConstantPool.Utf8Entry("(II)Ljava/lang/String;"),
+            new ConstantPool.MethodHandleEntry(6, 6),
+            new ConstantPool.RefEntry(10, 7, 8),
+            new ConstantPool.ClassEntry(9),
+            new ConstantPool.NameAndTypeEntry(10, 11),
+            new ConstantPool.Utf8Entry("java/lang/invoke/StringConcatFactory"),
+            new ConstantPool.Utf8Entry("makeConcatWithConstants"),
+            new ConstantPool.Utf8Entry("()V"),
+            new ConstantPool.Utf8Entry("\u0001\u0000\u0001", true),
+            new ConstantPool.StringEntry(12)
+        });
+
+        assertThat(pool.dynamicRef(1, List.of(new BootstrapMethod(5, List.of(13)))))
+            .hasValueSatisfying(dynamicRef -> {
+                assertThat(dynamicRef.bootstrapArguments()).containsExactly("\u0001\u0000\u0001");
+                assertThat(dynamicRef.bootstrapArgumentDetails())
+                    .containsExactly(BootstrapArgument.string("\u0001\u0000\u0001", true));
+            });
+    }
+
+    @Test
     void dynamicRefPreservesMethodHandleBootstrapArguments() {
         final ConstantPool pool = new ConstantPool(new Object[]{
             null,

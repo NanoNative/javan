@@ -34,6 +34,35 @@ final class ClassByteCursorTest {
     }
 
     @Test
+    void cursorPreservesEmbeddedNulMetadata() throws Exception {
+        final ClassByteCursor canonical = new ClassByteCursor(new byte[]{
+            0x00, 0x04,
+            'a', (byte) 0xC0, (byte) 0x80, 'b'
+        });
+        final ClassByteCursor toleratedRaw = new ClassByteCursor(new byte[]{
+            0x00, 0x03,
+            'a', 0x00, 'b'
+        });
+        final ClassByteCursor toleratedThreeByte = new ClassByteCursor(new byte[]{
+            0x00, 0x03,
+            (byte) 0xE0, (byte) 0x80, (byte) 0x80
+        });
+        final ClassByteCursor ordinary = new ClassByteCursor(new byte[]{
+            0x00, 0x02,
+            'O', 'K'
+        });
+
+        assertThat(canonical.modifiedUtf8Value())
+            .isEqualTo(new ClassByteCursor.ModifiedUtf8("a\uFFFDb", true));
+        assertThat(toleratedRaw.modifiedUtf8Value())
+            .isEqualTo(new ClassByteCursor.ModifiedUtf8("a\uFFFDb", true));
+        assertThat(toleratedThreeByte.modifiedUtf8Value())
+            .isEqualTo(new ClassByteCursor.ModifiedUtf8("\uFFFD", true));
+        assertThat(ordinary.modifiedUtf8Value())
+            .isEqualTo(new ClassByteCursor.ModifiedUtf8("OK", false));
+    }
+
+    @Test
     void cursorRejectsNegativeLengths() {
         final ClassByteCursor cursor = new ClassByteCursor(new byte[]{1, 2, 3});
 

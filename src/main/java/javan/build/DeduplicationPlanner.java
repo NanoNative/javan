@@ -54,7 +54,7 @@ public final class DeduplicationPlanner {
     }
 
     private static Plan plan(final Map<String, ClassFile> classes, final CallGraph callGraph) {
-        final List<LiteralCount> strings = new ArrayList<>();
+        final List<String> strings = new ArrayList<>();
         final List<String> helpers = new ArrayList<>();
         final List<String> modules = new ArrayList<>();
         modules.add("core");
@@ -82,13 +82,13 @@ public final class DeduplicationPlanner {
     private static void inspect(
         final Map<String, ClassFile> classes,
         final Instruction instruction,
-        final List<LiteralCount> strings,
+        final List<String> strings,
         final List<String> helpers,
         final List<String> modules
     ) {
         final Optional<String> literal = instruction.stringValue();
         if (literal.isPresent()) {
-            increment(strings, literal.orElseThrow());
+            strings.add(literal.orElseThrow());
         }
         switch (instruction.opcode()) {
             case 50, 83, 189 -> {
@@ -138,25 +138,61 @@ public final class DeduplicationPlanner {
         }
     }
 
-    private static void increment(final List<LiteralCount> counts, final String literal) {
-        for (int index = 0; index < counts.size(); index++) {
-            final LiteralCount count = counts.get(index);
-            if (count.literal().equals(literal)) {
-                counts.set(index, new LiteralCount(literal, count.count() + 1));
-                return;
-            }
-        }
-        counts.add(new LiteralCount(literal, 1));
-    }
-
-    private static long duplicateCount(final List<LiteralCount> counts) {
+    private static long duplicateCount(final List<String> literals) {
+        sortLiterals(literals, 0, literals.size());
         long result = 0L;
-        for (final LiteralCount count : counts) {
-            if (count.count() > 1) {
-                result += count.count() - 1L;
+        for (int index = 1; index < literals.size(); index++) {
+            if (literals.get(index - 1).equals(literals.get(index))) {
+                result++;
             }
         }
         return result;
+    }
+
+    private static void sortLiterals(
+        final List<String> literals,
+        final int from,
+        final int to
+    ) {
+        if (to - from <= 1) {
+            return;
+        }
+        final int middle = from + ((to - from) / 2);
+        sortLiterals(literals, from, middle);
+        sortLiterals(literals, middle, to);
+        mergeLiterals(literals, from, middle, to);
+    }
+
+    private static void mergeLiterals(
+        final List<String> literals,
+        final int from,
+        final int middle,
+        final int to
+    ) {
+        final List<String> left = new ArrayList<>();
+        for (int index = from; index < middle; index++) {
+            left.add(literals.get(index));
+        }
+        int leftIndex = 0;
+        int rightIndex = middle;
+        int target = from;
+        while (leftIndex < left.size() && rightIndex < to) {
+            final String leftValue = left.get(leftIndex);
+            final String rightValue = literals.get(rightIndex);
+            if (Strings2.compareAscii(leftValue, rightValue) <= 0) {
+                literals.set(target, leftValue);
+                leftIndex++;
+            } else {
+                literals.set(target, rightValue);
+                rightIndex++;
+            }
+            target++;
+        }
+        while (leftIndex < left.size()) {
+            literals.set(target, left.get(leftIndex));
+            leftIndex++;
+            target++;
+        }
     }
 
     private static List<String> sortedUnique(final List<String> values) {
@@ -202,9 +238,6 @@ public final class DeduplicationPlanner {
             result.append(values.get(index));
         }
         return result.toString();
-    }
-
-    private record LiteralCount(String literal, int count) {
     }
 
     /**

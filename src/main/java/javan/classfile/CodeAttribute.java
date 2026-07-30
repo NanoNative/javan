@@ -70,13 +70,15 @@ public record CodeAttribute(
      * @return matching line when a LineNumberTable exists
      */
     public Optional<Integer> lineForOffset(final int bytecodeOffset) {
-        Optional<Integer> result = Optional.empty();
+        int result = 0;
+        boolean found = false;
         for (final LineNumberEntry entry : lineNumbers) {
             if (entry.startPc() > bytecodeOffset) {
                 break;
             }
-            result = Optional.of(entry.line());
+            result = entry.line();
+            found = true;
         }
-        return result;
+        return found ? Optional.of(result) : Optional.empty();
     }
 }
