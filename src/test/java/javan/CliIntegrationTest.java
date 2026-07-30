@@ -1094,6 +1094,82 @@ final class CliIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void utf8StringLiteralMatchesJvmOutput() throws Exception {
+        assertUtf8LiteralMatchesJvm(
+            "utf8-string-literal",
+            "\\u0661\\u20AC\\uD83D\\uDE80"
+        );
+    }
+
+    @Test
+    void longUtf8StringLiteralAcrossCChunksMatchesJvmOutput() throws Exception {
+        assertUtf8LiteralMatchesJvm(
+            "utf8-string-literal-chunks",
+            "a".repeat(117) + "\\u0661\\\\\\\"\\n7"
+        );
+    }
+
+    @Test
+    void malformedSurrogateLiteralMatchesRuntimeConstructedString() throws Exception {
+        assertNativeMatchesJvm(
+            "malformed-surrogate-literal",
+            """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("\\uD800".equals(new String(new char[] {'\\uD800'})));
+                }
+            }
+            """
+        );
+    }
+
+    private void assertUtf8LiteralMatchesJvm(
+        final String projectName,
+        final String escapedLiteral
+    ) throws Exception {
+        assertNativeMatchesJvm(projectName, """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("%s");
+                }
+            }
+            """.formatted(escapedLiteral));
+    }
+
+    private void assertNativeMatchesJvm(final String projectName, final String source) throws Exception {
+        final Path project = project(projectName);
+        writeJava(project, "com.acme.Main", source);
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        List<Object> outcome = List.of(build.exitCode(), build.stderr(), -1, "", "");
+        if (build.exitCode() == 0) {
+            final ProcessResult nativeRun = process(
+                project,
+                List.of(project.resolve(".javan/bin").resolve(projectName).toString())
+            );
+            outcome = List.of(
+                build.exitCode(),
+                build.stderr(),
+                nativeRun.exitCode(),
+                nativeRun.stderr(),
+                nativeRun.stdout()
+            );
+        }
+
+        assertThat(outcome).containsExactly(0, "", 0, "", jvmOutput);
+    }
+
+    @Test
     void intToCharNarrowingBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("int-to-char");
         writeJava(project, "com.acme.Main", """
