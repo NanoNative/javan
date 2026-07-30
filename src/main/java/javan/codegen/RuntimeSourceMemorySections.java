@@ -7920,6 +7920,149 @@ final class RuntimeSourceMemorySections {
             return javan_string_to_lower_case(value);
         }
 
+        static int javan_utf8_decimal_digit(const unsigned char** cursor) {
+            static const unsigned short decimal_starts[] = {
+                0x0660, 0x06F0, 0x07C0, 0x0966, 0x09E6, 0x0A66, 0x0AE6, 0x0B66,
+                0x0BE6, 0x0C66, 0x0CE6, 0x0D66, 0x0DE6, 0x0E50, 0x0ED0, 0x0F20,
+                0x1040, 0x1090, 0x17E0, 0x1810, 0x1946, 0x19D0, 0x1A80, 0x1A90,
+                0x1B50, 0x1BB0, 0x1C40, 0x1C50, 0xA620, 0xA8D0, 0xA900, 0xA9D0,
+                0xA9F0, 0xAA50, 0xABF0, 0xFF10
+            };
+            const unsigned char* value = *cursor;
+            unsigned int code_point;
+            if (*value >= '0' && *value <= '9') {
+                *cursor = value + 1;
+                return (int) (*value - '0');
+            }
+            if (*value >= 0xC2U && *value <= 0xDFU) {
+                if (value[1] == 0U || (value[1] & 0xC0U) != 0x80U) {
+                    return -1;
+                }
+                code_point = ((unsigned int) (*value & 0x1FU) << 6)
+                    | (unsigned int) (value[1] & 0x3FU);
+                *cursor = value + 2;
+            } else if (*value >= 0xE0U && *value <= 0xEFU) {
+                if (value[1] == 0U || value[2] == 0U
+                    || (value[1] & 0xC0U) != 0x80U
+                    || (value[2] & 0xC0U) != 0x80U
+                    || (*value == 0xE0U && value[1] < 0xA0U)
+                    || (*value == 0xEDU && value[1] >= 0xA0U)) {
+                    return -1;
+                }
+                code_point = ((unsigned int) (*value & 0x0FU) << 12)
+                    | ((unsigned int) (value[1] & 0x3FU) << 6)
+                    | (unsigned int) (value[2] & 0x3FU);
+                *cursor = value + 3;
+            } else {
+                return -1;
+            }
+            int low = 0;
+            int high = (int) (sizeof(decimal_starts) / sizeof(decimal_starts[0])) - 1;
+            while (low <= high) {
+                const int middle = low + (high - low) / 2;
+                const unsigned int start = decimal_starts[middle];
+                if (code_point < start) {
+                    high = middle - 1;
+                } else if (code_point > start + 9U) {
+                    low = middle + 1;
+                } else {
+                    return (int) (code_point - start);
+                }
+            }
+            return -1;
+        }
+
+        static int javan_decimal_parse(
+            const char* value,
+            long long negative_limit,
+            long long positive_limit,
+            long long* parsed
+        ) {
+            if (value == NULL) {
+                return 1;
+            }
+            const unsigned char* cursor = (const unsigned char*) value;
+            if (*cursor == 0U) {
+                return 2;
+            }
+            int negative = 0;
+            if (*cursor == '-' || *cursor == '+') {
+                negative = *cursor == '-';
+                cursor++;
+                if (*cursor == 0U) {
+                    return 2;
+                }
+            }
+            const long long limit = negative ? negative_limit : positive_limit;
+            const long long multiply_limit = limit / 10LL;
+            long long result = 0LL;
+            while (*cursor != 0U) {
+                const int digit = javan_utf8_decimal_digit(&cursor);
+                if (digit < 0 || result < multiply_limit) {
+                    return 2;
+                }
+                result *= 10LL;
+                if (result < limit + digit) {
+                    return 2;
+                }
+                result -= digit;
+            }
+            *parsed = negative ? result : -result;
+            return 0;
+        }
+
+        int javan_decimal_parse_status(
+            const char* value,
+            long long negative_limit,
+            long long positive_limit
+        ) {
+            long long parsed = 0LL;
+            return javan_decimal_parse(value, negative_limit, positive_limit, &parsed);
+        }
+
+        long long javan_decimal_parse_value(
+            const char* value,
+            long long negative_limit,
+            long long positive_limit
+        ) {
+            long long parsed = 0LL;
+            if (javan_decimal_parse(value, negative_limit, positive_limit, &parsed) != 0) {
+                javan_panic("decimal parse value requested for invalid input");
+            }
+            return parsed;
+        }
+
+        void* javan_decimal_parse_message(const char* value, int status) {
+            if (status == 1) {
+                return (void*) "Cannot parse null string";
+            }
+            if (value == NULL) {
+                javan_panic("decimal parse failure is missing its input");
+            }
+            static const char prefix[] = "For input string: \\"";
+            static const char suffix[] = "\\"";
+            const unsigned long prefix_length = (unsigned long) strlen(prefix);
+            const unsigned long value_length = (unsigned long) strlen(value);
+            const unsigned long suffix_length = (unsigned long) strlen(suffix);
+            if (value_length > ULONG_MAX - prefix_length - suffix_length - 1UL) {
+                javan_panic("decimal parse failure message is too large");
+            }
+            void* source_root = (void*) value;
+            void** roots[] = {
+                (void**) &source_root
+            };
+            javan_root_frame_push(roots, 1);
+            char* result = javan_string_alloc(
+                prefix_length + value_length + suffix_length + 1UL
+            );
+            memcpy(result, prefix, prefix_length);
+            memcpy(result + prefix_length, source_root, value_length);
+            memcpy(result + prefix_length + value_length, suffix, suffix_length);
+            result[prefix_length + value_length + suffix_length] = '\\0';
+            javan_root_frame_pop(roots);
+            return result;
+        }
+
         void* javan_string_to_upper_case(const char* value) {
             if (value == NULL) {
                 javan_panic("null string");

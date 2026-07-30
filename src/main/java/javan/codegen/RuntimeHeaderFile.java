@@ -90,6 +90,17 @@ final class RuntimeHeaderFile {
         long long javan_math_multiply_exact_long_long(long long left, long long right);
         int javan_math_to_int_exact_overflows(long long value);
         int javan_math_to_int_exact(long long value);
+        int javan_decimal_parse_status(
+            const char* value,
+            long long negative_limit,
+            long long positive_limit
+        );
+        long long javan_decimal_parse_value(
+            const char* value,
+            long long negative_limit,
+            long long positive_limit
+        );
+        void* javan_decimal_parse_message(const char* value, int status);
         int javan_int_neg(int value);
         int javan_int_shl(int value, int shift);
         long long javan_long_shl(long long value, int shift);

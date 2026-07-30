@@ -43,7 +43,7 @@ public final class JdkCallSupport {
         java/lang/IndexOutOfBoundsException=java/lang/RuntimeException
         java/lang/NegativeArraySizeException=java/lang/RuntimeException
         java/lang/NullPointerException=java/lang/RuntimeException
-        java/lang/NumberFormatException=java/lang/RuntimeException
+        java/lang/NumberFormatException=java/lang/IllegalArgumentException
         java/lang/SecurityException=java/lang/RuntimeException
         java/lang/StringIndexOutOfBoundsException=java/lang/IndexOutOfBoundsException
         java/lang/UnsupportedOperationException=java/lang/RuntimeException
@@ -276,6 +276,7 @@ public final class JdkCallSupport {
         ),
         intrinsic("Arrays.equals", "java/util/Arrays", "equals", "([B[B)Z"),
         intrinsic("Arrays.fill", "java/util/Arrays", "fill", "([BB)V", "([BIIB)V"),
+        intrinsic("Integer.parseInt", "java/lang/Integer", "parseInt", "(Ljava/lang/String;)I"),
         intrinsic("Integer.toString", "java/lang/Integer", "toString", "(I)Ljava/lang/String;"),
         runtime("Integer.toString.instance", "java/lang/Integer", "toString", "()Ljava/lang/String;"),
         runtime("Integer.valueOf", "java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;"),
@@ -295,6 +296,7 @@ public final class JdkCallSupport {
         ),
         intrinsic("Long.compare", "java/lang/Long", "compare", "(JJ)I"),
         intrinsic("Long.compareUnsigned", "java/lang/Long", "compareUnsigned", "(JJ)I"),
+        intrinsic("Long.parseLong", "java/lang/Long", "parseLong", "(Ljava/lang/String;)J"),
         intrinsic("Long.toString", "java/lang/Long", "toString", "(J)Ljava/lang/String;"),
         runtime("Long.toString.instance", "java/lang/Long", "toString", "()Ljava/lang/String;"),
         runtime("Long.valueOf", "java/lang/Long", "valueOf", "(J)Ljava/lang/Long;"),
@@ -1625,7 +1627,9 @@ public final class JdkCallSupport {
         if ("java/util/Objects".equals(owner) && "toString".equals(name)) {
             return List.of("strings");
         }
-        if (isStringRuntimeOwner(owner) || isNumberToStringCall(owner, name)) {
+        if (isStringRuntimeOwner(owner)
+            || isNumberToStringCall(owner, name)
+            || isDecimalParseCall(methodRef)) {
             return List.of("strings");
         }
         if (isBoxedPrimitiveOwner(owner)) {
@@ -1754,6 +1758,9 @@ public final class JdkCallSupport {
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
+        if (isDecimalParseCall(methodRef)) {
+            return List.of("java/lang/NumberFormatException");
+        }
         if ("java/lang/String".equals(methodRef.owner())
             && "toLowerCase".equals(methodRef.name())
             && "(Ljava/util/Locale;)Ljava/lang/String;".equals(methodRef.descriptor())) {
@@ -1778,10 +1785,21 @@ public final class JdkCallSupport {
             }
         }
         if ("java/lang/Thread".equals(methodRef.owner())
-            && ("sleep".equals(methodRef.name()) || "join".equals(methodRef.name()))) {
+            && ("sleep".equals(methodRef.name()) || "join".equals(methodRef.name()))
+            && supportedCall(methodRef).isPresent()) {
             return List.of("java/lang/InterruptedException");
         }
         return List.of();
+    }
+
+    private static boolean isDecimalParseCall(final MethodRef methodRef) {
+        final boolean integerParse = "java/lang/Integer".equals(methodRef.owner())
+            && "parseInt".equals(methodRef.name())
+            && "(Ljava/lang/String;)I".equals(methodRef.descriptor());
+        final boolean longParse = "java/lang/Long".equals(methodRef.owner())
+            && "parseLong".equals(methodRef.name())
+            && "(Ljava/lang/String;)J".equals(methodRef.descriptor());
+        return integerParse || longParse;
     }
 
     private static String platformThrowableParent(final String owner) {
