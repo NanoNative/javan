@@ -230,6 +230,7 @@ public record RecordObjectMethodsCall(List<RecordObjectMethodsCall.Component> co
             return parsed.isPresent()
                 && descriptor.equals(parsed.orElseThrow().erasure())
                 && parsed.orElseThrow().shape().isArray()
+                && parsed.orElseThrow().shape().valid()
                 ? arrayShape(descriptor)
                 : invalidShape(descriptor);
         }
@@ -250,9 +251,18 @@ public record RecordObjectMethodsCall(List<RecordObjectMethodsCall.Component> co
             }
             return parsed.orElseThrow().shape();
         }
-        return field.signature().isEmpty()
-            ? referenceShape(descriptor, owner.orElseThrow())
-            : invalidShape(descriptor);
+        if (field.signature().isEmpty()) {
+            return referenceShape(descriptor, owner.orElseThrow());
+        }
+        final Optional<ParsedType> parsed = parseSignature(field.signature().orElseThrow());
+        if (parsed.isEmpty()
+            || !descriptor.equals(parsed.orElseThrow().erasure())
+            || !parsed.orElseThrow().shape().valid()
+            || !sameOptionalString(owner, parsed.orElseThrow().shape().referenceOwner())
+            || parsed.orElseThrow().shape().isList()) {
+            return invalidShape(descriptor);
+        }
+        return parsed.orElseThrow().shape();
     }
 
     private static boolean sameOptionalString(final Optional<String> left, final Optional<String> right) {
@@ -330,7 +340,10 @@ public record RecordObjectMethodsCall(List<RecordObjectMethodsCall.Component> co
                     return Optional.empty();
                 }
                 final String descriptor = "[" + element.orElseThrow().erasure();
-                return Optional.of(new ParsedType(arrayShape(descriptor), descriptor));
+                final Shape shape = element.orElseThrow().shape().valid()
+                    ? arrayShape(descriptor)
+                    : invalidShape(descriptor);
+                return Optional.of(new ParsedType(shape, descriptor));
             }
             if (marker == 'T') {
                 final int end = value.indexOf(';', index + 1);
@@ -381,10 +394,24 @@ public record RecordObjectMethodsCall(List<RecordObjectMethodsCall.Component> co
                 return Optional.empty();
             }
             index++;
-            final Shape shape = isListOwner(owner) && arguments.size() == 1
-                ? listShape(descriptor, owner, arguments.getFirst())
-                : invalidShape(descriptor);
+            final Shape shape;
+            if (isListOwner(owner) && arguments.size() == 1) {
+                shape = listShape(descriptor, owner, arguments.getFirst());
+            } else if (closed(arguments)) {
+                shape = referenceShape(descriptor, owner);
+            } else {
+                shape = invalidShape(descriptor);
+            }
             return Optional.of(new ParsedType(shape, descriptor));
+        }
+
+        private static boolean closed(final List<Shape> arguments) {
+            for (final Shape argument : arguments) {
+                if (!argument.valid()) {
+                    return false;
+                }
+            }
+            return true;
         }
 
         private Optional<Shape> typeArgument() {
