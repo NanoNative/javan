@@ -5,6 +5,7 @@ final class RuntimeSourceCoreSection {
         #include "javan_runtime.h"
         #include <dirent.h>
         #include <errno.h>
+        #include <float.h>
         #include <limits.h>
         #include <math.h>
         #include <signal.h>
@@ -35,6 +36,10 @@ final class RuntimeSourceCoreSection {
         #include <sys/stat.h>
         #include <sys/time.h>
         #include <time.h>
+        #if CHAR_BIT != 8 || FLT_RADIX != 2 || DBL_MANT_DIG != 53 || DBL_MIN_EXP != -1021 || DBL_MAX_EXP != 1024
+        #error "Javan requires IEEE 754 binary64 double"
+        #endif
+        _Static_assert(sizeof(double) == 8, "Javan requires 64-bit double");
         #if defined(_MSC_VER)
         #define JAVAN_THREAD_LOCAL __declspec(thread)
         #else
@@ -690,6 +695,39 @@ final class RuntimeSourceCoreSection {
                 magnitude++;
             }
             return negative ? -(int) magnitude : (int) magnitude;
+        }
+
+        double javan_math_floor_double(double value) {
+            uint64_t bits = UINT64_C(0);
+            memcpy(&bits, &value, sizeof(bits));
+            const uint64_t exponent = (bits >> 52U) & UINT64_C(0x7ff);
+            if (exponent == UINT64_C(0x7ff)) {
+                return value;
+            }
+            const uint64_t magnitude = bits & UINT64_C(0x7fffffffffffffff);
+            if (magnitude == UINT64_C(0)) {
+                return value;
+            }
+            const int negative = (bits & UINT64_C(0x8000000000000000)) != UINT64_C(0);
+            if (exponent == UINT64_C(0)) {
+                bits = negative ? UINT64_C(0xbff0000000000000) : UINT64_C(0);
+            } else {
+                const int unbiased_exponent = (int) exponent - 1023;
+                if (unbiased_exponent < 0) {
+                    bits = negative ? UINT64_C(0xbff0000000000000) : UINT64_C(0);
+                } else if (unbiased_exponent < 52) {
+                    const unsigned int fractional_shift = (unsigned int) (52 - unbiased_exponent);
+                    const uint64_t fractional_mask = (UINT64_C(1) << fractional_shift) - UINT64_C(1);
+                    if ((bits & fractional_mask) != UINT64_C(0)) {
+                        bits &= ~fractional_mask;
+                        if (negative) {
+                            bits += UINT64_C(1) << fractional_shift;
+                        }
+                    }
+                }
+            }
+            memcpy(&value, &bits, sizeof(value));
+            return value;
         }
 
         int javan_math_abs_int(int value) {

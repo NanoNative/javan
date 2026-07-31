@@ -2457,6 +2457,13 @@ final class BytecodeToIRInvokeSupport {
             )));
             return true;
         }
+        if ("floor".equals(methodRef.name()) && "(D)D".equals(methodRef.descriptor())) {
+            stack.add(StackValue.doubleExpression(IrExpression.doubleCall(
+                "javan_math_floor_double",
+                List.of(popDouble(classFile, method, stack))
+            )));
+            return true;
+        }
         if ("abs".equals(methodRef.name()) && "(I)I".equals(methodRef.descriptor())) {
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_math_abs_int", List.of(popInt(classFile, method, stack)))));
             return true;
