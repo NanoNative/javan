@@ -461,7 +461,8 @@ jobs:
             enabled: true
           - target: windows-arm64
             os: windows-11-arm
-            enabled: true
+            enabled: false
+            reason: Temurin 25 is unavailable on the GitHub-hosted Windows ARM64 runner
     permissions:
       contents: read
     uses: ./.github/workflows/platform-proof.yml

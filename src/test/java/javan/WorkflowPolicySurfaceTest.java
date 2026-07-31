@@ -133,6 +133,7 @@ final class WorkflowPolicySurfaceTest {
             .contains("target: windows-x64", "os: windows-2025")
             .contains("target: windows-arm64", "os: windows-11-arm")
             .contains("enabled: true")
+            .contains("Temurin 25 is unavailable on the GitHub-hosted Windows ARM64 runner")
             .contains("enabled: ${{ matrix.enabled }}");
         assertThat(Files.readString(PLATFORM_PROOF)).contains("if: inputs.enabled");
     }
