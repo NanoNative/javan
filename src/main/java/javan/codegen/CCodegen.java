@@ -109,6 +109,7 @@ public final class CCodegen {
         emitGeneratedObjectHelpers(program, features, c);
         emitRecordShapeExactTypeHelper(program, c);
         emitEnumOrdinalHelpers(program, c);
+        emitGeneratedEnumOrdinalHelper(program, c);
         emitExactEnumLookupHelpers(program, c);
         emitExactFunctionOrNullHelpers(program, c);
         emitExactTemporalBridgeHelpers(c);
@@ -187,6 +188,7 @@ public final class CCodegen {
         emitGeneratedObjectHelpers(program, features, c);
         emitRecordShapeExactTypeHelper(program, c);
         emitEnumOrdinalHelpers(program, c);
+        emitGeneratedEnumOrdinalHelper(program, c);
         emitExactEnumLookupHelpers(program, c);
         emitExactFunctionOrNullHelpers(program, c);
         emitThreadHelpers(program, c);
@@ -455,6 +457,31 @@ public final class CCodegen {
             c.append("    return -1;").append(System.lineSeparator());
             c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
         }
+    }
+
+    private static void emitGeneratedEnumOrdinalHelper(final IrProgram program, final StringBuilder c) {
+        final java.util.Map<String, Integer> typeIds = typeIds(program);
+        c.append("static int javan_generated_enum_ordinal(int enum_type_id, void* value) {").append(System.lineSeparator());
+        c.append("    switch (enum_type_id) {").append(System.lineSeparator());
+        for (final IrClass classInfo : program.classes()) {
+            if (classInfo.enumConstants().isEmpty()) {
+                continue;
+            }
+            c.append("        case ").append(typeIds.get(classInfo.jvmName()).intValue()).append(":")
+                .append(System.lineSeparator());
+            for (int index = 0; index < classInfo.enumConstants().size(); index++) {
+                c.append("            if (value == ")
+                    .append(staticFieldSymbol(classInfo.jvmName(), classInfo.enumConstants().get(index)))
+                    .append(") { return ")
+                    .append(index)
+                    .append("; }")
+                    .append(System.lineSeparator());
+            }
+            c.append("            return -1;").append(System.lineSeparator());
+        }
+        c.append("        default: return -1;").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
     }
 
     private static void emitRecordShapeExactTypeHelper(final IrProgram program, final StringBuilder c) {
@@ -1092,6 +1119,8 @@ public final class CCodegen {
         if (entry) {
             c.append("    javan_register_generated_type_descriptors();").append(System.lineSeparator());
             c.append("    javan_register_generated_roots();").append(System.lineSeparator());
+            c.append("    javan_register_enum_ordinal_resolver(javan_generated_enum_ordinal);")
+                .append(System.lineSeparator());
             emitRecordReferenceObjectMethodResolverRegistration(program, c);
             emitClassInitializers(program, c);
             c.append("    javan_gc_safe_point();").append(System.lineSeparator());
@@ -1175,6 +1204,8 @@ public final class CCodegen {
         c.append("    }").append(System.lineSeparator());
         c.append("    javan_register_generated_type_descriptors();").append(System.lineSeparator());
         c.append("    javan_register_generated_roots();").append(System.lineSeparator());
+        c.append("    javan_register_enum_ordinal_resolver(javan_generated_enum_ordinal);")
+            .append(System.lineSeparator());
         emitRecordReferenceObjectMethodResolverRegistration(program, c);
         emitClassInitializers(program, c);
         c.append("    javan_gc_safe_point();").append(System.lineSeparator());

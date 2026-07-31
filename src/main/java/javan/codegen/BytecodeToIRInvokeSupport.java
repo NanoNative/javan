@@ -482,7 +482,8 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if (isEnumIntrinsic(classes, methodRef)) {
-            stack.add(StackValue.objectExpression(popObject(classFile, method, stack)));
+            final IrExpression receiver = popObject(classFile, method, stack);
+            pushObjectCall(instructions, stack, localDeclarations, "javan_string_from", List.of(receiver));
             return;
         }
         if (isEnumOrdinal(classes, methodRef)) {
@@ -5783,6 +5784,15 @@ final class BytecodeToIRInvokeSupport {
                 return true;
             }
         }
+        if ("java/util/EnumMap".equals(methodRef.owner())
+            && "<init>".equals(methodRef.name())
+            && "(Ljava/lang/Class;)V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.callStaticVoid(
+                "javan_enummap_initialize",
+                List.of(receiver, arguments.getFirst())
+            ));
+            return true;
+        }
         if ("java/util/concurrent/ConcurrentHashMap".equals(methodRef.owner())
             && "<init>".equals(methodRef.name())
             && "(I)V".equals(methodRef.descriptor())) {
@@ -6653,7 +6663,9 @@ final class BytecodeToIRInvokeSupport {
                 pushObjectCall(instructions, stack, localDeclarations, "javan_map_get_or_default", List.of(receiver, arguments.get(0), arguments.get(1)));
                 return true;
             }
-            if ("put(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(signature)) {
+            if ("put(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(signature)
+                || ("java/util/EnumMap".equals(methodRef.owner())
+                && "put(Ljava/lang/Enum;Ljava/lang/Object;)Ljava/lang/Object;".equals(signature))) {
                 pushObjectCall(instructions, stack, localDeclarations, "javan_map_put", List.of(receiver, arguments.get(0), arguments.get(1)));
                 return true;
             }
@@ -7801,6 +7813,9 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         if ("java/util/TreeMap".equals(owner)) {
+            return true;
+        }
+        if ("java/util/EnumMap".equals(owner)) {
             return true;
         }
         return "java/util/concurrent/ConcurrentHashMap".equals(owner);

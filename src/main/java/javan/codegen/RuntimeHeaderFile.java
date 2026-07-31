@@ -362,6 +362,8 @@ final class RuntimeHeaderFile {
         void* javan_hashmap_new(void);
         void* javan_hashmap_new_with_expected_mappings(int num_mappings);
         void* javan_linkedhashmap_new_with_expected_mappings(int num_mappings);
+        void javan_enummap_initialize(void* map, void* key_type);
+        void javan_register_enum_ordinal_resolver(int (*resolver)(int, void*));
         void javan_map_initialize_capacity(void* map, int capacity);
         void javan_map_initialize_capacity_with_load_factor(void* map, int capacity, float load_factor);
         void javan_map_initialize_capacity_with_load_factor_and_concurrency(void* map, int capacity, float load_factor, int concurrency_level);

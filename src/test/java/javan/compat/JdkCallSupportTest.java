@@ -1416,6 +1416,78 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void enumMapClassConstructorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/EnumMap",
+            "<init>",
+            "(Ljava/lang/Class;)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void enumMapCopyConstructorRemainsUnsupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/EnumMap",
+            "<init>",
+            "(Ljava/util/EnumMap;)V"
+        ))).isFalse();
+    }
+
+    @Test
+    void enumMapTypedPutIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/EnumMap",
+            "put",
+            "(Ljava/lang/Enum;Ljava/lang/Object;)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void enumMapBridgePutIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/EnumMap",
+            "put",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void enumMapSizeIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/EnumMap",
+            "size",
+            "()I"
+        ))).isTrue();
+    }
+
+    @Test
+    void enumMapRemoveIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/EnumMap",
+            "remove",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void enumMapDirectKeySetRemainsUnsupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/EnumMap",
+            "keySet",
+            "()Ljava/util/Set;"
+        ))).isFalse();
+    }
+
+    @Test
+    void enumMapCloneRemainsUnsupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/EnumMap",
+            "clone",
+            "()Ljava/util/EnumMap;"
+        ))).isFalse();
+    }
+
+    @Test
     void mapRemoveIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Map",
