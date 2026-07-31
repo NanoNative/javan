@@ -294,6 +294,7 @@ final class RuntimeHeaderFile {
         void* javan_string_to_lower_case(const char* value);
         void* javan_string_to_lower_case_locale(const char* value, void* locale);
         void* javan_string_to_upper_case(const char* value);
+        void* javan_string_get_bytes_charset(const char* value, void* charset);
         int javan_char_sequence_length(void* value);
         int javan_char_sequence_char_at(void* value, int index);
         int javan_character_is_whitespace(int value);
@@ -609,6 +610,7 @@ final class RuntimeHeaderFile {
         void* javan_text_style_short(void);
         void* javan_locale_english(void);
         void* javan_locale_root(void);
+        void* javan_standard_charset_utf8(void);
         void* javan_caller_runs_policy_new(void);
         void* javan_atomic_boolean_new(void);
         void javan_atomic_boolean_init(void* value, int initial_value);

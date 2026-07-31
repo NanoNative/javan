@@ -223,6 +223,13 @@ final class RuntimeSourceMemorySections {
 
         typedef struct {
             int magic;
+            int charset_kind;
+            int reserved0;
+            int reserved1;
+        } javan_charset_state;
+
+        typedef struct {
+            int magic;
             int target_id;
             int capture_count;
             void** captures;
@@ -419,9 +426,11 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_DATE_TIME_FORMATTER_BUILDER_MAGIC 0x4a445442
         #define JAVAN_TEXT_STYLE_MAGIC 0x4a545354
         #define JAVAN_LOCALE_MAGIC 0x4a4c434c
+        #define JAVAN_CHARSET_MAGIC 0x4a435354
         #define JAVAN_DATE_TIME_TEXT_STYLE_SHORT 1
         #define JAVAN_LOCALE_ENGLISH 1
         #define JAVAN_LOCALE_ROOT 2
+        #define JAVAN_CHARSET_UTF8 1
         #define JAVAN_DATE_TIME_BUILDER_STAGE_NEW 0
         #define JAVAN_DATE_TIME_BUILDER_STAGE_CASE_INSENSITIVE 1
         #define JAVAN_DATE_TIME_BUILDER_STAGE_PATTERN_HEAD 2
@@ -521,6 +530,7 @@ final class RuntimeSourceMemorySections {
         static int (*javan_record_exact_type_resolver_value)(void*, int) = NULL;
         static void* javan_locale_english_value = NULL;
         static void* javan_locale_root_value = NULL;
+        static void* javan_charset_utf8_value = NULL;
         static void*** javan_static_roots_value = NULL;
         static int javan_static_root_count_value = 0;
         static JAVAN_THREAD_LOCAL javan_root_frame* javan_root_frames_value = NULL;
@@ -1278,6 +1288,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_TYPE_JAVA_LANG_THREAD -1008
         #define JAVAN_TYPE_JAVA_LANG_THREAD_LOCAL -1009
         #define JAVAN_TYPE_JAVA_LANG_INHERITABLE_THREAD_LOCAL -1017
+        #define JAVAN_TYPE_JAVA_NIO_CHARSET_CHARSET -1018
         #define JAVAN_TYPE_JAVA_TIME_FORMAT_DATE_TIME_FORMATTER -1010
         #define JAVAN_TYPE_JAVA_TIME_FORMAT_DATE_TIME_FORMATTER_BUILDER -1011
         #define JAVAN_TYPE_JAVA_TIME_FORMAT_TEXT_STYLE -1012
@@ -1313,7 +1324,8 @@ final class RuntimeSourceMemorySections {
                 || type_id == JAVAN_TYPE_JAVA_TIME_FORMAT_DATE_TIME_FORMATTER
                 || type_id == JAVAN_TYPE_JAVA_TIME_FORMAT_DATE_TIME_FORMATTER_BUILDER
                 || type_id == JAVAN_TYPE_JAVA_TIME_FORMAT_TEXT_STYLE
-                || type_id == JAVAN_TYPE_JAVA_UTIL_LOCALE;
+                || type_id == JAVAN_TYPE_JAVA_UTIL_LOCALE
+                || type_id == JAVAN_TYPE_JAVA_NIO_CHARSET_CHARSET;
         }
 
         static void javan_update_allocation_metadata(void* value, int kind, int type_id) {
@@ -1907,6 +1919,9 @@ final class RuntimeSourceMemorySections {
             }
             if (node->type_id == JAVAN_TYPE_JAVA_UTIL_LOCALE) {
                 return (void*) "Locale";
+            }
+            if (node->type_id == JAVAN_TYPE_JAVA_NIO_CHARSET_CHARSET) {
+                return (void*) "UTF-8";
             }
             javan_panic("unsupported printable object");
             return (void*) "unsupported printable object";
@@ -3652,6 +3667,9 @@ final class RuntimeSourceMemorySections {
             if (type_id == JAVAN_TYPE_JAVA_UTIL_LOCALE) {
                 return javan_runtime_class_literal("java.util.Locale", JAVAN_TYPE_JAVA_UTIL_LOCALE, 0, 0, 0);
             }
+            if (type_id == JAVAN_TYPE_JAVA_NIO_CHARSET_CHARSET) {
+                return javan_runtime_class_literal("java.nio.charset.Charset", JAVAN_TYPE_JAVA_NIO_CHARSET_CHARSET, 0, 0, 0);
+            }
             if (type_id == JAVAN_TYPE_JAVA_NIO_FILE_ATTRIBUTE_FILE_TIME) {
                 return javan_runtime_class_literal("java.nio.file.attribute.FileTime", JAVAN_TYPE_JAVA_NIO_FILE_ATTRIBUTE_FILE_TIME, 0, 0, 0);
             }
@@ -4393,6 +4411,19 @@ final class RuntimeSourceMemorySections {
             return state;
         }
 
+        static javan_charset_state* javan_charset_utf8_checked(void* value) {
+            if (value == NULL
+                || value != javan_charset_utf8_value
+                || javan_registered_type_id(value) != JAVAN_TYPE_JAVA_NIO_CHARSET_CHARSET) {
+                javan_panic("unsupported charset; only StandardCharsets.UTF_8 is supported");
+            }
+            javan_charset_state* state = (javan_charset_state*) value;
+            if (state->magic != JAVAN_CHARSET_MAGIC || state->charset_kind != JAVAN_CHARSET_UTF8) {
+                javan_panic("unsupported charset; only StandardCharsets.UTF_8 is supported");
+            }
+            return state;
+        }
+
         void* javan_datetime_formatter_builtin(int kind) {
             if (kind < JAVAN_DATE_TIME_FORMATTER_ISO_ZONED_DATE_TIME || kind > JAVAN_DATE_TIME_FORMATTER_DATE_TO_STRING) {
                 javan_panic("unsupported date-time formatter builtin");
@@ -4451,6 +4482,25 @@ final class RuntimeSourceMemorySections {
 
         void* javan_locale_root(void) {
             return javan_locale_singleton(&javan_locale_root_value, JAVAN_LOCALE_ROOT);
+        }
+
+        void* javan_standard_charset_utf8(void) {
+            javan_runtime_lock_enter();
+            if (javan_charset_utf8_value != NULL) {
+                void* value = javan_charset_utf8_value;
+                javan_runtime_lock_leave();
+                return value;
+            }
+            javan_charset_state* state = (javan_charset_state*) javan_alloc(sizeof(javan_charset_state));
+            state->magic = JAVAN_CHARSET_MAGIC;
+            state->charset_kind = JAVAN_CHARSET_UTF8;
+            state->reserved0 = 0;
+            state->reserved1 = 0;
+            javan_register_object((void*) state, JAVAN_TYPE_JAVA_NIO_CHARSET_CHARSET);
+            javan_charset_utf8_value = (void*) state;
+            (void) javan_object_handle_new((void*) state);
+            javan_runtime_lock_leave();
+            return javan_charset_utf8_value;
         }
 
         void* javan_datetime_formatter_builder_parse_case_insensitive(void* value) {
@@ -7220,6 +7270,91 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        static int javan_wtf8_sequence_width(const unsigned char* value, int remaining) {
+            if (remaining <= 0) {
+                return 0;
+            }
+            unsigned int first = value[0];
+            if (first <= 0x7FU) {
+                return 1;
+            }
+            if (first >= 0xC2U && first <= 0xDFU) {
+                return remaining >= 2 && (value[1] & 0xC0U) == 0x80U ? 2 : 0;
+            }
+            if (first >= 0xE0U && first <= 0xEFU) {
+                if (remaining < 3
+                    || (value[1] & 0xC0U) != 0x80U
+                    || (value[2] & 0xC0U) != 0x80U
+                    || (first == 0xE0U && value[1] < 0xA0U)) {
+                    return 0;
+                }
+                if (first == 0xEDU && value[1] >= 0xA0U) {
+                    return -3;
+                }
+                return 3;
+            }
+            if (first >= 0xF0U && first <= 0xF4U) {
+                if (remaining < 4
+                    || (value[1] & 0xC0U) != 0x80U
+                    || (value[2] & 0xC0U) != 0x80U
+                    || (value[3] & 0xC0U) != 0x80U
+                    || (first == 0xF0U && value[1] < 0x90U)
+                    || (first == 0xF4U && value[1] > 0x8FU)) {
+                    return 0;
+                }
+                return 4;
+            }
+            return 0;
+        }
+
+        static int javan_utf8_encoded_length_from_wtf8(const unsigned char* value, int length) {
+            int input_index = 0;
+            int output_length = 0;
+            while (input_index < length) {
+                int width = javan_wtf8_sequence_width(value + input_index, length - input_index);
+                if (width == 0) {
+                    javan_panic("invalid UTF-8 string");
+                }
+                if (width < 0) {
+                    input_index -= width;
+                    output_length++;
+                } else {
+                    input_index += width;
+                    output_length += width;
+                }
+            }
+            return output_length;
+        }
+
+        void* javan_string_get_bytes_charset(const char* value, void* charset) {
+            if (value == NULL) {
+                javan_panic("null string");
+            }
+            (void) javan_charset_utf8_checked(charset);
+            unsigned long measured_length = strlen(value);
+            if (measured_length > (unsigned long) INT_MAX) {
+                javan_panic("string is too large");
+            }
+            const unsigned char* input = (const unsigned char*) value;
+            int input_length = (int) measured_length;
+            int output_length = javan_utf8_encoded_length_from_wtf8(input, input_length);
+            javan_byte_array* result = (javan_byte_array*) javan_byte_array_new(output_length);
+            int input_index = 0;
+            int output_index = 0;
+            while (input_index < input_length) {
+                int width = javan_wtf8_sequence_width(input + input_index, input_length - input_index);
+                if (width < 0) {
+                    result->values[output_index++] = 63;
+                    input_index -= width;
+                } else {
+                    memcpy(result->values + output_index, input + input_index, (unsigned long) width);
+                    input_index += width;
+                    output_index += width;
+                }
+            }
+            return result;
+        }
+
         JavanByteArray javan_byte_array_export(void* array) {
             javan_byte_array* values = (javan_byte_array*) javan_array_checked(array);
             JavanByteArray result;
@@ -7553,7 +7688,7 @@ final class RuntimeSourceMemorySections {
             while (index < end) {
                 unsigned int ch = values[index];
                 if (ch == 0) {
-                    javan_panic("unsupported null character in string");
+                    javan_panic("native String profile does not support U+0000");
                 }
                 if (ch <= 0x7F) {
                     length++;
