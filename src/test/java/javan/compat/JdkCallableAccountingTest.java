@@ -166,9 +166,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksStringGetBytesCharsetAsExplicitRejected() {
+    void marksStringGetBytesCharsetAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/String", "getBytes", "(Ljava/nio/charset/Charset;)[B")))
-            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test

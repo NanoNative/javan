@@ -4998,7 +4998,8 @@ public final class StaticVerifier {
     private static boolean unsupportedCheckcastTarget(final Instruction instruction) {
         return instruction.opcode() == 192
             && instruction.className().isPresent()
-            && "java/util/Locale".equals(instruction.className().orElseThrow());
+            && ("java/util/Locale".equals(instruction.className().orElseThrow())
+            || "java/nio/charset/Charset".equals(instruction.className().orElseThrow()));
     }
 
     private static boolean unsupportedInstanceOfTarget(final Map<String, ClassFile> classes, final Instruction instruction) {
@@ -5549,8 +5550,8 @@ public final class StaticVerifier {
         final int reachable
     ) {
         final String target = instruction.className().orElse("unknown");
-        final String reason = "The current runtime cannot perform a deterministic checkcast to the built-in Locale objects or transport the required ClassCastException.";
-        final String fix = "Keep Locale values statically typed and pass Locale.ROOT or Locale.ENGLISH directly until built-in checkcast exception transport is implemented.";
+        final String reason = "The current runtime cannot perform a deterministic checkcast to this built-in singleton type or transport the required ClassCastException.";
+        final String fix = "Keep built-in singleton values statically typed and pass the supported constants directly.";
         if (reachable == 1) {
             return error(classFile, method, "JAVAN045", "unsupported checkcast target", target, reason, fix);
         }

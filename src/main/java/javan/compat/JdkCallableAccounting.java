@@ -89,7 +89,6 @@ final class JdkCallableAccounting {
             if ("getBytes".equals(methodName)) {
                 return "(II[BI)V".equals(descriptor)
                     || "(Ljava/lang/String;)[B".equals(descriptor)
-                    || "(Ljava/nio/charset/Charset;)[B".equals(descriptor)
                     || "()[B".equals(descriptor);
             }
             if ("toLowerCase".equals(methodName) || "toUpperCase".equals(methodName)) {

@@ -329,7 +329,12 @@ final class BytecodeToIRInvokeSupport {
                 return;
             }
         }
-        if (pushDateTimeFormatterField(fieldRef, stack)) {
+        if ("java/nio/charset/StandardCharsets".equals(fieldRef.owner())
+            && "Ljava/nio/charset/Charset;".equals(fieldRef.descriptor())
+            && !"UTF_8".equals(fieldRef.name())) {
+            throw unsupportedStandardCharset(classFile, method, instruction, fieldRef);
+        }
+        if (pushBuiltinObjectField(fieldRef, stack)) {
             return;
         }
         if (isSupportedJdkEnumConstant(fieldRef)) {
@@ -892,6 +897,25 @@ final class BytecodeToIRInvokeSupport {
             && "stripTrailing".equals(methodRef.name())
             && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
             pushObjectCall(instructions, stack, localDeclarations, "javan_string_strip_trailing", List.of(popObject(classFile, method, stack)));
+            return;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "getBytes".equals(methodRef.name())
+            && "(Ljava/nio/charset/Charset;)[B".equals(methodRef.descriptor())) {
+            final IrExpression charset = popObject(classFile, method, stack);
+            final IrExpression receiver = popObject(classFile, method, stack);
+            lowerStringGetBytesCharset(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                localDeclarations,
+                pendingExceptionHandlerStacks,
+                sourceLines,
+                receiver,
+                charset
+            );
             return;
         }
         if ("java/lang/String".equals(methodRef.owner())
@@ -3999,6 +4023,70 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         throw unsupportedStringConstant(classFile, method, instruction);
+    }
+
+    private static void lowerStringGetBytesCharset(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines,
+        final IrExpression receiver,
+        final IrExpression charset
+    ) {
+        final String receiverLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(receiverLocal, receiver));
+        final String charsetLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(charsetLocal, charset));
+        final List<StackValue> successStack = List.copyOf(stack);
+        final String receiverPresentLabel = "label_string_get_bytes_receiver_present_"
+            + instruction.offset() + "_" + localDeclarations.size();
+        instructions.add(IrInstruction.branchIf(
+            receiverPresentLabel,
+            IrExpression.objectComparison("!=", IrExpression.objectLocal(receiverLocal), IrExpression.objectNull())
+        ));
+        routePendingPlatformException(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            "java/lang/NullPointerException",
+            IrExpression.stringLiteral("Cannot invoke java/lang/String.getBytes on null")
+        );
+        instructions.add(IrInstruction.label(receiverPresentLabel));
+        stack.addAll(successStack);
+        final String charsetPresentLabel = "label_string_get_bytes_charset_present_"
+            + instruction.offset() + "_" + localDeclarations.size();
+        instructions.add(IrInstruction.branchIf(
+            charsetPresentLabel,
+            IrExpression.objectComparison("!=", IrExpression.objectLocal(charsetLocal), IrExpression.objectNull())
+        ));
+        routePendingPlatformException(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            "java/lang/NullPointerException",
+            IrExpression.stringLiteral("charset")
+        );
+        instructions.add(IrInstruction.label(charsetPresentLabel));
+        stack.addAll(successStack);
+        pushObjectCall(
+            instructions,
+            stack,
+            localDeclarations,
+            "javan_string_get_bytes_charset",
+            List.of(IrExpression.objectLocal(receiverLocal), IrExpression.objectLocal(charsetLocal))
+        );
     }
 
     private static void lowerStringToLowerCaseLocale(
@@ -12025,7 +12113,13 @@ final class BytecodeToIRInvokeSupport {
         ));
     }
 
-    private static boolean pushDateTimeFormatterField(final FieldRef fieldRef, final List<StackValue> stack) {
+    private static boolean pushBuiltinObjectField(final FieldRef fieldRef, final List<StackValue> stack) {
+        if ("java/nio/charset/StandardCharsets".equals(fieldRef.owner())
+            && "UTF_8".equals(fieldRef.name())
+            && "Ljava/nio/charset/Charset;".equals(fieldRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_standard_charset_utf8", List.of())));
+            return true;
+        }
         if (DATE_TIME_FORMATTER_OWNER.equals(fieldRef.owner())
             && "Ljava/time/format/DateTimeFormatter;".equals(fieldRef.descriptor())) {
             final Optional<Integer> formatterId = dateTimeFormatterBuiltinId(fieldRef.name());
@@ -12056,6 +12150,23 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         return false;
+    }
+
+    private static DiagnosticException unsupportedStandardCharset(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final FieldRef fieldRef
+    ) {
+        return new DiagnosticException(Diagnostic.error(
+            "JAVAN031",
+            "unsupported standard charset",
+            classFile.name(),
+            method.name() + method.descriptor(),
+            instruction.mnemonic() + " " + fieldRef.owner() + "." + fieldRef.name() + ":" + fieldRef.descriptor(),
+            "Only StandardCharsets.UTF_8 is supported by the current native string representation.",
+            "Use StandardCharsets.UTF_8 or wait for the length-bearing Java string model."
+        ));
     }
 
     private static Optional<Integer> dateTimeFormatterBuiltinId(final String fieldName) {

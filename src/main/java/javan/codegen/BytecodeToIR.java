@@ -1411,8 +1411,14 @@ public final class BytecodeToIR {
                     break;
                 }
                 if (instruction.className().isPresent()
-                    && "java/util/Locale".equals(instruction.className().orElseThrow())) {
-                    throw unsupportedCheckcastTarget(classFile, method, instruction, "java/util/Locale");
+                    && ("java/util/Locale".equals(instruction.className().orElseThrow())
+                    || "java/nio/charset/Charset".equals(instruction.className().orElseThrow()))) {
+                    throw unsupportedCheckcastTarget(
+                        classFile,
+                        method,
+                        instruction,
+                        instruction.className().orElseThrow()
+                    );
                 }
                 // checkcast is a verifier/runtime type check; exact supported code keeps the reference unchanged.
                 break;
@@ -3576,8 +3582,8 @@ public final class BytecodeToIR {
             classFile.name(),
             method.name() + method.descriptor(),
             instruction.mnemonic() + " " + target,
-            "The native runtime cannot perform a deterministic checkcast to the built-in Locale objects or transport the required ClassCastException.",
-            "Keep Locale values statically typed and pass Locale.ROOT or Locale.ENGLISH directly until built-in checkcast exception transport is implemented."
+            "The native runtime cannot perform a deterministic checkcast to this built-in singleton type or transport the required ClassCastException.",
+            "Keep built-in singleton values statically typed and pass the supported constants directly."
         ));
     }
 

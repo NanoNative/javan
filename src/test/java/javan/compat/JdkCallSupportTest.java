@@ -3820,6 +3820,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void stringGetBytesCharsetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/String",
+            "getBytes",
+            "(Ljava/nio/charset/Charset;)[B"
+        ))).isTrue();
+    }
+
+    @Test
+    void stringGetBytesCharsetRequiresStringsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/lang/String",
+            "getBytes",
+            "(Ljava/nio/charset/Charset;)[B"
+        ))).containsExactly("strings");
+    }
+
+    @Test
     void integerDescribeConstableIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/Integer",
@@ -4159,6 +4177,15 @@ final class JdkCallSupportTest {
             "java/lang/String",
             "toLowerCase",
             "(Ljava/util/Locale;)Ljava/lang/String;"
+        ))).containsExactly("java/lang/NullPointerException");
+    }
+
+    @Test
+    void stringGetBytesCharsetTransportsNullPointerException() {
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
+            "java/lang/String",
+            "getBytes",
+            "(Ljava/nio/charset/Charset;)[B"
         ))).containsExactly("java/lang/NullPointerException");
     }
 
