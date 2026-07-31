@@ -219,6 +219,13 @@ public final class StaticVerifier {
             final int application = classFile.application() ? 1 : 0;
             final int unsupportedStringConstant = containsUnsupportedRuntimeStringConstant(methodCode) ? 1 : 0;
             final List<Instruction> instructions = methodCode.instructions();
+            diagnostics.addAll(boundedOptionalOrElseThrowDiagnostics(
+                classes,
+                classFile,
+                method,
+                instructions,
+                reachable
+            ));
             for (int instructionIndex = 0; instructionIndex < instructions.size(); instructionIndex++) {
                 final Instruction instruction = instructions.get(instructionIndex);
                 diagnostics.addAll(verifyInstruction(
@@ -238,6 +245,519 @@ public final class StaticVerifier {
             }
         }
         return diagnostics;
+    }
+
+    private static List<Diagnostic> boundedOptionalOrElseThrowDiagnostics(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final List<Instruction> instructions,
+        final int reachable
+    ) {
+        for (int index = 0; index < instructions.size(); index++) {
+            final Instruction instruction = instructions.get(index);
+            if (instruction.methodRef().isPresent()
+                && JdkCallSupport.isContextLimitedOptionalOrElseThrowCall(
+                    instruction.methodRef().orElseThrow()
+                )
+                && !isImmediateOptionalOrElseThrowSupplier(classes, instructions, index)) {
+                return List.of(boundedOptionalOrElseThrowDiagnostic(
+                    classFile,
+                    method,
+                    instruction,
+                    reachable
+                ));
+            }
+        }
+        return List.of();
+    }
+
+    private static boolean isImmediateOptionalOrElseThrowSupplier(
+        final Map<String, ClassFile> classes,
+        final List<Instruction> instructions,
+        final int terminalIndex
+    ) {
+        final Instruction terminal = instructions.get(terminalIndex);
+        if (terminal.opcode() != 182
+            || !"invokevirtual".equals(terminal.mnemonic())
+            || terminal.methodRef().isEmpty()
+            || !JdkCallSupport.isContextLimitedOptionalOrElseThrowCall(
+                terminal.methodRef().orElseThrow()
+            )) {
+            return false;
+        }
+        final int dynamicIndex = terminalIndex - 1;
+        if (dynamicIndex < 0) {
+            return false;
+        }
+        final Instruction dynamicInstruction = instructions.get(dynamicIndex);
+        if (dynamicInstruction.opcode() != 186
+            || !"invokedynamic".equals(dynamicInstruction.mnemonic())
+            || dynamicInstruction.dynamicRef().isEmpty()) {
+            return false;
+        }
+        final Optional<LambdaMetafactoryCall> resolved = LambdaMetafactoryCall.resolve(
+            dynamicInstruction.dynamicRef().orElseThrow()
+        );
+        if (resolved.isEmpty()) {
+            return false;
+        }
+        final LambdaMetafactoryCall lambda = resolved.orElseThrow();
+        final Optional<String> suppliedThrowableType =
+            exactPlatformThrowableSupplierType(lambda);
+        if (!lambda.isSupplier()
+            || lambda.implementationReferenceKind() != 6
+            || suppliedThrowableType.isEmpty()) {
+            return false;
+        }
+        final int firstCaptureIndex = dynamicIndex - lambda.capturedParameterDescriptors().size();
+        final int receiverIndex = firstCaptureIndex - 1;
+        if (receiverIndex < 0
+            || !isImmediateOptionalReceiver(classes, instructions.get(receiverIndex))
+            || hasOptionalSupplierControlFlowEntry(instructions, receiverIndex, terminalIndex)) {
+            return false;
+        }
+        for (int index = firstCaptureIndex; index < dynamicIndex; index++) {
+            if (aloadLocalIndex(instructions.get(index)) < 0) {
+                return false;
+            }
+        }
+        final ClassFile implementationOwner = classes.get(lambda.implementation().owner());
+        if (implementationOwner == null || !implementationOwner.application()) {
+            return false;
+        }
+        final Optional<MethodInfo> implementation = implementationOwner.method(
+            lambda.implementation().name(),
+            lambda.implementation().descriptor()
+        );
+        return implementation.isPresent()
+            && implementation.orElseThrow().isStatic()
+            && implementation.orElseThrow().code().isPresent()
+            && hasExactPlatformThrowableReturns(
+                classes,
+                implementationOwner,
+                implementation.orElseThrow(),
+                suppliedThrowableType.orElseThrow(),
+                Set.of()
+            );
+    }
+
+    private static Optional<String> exactPlatformThrowableSupplierType(
+        final LambdaMetafactoryCall lambda
+    ) {
+        final String instantiated = lambda.instantiatedMethodDescriptor();
+        if (!instantiated.startsWith("()L") || !instantiated.endsWith(";")) {
+            return Optional.empty();
+        }
+        final String returnDescriptor = instantiated.substring(2);
+        final String throwableType = returnDescriptor.substring(1, returnDescriptor.length() - 1);
+        if (!JdkCallSupport.isPlatformThrowable(throwableType)) {
+            return Optional.empty();
+        }
+        final StringBuilder expected = new StringBuilder("(");
+        for (final String capture : lambda.capturedParameterDescriptors()) {
+            if (!isExactReferenceOrArrayDescriptor(capture)) {
+                return Optional.empty();
+            }
+            expected.append(capture);
+        }
+        expected.append(')').append(returnDescriptor);
+        if (!expected.toString().equals(lambda.implementation().descriptor())) {
+            return Optional.empty();
+        }
+        return Optional.of(throwableType);
+    }
+
+    private static boolean hasExactPlatformThrowableReturns(
+        final Map<String, ClassFile> classes,
+        final ClassFile owner,
+        final MethodInfo method,
+        final String expectedType,
+        final Set<MethodRef> visiting
+    ) {
+        final MethodRef current = new MethodRef(owner.name(), method.name(), method.descriptor());
+        if (visiting.contains(current) || method.code().isEmpty()) {
+            return false;
+        }
+        final Set<MethodRef> path = new HashSet<>(visiting);
+        path.add(current);
+        final List<Instruction> instructions = method.code().orElseThrow().instructions();
+        boolean returnsValue = false;
+        for (final Instruction instruction : instructions) {
+            if (instruction.opcode() == 192) {
+                return false;
+            }
+            if (instruction.opcode() == 176) {
+                returnsValue = true;
+            }
+        }
+        if (returnsValue) {
+            for (final Instruction instruction : instructions) {
+                final int opcode = instruction.opcode();
+                if (opcode >= 153 && opcode <= 171 || opcode >= 198 && opcode <= 201) {
+                    return false;
+                }
+            }
+        }
+        for (int index = 0; index < instructions.size(); index++) {
+            if (instructions.get(index).opcode() != 176) {
+                continue;
+            }
+            if (index == 0
+                || !isExactPlatformThrowableReturn(
+                    classes,
+                    instructions.get(index - 1),
+                    expectedType,
+                    path
+                )) {
+                return false;
+            }
+        }
+        if (!returnsValue) {
+            for (final Instruction instruction : instructions) {
+                if (!isExactStaticThrowableHelperCall(instruction, expectedType)
+                    || hasExactPlatformThrowableHelper(
+                        classes,
+                        instruction.methodRef().orElseThrow(),
+                        expectedType,
+                        path
+                    )) {
+                    continue;
+                }
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean isExactPlatformThrowableReturn(
+        final Map<String, ClassFile> classes,
+        final Instruction producer,
+        final String expectedType,
+        final Set<MethodRef> visiting
+    ) {
+        if (producer.opcode() == 1 && "aconst_null".equals(producer.mnemonic())) {
+            return true;
+        }
+        if (producer.methodRef().isEmpty()) {
+            return false;
+        }
+        final MethodRef target = producer.methodRef().orElseThrow();
+        if (producer.opcode() == 183
+            && "invokespecial".equals(producer.mnemonic())
+            && "<init>".equals(target.name())) {
+            return expectedType.equals(target.owner());
+        }
+        if (producer.opcode() != 184
+            || !"invokestatic".equals(producer.mnemonic())
+            || !target.descriptor().endsWith(")L" + expectedType + ";")) {
+            return false;
+        }
+        final ClassFile targetOwner = classes.get(target.owner());
+        if (targetOwner == null || !targetOwner.application()) {
+            return false;
+        }
+        final Optional<MethodInfo> targetMethod = targetOwner.method(
+            target.name(),
+            target.descriptor()
+        );
+        return targetMethod.isPresent()
+            && targetMethod.orElseThrow().isStatic()
+            && hasExactPlatformThrowableReturns(
+                classes,
+                targetOwner,
+                targetMethod.orElseThrow(),
+                expectedType,
+                visiting
+            );
+    }
+
+    private static boolean isExactStaticThrowableHelperCall(
+        final Instruction instruction,
+        final String expectedType
+    ) {
+        return instruction.opcode() == 184
+            && "invokestatic".equals(instruction.mnemonic())
+            && instruction.methodRef().isPresent()
+            && instruction.methodRef().orElseThrow().descriptor()
+                .endsWith(")L" + expectedType + ";");
+    }
+
+    private static boolean hasExactPlatformThrowableHelper(
+        final Map<String, ClassFile> classes,
+        final MethodRef target,
+        final String expectedType,
+        final Set<MethodRef> visiting
+    ) {
+        final ClassFile targetOwner = classes.get(target.owner());
+        if (targetOwner == null || !targetOwner.application()) {
+            return false;
+        }
+        final Optional<MethodInfo> targetMethod = targetOwner.method(
+            target.name(),
+            target.descriptor()
+        );
+        return targetMethod.isPresent()
+            && targetMethod.orElseThrow().isStatic()
+            && hasExactPlatformThrowableReturns(
+                classes,
+                targetOwner,
+                targetMethod.orElseThrow(),
+                expectedType,
+                visiting
+            );
+    }
+
+    private static boolean isExactReferenceOrArrayDescriptor(final String descriptor) {
+        int component = 0;
+        while (component < descriptor.length() && descriptor.charAt(component) == '[') {
+            component++;
+        }
+        if (component >= descriptor.length()) {
+            return false;
+        }
+        if (descriptor.charAt(component) == 'L') {
+            final int end = descriptor.indexOf(';', component + 1);
+            return end > component + 1 && end == descriptor.length() - 1;
+        }
+        return component > 0
+            && component == descriptor.length() - 1
+            && "BCDFIJSZ".indexOf(descriptor.charAt(component)) >= 0;
+    }
+
+    private static boolean isImmediateOptionalReceiver(
+        final Map<String, ClassFile> classes,
+        final Instruction instruction
+    ) {
+        if (aloadLocalIndex(instruction) >= 0) {
+            return true;
+        }
+        if (instruction.fieldRef().isPresent()) {
+            return isExactOptionalFieldRead(classes, instruction);
+        }
+        if (instruction.methodRef().isEmpty()
+            || !instruction.methodRef().orElseThrow().descriptor()
+                .endsWith(")Ljava/util/Optional;")) {
+            return false;
+        }
+        final MethodRef target = instruction.methodRef().orElseThrow();
+        if ("java/util/Optional".equals(target.owner())) {
+            if ("empty".equals(target.name())
+                || "of".equals(target.name())
+                || "ofNullable".equals(target.name())) {
+                return instruction.opcode() == 184
+                    && "invokestatic".equals(instruction.mnemonic());
+            }
+            return instruction.opcode() == 182
+                && "invokevirtual".equals(instruction.mnemonic());
+        }
+        final ClassFile owner = classes.get(target.owner());
+        if (owner == null) {
+            return false;
+        }
+        final Optional<MethodInfo> resolved = owner.method(target.name(), target.descriptor());
+        if (resolved.isEmpty()) {
+            return false;
+        }
+        if (resolved.orElseThrow().isStatic()) {
+            return instruction.opcode() == 184
+                && "invokestatic".equals(instruction.mnemonic());
+        }
+        if (owner.isInterface()) {
+            return instruction.opcode() == 185
+                && "invokeinterface".equals(instruction.mnemonic());
+        }
+        return instruction.opcode() == 182
+            && "invokevirtual".equals(instruction.mnemonic());
+    }
+
+    private static boolean isExactOptionalFieldRead(
+        final Map<String, ClassFile> classes,
+        final Instruction instruction
+    ) {
+        final FieldRef field = instruction.fieldRef().orElseThrow();
+        if (!"Ljava/util/Optional;".equals(field.descriptor())) {
+            return false;
+        }
+        final ClassFile owner = classes.get(field.owner());
+        if (owner == null) {
+            return false;
+        }
+        for (final javan.classfile.FieldInfo candidate : owner.fields()) {
+            if (!candidate.name().equals(field.name())
+                || !candidate.descriptor().equals(field.descriptor())) {
+                continue;
+            }
+            if (candidate.isStatic()) {
+                return instruction.opcode() == 178
+                    && "getstatic".equals(instruction.mnemonic());
+            }
+            return instruction.opcode() == 180
+                && "getfield".equals(instruction.mnemonic());
+        }
+        return false;
+    }
+
+    private static boolean hasOptionalSupplierControlFlowEntry(
+        final List<Instruction> instructions,
+        final int startIndex,
+        final int terminalIndex
+    ) {
+        final int startOffset = instructions.get(startIndex).offset();
+        final int endOffset = nextInstructionOffset(instructions.get(terminalIndex));
+        for (int index = 0; index < instructions.size(); index++) {
+            final Instruction instruction = instructions.get(index);
+            final int opcode = instruction.opcode();
+            final boolean inExpression = index >= startIndex && index <= terminalIndex;
+            if (inExpression
+                && (opcode == 168 || opcode == 169 || opcode == 170 || opcode == 171
+                    || opcode == 200 || opcode == 201)) {
+                return true;
+            }
+            final int target = boundedBranchTarget(instruction);
+            if (target >= startOffset && target < endOffset) {
+                return true;
+            }
+            if (inExpression && target >= 0) {
+                return true;
+            }
+            final int wideTarget = wideBranchTarget(instruction);
+            if (wideTarget >= startOffset && wideTarget < endOffset) {
+                return true;
+            }
+            if (switchTargetsRange(instruction, startOffset, endOffset)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static int wideBranchTarget(final Instruction instruction) {
+        if ((instruction.opcode() != 200 && instruction.opcode() != 201)
+            || instruction.operands().length != 4) {
+            return -1;
+        }
+        return instruction.offset() + int32(instruction.operands(), 0);
+    }
+
+    private static boolean switchTargetsRange(
+        final Instruction instruction,
+        final int startOffset,
+        final int endOffset
+    ) {
+        if (instruction.opcode() != 170 && instruction.opcode() != 171) {
+            return false;
+        }
+        final byte[] operands = instruction.operands();
+        final int padding = switchPadding(instruction.offset());
+        if (padding + 8 > operands.length) {
+            return true;
+        }
+        if (relativeTargetInRange(
+            instruction,
+            int32(operands, padding),
+            startOffset,
+            endOffset
+        )) {
+            return true;
+        }
+        if (instruction.opcode() == 170) {
+            if (padding + 12 > operands.length) {
+                return true;
+            }
+            final int low = int32(operands, padding + 4);
+            final int high = int32(operands, padding + 8);
+            final long entries = (long) high - low + 1L;
+            if (entries < 0L || entries > (operands.length - padding - 12) / 4L) {
+                return true;
+            }
+            int offset = padding + 12;
+            for (long index = 0; index < entries; index++) {
+                if (relativeTargetInRange(
+                    instruction,
+                    int32(operands, offset),
+                    startOffset,
+                    endOffset
+                )) {
+                    return true;
+                }
+                offset += 4;
+            }
+            return false;
+        }
+        final int pairs = int32(operands, padding + 4);
+        if (pairs < 0 || pairs > (operands.length - padding - 8) / 8) {
+            return true;
+        }
+        int offset = padding + 8;
+        for (int index = 0; index < pairs; index++) {
+            if (relativeTargetInRange(
+                instruction,
+                int32(operands, offset + 4),
+                startOffset,
+                endOffset
+            )) {
+                return true;
+            }
+            offset += 8;
+        }
+        return false;
+    }
+
+    private static boolean relativeTargetInRange(
+        final Instruction instruction,
+        final int relativeTarget,
+        final int startOffset,
+        final int endOffset
+    ) {
+        final int target = instruction.offset() + relativeTarget;
+        return target >= startOffset && target < endOffset;
+    }
+
+    private static int switchPadding(final int offset) {
+        int cursor = offset + 1;
+        while (cursor % 4 != 0) {
+            cursor++;
+        }
+        return cursor - offset - 1;
+    }
+
+    private static int int32(final byte[] operands, final int offset) {
+        return ((operands[offset] & 0xFF) << 24)
+            | ((operands[offset + 1] & 0xFF) << 16)
+            | ((operands[offset + 2] & 0xFF) << 8)
+            | (operands[offset + 3] & 0xFF);
+    }
+
+    private static Diagnostic boundedOptionalOrElseThrowDiagnostic(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final int reachable
+    ) {
+        final MethodRef subject = instruction.methodRef().orElseThrow();
+        final String reason = "The native Optional subset requires an immediate Optional receiver, contiguous reference captures, a direct LambdaMetafactory Supplier backed by application-owned static code, and a platform Throwable result.";
+        final String fix = "Keep Optional.orElseThrow(Supplier) as one direct expression with a static application exception supplier.";
+        if (reachable == 1) {
+            return error(
+                classFile,
+                method,
+                "JAVAN031",
+                "unsupported reachable JDK call",
+                subject.display(),
+                reason,
+                fix
+            );
+        }
+        return warning(
+            classFile,
+            method,
+            "JAVAN131",
+            "unsupported JDK call in unreachable code",
+            subject.display(),
+            reason,
+            fix
+        );
     }
 
     private static List<Diagnostic> unsupportedThreadLifecycleDiagnostics(
@@ -617,11 +1137,12 @@ public final class StaticVerifier {
         if (normalBranchEntersHandlerBody(code)) {
             return true;
         }
-        if (boundedTypedHandlerSetCandidate(code) && hasUnsupportedIndividualHandler(classes, code)) {
+        if (boundedTypedHandlerSetCandidate(code)
+            && hasUnsupportedIndividualHandler(classes, method, code)) {
             return !supportedBoundedTypedHandlerSet(classes, method, code);
         }
         for (final CodeException handler : code.exceptionTable()) {
-            if (!supportedExceptionHandler(classes, code, handler)) {
+            if (!supportedExceptionHandler(classes, method, code, handler)) {
                 return true;
             }
         }
@@ -630,10 +1151,11 @@ public final class StaticVerifier {
 
     private static boolean hasUnsupportedIndividualHandler(
         final Map<String, ClassFile> classes,
+        final MethodInfo method,
         final CodeAttribute code
     ) {
         for (final CodeException handler : code.exceptionTable()) {
-            if (!supportedExceptionHandler(classes, code, handler)) {
+            if (!supportedExceptionHandler(classes, method, code, handler)) {
                 return true;
             }
         }
@@ -762,19 +1284,53 @@ public final class StaticVerifier {
             if (handlerIndex < 0) {
                 continue;
             }
-            final int terminal = boundedHandlerTerminalOffset(instructions, handlerIndex);
-            if (terminal < 0) {
+            final int handlerEnd = boundedHandlerBodyEndOffset(
+                code,
+                handler,
+                handlerIndex
+            );
+            if (handlerEnd < 0) {
                 continue;
             }
             for (final Instruction instruction : instructions) {
                 final int target = boundedBranchTarget(instruction);
-                if ((instruction.offset() < handler.handlerPc() || instruction.offset() > terminal)
-                    && target >= handler.handlerPc() && target < terminal) {
+                if ((instruction.offset() < handler.handlerPc()
+                    || instruction.offset() >= handlerEnd)
+                    && target >= handler.handlerPc()
+                    && target < handlerEnd) {
                     return true;
                 }
             }
         }
         return false;
+    }
+
+    private static int boundedHandlerBodyEndOffset(
+        final CodeAttribute code,
+        final CodeException handler,
+        final int handlerIndex
+    ) {
+        final int terminal = boundedHandlerTerminalOffset(
+            code.instructions(),
+            handlerIndex
+        );
+        if (terminal < 0) {
+            return -1;
+        }
+        final Optional<Instruction> normalExit = instructionAtOffset(
+            code,
+            handler.endPc()
+        );
+        if (normalExit.isPresent()) {
+            final int target = boundedBranchTarget(normalExit.orElseThrow());
+            final int firstBodyOffset = nextInstructionOffset(
+                code.instructions().get(handlerIndex)
+            );
+            if (target > firstBodyOffset && target <= terminal) {
+                return target;
+            }
+        }
+        return terminal;
     }
 
     private static int boundedHandlerTerminalOffset(
@@ -990,7 +1546,12 @@ public final class StaticVerifier {
         return -1;
     }
 
-    private static boolean supportedExceptionHandler(final Map<String, ClassFile> classes, final CodeAttribute code, final CodeException handler) {
+    private static boolean supportedExceptionHandler(
+        final Map<String, ClassFile> classes,
+        final MethodInfo method,
+        final CodeAttribute code,
+        final CodeException handler
+    ) {
         if (supportedEnumSwitchMapHandler(classes, code, handler)) {
             return true;
         }
@@ -1010,6 +1571,14 @@ public final class StaticVerifier {
             return true;
         }
         if (supportedFinallyRethrowHandler(classes, code, handler)) {
+            return true;
+        }
+        if (supportsImmediateOptionalOrElseThrowSupplierHandler(
+            classes,
+            method,
+            code,
+            handler
+        )) {
             return true;
         }
         if (handler.catchType().isEmpty()) {
@@ -1051,6 +1620,143 @@ public final class StaticVerifier {
             return true;
         }
         return false;
+    }
+
+    private static boolean supportsImmediateOptionalOrElseThrowSupplierHandler(
+        final Map<String, ClassFile> classes,
+        final MethodInfo method,
+        final CodeAttribute code,
+        final CodeException handler
+    ) {
+        if (handler.catchType().isEmpty()
+            || !JdkCallSupport.isPlatformThrowable(handler.catchType().orElseThrow())
+            || code.maxStack() > 64
+            || code.maxLocals() > 256
+            || handler.startPc() >= handler.endPc()
+            || !boundedEndBoundary(code, handler.endPc())
+            || !boundedProtectedRangeEntryIsIsolated(code, handler)
+            || !supportedOptionalSupplierProtectedRange(classes, method, code, handler)) {
+            return false;
+        }
+        final Optional<Instruction> handlerEntry = instructionAtOffset(
+            code,
+            handler.handlerPc()
+        );
+        if (handlerEntry.isEmpty() || astoreLocalIndex(handlerEntry.orElseThrow()) < 0) {
+            return false;
+        }
+        final List<Instruction> instructions = code.instructions();
+        int optionalCalls = 0;
+        for (int index = 0; index < instructions.size(); index++) {
+            final Instruction instruction = instructions.get(index);
+            if (instruction.offset() < handler.startPc()
+                || instruction.offset() >= handler.endPc()) {
+                continue;
+            }
+            if (instruction.methodRef().isPresent()
+                && JdkCallSupport.isContextLimitedOptionalOrElseThrowCall(
+                    instruction.methodRef().orElseThrow()
+                )) {
+                optionalCalls++;
+                if (optionalCalls > 1
+                    || !isImmediateOptionalOrElseThrowSupplier(classes, instructions, index)) {
+                    return false;
+                }
+                if (JdkCallSupport.isPlatformThrowableAssignable(
+                    "java/lang/NullPointerException",
+                    handler.catchType().orElseThrow()
+                ) && !hasProvablyNonNullImmediateOptionalReceiver(instructions, index)) {
+                    return false;
+                }
+            }
+        }
+        return optionalCalls == 1;
+    }
+
+    private static boolean hasProvablyNonNullImmediateOptionalReceiver(
+        final List<Instruction> instructions,
+        final int terminalIndex
+    ) {
+        final int dynamicIndex = terminalIndex - 1;
+        if (dynamicIndex < 0 || instructions.get(dynamicIndex).dynamicRef().isEmpty()) {
+            return false;
+        }
+        final Optional<LambdaMetafactoryCall> resolved = LambdaMetafactoryCall.resolve(
+            instructions.get(dynamicIndex).dynamicRef().orElseThrow()
+        );
+        if (resolved.isEmpty()) {
+            return false;
+        }
+        final int receiverIndex = dynamicIndex
+            - resolved.orElseThrow().capturedParameterDescriptors().size()
+            - 1;
+        if (receiverIndex < 0) {
+            return false;
+        }
+        final Instruction receiver = instructions.get(receiverIndex);
+        if (receiver.opcode() != 184
+            || !"invokestatic".equals(receiver.mnemonic())
+            || receiver.methodRef().isEmpty()) {
+            return false;
+        }
+        final MethodRef target = receiver.methodRef().orElseThrow();
+        return "java/util/Optional".equals(target.owner())
+            && ("empty".equals(target.name()) || "ofNullable".equals(target.name()))
+            && target.descriptor().endsWith(")Ljava/util/Optional;");
+    }
+
+    private static boolean supportedOptionalSupplierProtectedRange(
+        final Map<String, ClassFile> classes,
+        final MethodInfo method,
+        final CodeAttribute code,
+        final CodeException handler
+    ) {
+        int protectedInstructions = 0;
+        for (final Instruction instruction : code.instructions()) {
+            if (instruction.offset() < handler.startPc()
+                || instruction.offset() >= handler.endPc()) {
+                continue;
+            }
+            protectedInstructions++;
+            if (protectedInstructions > 64) {
+                return false;
+            }
+            if (instruction.opcode() == 192
+                && JdkCallSupport.isPlatformThrowableAssignable(
+                    "java/lang/ClassCastException",
+                    handler.catchType().orElseThrow()
+                )) {
+                return false;
+            }
+            if (supportedBoundedProtectedInstruction(
+                classes,
+                method,
+                code,
+                handler,
+                instruction
+            )) {
+                continue;
+            }
+            if (instruction.opcode() == 178 && instruction.fieldRef().isPresent()) {
+                continue;
+            }
+            if (instruction.opcode() == 180
+                && instruction.fieldRef().isPresent()
+                && isExactOptionalFieldRead(classes, instruction)
+                && !JdkCallSupport.isPlatformThrowableAssignable(
+                    "java/lang/NullPointerException",
+                    handler.catchType().orElseThrow()
+                )) {
+                continue;
+            }
+            if (instruction.opcode() == 192
+                && instruction.className().isPresent()
+                && !"java/util/Locale".equals(instruction.className().orElseThrow())) {
+                continue;
+            }
+            return false;
+        }
+        return protectedInstructions > 0;
     }
 
     private static boolean supportedTransportedJdkThrowableCall(

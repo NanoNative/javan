@@ -1188,7 +1188,8 @@ public final class ReachabilityAnalyzer {
         }
         if ("java/util/Optional".equals(target.owner())) {
             return ("or".equals(target.name()) && "(Ljava/util/function/Supplier;)Ljava/util/Optional;".equals(target.descriptor()))
-                || ("orElseGet".equals(target.name()) && "(Ljava/util/function/Supplier;)Ljava/lang/Object;".equals(target.descriptor()));
+                || ("orElseGet".equals(target.name()) && "(Ljava/util/function/Supplier;)Ljava/lang/Object;".equals(target.descriptor()))
+                || JdkCallSupport.isContextLimitedOptionalOrElseThrowCall(target);
         }
         return isObjectsRequireNonNullElseGet(target);
     }

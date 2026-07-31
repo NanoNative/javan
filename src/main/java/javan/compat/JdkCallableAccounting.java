@@ -13,6 +13,9 @@ final class JdkCallableAccounting {
     }
 
     static Status status(final MethodRef methodRef) {
+        if (JdkCallSupport.isContextLimitedOptionalOrElseThrowCall(methodRef)) {
+            return Status.UNKNOWN;
+        }
         if (JdkCallSupport.isSupported(methodRef)) {
             return Status.SUPPORTED;
         }
