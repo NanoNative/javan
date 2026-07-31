@@ -10093,6 +10093,209 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertThat(nativeRun.exitCode()).isEqualTo(7);
     }
 
+    @Test
+    void setEqualsBuildsAndMatchesJvmOutput() throws Exception {
+        assertThat(runSetEqualsParity("set-equals-owner-set", """
+            final Set<String> receiver = Set.of("left", "right");
+            System.out.println(receiver.equals(Set.of("right", "left")));
+            """)).isEqualTo(setEqualsParitySuccess("true\n"));
+    }
+
+    @Test
+    void abstractSetEqualsBuildsAndMatchesJvmOutput() throws Exception {
+        assertThat(runSetEqualsParity("set-equals-owner-abstract-set", """
+            final HashSet<String> values = new HashSet<>();
+            values.add("left");
+            values.add("right");
+            final AbstractSet<String> receiver = values;
+            System.out.println(receiver.equals(Set.of("right", "left")));
+            """)).isEqualTo(setEqualsParitySuccess("true\n"));
+    }
+
+    @Test
+    void hashSetEqualsBuildsAndMatchesJvmOutput() throws Exception {
+        assertThat(runSetEqualsParity("set-equals-owner-hash-set", """
+            final HashSet<String> receiver = new HashSet<>();
+            receiver.add("left");
+            receiver.add("right");
+            System.out.println(receiver.equals(Set.of("right", "left")));
+            """)).isEqualTo(setEqualsParitySuccess("true\n"));
+    }
+
+    @Test
+    void linkedHashSetEqualsBuildsAndMatchesJvmOutput() throws Exception {
+        assertThat(runSetEqualsParity("set-equals-owner-linked-hash-set", """
+            final LinkedHashSet<String> receiver = new LinkedHashSet<>();
+            receiver.add("left");
+            receiver.add("right");
+            System.out.println(receiver.equals(Set.of("right", "left")));
+            """)).isEqualTo(setEqualsParitySuccess("true\n"));
+    }
+
+    @Test
+    void setEqualsBuildEmitsOneGeneratedNativeCall() throws Exception {
+        final Path project = project("set-equals-generated-call");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Set.of("left").equals(Set.of("left")));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String source = run.exitCode() == 0
+            ? Files.readString(project.resolve(".javan/generated/main.c"))
+            : "";
+
+        assertThat(source.split("javan_set_equals\\(", -1).length - 1).isEqualTo(1);
+    }
+
+    @Test
+    void setCopyOfEqualsBuildsAndMatchesJvmOutput() throws Exception {
+        assertThat(runSetEqualsParity("set-equals-producer-copy-of", """
+            System.out.println(Set.copyOf(List.of("left")).equals(Set.of("left")));
+            """)).isEqualTo(setEqualsParitySuccess("true\n"));
+    }
+
+    @Test
+    void collectionsEmptySetEqualsBuildsAndMatchesJvmOutput() throws Exception {
+        assertThat(runSetEqualsParity("set-equals-producer-empty-set", """
+            System.out.println(Collections.emptySet().equals(Set.of()));
+            """)).isEqualTo(setEqualsParitySuccess("true\n"));
+    }
+
+    @Test
+    void collectionsSingletonSetEqualsBuildsAndMatchesJvmOutput() throws Exception {
+        assertThat(runSetEqualsParity("set-equals-producer-singleton-set", """
+            System.out.println(Collections.singleton("left").equals(Set.of("left")));
+            """)).isEqualTo(setEqualsParitySuccess("true\n"));
+    }
+
+    @Test
+    void collectionsUnmodifiableSetEqualsBuildsAndMatchesJvmOutput() throws Exception {
+        assertThat(runSetEqualsParity("set-equals-producer-unmodifiable-set", """
+            final HashSet<String> values = new HashSet<>();
+            values.add("left");
+            System.out.println(Collections.unmodifiableSet(values).equals(Set.of("left")));
+            """)).isEqualTo(setEqualsParitySuccess("true\n"));
+    }
+
+    @Test
+    void linkedHashSetProducerEqualsBuildsAndMatchesJvmOutput() throws Exception {
+        assertThat(runSetEqualsParity("set-equals-producer-linked-hash-set", """
+            final LinkedHashSet<String> values = new LinkedHashSet<>();
+            values.add("left");
+            System.out.println(values.equals(Set.of("left")));
+            """)).isEqualTo(setEqualsParitySuccess("true\n"));
+    }
+
+    @Test
+    void hashSetFactoryEqualsBuildsAndMatchesJvmOutput() throws Exception {
+        assertThat(runSetEqualsParity("set-equals-producer-hash-set-factory", """
+            final HashSet<String> values = HashSet.newHashSet(1);
+            values.add("left");
+            System.out.println(values.equals(Set.of("left")));
+            """)).isEqualTo(setEqualsParitySuccess("true\n"));
+    }
+
+    @Test
+    void linkedHashSetFactoryEqualsBuildsAndMatchesJvmOutput() throws Exception {
+        assertThat(runSetEqualsParity("set-equals-producer-linked-hash-set-factory", """
+            final LinkedHashSet<String> values = LinkedHashSet.newLinkedHashSet(1);
+            values.add("left");
+            System.out.println(values.equals(Set.of("left")));
+            """)).isEqualTo(setEqualsParitySuccess("true\n"));
+    }
+
+    @Test
+    void mapKeySetEqualsBuildsAndMatchesJvmOutput() throws Exception {
+        assertThat(runSetEqualsParity("set-equals-producer-map-key-set", """
+            final Map<String, String> values = new LinkedHashMap<>();
+            values.put("left", "one");
+            System.out.println(values.keySet().equals(Set.of("left")));
+            """)).isEqualTo(setEqualsParitySuccess("true\n"));
+    }
+
+    @Test
+    void collectionsUnmodifiableCollectionOfSetIsNotEqual() throws Exception {
+        assertThat(runSetEqualsParity("set-equals-wrapper-unmodifiable-collection", """
+            final Set<String> values = Set.of("left");
+            System.out.println(values.equals(Collections.unmodifiableCollection(values)));
+            """)).isEqualTo(setEqualsParitySuccess("false\n"));
+    }
+
+    @Test
+    void hashSetNullMemberEqualsBuildsAndMatchesJvmOutput() throws Exception {
+        assertThat(runSetEqualsParity("set-equals-producer-hash-set-null", """
+            final HashSet<String> left = new HashSet<>();
+            final HashSet<String> right = new HashSet<>();
+            left.add(null);
+            right.add(null);
+            System.out.println(left.equals(right));
+            """)).isEqualTo(setEqualsParitySuccess("true\n"));
+    }
+
+    private SetEqualsParityResult runSetEqualsParity(final String projectName, final String statements) throws Exception {
+        final Path project = project(projectName);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.AbstractSet;
+            import java.util.Collections;
+            import java.util.HashSet;
+            import java.util.LinkedHashMap;
+            import java.util.LinkedHashSet;
+            import java.util.List;
+            import java.util.Map;
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+            %s
+                }
+            }
+            """.formatted(statements.indent(8)));
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final ProcessResult nativeRun = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/" + projectName).toString()))
+            : new ProcessResult(-1, "", "not built");
+        return new SetEqualsParityResult(
+            run.exitCode(),
+            run.stderr(),
+            nativeRun.exitCode(),
+            nativeRun.stdout(),
+            nativeRun.stderr(),
+            jvmOutput
+        );
+    }
+
+    private static SetEqualsParityResult setEqualsParitySuccess(final String stdout) {
+        return new SetEqualsParityResult(0, "", 0, stdout, "", stdout);
+    }
+
+    private record SetEqualsParityResult(
+        int buildExitCode,
+        String buildStderr,
+        int nativeExitCode,
+        String nativeStdout,
+        String nativeStderr,
+        String jvmStdout
+    ) {
+    }
+
     private void assertNumericWrapperConstableMethodsBuildAndMatchJvmOutput(
         final String projectName,
         final String wrapperType,

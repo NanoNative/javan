@@ -5445,8 +5445,15 @@ final class BytecodeToIRInvokeSupport {
         final List<StackValue> stack,
         final Map<Integer, IrLocal> localDeclarations
     ) {
-        if ((!isJdkCollectionOwner(methodRef.owner()) && !"java/lang/CharSequence".equals(methodRef.owner()))
+        if ((!isJdkCollectionOwner(methodRef.owner())
+            && !isJdkSetEqualsOwner(methodRef.owner())
+            && !"java/lang/CharSequence".equals(methodRef.owner()))
             || !JdkCallSupport.isSupported(methodRef)) {
+            return false;
+        }
+        if (isJdkSetEqualsOwner(methodRef.owner())
+            && "equals(Ljava/lang/Object;)Z".equals(methodRef.name() + methodRef.descriptor())
+            && !isJdkSetEqualsInvocation(instruction, methodRef)) {
             return false;
         }
         if (isSupportedMapComputeIfAbsentOwner(methodRef)
@@ -6272,6 +6279,12 @@ final class BytecodeToIRInvokeSupport {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_to_array", List.of(receiver))));
                 return true;
             }
+        }
+        if (isJdkSetEqualsOwner(methodRef.owner()) && "equals(Ljava/lang/Object;)Z".equals(signature)) {
+            stack.add(StackValue.intExpression(
+                IrExpression.intCall("javan_set_equals", List.of(receiver, arguments.getFirst()))
+            ));
+            return true;
         }
         if (isJdkSetOwner(methodRef.owner())) {
             if ("add(Ljava/lang/Object;)Z".equals(signature)) {
@@ -7587,6 +7600,18 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         return isJdkSetClass(owner);
+    }
+    static boolean isJdkSetEqualsOwner(final String owner) {
+        return "java/util/Set".equals(owner)
+            || "java/util/AbstractSet".equals(owner)
+            || "java/util/HashSet".equals(owner)
+            || "java/util/LinkedHashSet".equals(owner);
+    }
+    static boolean isJdkSetEqualsInvocation(final Instruction instruction, final MethodRef methodRef) {
+        if ("java/util/Set".equals(methodRef.owner())) {
+            return instruction.opcode() == 185 && "invokeinterface".equals(instruction.mnemonic());
+        }
+        return instruction.opcode() == 182 && "invokevirtual".equals(instruction.mnemonic());
     }
     static boolean isJdkMapOwner(final String owner) {
         if ("java/util/Map".equals(owner)) {

@@ -28,6 +28,283 @@ final class RuntimeFilesTest {
     private Path tempDir;
 
     @Test
+    void runtimeSetEqualsDeclarationAndDefinitionAreUnique() throws Exception {
+        final String source = Files.readString(new RuntimeFiles().write(tempDir));
+        final String header = Files.readString(tempDir.resolve("javan_runtime.h"));
+
+        assertThat(List.of(
+            header.split("int32_t javan_set_equals\\(void\\* receiver, void\\* other\\);", -1).length - 1,
+            source.split("int32_t javan_set_equals\\(void\\* receiver, void\\* other\\) \\{", -1).length - 1
+        )).containsExactly(1, 1);
+    }
+
+    @Test
+    void runtimeSetEqualsReturnsTrueForIdentity() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe("""
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* set = javan_set_empty();
+                printf("%d\\n", javan_set_equals(set, set));
+                return 0;
+            }
+            """, "512");
+
+        assertThat(stdout).isEqualTo("1\n");
+    }
+
+    @Test
+    void runtimeSetEqualsRejectsNullArgument() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe("""
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                printf("%d\\n", javan_set_equals(javan_set_empty(), NULL));
+                return 0;
+            }
+            """, "512");
+
+        assertThat(stdout).isEqualTo("0\n");
+    }
+
+    @Test
+    void runtimeSetEqualsRejectsNullReceiver() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe("""
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                printf("%d\\n", javan_set_equals(NULL, javan_set_empty()));
+                return 0;
+            }
+            """, "512");
+
+        assertThat(stdout).isEqualTo("0\n");
+    }
+
+    @Test
+    void runtimeSetEqualsRejectsNonSetArgument() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe("""
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                printf("%d\\n", javan_set_equals(javan_set_empty(), javan_arraylist_new()));
+                return 0;
+            }
+            """, "512");
+
+        assertThat(stdout).isEqualTo("0\n");
+    }
+
+    @Test
+    void runtimeSetEqualsRejectsUntrackedStaticStringArgument() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe("""
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                printf("%d\\n", javan_set_equals(javan_set_empty(), "static"));
+                return 0;
+            }
+            """, "512");
+
+        assertThat(stdout).isEqualTo("0\n");
+    }
+
+    @Test
+    void runtimeSetEqualsRejectsUnequalLogicalSizes() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe("""
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* left = javan_hashset_new();
+                void* right = javan_hashset_new();
+                javan_set_add(left, "left");
+                javan_set_add(right, "left");
+                javan_set_add(right, "right");
+                printf("%d\\n", javan_set_equals(left, right));
+                return 0;
+            }
+            """, "512");
+
+        assertThat(stdout).isEqualTo("0\n");
+    }
+
+    @Test
+    void runtimeSetEqualsIgnoresInsertionOrder() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe("""
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* left = javan_hashset_new();
+                void* right = javan_hashset_new();
+                javan_set_add(left, "left");
+                javan_set_add(left, "right");
+                javan_set_add(right, "right");
+                javan_set_add(right, "left");
+                printf("%d\\n", javan_set_equals(left, right));
+                return 0;
+            }
+            """, "512");
+
+        assertThat(stdout).isEqualTo("1\n");
+    }
+
+    @Test
+    void runtimeSetEqualsRejectsSameSizeMissingMember() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe("""
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* left = javan_hashset_new();
+                void* right = javan_hashset_new();
+                javan_set_add(left, "left");
+                javan_set_add(left, "right");
+                javan_set_add(right, "left");
+                javan_set_add(right, "other");
+                printf("%d\\n", javan_set_equals(left, right));
+                return 0;
+            }
+            """, "512");
+
+        assertThat(stdout).isEqualTo("0\n");
+    }
+
+    @Test
+    void runtimeSetEqualsUsesNullSafeElementEquality() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe("""
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* left = javan_hashset_new();
+                void* right = javan_hashset_new();
+                javan_set_add(left, NULL);
+                javan_set_add(right, NULL);
+                printf("%d\\n", javan_set_equals(left, right));
+                return 0;
+            }
+            """, "512");
+
+        assertThat(stdout).isEqualTo("1\n");
+    }
+
+    @Test
+    void runtimeSetEqualsRecognizesUnmodifiableSet() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe("""
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* mutable = javan_hashset_new();
+                void* other = javan_hashset_new();
+                javan_set_add(mutable, "left");
+                javan_set_add(other, "left");
+                printf("%d\\n", javan_set_equals(javan_set_unmodifiable(mutable), other));
+                return 0;
+            }
+            """, "512");
+
+        assertThat(stdout).isEqualTo("1\n");
+    }
+
+    @Test
+    void runtimeSetEqualsRejectsUnmodifiableCollectionOfSet() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe("""
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* set = javan_hashset_new();
+                javan_set_add(set, "left");
+                printf("%d\\n", javan_set_equals(set, javan_list_unmodifiable(set)));
+                return 0;
+            }
+            """, "512");
+
+        assertThat(stdout).isEqualTo("0\n");
+    }
+
+    @Test
+    void runtimeSetEqualsUsesMaterializedMapKeySetSnapshot() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe("""
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* map = javan_hashmap_new();
+                (void) javan_map_put(map, "left", "one");
+                void* keys = javan_map_key_set(map);
+                (void) javan_map_put(map, "right", "two");
+                void* expected = javan_hashset_new();
+                javan_set_add(expected, "left");
+                printf("%d\\n", javan_set_equals(keys, expected));
+                return 0;
+            }
+            """, "512");
+
+        assertThat(stdout).isEqualTo("1\n");
+    }
+
+    @Test
+    void runtimeSetEqualsReadsSequentialMutationState() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe("""
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* left = javan_hashset_new();
+                void* right = javan_hashset_new();
+                javan_set_add(left, "left");
+                javan_set_add(right, "left");
+                int before = javan_set_equals(left, right);
+                javan_set_add(left, "right");
+                printf("%d %d\\n", before, javan_set_equals(left, right));
+                return 0;
+            }
+            """, "512");
+
+        assertThat(stdout).isEqualTo("1 0\n");
+    }
+
+    @Test
+    void runtimeSetEqualsRepeatsImmutableReads() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe("""
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* left = javan_set_of_pair("left", "right");
+                void* right = javan_set_of_pair("right", "left");
+                printf("%d %d\\n", javan_set_equals(left, right), javan_set_equals(left, right));
+                return 0;
+            }
+            """, "512");
+
+        assertThat(stdout).isEqualTo("1 1\n");
+    }
+
+    @Test
     void writeIncludesNativeOsArchSystemProperty() throws Exception {
         final Path runtime = new RuntimeFiles().write(tempDir);
 

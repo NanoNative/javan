@@ -1263,6 +1263,105 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void supportsSetEquals() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Set",
+            "equals",
+            "(Ljava/lang/Object;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void supportsAbstractSetEquals() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/AbstractSet",
+            "equals",
+            "(Ljava/lang/Object;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void supportsHashSetEquals() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/HashSet",
+            "equals",
+            "(Ljava/lang/Object;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void supportsLinkedHashSetEquals() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/LinkedHashSet",
+            "equals",
+            "(Ljava/lang/Object;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void setEqualsSelectsCollectionsRuntime() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/Set",
+            "equals",
+            "(Ljava/lang/Object;)Z"
+        ))).containsExactly("collections");
+    }
+
+    @Test
+    void abstractSetEqualsSelectsCollectionsRuntime() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/AbstractSet",
+            "equals",
+            "(Ljava/lang/Object;)Z"
+        ))).containsExactly("collections");
+    }
+
+    @Test
+    void hashSetEqualsSelectsCollectionsRuntime() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/HashSet",
+            "equals",
+            "(Ljava/lang/Object;)Z"
+        ))).containsExactly("collections");
+    }
+
+    @Test
+    void linkedHashSetEqualsSelectsCollectionsRuntime() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/LinkedHashSet",
+            "equals",
+            "(Ljava/lang/Object;)Z"
+        ))).containsExactly("collections");
+    }
+
+    @Test
+    void setEqualsRejectsWrongOwner() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/TreeSet",
+            "equals",
+            "(Ljava/lang/Object;)Z"
+        ))).isFalse();
+    }
+
+    @Test
+    void setEqualsRejectsWrongName() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Set",
+            "equal",
+            "(Ljava/lang/Object;)Z"
+        ))).isFalse();
+    }
+
+    @Test
+    void setEqualsRejectsWrongDescriptor() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Set",
+            "equals",
+            "(Ljava/util/Set;)Z"
+        ))).isFalse();
+    }
+
+    @Test
     void setRemoveIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Set",
