@@ -142,6 +142,62 @@ final class CliRecordObjectMethodsIntegrationTest extends CliIntegrationSupport 
     }
 
     @Test
+    void parameterizedFinalComponentsUseErasedClosedWorldObjectMethods() throws Exception {
+        final String projectName = "parameterized-final-record-component";
+        final Path genericProject = project(projectName);
+        writeJava(genericProject, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                record Holder(Box<String> value) {
+                }
+
+                static final class Box<T> {
+                    private final int value;
+
+                    Box(final int value) {
+                        this.value = value;
+                    }
+
+                    @Override
+                    public boolean equals(final Object other) {
+                        return other instanceof Box<?> candidate && value == candidate.value;
+                    }
+
+                    @Override
+                    public int hashCode() {
+                        return value;
+                    }
+                }
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new Holder(new Box<String>(7)).equals(
+                        new Holder(new Box<String>(7))
+                    ));
+                    System.out.println(new Holder(new Box<String>(7)).equals(
+                        new Holder(new Box<String>(8))
+                    ));
+                    System.out.println(new Holder(new Box<String>(7)).hashCode());
+                }
+            }
+            """);
+        final String jvmOutput = runJvm(genericProject, "com.acme.Main");
+        final CliRun build = runSlow(tempDir, "build", genericProject.toString());
+        final ProcessResult nativeRun = build.exitCode() == 0
+            ? processSlow(genericProject, List.of(
+                genericProject.resolve(".javan/bin/" + projectName).toString()
+            ))
+            : new ProcessResult(-1, "", "native build did not run");
+
+        assertThat(build.exitCode() + "\n" + nativeRun.exitCode() + "\n" + nativeRun.stdout())
+            .as(build.stderr() + "\n" + nativeRun.stderr())
+            .isEqualTo("0\n0\n" + jvmOutput);
+    }
+
+    @Test
     void recordEqualsAcceptsSelf() {
         assertThat(outputs("self")).containsExactly("true\n", "true\n");
     }
@@ -265,6 +321,93 @@ final class CliRecordObjectMethodsIntegrationTest extends CliIntegrationSupport 
                 }
             }
             """)).contains("unsupported record component type");
+    }
+
+    @Test
+    void typeVariableParameterizedFinalComponentIsRejectedBeforeCodeGeneration() throws Exception {
+        assertThat(rejectedGenericRecordBuild("type-variable-parameterized-final", """
+            final class Box<T> {
+            }
+
+            record Unsafe<T>(Box<T> value) {
+            }
+
+            public final class Main {
+                public static void main(final String[] args) {
+                    System.out.println(new Unsafe<String>(new Box<String>()).hashCode());
+                }
+            }
+            """)).contains("error[JAVAN030]", "unsupported record component type");
+    }
+
+    @Test
+    void wildcardParameterizedFinalComponentIsRejectedBeforeCodeGeneration() throws Exception {
+        assertThat(rejectedGenericRecordBuild("wildcard-parameterized-final", """
+            final class Box<T> {
+            }
+
+            record Unsafe(Box<?> value) {
+            }
+
+            public final class Main {
+                public static void main(final String[] args) {
+                    System.out.println(new Unsafe(new Box<String>()).hashCode());
+                }
+            }
+            """)).contains("error[JAVAN030]", "unsupported record component type");
+    }
+
+    @Test
+    void boundedWildcardParameterizedFinalComponentIsRejectedBeforeCodeGeneration() throws Exception {
+        assertThat(rejectedGenericRecordBuild("bounded-wildcard-parameterized-final", """
+            final class Box<T> {
+            }
+
+            record Unsafe(Box<? extends CharSequence> value) {
+            }
+
+            public final class Main {
+                public static void main(final String[] args) {
+                    System.out.println(new Unsafe(new Box<String>()).hashCode());
+                }
+            }
+            """)).contains("error[JAVAN030]", "unsupported record component type");
+    }
+
+    @Test
+    void nestedWildcardParameterizedFinalComponentIsRejectedBeforeCodeGeneration() throws Exception {
+        assertThat(rejectedGenericRecordBuild("nested-wildcard-parameterized-final", """
+            import java.util.List;
+
+            final class Box<T> {
+            }
+
+            record Unsafe(Box<List<?>> value) {
+            }
+
+            public final class Main {
+                public static void main(final String[] args) {
+                    System.out.println(new Unsafe(new Box<List<?>>()).hashCode());
+                }
+            }
+            """)).contains("error[JAVAN030]", "unsupported record component type");
+    }
+
+    @Test
+    void parameterizedInterfaceComponentIsRejectedBeforeCodeGeneration() throws Exception {
+        assertThat(rejectedGenericRecordBuild("parameterized-interface-component", """
+            interface Carrier<T> {
+            }
+
+            record Unsafe(Carrier<String> value) {
+            }
+
+            public final class Main {
+                public static void main(final String[] args) {
+                    System.out.println(new Unsafe(null).hashCode());
+                }
+            }
+            """)).contains("error[JAVAN030]", "final closed-world class");
     }
 
     @Test
