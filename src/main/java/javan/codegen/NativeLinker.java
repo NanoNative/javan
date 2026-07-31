@@ -165,7 +165,7 @@ public final class NativeLinker {
         if (isWindowsHost(osName)) {
             return List.of("-lws2_32");
         }
-        return isMacHost(osName) ? List.of() : List.of("-lm");
+        return List.of();
     }
 
     private static List<String> compilerCandidates() {
@@ -343,9 +343,5 @@ public final class NativeLinker {
 
     private static boolean isWindowsHost(final String osName) {
         return Strings2.toAsciiLowerCase(osName).contains("win");
-    }
-
-    private static boolean isMacHost(final String osName) {
-        return Strings2.toAsciiLowerCase(osName).contains("mac");
     }
 }

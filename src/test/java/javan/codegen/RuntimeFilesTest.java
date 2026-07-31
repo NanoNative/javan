@@ -7803,6 +7803,63 @@ final class RuntimeFilesTest {
         assertThat(mathFloorBits("7ff8000000001234")).isEqualTo("7ff8000000001234\n");
     }
 
+    @Test
+    void mathFloorPreservesNegativeQuietNanBits() throws Exception {
+        assertThat(mathFloorBits("fff8000000005678")).isEqualTo("fff8000000005678\n");
+    }
+
+    @Test
+    void mathFloorPreservesPositiveSignalingNanBits() throws Exception {
+        assertThat(mathFloorBits("7ff0000000001234")).isEqualTo("7ff0000000001234\n");
+    }
+
+    @Test
+    void mathFloorPreservesNegativeSignalingNanBits() throws Exception {
+        assertThat(mathFloorBits("fff0000000005678")).isEqualTo("fff0000000005678\n");
+    }
+
+    @Test
+    void mathFloorPreservesPositiveTwoToTheFiftyTwoBits() throws Exception {
+        assertThat(mathFloorBits("4330000000000000")).isEqualTo("4330000000000000\n");
+    }
+
+    @Test
+    void mathFloorPreservesNegativeTwoToTheFiftyTwoBits() throws Exception {
+        assertThat(mathFloorBits("c330000000000000")).isEqualTo("c330000000000000\n");
+    }
+
+    @Test
+    void mathFloorPreservesPositiveMaximumDoubleBits() throws Exception {
+        assertThat(mathFloorBits("7fefffffffffffff")).isEqualTo("7fefffffffffffff\n");
+    }
+
+    @Test
+    void mathFloorPreservesNegativeMaximumDoubleBits() throws Exception {
+        assertThat(mathFloorBits("ffefffffffffffff")).isEqualTo("ffefffffffffffff\n");
+    }
+
+    @Test
+    void generatedRuntimeFloorRejectsNonBinary64Targets() throws Exception {
+        assertThat(Files.readString(new RuntimeFiles().write(tempDir))).contains(
+            "#if CHAR_BIT != 8 || FLT_RADIX != 2 || DBL_MANT_DIG != 53 || DBL_MIN_EXP != -1021 || DBL_MAX_EXP != 1024"
+        );
+    }
+
+    @Test
+    void generatedRuntimeFloorRequiresEightByteDouble() throws Exception {
+        assertThat(Files.readString(new RuntimeFiles().write(tempDir))).contains(
+            "_Static_assert(sizeof(double) == 8, \"Javan requires 64-bit double\");"
+        );
+    }
+
+    @Test
+    void generatedRuntimeFloorHasNoExternalFloorCall() throws Exception {
+        assertThat(runtimeFunction(
+            Files.readString(new RuntimeFiles().write(tempDir)),
+            "double javan_math_floor_double(double value)"
+        )).doesNotContain("floor(value)");
+    }
+
     private String mathFloorBits(final String bits) throws Exception {
         return runRuntimeBoundaryProbe(
             """

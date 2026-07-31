@@ -62,6 +62,11 @@ Library-output changes are covered by `.github/scripts/acceptance.sh`, including
 dist/javan build src/test/resources/projects/acceptance/native-library --library --format static --export com.acme.Math.add --bindings c,rust,go,python
 ```
 
+Static-library consumers must not need `-lm` for `Math.floor(double)`: the generated
+binary64 implementation is integer-mask based, and the local macOS static C consumer
+uses `cc caller.c lib<name>.a -o caller` without it. Linux and Windows rows have not
+been run for this change.
+
 CI proves required host-native target rows. Docker proves extra Linux/container behavior.
 Neither replaces the local host gate.
 

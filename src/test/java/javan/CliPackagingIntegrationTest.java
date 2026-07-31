@@ -593,6 +593,57 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void staticLibraryExportedMathFloorLinksAndRunsFromCWithoutMathLibrary() throws Exception {
+        final Path project = project("library-floor");
+        writeJava(project, "com.acme.Math", """
+            package com.acme;
+
+            public final class Math {
+                private Math() {
+                }
+
+                public static double floor(final double value) {
+                    return java.lang.Math.floor(value);
+                }
+            }
+            """);
+
+        requireBuildSuccess(run(
+            tempDir,
+            "build",
+            project.toString(),
+            "--kind",
+            "staticlib",
+            "--export",
+            "com.acme.Math.floor"
+        ));
+        final Path library = project.resolve(".javan/dist/liblibrary-floor.a");
+        final Path caller = writeC(project, "caller.c", """
+            #include <stdio.h>
+            #include ".javan/dist/bindings/c/library-floor.h"
+
+            int main(void) {
+                printf("%.1f\\n", javan_export_com_acme_Math_floor_double(-7.25));
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("library-floor-caller");
+
+        final ProcessResult link = process(project, List.of(
+            "cc",
+            caller.toString(),
+            library.toString(),
+            "-o",
+            binary.toString()
+        ));
+
+        if (link.exitCode() != 0) {
+            throw new AssertionError(link.stderr());
+        }
+        assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo("-8.0\n");
+    }
+
+    @Test
     void libraryAliasBuildsStaticSharedAndLanguageFolders() throws Exception {
         final Path project = project("library-friendly");
         writeJava(project, "com.acme.Math", """
