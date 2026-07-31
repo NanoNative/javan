@@ -34,6 +34,15 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksBooleanParseBooleanAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef(
+            "java/lang/Boolean",
+            "parseBoolean",
+            "(Ljava/lang/String;)Z"
+        ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksForbiddenDynamicApiAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Class", "forName", "(Ljava/lang/String;)Ljava/lang/Class;")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
