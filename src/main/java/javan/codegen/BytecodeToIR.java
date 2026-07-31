@@ -1178,6 +1178,9 @@ public final class BytecodeToIR {
             case 116:
                 unaryIntNeg(classFile, method, stack);
                 break;
+            case 117:
+                unaryLongNeg(classFile, method, stack);
+                break;
             case 120:
                 shiftInt(classFile, method, stack, "javan_int_shl");
                 break;
@@ -1589,6 +1592,13 @@ public final class BytecodeToIR {
         stack.add(StackValue.intExpression(IrExpression.intCall(
             "javan_int_neg",
             List.of(popInt(classFile, method, stack))
+        )));
+    }
+
+    static void unaryLongNeg(final ClassFile classFile, final MethodInfo method, final List<StackValue> stack) {
+        stack.add(StackValue.longExpression(IrExpression.longCall(
+            "javan_long_neg",
+            List.of(popLong(classFile, method, stack))
         )));
     }
 

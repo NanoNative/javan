@@ -109,6 +109,7 @@ final class RuntimeHeaderFile {
         void* javan_double_parse_message(const char* value, int status);
         int javan_boolean_parse(const char* value);
         int javan_int_neg(int value);
+        long long javan_long_neg(long long value);
         int javan_int_shl(int value, int shift);
         long long javan_long_shl(long long value, int shift);
         int javan_int_shr(int value, int shift);

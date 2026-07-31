@@ -7833,6 +7833,47 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void longNegationReturnsZeroForZero() throws Exception {
+        assertThat(longNegation("0LL")).isEqualTo("0\n");
+    }
+
+    @Test
+    void longNegationReturnsNegativeForPositiveValue() throws Exception {
+        assertThat(longNegation("73LL")).isEqualTo("-73\n");
+    }
+
+    @Test
+    void longNegationReturnsPositiveForNegativeValue() throws Exception {
+        assertThat(longNegation("-73LL")).isEqualTo("73\n");
+    }
+
+    @Test
+    void longNegationReturnsNegativeMaximumForLongMaximum() throws Exception {
+        assertThat(longNegation("LLONG_MAX")).isEqualTo("-9223372036854775807\n");
+    }
+
+    @Test
+    void longNegationPreservesLongMinimum() throws Exception {
+        assertThat(longNegation("LLONG_MIN")).isEqualTo("-9223372036854775808\n");
+    }
+
+    private String longNegation(final String value) throws Exception {
+        return runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <limits.h>
+            #include <stdio.h>
+
+            int main(void) {
+                printf("%%lld\\n", javan_long_neg(%s));
+                return 0;
+            }
+            """.formatted(value),
+            "4096"
+        );
+    }
+
+    @Test
     void multiplyExactIntAcceptsPositiveOperands() throws Exception {
         assertThat(multiplyExactIntOverflow("2", "3")).isEqualTo("0\n");
     }

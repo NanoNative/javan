@@ -331,6 +331,16 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void bytecodeSupportClassifiesLongNegationAsNativeSupported() {
+        assertThat(BytecodeSupport.classify(117)).isEqualTo(BytecodeSupport.Status.NATIVE_SUPPORTED);
+    }
+
+    @Test
+    void bytecodeSupportPublishesLongNegation() {
+        assertThat(BytecodeSupport.nativeSupportedOpcodes()).contains(117);
+    }
+
+    @Test
     void bytecodeSupportOpcodeListsAreSortedAndReadOnly() {
         final List<Integer> opcodes = BytecodeSupport.knownOpcodes();
 
@@ -7034,6 +7044,50 @@ final class CoreBehaviorTest {
         );
 
         assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsEntryAnchoredLongNegation() {
+        final MethodInfo method = entryAnchoredLongNegationMethod(new MethodRef(
+            "java/lang/Long",
+            "parseLong",
+            "(Ljava/lang/String;)J"
+        ));
+        final ClassFile classFile = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            method
+        );
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(classFile.name(), classFile),
+            List.of(new EntryPoint(classFile.name(), method.name(), method.descriptor()))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierRejectsEntryAnchoredLongNegationOfInt() {
+        final MethodInfo method = entryAnchoredLongNegationMethod(new MethodRef(
+            "java/lang/Integer",
+            "parseInt",
+            "(Ljava/lang/String;)I"
+        ));
+        final ClassFile classFile = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            method
+        );
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(classFile.name(), classFile),
+            List.of(new EntryPoint(classFile.name(), method.name(), method.descriptor()))
+        );
+
+        assertThat(diagnostics).extracting(Diagnostic::code).containsExactly("JAVAN014");
     }
 
     @Test
@@ -14481,6 +14535,30 @@ final class CoreBehaviorTest {
             name,
             descriptor,
             Optional.of(new CodeAttribute(2, 1, new byte[0], 0, List.of(instructions)))
+        );
+    }
+
+    private static MethodInfo entryAnchoredLongNegationMethod(final MethodRef parser) {
+        return new MethodInfo(
+            0x0008,
+            "value",
+            "(Ljava/lang/String;)J",
+            Optional.of(new CodeAttribute(
+                2,
+                2,
+                new byte[0],
+                1,
+                List.of(new CodeException(0, 3, 4, Optional.of("java/lang/NumberFormatException"))),
+                List.of(
+                    instruction(0, 42, "aload_0"),
+                    instruction(1, 184, "invokestatic", parser),
+                    instruction(2, 117, "lneg"),
+                    instruction(3, 173, "lreturn"),
+                    instruction(4, 76, "astore_1"),
+                    instruction(5, 9, "lconst_0"),
+                    instruction(6, 173, "lreturn")
+                )
+            ))
         );
     }
 

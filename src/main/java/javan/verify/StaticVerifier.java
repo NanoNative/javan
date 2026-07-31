@@ -1984,7 +1984,8 @@ public final class StaticVerifier {
             || opcode >= 2 && opcode <= 17
             || opcode >= 21 && opcode <= 78
             || opcode == 87
-            || opcode == 89;
+            || opcode == 89
+            || opcode == 117;
     }
 
     private static boolean applyEntryAnchoredStackEffect(
@@ -2044,6 +2045,10 @@ public final class StaticVerifier {
             }
             stack.add(stack.getLast());
             return true;
+        }
+        if (opcode == 117) {
+            return popEntryAnchoredType(stack, IrType.LONG)
+                && addEntryAnchoredType(stack, IrType.LONG);
         }
         if (opcode == 192) {
             return popEntryAnchoredType(stack, IrType.OBJECT)
