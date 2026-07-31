@@ -189,15 +189,18 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     }
 
     @Test
-    void ciWorkflowKeepsSoftCoverageSummaryInsteadOfHardNinePercentGate() throws Exception {
+    void ciWorkflowReportsCoverageWithoutTargetOrGate() throws Exception {
         final String ciWorkflow = Files.readString(BUILD_COMMON);
 
         assertThat(ciWorkflow)
-            .contains("- name: Summarize coverage (non-blocking)")
-            .contains("JAVAN_COVERAGE_SOFT_TARGET: \"0.09\"")
-            .contains("target_ratio = float(os.environ[\"JAVAN_COVERAGE_SOFT_TARGET\"])")
-            .contains("::warning::JaCoCo")
-            .doesNotContain("minimum>0.09</minimum>");
+            .contains("- name: Report coverage")
+            .doesNotContain(
+                "JAVAN_COVERAGE_SOFT_TARGET",
+                "Soft target:",
+                "::warning::JaCoCo",
+                "Upload coverage artifact",
+                "minimum>0.09</minimum>"
+            );
     }
 
     @Test
@@ -206,7 +209,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
 
         assertThat(ciWorkflow)
             .contains("windows-runtime-smoke:")
-            .contains("name: windows-runtime-smoke (${{ matrix.shard }})")
+            .contains("name: Windows runtime · ${{ matrix.shard }} · x64")
             .contains("shard: current-thread")
             .contains("shard: worker-thread")
             .contains("generatedRuntimeCrossCompilesToWindowsPeWhenMinGwIsAvailable")

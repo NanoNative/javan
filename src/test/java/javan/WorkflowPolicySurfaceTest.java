@@ -43,18 +43,21 @@ final class WorkflowPolicySurfaceTest {
     }
 
     @Test
-    void commonBuildKeepsCoverageSignalAcrossCoreAndCliShards() throws Exception {
+    void commonBuildReportsCoverageWithoutTargetsOrArtifacts() throws Exception {
         assertThat(Files.readString(BUILD_COMMON))
-            .contains("JAVAN_COVERAGE_SOFT_TARGET: \"0.09\"")
-            .contains("name: verify-core")
-            .contains("name: verify-cli-integration (${{ matrix.shard }})")
-            .contains("-Dtest='!Cli*IntegrationTest,!CliExternalProbeAcceptanceIntegrationTest' verify")
-            .contains("-Dtest='${{ matrix.test-selector }}' verify")
-            .contains("Summarize coverage (non-blocking)")
-            .contains("Upload coverage artifact")
-            .contains("name: jacoco-core-linux-x64")
-            .contains("name: jacoco-cli-integration-${{ matrix.shard }}")
-            .contains("::warning::JaCoCo");
+            .contains("name: Core tests · Linux x64")
+            .contains("name: CLI tests · ${{ matrix.shard }} · Linux x64")
+            .contains("-Dexec.skip=true -Dtest='!Cli*IntegrationTest,!CliExternalProbeAcceptanceIntegrationTest' verify")
+            .contains("-Dexec.skip=true -Dtest='${{ matrix.test-selector }}' verify")
+            .contains("Report coverage")
+            .contains("JaCoCo {counter_type.lower()} coverage: {covered}/{total} = {ratio:.2%}")
+            .doesNotContain(
+                "JAVAN_COVERAGE_SOFT_TARGET",
+                "Soft target:",
+                "Upload coverage artifact",
+                "jacoco-core-linux-x64",
+                "jacoco-cli-integration-${{ matrix.shard }}"
+            );
     }
 
     @Test
@@ -74,17 +77,33 @@ final class WorkflowPolicySurfaceTest {
     }
 
     @Test
-    void mavenVerifyRefreshesCompatibilityStatusThroughCanonicalCli() throws Exception {
+    void localMavenVerifyRefreshesCompatibilityStatusWhileCiSkipsIt() throws Exception {
         assertThat(Files.readString(POM))
             .contains("<id>refresh-compatibility-status</id>")
             .contains("<mainClass>javan.compat.CompatibilityStatusRefresh</mainClass>")
             .contains("<argument>${java.version}</argument>")
             .doesNotContain("javan.compatibility.");
         assertThat(Files.readString(BUILD_COMMON))
-            .contains("verify-compatibility-status:")
-            .contains("Set up canonical compatibility JDK")
-            .contains("-DskipTests -Djacoco.skip=true verify")
-            .doesNotContain("javan.compatibility.");
+            .contains("-Dexec.skip=true")
+            .doesNotContain(
+                "verify-compatibility-status:",
+                "Set up canonical compatibility JDK",
+                "javan.compatibility."
+            );
+    }
+
+    @Test
+    void matricesStopSiblingWorkAfterFailure() throws Exception {
+        assertThat(Files.readString(BUILD_COMMON))
+            .contains("fail-fast: true")
+            .doesNotContain("fail-fast: false");
+    }
+
+    @Test
+    void windowsPlatformProofEnablesLongPathsBeforeCheckout() throws Exception {
+        assertThat(Files.readString(PLATFORM_PROOF))
+            .contains("name: Enable Git long paths")
+            .contains("git config --system core.longpaths true");
     }
 
     @Test

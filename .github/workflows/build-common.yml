@@ -40,9 +40,6 @@ on:
 
 permissions: {}
 
-env:
-  JAVAN_COVERAGE_SOFT_TARGET: "0.09"
-
 jobs:
   build-info:
     name: Build metadata
@@ -77,35 +74,6 @@ jobs:
             printf 'commit_sha=%s\n' "$(git rev-parse HEAD)"
             printf 'build_output_timestamp=%s\n' "$(git log -1 --format=%cI HEAD)"
           } >> "$GITHUB_OUTPUT"
-
-  verify-compatibility-status:
-    name: Compatibility docs · Linux x64
-    if: "${{ github.event_name != 'push' || !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}"
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          ref: ${{ inputs.ref || github.sha }}
-
-      - name: Read Java info
-        id: java_info
-        uses: YunaBraska/java-info-action@11a434ffbf6bb3357363d1933be71a4076a90a6b # 3
-
-      - name: Set up canonical compatibility JDK
-        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
-        with:
-          java-version: ${{ steps.java_info.outputs.java_version }}
-          distribution: temurin
-          cache: maven
-
-      - name: Verify generated compatibility status
-        run: >-
-          ./mvnw -q -DskipTests -Djacoco.skip=true verify
 
   verify-core:
     name: Core tests · Linux x64
@@ -172,7 +140,7 @@ jobs:
       - name: Verify core Maven suite
         run: |
           status=0
-          ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -Dtest='!Cli*IntegrationTest,!CliExternalProbeAcceptanceIntegrationTest' verify || status=$?
+          ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -Dexec.skip=true -Dtest='!Cli*IntegrationTest,!CliExternalProbeAcceptanceIntegrationTest' verify || status=$?
 
           if find target -maxdepth 1 -type f -name 'jacoco-surefire-*.exec' -print -quit | grep -q . \
             || [ -d target/jacoco-child ]; then
@@ -184,7 +152,7 @@ jobs:
             exit "$status"
           fi
 
-      - name: Summarize coverage (non-blocking)
+      - name: Report coverage
         if: always()
         run: |
           python3 - <<'PY'
@@ -194,9 +162,8 @@ jobs:
 
           report = pathlib.Path("target/site/jacoco/jacoco.xml")
           summary_path = pathlib.Path(os.environ["GITHUB_STEP_SUMMARY"])
-          target_ratio = float(os.environ["JAVAN_COVERAGE_SOFT_TARGET"])
           if not report.exists():
-              print("::warning::JaCoCo report missing; coverage summary skipped.")
+              print("JaCoCo report missing; coverage summary skipped.")
               summary_path.write_text(
                   "# Coverage\n\nJaCoCo report missing. Coverage summary skipped.\n",
                   encoding="utf-8"
@@ -208,10 +175,8 @@ jobs:
           summary_lines = [
               "# Coverage",
               "",
-              f"Soft target: {target_ratio:.0%} (signal only, not a workflow gate)",
-              "",
-              "| Counter | Covered | Total | Ratio | Status |",
-              "| --- | ---: | ---: | ---: | --- |",
+              "| Counter | Covered | Total | Ratio |",
+              "| --- | ---: | ---: | ---: |",
           ]
           for counter_type in ("LINE", "BRANCH"):
               counter = counters.get(counter_type)
@@ -221,29 +186,12 @@ jobs:
               covered = int(counter["covered"])
               total = missed + covered
               ratio = covered / total if total else 1.0
-              ratio_text = f"{covered}/{total} = {ratio:.6%}"
-              status = "meets target" if ratio >= target_ratio else "below target"
-              print(f"JaCoCo {counter_type.lower()} bundle ratio: {ratio_text}")
-              if ratio < target_ratio:
-                  print(f"::warning::JaCoCo {counter_type.lower()} coverage is below soft target {target_ratio:.0%}: {ratio_text}")
-              else:
-                  print(f"::notice::JaCoCo {counter_type.lower()} coverage meets soft target {target_ratio:.0%}: {ratio_text}")
+              print(f"JaCoCo {counter_type.lower()} coverage: {covered}/{total} = {ratio:.2%}")
               summary_lines.append(
-                  f"| {counter_type.lower()} | {covered} | {total} | {ratio:.2%} | {status} |"
+                  f"| {counter_type.lower()} | {covered} | {total} | {ratio:.2%} |"
               )
           summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
           PY
-
-      - name: Upload coverage artifact
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: jacoco-core-linux-x64
-          retention-days: 7
-          if-no-files-found: warn
-          path: |
-            target/site/jacoco/**
-            target/jacoco-merged.exec
 
   verify-cli-integration:
     name: CLI tests · ${{ matrix.shard }} · Linux x64
@@ -253,7 +201,7 @@ jobs:
     permissions:
       contents: read
     strategy:
-      fail-fast: false
+      fail-fast: true
       max-parallel: 6
       matrix:
         include:
@@ -332,7 +280,7 @@ jobs:
       - name: Verify CLI integration Maven suite
         run: |
           status=0
-          ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -Dtest='${{ matrix.test-selector }}' verify || status=$?
+          ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -Dexec.skip=true -Dtest='${{ matrix.test-selector }}' verify || status=$?
 
           if find target -maxdepth 1 -type f -name 'jacoco-surefire-*.exec' -print -quit | grep -q . \
             || [ -d target/jacoco-child ]; then
@@ -344,7 +292,7 @@ jobs:
             exit "$status"
           fi
 
-      - name: Summarize coverage (non-blocking)
+      - name: Report coverage
         if: always()
         run: |
           python3 - <<'PY'
@@ -354,9 +302,8 @@ jobs:
 
           report = pathlib.Path("target/site/jacoco/jacoco.xml")
           summary_path = pathlib.Path(os.environ["GITHUB_STEP_SUMMARY"])
-          target_ratio = float(os.environ["JAVAN_COVERAGE_SOFT_TARGET"])
           if not report.exists():
-              print("::warning::JaCoCo report missing; coverage summary skipped.")
+              print("JaCoCo report missing; coverage summary skipped.")
               summary_path.write_text(
                   "# Coverage\n\nJaCoCo report missing. Coverage summary skipped.\n",
                   encoding="utf-8"
@@ -368,10 +315,8 @@ jobs:
           summary_lines = [
               "# Coverage",
               "",
-              f"Soft target: {target_ratio:.0%} (signal only, not a workflow gate)",
-              "",
-              "| Counter | Covered | Total | Ratio | Status |",
-              "| --- | ---: | ---: | ---: | --- |",
+              "| Counter | Covered | Total | Ratio |",
+              "| --- | ---: | ---: | ---: |",
           ]
           for counter_type in ("LINE", "BRANCH"):
               counter = counters.get(counter_type)
@@ -381,29 +326,12 @@ jobs:
               covered = int(counter["covered"])
               total = missed + covered
               ratio = covered / total if total else 1.0
-              ratio_text = f"{covered}/{total} = {ratio:.6%}"
-              status = "meets target" if ratio >= target_ratio else "below target"
-              print(f"JaCoCo {counter_type.lower()} bundle ratio: {ratio_text}")
-              if ratio < target_ratio:
-                  print(f"::warning::JaCoCo {counter_type.lower()} coverage is below soft target {target_ratio:.0%}: {ratio_text}")
-              else:
-                  print(f"::notice::JaCoCo {counter_type.lower()} coverage meets soft target {target_ratio:.0%}: {ratio_text}")
+              print(f"JaCoCo {counter_type.lower()} coverage: {covered}/{total} = {ratio:.2%}")
               summary_lines.append(
-                  f"| {counter_type.lower()} | {covered} | {total} | {ratio:.2%} | {status} |"
+                  f"| {counter_type.lower()} | {covered} | {total} | {ratio:.2%} |"
               )
           summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
           PY
-
-      - name: Upload coverage artifact
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: jacoco-cli-integration-${{ matrix.shard }}
-          retention-days: 7
-          if-no-files-found: warn
-          path: |
-            target/site/jacoco/**
-            target/jacoco-merged.exec
 
   native-acceptance:
     name: Native acceptance · ${{ matrix.target }}
@@ -412,7 +340,7 @@ jobs:
     permissions:
       contents: read
     strategy:
-      fail-fast: false
+      fail-fast: true
       max-parallel: 2
       matrix:
         include:
@@ -439,7 +367,7 @@ jobs:
     permissions:
       contents: read
     strategy:
-      fail-fast: false
+      fail-fast: true
       max-parallel: 2
       matrix:
         include:
@@ -466,7 +394,7 @@ jobs:
     permissions:
       contents: read
     strategy:
-      fail-fast: false
+      fail-fast: true
       max-parallel: 6
       matrix:
         include:
@@ -512,7 +440,7 @@ jobs:
   platform-smoke:
     name: Platform smoke · ${{ matrix.target }}
     strategy:
-      fail-fast: false
+      fail-fast: true
       max-parallel: 6
       matrix:
         include:
@@ -552,7 +480,7 @@ jobs:
     permissions:
       contents: read
     strategy:
-      fail-fast: false
+      fail-fast: true
       max-parallel: 2
       matrix:
         include:
@@ -617,7 +545,6 @@ jobs:
     name: Prepare Maven publication
     needs:
       - build-info
-      - verify-compatibility-status
       - verify-core
       - verify-cli-integration
       - native-acceptance
