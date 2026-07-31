@@ -644,6 +644,7 @@ public final class JdkCallSupport {
         runtime("LinkedHashMap.<init>", "java/util/LinkedHashMap", "<init>", "(Ljava/util/Map;)V"),
         runtime("LinkedHashMap.newLinkedHashMap", "java/util/LinkedHashMap", "newLinkedHashMap", "(I)Ljava/util/LinkedHashMap;"),
         runtime("TreeMap.<init>", "java/util/TreeMap", "<init>", "()V"),
+        runtime("EnumMap.<init>", "java/util/EnumMap", "<init>", "(Ljava/lang/Class;)V"),
         runtime("ConcurrentHashMap.<init>", "java/util/concurrent/ConcurrentHashMap", "<init>", "()V"),
         runtime("ConcurrentHashMap.<init>", "java/util/concurrent/ConcurrentHashMap", "<init>", "(I)V"),
         runtime("ConcurrentHashMap.<init>", "java/util/concurrent/ConcurrentHashMap", "<init>", "(Ljava/util/Map;)V"),
@@ -990,6 +991,9 @@ public final class JdkCallSupport {
         }
         if ("java/util/TreeMap".equals(methodRef.owner())) {
             return isSupportedTreeMapCall(methodRef.name(), methodRef.descriptor());
+        }
+        if ("java/util/EnumMap".equals(methodRef.owner())) {
+            return isSupportedEnumMapCall(methodRef.name(), methodRef.descriptor());
         }
         if ("java/util/concurrent/ConcurrentHashMap".equals(methodRef.owner())) {
             return isSupportedConcurrentHashMapCall(methodRef.name(), methodRef.descriptor());
@@ -1354,6 +1358,26 @@ public final class JdkCallSupport {
             return "()V".equals(descriptor);
         }
         return isSupportedMutableMapInstanceCall(name, descriptor);
+    }
+
+    private static boolean isSupportedEnumMapCall(final String name, final String descriptor) {
+        if ("<init>".equals(name)) {
+            return "(Ljava/lang/Class;)V".equals(descriptor);
+        }
+        if ("put".equals(name)) {
+            return "(Ljava/lang/Enum;Ljava/lang/Object;)Ljava/lang/Object;".equals(descriptor)
+                || "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(descriptor);
+        }
+        if ("get".equals(name)) {
+            return "(Ljava/lang/Object;)Ljava/lang/Object;".equals(descriptor);
+        }
+        if ("containsKey".equals(name)) {
+            return "(Ljava/lang/Object;)Z".equals(descriptor);
+        }
+        if ("size".equals(name)) {
+            return "()I".equals(descriptor);
+        }
+        return "remove".equals(name) && "(Ljava/lang/Object;)Ljava/lang/Object;".equals(descriptor);
     }
 
     private static boolean isSupportedConcurrentHashMapCall(final String name, final String descriptor) {

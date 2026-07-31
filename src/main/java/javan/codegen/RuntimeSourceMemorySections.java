@@ -117,7 +117,7 @@ final class RuntimeSourceMemorySections {
             int immutable;
             int mod_count;
             int view_flags;
-            int reserved0;
+            int enum_key_type_id;
             struct javan_object_map* backing;
             void** keys;
             void** values;
@@ -10037,6 +10037,7 @@ final class RuntimeSourceMemorySections {
             map->immutable = immutable;
             map->mod_count = 0;
             map->view_flags = 0;
+            map->enum_key_type_id = 0;
             map->backing = NULL;
             map->keys = NULL;
             map->values = NULL;
@@ -10073,6 +10074,7 @@ final class RuntimeSourceMemorySections {
             javan_root_frame_push(roots, 2);
             map = javan_map_new_with_capacity(0, immutable);
             map->view_flags = view_flags;
+            map->enum_key_type_id = backing->enum_key_type_id;
             map->backing = backing;
             map->length = 0;
             map->capacity = 0;
@@ -10085,7 +10087,7 @@ final class RuntimeSourceMemorySections {
                 javan_panic("null map");
             }
             javan_object_map* map = (javan_object_map*) value;
-            if (map->magic != JAVAN_OBJECT_MAP_MAGIC) {
+            if (map->magic != JAVAN_OBJECT_MAP_MAGIC || map->enum_key_type_id < 0) {
                 javan_panic("unsupported map object");
             }
             return map;
@@ -10174,7 +10176,24 @@ final class RuntimeSourceMemorySections {
             return javan_object_equals(left, right);
         }
 
+        static int (*javan_enum_ordinal_resolver)(int, void*) = NULL;
+
+        void javan_register_enum_ordinal_resolver(int (*resolver)(int, void*)) {
+            javan_enum_ordinal_resolver = resolver;
+        }
+
+        static int javan_map_enum_ordinal(int enum_type_id, void* key) {
+            if (javan_enum_ordinal_resolver == NULL) {
+                return -1;
+            }
+            return javan_enum_ordinal_resolver(enum_type_id, key);
+        }
+
         static int javan_map_find(javan_object_map* map, void* key) {
+            if (map->enum_key_type_id > 0
+                && javan_map_enum_ordinal(map->enum_key_type_id, key) < 0) {
+                return -1;
+            }
             int length = javan_map_logical_length(map);
             for (int index = 0; index < length; index++) {
                 if (javan_map_key_equals(javan_map_key_unchecked(map, index), key) != 0) {
@@ -10183,11 +10202,53 @@ final class RuntimeSourceMemorySections {
             }
             return -1;
         }
+
+        static int javan_map_insertion_index(javan_object_map* map, void* key) {
+            if (map->enum_key_type_id == 0) {
+                return map->length;
+            }
+            if (key == NULL) {
+                javan_panic("null EnumMap key");
+            }
+            int ordinal = javan_map_enum_ordinal(map->enum_key_type_id, key);
+            if (ordinal < 0) {
+                javan_panic("EnumMap key type mismatch");
+            }
+            for (int index = 0; index < map->length; index++) {
+                int existing_ordinal = javan_map_enum_ordinal(
+                    map->enum_key_type_id,
+                    map->keys[index]
+                );
+                if (existing_ordinal < 0) {
+                    javan_panic("corrupt EnumMap key");
+                }
+                if (existing_ordinal > ordinal) {
+                    return index;
+                }
+            }
+            return map->length;
+        }
         """;
 
     private static final String SOURCE_COLLECTIONS_TAIL = """
         void* javan_hashmap_new(void) {
             return javan_map_new_with_capacity(0, 0);
+        }
+
+        void javan_enummap_initialize(void* value, void* key_type) {
+            javan_object_map* map = javan_map_checked(value);
+            javan_map_mutable_checked(map);
+            if (key_type == NULL) {
+                javan_panic("null EnumMap key type");
+            }
+            javan_runtime_class_state* state = javan_runtime_class_checked(key_type);
+            if (state->is_enum == 0 || state->exact_type_id <= 0) {
+                javan_panic("EnumMap key type is not an enum");
+            }
+            if (map->length != 0 || map->backing != NULL) {
+                javan_panic("EnumMap initialized from non-empty map");
+            }
+            map->enum_key_type_id = state->exact_type_id;
         }
 
         static int javan_hashmap_capacity_for_expected_mappings(int num_mappings) {
@@ -11143,6 +11204,7 @@ final class RuntimeSourceMemorySections {
                 map->values[index] = element;
                 return previous;
             }
+            int insertion_index = javan_map_insertion_index(map, key);
             void* key_root = key;
             void* element_root = element;
             void** javan_map_put_roots[] = {
@@ -11152,8 +11214,12 @@ final class RuntimeSourceMemorySections {
             };
             javan_root_frame_push(javan_map_put_roots, 3);
             javan_map_ensure_capacity(map, map->length + 1);
-            map->keys[map->length] = key_root;
-            map->values[map->length] = element_root;
+            for (int cursor = map->length; cursor > insertion_index; cursor--) {
+                map->keys[cursor] = map->keys[cursor - 1];
+                map->values[cursor] = map->values[cursor - 1];
+            }
+            map->keys[insertion_index] = key_root;
+            map->values[insertion_index] = element_root;
             map->length++;
             javan_root_frame_pop(javan_map_put_roots);
             map->mod_count++;
@@ -11167,6 +11233,7 @@ final class RuntimeSourceMemorySections {
             if (index >= 0) {
                 return map->values[index];
             }
+            int insertion_index = javan_map_insertion_index(map, key);
             void* key_root = key;
             void* element_root = element;
             void** javan_map_put_absent_roots[] = {
@@ -11176,8 +11243,12 @@ final class RuntimeSourceMemorySections {
             };
             javan_root_frame_push(javan_map_put_absent_roots, 3);
             javan_map_ensure_capacity(map, map->length + 1);
-            map->keys[map->length] = key_root;
-            map->values[map->length] = element_root;
+            for (int cursor = map->length; cursor > insertion_index; cursor--) {
+                map->keys[cursor] = map->keys[cursor - 1];
+                map->values[cursor] = map->values[cursor - 1];
+            }
+            map->keys[insertion_index] = key_root;
+            map->values[insertion_index] = element_root;
             map->length++;
             javan_root_frame_pop(javan_map_put_absent_roots);
             map->mod_count++;

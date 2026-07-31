@@ -2320,6 +2320,417 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void enumMapClassConstructorBuildsAndUsesNaturalEnumOrder() throws Exception {
+        final Path project = project("enummap-class-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.EnumMap;
+            import java.util.Map;
+
+            public final class Main {
+                private enum Phase {
+                    FIRST,
+                    SECOND,
+                    THIRD
+                }
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<Phase, String> values = new EnumMap<>(Phase.class);
+                    values.put(Phase.THIRD, "three");
+                    values.put(Phase.FIRST, null);
+                    values.put(Phase.SECOND, "two");
+                    final Object[] keys = values.keySet().toArray();
+                    System.out.println(keys[0]);
+                    System.out.println(keys[1]);
+                    System.out.println(keys[2]);
+                    System.out.println(values.get(Phase.FIRST));
+                    System.out.println(values.get(Phase.THIRD));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/enummap-class-constructor").toString())).stdout()
+            : run.stderr();
+
+        assertThat(nativeOutput).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void enumMapInvalidLookupKeysRemainAbsent() throws Exception {
+        final Path project = project("enummap-invalid-lookup-keys");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.EnumMap;
+            import java.util.Map;
+
+            public final class Main {
+                private enum Phase {
+                    FIRST
+                }
+
+                private enum Other {
+                    FIRST
+                }
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<Phase, String> values = new EnumMap<>(Phase.class);
+                    values.put(Phase.FIRST, "first");
+                    System.out.println(values.get(Other.FIRST));
+                    System.out.println(values.containsKey(Other.FIRST));
+                    System.out.println(values.remove(Other.FIRST));
+                    System.out.println(values.containsKey(null));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/enummap-invalid-lookup-keys").toString())).stdout()
+            : run.stderr();
+
+        assertThat(nativeOutput).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void enumMapRejectsNullPutKeyAtRuntime() throws Exception {
+        final Path project = enumMapFailureProject(
+            "enummap-null-put-key",
+            "final Map<Phase, String> values = new EnumMap<>(Phase.class); values.put(null, \"value\");"
+        );
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String outcome = run.exitCode() == 0
+            ? runtimeFailureOutcome(process(
+                project,
+                List.of(project.resolve(".javan/bin/enummap-null-put-key").toString())
+            ), "null EnumMap key")
+            : "build-failure";
+
+        assertThat(outcome).isEqualTo("runtime-failure:null EnumMap key");
+    }
+
+    @Test
+    void enumMapRejectsWrongEnumPutKeyAtRuntime() throws Exception {
+        final Path project = enumMapFailureProject(
+            "enummap-wrong-put-key",
+            """
+            final Map values = new EnumMap<Phase, String>(Phase.class);
+            values.put(Other.FIRST, "value");
+            """
+        );
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String outcome = run.exitCode() == 0
+            ? runtimeFailureOutcome(process(
+                project,
+                List.of(project.resolve(".javan/bin/enummap-wrong-put-key").toString())
+            ), "EnumMap key type mismatch")
+            : "build-failure";
+
+        assertThat(outcome).isEqualTo("runtime-failure:EnumMap key type mismatch");
+    }
+
+    @Test
+    void enumMapRejectsEnumNameStringAsKeyAtRuntime() throws Exception {
+        final Path project = enumMapFailureProject(
+            "enummap-name-string-key",
+            """
+            final EnumMap values = new EnumMap<Phase, String>(Phase.class);
+            values.put(Phase.FIRST.name(), "value");
+            """
+        );
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String outcome = run.exitCode() == 0
+            ? runtimeFailureOutcome(process(
+                project,
+                List.of(project.resolve(".javan/bin/enummap-name-string-key").toString())
+            ), "EnumMap key type mismatch")
+            : "build-failure";
+
+        assertThat(outcome).isEqualTo("runtime-failure:EnumMap key type mismatch");
+    }
+
+    @Test
+    void enumMapRejectsNullKeyClassAtRuntime() throws Exception {
+        final Path project = enumMapFailureProject(
+            "enummap-null-key-class",
+            "new EnumMap((Class) null);"
+        );
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String outcome = run.exitCode() == 0
+            ? runtimeFailureOutcome(process(
+                project,
+                List.of(project.resolve(".javan/bin/enummap-null-key-class").toString())
+            ), "null EnumMap key type")
+            : "build-failure";
+
+        assertThat(outcome).isEqualTo("runtime-failure:null EnumMap key type");
+    }
+
+    @Test
+    void enumMapRejectsNonEnumKeyClassAtRuntime() throws Exception {
+        final Path project = enumMapFailureProject(
+            "enummap-non-enum-key-class",
+            "new EnumMap((Class) String.class);"
+        );
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String outcome = run.exitCode() == 0
+            ? runtimeFailureOutcome(process(
+                project,
+                List.of(project.resolve(".javan/bin/enummap-non-enum-key-class").toString())
+            ), "EnumMap key type is not an enum")
+            : "build-failure";
+
+        assertThat(outcome).isEqualTo("runtime-failure:EnumMap key type is not an enum");
+    }
+
+    @Test
+    void enumMapAcceptsEmptyEnumKeyClass() throws Exception {
+        final Path project = project("enummap-empty-enum-key-class");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.EnumMap;
+            import java.util.Map;
+
+            public final class Main {
+                private enum Empty {
+                }
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<Empty, String> values = new EnumMap<>(Empty.class);
+                    System.out.println(values.isEmpty());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/enummap-empty-enum-key-class").toString())).stdout()
+            : run.stderr();
+
+        assertThat(nativeOutput).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void enumMapTypedSizeBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("enummap-typed-size");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.EnumMap;
+
+            public final class Main {
+                private enum Phase {
+                    FIRST
+                }
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final EnumMap<Phase, String> values = new EnumMap<>(Phase.class);
+                    values.put(Phase.FIRST, "first");
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/enummap-typed-size").toString())).stdout()
+            : run.stderr();
+
+        assertThat(nativeOutput).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void enumMapTypedGetBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("enummap-typed-get");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.EnumMap;
+
+            public final class Main {
+                private enum Phase {
+                    FIRST
+                }
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final EnumMap<Phase, String> values = new EnumMap<>(Phase.class);
+                    values.put(Phase.FIRST, "first");
+                    System.out.println(values.get(Phase.FIRST));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/enummap-typed-get").toString())).stdout()
+            : run.stderr();
+
+        assertThat(nativeOutput).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void enumMapTypedContainsKeyBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("enummap-typed-contains-key");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.EnumMap;
+
+            public final class Main {
+                private enum Phase {
+                    FIRST
+                }
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final EnumMap<Phase, String> values = new EnumMap<>(Phase.class);
+                    values.put(Phase.FIRST, "first");
+                    System.out.println(values.containsKey(Phase.FIRST));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/enummap-typed-contains-key").toString())).stdout()
+            : run.stderr();
+
+        assertThat(nativeOutput).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void enumMapTypedRemoveAndReinsertPreserveNaturalOrder() throws Exception {
+        final Path project = project("enummap-typed-remove-reinsert");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.EnumMap;
+            import java.util.Map;
+
+            public final class Main {
+                private enum Phase {
+                    FIRST,
+                    SECOND,
+                    THIRD
+                }
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final EnumMap<Phase, String> values = new EnumMap<>(Phase.class);
+                    values.put(Phase.THIRD, "third");
+                    values.put(Phase.FIRST, "first");
+                    values.remove(Phase.FIRST);
+                    values.put(Phase.SECOND, "second");
+                    final Object[] keys = ((Map<Phase, String>) values).keySet().toArray();
+                    System.out.println(keys[0]);
+                    System.out.println(keys[1]);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/enummap-typed-remove-reinsert").toString())).stdout()
+            : run.stderr();
+
+        assertThat(nativeOutput).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void enumMapPutAllRejectsWrongEnumDomainAtRuntime() throws Exception {
+        final Path project = enumMapFailureProject(
+            "enummap-put-all-wrong-domain",
+            """
+            final Map source = new HashMap();
+            source.put(Other.FIRST, "value");
+            final Map<Phase, String> values = new EnumMap<>(Phase.class);
+            values.putAll(source);
+            """
+        );
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String outcome = run.exitCode() == 0
+            ? runtimeFailureOutcome(process(
+                project,
+                List.of(project.resolve(".javan/bin/enummap-put-all-wrong-domain").toString())
+            ), "EnumMap key type mismatch")
+            : "build-failure";
+
+        assertThat(outcome).isEqualTo("runtime-failure:EnumMap key type mismatch");
+    }
+
+    @Test
+    void enumMapEntriesSurviveGcStress() throws Exception {
+        final Path project = project("enummap-gc-stress");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.EnumMap;
+            import java.util.Map;
+
+            public final class Main {
+                private enum Phase {
+                    FIRST,
+                    SECOND
+                }
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<Phase, String> values = new EnumMap<>(Phase.class);
+                    values.put(Phase.SECOND, new String("survives"));
+                    for (int index = 0; index < 64; index++) {
+                        new String("pressure-" + index);
+                    }
+                    System.out.println(values.get(Phase.SECOND));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String output = run.exitCode() == 0
+            ? process(
+                project,
+                List.of(project.resolve(".javan/bin/enummap-gc-stress").toString()),
+                defaultProcessTimeout(),
+                java.util.Map.of("JAVAN_GC_STRESS", "1")
+            ).stdout()
+            : run.stderr();
+
+        assertThat(output).isEqualTo("survives\n");
+    }
+
+    @Test
     void hashMapLoadFactorConstructorRejectsZeroLoadFactorAtRuntime() throws Exception {
         assertMapConstructorFailureAtRuntime(
             "hashmap-load-factor-constructor-zero-load-factor",
@@ -6826,6 +7237,44 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
 
         assertThat(nativeRun.exitCode()).isNotZero();
         assertThat(nativeRun.stderr()).contains(expectedMessage);
+    }
+
+    private Path enumMapFailureProject(final String projectName, final String statement) throws Exception {
+        final Path project = project(projectName);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.EnumMap;
+            import java.util.HashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private enum Phase {
+                    FIRST
+                }
+
+                private enum Other {
+                    FIRST
+                }
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    %s
+                }
+            }
+            """.formatted(statement));
+        return project;
+    }
+
+    private static String runtimeFailureOutcome(final ProcessResult result, final String expectedMessage) {
+        if (result.exitCode() == 0) {
+            return "runtime-success";
+        }
+        return result.stderr().contains(expectedMessage)
+            ? "runtime-failure:" + expectedMessage
+            : "runtime-failure:unexpected-diagnostic";
     }
 
     private void assertMapStaticFactoryFailureAtRuntime(

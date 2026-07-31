@@ -17924,7 +17924,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersEnumToStringIntrinsicToIdentityReturn() {
+    void lowersEnumToStringIntrinsicToStringCopy() {
         final ClassFile mode = classFile(
             "com/acme/Mode",
             "java/lang/Enum",
@@ -17946,7 +17946,14 @@ final class BytecodeToIRTest {
         ), mode);
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.objectStaticField("com/acme/Mode", "READY"))
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_string_from",
+                    List.of(IrExpression.objectStaticField("com/acme/Mode", "READY"))
+                )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 
@@ -17977,7 +17984,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersEnumNameIntrinsicToIdentityReturn() {
+    void lowersEnumNameIntrinsicToStringCopy() {
         final ClassFile mode = classFile(
             "com/acme/Mode",
             "java/lang/Enum",
@@ -17999,7 +18006,14 @@ final class BytecodeToIRTest {
         ), mode);
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.objectStaticField("com/acme/Mode", "READY"))
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_string_from",
+                    List.of(IrExpression.objectStaticField("com/acme/Mode", "READY"))
+                )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 
