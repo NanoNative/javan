@@ -45,7 +45,7 @@ env:
 
 jobs:
   build-info:
-    name: resolve build information
+    name: Build metadata
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -79,7 +79,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
   verify-compatibility-status:
-    name: verify-compatibility-status
+    name: Compatibility docs · Linux x64
     if: "${{ github.event_name != 'push' || !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}"
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -108,7 +108,7 @@ jobs:
           ./mvnw -q -DskipTests -Djacoco.skip=true verify
 
   verify-core:
-    name: verify-core
+    name: Core tests · Linux x64
     if: "${{ github.event_name != 'push' || !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}"
     runs-on: ubuntu-24.04
     timeout-minutes: 90
@@ -246,7 +246,7 @@ jobs:
             target/jacoco-merged.exec
 
   verify-cli-integration:
-    name: verify-cli-integration (${{ matrix.shard }})
+    name: CLI tests · ${{ matrix.shard }} · Linux x64
     if: "${{ github.event_name != 'push' || !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}"
     runs-on: ubuntu-24.04
     timeout-minutes: 90
@@ -406,7 +406,7 @@ jobs:
             target/jacoco-merged.exec
 
   native-acceptance:
-    name: native-acceptance (${{ matrix.target }})
+    name: Native acceptance · ${{ matrix.target }}
     needs:
       - build-info
     permissions:
@@ -433,7 +433,7 @@ jobs:
     secrets: inherit
 
   native-sanitizer:
-    name: native-sanitizer (${{ matrix.target }})
+    name: Native sanitizer · ${{ matrix.target }}
     needs:
       - build-info
     permissions:
@@ -460,7 +460,7 @@ jobs:
     secrets: inherit
 
   native-package-self-host:
-    name: native-package-self-host (${{ matrix.target }})
+    name: Native package · ${{ matrix.target }}
     needs:
       - build-info
     permissions:
@@ -510,7 +510,7 @@ jobs:
     secrets: inherit
 
   platform-smoke:
-    name: platform-smoke (${{ matrix.target }})
+    name: Platform smoke · ${{ matrix.target }}
     strategy:
       fail-fast: false
       max-parallel: 6
@@ -540,11 +540,12 @@ jobs:
     with:
       ref: ${{ inputs.ref || github.sha }}
       runner: ${{ matrix.os }}
+      target: ${{ matrix.target }}
       enabled: ${{ matrix.enabled }}
     secrets: inherit
 
   windows-runtime-smoke:
-    name: windows-runtime-smoke (${{ matrix.shard }})
+    name: Windows runtime · ${{ matrix.shard }} · x64
     if: "${{ github.event_name != 'push' || !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}"
     runs-on: windows-latest
     timeout-minutes: 30
@@ -613,7 +614,7 @@ jobs:
           test
 
   prepare-publication:
-    name: prepare Maven publication workspace
+    name: Prepare Maven publication
     needs:
       - build-info
       - verify-compatibility-status

@@ -25,6 +25,7 @@ concurrency:
 
 jobs:
   verify:
+    name: PR checks
     permissions:
       contents: read
     uses: ./.github/workflows/build-common.yml
