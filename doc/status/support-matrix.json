@@ -11,8 +11,8 @@
     "rule": "done = supported variants + rejected variants; unknown leftovers must be 0 for a release-gated JDK"
   },
   "counts": {
-    "rows": 302,
-    "pass": 302,
+    "rows": 303,
+    "pass": 303,
     "scoped": 0,
     "target": 0,
     "rejected": 0
@@ -55,6 +55,7 @@
     {"feature": "jdk-intrinsics-system-arraycopy", "jdk25": "pass"},
     {"feature": "jdk-intrinsics-arrays-copy-of", "jdk25": "pass"},
     {"feature": "jdk-intrinsics-number-to-string", "jdk25": "pass"},
+    {"feature": "jdk-intrinsics-boolean-parse", "jdk25": "pass"},
     {"feature": "if-else", "jdk25": "pass"},
     {"feature": "while-loop", "jdk25": "pass"},
     {"feature": "records-basic", "jdk25": "pass"},

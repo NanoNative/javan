@@ -324,6 +324,36 @@ final class CliRecordObjectMethodsIntegrationTest extends CliIntegrationSupport 
     }
 
     @Test
+    void typeVariableArrayComponentIsRejectedBeforeCodeGeneration() throws Exception {
+        assertThat(rejectedGenericRecordBuild("type-variable-array", """
+            record Unsafe<T>(T[] value) {
+            }
+
+            public final class Main {
+                public static void main(final String[] args) {
+                    System.out.println(new Unsafe<String>(new String[] {"x"}).hashCode());
+                }
+            }
+            """)).contains("unsupported record component type");
+    }
+
+    @Test
+    void wildcardListArrayComponentIsRejectedBeforeCodeGeneration() throws Exception {
+        assertThat(rejectedGenericRecordBuild("wildcard-list-array", """
+            import java.util.List;
+
+            record Unsafe(List<?>[] value) {
+            }
+
+            public final class Main {
+                public static void main(final String[] args) {
+                    System.out.println(new Unsafe(new List<?>[] {List.of("x")}).hashCode());
+                }
+            }
+            """)).contains("unsupported record component type");
+    }
+
+    @Test
     void typeVariableParameterizedFinalComponentIsRejectedBeforeCodeGeneration() throws Exception {
         assertThat(rejectedGenericRecordBuild("type-variable-parameterized-final", """
             final class Box<T> {

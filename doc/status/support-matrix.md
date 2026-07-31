@@ -9,8 +9,8 @@ External project names do not belong in this matrix; this ledger stays compiler-
 
 | Measure | Count |
 | --- | ---: |
-| rows | 302 |
-| pass | 302 |
+| rows | 303 |
+| pass | 303 |
 | scoped | 0 |
 | target | 0 |
 | rejected | 0 |
@@ -63,6 +63,7 @@ Status mapping:
 | `jdk-intrinsics-system-arraycopy` | pass |
 | `jdk-intrinsics-arrays-copy-of` | pass |
 | `jdk-intrinsics-number-to-string` | pass |
+| `jdk-intrinsics-boolean-parse` | pass |
 | `if-else` | pass |
 | `while-loop` | pass |
 | `records-basic` | pass |

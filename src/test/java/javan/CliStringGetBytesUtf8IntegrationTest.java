@@ -58,6 +58,16 @@ final class CliStringGetBytesUtf8IntegrationTest extends CliIntegrationSupport {
                         printBytes("\\ud83d\\ude00");
                     } else if ("unpaired-surrogate".equals(scenario)) {
                         printBytes("\\ud800");
+                    } else if ("runtime-nul".equals(scenario)) {
+                        printBytes(new String(new char[] {'A', '\\u0000', 'B'}));
+                    } else if ("lone-low-surrogate".equals(scenario)) {
+                        printBytes(new String(new char[] {'\\uDC00'}));
+                    } else if ("consecutive-high-surrogates".equals(scenario)) {
+                        printBytes(new String(new char[] {'\\uD800', '\\uD801'}));
+                    } else if ("low-then-high-surrogate".equals(scenario)) {
+                        printBytes(new String(new char[] {'\\uDC00', '\\uD800'}));
+                    } else if ("mixed-high-text-low-surrogate".equals(scenario)) {
+                        printBytes(new String(new char[] {'\\uD800', 'A', '\\uDC00'}));
                     } else if ("empty".equals(scenario)) {
                         printBytes("");
                     } else if ("fresh-identity".equals(scenario)) {
@@ -176,6 +186,34 @@ final class CliStringGetBytesUtf8IntegrationTest extends CliIntegrationSupport {
     @Test
     void unpairedSurrogateEncodingMatchesJvm() {
         assertThat(nativeRun("unpaired-surrogate")).isEqualTo(jvmRun("unpaired-surrogate"));
+    }
+
+    @Test
+    void runtimeCreatedEmbeddedNulFailsBeforeEncoding() {
+        assertThat(nativeRun("runtime-nul")).matches(result -> result.exitCode() != 0
+            && result.stdout().isEmpty()
+            && result.stderr().contains("native String profile does not support U+0000"));
+    }
+
+    @Test
+    void loneLowSurrogateEncodingMatchesJvm() {
+        assertThat(nativeRun("lone-low-surrogate")).isEqualTo(jvmRun("lone-low-surrogate"));
+    }
+
+    @Test
+    void consecutiveHighSurrogateEncodingMatchesJvm() {
+        assertThat(nativeRun("consecutive-high-surrogates")).isEqualTo(jvmRun("consecutive-high-surrogates"));
+    }
+
+    @Test
+    void lowThenHighSurrogateEncodingMatchesJvm() {
+        assertThat(nativeRun("low-then-high-surrogate")).isEqualTo(jvmRun("low-then-high-surrogate"));
+    }
+
+    @Test
+    void mixedHighTextLowSurrogateEncodingMatchesJvm() {
+        assertThat(nativeRun("mixed-high-text-low-surrogate"))
+            .isEqualTo(jvmRun("mixed-high-text-low-surrogate"));
     }
 
     @Test
