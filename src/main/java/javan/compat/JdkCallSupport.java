@@ -92,7 +92,7 @@ public final class JdkCallSupport {
         intrinsic("Objects.nonNull", "java/util/Objects", "nonNull", "(Ljava/lang/Object;)Z"),
         intrinsic("Objects.toString", "java/util/Objects", "toString", "(Ljava/lang/Object;)Ljava/lang/String;", "(Ljava/lang/Object;Ljava/lang/String;)Ljava/lang/String;"),
         intrinsic("Math.abs", "java/lang/Math", "abs", "(I)I", "(J)J", "(F)F", "(D)D"),
-        intrinsic("Math.round", "java/lang/Math", "round", "(F)I"),
+        intrinsic("Math.round", "java/lang/Math", "round", "(F)I", "(D)J"),
         intrinsic("Math.min", "java/lang/Math", "min", "(II)I", "(JJ)J", "(FF)F", "(DD)D"),
         intrinsic("Math.max", "java/lang/Math", "max", "(II)I", "(JJ)J", "(FF)F", "(DD)D"),
         intrinsic("Math.addExact", "java/lang/Math", "addExact", "(II)I", "(JJ)J"),
