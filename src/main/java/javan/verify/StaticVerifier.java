@@ -363,7 +363,8 @@ public final class StaticVerifier {
                 ));
             }
             if (unsupportedExceptionHandlers(classes, method, reachableEntries)
-                && !supportedSyntheticSwitchMapClass(classFile, method, methodCode)) {
+                && !supportedSyntheticSwitchMapClass(classFile, method, methodCode)
+                && !supportedSyntheticSwitchTableMethod(classes, classFile, method, methodCode)) {
                 diagnostics.add(exceptionHandlerDiagnostic(classFile, method, methodCode.exceptionTableLength(), reachable));
             }
             diagnostics.addAll(unsupportedThreadLifecycleDiagnostics(classFile, method, methodCode, reachable));
@@ -1120,6 +1121,38 @@ public final class StaticVerifier {
             }
         }
         return true;
+    }
+
+    private static boolean supportedSyntheticSwitchTableMethod(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final CodeAttribute code
+    ) {
+        if (!method.isStatic() || !method.isSynthetic()) {
+            return false;
+        }
+        if (!method.name().startsWith("$SWITCH_TABLE$") || !"()[I".equals(method.descriptor())) {
+            return false;
+        }
+        if (code.exceptionTableLength() == 0 || !hasMatchingSwitchTableField(classFile, method.name())) {
+            return false;
+        }
+        for (final CodeException handler : code.exceptionTable()) {
+            if (!supportedEnumSwitchMapHandler(classes, code, handler)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean hasMatchingSwitchTableField(final ClassFile classFile, final String name) {
+        for (final javan.classfile.FieldInfo field : classFile.fields()) {
+            if (field.isStatic() && field.name().equals(name) && "[I".equals(field.descriptor())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private List<Diagnostic> verifyInstruction(
