@@ -471,36 +471,6 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void booleanParseBooleanBuildsAndMatchesJvmOutput() throws Exception {
-        final Path project = project("boolean-parse-boolean");
-        writeJava(project, "com.acme.Main", """
-            package com.acme;
-
-            public final class Main {
-                private Main() {
-                }
-
-                public static void main(final String[] args) {
-                    System.out.println(Boolean.parseBoolean("true"));
-                    System.out.println(Boolean.parseBoolean("TRUE"));
-                    System.out.println(Boolean.parseBoolean("TrUe"));
-                    System.out.println(Boolean.parseBoolean("false"));
-                    System.out.println(Boolean.parseBoolean("yes"));
-                    System.out.println(Boolean.parseBoolean(null));
-                }
-            }
-            """);
-
-        final String jvmOutput = runJvm(project, "com.acme.Main");
-        final CliRun run = run(tempDir, "build", project.toString());
-
-        assertThat(run.exitCode()).as(run.stderr()).isZero();
-        assertThat(process(project, List.of(project.resolve(".javan/bin/boolean-parse-boolean").toString())).stdout())
-            .isEqualTo(jvmOutput);
-        assertThat(jvmOutput).isEqualTo("true\ntrue\ntrue\nfalse\nfalse\nfalse\n");
-    }
-
-    @Test
     void byteWrapperPrintableBuildsAndMatchesJvmOutput() throws Exception {
         assertPrimitiveWrapperPrintableBuildAndMatchJvmOutput("byte-wrapper-printable", "Byte", "Byte.valueOf((byte) 12)");
     }

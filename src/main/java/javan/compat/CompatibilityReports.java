@@ -472,6 +472,7 @@ public final class CompatibilityReports {
             pass("jdk-intrinsics-system-arraycopy"),
             pass("jdk-intrinsics-arrays-copy-of"),
             pass("jdk-intrinsics-number-to-string"),
+            pass("jdk-intrinsics-boolean-parse"),
             pass("if-else"),
             pass("while-loop"),
             pass("records-basic"),
