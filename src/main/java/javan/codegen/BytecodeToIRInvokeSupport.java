@@ -2531,6 +2531,23 @@ final class BytecodeToIRInvokeSupport {
             );
             return true;
         }
+        if ("multiplyExact".equals(methodRef.name()) && "(II)I".equals(methodRef.descriptor())) {
+            final IrExpression right = popInt(classFile, method, stack);
+            final IrExpression left = popInt(classFile, method, stack);
+            lowerMathMultiplyExactInt(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                localDeclarations,
+                pendingExceptionHandlerStacks,
+                sourceLines,
+                left,
+                right
+            );
+            return true;
+        }
         if ("multiplyExact".equals(methodRef.name()) && "(JI)J".equals(methodRef.descriptor())) {
             final IrExpression right = popInt(classFile, method, stack);
             final IrExpression left = popLong(classFile, method, stack);
@@ -2762,6 +2779,70 @@ final class BytecodeToIRInvokeSupport {
         stack.addAll(successStack);
         stack.add(StackValue.longExpression(IrExpression.longCall(
             "javan_math_add_exact_long",
+            List.of(checkedLeft, checkedRight)
+        )));
+    }
+    static void lowerMathMultiplyExactInt(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines,
+        final IrExpression left,
+        final IrExpression right
+    ) {
+        final int leftLocalIndex = localDeclarations.size();
+        final String leftLocalName = "int" + leftLocalIndex;
+        localDeclarations.put(Integer.MIN_VALUE + leftLocalIndex, new IrLocal(IrType.INT, leftLocalName));
+        instructions.add(IrInstruction.assignInt(leftLocalName, left));
+
+        final int rightLocalIndex = localDeclarations.size();
+        final String rightLocalName = "int" + rightLocalIndex;
+        localDeclarations.put(Integer.MIN_VALUE + rightLocalIndex, new IrLocal(IrType.INT, rightLocalName));
+        instructions.add(IrInstruction.assignInt(rightLocalName, right));
+
+        final IrExpression checkedLeft = IrExpression.intLocal(leftLocalName);
+        final IrExpression checkedRight = IrExpression.intLocal(rightLocalName);
+        final int overflowLocalIndex = localDeclarations.size();
+        final String overflowLocalName = "int" + overflowLocalIndex;
+        localDeclarations.put(Integer.MIN_VALUE + overflowLocalIndex, new IrLocal(IrType.INT, overflowLocalName));
+        instructions.add(IrInstruction.assignInt(
+            overflowLocalName,
+            IrExpression.intCall(
+                "javan_math_multiply_exact_int_overflows",
+                List.of(checkedLeft, checkedRight)
+            )
+        ));
+
+        final String successLabel = "label_math_multiply_exact_int_success_"
+            + instruction.offset() + "_" + overflowLocalIndex;
+        instructions.add(IrInstruction.branchIf(
+            successLabel,
+            IrExpression.intComparison(
+                "==",
+                IrExpression.intLocal(overflowLocalName),
+                IrExpression.intLiteral(0)
+            )
+        ));
+        final List<StackValue> successStack = List.copyOf(stack);
+        routePendingPlatformException(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            "java/lang/ArithmeticException",
+            IrExpression.stringLiteral("integer overflow")
+        );
+        instructions.add(IrInstruction.label(successLabel));
+        stack.addAll(successStack);
+        stack.add(StackValue.intExpression(IrExpression.intCall(
+            "javan_math_multiply_exact_int",
             List.of(checkedLeft, checkedRight)
         )));
     }

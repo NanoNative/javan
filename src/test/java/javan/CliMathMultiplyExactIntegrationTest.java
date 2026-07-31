@@ -52,6 +52,16 @@ final class CliMathMultiplyExactIntegrationTest extends CliIntegrationSupport {
                     return 7;
                 }
 
+                private static int intLeft() {
+                    trace = trace * 10 + 1;
+                    return 60_000;
+                }
+
+                private static int intRight() {
+                    trace = trace * 10 + 2;
+                    return 7;
+                }
+
                 private static long longLeft() {
                     trace = trace * 10 + 1;
                     return 2_000_000_000L;
@@ -126,6 +136,62 @@ final class CliMathMultiplyExactIntegrationTest extends CliIntegrationSupport {
                     }
                 }
 
+                private static int intPositiveOverflow() {
+                    try {
+                        return Math.multiplyExact(Integer.MAX_VALUE, 2);
+                    } catch (final ArithmeticException ignored) {
+                        return 61;
+                    }
+                }
+
+                private static int intNegativeOverflow() {
+                    try {
+                        return Math.multiplyExact(Integer.MIN_VALUE, -1);
+                    } catch (final ArithmeticException ignored) {
+                        return -61;
+                    }
+                }
+
+                private static int intPositiveTimesNegativeOverflow() {
+                    try {
+                        return Math.multiplyExact(Integer.MAX_VALUE, -2);
+                    } catch (final ArithmeticException ignored) {
+                        return 62;
+                    }
+                }
+
+                private static int intNegativeTimesPositiveOverflow() {
+                    try {
+                        return Math.multiplyExact(Integer.MIN_VALUE, 2);
+                    } catch (final ArithmeticException ignored) {
+                        return -62;
+                    }
+                }
+
+                private static int intPositiveThresholdOverflow() {
+                    try {
+                        return Math.multiplyExact(Integer.MAX_VALUE / 3 + 1, 3);
+                    } catch (final ArithmeticException ignored) {
+                        return 63;
+                    }
+                }
+
+                private static int intNegativeThresholdOverflow() {
+                    try {
+                        return Math.multiplyExact(Integer.MIN_VALUE / 3 - 1, 3);
+                    } catch (final ArithmeticException ignored) {
+                        return -63;
+                    }
+                }
+
+                private static int loadedIntOperands(final int left, final int right) {
+                    try {
+                        return Math.multiplyExact(left, right);
+                    } catch (final ArithmeticException ignored) {
+                        return 64;
+                    }
+                }
+
                 private static long longLongPositiveOverflow() {
                     try {
                         return Math.multiplyExact(Long.MAX_VALUE, 2L);
@@ -192,7 +258,44 @@ final class CliMathMultiplyExactIntegrationTest extends CliIntegrationSupport {
 
                 public static void main(final String[] args) {
                     final String scenario = args.length == 0 ? "positive" : args[0];
-                    if ("negative".equals(scenario)) {
+                    if ("int-positive".equals(scenario)) {
+                        System.out.println(Math.multiplyExact(60_000, 7));
+                    } else if ("int-negative".equals(scenario)) {
+                        System.out.println(Math.multiplyExact(-60_000, 7));
+                    } else if ("int-positive-negative".equals(scenario)) {
+                        System.out.println(Math.multiplyExact(60_000, -7));
+                    } else if ("int-negative-negative".equals(scenario)) {
+                        System.out.println(Math.multiplyExact(-60_000, -7));
+                    } else if ("int-zero".equals(scenario)) {
+                        System.out.println(Math.multiplyExact(Integer.MIN_VALUE, 0));
+                    } else if ("int-maximum".equals(scenario)) {
+                        System.out.println(Math.multiplyExact(Integer.MAX_VALUE, 1));
+                    } else if ("int-minimum".equals(scenario)) {
+                        System.out.println(Math.multiplyExact(Integer.MIN_VALUE, 1));
+                    } else if ("int-positive-threshold".equals(scenario)) {
+                        System.out.println(Math.multiplyExact(Integer.MAX_VALUE / 3, 3));
+                    } else if ("int-negative-threshold".equals(scenario)) {
+                        System.out.println(Math.multiplyExact(Integer.MIN_VALUE / 3, 3));
+                    } else if ("int-order".equals(scenario)) {
+                        System.out.println(Math.multiplyExact(intLeft(), intRight()));
+                        System.out.println(trace);
+                    } else if ("int-caught-positive-overflow".equals(scenario)) {
+                        System.out.println(intPositiveOverflow());
+                    } else if ("int-caught-negative-overflow".equals(scenario)) {
+                        System.out.println(intNegativeOverflow());
+                    } else if ("int-caught-positive-negative-overflow".equals(scenario)) {
+                        System.out.println(intPositiveTimesNegativeOverflow());
+                    } else if ("int-caught-negative-positive-overflow".equals(scenario)) {
+                        System.out.println(intNegativeTimesPositiveOverflow());
+                    } else if ("int-caught-positive-threshold-overflow".equals(scenario)) {
+                        System.out.println(intPositiveThresholdOverflow());
+                    } else if ("int-caught-negative-threshold-overflow".equals(scenario)) {
+                        System.out.println(intNegativeThresholdOverflow());
+                    } else if ("int-caught-loaded-overflow".equals(scenario)) {
+                        System.out.println(loadedIntOperands(Integer.MAX_VALUE, 2));
+                    } else if ("int-uncaught-overflow".equals(scenario)) {
+                        System.out.println(Math.multiplyExact(Integer.MAX_VALUE, 2));
+                    } else if ("negative".equals(scenario)) {
                         System.out.println(Math.multiplyExact(-3_000_000_000L, 7));
                     } else if ("positive-negative".equals(scenario)) {
                         System.out.println(Math.multiplyExact(3_000_000_000L, -7));
@@ -278,6 +381,115 @@ final class CliMathMultiplyExactIntegrationTest extends CliIntegrationSupport {
         runJvm(project, MAIN_CLASS);
         requireBuildSuccess(run(tempDir, "build", project.toString()));
         binary = project.resolve(".javan/bin/math-multiply-exact");
+    }
+
+    @Test
+    void intPositiveProductMatchesJvm() {
+        assertThat(nativeRun("int-positive")).isEqualTo(jvmRun("int-positive"));
+    }
+
+    @Test
+    void intNegativeProductMatchesJvm() {
+        assertThat(nativeRun("int-negative")).isEqualTo(jvmRun("int-negative"));
+    }
+
+    @Test
+    void intPositiveTimesNegativeProductMatchesJvm() {
+        assertThat(nativeRun("int-positive-negative")).isEqualTo(jvmRun("int-positive-negative"));
+    }
+
+    @Test
+    void intNegativeTimesNegativeProductMatchesJvm() {
+        assertThat(nativeRun("int-negative-negative")).isEqualTo(jvmRun("int-negative-negative"));
+    }
+
+    @Test
+    void intZeroProductMatchesJvm() {
+        assertThat(nativeRun("int-zero")).isEqualTo(jvmRun("int-zero"));
+    }
+
+    @Test
+    void intMaximumSafeProductMatchesJvm() {
+        assertThat(nativeRun("int-maximum")).isEqualTo(jvmRun("int-maximum"));
+    }
+
+    @Test
+    void intMinimumSafeProductMatchesJvm() {
+        assertThat(nativeRun("int-minimum")).isEqualTo(jvmRun("int-minimum"));
+    }
+
+    @Test
+    void intPositiveThresholdProductMatchesJvm() {
+        assertThat(nativeRun("int-positive-threshold")).isEqualTo(jvmRun("int-positive-threshold"));
+    }
+
+    @Test
+    void intNegativeThresholdProductMatchesJvm() {
+        assertThat(nativeRun("int-negative-threshold")).isEqualTo(jvmRun("int-negative-threshold"));
+    }
+
+    @Test
+    void intOperandsAreEvaluatedOnceInOrder() {
+        assertThat(nativeRun("int-order")).isEqualTo(jvmRun("int-order"));
+    }
+
+    @Test
+    void intPositiveOverflowCanBeCaught() {
+        assertThat(nativeRun("int-caught-positive-overflow")).isEqualTo(jvmRun("int-caught-positive-overflow"));
+    }
+
+    @Test
+    void intNegativeOverflowCanBeCaught() {
+        assertThat(nativeRun("int-caught-negative-overflow")).isEqualTo(jvmRun("int-caught-negative-overflow"));
+    }
+
+    @Test
+    void intPositiveTimesNegativeOverflowCanBeCaught() {
+        assertThat(nativeRun("int-caught-positive-negative-overflow"))
+            .isEqualTo(jvmRun("int-caught-positive-negative-overflow"));
+    }
+
+    @Test
+    void intNegativeTimesPositiveOverflowCanBeCaught() {
+        assertThat(nativeRun("int-caught-negative-positive-overflow"))
+            .isEqualTo(jvmRun("int-caught-negative-positive-overflow"));
+    }
+
+    @Test
+    void intPositiveThresholdAdjacentOverflowCanBeCaught() {
+        assertThat(nativeRun("int-caught-positive-threshold-overflow"))
+            .isEqualTo(jvmRun("int-caught-positive-threshold-overflow"));
+    }
+
+    @Test
+    void intNegativeThresholdAdjacentOverflowCanBeCaught() {
+        assertThat(nativeRun("int-caught-negative-threshold-overflow"))
+            .isEqualTo(jvmRun("int-caught-negative-threshold-overflow"));
+    }
+
+    @Test
+    void loadedIntOperandOverflowCanBeCaught() {
+        assertThat(nativeRun("int-caught-loaded-overflow")).isEqualTo(jvmRun("int-caught-loaded-overflow"));
+    }
+
+    @Test
+    void uncaughtIntOverflowFailsAtNativeBoundary() {
+        assertThat(nativeRun("int-uncaught-overflow").exitCode()).isNotZero();
+    }
+
+    @Test
+    void uncaughtIntOverflowProducesNoStandardOutput() {
+        assertThat(nativeRun("int-uncaught-overflow").stdout()).isEmpty();
+    }
+
+    @Test
+    void uncaughtIntOverflowNamesArithmeticException() {
+        assertThat(nativeRun("int-uncaught-overflow").stderr()).contains("java/lang/ArithmeticException");
+    }
+
+    @Test
+    void uncaughtIntOverflowNamesMessage() {
+        assertThat(nativeRun("int-uncaught-overflow").stderr()).contains("integer overflow");
     }
 
     @Test

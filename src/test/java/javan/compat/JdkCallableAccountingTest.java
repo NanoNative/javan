@@ -1336,6 +1336,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksMathMultiplyExactIntAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Math", "multiplyExact", "(II)I")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksMathMultiplyExactLongLongAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Math", "multiplyExact", "(JJ)J")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

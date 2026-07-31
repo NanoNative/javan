@@ -75,6 +75,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void mathMultiplyExactIntIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Math",
+            "multiplyExact",
+            "(II)I"
+        ))).isTrue();
+    }
+
+    @Test
     void mathMultiplyExactLongLongIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/Math",

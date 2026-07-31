@@ -274,6 +274,23 @@ final class IntrinsicUsageReportsTest {
     }
 
     @Test
+    void countsReachableMathMultiplyExactIntAsIntrinsic() {
+        final IntrinsicUsageReports reports = new IntrinsicUsageReports();
+        final EntryPoint entry = new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V");
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classFile("com/acme/Main", method(
+                "main",
+                "([Ljava/lang/String;)V",
+                instruction("java/lang/Math", "multiplyExact", "(II)I")
+            ))
+        );
+
+        assertThat(reports.analyze(classes, List.of(entry)).intrinsics())
+            .contains(new IntrinsicCallCount("Math.multiplyExact", 1));
+    }
+
+    @Test
     void countsReachableMathAddExactLongAsIntrinsic() {
         final IntrinsicUsageReports reports = new IntrinsicUsageReports();
         final EntryPoint entry = new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V");
