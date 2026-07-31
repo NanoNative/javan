@@ -27,6 +27,13 @@ Maven writes the current files and fails once so the generated change can be rev
 the same command to confirm it is stable. No separate report command or manual copy step is
 required.
 
+When a tested behavior becomes supported, register its named scenario with the appropriate
+`pass(...)`, `scoped(...)`, or `target(...)` entry in
+`CompatibilityReports.supportRows()` and cover that entry in `CompatibilityReportsTest`.
+Do not edit `doc/status/support-matrix.md` or `doc/status/support-matrix.json` directly:
+`mvn verify` generates both files from that canonical ledger. Commit the generated changes,
+then rerun `mvn verify`; the second run must report that compatibility status is current.
+
 The tracked JDK inventory is pinned in `pom.xml` to Eclipse Temurin 25.0.1 on Linux x64.
 Other Java 25 environments leave that reference snapshot unchanged while still producing
 their active-JDK reports. CI requires the exact reference environment and gates the snapshot
