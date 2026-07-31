@@ -28,7 +28,7 @@ elif [ -f "$ROOT/target/classes/javan/Main.class" ]; then
   chmod +x "$JAVAN_BIN"
 else
   printf '%s\n' "Missing javan runtime: build target/classes or set JAVAN_BIN=/path/to/javan." >&2
-  printf '%s\n' "Run mvn -q package first." >&2
+  printf '%s\n' "Run ./mvnw -q package first." >&2
   exit 2
 fi
 

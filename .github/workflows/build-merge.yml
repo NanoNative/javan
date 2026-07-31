@@ -1,0 +1,36 @@
+name: CD · Main Snapshot
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: build-main-${{ github.ref || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: "${{ github.event_name != 'push' || !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}"
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-common.yml
+    with:
+      ref: ${{ github.sha }}
+      prepare_publication: true
+      snapshot: true
+    secrets: inherit
+
+  publish-central:
+    needs:
+      - verify
+    if: ${{ false }}
+    uses: ./.github/workflows/publish-central.yml
+    with:
+      run_id: ${{ github.run_id }}
+      dry_run: false
+      build_output_timestamp: ${{ needs.verify.outputs.build_output_timestamp }}
+    secrets: inherit

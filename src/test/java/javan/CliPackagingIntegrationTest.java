@@ -6,7 +6,9 @@ import javan.reporting.RuntimeFootprintReports;
 import javan.util.Files2;
 import javan.util.Json;
 import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ResourceAccessMode;
@@ -33,9 +35,12 @@ import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 
 @Execution(SAME_THREAD)
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @ResourceLock("native-cli-heavy")
 @ResourceLock(value = Resources.SYSTEM_PROPERTIES, mode = ResourceAccessMode.READ)
 final class CliPackagingIntegrationTest extends CliIntegrationSupport {
+    private Path primitiveLiteralBootstrap;
+
     @Test
     void testDelegatesToMavenWrapperAfterBuildingClasses() throws Exception {
         final Path project = project("maven-test");
@@ -256,27 +261,30 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         );
     }
 
-    @Test
-    void nativeBuiltJavanBuildsPlainBooleanLiteralProgram() throws Exception {
+    @BeforeAll
+    void buildPrimitiveLiteralBootstrap(@TempDir final Path bootstrapTempDir) throws Exception {
         final Path root = Path.of("").toAbsolutePath().normalize();
         final Path classes = root.resolve("target/classes");
         assertThat(classes.resolve("javan/Main.class")).exists();
 
         final CliRun bootstrapBuild = runWithTimeout(
-            tempDir,
+            bootstrapTempDir,
             Duration.ofSeconds(120),
             "build",
             classes.toString(),
             "--main",
             "javan.Main",
             "--output",
-            "javan-bootstrap-literal"
+            "javan-bootstrap-primitive-literals"
         );
         assertThat(bootstrapBuild.exitCode()).as(bootstrapBuild.stderr()).isZero();
 
-        final Path bootstrapBinary = root.resolve("target/.javan/bin/javan-bootstrap-literal");
-        assertThat(bootstrapBinary).isExecutable();
+        primitiveLiteralBootstrap = root.resolve("target/.javan/bin/javan-bootstrap-primitive-literals");
+        assertThat(primitiveLiteralBootstrap).isExecutable();
+    }
 
+    @Test
+    void nativeBuiltJavanBuildsPlainBooleanLiteralProgram() throws Exception {
         final Path probeProject = tempDir.resolve("selfhost-plain-boolean");
         final Path probeClasses = probeProject.resolve("classes");
         Files.createDirectories(probeClasses);
@@ -318,7 +326,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         final ProcessResult nativeBuild = process(
             tempDir,
             List.of(
-                bootstrapBinary.toString(),
+                primitiveLiteralBootstrap.toString(),
                 "build",
                 probeClasses.toString(),
                 "--main",
@@ -333,34 +341,17 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
 
         final Path probeBinary = probeProject.resolve(".javan/bin/selfhost-plain-boolean");
         assertThat(probeBinary).isExecutable();
-        assertThat(process(tempDir, List.of(probeBinary.toString())).stdout()).isEqualTo("true\nfalse\n");
+        assertThat(process(tempDir, List.of(probeBinary.toString())).stdout())
+            .as("native-built Javan boolean literal output")
+            .isEqualTo("true\nfalse\n");
     }
 
     @Test
     void nativeBuiltJavanBuildsPlainLongLiteralProgram() throws Exception {
-        final Path root = Path.of("").toAbsolutePath().normalize();
-        final Path classes = root.resolve("target/classes");
-        assertThat(classes.resolve("javan/Main.class")).exists();
-
-        final CliRun bootstrapBuild = runWithTimeout(
-            tempDir,
-            Duration.ofSeconds(120),
-            "build",
-            classes.toString(),
-            "--main",
-            "javan.Main",
-            "--output",
-            "javan-bootstrap-long-literal"
-        );
-        assertThat(bootstrapBuild.exitCode()).as(bootstrapBuild.stderr()).isZero();
-
-        final Path bootstrapBinary = root.resolve("target/.javan/bin/javan-bootstrap-long-literal");
-        assertThat(bootstrapBinary).isExecutable();
-
-        final Path probeProject = tempDir.resolve("selfhost-plain-long");
-        final Path probeClasses = probeProject.resolve("classes");
-        Files.createDirectories(probeClasses);
-        writeJava(probeProject, "com.acme.Main", """
+        final Path longProject = tempDir.resolve("selfhost-plain-long");
+        final Path longClasses = longProject.resolve("classes");
+        Files.createDirectories(longClasses);
+        writeJava(longProject, "com.acme.Main", """
             package com.acme;
 
             public final class Main {
@@ -378,26 +369,26 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             }
             """);
 
-        final ProcessResult javac = process(
+        final ProcessResult longJavac = process(
             tempDir,
             List.of(
                 CliTestHarness.currentJavacCommand(),
                 "--release",
                 "25",
                 "-d",
-                probeClasses.toString(),
-                probeProject.resolve("src/main/java/com/acme/Main.java").toString()
+                longClasses.toString(),
+                longProject.resolve("src/main/java/com/acme/Main.java").toString()
             ),
             Duration.ofSeconds(30)
         );
-        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        assertThat(longJavac.exitCode()).as(longJavac.stderr()).isZero();
 
-        final ProcessResult nativeBuild = process(
+        final ProcessResult longNativeBuild = process(
             tempDir,
             List.of(
-                bootstrapBinary.toString(),
+                primitiveLiteralBootstrap.toString(),
                 "build",
-                probeClasses.toString(),
+                longClasses.toString(),
                 "--main",
                 "com.acme.Main",
                 "--output",
@@ -405,12 +396,14 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             ),
             Duration.ofSeconds(120)
         );
-        assertThat(nativeBuild.exitCode()).as(nativeBuild.stderr()).isZero();
-        assertThat(nativeBuild.stderr()).doesNotContain("debug[JAVAN040]");
+        assertThat(longNativeBuild.exitCode()).as(longNativeBuild.stderr()).isZero();
+        assertThat(longNativeBuild.stderr()).doesNotContain("debug[JAVAN040]");
 
-        final Path probeBinary = probeProject.resolve(".javan/bin/selfhost-plain-long");
-        assertThat(probeBinary).isExecutable();
-        assertThat(process(tempDir, List.of(probeBinary.toString())).stdout()).isEqualTo("0\n1\n");
+        final Path longBinary = longProject.resolve(".javan/bin/selfhost-plain-long");
+        assertThat(longBinary).isExecutable();
+        assertThat(process(tempDir, List.of(longBinary.toString())).stdout())
+            .as("native-built Javan long literal output")
+            .isEqualTo("0\n1\n");
     }
 
     @Test

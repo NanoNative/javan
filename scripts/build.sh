@@ -5,6 +5,7 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT"
 
 OUTPUT=${1:-dist/javan}
+VERSION=$(./mvnw -q help:evaluate -Dexpression=project.version -DforceStdout | tail -n 1)
 
 REUSE_TARGET=${JAVAN_BUILD_REUSE_TARGET:-false}
 if [ "$REUSE_TARGET" = "true" ]; then
@@ -13,13 +14,12 @@ if [ "$REUSE_TARGET" = "true" ]; then
     exit 1
   fi
 else
-  mvn -q -DskipTests clean package
+  ./mvnw -q -DskipTests clean package
 fi
 mkdir -p "$(dirname -- "$OUTPUT")"
-VERSION=$(sed -n 's/.*<version>\(.*\)<\/version>.*/\1/p' pom.xml | head -n 1)
 JAR="target/javan-$VERSION.jar"
 if [ -z "$VERSION" ]; then
-  printf '%s\n' "Could not resolve project version from pom.xml." >&2
+  printf '%s\n' "Could not resolve the Maven project version." >&2
   exit 1
 fi
 if [ "$REUSE_TARGET" != "true" ] && [ ! -f "$JAR" ]; then

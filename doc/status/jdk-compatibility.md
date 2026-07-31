@@ -14,9 +14,6 @@ bytecode pattern or rejects it before native code generation.
 
 ## Active Scan
 
-- scanned java: `25.0.1`
-- scanned vendor: `Eclipse Adoptium`
-- scanned platform: `Linux/amd64`
 - scanned JDK: `JDK25`
 - project classfile majors: `[69]`
 - JDK classfile majors: `[52, 69]`

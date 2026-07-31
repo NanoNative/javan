@@ -12,8 +12,8 @@ mutable external services, or whatever tool version wandered into `PATH` this mo
 This policy covers:
 
 - required local macOS native smoke
-- CI-based Linux x64 and Linux aarch64 verification, with macOS aarch64 covered by
-  the required local host gate and macOS x64 deferred until the active matrix is stable
+- CI-based Linux package verification, with macOS package rows retained but disabled after
+  disproportionate self-host timing
 - Docker-based Linux x64 and Linux aarch64 verification where available
 - future Windows verification
 - JDK matrix checks
@@ -38,7 +38,7 @@ Required local commands:
 For focused local debugging, the release gate expands to:
 
 ```sh
-mvn -q clean verify
+./mvnw -q clean verify
 scripts/build.sh
 ARCHIVE=$(.github/scripts/package-release.sh "${JAVAN_VERSION:-}")
 .github/scripts/verify-package.sh "$ARCHIVE"
@@ -52,7 +52,7 @@ JAVAN_BIN=bin/javan JAVAN_SANITIZER_REQUIRED=true sh .github/scripts/sanitizer-s
 
 The sanitizer suite includes generated-app counter proof, package-backed generated
 self-host allocation/GC/no-residue proof, and native-library/binding ownership proof.
-Local macOS aarch64 proof exists; remote Linux release-matrix validation is the CI gate.
+Local macOS aarch64 proof exists; remote Linux release-matrix validation remains the CI gate.
 The self-host proof requires nonzero allocation and GC counters plus zero
 final tracked heap/root residue.
 
@@ -79,10 +79,11 @@ entrypoints on each required target.
 | --- | --- | --- |
 | linux-x64 | `ubuntu-24.04` | `mvn verify`, acceptance, host `--target`, sanitizer suite with self-host proof |
 | linux-aarch64 | `ubuntu-24.04-arm` | `mvn verify`, acceptance, host `--target`, sanitizer suite with self-host proof |
+| macos-x64 | `macos-15-intel` | disabled package row; historically slower architecture lane |
+| macos-aarch64 | `macos-15` | disabled package row; local first self-rebuild exceeded 29 minutes |
 
-macOS aarch64 remains a required local host gate and is not a remote release row.
-`macos-x64` remains deferred until a future release contract admits it.
-Windows targets remain tracked rows until the runtime and linker path are ported.
+Linux rows are required. macOS and Windows package targets remain explicit `enabled: false`
+rows until their timing or native runtime blockers are resolved.
 
 ## Container Matrix
 
@@ -197,7 +198,7 @@ Good tests:
 - `Math.abs(int)` lowers and matches JVM output
 - `Math.abs(float)` lowers and matches JVM output
 - `System.arraycopy` rejects primitive type mismatch
-- Maven wrapper is preferred over system Maven
+- repository Maven wrapper is used instead of system Maven
 - missing configured JDK cache entry fails with a toolchain diagnostic
 
 Bad tests:
@@ -211,28 +212,27 @@ Shared setup is allowed. Shared assumptions are not.
 
 ## CI Stages
 
-Current CI stages in `.github/workflows/ci.yml`:
+Current pull-request and `main` entry workflows delegate to
+`.github/workflows/build-common.yml`. Its independent stages run in parallel:
 
-1. JDK 25, Go, Rust, runner Python, and native toolchain setup
-2. `mvn verify`
-3. public acceptance suite
-4. host-target native build check
-5. sanitizer suite with required C/Rust/Go/Python binding proof
-6. extracted self-host package smoke with packaged `bin/javan`
+1. generated compatibility-status verification on the canonical Linux x64 platform
+2. core `mvn verify` with merged JaCoCo reporting
+3. six CLI integration shards
+4. Linux x64 and arm64 public acceptance proof
+5. Linux x64 and arm64 sanitizer proof with required C/Rust/Go/Python bindings
+6. Linux x64/arm64 extracted self-host package proof with packaged `bin/javan`; disabled
+   macOS and Windows artifact rows remain visible in the same matrix
+7. Java compiler/platform-contract smoke on Linux, macOS, and Windows for x64 and arm64
+8. focused Windows x64 runtime cross-compilation probes
 
-For existing reduced `platform-smoke` rows, the extracted package smoke still proves the
-packaged self-host sanitizer path, but it reuses the generated self-host C output from
-the immediately preceding packaged self-build and narrows the repeated probe set to
-`--version` plus the tiny build/check loop instead of rerunning the full packaged
-`check/report target/classes` cycle.
+The native proofs remain separate reusable jobs so acceptance, sanitizer, and package
+self-host work no longer wait on one another. Platform-contract rows have explicit
+`enabled` flags; an unreliable or disproportionately slow row is disabled in place rather
+than deleted.
 
-Current release workflow stages:
-
-1. native self-host release gate
-2. extracted-package verification
-3. package-backed acceptance suite
-4. package-backed sanitizer/leak suite
-5. host-native package upload
+The manual release workflow validates the branch and version, delegates to this same common
+build, downloads its verified native package artifacts, then publishes release metadata and
+the GitHub release. It does not rebuild packages through a second path.
 
 Planned expanded CI stages:
 

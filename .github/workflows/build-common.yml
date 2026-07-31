@@ -1,86 +1,145 @@
-name: CI
+name: CI · Common Build
 
 on:
-  pull_request:
-    branches:
-      - main
-    types:
-      - opened
-      - reopened
-      - synchronize
-      - ready_for_review
-  push:
-    branches:
-      - main
+  workflow_call:
+    inputs:
+      ref:
+        required: false
+        default: ''
+        type: string
+      prepare_publication:
+        required: false
+        default: false
+        type: boolean
+      snapshot:
+        required: false
+        default: false
+        type: boolean
+    outputs:
+      resolved_version:
+        description: Version used for publication artifacts
+        value: ${{ jobs.build-info.outputs.resolved_version }}
+      commit_sha:
+        description: Commit built by this workflow
+        value: ${{ jobs.build-info.outputs.commit_sha }}
+      build_output_timestamp:
+        description: Reproducible build timestamp from the built commit
+        value: ${{ jobs.build-info.outputs.build_output_timestamp }}
   workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to build
+        required: false
+        default: ''
+        type: string
+      snapshot:
+        description: Append -SNAPSHOT to the UTC date version
+        required: false
+        default: false
+        type: boolean
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: false
-
-permissions:
-  contents: read
+permissions: {}
 
 env:
   JAVAN_COVERAGE_SOFT_TARGET: "0.09"
 
 jobs:
+  build-info:
+    name: resolve build information
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      resolved_version: ${{ steps.info.outputs.resolved_version }}
+      commit_sha: ${{ steps.info.outputs.commit_sha }}
+      build_output_timestamp: ${{ steps.info.outputs.build_output_timestamp }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: Resolve immutable build information
+        id: info
+        shell: sh
+        env:
+          SNAPSHOT: ${{ inputs.snapshot }}
+        run: |
+          set -eu
+          version=$(date -u +%Y.%m.%d)
+          if [ "$SNAPSHOT" = "true" ]; then
+            version=$version-SNAPSHOT
+          fi
+          {
+            printf 'resolved_version=%s\n' "$version"
+            printf 'commit_sha=%s\n' "$(git rev-parse HEAD)"
+            printf 'build_output_timestamp=%s\n' "$(git log -1 --format=%cI HEAD)"
+          } >> "$GITHUB_OUTPUT"
+
   verify-compatibility-status:
     name: verify-compatibility-status
     if: "${{ github.event_name != 'push' || !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}"
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Set up reference JDK
-        uses: actions/setup-java@v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          java-version: '25.0.1'
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: Read Java info
+        id: java_info
+        uses: YunaBraska/java-info-action@11a434ffbf6bb3357363d1933be71a4076a90a6b # 3
+
+      - name: Set up canonical compatibility JDK
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
+        with:
+          java-version: ${{ steps.java_info.outputs.java_version }}
           distribution: temurin
           cache: maven
 
       - name: Verify generated compatibility status
         run: >-
-          mvn -q -DskipTests -Djacoco.skip=true
-          -Djavan.compatibility.require-reference-jdk=true verify
+          ./mvnw -q -DskipTests -Djacoco.skip=true verify
 
   verify-core:
-    name: verify-core (${{ matrix.target }})
+    name: verify-core
     if: "${{ github.event_name != 'push' || !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}"
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      max-parallel: 3
-      matrix:
-        include:
-          - target: linux-x64
-            os: ubuntu-24.04
-          - target: linux-aarch64
-            os: ubuntu-24.04-arm
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: Read Java info
+        id: java_info
+        uses: YunaBraska/java-info-action@11a434ffbf6bb3357363d1933be71a4076a90a6b # 3
 
       - name: Set up JDK
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
         with:
-          java-version: '25'
+          java-version: ${{ steps.java_info.outputs.java_version }}
           distribution: temurin
           cache: maven
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: '1.26.4'
           cache: false
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@1.96.0
+        uses: dtolnay/rust-toolchain@191af2e1955bbe165f9bbacff2d2438002dff4d4 # 1.96.0
 
       - name: Verify binding toolchains
         run: |
@@ -103,7 +162,7 @@ jobs:
 
       - name: Resolve Maven local repository
         run: |
-          repo=$(mvn -q help:evaluate -Dexpression=settings.localRepository -DforceStdout | tail -n 1)
+          repo=$(./mvnw -q help:evaluate -Dexpression=settings.localRepository -DforceStdout | tail -n 1)
           echo "MAVEN_REPO_LOCAL=$repo" >> "$GITHUB_ENV"
 
       - name: Install bundled external smoke artifacts
@@ -113,11 +172,11 @@ jobs:
       - name: Verify core Maven suite
         run: |
           status=0
-          mvn -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -Dtest='!Cli*IntegrationTest,!CliExternalProbeAcceptanceIntegrationTest' -Djavan.coverage.check.skip=true verify || status=$?
+          ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -Dtest='!Cli*IntegrationTest,!CliExternalProbeAcceptanceIntegrationTest' verify || status=$?
 
           if find target -maxdepth 1 -type f -name 'jacoco-surefire-*.exec' -print -quit | grep -q . \
             || [ -d target/jacoco-child ]; then
-            mvn -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -DskipTests -Djavan.coverage.check.skip=true jacoco:merge@merge-coverage jacoco:report@report || true
+            ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -DskipTests jacoco:merge@merge-coverage jacoco:report@report || true
           fi
 
           if [ "$status" -ne 0 ]; then
@@ -177,9 +236,9 @@ jobs:
 
       - name: Upload coverage artifact
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: jacoco-core-${{ matrix.target }}
+          name: jacoco-core-linux-x64
           retention-days: 7
           if-no-files-found: warn
           path: |
@@ -191,9 +250,11 @@ jobs:
     if: "${{ github.event_name != 'push' || !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}"
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: 6
       matrix:
         include:
           - shard: cli-general
@@ -202,32 +263,44 @@ jobs:
           - shard: cli-jdk-semantics
             test-selector: >-
               CliJdkSemanticsIntegrationTest
-          - shard: cli-runtime-heavy
+          - shard: cli-thread-runtime
             test-selector: >-
-              CliThreadRuntimeIntegrationTest,CliRuntimeTranslationIntegrationTest
-          - shard: packaging-and-probes
+              CliThreadRuntimeIntegrationTest
+          - shard: cli-runtime-translation
             test-selector: >-
-              CliExternalProbeAcceptanceIntegrationTest,CliPackagingIntegrationTest
+              CliRuntimeTranslationIntegrationTest
+          - shard: cli-packaging
+            test-selector: >-
+              CliPackagingIntegrationTest
+          - shard: cli-external-probes
+            test-selector: >-
+              CliExternalProbeAcceptanceIntegrationTest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: Read Java info
+        id: java_info
+        uses: YunaBraska/java-info-action@11a434ffbf6bb3357363d1933be71a4076a90a6b # 3
 
       - name: Set up JDK
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
         with:
-          java-version: '25'
+          java-version: ${{ steps.java_info.outputs.java_version }}
           distribution: temurin
           cache: maven
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: '1.26.4'
           cache: false
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@1.96.0
+        uses: dtolnay/rust-toolchain@191af2e1955bbe165f9bbacff2d2438002dff4d4 # 1.96.0
 
       - name: Verify binding toolchains
         run: |
@@ -249,7 +322,7 @@ jobs:
 
       - name: Resolve Maven local repository
         run: |
-          repo=$(mvn -q help:evaluate -Dexpression=settings.localRepository -DforceStdout | tail -n 1)
+          repo=$(./mvnw -q help:evaluate -Dexpression=settings.localRepository -DforceStdout | tail -n 1)
           echo "MAVEN_REPO_LOCAL=$repo" >> "$GITHUB_ENV"
 
       - name: Install bundled external smoke artifacts
@@ -259,11 +332,11 @@ jobs:
       - name: Verify CLI integration Maven suite
         run: |
           status=0
-          mvn -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -Dtest='${{ matrix.test-selector }}' -Djavan.coverage.check.skip=true verify || status=$?
+          ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -Dtest='${{ matrix.test-selector }}' verify || status=$?
 
           if find target -maxdepth 1 -type f -name 'jacoco-surefire-*.exec' -print -quit | grep -q . \
             || [ -d target/jacoco-child ]; then
-            mvn -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -DskipTests -Djavan.coverage.check.skip=true jacoco:merge@merge-coverage jacoco:report@report || true
+            ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -DskipTests jacoco:merge@merge-coverage jacoco:report@report || true
           fi
 
           if [ "$status" -ne 0 ]; then
@@ -323,7 +396,7 @@ jobs:
 
       - name: Upload coverage artifact
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: jacoco-cli-integration-${{ matrix.shard }}
           retention-days: 7
@@ -332,14 +405,15 @@ jobs:
             target/site/jacoco/**
             target/jacoco-merged.exec
 
-  native-smoke:
-    name: native-smoke (${{ matrix.target }})
-    if: "${{ github.event_name != 'push' || !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}"
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
+  native-acceptance:
+    name: native-acceptance (${{ matrix.target }})
+    needs:
+      - build-info
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
-      max-parallel: 3
+      max-parallel: 2
       matrix:
         include:
           - target: linux-x64
@@ -348,84 +422,134 @@ jobs:
           - target: linux-aarch64
             os: ubuntu-24.04-arm
             sanitizer-scope: platform-smoke
+    uses: ./.github/workflows/native-proof.yml
+    with:
+      ref: ${{ inputs.ref || github.sha }}
+      runner: ${{ matrix.os }}
+      target: ${{ matrix.target }}
+      sanitizer_scope: ${{ matrix.sanitizer-scope }}
+      proof: acceptance
+      version: ${{ needs.build-info.outputs.resolved_version }}
+    secrets: inherit
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
+  native-sanitizer:
+    name: native-sanitizer (${{ matrix.target }})
+    needs:
+      - build-info
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - target: linux-x64
+            os: ubuntu-24.04
+            sanitizer-scope: full
+          - target: linux-aarch64
+            os: ubuntu-24.04-arm
+            sanitizer-scope: platform-smoke
+    uses: ./.github/workflows/native-proof.yml
+    with:
+      ref: ${{ inputs.ref || github.sha }}
+      runner: ${{ matrix.os }}
+      target: ${{ matrix.target }}
+      sanitizer_scope: ${{ matrix.sanitizer-scope }}
+      proof: sanitizer
+      version: ${{ needs.build-info.outputs.resolved_version }}
+    secrets: inherit
 
-      - name: Set up JDK
-        uses: actions/setup-java@v5
-        with:
-          java-version: '25'
-          distribution: temurin
-          cache: maven
+  native-package-self-host:
+    name: native-package-self-host (${{ matrix.target }})
+    needs:
+      - build-info
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        include:
+          - target: linux-x64
+            os: ubuntu-24.04
+            sanitizer-scope: full
+            enabled: true
+          - target: linux-aarch64
+            os: ubuntu-24.04-arm
+            sanitizer-scope: platform-smoke
+            enabled: true
+          - target: macos-x64
+            os: macos-15-intel
+            sanitizer-scope: platform-smoke
+            enabled: false
+            reason: historical slower architecture lane
+          - target: macos-aarch64
+            os: macos-15
+            sanitizer-scope: platform-smoke
+            enabled: false
+            reason: local self-host proof exceeded the 45-minute job projection
+          - target: windows-x64
+            os: windows-2025
+            sanitizer-scope: platform-smoke
+            enabled: false
+            reason: native linker and process runtime are incomplete
+          - target: windows-aarch64
+            os: windows-11-arm
+            sanitizer-scope: platform-smoke
+            enabled: false
+            reason: native linker and process runtime are incomplete
+    uses: ./.github/workflows/native-proof.yml
+    with:
+      ref: ${{ inputs.ref || github.sha }}
+      runner: ${{ matrix.os }}
+      target: ${{ matrix.target }}
+      sanitizer_scope: ${{ matrix.sanitizer-scope }}
+      proof: package-self-host
+      enabled: ${{ matrix.enabled }}
+      version: ${{ needs.build-info.outputs.resolved_version }}
+    secrets: inherit
 
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: '1.26.4'
-          cache: false
-
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@1.96.0
-
-      - name: Verify binding toolchains
-        run: |
-          go version
-          rustc --version
-
-      - name: Install Linux native toolchain
-        if: runner.os == 'Linux'
-        run: |
-          for attempt in 1 2 3; do
-            if sudo apt-get -o Acquire::ForceIPv4=true update \
-              && sudo apt-get -o Acquire::ForceIPv4=true install -y --fix-missing build-essential mingw-w64; then
-              exit 0
-            fi
-            if [ "$attempt" -eq 3 ]; then
-              exit 1
-            fi
-            sleep 15
-          done
-
-      - name: Resolve Maven local repository
-        run: |
-          repo=$(mvn -q help:evaluate -Dexpression=settings.localRepository -DforceStdout | tail -n 1)
-          echo "MAVEN_REPO_LOCAL=$repo" >> "$GITHUB_ENV"
-
-      - name: Install bundled external smoke artifacts
-        run: |
-          sh .github/scripts/install-external-probe-artifacts.sh "$MAVEN_REPO_LOCAL"
-
-      - name: Compile test fixtures
-        run: mvn -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -DskipTests compile test-compile
-
-      - name: Verify acceptance suite
-        env:
-          JAVAN_MAVEN_REPO: ${{ env.MAVEN_REPO_LOCAL }}
-          JAVAN_REQUIRE_EXTERNAL_SMOKE: "true"
-        run: sh .github/scripts/acceptance.sh
-
-      - name: Verify host target build
-        run: java -cp target/classes javan.Main build src/test/resources/projects/acceptance/hello --target ${{ matrix.target }} --output hello-${{ matrix.target }}
-
-      - name: Verify sanitizer smoke
-        run: >-
-          JAVAN_SANITIZER_REQUIRED=true
-          JAVAN_SANITIZER_SCOPE='${{ matrix.sanitizer-scope }}'
-          sh .github/scripts/sanitizer-suite.sh
-
-      - name: Verify self-host package smoke
-        run: >-
-          JAVAN_PACKAGE_TARGET='${{ matrix.target }}'
-          JAVAN_PACKAGE_SANITIZER_SCOPE='${{ matrix.sanitizer-scope }}'
-          sh .github/scripts/verify-ci-package-smoke.sh
+  platform-smoke:
+    name: platform-smoke (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        include:
+          - target: linux-x64
+            os: ubuntu-24.04
+            enabled: true
+          - target: linux-arm64
+            os: ubuntu-24.04-arm
+            enabled: true
+          - target: macos-x64
+            os: macos-15-intel
+            enabled: true
+          - target: macos-arm64
+            os: macos-15
+            enabled: true
+          - target: windows-x64
+            os: windows-2025
+            enabled: true
+          - target: windows-arm64
+            os: windows-11-arm
+            enabled: true
+    permissions:
+      contents: read
+    uses: ./.github/workflows/platform-proof.yml
+    with:
+      ref: ${{ inputs.ref || github.sha }}
+      runner: ${{ matrix.os }}
+      enabled: ${{ matrix.enabled }}
+    secrets: inherit
 
   windows-runtime-smoke:
     name: windows-runtime-smoke (${{ matrix.shard }})
     if: "${{ github.event_name != 'push' || !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}"
     runs-on: windows-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       max-parallel: 2
@@ -445,18 +569,24 @@ jobs:
           git config --system core.longpaths true
 
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: Read Java info
+        id: java_info
+        uses: YunaBraska/java-info-action@11a434ffbf6bb3357363d1933be71a4076a90a6b # 3
 
       - name: Set up JDK
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
         with:
-          java-version: '25'
+          java-version: ${{ steps.java_info.outputs.java_version }}
           distribution: temurin
           cache: maven
 
       - name: Set up MSYS2 toolchain
         id: msys2
-        uses: msys2/setup-msys2@v2
+        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2
         with:
           update: true
           msystem: MINGW64
@@ -478,23 +608,65 @@ jobs:
         env:
           CC: ${{ steps.msys2.outputs.msys2-location }}\\mingw64\\bin\\gcc.exe
         run: >-
-          mvn -q
+          ./mvnw.cmd -q
           '-Dtest=${{ matrix.test-selector }}'
           test
 
-  release:
-    name: release
-    if: "${{ github.event_name == 'push' && github.ref_name == 'main' && !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}"
+  prepare-publication:
+    name: prepare Maven publication workspace
     needs:
+      - build-info
       - verify-compatibility-status
       - verify-core
       - verify-cli-integration
-      - native-smoke
+      - native-acceptance
+      - native-sanitizer
+      - native-package-self-host
+      - platform-smoke
       - windows-runtime-smoke
+    if: inputs.prepare_publication
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     permissions:
-      contents: write
-    uses: ./.github/workflows/release.yml
-    with:
-      release_enabled: true
-      dry_run: true
-    secrets: inherit
+      contents: read
+    steps:
+      - name: Checkout verified commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.build-info.outputs.commit_sha }}
+
+      - name: Read Java info
+        id: java_info
+        uses: YunaBraska/java-info-action@11a434ffbf6bb3357363d1933be71a4076a90a6b # 3
+
+      - name: Set up JDK
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
+        with:
+          java-version: ${{ steps.java_info.outputs.java_version }}
+          distribution: temurin
+          cache: maven
+
+      - name: Build publication artifacts without repeating tests
+        shell: sh
+        env:
+          BUILD_OUTPUT_TIMESTAMP: ${{ needs.build-info.outputs.build_output_timestamp }}
+          RELEASE_VERSION: ${{ needs.build-info.outputs.resolved_version }}
+        run: >-
+          ./mvnw -B versions:set -DnewVersion="$RELEASE_VERSION" -DgenerateBackupPoms=false
+          && ./mvnw -B -Ppublish -DskipTests -Dgpg.skip=true
+          -Dproject.build.outputTimestamp="$BUILD_OUTPUT_TIMESTAMP" package
+
+      - name: Upload publication workspace
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: build-workspace
+          retention-days: 1
+          if-no-files-found: error
+          include-hidden-files: true
+          path: |
+            .mvn
+            mvnw
+            mvnw.cmd
+            pom.xml
+            src
+            target/*.jar

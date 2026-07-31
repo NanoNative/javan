@@ -19,6 +19,8 @@ public final class CompatibilityStatusRefresh {
     private static final List<Path> MATRIX_FILES = CompatibilityReports.MATRIX_STATUS_FILES;
     private static final Path JDK_STATUS_FILE = CompatibilityReports.JDK_STATUS_FILE;
     private static final List<Path> GENERATED_STATUS_FILES = CompatibilityReports.STATUS_FILES;
+    private static final String CANONICAL_OS = "Linux";
+    private static final String CANONICAL_ARCH = "amd64";
 
     private CompatibilityStatusRefresh() {
     }
@@ -27,22 +29,18 @@ public final class CompatibilityStatusRefresh {
      * Runs compatibility generation against already compiled Javan classes and synchronizes
      * the tracked status documents.
      *
-     * @param args repository root, compiled classes directory, required JDK feature,
-     *             reference JDK vendor/version/OS/architecture, and whether the reference
-     *             environment is mandatory
+     * @param args repository root, compiled classes directory, and required JDK feature
      * @throws IOException when generation or synchronization fails
      * @throws InterruptedException when compatibility generation is interrupted
      */
     public static void main(final String[] args) throws IOException, InterruptedException {
-        if (args.length != 8) {
+        if (args.length != 3) {
             throw new IllegalArgumentException(
-                "Expected repository root, compiled classes directory, required JDK feature, "
-                    + "reference JDK vendor, version, OS, architecture, and strict-reference flag; received "
+                "Expected repository root, compiled classes directory, and required JDK feature; received "
                     + args.length + " arguments."
             );
         }
         final String actualJavaVersion = System.getProperty("java.version", "");
-        final String actualJavaVendor = System.getProperty("java.vendor", "");
         final String actualOsName = System.getProperty("os.name", "");
         final String actualOsArch = System.getProperty("os.arch", "");
         final int requiredFeature = CompatibilityReports.javaFeature(args[2]);
@@ -57,19 +55,7 @@ public final class CompatibilityStatusRefresh {
                     + "Run mvn verify with JDK " + requiredFeature + " so matrix keys stay canonical."
             );
         }
-        final boolean requireReferenceJdk = parseBoolean(args[7]);
-        final boolean referenceJdk = actualJavaVendor.equals(args[3])
-            && actualJavaVersion.equals(args[4])
-            && actualOsName.equals(args[5])
-            && actualOsArch.equals(args[6]);
-        if (requireReferenceJdk && !referenceJdk) {
-            throw new IllegalStateException(
-                "Reference compatibility status requires " + args[3] + " " + args[4]
-                    + " on " + args[5] + "/" + args[6] + ", but Maven is running "
-                    + actualJavaVendor + " " + actualJavaVersion + " on " + actualOsName + "/" + actualOsArch
-                    + ". Refusing to skip the tracked JDK snapshot."
-            );
-        }
+        final boolean canonicalPlatform = isCanonicalPlatform(actualOsName, actualOsArch);
         final Path root = Path.of(args[0]).toAbsolutePath().normalize();
         final Path configuredClasses = Path.of(args[1]);
         final Path classes = (configuredClasses.isAbsolute() ? configuredClasses : root.resolve(configuredClasses))
@@ -96,28 +82,22 @@ public final class CompatibilityStatusRefresh {
             throw new IOException("Compatibility report generation failed with exit code " + generationExitCode + ".");
         }
 
-        failWhenStatusWasStale(synchronize(root, classes, System.out, referenceJdk));
+        failWhenStatusWasStale(synchronize(root, classes, System.out, canonicalPlatform));
     }
 
-    private static boolean parseBoolean(final String value) {
-        if ("true".equals(value)) {
-            return true;
-        }
-        if ("false".equals(value)) {
-            return false;
-        }
-        throw new IllegalArgumentException("Reference JDK requirement must be true or false: " + value);
+    static boolean isCanonicalPlatform(final String osName, final String osArch) {
+        return CANONICAL_OS.equals(osName) && CANONICAL_ARCH.equals(osArch);
     }
 
     static RefreshResult synchronize(
         final Path root,
         final Path classes,
         final PrintStream out,
-        final boolean referenceJdk
+        final boolean canonicalPlatform
     ) throws IOException {
         validateGenerated(root, classes);
         final List<Path> changed = new ArrayList<>();
-        for (final Path relative : trackedFiles(referenceJdk)) {
+        for (final Path relative : trackedFiles(canonicalPlatform)) {
             final Path generated = classes.resolve(relative);
             final Path tracked = root.resolve(relative);
             final String generatedText = Files2.readStringIfExists(generated);
@@ -127,7 +107,7 @@ public final class CompatibilityStatusRefresh {
             Files2.writeString(tracked, generatedText);
             changed.add(relative);
         }
-        printResult(root, classes, out, changed, referenceJdk);
+        printResult(root, classes, out, changed, canonicalPlatform);
         return new RefreshResult(List.copyOf(changed));
     }
 
@@ -159,8 +139,8 @@ public final class CompatibilityStatusRefresh {
         }
     }
 
-    private static List<Path> trackedFiles(final boolean referenceJdk) {
-        if (referenceJdk) {
+    private static List<Path> trackedFiles(final boolean canonicalPlatform) {
+        if (canonicalPlatform) {
             return GENERATED_STATUS_FILES;
         }
         return MATRIX_FILES;
@@ -171,7 +151,7 @@ public final class CompatibilityStatusRefresh {
         final Path classes,
         final PrintStream out,
         final List<Path> changed,
-        final boolean referenceJdk
+        final boolean canonicalPlatform
     ) {
         if (changed.isEmpty()) {
             out.println("Compatibility status documents are current.");
@@ -181,9 +161,9 @@ public final class CompatibilityStatusRefresh {
                 out.println("  " + Strings2.replaceChar(path.toString(), File.separatorChar, '/'));
             }
         }
-        if (!referenceJdk) {
+        if (!canonicalPlatform) {
             out.println("Active JDK report generated at " + displayPath(root, classes.resolve(JDK_STATUS_FILE)) + ".");
-            out.println("Tracked JDK compatibility remains pinned to the reference JDK.");
+            out.println("Tracked JDK compatibility remains owned by the canonical platform.");
         }
     }
 
