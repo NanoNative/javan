@@ -10243,6 +10243,608 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
             """)).isEqualTo(setEqualsParitySuccess("true\n"));
     }
 
+    @Test
+    void entryAnchoredTypedHandlerBuildsAndMatchesJvmFallback() throws Exception {
+        assertThat(runMapTypedHandlerParity("entry-anchored-typed-handler", "RuntimeException", """
+            final Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("cipher", "invalid");
+            System.out.println(parse(new Envelope(payload)));
+            """)).isEqualTo(typedHandlerParitySuccess("-1\n"));
+    }
+
+    @Test
+    void entryAnchoredTypedHandlerReturnsSuccessfulValue() throws Exception {
+        assertThat(runMapTypedHandlerParity("entry-anchored-typed-success", "RuntimeException", """
+            final Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("cipher", "42");
+            System.out.println(parse(new Envelope(payload)));
+            """)).isEqualTo(typedHandlerParitySuccess("42\n"));
+    }
+
+    @Test
+    void entryAnchoredTypedHandlerCatchesNullInputReceiver() throws Exception {
+        assertThat(runMapTypedHandlerParity("entry-anchored-null-input", "RuntimeException", """
+            System.out.println(parse(null));
+            """)).isEqualTo(typedHandlerParitySuccess("-1\n"));
+    }
+
+    @Test
+    void entryAnchoredTypedHandlerCatchesNullMapReceiver() throws Exception {
+        assertThat(runMapTypedHandlerParity("entry-anchored-null-map", "RuntimeException", """
+            System.out.println(parse(new Envelope(null)));
+            """)).isEqualTo(typedHandlerParitySuccess("-1\n"));
+    }
+
+    @Test
+    void entryAnchoredTypedHandlerCatchesNullMapValue() throws Exception {
+        assertThat(runMapTypedHandlerParity("entry-anchored-null-value", "RuntimeException", """
+            System.out.println(parse(new Envelope(new LinkedHashMap<>())));
+            """)).isEqualTo(typedHandlerParitySuccess("-1\n"));
+    }
+
+    @Test
+    void entryAnchoredTypedHandlerCatchesWrongMapValueType() throws Exception {
+        assertThat(runMapTypedHandlerParity("entry-anchored-wrong-type", "RuntimeException", """
+            final Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("cipher", Long.valueOf(42L));
+            System.out.println(parse(new Envelope(payload)));
+            """)).isEqualTo(typedHandlerParitySuccess("-1\n"));
+    }
+
+    @Test
+    void entryAnchoredCheckcastPassesNullToApplicationCall() throws Exception {
+        assertThat(runTypedHandlerParity("entry-anchored-null-checkcast", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(cast(null));
+                }
+
+                private static long cast(final Object value) {
+                    try {
+                        return classify((String) value);
+                    } catch (final RuntimeException exception) {
+                        return -1L;
+                    }
+                }
+
+                private static long classify(final String value) {
+                    return value == null ? 7L : 8L;
+                }
+            }
+            """)).isEqualTo(typedHandlerParitySuccess("7\n"));
+    }
+
+    @Test
+    void entryAnchoredTypedHandlerCatchesPositiveOverflow() throws Exception {
+        assertThat(runMapTypedHandlerParity("entry-anchored-positive-overflow", "RuntimeException", """
+            final Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("cipher", "9223372036854775808");
+            System.out.println(parse(new Envelope(payload)));
+            """)).isEqualTo(typedHandlerParitySuccess("-1\n"));
+    }
+
+    @Test
+    void entryAnchoredTypedHandlerCatchesNegativeOverflow() throws Exception {
+        assertThat(runMapTypedHandlerParity("entry-anchored-negative-overflow", "RuntimeException", """
+            final Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("cipher", "-9223372036854775809");
+            System.out.println(parse(new Envelope(payload)));
+            """)).isEqualTo(typedHandlerParitySuccess("-1\n"));
+    }
+
+    @Test
+    void entryAnchoredTypedHandlerSupportsSpecificNumberFormatCatch() throws Exception {
+        assertThat(runMapTypedHandlerParity("entry-anchored-specific-catch", "NumberFormatException", """
+            final Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("cipher", "invalid");
+            System.out.println(parse(new Envelope(payload)));
+            """)).isEqualTo(typedHandlerParitySuccess("-1\n"));
+    }
+
+    @Test
+    void entryAnchoredTypedHandlerAlternatesSuccessAndFailure() throws Exception {
+        assertThat(runMapTypedHandlerParity("entry-anchored-alternating", "RuntimeException", """
+            final Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("cipher", "7");
+            System.out.println(parse(new Envelope(payload)));
+            payload.put("cipher", "invalid");
+            System.out.println(parse(new Envelope(payload)));
+            payload.put("cipher", "8");
+            System.out.println(parse(new Envelope(payload)));
+            """)).isEqualTo(typedHandlerParitySuccess("7\n-1\n8\n"));
+    }
+
+    @Test
+    void entryAnchoredTypedHandlerSurvivesRepeatedFailureWithForcedGc() throws Exception {
+        final String source = mapTypedHandlerSource("RuntimeException", """
+            final Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("cipher", "invalid");
+            long total = 0L;
+            for (int index = 0; index < 100000; index++) {
+                total += parse(new Envelope(payload));
+            }
+            System.out.println(total);
+            """);
+
+        assertThat(runTypedHandlerParity(
+            "entry-anchored-forced-gc",
+            source,
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1")
+        )).isEqualTo(typedHandlerParitySuccess("-100000\n"));
+    }
+
+    @Test
+    void entryAnchoredApplicationValidationIsCaught() throws Exception {
+        assertThat(runTypedHandlerParity("entry-anchored-application-validation", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(validated(-1L));
+                }
+
+                private static long validated(final long value) {
+                    try {
+                        return requirePositive(value);
+                    } catch (final IllegalArgumentException exception) {
+                        return -1L;
+                    }
+                }
+
+                private static long requirePositive(final long value) {
+                    if (value < 0L) {
+                        throw new IllegalArgumentException("negative");
+                    }
+                    return value;
+                }
+            }
+            """)).isEqualTo(typedHandlerParitySuccess("-1\n"));
+    }
+
+    @Test
+    void entryAnchoredCaughtObjectCanBeRethrown() throws Exception {
+        assertThat(runTypedHandlerParity("entry-anchored-caught-rethrow", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(observe());
+                }
+
+                private static long observe() {
+                    try {
+                        return parse("invalid");
+                    } catch (final RuntimeException exception) {
+                        return -2L;
+                    }
+                }
+
+                private static long parse(final String value) {
+                    try {
+                        return Long.parseLong(value);
+                    } catch (final RuntimeException exception) {
+                        throw exception;
+                    }
+                }
+            }
+        """)).isEqualTo(typedHandlerParitySuccess("-2\n"));
+    }
+
+    @Test
+    void entryAnchoredHandlerRejectsUnsupportedCaughtValueInspection() throws Exception {
+        assertThat(runTypedHandlerParity("entry-anchored-caught-inspection", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(parse("invalid"));
+                }
+
+                private static long parse(final String value) {
+                    try {
+                        return Long.parseLong(value);
+                    } catch (final RuntimeException exception) {
+                        return exception == null ? 1L : -2L;
+                    }
+                }
+            }
+            """).buildStderr()).contains("caught throwable escape is not supported");
+    }
+
+    @Test
+    void entryAnchoredStoredThrowableFactoryIsRejectedBeforeNativeExecution() throws Exception {
+        assertThat(runTypedHandlerParity("entry-anchored-stored-throwable", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(observe());
+                }
+
+                private static long observe() {
+                    try {
+                        return parse("invalid");
+                    } catch (final UnsupportedOperationException exception) {
+                        return -2L;
+                    }
+                }
+
+                private static long parse(final String value) {
+                    try {
+                        return Long.parseLong(value);
+                    } catch (final RuntimeException exception) {
+                        final UnsupportedOperationException converted = unsupported();
+                        throw converted;
+                    }
+                }
+
+                private static UnsupportedOperationException unsupported() {
+                    return new UnsupportedOperationException("converted");
+                }
+            }
+            """).buildStderr()).contains("exception handler needs a known thrown type");
+    }
+
+    @Test
+    void entryAnchoredTypedHandlerRejectsCustomMapDispatch() throws Exception {
+        assertThat(runTypedHandlerParity("entry-anchored-custom-map-dispatch", """
+            package com.acme;
+
+            import java.util.LinkedHashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(parse(new CustomMap()));
+                }
+
+                private static long parse(final Map<String, Object> input) {
+                    try {
+                        return Long.parseLong((String) input.get("cipher"));
+                    } catch (final RuntimeException exception) {
+                        return -1L;
+                    }
+                }
+
+                private static final class CustomMap extends LinkedHashMap<String, Object> {
+                    @Override
+                    public Object get(final Object key) {
+                        return "42";
+                    }
+                }
+            }
+            """).buildStderr()).contains("error[JAVAN014]");
+    }
+
+    @Test
+    void entryAnchoredTypedHandlerRejectsDefaultMapDispatch() throws Exception {
+        assertThat(runTypedHandlerParity("entry-anchored-default-map-dispatch", """
+            package com.acme;
+
+            import java.util.Collection;
+            import java.util.Map;
+            import java.util.SequencedMap;
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(parse(new DefaultMap()));
+                }
+
+                private static long parse(final Map<String, Object> input) {
+                    try {
+                        return Long.parseLong((String) input.get("cipher"));
+                    } catch (final RuntimeException exception) {
+                        return -1L;
+                    }
+                }
+
+                private interface CustomMap extends SequencedMap<String, Object> {
+                    @Override
+                    default int size() {
+                        return 0;
+                    }
+
+                    @Override
+                    default boolean isEmpty() {
+                        return true;
+                    }
+
+                    @Override
+                    default boolean containsKey(final Object key) {
+                        return false;
+                    }
+
+                    @Override
+                    default boolean containsValue(final Object value) {
+                        return false;
+                    }
+
+                    @Override
+                    default Object get(final Object key) {
+                        return "42";
+                    }
+
+                    @Override
+                    default Object put(final String key, final Object value) {
+                        throw new UnsupportedOperationException();
+                    }
+
+                    @Override
+                    default Object remove(final Object key) {
+                        return null;
+                    }
+
+                    @Override
+                    default void putAll(final Map<? extends String, ?> values) {
+                    }
+
+                    @Override
+                    default void clear() {
+                    }
+
+                    @Override
+                    default Set<String> keySet() {
+                        return Set.of();
+                    }
+
+                    @Override
+                    default Collection<Object> values() {
+                        return Set.of();
+                    }
+
+                    @Override
+                    default Set<Entry<String, Object>> entrySet() {
+                        return Set.of();
+                    }
+
+                    @Override
+                    default SequencedMap<String, Object> reversed() {
+                        return this;
+                    }
+                }
+
+                private static final class DefaultMap implements CustomMap {
+                }
+            }
+            """).buildStderr()).contains("error[JAVAN014]");
+    }
+
+    @Test
+    void unusedCustomMapDoesNotRejectRuntimeMapHandler() throws Exception {
+        assertThat(runTypedHandlerParity("entry-anchored-unused-custom-map", """
+            package com.acme;
+
+            import java.util.LinkedHashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, Object> input = new LinkedHashMap<>();
+                    input.put("cipher", "42");
+                    System.out.println(parse(input));
+                }
+
+                private static long parse(final Map<String, Object> input) {
+                    try {
+                        return Long.parseLong((String) input.get("cipher"));
+                    } catch (final RuntimeException exception) {
+                        return -1L;
+                    }
+                }
+
+                private static final class UnusedMap extends LinkedHashMap<String, Object> {
+                    @Override
+                    public Object get(final Object key) {
+                        return "unused";
+                    }
+                }
+            }
+            """)).isEqualTo(typedHandlerParitySuccess("42\n"));
+    }
+
+    @Test
+    void unknownThrowAfterUnrelatedHandlerStillBuilds() throws Exception {
+        final Path project = project("unknown-throw-after-handler");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    fail(new IllegalStateException("boom"));
+                }
+
+                private static void fail(final RuntimeException failure) {
+                    long parsed;
+                    try {
+                        parsed = Long.parseLong("1");
+                    } catch (final NumberFormatException exception) {
+                        parsed = -1L;
+                    }
+                    if (parsed != 1L) {
+                        return;
+                    }
+                    throw failure;
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+    }
+
+    @Test
+    void entryAnchoredThrowNullProducesNullPointerException() throws Exception {
+        assertThat(runTypedHandlerParity("entry-anchored-throw-null", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(observe());
+                }
+
+                private static long observe() {
+                    try {
+                        throw null;
+                    } catch (final NullPointerException exception) {
+                        return -3L;
+                    }
+                }
+            }
+            """)).isEqualTo(typedHandlerParitySuccess("-3\n"));
+    }
+
+    @Test
+    void entryAnchoredNonassignableErrorEscapesRuntimeCatch() throws Exception {
+        assertThat(runTypedHandlerParity("entry-anchored-error-rethrow", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(observe());
+                }
+
+                private static long observe() {
+                    try {
+                        return guarded();
+                    } catch (final AssertionError error) {
+                        return -4L;
+                    }
+                }
+
+                private static long guarded() {
+                    try {
+                        return fail();
+                    } catch (final RuntimeException exception) {
+                        return -1L;
+                    }
+                }
+
+                private static long fail() {
+                    throw new AssertionError();
+                }
+            }
+            """)).isEqualTo(typedHandlerParitySuccess("-4\n"));
+    }
+
+    private TypedHandlerParityResult runMapTypedHandlerParity(
+        final String projectName,
+        final String catchType,
+        final String statements
+    ) throws Exception {
+        return runTypedHandlerParity(
+            projectName,
+            mapTypedHandlerSource(catchType, statements),
+            Map.of()
+        );
+    }
+
+    private static String mapTypedHandlerSource(
+        final String catchType,
+        final String statements
+    ) {
+        return """
+            package com.acme;
+
+            import java.util.LinkedHashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+            %s
+                }
+
+                private static long parse(final Envelope input) {
+                    try {
+                        return Long.parseLong((String) input.payload().get("cipher"));
+                    } catch (final %s exception) {
+                        return -1L;
+                    }
+                }
+
+                private record Envelope(Map<String, Object> payload) {
+                }
+            }
+            """.formatted(statements.indent(8), catchType);
+    }
+
+    private TypedHandlerParityResult runTypedHandlerParity(
+        final String projectName,
+        final String source
+    ) throws Exception {
+        return runTypedHandlerParity(projectName, source, Map.of());
+    }
+
+    private TypedHandlerParityResult runTypedHandlerParity(
+        final String projectName,
+        final String source,
+        final Map<String, String> environment
+    ) throws Exception {
+        final Path project = project(projectName);
+        writeJava(project, "com.acme.Main", source);
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        final ProcessResult nativeRun = build.exitCode() == 0
+            ? process(
+                project,
+                List.of(project.resolve(".javan/bin/" + projectName).toString()),
+                Duration.ofSeconds(30),
+                environment
+            )
+            : new ProcessResult(-1, "", "not built");
+        return new TypedHandlerParityResult(
+            build.exitCode(),
+            build.stderr(),
+            nativeRun.exitCode(),
+            nativeRun.stdout(),
+            nativeRun.stderr(),
+            jvmOutput
+        );
+    }
+
+    private static TypedHandlerParityResult typedHandlerParitySuccess(final String stdout) {
+        return new TypedHandlerParityResult(0, "", 0, stdout, "", stdout);
+    }
+
     private SetEqualsParityResult runSetEqualsParity(final String projectName, final String statements) throws Exception {
         final Path project = project(projectName);
         writeJava(project, "com.acme.Main", """
@@ -10287,6 +10889,16 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     private record SetEqualsParityResult(
+        int buildExitCode,
+        String buildStderr,
+        int nativeExitCode,
+        String nativeStdout,
+        String nativeStderr,
+        String jvmStdout
+    ) {
+    }
+
+    private record TypedHandlerParityResult(
         int buildExitCode,
         String buildStderr,
         int nativeExitCode,
