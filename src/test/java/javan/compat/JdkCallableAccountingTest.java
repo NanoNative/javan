@@ -10,6 +10,15 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 @Execution(CONCURRENT)
 final class JdkCallableAccountingTest {
     @Test
+    void marksBoundedOptionalOrElseThrowSupplierAsContextLimitedUnknown() {
+        assertThat(JdkCallableAccounting.status(new MethodRef(
+            "java/util/Optional",
+            "orElseThrow",
+            "(Ljava/util/function/Supplier;)Ljava/lang/Object;"
+        ))).isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+    }
+
+    @Test
     void marksSupportedCallableAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Object", "<init>", "()V")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

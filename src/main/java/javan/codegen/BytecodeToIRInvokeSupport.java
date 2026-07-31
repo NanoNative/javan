@@ -794,7 +794,9 @@ final class BytecodeToIRInvokeSupport {
             materializedLambdaMethods,
             functionValueFlow,
             stack,
-            localDeclarations
+            localDeclarations,
+            pendingExceptionHandlerStacks,
+            sourceLines
         )) {
             return;
         }
@@ -3971,13 +3973,36 @@ final class BytecodeToIRInvokeSupport {
         final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final FunctionValueFlow.Result functionValueFlow,
         final List<StackValue> stack,
-        final Map<Integer, IrLocal> localDeclarations
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
     ) {
-        if (!"java/util/Optional".equals(methodRef.owner()) || JdkCallSupport.supportedCall(methodRef).isEmpty()) {
+        if (!"java/util/Optional".equals(methodRef.owner())
+            || (JdkCallSupport.supportedCall(methodRef).isEmpty()
+                && !isContextLimitedOptionalOrElseThrowCall(instruction, methodRef))) {
             return false;
         }
         final String name = methodRef.name();
         final String descriptor = methodRef.descriptor();
+        if ("orElseThrow".equals(name)
+            && "(Ljava/util/function/Supplier;)Ljava/lang/Object;".equals(descriptor)
+            && hasTopStackKind(stack, StackKind.LAMBDA_SUPPLIER)) {
+            lowerOptionalOrElseThrowSupplierLambdaCall(
+                classes,
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                localDeclarations,
+                pendingExceptionHandlerStacks,
+                sourceLines
+            );
+            return true;
+        }
+        if (JdkCallSupport.isContextLimitedOptionalOrElseThrowCall(methodRef)) {
+            throw unsupported(classFile, method, instruction);
+        }
         if ("filter".equals(name)
             && "(Ljava/util/function/Predicate;)Ljava/util/Optional;".equals(descriptor)
             && hasTopStackKind(stack, StackKind.LAMBDA_PREDICATE)) {
@@ -4134,6 +4159,282 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         return false;
+    }
+
+    private static void lowerOptionalOrElseThrowSupplierLambdaCall(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
+    ) {
+        final DynamicLambda lambda = popDynamicLambda(
+            classFile,
+            method,
+            instruction,
+            stack,
+            StackKind.LAMBDA_SUPPLIER,
+            "supplier lambda"
+        );
+        final Optional<String> suppliedThrowableType = supplierPlatformThrowableType(lambda);
+        if (suppliedThrowableType.isEmpty()) {
+            throw new IllegalStateException(
+                "Verifier admitted Optional.orElseThrow supplier without a platform Throwable result."
+            );
+        }
+        final OptionalSupplierResultKind supplierResultKind =
+            optionalSupplierResultKind(
+                classes,
+                lambda.implementationMethodRef(),
+                suppliedThrowableType.orElseThrow(),
+                Set.of()
+            );
+        if (supplierResultKind == OptionalSupplierResultKind.INVALID) {
+            throw new IllegalStateException(
+                "Verifier admitted Optional.orElseThrow supplier without an exact result shape."
+            );
+        }
+        final IrExpression receiver = popObject(
+            classFile,
+            method,
+            instruction,
+            stack
+        );
+        final List<StackValue> preservedStack = List.copyOf(stack);
+        final String valueLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(
+            valueLocal,
+            IrExpression.objectCall(
+                "javan_optional_or_else",
+                List.of(receiver, IrExpression.objectNull())
+            )
+        ));
+        final String resultLocal = newObjectLocal(localDeclarations);
+        final String valuePresentLabel =
+            "label_optional_or_else_throw_value_present_"
+                + instruction.offset()
+                + "_"
+                + localDeclarations.size();
+        final String supplierReturnedLabel =
+            "label_optional_or_else_throw_supplier_returned_"
+                + instruction.offset()
+                + "_"
+                + localDeclarations.size();
+        final String endLabel =
+            "label_optional_or_else_throw_end_"
+                + instruction.offset()
+                + "_"
+                + localDeclarations.size();
+        instructions.add(IrInstruction.branchIf(
+            valuePresentLabel,
+            IrExpression.objectComparison(
+                "!=",
+                IrExpression.objectLocal(valueLocal),
+                IrExpression.objectNull()
+            )
+        ));
+        final String throwableLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(
+            throwableLocal,
+            invokeSupplierLambdaExpression(lambda)
+        ));
+        instructions.add(IrInstruction.branchIf(
+            supplierReturnedLabel,
+            IrExpression.intComparison(
+                "==",
+                IrExpression.intCall("javan_pending_has", List.of()),
+                IrExpression.intLiteral(0)
+            )
+        ));
+        instructions.add(IrInstruction.jump(endLabel));
+        instructions.add(IrInstruction.label(supplierReturnedLabel));
+        if (supplierResultKind == OptionalSupplierResultKind.THROWABLE) {
+            routePendingPlatformException(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                pendingExceptionHandlerStacks,
+                sourceLines,
+                suppliedThrowableType.orElseThrow(),
+                IrExpression.objectLocal(throwableLocal)
+            );
+        } else {
+            routePendingPlatformException(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                pendingExceptionHandlerStacks,
+                sourceLines,
+                "java/lang/NullPointerException",
+                IrExpression.stringLiteral(
+                    "Cannot throw exception because the return value of "
+                        + "\"java.util.function.Supplier.get()\" is null"
+                )
+            );
+        }
+        instructions.add(IrInstruction.label(valuePresentLabel));
+        instructions.add(IrInstruction.assignObject(
+            resultLocal,
+            IrExpression.objectLocal(valueLocal)
+        ));
+        instructions.add(IrInstruction.label(endLabel));
+        stack.addAll(preservedStack);
+        stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
+    }
+
+    private static Optional<String> supplierPlatformThrowableType(final DynamicLambda lambda) {
+        final String descriptor = lambda.implementationDescriptor();
+        final int close = descriptor.lastIndexOf(')');
+        if (close < 0 || close + 3 > descriptor.length()
+            || descriptor.charAt(close + 1) != 'L'
+            || descriptor.charAt(descriptor.length() - 1) != ';') {
+            return Optional.empty();
+        }
+        final String returnDescriptor = descriptor.substring(close + 1);
+        if (!("()" + returnDescriptor).equals(lambda.instantiatedMethodDescriptor())) {
+            return Optional.empty();
+        }
+        final String throwableType = returnDescriptor.substring(
+            1,
+            returnDescriptor.length() - 1
+        );
+        if (!JdkCallSupport.isPlatformThrowable(throwableType)) {
+            return Optional.empty();
+        }
+        return Optional.of(throwableType);
+    }
+
+    private static OptionalSupplierResultKind optionalSupplierResultKind(
+        final Map<String, ClassFile> classes,
+        final MethodRef implementation,
+        final String expectedType,
+        final Set<MethodRef> visiting
+    ) {
+        if (visiting.contains(implementation)) {
+            return OptionalSupplierResultKind.INVALID;
+        }
+        final ClassFile owner = classes.get(implementation.owner());
+        if (owner == null || !owner.application()) {
+            return OptionalSupplierResultKind.INVALID;
+        }
+        final Optional<MethodInfo> resolved = owner.method(
+            implementation.name(),
+            implementation.descriptor()
+        );
+        if (resolved.isEmpty()
+            || !resolved.orElseThrow().isStatic()
+            || resolved.orElseThrow().code().isEmpty()) {
+            return OptionalSupplierResultKind.INVALID;
+        }
+        final Set<MethodRef> path = new HashSet<>(visiting);
+        path.add(implementation);
+        final List<Instruction> implementationInstructions =
+            resolved.orElseThrow().code().orElseThrow().instructions();
+        OptionalSupplierResultKind result = OptionalSupplierResultKind.THROWS_ONLY;
+        for (int index = 0; index < implementationInstructions.size(); index++) {
+            if (implementationInstructions.get(index).opcode() == 192) {
+                return OptionalSupplierResultKind.INVALID;
+            }
+            if (implementationInstructions.get(index).opcode() != 176) {
+                continue;
+            }
+            if (index == 0) {
+                return OptionalSupplierResultKind.INVALID;
+            }
+            final OptionalSupplierResultKind candidate =
+                optionalSupplierProducerKind(
+                    classes,
+                    implementationInstructions.get(index - 1),
+                    expectedType,
+                    path
+                );
+            if (candidate == OptionalSupplierResultKind.INVALID) {
+                return candidate;
+            }
+            if (result == OptionalSupplierResultKind.THROWS_ONLY) {
+                result = candidate;
+            } else if (candidate != result) {
+                return OptionalSupplierResultKind.INVALID;
+            }
+        }
+        if (result == OptionalSupplierResultKind.THROWS_ONLY) {
+            for (final Instruction candidate : implementationInstructions) {
+                if (!isOptionalSupplierStaticHelperCall(candidate, expectedType)) {
+                    continue;
+                }
+                if (optionalSupplierResultKind(
+                    classes,
+                    candidate.methodRef().orElseThrow(),
+                    expectedType,
+                    path
+                ) == OptionalSupplierResultKind.INVALID) {
+                    return OptionalSupplierResultKind.INVALID;
+                }
+            }
+        }
+        return result;
+    }
+
+    private static boolean isOptionalSupplierStaticHelperCall(
+        final Instruction instruction,
+        final String expectedType
+    ) {
+        return instruction.opcode() == 184
+            && "invokestatic".equals(instruction.mnemonic())
+            && instruction.methodRef().isPresent()
+            && instruction.methodRef().orElseThrow().descriptor()
+                .endsWith(")L" + expectedType + ";");
+    }
+
+    private static OptionalSupplierResultKind optionalSupplierProducerKind(
+        final Map<String, ClassFile> classes,
+        final Instruction producer,
+        final String expectedType,
+        final Set<MethodRef> visiting
+    ) {
+        if (producer.opcode() == 1 && "aconst_null".equals(producer.mnemonic())) {
+            return OptionalSupplierResultKind.NULL;
+        }
+        if (producer.methodRef().isEmpty()) {
+            return OptionalSupplierResultKind.INVALID;
+        }
+        final MethodRef target = producer.methodRef().orElseThrow();
+        if (producer.opcode() == 183
+            && "invokespecial".equals(producer.mnemonic())
+            && "<init>".equals(target.name())
+            && expectedType.equals(target.owner())) {
+            return OptionalSupplierResultKind.THROWABLE;
+        }
+        if (producer.opcode() != 184
+            || !"invokestatic".equals(producer.mnemonic())
+            || !target.descriptor().endsWith(")L" + expectedType + ";")) {
+            return OptionalSupplierResultKind.INVALID;
+        }
+        return optionalSupplierResultKind(classes, target, expectedType, visiting);
+    }
+
+    private static boolean isContextLimitedOptionalOrElseThrowCall(
+        final Instruction instruction,
+        final MethodRef methodRef
+    ) {
+        return instruction.opcode() == 182
+            && "invokevirtual".equals(instruction.mnemonic())
+            && JdkCallSupport.isContextLimitedOptionalOrElseThrowCall(methodRef);
+    }
+
+    private enum OptionalSupplierResultKind {
+        NULL,
+        THROWABLE,
+        THROWS_ONLY,
+        INVALID
     }
 
     private static void lowerOptionalFilterLambdaCall(
@@ -10205,7 +10506,8 @@ final class BytecodeToIRInvokeSupport {
         }
         if ("java/util/Optional".equals(target.owner())) {
             return ("or".equals(target.name()) && "(Ljava/util/function/Supplier;)Ljava/util/Optional;".equals(target.descriptor()))
-                || ("orElseGet".equals(target.name()) && "(Ljava/util/function/Supplier;)Ljava/lang/Object;".equals(target.descriptor()));
+                || ("orElseGet".equals(target.name()) && "(Ljava/util/function/Supplier;)Ljava/lang/Object;".equals(target.descriptor()))
+                || JdkCallSupport.isContextLimitedOptionalOrElseThrowCall(target);
         }
         return "java/util/Objects".equals(target.owner())
             && "requireNonNullElseGet".equals(target.name())

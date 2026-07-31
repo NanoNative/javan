@@ -929,6 +929,9 @@ public final class JdkCallSupport {
      * @return true when the verifier and lowering both support the call
      */
     public static boolean isSupported(final MethodRef methodRef) {
+        if (isContextLimitedOptionalOrElseThrowCall(methodRef)) {
+            return true;
+        }
         if (isDirectlySupported(methodRef)) {
             return true;
         }
@@ -939,6 +942,18 @@ public final class JdkCallSupport {
             return true;
         }
         return isNoopPlatformConstructor(methodRef);
+    }
+
+    /**
+     * Checks whether a call requires verifier-approved direct Optional supplier lowering.
+     *
+     * @param methodRef method reference
+     * @return true for exact {@code Optional.orElseThrow(Supplier)}
+     */
+    public static boolean isContextLimitedOptionalOrElseThrowCall(final MethodRef methodRef) {
+        return "java/util/Optional".equals(methodRef.owner())
+            && "orElseThrow".equals(methodRef.name())
+            && "(Ljava/util/function/Supplier;)Ljava/lang/Object;".equals(methodRef.descriptor());
     }
 
     private static boolean isDirectlySupported(final MethodRef methodRef) {

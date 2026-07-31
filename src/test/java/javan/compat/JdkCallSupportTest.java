@@ -2,6 +2,7 @@ package javan.compat;
 
 import javan.classfile.ClassFile;
 import javan.classfile.MethodInfo;
+import javan.classfile.MethodRef;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 
@@ -16,6 +17,36 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 
 @Execution(CONCURRENT)
 final class JdkCallSupportTest {
+    @Test
+    void boundedOptionalOrElseThrowSupplierHasExactSupportAndRuntimeModule() {
+        final MethodRef method = new MethodRef(
+            "java/util/Optional",
+            "orElseThrow",
+            "(Ljava/util/function/Supplier;)Ljava/lang/Object;"
+        );
+
+        assertThat(List.of(
+            JdkCallSupport.isContextLimitedOptionalOrElseThrowCall(method),
+            JdkCallSupport.isSupported(method),
+            JdkCallSupport.runtimeModules(method)
+        )).containsExactly(true, true, List.of("optional"));
+    }
+
+    @Test
+    void boundedOptionalOrElseThrowSupplierRejectsWrongDescriptor() {
+        final MethodRef method = new MethodRef(
+            "java/util/Optional",
+            "orElseThrow",
+            "(Ljava/util/function/Supplier;)Ljava/lang/Throwable;"
+        );
+
+        assertThat(List.of(
+            JdkCallSupport.isContextLimitedOptionalOrElseThrowCall(method),
+            JdkCallSupport.isSupported(method),
+            JdkCallSupport.runtimeModules(method)
+        )).containsExactly(false, false, List.of());
+    }
+
     @Test
     void objectCloneIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(

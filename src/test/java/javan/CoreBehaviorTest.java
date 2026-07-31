@@ -1855,6 +1855,81 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void reachabilityDoesNotMaterializeOptionalOrElseThrowInlineSupplier() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of("com/acme/Main", classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                methodInfo(
+                    "supply",
+                    "(Ljava/lang/String;)V",
+                    instruction(0, 184, "invokestatic", new MethodRef(
+                        "java/util/Optional",
+                        "empty",
+                        "()Ljava/util/Optional;"
+                    )),
+                    instruction(1, 42, "aload_0"),
+                    invokeDynamicInstruction(2, new DynamicRef(
+                        "get",
+                        "(Ljava/lang/String;)Ljava/util/function/Supplier;",
+                        "java/lang/invoke/LambdaMetafactory",
+                        "metafactory",
+                        "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                            + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                            + "Ljava/lang/invoke/CallSite;",
+                        List.of(
+                            "()Ljava/lang/Object;",
+                            "invokestatic com/acme/Main.lambda$supply$0:(Ljava/lang/String;)Ljava/lang/IllegalArgumentException;",
+                            "()Ljava/lang/IllegalArgumentException;"
+                        ),
+                        List.of(
+                            BootstrapArgument.methodType("()Ljava/lang/Object;"),
+                            BootstrapArgument.methodHandle(
+                                6,
+                                new MethodRef(
+                                    "com/acme/Main",
+                                    "lambda$supply$0",
+                                    "(Ljava/lang/String;)Ljava/lang/IllegalArgumentException;"
+                                )
+                            ),
+                            BootstrapArgument.methodType(
+                                "()Ljava/lang/IllegalArgumentException;"
+                            )
+                        )
+                    )),
+                    instruction(3, 182, "invokevirtual", new MethodRef(
+                        "java/util/Optional",
+                        "orElseThrow",
+                        "(Ljava/util/function/Supplier;)Ljava/lang/Object;"
+                    )),
+                    instruction(4, 87, "pop"),
+                    instruction(5, 1, "aconst_null"),
+                    instruction(6, 185, "invokeinterface", new MethodRef(
+                        "java/util/function/Supplier",
+                        "get",
+                        "()Ljava/lang/Object;"
+                    )),
+                    instruction(7, 87, "pop"),
+                    instruction(8, 177, "return")
+                ),
+                methodInfo(
+                    "lambda$supply$0",
+                    "(Ljava/lang/String;)Ljava/lang/IllegalArgumentException;",
+                    instruction(0, 1, "aconst_null"),
+                    instruction(1, 176, "areturn")
+                )
+            )),
+            List.of(new EntryPoint("com/acme/Main", "supply", "(Ljava/lang/String;)V"))
+        );
+
+        assertThat(graph.diagnostics())
+            .extracting(Diagnostic::code)
+            .containsExactly("JAVAN012");
+    }
+
+    @Test
     void reachabilityAcceptsOptionalIfPresentMaterializedConsumerLambda() {
         final CallGraph graph = new ReachabilityAnalyzer().analyze(
             Map.of("com/acme/Main", classWithMethods(
