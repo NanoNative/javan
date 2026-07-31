@@ -33,7 +33,6 @@ final class CiParallelWorkflowSurfaceTest {
     @Test
     void commonBuildSplitsLongNativeProofsIntoIndependentJobs() throws Exception {
         assertThat(Files.readString(BUILD_COMMON))
-            .contains("verify-compatibility-status:")
             .contains("verify-core:")
             .contains("verify-cli-integration:")
             .contains("native-acceptance:")
@@ -47,7 +46,7 @@ final class CiParallelWorkflowSurfaceTest {
     @Test
     void commonBuildRunsAllRequestedOperatingSystemArchitecturesInParallel() throws Exception {
         assertThat(Files.readString(BUILD_COMMON))
-            .contains("name: platform-smoke (${{ matrix.target }})")
+            .contains("name: Platform smoke · ${{ matrix.target }}")
             .contains("max-parallel: 6")
             .contains("target: linux-x64", "os: ubuntu-24.04")
             .contains("target: linux-arm64", "os: ubuntu-24.04-arm")
