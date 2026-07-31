@@ -892,6 +892,17 @@ public final class BytecodeToIR {
         final SourceLineIndex sourceLines,
         final int lastMaterializingDuplicateOffset
     ) {
+        BytecodeToIRInvokeSupport.guardTypedReceiver(
+            classes,
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            localDeclarations,
+            pendingExceptionHandlerStacks,
+            sourceLines
+        );
         switch (instruction.opcode()) {
             case 1:
                 stack.add(StackValue.objectExpression(IrExpression.objectNull()));
@@ -1383,6 +1394,19 @@ public final class BytecodeToIR {
                 BytecodeToIRControlFlowSupport.lowerThrow(classFile, method, instruction, instructions, stack, pendingExceptionHandlerStacks, sourceLines);
                 break;
             case 192:
+                if (BytecodeToIRInvokeSupport.lowerSupportedCheckcast(
+                    classes,
+                    classFile,
+                    method,
+                    instruction,
+                    instructions,
+                    stack,
+                    localDeclarations,
+                    pendingExceptionHandlerStacks,
+                    sourceLines
+                )) {
+                    break;
+                }
                 if (instruction.className().isPresent()
                     && "java/util/Locale".equals(instruction.className().orElseThrow())) {
                     throw unsupportedCheckcastTarget(classFile, method, instruction, "java/util/Locale");

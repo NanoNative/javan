@@ -15,12 +15,14 @@ import javan.classfile.LambdaMetafactoryCall;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
 import javan.classfile.RecordObjectMethodsCall;
+import javan.codegen.MethodDescriptor;
 import javan.compat.BytecodeSupport;
 import javan.compat.ExactMethodSupport;
 import javan.compat.JdkCallSupport;
 import javan.compat.JavanHostOnlyMethods;
 import javan.compat.JavanNativeSubstitutions;
 import javan.compat.NetworkApiSupport;
+import javan.ir.IrType;
 import javan.util.Strings2;
 
 import java.util.ArrayList;
@@ -50,7 +52,14 @@ public final class StaticVerifier {
         for (final ClassFile classFile : classes.values()) {
             for (final MethodInfo method : classFile.methods()) {
                 final int isReachable = reachableEntries.contains(classFile.name(), method.name(), method.descriptor()) ? 1 : 0;
-                diagnostics.addAll(verifyMethod(classes, classFile, method, isReachable, methodRefFacts));
+                diagnostics.addAll(verifyMethod(
+                    classes,
+                    classFile,
+                    method,
+                    isReachable,
+                    reachableEntries,
+                    methodRefFacts
+                ));
             }
         }
         return List.copyOf(diagnostics);
@@ -77,6 +86,10 @@ public final class StaticVerifier {
                 }
             }
             return false;
+        }
+
+        private boolean containsOwner(final String owner) {
+            return existingOwnerBucket(owner) != null;
         }
 
         private List<EntryPoint> ownerBucket(final String owner) {
@@ -163,6 +176,7 @@ public final class StaticVerifier {
         final ClassFile classFile,
         final MethodInfo method,
         final int reachable,
+        final ReachableEntries reachableEntries,
         final MethodRefFactsCache methodRefFacts
     ) {
         final List<Diagnostic> diagnostics = new ArrayList<>();
@@ -211,7 +225,8 @@ public final class StaticVerifier {
                     reachable
                 ));
             }
-            if (unsupportedExceptionHandlers(classes, method) && !supportedSyntheticSwitchMapClass(classFile, method, methodCode)) {
+            if (unsupportedExceptionHandlers(classes, method, reachableEntries)
+                && !supportedSyntheticSwitchMapClass(classFile, method, methodCode)) {
                 diagnostics.add(exceptionHandlerDiagnostic(classFile, method, methodCode.exceptionTableLength(), reachable));
             }
             diagnostics.addAll(unsupportedThreadLifecycleDiagnostics(classFile, method, methodCode, reachable));
@@ -1129,7 +1144,11 @@ public final class StaticVerifier {
         return "(Ljava/lang/String;I)I".equals(descriptor);
     }
 
-    private static boolean unsupportedExceptionHandlers(final Map<String, ClassFile> classes, final MethodInfo method) {
+    private static boolean unsupportedExceptionHandlers(
+        final Map<String, ClassFile> classes,
+        final MethodInfo method,
+        final ReachableEntries reachableEntries
+    ) {
         final CodeAttribute code = method.code().orElseThrow();
         if (code.exceptionTableLength() == 0) {
             return false;
@@ -1138,11 +1157,11 @@ public final class StaticVerifier {
             return true;
         }
         if (boundedTypedHandlerSetCandidate(code)
-            && hasUnsupportedIndividualHandler(classes, method, code)) {
+            && hasUnsupportedIndividualHandler(classes, method, code, reachableEntries)) {
             return !supportedBoundedTypedHandlerSet(classes, method, code);
         }
         for (final CodeException handler : code.exceptionTable()) {
-            if (!supportedExceptionHandler(classes, method, code, handler)) {
+            if (!supportedExceptionHandler(classes, method, code, handler, reachableEntries)) {
                 return true;
             }
         }
@@ -1152,10 +1171,11 @@ public final class StaticVerifier {
     private static boolean hasUnsupportedIndividualHandler(
         final Map<String, ClassFile> classes,
         final MethodInfo method,
-        final CodeAttribute code
+        final CodeAttribute code,
+        final ReachableEntries reachableEntries
     ) {
         for (final CodeException handler : code.exceptionTable()) {
-            if (!supportedExceptionHandler(classes, method, code, handler)) {
+            if (!supportedExceptionHandler(classes, method, code, handler, reachableEntries)) {
                 return true;
             }
         }
@@ -1550,7 +1570,8 @@ public final class StaticVerifier {
         final Map<String, ClassFile> classes,
         final MethodInfo method,
         final CodeAttribute code,
-        final CodeException handler
+        final CodeException handler,
+        final ReachableEntries reachableEntries
     ) {
         if (supportedEnumSwitchMapHandler(classes, code, handler)) {
             return true;
@@ -1587,6 +1608,14 @@ public final class StaticVerifier {
         if (!isPlatformThrowable(handler.catchType().orElseThrow())) {
             return false;
         }
+        if (supportsEntryAnchoredStraightLineTypedHandler(
+            classes,
+            method,
+            handler,
+            reachableEntries
+        )) {
+            return true;
+        }
         final String catchType = handler.catchType().orElseThrow();
         int hasThrowableTransport = 0;
         final List<Instruction> instructions = code.instructions();
@@ -1620,6 +1649,594 @@ public final class StaticVerifier {
             return true;
         }
         return false;
+    }
+
+    private static boolean supportsEntryAnchoredStraightLineTypedHandler(
+        final Map<String, ClassFile> classes,
+        final MethodInfo method,
+        final CodeException handler,
+        final ReachableEntries reachableEntries
+    ) {
+        final CodeAttribute code = method.code().orElseThrow();
+        if (code.exceptionTableLength() != 1
+            || handler.catchType().isEmpty()
+            || !JdkCallSupport.isPlatformThrowable(handler.catchType().orElseThrow())
+            || handler.startPc() != 0
+            || handler.endPc() <= handler.startPc()
+            || handler.handlerPc() <= handler.endPc()
+            || code.maxStack() > 64
+            || code.maxLocals() > 256
+            || instructionAtOffset(code, handler.startPc()).isEmpty()
+            || instructionAtOffset(code, handler.endPc()).isEmpty()
+            || instructionAtOffset(code, handler.handlerPc()).isEmpty()
+            || !entryAnchoredNormalExit(code, handler)
+            || hasEntryAnchoredInboundTarget(code, handler)) {
+            return false;
+        }
+        final Instruction handlerEntry = instructionAtOffset(code, handler.handlerPc()).orElseThrow();
+        final int catchLocal = astoreLocalIndex(handlerEntry);
+        if (catchLocal < 0 || catchLocal >= code.maxLocals()
+            || !hasSingleEntryAnchoredCatchStore(code, handler, catchLocal)) {
+            return false;
+        }
+        final Optional<List<IrType>> initialLocals = entryAnchoredLocals(method, code.maxLocals());
+        if (initialLocals.isEmpty()) {
+            return false;
+        }
+        int lastTypedSite = -1;
+        for (final Instruction instruction : code.instructions()) {
+            if (instruction.offset() >= handler.startPc() && instruction.offset() < handler.endPc()
+                && entryAnchoredTypedSite(classes, instruction, reachableEntries)) {
+                lastTypedSite = instruction.offset();
+            }
+        }
+        if (lastTypedSite < 0) {
+            return false;
+        }
+        final List<IrType> locals = new ArrayList<>(initialLocals.orElseThrow());
+        final List<IrType> stack = new ArrayList<>();
+        for (final Instruction instruction : code.instructions()) {
+            if (instruction.offset() < handler.startPc() || instruction.offset() >= handler.endPc()) {
+                continue;
+            }
+            if (entryAnchoredControlFlow(instruction.opcode())
+                || entryAnchoredStoreType(instruction.opcode()).isPresent()
+                    && instruction.offset() < lastTypedSite
+                || !entryAnchoredTypedSite(classes, instruction, reachableEntries)
+                    && !entryAnchoredNonThrowingInstruction(instruction)
+                || !applyEntryAnchoredStackEffect(instruction, locals, stack)
+                || entryAnchoredStackWords(stack) > code.maxStack()) {
+                return false;
+            }
+        }
+        return entryAnchoredNormalStack(code, handler, stack);
+    }
+
+    private static boolean entryAnchoredTypedSite(
+        final Map<String, ClassFile> classes,
+        final Instruction instruction,
+        final ReachableEntries reachableEntries
+    ) {
+        if (instruction.opcode() == 192) {
+            return instruction.className().isPresent()
+                && entryAnchoredCheckcastTarget(instruction.className().orElseThrow());
+        }
+        if (instruction.methodRef().isEmpty()) {
+            return false;
+        }
+        final MethodRef target = instruction.methodRef().orElseThrow();
+        if (entryAnchoredDecimalParser(target)) {
+            return instruction.opcode() == 184 && "invokestatic".equals(instruction.mnemonic());
+        }
+        if (entryAnchoredMapGet(classes, target, reachableEntries)) {
+            return ("java/util/Map".equals(target.owner()) && instruction.opcode() == 185)
+                || (!"java/util/Map".equals(target.owner()) && instruction.opcode() == 182);
+        }
+        return entryAnchoredApplicationCall(classes, instruction.opcode(), target);
+    }
+
+    private static boolean entryAnchoredDecimalParser(final MethodRef target) {
+        return "java/lang/Integer".equals(target.owner())
+                && "parseInt".equals(target.name())
+                && "(Ljava/lang/String;)I".equals(target.descriptor())
+            || "java/lang/Long".equals(target.owner())
+                && "parseLong".equals(target.name())
+                && "(Ljava/lang/String;)J".equals(target.descriptor());
+    }
+
+    private static boolean entryAnchoredMapGet(
+        final Map<String, ClassFile> classes,
+        final MethodRef target,
+        final ReachableEntries reachableEntries
+    ) {
+        return ("java/util/Map".equals(target.owner())
+                || "java/util/HashMap".equals(target.owner())
+                || "java/util/LinkedHashMap".equals(target.owner())
+                || "java/util/TreeMap".equals(target.owner())
+                || "java/util/concurrent/ConcurrentHashMap".equals(target.owner()))
+            && "get".equals(target.name())
+            && "(Ljava/lang/Object;)Ljava/lang/Object;".equals(target.descriptor())
+            && JdkCallSupport.supportedCall(target).isPresent()
+            && !hasReachableEntryAnchoredApplicationMap(classes, reachableEntries);
+    }
+
+    private static boolean hasReachableEntryAnchoredApplicationMap(
+        final Map<String, ClassFile> classes,
+        final ReachableEntries reachableEntries
+    ) {
+        for (final ClassFile candidate : classes.values()) {
+            if (!candidate.application()
+                || candidate.isInterface()
+                || !reachableEntries.containsOwner(candidate.name())) {
+                continue;
+            }
+            if (entryAnchoredApplicationMapType(classes, candidate)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean entryAnchoredApplicationMapType(
+        final Map<String, ClassFile> classes,
+        final ClassFile candidate
+    ) {
+        String current = candidate.name();
+        final List<String> visited = new ArrayList<>();
+        while (current != null && !current.isEmpty() && !containsString(visited, current)) {
+            if (entryAnchoredJdkMapType(current)) {
+                return true;
+            }
+            visited.add(current);
+            final ClassFile currentClass = classes.get(current);
+            if (currentClass == null) {
+                return false;
+            }
+            if (hasEntryAnchoredMapInterface(classes, currentClass, new ArrayList<>())) {
+                return true;
+            }
+            current = currentClass.superName();
+        }
+        return false;
+    }
+
+    private static boolean hasEntryAnchoredMapInterface(
+        final Map<String, ClassFile> classes,
+        final ClassFile candidate,
+        final List<String> visited
+    ) {
+        for (final String interfaceName : candidate.interfaces()) {
+            if (entryAnchoredJdkMapType(interfaceName)) {
+                return true;
+            }
+            if (containsString(visited, interfaceName)) {
+                continue;
+            }
+            visited.add(interfaceName);
+            final ClassFile interfaceClass = classes.get(interfaceName);
+            if (interfaceClass != null
+                && hasEntryAnchoredMapInterface(classes, interfaceClass, visited)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean entryAnchoredJdkMapType(final String name) {
+        return "java/util/Map".equals(name)
+            || "java/util/SequencedMap".equals(name)
+            || "java/util/AbstractMap".equals(name)
+            || "java/util/HashMap".equals(name)
+            || "java/util/LinkedHashMap".equals(name)
+            || "java/util/TreeMap".equals(name)
+            || "java/util/SortedMap".equals(name)
+            || "java/util/NavigableMap".equals(name)
+            || "java/util/concurrent/ConcurrentMap".equals(name)
+            || "java/util/concurrent/ConcurrentHashMap".equals(name);
+    }
+
+    private static boolean entryAnchoredApplicationCall(
+        final Map<String, ClassFile> classes,
+        final int opcode,
+        final MethodRef target
+    ) {
+        if ("<init>".equals(target.name())) {
+            return false;
+        }
+        final MethodDescriptor descriptor = MethodDescriptor.parse(target.descriptor());
+        if (descriptor.returnType() == IrType.VOID) {
+            return false;
+        }
+        final ClassFile owner = classes.get(target.owner());
+        if (owner == null || !owner.application()) {
+            return false;
+        }
+        if (opcode == 184) {
+            return owner.method(target.name(), target.descriptor())
+                .filter(candidate -> candidate.isStatic() && candidate.code().isPresent())
+                .isPresent();
+        }
+        if (opcode == 182) {
+            return owner.isFinal()
+                && !owner.isInterface()
+                && owner.method(target.name(), target.descriptor())
+                    .filter(candidate -> !candidate.isStatic() && candidate.code().isPresent())
+                    .isPresent();
+        }
+        if (opcode != 185 || !owner.isInterface()) {
+            return false;
+        }
+        int targets = 0;
+        for (final ClassFile candidate : classes.values()) {
+            if (candidate.isInterface() || !candidate.interfaces().contains(target.owner())) {
+                continue;
+            }
+            if (!candidate.application()
+                || candidate.method(target.name(), target.descriptor())
+                    .filter(implementation -> !implementation.isStatic() && implementation.code().isPresent())
+                    .isEmpty()) {
+                return false;
+            }
+            targets++;
+        }
+        return targets > 0;
+    }
+
+    private static boolean entryAnchoredCheckcastTarget(final String target) {
+        return "java/lang/String".equals(target)
+            || "java/lang/Object".equals(target);
+    }
+
+    private static boolean entryAnchoredNormalExit(
+        final CodeAttribute code,
+        final CodeException handler
+    ) {
+        final Instruction normalExit = instructionAtOffset(code, handler.endPc()).orElseThrow();
+        if (normalExit.opcode() >= 172 && normalExit.opcode() <= 177) {
+            return true;
+        }
+        final int target = boundedBranchTarget(normalExit);
+        return target > handler.handlerPc() && instructionAtOffset(code, target).isPresent();
+    }
+
+    private static boolean entryAnchoredNormalStack(
+        final CodeAttribute code,
+        final CodeException handler,
+        final List<IrType> stack
+    ) {
+        Instruction exit = instructionAtOffset(code, handler.endPc()).orElseThrow();
+        if (exit.opcode() == 167) {
+            final Optional<Instruction> target = instructionAtOffset(
+                code,
+                boundedBranchTarget(exit)
+            );
+            if (target.isEmpty()) {
+                return false;
+            }
+            exit = target.orElseThrow();
+        }
+        if (exit.opcode() == 177) {
+            return stack.isEmpty();
+        }
+        if (stack.size() != 1) {
+            return false;
+        }
+        if (exit.opcode() == 172) {
+            return stack.getFirst() == IrType.INT;
+        }
+        if (exit.opcode() == 173) {
+            return stack.getFirst() == IrType.LONG;
+        }
+        if (exit.opcode() == 174) {
+            return stack.getFirst() == IrType.FLOAT;
+        }
+        if (exit.opcode() == 175) {
+            return stack.getFirst() == IrType.DOUBLE;
+        }
+        return exit.opcode() == 176 && stack.getFirst() == IrType.OBJECT;
+    }
+
+    private static boolean hasEntryAnchoredInboundTarget(
+        final CodeAttribute code,
+        final CodeException handler
+    ) {
+        for (final Instruction instruction : code.instructions()) {
+            if (instruction.offset() >= handler.startPc() && instruction.offset() < handler.endPc()) {
+                continue;
+            }
+            final int target = boundedBranchTarget(instruction);
+            if (target >= handler.startPc() && target < handler.endPc()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasSingleEntryAnchoredCatchStore(
+        final CodeAttribute code,
+        final CodeException handler,
+        final int catchLocal
+    ) {
+        for (final Instruction instruction : code.instructions()) {
+            if (instruction.offset() == handler.handlerPc()) {
+                continue;
+            }
+            if (entryAnchoredStoreLocalIndex(instruction) == catchLocal) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean entryAnchoredControlFlow(final int opcode) {
+        return opcode >= 153 && opcode <= 177
+            || opcode == 191
+            || opcode >= 194 && opcode <= 201;
+    }
+
+    private static boolean entryAnchoredNonThrowingInstruction(final Instruction instruction) {
+        final int opcode = instruction.opcode();
+        if (opcode == 18 || opcode == 19 || opcode == 20) {
+            return entryAnchoredLiteralType(instruction).isPresent();
+        }
+        return opcode == 0
+            || opcode == 1
+            || opcode >= 2 && opcode <= 17
+            || opcode >= 21 && opcode <= 78
+            || opcode == 87
+            || opcode == 89;
+    }
+
+    private static boolean applyEntryAnchoredStackEffect(
+        final Instruction instruction,
+        final List<IrType> locals,
+        final List<IrType> stack
+    ) {
+        final int opcode = instruction.opcode();
+        if (opcode == 0) {
+            return true;
+        }
+        if (opcode == 1) {
+            return addEntryAnchoredType(stack, IrType.OBJECT);
+        }
+        if (opcode == 18 || opcode == 19 || opcode == 20) {
+            final Optional<IrType> type = entryAnchoredLiteralType(instruction);
+            return type.isPresent() && addEntryAnchoredType(stack, type.orElseThrow());
+        }
+        if (opcode >= 2 && opcode <= 8 || opcode == 16 || opcode == 17) {
+            return addEntryAnchoredType(stack, IrType.INT);
+        }
+        if (opcode == 9 || opcode == 10) {
+            return addEntryAnchoredType(stack, IrType.LONG);
+        }
+        if (opcode >= 11 && opcode <= 13) {
+            return addEntryAnchoredType(stack, IrType.FLOAT);
+        }
+        if (opcode == 14 || opcode == 15) {
+            return addEntryAnchoredType(stack, IrType.DOUBLE);
+        }
+        final Optional<IrType> loaded = entryAnchoredLoadType(opcode);
+        if (loaded.isPresent()) {
+            final int local = entryAnchoredLoadLocalIndex(instruction);
+            return local >= 0 && local < locals.size() && locals.get(local) == loaded.orElseThrow()
+                && addEntryAnchoredType(stack, loaded.orElseThrow());
+        }
+        final Optional<IrType> stored = entryAnchoredStoreType(opcode);
+        if (stored.isPresent()) {
+            final int local = entryAnchoredStoreLocalIndex(instruction);
+            final IrType type = stored.orElseThrow();
+            if (local < 0 || local >= locals.size() || !popEntryAnchoredType(stack, type)
+                || type.slotWidth() == 2 && local + 1 >= locals.size()) {
+                return false;
+            }
+            locals.set(local, type);
+            if (type.slotWidth() == 2) {
+                locals.set(local + 1, IrType.VOID);
+            }
+            return true;
+        }
+        if (opcode == 87) {
+            return popEntryAnchoredCategoryOne(stack);
+        }
+        if (opcode == 89) {
+            if (stack.isEmpty() || stack.getLast().slotWidth() == 2) {
+                return false;
+            }
+            stack.add(stack.getLast());
+            return true;
+        }
+        if (opcode == 192) {
+            return popEntryAnchoredType(stack, IrType.OBJECT)
+                && addEntryAnchoredType(stack, IrType.OBJECT);
+        }
+        return instruction.methodRef().isPresent()
+            && applyEntryAnchoredCallStackEffect(
+                instruction.opcode(),
+                instruction.methodRef().orElseThrow(),
+                stack
+            );
+    }
+
+    private static Optional<IrType> entryAnchoredLiteralType(final Instruction instruction) {
+        if (instruction.className().isPresent()
+            || instruction.methodRef().isPresent()
+            || instruction.fieldRef().isPresent()
+            || instruction.dynamicRef().isPresent()) {
+            return Optional.empty();
+        }
+        final List<IrType> types = new ArrayList<>();
+        instruction.intValue().ifPresent(value -> types.add(IrType.INT));
+        instruction.longValue().ifPresent(value -> types.add(IrType.LONG));
+        instruction.floatValue().ifPresent(value -> types.add(IrType.FLOAT));
+        instruction.doubleValue().ifPresent(value -> types.add(IrType.DOUBLE));
+        if (instruction.stringValue().isPresent()
+            && Strings2.isRuntimeAsciiStringConstant(instruction.stringValue().orElseThrow())) {
+            types.add(IrType.OBJECT);
+        }
+        if (types.size() != 1) {
+            return Optional.empty();
+        }
+        final IrType type = types.getFirst();
+        if (instruction.opcode() == 20) {
+            return type.slotWidth() == 2 ? Optional.of(type) : Optional.empty();
+        }
+        return type.slotWidth() == 2 ? Optional.empty() : Optional.of(type);
+    }
+
+    private static boolean applyEntryAnchoredCallStackEffect(
+        final int opcode,
+        final MethodRef target,
+        final List<IrType> stack
+    ) {
+        final MethodDescriptor descriptor = MethodDescriptor.parse(target.descriptor());
+        for (int index = descriptor.parameterTypes().size() - 1; index >= 0; index--) {
+            if (!popEntryAnchoredType(stack, descriptor.parameterTypes().get(index))) {
+                return false;
+            }
+        }
+        if (opcode != 184 && !popEntryAnchoredType(stack, IrType.OBJECT)) {
+            return false;
+        }
+        return descriptor.returnType() == IrType.VOID
+            || addEntryAnchoredType(stack, descriptor.returnType());
+    }
+
+    private static Optional<List<IrType>> entryAnchoredLocals(
+        final MethodInfo method,
+        final int maxLocals
+    ) {
+        final MethodDescriptor descriptor = MethodDescriptor.parse(method.descriptor());
+        final List<IrType> locals = new ArrayList<>();
+        if (!method.isStatic()) {
+            locals.add(IrType.OBJECT);
+        }
+        for (final IrType parameter : descriptor.parameterTypes()) {
+            locals.add(parameter);
+            if (parameter.slotWidth() == 2) {
+                locals.add(IrType.VOID);
+            }
+        }
+        if (locals.size() > maxLocals) {
+            return Optional.empty();
+        }
+        while (locals.size() < maxLocals) {
+            locals.add(IrType.VOID);
+        }
+        return Optional.of(List.copyOf(locals));
+    }
+
+    private static Optional<IrType> entryAnchoredLoadType(final int opcode) {
+        if (opcode == 21 || opcode >= 26 && opcode <= 29) {
+            return Optional.of(IrType.INT);
+        }
+        if (opcode == 22 || opcode >= 30 && opcode <= 33) {
+            return Optional.of(IrType.LONG);
+        }
+        if (opcode == 23 || opcode >= 34 && opcode <= 37) {
+            return Optional.of(IrType.FLOAT);
+        }
+        if (opcode == 24 || opcode >= 38 && opcode <= 41) {
+            return Optional.of(IrType.DOUBLE);
+        }
+        return opcode == 25 || opcode >= 42 && opcode <= 45
+            ? Optional.of(IrType.OBJECT)
+            : Optional.empty();
+    }
+
+    private static Optional<IrType> entryAnchoredStoreType(final int opcode) {
+        if (opcode == 54 || opcode >= 59 && opcode <= 62) {
+            return Optional.of(IrType.INT);
+        }
+        if (opcode == 55 || opcode >= 63 && opcode <= 66) {
+            return Optional.of(IrType.LONG);
+        }
+        if (opcode == 56 || opcode >= 67 && opcode <= 70) {
+            return Optional.of(IrType.FLOAT);
+        }
+        if (opcode == 57 || opcode >= 71 && opcode <= 74) {
+            return Optional.of(IrType.DOUBLE);
+        }
+        return opcode == 58 || opcode >= 75 && opcode <= 78
+            ? Optional.of(IrType.OBJECT)
+            : Optional.empty();
+    }
+
+    private static int entryAnchoredLoadLocalIndex(final Instruction instruction) {
+        final int opcode = instruction.opcode();
+        if (opcode >= 21 && opcode <= 25) {
+            return instruction.operands().length == 1 ? instruction.operands()[0] & 0xFF : -1;
+        }
+        if (opcode >= 26 && opcode <= 29) {
+            return opcode - 26;
+        }
+        if (opcode >= 30 && opcode <= 33) {
+            return opcode - 30;
+        }
+        if (opcode >= 34 && opcode <= 37) {
+            return opcode - 34;
+        }
+        if (opcode >= 38 && opcode <= 41) {
+            return opcode - 38;
+        }
+        return opcode >= 42 && opcode <= 45 ? opcode - 42 : -1;
+    }
+
+    private static int entryAnchoredStoreLocalIndex(final Instruction instruction) {
+        final int opcode = instruction.opcode();
+        if (opcode >= 54 && opcode <= 58) {
+            return instruction.operands().length == 1 ? instruction.operands()[0] & 0xFF : -1;
+        }
+        if (opcode >= 59 && opcode <= 62) {
+            return opcode - 59;
+        }
+        if (opcode >= 63 && opcode <= 66) {
+            return opcode - 63;
+        }
+        if (opcode >= 67 && opcode <= 70) {
+            return opcode - 67;
+        }
+        if (opcode >= 71 && opcode <= 74) {
+            return opcode - 71;
+        }
+        return opcode >= 75 && opcode <= 78 ? opcode - 75 : -1;
+    }
+
+    private static boolean popEntryAnchoredType(
+        final List<IrType> stack,
+        final IrType expected
+    ) {
+        if (stack.isEmpty() || stack.getLast() != expected) {
+            return false;
+        }
+        stack.removeLast();
+        return true;
+    }
+
+    private static boolean popEntryAnchoredCategoryOne(final List<IrType> stack) {
+        if (stack.isEmpty() || stack.getLast().slotWidth() == 2) {
+            return false;
+        }
+        stack.removeLast();
+        return true;
+    }
+
+    private static boolean addEntryAnchoredType(
+        final List<IrType> stack,
+        final IrType type
+    ) {
+        if (type == IrType.VOID) {
+            return false;
+        }
+        stack.add(type);
+        return true;
+    }
+
+    private static int entryAnchoredStackWords(final List<IrType> stack) {
+        int words = 0;
+        for (final IrType type : stack) {
+            words += type.slotWidth();
+        }
+        return words;
     }
 
     private static boolean supportsImmediateOptionalOrElseThrowSupplierHandler(

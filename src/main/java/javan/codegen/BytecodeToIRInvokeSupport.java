@@ -87,9 +87,26 @@ final class BytecodeToIRInvokeSupport {
     ) {
         final String target = instruction.className().orElseThrow();
         final IrExpression value = popObject(classFile, method, stack);
+        stack.add(StackValue.intExpression(instanceOfExpression(
+            classes,
+            classFile,
+            method,
+            instruction,
+            target,
+            value
+        )));
+    }
+
+    private static IrExpression instanceOfExpression(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final String target,
+        final IrExpression value
+    ) {
         if ("java/lang/Object".equals(target)) {
-            stack.add(StackValue.intExpression(IrExpression.intCall("javan_object_non_null", List.of(value))));
-            return;
+            return IrExpression.intCall("javan_object_non_null", List.of(value));
         }
         final Optional<Integer> wrapperTypeId = platformWrapperTypeId(target);
         final List<IrExpression> arguments = new ArrayList<>();
@@ -97,16 +114,14 @@ final class BytecodeToIRInvokeSupport {
         if (wrapperTypeId.isPresent()) {
             arguments.add(IrExpression.intLiteral(1));
             arguments.add(IrExpression.intLiteral(wrapperTypeId.orElseThrow()));
-            stack.add(StackValue.intExpression(IrExpression.intCall("javan_object_type_in", arguments)));
-            return;
+            return IrExpression.intCall("javan_object_type_in", arguments);
         }
         final Optional<Integer> builtinTargetId = JdkCallSupport.builtinInstanceOfTargetId(target);
         if (builtinTargetId.isPresent()) {
-            stack.add(StackValue.intExpression(IrExpression.intCall(
+            return IrExpression.intCall(
                 "javan_object_builtin_instance_of",
                 List.of(value, IrExpression.intLiteral(builtinTargetId.orElseThrow()))
-            )));
-            return;
+            );
         }
         final boolean knownTarget = classes.containsKey(target);
         final List<Integer> typeIds = assignableTypeIds(classes, target);
@@ -114,15 +129,174 @@ final class BytecodeToIRInvokeSupport {
             throw unsupportedInstanceOfTarget(classFile, method, instruction, target);
         }
         if (typeIds.isEmpty()) {
-            stack.add(StackValue.intExpression(IrExpression.intLiteral(0)));
-            return;
+            return IrExpression.intLiteral(0);
         }
         arguments.add(IrExpression.intLiteral(typeIds.size()));
         for (final int typeId : typeIds) {
             arguments.add(IrExpression.intLiteral(typeId));
         }
-        stack.add(StackValue.intExpression(IrExpression.intCall("javan_object_type_in", arguments)));
+        return IrExpression.intCall("javan_object_type_in", arguments);
     }
+
+    static boolean lowerSupportedCheckcast(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
+    ) {
+        final String target = instruction.className().orElseThrow();
+        if (!"java/lang/String".equals(target)
+            && !"java/lang/Object".equals(target)) {
+            return false;
+        }
+        final String valueLocal = "object" + localDeclarations.size();
+        localDeclarations.put(
+            Integer.MIN_VALUE + localDeclarations.size(),
+            new IrLocal(IrType.OBJECT, valueLocal)
+        );
+        instructions.add(IrInstruction.assignObject(
+            valueLocal,
+            popObject(classFile, method, instruction, stack)
+        ));
+        final IrExpression value = IrExpression.objectLocal(valueLocal);
+        final String successLabel = "label_typed_checkcast_success_"
+            + instruction.offset() + "_" + localDeclarations.size();
+        instructions.add(IrInstruction.branchIf(
+            successLabel,
+            IrExpression.objectComparison("==", value, IrExpression.objectNull())
+        ));
+        instructions.add(IrInstruction.branchIf(
+            successLabel,
+            IrExpression.intComparison(
+                "!=",
+                IrExpression.intCall(
+                    "javan_class_is_instance",
+                    List.of(
+                        classLiteralExpression(classes, classFile, method, instruction),
+                        value
+                    )
+                ),
+                IrExpression.intLiteral(0)
+            )
+        ));
+        final List<StackValue> successStack = new ArrayList<>(stack);
+        successStack.add(StackValue.objectExpression(value));
+        routePendingPlatformException(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            "java/lang/ClassCastException",
+            IrExpression.stringLiteral("Cannot cast value to " + target)
+        );
+        instructions.add(IrInstruction.label(successLabel));
+        stack.addAll(successStack);
+        return true;
+    }
+
+    static void guardTypedReceiver(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
+    ) {
+        if (instruction.opcode() != 182 && instruction.opcode() != 185) {
+            return;
+        }
+        final MethodRef target = instruction.methodRef().orElseThrow();
+        if (!guardedMapGet(target)
+            && !(classes.containsKey(target.owner())
+                && classes.get(target.owner()).application()
+                && !"<init>".equals(target.name()))) {
+            return;
+        }
+        final IrExpression nullMessage = IrExpression.stringLiteral(
+            "Cannot invoke " + target.owner() + "." + target.name() + " on null"
+        );
+        if (BytecodeToIRControlFlowSupport.exceptionHandler(
+            classFile,
+            method,
+            instruction,
+            StackValue.platformThrowable("java/lang/NullPointerException", nullMessage),
+            instruction.offset()
+        ).isEmpty()) {
+            return;
+        }
+        final int receiverIndex = stack.size()
+            - MethodDescriptor.parse(target.descriptor()).parameterTypes().size()
+            - 1;
+        if (receiverIndex < 0) {
+            throw unsupported(classFile, method, instruction);
+        }
+        final StackValue receiver = stack.get(receiverIndex);
+        if (receiver.expression().isEmpty()) {
+            throw unsupported(classFile, method, instruction);
+        }
+        final String receiverLocal = "object" + localDeclarations.size();
+        localDeclarations.put(
+            Integer.MIN_VALUE + localDeclarations.size(),
+            new IrLocal(IrType.OBJECT, receiverLocal)
+        );
+        instructions.add(IrInstruction.assignObject(
+            receiverLocal,
+            receiver.expression().orElseThrow()
+        ));
+        final IrExpression materialized = IrExpression.objectLocal(receiverLocal);
+        stack.set(
+            receiverIndex,
+            new StackValue(
+                receiver.kind(),
+                receiver.throwableType(),
+                Optional.of(materialized),
+                receiver.dynamicLambda()
+            )
+        );
+        final List<StackValue> successStack = List.copyOf(stack);
+        final String successLabel = "label_typed_receiver_success_"
+            + instruction.offset() + "_" + localDeclarations.size();
+        instructions.add(IrInstruction.branchIf(
+            successLabel,
+            IrExpression.objectComparison("!=", materialized, IrExpression.objectNull())
+        ));
+        routePendingPlatformException(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            "java/lang/NullPointerException",
+            nullMessage
+        );
+        instructions.add(IrInstruction.label(successLabel));
+        stack.addAll(successStack);
+    }
+
+    private static boolean guardedMapGet(final MethodRef target) {
+        return ("java/util/Map".equals(target.owner())
+                || "java/util/HashMap".equals(target.owner())
+                || "java/util/LinkedHashMap".equals(target.owner())
+                || "java/util/TreeMap".equals(target.owner())
+                || "java/util/concurrent/ConcurrentHashMap".equals(target.owner()))
+            && "get".equals(target.name())
+            && "(Ljava/lang/Object;)Ljava/lang/Object;".equals(target.descriptor())
+            && JdkCallSupport.supportedCall(target).isPresent();
+    }
+
     static void pushField(
         final Map<String, ClassFile> classes,
         final ClassFile classFile,

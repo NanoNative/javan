@@ -252,7 +252,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersUncaughtThrowToSourceMappedPanic() {
+    void lowersUncaughtNullThrowToSourceMappedPendingException() {
         final MethodInfo main = new MethodInfo(
             0x0008,
             "main",
@@ -270,16 +270,19 @@ final class BytecodeToIRTest {
 
         final IrFunction function = lower(main);
 
-        assertThat(function.instructions()).singleElement().satisfies(instruction -> {
-            assertThat(instruction.op()).isEqualTo(IrInstruction.Op.PANIC);
-            assertThat(instruction.sourceLocation()).isPresent();
-            assertThat(instruction.sourceLocation().orElseThrow().className()).isEqualTo("com/acme/Main");
-            assertThat(instruction.sourceLocation().orElseThrow().methodName()).isEqualTo("main");
-            assertThat(instruction.sourceLocation().orElseThrow().descriptor()).isEqualTo("()V");
-            assertThat(instruction.sourceLocation().orElseThrow().bytecodeOffset()).isEqualTo(1);
-            assertThat(instruction.sourceLocation().orElseThrow().lineNumber()).contains(42);
-            assertThat(instruction.sourceLocation().orElseThrow().sourceFile()).contains("Main.java");
-        });
+        assertThat(function.instructions()).containsExactly(IrInstruction.throwPending(
+            "java/lang/NullPointerException",
+            IrExpression.stringLiteral("Cannot throw null"),
+            new IrSourceLocation(
+                "com/acme/Main",
+                "main",
+                "()V",
+                1,
+                Optional.of("Main.java"),
+                Optional.of(42),
+                Optional.empty()
+            )
+        ));
     }
 
     @Test
@@ -407,22 +410,29 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void rejectsProtectedUnknownThrowableTypeForCatchHandler() {
-        assertThatThrownBy(() -> lowerMain(methodWithHandlers(
+    void lowersProtectedNullThrowToCatchHandler() {
+        final IrFunction function = lowerMain(methodWithHandlers(
             0x0008,
             "main",
             "()Ljava/lang/String;",
             1,
-            0,
+            1,
             List.of(new CodeException(0, 2, 2, Optional.of("java/lang/Throwable"))),
             plain(0, 1, "aconst_null"),
             plain(1, 191, "athrow"),
-            plain(2, 176, "areturn")
-        )))
-            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
-                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN014");
-                assertThat(exception.diagnostic().subject()).isEqualTo("athrow");
-            });
+            plain(2, 75, "astore_0"),
+            stringConstant(3, "caught"),
+            plain(4, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).extracting(IrInstruction::op).containsExactly(
+            IrInstruction.Op.SET_PENDING,
+            IrInstruction.Op.JUMP,
+            IrInstruction.Op.LABEL,
+            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.RETURN_OBJECT
+        );
     }
 
     @Test
@@ -4608,7 +4618,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersCheckcastAsNoopPreservingReference() {
+    void lowersCheckcastToNullSafeRuntimeTypeCheck() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -4620,8 +4630,13 @@ final class BytecodeToIRTest {
             plain(2, 176, "areturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.objectLocal("arg0"))
+        assertThat(function.instructions()).extracting(IrInstruction::op).containsExactly(
+            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.THROW_PENDING,
+            IrInstruction.Op.LABEL,
+            IrInstruction.Op.RETURN_OBJECT
         );
     }
 

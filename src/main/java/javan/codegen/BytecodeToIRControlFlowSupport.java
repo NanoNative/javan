@@ -38,7 +38,21 @@ final class BytecodeToIRControlFlowSupport {
     ) {
         final StackValue thrownValue = popThrowable(classFile, method, instruction, stack);
         final IrExpression thrown = thrownValue.expression().orElseThrow();
-        if (thrownValue.kind() == StackKind.CAUGHT_THROWABLE) {
+        if (thrownValue.kind() == StackKind.OBJECT
+            && thrownValue.throwableType().isEmpty()
+            && thrown.kind() == IrExpression.Kind.OBJECT_NULL) {
+            BytecodeToIRInvokeSupport.routePendingPlatformException(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                pendingExceptionHandlerStacks,
+                sourceLines,
+                "java/lang/NullPointerException",
+                IrExpression.stringLiteral("Cannot throw null")
+            );
+        } else if (thrownValue.kind() == StackKind.CAUGHT_THROWABLE) {
             instructions.add(IrInstruction.callStaticVoid("javan_pending_rethrow", List.of(thrown)));
             appendPendingExceptionDispatch(
                 method,
@@ -62,12 +76,39 @@ final class BytecodeToIRControlFlowSupport {
                 pendingExceptionHandlerStacks
             );
         } else {
-            if (hasExceptionHandler(method, instruction.offset())) {
+            if (hasExceptionHandler(method, instruction.offset())
+                || insideExceptionHandlerBody(method, instruction.offset())) {
                 throw unsupportedTypedExceptionHandler(classFile, method, instruction);
             }
             instructions.add(IrInstruction.panic(thrown, sourceLocation(classFile, method, instruction, sourceLines)));
         }
         clearStack(stack);
+    }
+
+    private static boolean insideExceptionHandlerBody(
+        final MethodInfo method,
+        final int offset
+    ) {
+        final CodeAttribute code = method.code().orElseThrow();
+        for (final javan.classfile.CodeException handler : code.exceptionTable()) {
+            int bodyEnd = code.bytecode().length;
+            for (final Instruction instruction : code.instructions()) {
+                if (instruction.offset() != handler.endPc()) {
+                    continue;
+                }
+                if (instruction.opcode() == 167 || instruction.opcode() == 200) {
+                    final int normalJoin = branchTarget(instruction);
+                    if (normalJoin > handler.handlerPc()) {
+                        bodyEnd = normalJoin;
+                    }
+                }
+                break;
+            }
+            if (offset >= handler.handlerPc() && offset < bodyEnd) {
+                return true;
+            }
+        }
+        return false;
     }
 
     static void appendPendingExceptionDispatch(
