@@ -817,6 +817,27 @@ final class CompatibilityReportsTest {
         );
     }
 
+    @Test
+    void writeReportsSetEqualsAsSupportedCollectionsCallable() throws Exception {
+        new CompatibilityReports().write(
+            tempDir,
+            tempDir.resolve(".javan"),
+            List.of(metadata("", "com/acme/Main")),
+            List.of(metadata(
+                "java.base",
+                "java/util/Set",
+                0,
+                List.of(),
+                List.of(member(0, "equals", "(Ljava/lang/Object;)Z", List.of(), List.of()))
+            )),
+            List.of()
+        );
+
+        assertThat(Files.readString(tempDir.resolve(".javan/reports/compatibility-summary.json"))).contains(
+            "\"exactJdkCallableAccounting\": {\"supportedCallables\": 1, \"explicitRejectedCallables\": 0, \"doneCallables\": 1, \"unknownCallables\": 0, \"totalCallables\": 1, \"donePercent\": \"100.0\"}"
+        );
+    }
+
     private static ClassMetadata metadata(final String moduleName, final String className) {
         return metadata(moduleName, className, 0, List.of(), List.of());
     }

@@ -523,6 +523,10 @@ public final class JdkCallSupport {
         runtime("List.of", "java/util/List", "of", "([Ljava/lang/Object;)Ljava/util/List;"),
         runtime("List.copyOf", "java/util/List", "copyOf", "(Ljava/util/Collection;)Ljava/util/List;"),
         runtime("Set.copyOf", "java/util/Set", "copyOf", "(Ljava/util/Collection;)Ljava/util/Set;"),
+        runtime("Set.equals", "java/util/Set", "equals", "(Ljava/lang/Object;)Z"),
+        runtime("AbstractSet.equals", "java/util/AbstractSet", "equals", "(Ljava/lang/Object;)Z"),
+        runtime("HashSet.equals", "java/util/HashSet", "equals", "(Ljava/lang/Object;)Z"),
+        runtime("LinkedHashSet.equals", "java/util/LinkedHashSet", "equals", "(Ljava/lang/Object;)Z"),
         runtime("Set.of", "java/util/Set", "of", "()Ljava/util/Set;"),
         runtime("Set.of", "java/util/Set", "of", "(Ljava/lang/Object;)Ljava/util/Set;"),
         runtime("Set.of", "java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;"),
@@ -1960,6 +1964,9 @@ public final class JdkCallSupport {
             return true;
         }
         if ("java/util/Set".equals(owner)) {
+            return true;
+        }
+        if ("java/util/AbstractSet".equals(owner)) {
             return true;
         }
         if ("java/util/HashSet".equals(owner)) {

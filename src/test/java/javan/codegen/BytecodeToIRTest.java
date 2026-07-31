@@ -12372,6 +12372,133 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersAbstractSetEqualsToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/AbstractSet;Ljava/lang/Object;)Z",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/util/AbstractSet", "equals", "(Ljava/lang/Object;)Z")),
+            plain(5, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_set_equals",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
+    void rejectsSetEqualsWithStaticOpcode() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/Set;Ljava/lang/Object;)Z",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeStatic(2, new MethodRef("java/util/Set", "equals", "(Ljava/lang/Object;)Z")),
+            plain(5, 172, "ireturn")
+        ))).isInstanceOf(DiagnosticException.class);
+    }
+
+    @Test
+    void rejectsSetEqualsWithVirtualOpcode() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/Set;Ljava/lang/Object;)Z",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/util/Set", "equals", "(Ljava/lang/Object;)Z")),
+            plain(5, 172, "ireturn")
+        ))).isInstanceOf(DiagnosticException.class);
+    }
+
+    @Test
+    void rejectsSetEqualsWithVirtualMnemonic() {
+        final MethodRef methodRef = new MethodRef("java/util/Set", "equals", "(Ljava/lang/Object;)Z");
+        final Instruction wrongMnemonic = new Instruction(
+            2,
+            185,
+            "invokevirtual",
+            new byte[0],
+            Optional.of(methodRef),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty()
+        );
+
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/Set;Ljava/lang/Object;)Z",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            wrongMnemonic,
+            plain(5, 172, "ireturn")
+        ))).isInstanceOf(DiagnosticException.class);
+    }
+
+    @Test
+    void rejectsHashSetEqualsWithInterfaceOpcode() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/HashSet;Ljava/lang/Object;)Z",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeInterface(2, new MethodRef("java/util/HashSet", "equals", "(Ljava/lang/Object;)Z")),
+            plain(5, 172, "ireturn")
+        ))).isInstanceOf(DiagnosticException.class);
+    }
+
+    @Test
+    void rejectsHashSetEqualsWithInterfaceMnemonic() {
+        final MethodRef methodRef = new MethodRef("java/util/HashSet", "equals", "(Ljava/lang/Object;)Z");
+        final Instruction wrongMnemonic = new Instruction(
+            2,
+            182,
+            "invokeinterface",
+            new byte[0],
+            Optional.of(methodRef),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty()
+        );
+
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/HashSet;Ljava/lang/Object;)Z",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            wrongMnemonic,
+            plain(5, 172, "ireturn")
+        ))).isInstanceOf(DiagnosticException.class);
+    }
+
+    @Test
     void lowersMapKeySetToRuntimeHelper() {
         final IrFunction function = lowerMain(method(
             0x0008,

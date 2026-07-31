@@ -8475,6 +8475,16 @@ final class RuntimeSourceMemorySections {
             return 0;
         }
 
+        static int javan_list_is_direct_set_value(void* value) {
+            javan_allocation_node* allocation = javan_find_allocation(value, NULL);
+            if (allocation == NULL
+                || allocation->kind != JAVAN_HEAP_KIND_RUNTIME
+                || allocation->runtime_kind != JAVAN_RUNTIME_KIND_OBJECT_LIST) {
+                return 0;
+            }
+            return ((((javan_object_list*) value)->view_flags & JAVAN_LIST_VIEW_SET) != 0) ? 1 : 0;
+        }
+
         static javan_object_list* javan_list_storage_owner(javan_object_list* list) {
             while (list->backing != NULL) {
                 list = list->backing;
@@ -9417,10 +9427,14 @@ final class RuntimeSourceMemorySections {
             iterator->expected_mod_count = javan_list_observed_mod_count(iterator->list);
         }
 
-        void* javan_hashset_new(void) {
-            javan_object_list* set = javan_list_new_with_capacity(0, 0);
+        static javan_object_list* javan_set_new_with_capacity(int capacity) {
+            javan_object_list* set = javan_list_new_with_capacity(capacity, 0);
             set->view_flags = JAVAN_LIST_VIEW_SET;
             return set;
+        }
+
+        void* javan_hashset_new(void) {
+            return javan_set_new_with_capacity(0);
         }
 
         int javan_hashset_add_all(void* value, void* collection) {
@@ -9984,6 +9998,23 @@ final class RuntimeSourceMemorySections {
             return javan_list_new_view(set, 1, JAVAN_LIST_VIEW_UNMODIFIABLE | JAVAN_LIST_VIEW_SET);
         }
 
+        int32_t javan_set_equals(void* receiver, void* other) {
+            if (receiver == NULL || other == NULL
+                || javan_list_is_direct_set_value(receiver) == 0
+                || javan_list_is_direct_set_value(other) == 0) {
+                return 0;
+            }
+            if (receiver == other) {
+                return 1;
+            }
+            javan_object_list* receiver_set = (javan_object_list*) receiver;
+            javan_object_list* other_set = (javan_object_list*) other;
+            if (javan_list_logical_length(receiver_set) != javan_list_logical_length(other_set)) {
+                return 0;
+            }
+            return javan_list_contains_all(receiver_set, other_set);
+        }
+
         int javan_set_add(void* value, void* element) {
             javan_object_list* list = javan_list_checked(value);
             javan_list_mutable_checked(list);
@@ -10180,7 +10211,8 @@ final class RuntimeSourceMemorySections {
                 snprintf(buffer, sizeof(buffer), "Negative number of elements: %d", num_elements);
                 javan_panic(buffer);
             }
-            return javan_list_new_with_capacity(javan_hashmap_capacity_for_expected_mappings(num_elements), 0);
+            int capacity = javan_hashmap_capacity_for_expected_mappings(num_elements);
+            return javan_set_new_with_capacity(capacity);
         }
 
         void* javan_linkedhashset_new_with_expected_elements(int num_elements) {
@@ -10189,7 +10221,8 @@ final class RuntimeSourceMemorySections {
                 snprintf(buffer, sizeof(buffer), "Negative number of elements: %d", num_elements);
                 javan_panic(buffer);
             }
-            return javan_list_new_with_capacity(javan_hashmap_capacity_for_expected_mappings(num_elements), 0);
+            int capacity = javan_hashmap_capacity_for_expected_mappings(num_elements);
+            return javan_set_new_with_capacity(capacity);
         }
 
         void javan_set_initialize_capacity(void* value, int capacity) {
