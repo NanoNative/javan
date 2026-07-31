@@ -7833,6 +7833,115 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void multiplyExactIntAcceptsPositiveOperands() throws Exception {
+        assertThat(multiplyExactIntOverflow("2", "3")).isEqualTo("0\n");
+    }
+
+    @Test
+    void multiplyExactIntAcceptsMixedSignOperands() throws Exception {
+        assertThat(multiplyExactIntOverflow("2", "-3")).isEqualTo("0\n");
+    }
+
+    @Test
+    void multiplyExactIntAcceptsNegativeOperands() throws Exception {
+        assertThat(multiplyExactIntOverflow("-2", "-3")).isEqualTo("0\n");
+    }
+
+    @Test
+    void multiplyExactIntAcceptsZeroWithMinimumValue() throws Exception {
+        assertThat(multiplyExactIntOverflow("INT_MIN", "0")).isEqualTo("0\n");
+    }
+
+    @Test
+    void multiplyExactIntAcceptsMaximumBoundary() throws Exception {
+        assertThat(multiplyExactIntOverflow("INT_MAX", "1")).isEqualTo("0\n");
+    }
+
+    @Test
+    void multiplyExactIntAcceptsMinimumBoundary() throws Exception {
+        assertThat(multiplyExactIntOverflow("INT_MIN", "1")).isEqualTo("0\n");
+    }
+
+    @Test
+    void multiplyExactIntAcceptsPositiveThreshold() throws Exception {
+        assertThat(multiplyExactIntOverflow("INT_MAX / 3", "3")).isEqualTo("0\n");
+    }
+
+    @Test
+    void multiplyExactIntAcceptsNegativeThreshold() throws Exception {
+        assertThat(multiplyExactIntOverflow("INT_MIN / 3", "3")).isEqualTo("0\n");
+    }
+
+    @Test
+    void multiplyExactIntRejectsPositiveTimesPositiveOverflow() throws Exception {
+        assertThat(multiplyExactIntOverflow("INT_MAX", "2")).isEqualTo("1\n");
+    }
+
+    @Test
+    void multiplyExactIntRejectsNegativeTimesPositiveOverflow() throws Exception {
+        assertThat(multiplyExactIntOverflow("INT_MIN", "2")).isEqualTo("1\n");
+    }
+
+    @Test
+    void multiplyExactIntRejectsPositiveTimesNegativeOverflow() throws Exception {
+        assertThat(multiplyExactIntOverflow("INT_MAX", "-2")).isEqualTo("1\n");
+    }
+
+    @Test
+    void multiplyExactIntRejectsMinimumTimesNegativeOne() throws Exception {
+        assertThat(multiplyExactIntOverflow("INT_MIN", "-1")).isEqualTo("1\n");
+    }
+
+    @Test
+    void multiplyExactIntRejectsPositiveThresholdOverflow() throws Exception {
+        assertThat(multiplyExactIntOverflow("INT_MAX / 3 + 1", "3")).isEqualTo("1\n");
+    }
+
+    @Test
+    void multiplyExactIntRejectsNegativeThresholdOverflow() throws Exception {
+        assertThat(multiplyExactIntOverflow("INT_MIN / 3 - 1", "3")).isEqualTo("1\n");
+    }
+
+    @Test
+    void multiplyExactIntReturnsSafeProduct() throws Exception {
+        assertThat(multiplyExactIntResult("-7", "6")).isEqualTo("-42\n");
+    }
+
+    private String multiplyExactIntOverflow(final String left, final String right) throws Exception {
+        return runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <limits.h>
+            #include <stdio.h>
+
+            int main(void) {
+                printf(
+                    "%%d\\n",
+                    javan_math_multiply_exact_int_overflows(%s, %s)
+                );
+                return 0;
+            }
+            """.formatted(left, right),
+            "4096"
+        );
+    }
+
+    private String multiplyExactIntResult(final String left, final String right) throws Exception {
+        return runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                printf("%%d\\n", javan_math_multiply_exact_int(%s, %s));
+                return 0;
+            }
+            """.formatted(left, right),
+            "4096"
+        );
+    }
+
+    @Test
     void multiplyExactLongIntDetectsMinimumTimesNegativeOne() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """

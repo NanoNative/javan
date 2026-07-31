@@ -13147,6 +13147,18 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void staticVerifierAcceptsMathMultiplyExactIntHandlerWithLoadedOperands() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            instruction(0, 26, "iload_0"),
+            instruction(1, 27, "iload_1"),
+            instruction(2, 184, "invokestatic", new MethodRef("java/lang/Math", "multiplyExact", "(II)I")),
+            instruction(3, 75, "astore_0")
+        ), new CodeException(0, 3, 3, Optional.of("java/lang/ArithmeticException")));
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
     void staticVerifierAcceptsMathAddExactLongHandlerWithLoadedOperands() {
         final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
             instruction(0, 30, "lload_0"),
@@ -13216,6 +13228,20 @@ final class CoreBehaviorTest {
             instruction(2, 97, "ladd"),
             instruction(3, 10, "lconst_1"),
             instruction(4, 184, "invokestatic", new MethodRef("java/lang/Math", "multiplyExact", "(JJ)J")),
+            instruction(5, 75, "astore_0")
+        ), new CodeException(0, 5, 5, Optional.of("java/lang/ArithmeticException")));
+
+        assertThat(diagnostics).extracting(Diagnostic::code).containsExactly("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsMathMultiplyExactIntHandlerWithIntAddition() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            instruction(0, 4, "iconst_1"),
+            instruction(1, 5, "iconst_2"),
+            instruction(2, 96, "iadd"),
+            instruction(3, 4, "iconst_1"),
+            instruction(4, 184, "invokestatic", new MethodRef("java/lang/Math", "multiplyExact", "(II)I")),
             instruction(5, 75, "astore_0")
         ), new CodeException(0, 5, 5, Optional.of("java/lang/ArithmeticException")));
 

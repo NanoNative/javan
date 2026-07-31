@@ -21381,6 +21381,59 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersMathMultiplyExactIntToRuntimeCallAndArithmeticExceptionRoute() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(II)I",
+            2,
+            2,
+            plain(0, 26, "iload_0"),
+            plain(1, 27, "iload_1"),
+            invokeStatic(2, new MethodRef("java/lang/Math", "multiplyExact", "(II)I")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt("int0", IrExpression.intLocal("arg0")),
+            IrInstruction.assignInt("int1", IrExpression.intLocal("arg1")),
+            IrInstruction.assignInt(
+                "int2",
+                IrExpression.intCall(
+                    "javan_math_multiply_exact_int_overflows",
+                    List.of(IrExpression.intLocal("int0"), IrExpression.intLocal("int1"))
+                )
+            ),
+            IrInstruction.branchIf(
+                "label_math_multiply_exact_int_success_2_2",
+                IrExpression.intComparison(
+                    "==",
+                    IrExpression.intLocal("int2"),
+                    IrExpression.intLiteral(0)
+                )
+            ),
+            IrInstruction.throwPending(
+                "java/lang/ArithmeticException",
+                IrExpression.stringLiteral("integer overflow"),
+                new IrSourceLocation(
+                    "com/acme/Main",
+                    "main",
+                    "(II)I",
+                    2,
+                    Optional.of("Main.java"),
+                    Optional.empty(),
+                    Optional.empty()
+                )
+            ),
+            IrInstruction.label("label_math_multiply_exact_int_success_2_2"),
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_math_multiply_exact_int",
+                List.of(IrExpression.intLocal("int0"), IrExpression.intLocal("int1"))
+            ))
+        );
+    }
+
+    @Test
     void lowersMathMultiplyExactLongLongToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
