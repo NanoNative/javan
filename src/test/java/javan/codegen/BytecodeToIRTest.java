@@ -5681,6 +5681,27 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersDoubleToIntToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(D)I",
+            2,
+            2,
+            plain(0, 38, "dload_0"),
+            plain(1, 142, "d2i"),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_double_to_int",
+                List.of(IrExpression.doubleLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
     void rejectsObjectReturnWithoutStackValueWithSourceDiagnostic() {
         assertThatThrownBy(() -> lowerMain(method(
             0x0008,

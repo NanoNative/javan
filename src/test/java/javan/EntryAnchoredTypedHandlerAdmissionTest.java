@@ -34,6 +34,13 @@ final class EntryAnchoredTypedHandlerAdmissionTest {
     }
 
     @Test
+    void acceptsApplicationDoubleReturnConvertedToInt() {
+        assertThat(verifyApplicationDoubleToInt())
+            .extracting(Diagnostic::code)
+            .doesNotContain("JAVAN014");
+    }
+
+    @Test
     void rejectsMultipleHandlers() {
         assertThat(verify(
             canonicalInstructions(),
@@ -325,6 +332,57 @@ final class EntryAnchoredTypedHandlerAdmissionTest {
         return new StaticVerifier().verify(
             Map.of(classFile.name(), classFile),
             List.of(new EntryPoint(classFile.name(), method.name(), method.descriptor()))
+        );
+    }
+
+    private static List<Diagnostic> verifyApplicationDoubleToInt() {
+        final MethodInfo parse = new MethodInfo(
+            0x0008,
+            "parse",
+            "()I",
+            Optional.of(new CodeAttribute(
+                2,
+                1,
+                new byte[8],
+                1,
+                List.of(new CodeException(0, 4, 5, Optional.of("java/lang/IllegalArgumentException"))),
+                List.of(
+                    invoke(0, 184, "invokestatic", new MethodRef("com/acme/Main", "value", "()D")),
+                    plain(3, 142, "d2i"),
+                    plain(4, 172, "ireturn"),
+                    plain(5, 75, "astore_0"),
+                    plain(6, 2, "iconst_m1"),
+                    plain(7, 172, "ireturn")
+                )
+            ))
+        );
+        final MethodInfo value = new MethodInfo(
+            0x0008,
+            "value",
+            "()D",
+            Optional.of(new CodeAttribute(
+                2,
+                0,
+                new byte[2],
+                0,
+                List.of(),
+                List.of(plain(0, 14, "dconst_0"), plain(1, 175, "dreturn"))
+            ))
+        );
+        final ClassFile classFile = new ClassFile(
+            69,
+            "com/acme/Main",
+            "java/lang/Object",
+            0x0011,
+            List.of(),
+            List.of(),
+            List.of(parse, value),
+            Path.of("Main.class"),
+            true
+        );
+        return new StaticVerifier().verify(
+            Map.of(classFile.name(), classFile),
+            List.of(new EntryPoint(classFile.name(), parse.name(), parse.descriptor()))
         );
     }
 

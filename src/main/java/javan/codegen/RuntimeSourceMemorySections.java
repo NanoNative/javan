@@ -4831,7 +4831,7 @@ final class RuntimeSourceMemorySections {
             return (int) value;
         }
 
-        static int javan_double_to_int(double value) {
+        int javan_double_to_int(double value) {
             if (value != value) {
                 return 0;
             }

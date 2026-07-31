@@ -39,6 +39,34 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void runtimeHeaderDeclaresDoubleToInt() throws Exception {
+        new RuntimeFiles().write(tempDir);
+        final String header = Files.readString(tempDir.resolve("javan_runtime.h"));
+
+        assertThat(header).contains("int javan_double_to_int(double value);");
+    }
+
+    @Test
+    void runtimeDoubleToIntGuardsNaNAndRangeBeforeCasting() throws Exception {
+        final String source = Files.readString(new RuntimeFiles().write(tempDir));
+
+        assertThat(source).contains("""
+            int javan_double_to_int(double value) {
+                if (value != value) {
+                    return 0;
+                }
+                if (value >= 2147483647.0) {
+                    return 2147483647;
+                }
+                if (value <= -2147483648.0) {
+                    return (-2147483647 - 1);
+                }
+                return (int) value;
+            }
+            """.stripTrailing());
+    }
+
+    @Test
     void runtimeSetEqualsReturnsTrueForIdentity() throws Exception {
         final String stdout = runRuntimeBoundaryProbe("""
             #include "javan_runtime.h"
