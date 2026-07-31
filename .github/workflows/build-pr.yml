@@ -1,0 +1,33 @@
+name: CI · Pull Request
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to build
+        required: false
+        default: ''
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: build-pr-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-common.yml
+    with:
+      ref: ${{ inputs.ref || github.sha }}
+    secrets: inherit

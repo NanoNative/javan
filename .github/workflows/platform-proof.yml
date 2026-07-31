@@ -1,0 +1,50 @@
+name: CI · Platform Proof
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        required: false
+        default: ''
+        type: string
+      runner:
+        required: true
+        type: string
+      enabled:
+        required: true
+        type: boolean
+
+permissions: {}
+
+jobs:
+  platform-proof:
+    if: inputs.enabled
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: Read Java info
+        id: java_info
+        uses: YunaBraska/java-info-action@11a434ffbf6bb3357363d1933be71a4076a90a6b # 3
+
+      - name: Set up JDK
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
+        with:
+          java-version: ${{ steps.java_info.outputs.java_version }}
+          distribution: temurin
+          cache: maven
+
+      - name: Verify Java build and platform contracts
+        shell: bash
+        run: >-
+          ./mvnw -q -DskipTests compile
+          && ./mvnw -q
+          -Dtest='javan.reporting.RuntimeFootprintReportsTest,javan.compat.JdkCallSupportTest,javan.classfile.ClassFileReaderTest'
+          test

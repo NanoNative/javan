@@ -15,8 +15,8 @@ if [ -z "$VERSION" ]; then
 fi
 
 VERSION=${VERSION#v}
-if ! printf '%s\n' "$VERSION" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' >/dev/null 2>&1; then
-  printf '%s\n' "Homebrew formula version must be a numeric triplet such as 2026.7.16: $VERSION" >&2
+if ! printf '%s\n' "$VERSION" | grep -E '^[0-9]{4}\.[0-9]{2}\.[0-9]{2}$' >/dev/null 2>&1; then
+  printf '%s\n' "Homebrew formula version must use the UTC date format YYYY.MM.DD: $VERSION" >&2
   exit 1
 fi
 

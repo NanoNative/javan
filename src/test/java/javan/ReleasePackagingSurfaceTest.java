@@ -14,18 +14,47 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
-    private static final Path CI_WORKFLOW = Path.of(".github/workflows/ci.yml");
+    private static final Path BUILD_COMMON = Path.of(".github/workflows/build-common.yml");
+    private static final Path BUILD_PR = Path.of(".github/workflows/build-pr.yml");
+    private static final Path BUILD_MERGE = Path.of(".github/workflows/build-merge.yml");
+    private static final Path NATIVE_PROOF = Path.of(".github/workflows/native-proof.yml");
     private static final Path RELEASE_WORKFLOW = Path.of(".github/workflows/release.yml");
     private static final Path CONTAINER_WORKFLOW = Path.of(".github/workflows/container-images.yml");
     private static final Path VERIFY_RELEASE = Path.of(".github/scripts/verify-release.sh");
     private static final Path VERIFY_CI_PACKAGE_SMOKE = Path.of(".github/scripts/verify-ci-package-smoke.sh");
+    private static final Path VERSION_TEMPLATE = Path.of("src/main/version/javan/cli/Version.java");
     private static final Path REPO_ROOT = Path.of("").toAbsolutePath().normalize();
+
+    @Test
+    void mavenOwnsDateVersionAndGeneratesTheCliConstant() throws Exception {
+        assertThat(Files.readString(Path.of("pom.xml")))
+            .contains("<groupId>org.nanonative</groupId>")
+            .contains("<description>Native Java compiler.</description>")
+            .contains("<!-- ########## PROD ########## -->")
+            .contains("<!-- ########## TEST ########## -->")
+            .contains("<!-- ########## BUILD ########## -->")
+            .contains("<!-- ########## RELEASE ########## -->")
+            .contains("<version>1.0.0</version>")
+            .contains("<project.build.outputTimestamp>${git.commit.time}</project.build.outputTimestamp>")
+            .contains("<id>git-commit-time</id>")
+            .contains("<id>generate-version-source</id>")
+            .contains("<id>add-generated-version-source</id>")
+            .doesNotContain("<revision>", "flatten-maven-plugin", "versions-maven-plugin");
+        assertThat(Files.readString(VERSION_TEMPLATE))
+            .contains("private static final String VERSION = \"${project.version}\"");
+        assertThat(Path.of(".github/scripts/set-version.sh")).doesNotExist();
+        assertThat(List.of(Path.of("mvnw"), Path.of("mvnw.cmd"), Path.of(".mvn/wrapper/maven-wrapper.properties")))
+            .allMatch(Files::isRegularFile);
+        assertThat(Files.readString(BUILD_COMMON))
+            .contains("versions:set -DnewVersion=\"$RELEASE_VERSION\" -DgenerateBackupPoms=false")
+            .doesNotContain("set-version.sh");
+    }
 
     @Test
     void homebrewFormulaGenerationRendersPinnedLinuxUrlsAndChecksums() throws Exception {
         final Path releaseDir = tempDir.resolve("release");
         Files.createDirectories(releaseDir);
-        final String version = "2026.7.16";
+        final String version = "2026.07.16";
         writeReleaseArtifact(releaseDir, "javan-" + version + "-linux-x64.tar.gz", "linux-x64");
         writeReleaseArtifact(releaseDir, "javan-" + version + "-linux-aarch64.tar.gz", "linux-aarch64");
         final Path formula = releaseDir.resolve("javan.rb");
@@ -59,7 +88,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     void homebrewFormulaGenerationFailsWhenChecksumIsMissing() throws Exception {
         final Path releaseDir = tempDir.resolve("release");
         Files.createDirectories(releaseDir);
-        final String version = "2026.7.16";
+        final String version = "2026.07.16";
         Files.writeString(releaseDir.resolve("javan-" + version + "-linux-x64.tar.gz"), "linux-x64", StandardCharsets.UTF_8);
 
         final ProcessResult run = process(
@@ -78,7 +107,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     void homebrewFormulaVerificationChecksGeneratedFormulaAgainstReleaseChecksums() throws Exception {
         final Path releaseDir = tempDir.resolve("release");
         Files.createDirectories(releaseDir);
-        final String version = "2026.7.16";
+        final String version = "2026.07.16";
         writeReleaseArtifact(releaseDir, "javan-" + version + "-linux-x64.tar.gz", "linux-x64");
         writeReleaseArtifact(releaseDir, "javan-" + version + "-linux-aarch64.tar.gz", "linux-aarch64");
         final Path formula = releaseDir.resolve("javan.rb");
@@ -118,31 +147,37 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     }
 
     @Test
-    void ciWorkflowKeepsLinuxHostVerifyTargetsWithoutRemoteMacOsRunner() throws Exception {
-        final String ciWorkflow = Files.readString(CI_WORKFLOW);
+    void commonWorkflowKeepsLinuxNativeProofTargets() throws Exception {
+        final String commonWorkflow = Files.readString(BUILD_COMMON);
 
-        assertThat(ciWorkflow)
+        assertThat(commonWorkflow)
             .contains("target: linux-x64")
             .contains("target: linux-aarch64")
-            .doesNotContain("target: macos-aarch64");
+            .contains("native-acceptance:")
+            .contains("native-sanitizer:")
+            .contains("native-package-self-host:");
     }
 
     @Test
     void ciWorkflowKeepsPackagedSelfHostSmokeStep() throws Exception {
-        final String ciWorkflow = Files.readString(CI_WORKFLOW);
+        final String nativeProof = Files.readString(NATIVE_PROOF);
 
-        assertThat(ciWorkflow)
+        assertThat(nativeProof)
             .contains("- name: Verify self-host package smoke")
             .contains("sh .github/scripts/verify-ci-package-smoke.sh");
     }
 
     @Test
     void workflowsQueueByRefWithoutCancelingRuns() throws Exception {
-        final String ciWorkflow = Files.readString(CI_WORKFLOW);
+        final String pullRequestWorkflow = Files.readString(BUILD_PR);
+        final String mainWorkflow = Files.readString(BUILD_MERGE);
         final String releaseWorkflow = Files.readString(RELEASE_WORKFLOW);
         final String containerWorkflow = Files.readString(CONTAINER_WORKFLOW);
 
-        assertThat(ciWorkflow)
+        assertThat(pullRequestWorkflow)
+            .contains("concurrency:")
+            .contains("cancel-in-progress: false");
+        assertThat(mainWorkflow)
             .contains("concurrency:")
             .contains("cancel-in-progress: false");
         assertThat(releaseWorkflow)
@@ -155,7 +190,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
 
     @Test
     void ciWorkflowKeepsSoftCoverageSummaryInsteadOfHardNinePercentGate() throws Exception {
-        final String ciWorkflow = Files.readString(CI_WORKFLOW);
+        final String ciWorkflow = Files.readString(BUILD_COMMON);
 
         assertThat(ciWorkflow)
             .contains("- name: Summarize coverage (non-blocking)")
@@ -167,7 +202,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
 
     @Test
     void ciWorkflowKeepsWindowsRuntimeSmokeGate() throws Exception {
-        final String ciWorkflow = Files.readString(CI_WORKFLOW);
+        final String ciWorkflow = Files.readString(BUILD_COMMON);
 
         assertThat(ciWorkflow)
             .contains("windows-runtime-smoke:")
@@ -179,51 +214,60 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     }
 
     @Test
-    void ciWorkflowKeepsReleaseBlockedOnVerifyAndWindowsSmoke() throws Exception {
-        final String ciWorkflow = Files.readString(CI_WORKFLOW);
+    void mainWorkflowKeepsReleaseBlockedOnTheCompleteCommonBuild() throws Exception {
+        final String commonWorkflow = Files.readString(BUILD_COMMON);
+        final String mainWorkflow = Files.readString(BUILD_MERGE);
 
-        assertThat(ciWorkflow)
+        assertThat(commonWorkflow)
+            .contains("verify-core:")
+            .contains("verify-cli-integration:")
+            .contains("native-acceptance:")
+            .contains("native-sanitizer:")
+            .contains("native-package-self-host:")
+            .contains("windows-runtime-smoke:");
+        assertThat(mainWorkflow)
             .contains("needs:")
-            .contains("- verify-core")
-            .contains("- verify-cli-integration")
-            .contains("- native-smoke")
-            .contains("- windows-runtime-smoke")
-            .contains("uses: ./.github/workflows/release.yml");
+            .contains("- verify")
+            .contains("uses: ./.github/workflows/publish-central.yml")
+            .doesNotContain("uses: ./.github/workflows/release.yml");
     }
 
     @Test
-    void mainPushReleasePathBuildsPackagesAsDryRunWithoutBotToken() throws Exception {
-        final String ciWorkflow = Files.readString(CI_WORKFLOW);
-        final String releaseWorkflow = Files.readString(RELEASE_WORKFLOW);
+    void mainPushBuildsDateSnapshotArtifactsOnceWithoutInvokingManualRelease() throws Exception {
+        final String ciWorkflow = Files.readString(BUILD_MERGE);
 
         assertThat(ciWorkflow)
-            .contains("release_enabled: true")
-            .contains("dry_run: true");
-        assertThat(releaseWorkflow)
-            .contains("dry_run=\"$INPUT_DRY_RUN\"")
-            .contains("dry_run=\"$INPUT_DRY_RUN\"\n          elif");
+            .contains("prepare_publication: true")
+            .contains("snapshot: true")
+            .doesNotContain("release_strategy")
+            .doesNotContain("uses: ./.github/workflows/release.yml");
+        assertThat(Files.readString(BUILD_COMMON))
+            .contains("version=$version-SNAPSHOT")
+            .contains("prepare-publication:")
+            .contains("name: build-workspace");
+        assertThat(Files.readString(RELEASE_WORKFLOW))
+            .doesNotContain("snapshot: true", "git add pom.xml", "javan/cli/Version.java");
     }
 
     @Test
-    void releaseWorkflowKeepsLinuxPackageTargetsAndDisablesMacOsPackaging() throws Exception {
-        final String releaseWorkflow = Files.readString(RELEASE_WORKFLOW);
+    void commonBuildKeepsLinuxAndMacOsPackagesWhileRetainingDisabledWindowsRows() throws Exception {
+        final String commonWorkflow = Files.readString(BUILD_COMMON);
 
-        assertThat(releaseWorkflow)
-            .contains("package-target: linux-x64")
-            .contains("package-target: linux-aarch64")
-            .doesNotContain("build-macos:")
-            .doesNotContain("macos-aarch64")
-            .doesNotContain("macos-15");
+        assertThat(commonWorkflow)
+            .contains("target: linux-x64", "target: linux-aarch64")
+            .contains("target: macos-x64", "target: macos-aarch64")
+            .contains("target: windows-x64", "target: windows-aarch64")
+            .contains("enabled: false");
     }
 
     @Test
     void releaseWorkflowVerifiesNativePackagesBeforeUpload() throws Exception {
-        final String releaseWorkflow = Files.readString(RELEASE_WORKFLOW);
+        final String nativeProof = Files.readString(NATIVE_PROOF);
 
-        assertThat(releaseWorkflow)
-            .contains("- name: Build and verify native package")
-            .contains("sh .github/scripts/verify-release.sh")
-            .contains("- name: Upload package");
+        assertThat(nativeProof)
+            .contains("- name: Verify self-host package smoke")
+            .contains("sh .github/scripts/verify-ci-package-smoke.sh")
+            .contains("- name: Upload verified native package");
     }
 
     @Test
@@ -231,8 +275,9 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         final String releaseWorkflow = Files.readString(RELEASE_WORKFLOW);
 
         assertThat(releaseWorkflow)
-            .contains("- name: Download packages")
-            .contains("uses: actions/download-artifact@v8")
+            .contains("- name: Download verified packages")
+            .contains("actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7")
+            .contains("pattern: javan-*")
             .contains("merge-multiple: true")
             .contains("- name: Prepare release metadata");
     }
@@ -242,8 +287,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         final String script = Files.readString(VERIFY_RELEASE);
 
         assertThat(script)
-            .contains("mvn -q \\")
-            .contains("-Djavan.coverage.check.skip=true \\")
+            .contains("./mvnw -q \\")
             .contains("clean verify")
             .contains("scripts/build.sh")
             .contains(".github/scripts/package-release.sh")
@@ -255,6 +299,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         final String script = Files.readString(Path.of("scripts/build.sh"));
 
         assertThat(script)
+            .contains("VERSION=$(./mvnw -q help:evaluate -Dexpression=project.version -DforceStdout | tail -n 1)")
             .contains("if [ \"$REUSE_TARGET\" = \"true\" ]; then")
             .contains("Missing target/classes/javan/Main.class for JAVAN_BUILD_REUSE_TARGET=true.")
             .contains("if [ \"$REUSE_TARGET\" != \"true\" ] && [ ! -f \"$JAR\" ]; then")

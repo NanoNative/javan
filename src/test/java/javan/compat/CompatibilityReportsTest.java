@@ -677,10 +677,9 @@ final class CompatibilityReportsTest {
                 "\"syntheticMethods\": [\"com/acme/Preview.<init>()V\", \"com/acme/Preview.bridge()V\"]"
             );
             assertThat(Files.readString(tempDir.resolve("doc/status/jdk-compatibility.md"))).contains(
-                "- scanned vendor: `" + System.getProperty("java.vendor") + "`",
-                "- scanned platform: `" + System.getProperty("os.name") + "/" + System.getProperty("os.arch") + "`",
+                "- scanned JDK: `JDK25`",
                 "- JDK modules: `2`"
-            );
+            ).doesNotContain("- scanned java:", "- scanned vendor:", "- scanned platform:");
         });
     }
 

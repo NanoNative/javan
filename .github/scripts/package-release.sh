@@ -5,21 +5,19 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 cd "$ROOT"
 
 VERSION=${1:-}
-POM_VERSION=$(sed -n 's/.*<version>\(.*\)<\/version>.*/\1/p' pom.xml | head -n 1)
 if [ -z "$VERSION" ]; then
-  VERSION=$POM_VERSION
+  VERSION=${JAVAN_VERSION:-}
+fi
+if [ -z "$VERSION" ]; then
+  VERSION=$(./mvnw -q help:evaluate -Dexpression=project.version -DforceStdout | tail -n 1)
 fi
 VERSION=${VERSION#v}
 if [ -z "$VERSION" ]; then
   printf '%s\n' "Could not resolve project version." >&2
   exit 1
 fi
-if [ "$VERSION" != "$POM_VERSION" ]; then
-  printf '%s\n' "Requested version $VERSION does not match pom.xml version $POM_VERSION." >&2
-  exit 1
-fi
-if ! printf '%s\n' "$VERSION" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' >/dev/null 2>&1; then
-  printf '%s\n' "Release version must be a numeric triplet such as 2026.6.14: $VERSION" >&2
+if ! printf '%s\n' "$VERSION" | grep -E '^[0-9]{4}\.[0-9]{2}\.[0-9]{2}(-SNAPSHOT)?$' >/dev/null 2>&1; then
+  printf '%s\n' "Package version must use YYYY.MM.DD or YYYY.MM.DD-SNAPSHOT: $VERSION" >&2
   exit 1
 fi
 

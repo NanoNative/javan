@@ -18,8 +18,8 @@ Current implemented slice:
 - unified reports summarize the runtime-features family
 - `javan report` remains the explicit report reader/refresh command
 - `--target` is a host-target assertion and fails before native codegen on mismatch
-- host-native CI is currently required for `linux-x64`, `linux-aarch64`, and
-  `macos-aarch64`; `macos-x64` is deferred until the active matrix is stable
+- host-native CI is currently required for Linux and macOS x64/aarch64; Windows x64 and
+  aarch64 package rows remain explicit and disabled until the runtime/linker port lands
 
 ## Principles
 
