@@ -1781,6 +1781,65 @@ final class CCodegenMemoryTest {
             .isLessThan(generated.indexOf(BytecodeToIR.symbol(entry) + "(arg0_string, arg1_array);"));
     }
 
+    @Test
+    void emitsInfiniteFloatAndDoubleLiteralsAsCConstants() throws Exception {
+        final IrProgram program = new IrProgram(
+            List.of(),
+            List.of(
+                new IrFunction(
+                    "com/acme/Main",
+                    "main",
+                    "([Ljava/lang/String;)V",
+                    "main_symbol",
+                    IrType.VOID,
+                    List.of(),
+                    List.of(),
+                    List.of(IrInstruction.returnVoid())
+                ),
+                new IrFunction(
+                    "com/acme/Main",
+                    "positiveInfinity",
+                    "()D",
+                    "positive_infinity_symbol",
+                    IrType.DOUBLE,
+                    List.of(),
+                    List.of(),
+                    List.of(IrInstruction.returnDouble(IrExpression.doubleLiteral(Double.POSITIVE_INFINITY)))
+                ),
+                new IrFunction(
+                    "com/acme/Main",
+                    "negativeInfinity",
+                    "()D",
+                    "negative_infinity_symbol",
+                    IrType.DOUBLE,
+                    List.of(),
+                    List.of(),
+                    List.of(IrInstruction.returnDouble(IrExpression.doubleLiteral(Double.NEGATIVE_INFINITY)))
+                ),
+                new IrFunction(
+                    "com/acme/Main",
+                    "nan",
+                    "()F",
+                    "nan_symbol",
+                    IrType.FLOAT,
+                    List.of(),
+                    List.of(),
+                    List.of(IrInstruction.returnFloat(IrExpression.floatLiteral(Float.NaN)))
+                )
+            ),
+            "main_symbol"
+        );
+
+        final String generated = Files.readString(new CCodegen().generate(program, tempDir));
+
+        assertThat(generated).contains(
+            "#include <math.h>",
+            "return INFINITY;",
+            "return -INFINITY;",
+            "return NAN;"
+        );
+    }
+
     @TestFactory
     Stream<DynamicTest> threadProducingRuntimeCallsPublishIntoCallerRoot() {
         return Stream.of(

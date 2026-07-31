@@ -61,6 +61,9 @@ public final class CCodegen {
         final List<String> objectResultSymbols = objectResultSymbols(program);
         final StringBuilder c = new StringBuilder();
         c.append("#include \"javan_runtime.h\"").append(System.lineSeparator());
+        if (features.nonFiniteFloatingLiteral()) {
+            c.append("#include <math.h>").append(System.lineSeparator());
+        }
         c.append("#include <stddef.h>").append(System.lineSeparator());
         c.append("#include <stdio.h>").append(System.lineSeparator()).append(System.lineSeparator());
         emitObjectHeader(c);
@@ -141,6 +144,9 @@ public final class CCodegen {
         final List<String> objectResultSymbols = objectResultSymbols(program);
         final StringBuilder c = new StringBuilder();
         c.append("#include \"javan_runtime.h\"").append(System.lineSeparator());
+        if (features.nonFiniteFloatingLiteral()) {
+            c.append("#include <math.h>").append(System.lineSeparator());
+        }
         c.append("#include <stddef.h>").append(System.lineSeparator());
         c.append("#include <stdio.h>").append(System.lineSeparator()).append(System.lineSeparator());
         emitObjectHeader(c);
@@ -210,7 +216,7 @@ public final class CCodegen {
     }
 
     private static CodegenFeatures codegenFeatures(final IrProgram program) {
-        return new CodegenFeatures(usesGeneratedObjectClone(program));
+        return new CodegenFeatures(usesGeneratedObjectClone(program), usesNonFiniteFloatingLiteral(program));
     }
 
     private static List<String> objectResultSymbols(final IrProgram program) {
@@ -2270,6 +2276,7 @@ public final class CCodegen {
                     return longLiteral(expression.value());
                 case FLOAT_LITERAL:
                 case DOUBLE_LITERAL:
+                    return floatAndDoubleLiteral(expression.value());
                 case LOCAL:
                     return expression.value();
                 case OBJECT_NULL:
@@ -3519,6 +3526,47 @@ public final class CCodegen {
             .append(System.lineSeparator());
     }
 
-    private record CodegenFeatures(boolean generatedObjectClone) {
+    private static boolean usesNonFiniteFloatingLiteral(final IrProgram program) {
+        for (final IrFunction function : program.functions()) {
+            for (final IrInstruction instruction : function.instructions()) {
+                final java.util.Optional<IrExpression> expression = instruction.expression();
+                if (expression.isPresent() && usesNonFiniteFloatingLiteral(expression.get())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean usesNonFiniteFloatingLiteral(final IrExpression expression) {
+        if (isNonFiniteFloatingLiteral(expression.value()) && (expression.kind() == IrExpression.Kind.FLOAT_LITERAL || expression.kind() == IrExpression.Kind.DOUBLE_LITERAL)) {
+            return true;
+        }
+        for (final IrExpression argument : expression.arguments()) {
+            if (usesNonFiniteFloatingLiteral(argument)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isNonFiniteFloatingLiteral(final String value) {
+        return "Infinity".equals(value) || "-Infinity".equals(value) || "NaN".equals(value);
+    }
+
+    private static String floatAndDoubleLiteral(final String value) {
+        if ("Infinity".equals(value)) {
+            return "INFINITY";
+        }
+        if ("-Infinity".equals(value)) {
+            return "-INFINITY";
+        }
+        if ("NaN".equals(value)) {
+            return "NAN";
+        }
+        return value;
+    }
+
+    private record CodegenFeatures(boolean generatedObjectClone, boolean nonFiniteFloatingLiteral) {
     }
 }
