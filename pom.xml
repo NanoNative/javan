@@ -38,7 +38,7 @@
         <javan.compatibility.reference.os.name>Linux</javan.compatibility.reference.os.name>
         <javan.compatibility.reference.os.arch>amd64</javan.compatibility.reference.os.arch>
         <javan.compatibility.require-reference-jdk>false</javan.compatibility.require-reference-jdk>
-        <javan.jacoco.surefire.exec>${project.build.directory}/jacoco-surefire.exec</javan.jacoco.surefire.exec>
+        <javan.jacoco.surefire.exec>${project.build.directory}/jacoco-surefire-${surefire.forkNumber}.exec</javan.jacoco.surefire.exec>
         <javan.jacoco.child.dir>${project.build.directory}/jacoco-child</javan.jacoco.child.dir>
         <javan.jacoco.merged.exec>${project.build.directory}/jacoco-merged.exec</javan.jacoco.merged.exec>
     </properties>
@@ -140,6 +140,8 @@
                 <version>${maven-surefire-plugin.version}</version>
                 <configuration>
                     <argLine>@{surefireArgLine} -Djavan.childJacocoArgLine=@{surefireArgLine} -Djavan.childJacocoDir=${javan.jacoco.child.dir}</argLine>
+                    <forkCount>2</forkCount>
+                    <reuseForks>true</reuseForks>
                     <systemPropertyVariables>
                         <junit.jupiter.execution.parallel.enabled>true</junit.jupiter.execution.parallel.enabled>
                         <junit.jupiter.execution.parallel.mode.default>concurrent</junit.jupiter.execution.parallel.mode.default>
@@ -178,7 +180,7 @@
                                 <fileSet>
                                     <directory>${project.build.directory}</directory>
                                     <includes>
-                                        <include>jacoco-surefire.exec</include>
+                                        <include>jacoco-surefire-*.exec</include>
                                     </includes>
                                 </fileSet>
                                 <fileSet>

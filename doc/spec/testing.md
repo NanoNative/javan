@@ -21,9 +21,10 @@ instrumented child JVMs that execute `javan.Main`:
   orchestration through merged child-JVM coverage
 - utility helpers for deterministic strings, JSON, files, and process execution
 
-The Maven build writes `target/jacoco-surefire.exec`, instruments child `java ... javan.Main`
-runs into `target/jacoco-child/*.exec`, merges them into `target/jacoco-merged.exec`, and
-runs report/check from that merged file.
+The Maven build writes one `target/jacoco-surefire-<fork>.exec` file per reusable Surefire
+process, instruments child `java ... javan.Main` runs into `target/jacoco-child/*.exec`,
+merges all of them into `target/jacoco-merged.exec`, and runs report/check from that merged
+file.
 
 ## Generated Compatibility Status
 
@@ -51,14 +52,18 @@ JUnit parallel execution is enabled by default through `src/test/resources/junit
 Tests run concurrently unless they opt into `@Execution(SAME_THREAD)`, `@Isolated`, or a
 `@ResourceLock`. Any test that mutates global JVM state such as `System` properties, shared
 project output, locale, timezone, or process-wide caches must stay serial until that shared
-state is removed or guarded by a narrow resource lock.
+state is removed or guarded by a narrow resource lock. Maven uses two reusable Surefire
+processes so isolated native suites can advance two at a time without sharing JVM state.
+Each suite keeps its existing execution and resource-lock rules inside its process; the
+fixed two-process bound avoids scaling native compiler load with the host CPU count.
 The CLI compatibility command tests are split into `CliCompatIntegrationTest`; its three
 JDK-inventory/probe tests run concurrently and now take about `31s` together instead of
 about `88s` when they lived inside the serial CLI monolith. Cheap CLI command/report/toolchain
 tests live in `CliCommandIntegrationTest` and stay temp-directory scoped. Repo-level
 `target/classes` and current-JVM system-property mutation tests live in the serial
-`CliSharedStateIntegrationTest`. The remaining temp-project native CLI matrix runs
-concurrently in `CliIntegrationTest` under the fixed four-worker cap.
+`CliSharedStateIntegrationTest`. The remaining temp-project native CLI matrix stays serial
+inside each suite and gains bounded concurrency only through the two isolated Surefire
+processes.
 
 The following area still needs direct public-entrypoint tests, more targeted child-JVM
 coverage, or non-JaCoCo native/runtime evidence before it can join the numeric gate:

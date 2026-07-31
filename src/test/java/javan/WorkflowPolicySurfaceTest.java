@@ -60,6 +60,7 @@ final class WorkflowPolicySurfaceTest {
             .contains("CliThreadRuntimeIntegrationTest,CliRuntimeTranslationIntegrationTest")
             .contains("CliExternalProbeAcceptanceIntegrationTest,CliPackagingIntegrationTest")
             .contains("mvn -q -Dmaven.repo.local=\"$MAVEN_REPO_LOCAL\" -Dtest='${{ matrix.test-selector }}' -Djavan.coverage.check.skip=true verify")
+            .contains("find target -maxdepth 1 -type f -name 'jacoco-surefire-*.exec' -print -quit")
             .contains("Summarize coverage (non-blocking)")
             .contains("Soft target: {target_ratio:.0%} (signal only, not a workflow gate)")
             .contains("| Counter | Covered | Total | Ratio | Status |")
@@ -95,6 +96,10 @@ final class WorkflowPolicySurfaceTest {
             .contains("<junit.jupiter.execution.parallel.mode.classes.default>concurrent</junit.jupiter.execution.parallel.mode.classes.default>")
             .contains("<junit.jupiter.execution.parallel.config.strategy>dynamic</junit.jupiter.execution.parallel.config.strategy>")
             .contains("<junit.jupiter.execution.parallel.config.dynamic.factor>1.0</junit.jupiter.execution.parallel.config.dynamic.factor>")
+            .contains("<forkCount>2</forkCount>")
+            .contains("<reuseForks>true</reuseForks>")
+            .contains("jacoco-surefire-${surefire.forkNumber}.exec")
+            .contains("<include>jacoco-surefire-*.exec</include>")
             .contains("<testResources>")
             .contains("<exclude>projects/**/.javan/**</exclude>");
     }
