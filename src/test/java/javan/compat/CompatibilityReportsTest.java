@@ -84,12 +84,12 @@ final class CompatibilityReportsTest {
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 2, \"callables\": 3, \"totalCallables\": 6, \"leftCallables\": 3, \"coveragePercent\": \"50.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 3, \"explicitRejectedCallables\": 3, \"doneCallables\": 6, \"unknownCallables\": 0, \"totalCallables\": 6, \"donePercent\": \"100.0\"}",
-            "\"supportRows\": 302",
-            "\"passRows\": 302",
+            "\"supportRows\": 303",
+            "\"passRows\": 303",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 302",
+            "\"accountedRows\": 303",
             "\"unaccountedRows\": 0"
         );
     }
@@ -126,6 +126,7 @@ final class CompatibilityReportsTest {
             "| `generated-object-clone-single-threaded` | pass |",
             "| `generated-object-clone-concurrent-return-handoff` | pass |",
             "| `string-intrinsics` | pass |",
+            "| `jdk-intrinsics-boolean-parse` | pass |",
             "| `resource-system-loader-stream` | pass |",
             "| `resource-loader-instance-stream` | pass |",
             "| `library-last-error-abi` | pass |",

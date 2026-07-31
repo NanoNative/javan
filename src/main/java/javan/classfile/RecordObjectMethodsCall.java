@@ -230,6 +230,7 @@ public record RecordObjectMethodsCall(List<RecordObjectMethodsCall.Component> co
             return parsed.isPresent()
                 && descriptor.equals(parsed.orElseThrow().erasure())
                 && parsed.orElseThrow().shape().isArray()
+                && parsed.orElseThrow().shape().valid()
                 ? arrayShape(descriptor)
                 : invalidShape(descriptor);
         }

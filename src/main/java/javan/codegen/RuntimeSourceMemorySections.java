@@ -7688,7 +7688,7 @@ final class RuntimeSourceMemorySections {
             while (index < end) {
                 unsigned int ch = values[index];
                 if (ch == 0) {
-                    javan_panic("unsupported null character in string");
+                    javan_panic("native String profile does not support U+0000");
                 }
                 if (ch <= 0x7F) {
                     length++;
