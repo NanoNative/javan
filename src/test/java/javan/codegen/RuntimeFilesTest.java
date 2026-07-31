@@ -7833,6 +7833,80 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void subtractExactLongAcceptsZero() throws Exception {
+        assertThat(subtractExactLongOverflow("0LL", "0LL")).isEqualTo("0\n");
+    }
+
+    @Test
+    void subtractExactLongAcceptsSameSignOperands() throws Exception {
+        assertThat(subtractExactLongOverflow("-7LL", "-2LL")).isEqualTo("0\n");
+    }
+
+    @Test
+    void subtractExactLongAcceptsMixedSignOperands() throws Exception {
+        assertThat(subtractExactLongOverflow("7LL", "-2LL")).isEqualTo("0\n");
+    }
+
+    @Test
+    void subtractExactLongRejectsMaximumMinusNegativeOne() throws Exception {
+        assertThat(subtractExactLongOverflow("LLONG_MAX", "-1LL")).isEqualTo("1\n");
+    }
+
+    @Test
+    void subtractExactLongAcceptsMaximumMinusNegativeOneThreshold() throws Exception {
+        assertThat(subtractExactLongOverflow("LLONG_MAX - 1LL", "-1LL")).isEqualTo("0\n");
+    }
+
+    @Test
+    void subtractExactLongRejectsMinimumMinusOne() throws Exception {
+        assertThat(subtractExactLongOverflow("LLONG_MIN", "1LL")).isEqualTo("1\n");
+    }
+
+    @Test
+    void subtractExactLongAcceptsMinimumMinusOneThreshold() throws Exception {
+        assertThat(subtractExactLongOverflow("LLONG_MIN + 1LL", "1LL")).isEqualTo("0\n");
+    }
+
+    @Test
+    void subtractExactLongReturnsSafeDifference() throws Exception {
+        assertThat(subtractExactLongResult("7LL", "5LL")).isEqualTo("2\n");
+    }
+
+    private String subtractExactLongOverflow(final String left, final String right) throws Exception {
+        return runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <limits.h>
+            #include <stdio.h>
+
+            int main(void) {
+                printf(
+                    "%%d\\n",
+                    javan_math_subtract_exact_long_overflows(%s, %s)
+                );
+                return 0;
+            }
+            """.formatted(left, right),
+            "4096"
+        );
+    }
+
+    private String subtractExactLongResult(final String left, final String right) throws Exception {
+        return runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                printf("%%lld\\n", javan_math_subtract_exact_long(%s, %s));
+                return 0;
+            }
+            """.formatted(left, right),
+            "4096"
+        );
+    }
+
+    @Test
     void longNegationReturnsZeroForZero() throws Exception {
         assertThat(longNegation("0LL")).isEqualTo("0\n");
     }

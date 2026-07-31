@@ -1330,6 +1330,18 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksMathSubtractExactLongAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Math", "subtractExact", "(JJ)J")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void keepsMathSubtractExactIntUnknown() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Math", "subtractExact", "(II)I")))
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+    }
+
+    @Test
     void marksMathMultiplyExactLongIntAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Math", "multiplyExact", "(JI)J")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

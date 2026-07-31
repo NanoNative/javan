@@ -21371,6 +21371,59 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersMathSubtractExactLongToRuntimeCallAndArithmeticExceptionRoute() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(JJ)J",
+            4,
+            4,
+            plain(0, 30, "lload_0"),
+            plain(1, 32, "lload_2"),
+            invokeStatic(2, new MethodRef("java/lang/Math", "subtractExact", "(JJ)J")),
+            plain(3, 173, "lreturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignLong("long0", IrExpression.longLocal("arg0")),
+            IrInstruction.assignLong("long1", IrExpression.longLocal("arg1")),
+            IrInstruction.assignInt(
+                "int2",
+                IrExpression.intCall(
+                    "javan_math_subtract_exact_long_overflows",
+                    List.of(IrExpression.longLocal("long0"), IrExpression.longLocal("long1"))
+                )
+            ),
+            IrInstruction.branchIf(
+                "label_math_subtract_exact_long_success_2_2",
+                IrExpression.intComparison(
+                    "==",
+                    IrExpression.intLocal("int2"),
+                    IrExpression.intLiteral(0)
+                )
+            ),
+            IrInstruction.throwPending(
+                "java/lang/ArithmeticException",
+                IrExpression.stringLiteral("long overflow"),
+                new IrSourceLocation(
+                    "com/acme/Main",
+                    "main",
+                    "(JJ)J",
+                    2,
+                    Optional.of("Main.java"),
+                    Optional.empty(),
+                    Optional.empty()
+                )
+            ),
+            IrInstruction.label("label_math_subtract_exact_long_success_2_2"),
+            IrInstruction.returnLong(IrExpression.longCall(
+                "javan_math_subtract_exact_long",
+                List.of(IrExpression.longLocal("long0"), IrExpression.longLocal("long1"))
+            ))
+        );
+    }
+
+    @Test
     void lowersMathMultiplyExactLongIntToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

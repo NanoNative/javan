@@ -13237,6 +13237,44 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void staticVerifierAcceptsMathSubtractExactLongHandlerWithLoadedOperands() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            instruction(0, 30, "lload_0"),
+            instruction(1, 32, "lload_2"),
+            instruction(2, 184, "invokestatic", new MethodRef("java/lang/Math", "subtractExact", "(JJ)J")),
+            instruction(3, 75, "astore_0")
+        ), new CodeException(0, 3, 3, Optional.of("java/lang/ArithmeticException")));
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsMathSubtractExactLongHandlerWithConstants() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            instruction(0, 9, "lconst_0"),
+            instruction(1, 10, "lconst_1"),
+            instruction(2, 184, "invokestatic", new MethodRef("java/lang/Math", "subtractExact", "(JJ)J")),
+            instruction(3, 75, "astore_0")
+        ), new CodeException(0, 3, 3, Optional.of("java/lang/ArithmeticException")));
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierRejectsMathSubtractExactLongHandlerWithLongAddition() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            instruction(0, 9, "lconst_0"),
+            instruction(1, 10, "lconst_1"),
+            instruction(2, 97, "ladd"),
+            instruction(3, 10, "lconst_1"),
+            instruction(4, 184, "invokestatic", new MethodRef("java/lang/Math", "subtractExact", "(JJ)J")),
+            instruction(5, 75, "astore_0")
+        ), new CodeException(0, 5, 5, Optional.of("java/lang/ArithmeticException")));
+
+        assertThat(diagnostics).extracting(Diagnostic::code).containsExactly("JAVAN014");
+    }
+
+    @Test
     void staticVerifierRejectsMathAddExactLongHandlerWithLongAddition() {
         final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
             instruction(0, 9, "lconst_0"),

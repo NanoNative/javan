@@ -2955,6 +2955,9 @@ public final class StaticVerifier {
             && ("(II)I".equals(target.descriptor()) || "(JJ)J".equals(target.descriptor()))) {
             return true;
         }
+        if ("subtractExact".equals(target.name()) && "(JJ)J".equals(target.descriptor())) {
+            return true;
+        }
         if ("toIntExact".equals(target.name()) && "(J)I".equals(target.descriptor())) {
             return true;
         }

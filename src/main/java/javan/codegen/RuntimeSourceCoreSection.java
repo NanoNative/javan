@@ -801,6 +801,15 @@ final class RuntimeSourceCoreSection {
             return left + right;
         }
 
+        int javan_math_subtract_exact_long_overflows(long long left, long long right) {
+            return (right > 0 && left < LLONG_MIN + right)
+                || (right < 0 && left > LLONG_MAX + right);
+        }
+
+        long long javan_math_subtract_exact_long(long long left, long long right) {
+            return left - right;
+        }
+
         int javan_math_multiply_exact_int_overflows(int left, int right) {
             const long long result = (long long) left * (long long) right;
             return result < INT_MIN || result > INT_MAX;

@@ -102,6 +102,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void mathSubtractExactLongIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Math",
+            "subtractExact",
+            "(JJ)J"
+        ))).isTrue();
+    }
+
+    @Test
+    void mathSubtractExactIntIsNotSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Math",
+            "subtractExact",
+            "(II)I"
+        ))).isFalse();
+    }
+
+    @Test
     void floatToRawIntBitsIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/Float",
