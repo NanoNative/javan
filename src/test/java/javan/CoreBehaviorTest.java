@@ -336,6 +336,16 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void bytecodeSupportClassifiesDoubleToIntAsNativeSupported() {
+        assertThat(BytecodeSupport.classify(142)).isEqualTo(BytecodeSupport.Status.NATIVE_SUPPORTED);
+    }
+
+    @Test
+    void bytecodeSupportPublishesDoubleToInt() {
+        assertThat(BytecodeSupport.nativeSupportedOpcodes()).contains(142);
+    }
+
+    @Test
     void bytecodeSupportPublishesLongNegation() {
         assertThat(BytecodeSupport.nativeSupportedOpcodes()).contains(117);
     }

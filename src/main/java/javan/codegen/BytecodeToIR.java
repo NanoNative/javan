@@ -1238,6 +1238,9 @@ public final class BytecodeToIR {
             case 136:
                 stack.add(StackValue.intExpression(IrExpression.intCall("javan_l2i", List.of(popLong(classFile, method, stack)))));
                 break;
+            case 142:
+                stack.add(StackValue.intExpression(IrExpression.intCall("javan_double_to_int", List.of(popDouble(classFile, method, stack)))));
+                break;
             case 145:
                 intToByte(classFile, method, stack);
                 break;

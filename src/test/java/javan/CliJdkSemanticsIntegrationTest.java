@@ -10829,6 +10829,38 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void entryAnchoredApplicationDoubleConversionBuildsAndMatchesJvmFallback() throws Exception {
+        assertThat(runTypedHandlerParity("entry-anchored-application-double-to-int", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(convert(false));
+                    System.out.println(convert(true));
+                }
+
+                private static int convert(final boolean fail) {
+                    try {
+                        return (int) value(fail);
+                    } catch (final IllegalArgumentException exception) {
+                        return -1;
+                    }
+                }
+
+                private static double value(final boolean fail) {
+                    if (fail) {
+                        throw new IllegalArgumentException("failure");
+                    }
+                    return -0.75d;
+                }
+            }
+            """)).isEqualTo(typedHandlerParitySuccess("0\n-1\n"));
+    }
+
+    @Test
     void entryAnchoredCaughtObjectCanBeRethrown() throws Exception {
         assertThat(runTypedHandlerParity("entry-anchored-caught-rethrow", """
             package com.acme;
