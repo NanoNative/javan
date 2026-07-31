@@ -5478,6 +5478,27 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersLongNegationToWrappingRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(J)J",
+            2,
+            2,
+            plain(0, 30, "lload_0"),
+            plain(1, 117, "lneg"),
+            plain(2, 173, "lreturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnLong(IrExpression.longCall(
+                "javan_long_neg",
+                List.of(IrExpression.longLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
     void lowersIntDivisionToIrExpression() {
         final IrFunction function = lowerMain(method(
             0x0008,

@@ -862,6 +862,10 @@ final class RuntimeSourceCoreSection {
             return result;
         }
 
+        long long javan_long_neg(long long value) {
+            return value == LLONG_MIN ? LLONG_MIN : -value;
+        }
+
         int javan_int_shl(int value, int shift) {
             return (int) (((unsigned int) value) << (shift & 31));
         }
