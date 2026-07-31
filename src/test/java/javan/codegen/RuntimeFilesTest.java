@@ -7794,6 +7794,38 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void mathFloorPreservesNegativeZeroBits() throws Exception {
+        assertThat(mathFloorBits("8000000000000000")).isEqualTo("8000000000000000\n");
+    }
+
+    @Test
+    void mathFloorPreservesQuietNanBits() throws Exception {
+        assertThat(mathFloorBits("7ff8000000001234")).isEqualTo("7ff8000000001234\n");
+    }
+
+    private String mathFloorBits(final String bits) throws Exception {
+        return runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdint.h>
+            #include <stdio.h>
+            #include <string.h>
+
+            int main(void) {
+                const double result = javan_math_floor_double(
+                    javan_double_long_bits_to_double(0x%sLL)
+                );
+                uint64_t result_bits = UINT64_C(0);
+                memcpy(&result_bits, &result, sizeof(result_bits));
+                printf("%%016llx\\n", (unsigned long long) result_bits);
+                return 0;
+            }
+            """.formatted(bits),
+            "4096"
+        );
+    }
+
+    @Test
     void addExactLongAcceptsMaximumBoundary() throws Exception {
         assertThat(addExactLongOverflow("LLONG_MAX", "0LL")).isEqualTo("0\n");
     }

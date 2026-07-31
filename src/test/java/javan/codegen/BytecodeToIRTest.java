@@ -20943,6 +20943,27 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersMathFloorDoubleToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(D)D",
+            2,
+            2,
+            plain(0, 38, "dload_0"),
+            invokeStatic(1, new MethodRef("java/lang/Math", "floor", "(D)D")),
+            plain(2, 175, "dreturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnDouble(IrExpression.doubleCall(
+                "javan_math_floor_double",
+                List.of(IrExpression.doubleLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
     void lowersMathAbsLongToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

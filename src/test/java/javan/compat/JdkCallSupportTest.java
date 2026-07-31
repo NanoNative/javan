@@ -66,6 +66,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void mathFloorDoubleIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Math",
+            "floor",
+            "(D)D"
+        ))).isTrue();
+    }
+
+    @Test
+    void mathFloorFloatIsNotSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Math",
+            "floor",
+            "(F)F"
+        ))).isFalse();
+    }
+
+    @Test
     void mathMultiplyExactLongIntIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/Math",

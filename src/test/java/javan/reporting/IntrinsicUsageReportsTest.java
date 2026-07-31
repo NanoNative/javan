@@ -66,6 +66,7 @@ final class IntrinsicUsageReportsTest {
             new IntrinsicCallCount("Objects.toString", 0),
             new IntrinsicCallCount("Math.abs", 1),
             new IntrinsicCallCount("Math.round", 0),
+            new IntrinsicCallCount("Math.floor", 0),
             new IntrinsicCallCount("Math.min", 0),
             new IntrinsicCallCount("Math.max", 1),
             new IntrinsicCallCount("Math.addExact", 0),
@@ -483,6 +484,23 @@ final class IntrinsicUsageReportsTest {
 
         assertThat(reports.analyze(classes, List.of(entry)).intrinsics())
             .contains(new IntrinsicCallCount("Math.min", 1));
+    }
+
+    @Test
+    void countsReachableMathFloorAsSupportedIntrinsic() {
+        final IntrinsicUsageReports reports = new IntrinsicUsageReports();
+        final EntryPoint entry = new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V");
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classFile("com/acme/Main", method(
+                "main",
+                "([Ljava/lang/String;)V",
+                instruction("java/lang/Math", "floor", "(D)D")
+            ))
+        );
+
+        assertThat(reports.analyze(classes, List.of(entry)).intrinsics())
+            .contains(new IntrinsicCallCount("Math.floor", 1));
     }
 
     @Test

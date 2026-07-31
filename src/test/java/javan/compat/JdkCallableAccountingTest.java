@@ -1327,6 +1327,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksMathFloorDoubleAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Math", "floor", "(D)D")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void keepsMathSubtractExactIntUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Math", "subtractExact", "(II)I")))
             .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);

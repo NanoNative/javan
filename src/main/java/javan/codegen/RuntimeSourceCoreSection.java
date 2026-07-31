@@ -692,6 +692,17 @@ final class RuntimeSourceCoreSection {
             return negative ? -(int) magnitude : (int) magnitude;
         }
 
+        double javan_math_floor_double(double value) {
+            uint64_t bits = UINT64_C(0);
+            memcpy(&bits, &value, sizeof(bits));
+            const uint64_t magnitude = bits & UINT64_C(0x7fffffffffffffff);
+            if (magnitude == UINT64_C(0)
+                || magnitude >= UINT64_C(0x7ff0000000000000)) {
+                return value;
+            }
+            return floor(value);
+        }
+
         int javan_math_abs_int(int value) {
             if (value == INT_MIN) {
                 return value;
