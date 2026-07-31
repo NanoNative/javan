@@ -10,6 +10,9 @@ on:
       runner:
         required: true
         type: string
+      target:
+        required: true
+        type: string
       enabled:
         required: true
         type: boolean
@@ -18,6 +21,7 @@ permissions: {}
 
 jobs:
   platform-proof:
+    name: Platform smoke · ${{ inputs.target }}
     if: inputs.enabled
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 30
