@@ -1,4 +1,4 @@
-name: CD · Main Snapshot
+name: Snapshot
 
 on:
   push:
@@ -14,6 +14,7 @@ concurrency:
 
 jobs:
   verify:
+    name: Verify
     if: "${{ github.event_name != 'push' || !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}"
     permissions:
       contents: read
@@ -22,9 +23,12 @@ jobs:
       ref: ${{ github.sha }}
       prepare_publication: true
       snapshot: true
+      bootstrap_generation: 3
+      package_timeout_minutes: 90
     secrets: inherit
 
   publish-central:
+    name: Central
     needs:
       - verify
     if: ${{ false }}

@@ -140,9 +140,9 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         final String releaseWorkflow = Files.readString(RELEASE_WORKFLOW);
 
         assertThat(releaseWorkflow)
-            .contains("- name: Generate Homebrew formula")
+            .contains("- name: Homebrew")
             .contains(".github/scripts/generate-homebrew-formula.sh")
-            .contains("- name: Verify Homebrew formula")
+            .contains("- name: Formula")
             .contains(".github/scripts/verify-homebrew-formula.sh");
     }
 
@@ -163,7 +163,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         final String nativeProof = Files.readString(NATIVE_PROOF);
 
         assertThat(nativeProof)
-            .contains("- name: Verify self-host package smoke")
+            .contains("- name: Package")
             .contains("sh .github/scripts/verify-ci-package-smoke.sh");
     }
 
@@ -193,7 +193,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         final String ciWorkflow = Files.readString(BUILD_COMMON);
 
         assertThat(ciWorkflow)
-            .contains("- name: Report coverage")
+            .contains("- name: Coverage")
             .doesNotContain(
                 "JAVAN_COVERAGE_SOFT_TARGET",
                 "Soft target:",
@@ -209,7 +209,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
 
         assertThat(ciWorkflow)
             .contains("windows-runtime-smoke:")
-            .contains("name: Windows runtime · ${{ matrix.shard }} · x64")
+            .contains("label: runtime_current_win_x64", "label: runtime_worker_win_x64")
             .contains("shard: current-thread")
             .contains("shard: worker-thread")
             .contains("generatedRuntimeCrossCompilesToWindowsPeWhenMinGwIsAvailable")
@@ -268,9 +268,9 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         final String nativeProof = Files.readString(NATIVE_PROOF);
 
         assertThat(nativeProof)
-            .contains("- name: Verify self-host package smoke")
+            .contains("- name: Package")
             .contains("sh .github/scripts/verify-ci-package-smoke.sh")
-            .contains("- name: Upload verified native package");
+            .contains("- name: Upload");
     }
 
     @Test
@@ -278,11 +278,11 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         final String releaseWorkflow = Files.readString(RELEASE_WORKFLOW);
 
         assertThat(releaseWorkflow)
-            .contains("- name: Download verified packages")
+            .contains("- name: Download")
             .contains("actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7")
             .contains("pattern: javan-*")
             .contains("merge-multiple: true")
-            .contains("- name: Prepare release metadata");
+            .contains("- name: Metadata");
     }
 
     @Test
@@ -307,6 +307,19 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             .contains("Missing target/classes/javan/Main.class for JAVAN_BUILD_REUSE_TARGET=true.")
             .contains("if [ \"$REUSE_TARGET\" != \"true\" ] && [ ! -f \"$JAR\" ]; then")
             .contains("No packaged javan jar found in target/.");
+    }
+
+    @Test
+    void buildScriptSelectsSecondOrThirdBootstrapGeneration() throws Exception {
+        final String script = Files.readString(Path.of("scripts/build.sh"));
+
+        assertThat(script)
+            .contains("GENERATION=${JAVAN_BOOTSTRAP_GENERATION:-3}")
+            .contains("2|3)")
+            .contains("javan-bootstrap-rebuilt")
+            .contains("javan-bootstrap-verified")
+            .contains("if [ \"$GENERATION\" = \"3\" ]; then")
+            .contains("cp \"$BUILT\" \"$OUTPUT\"");
     }
 
     @Test
@@ -353,7 +366,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         final String containerWorkflow = Files.readString(CONTAINER_WORKFLOW);
 
         assertThat(containerWorkflow)
-            .contains("- name: Download released Linux packages")
+            .contains("- name: Download")
             .contains("gh release download")
             .contains("linux-x64.tar.gz")
             .contains("linux-aarch64.tar.gz");
@@ -364,7 +377,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         final String containerWorkflow = Files.readString(CONTAINER_WORKFLOW);
 
         assertThat(containerWorkflow)
-            .contains("- name: Verify default image builds showcase")
+            .contains("- name: Showcase")
             .contains("JAVAN_IMAGE=\"$image\" sh .github/scripts/verify-showcase.sh");
     }
 

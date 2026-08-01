@@ -1,4 +1,4 @@
-name: CI · Common Build
+name: Verify
 
 on:
   workflow_call:
@@ -15,6 +15,14 @@ on:
         required: false
         default: false
         type: boolean
+      bootstrap_generation:
+        required: false
+        default: 3
+        type: number
+      package_timeout_minutes:
+        required: false
+        default: 90
+        type: number
     outputs:
       resolved_version:
         description: Version used for publication artifacts
@@ -37,12 +45,22 @@ on:
         required: false
         default: false
         type: boolean
+      bootstrap_generation:
+        description: Native compiler bootstrap generation
+        required: false
+        default: 3
+        type: number
+      package_timeout_minutes:
+        description: Native package job timeout
+        required: false
+        default: 90
+        type: number
 
 permissions: {}
 
 jobs:
   build-info:
-    name: Build metadata
+    name: Metadata
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -58,7 +76,7 @@ jobs:
           fetch-depth: 0
           ref: ${{ inputs.ref || github.sha }}
 
-      - name: Resolve immutable build information
+      - name: Resolve
         id: info
         shell: sh
         env:
@@ -76,7 +94,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
   verify-core:
-    name: Core tests · Linux x64
+    name: core_linux_x64
     if: "${{ github.event_name != 'push' || !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}"
     runs-on: ubuntu-24.04
     timeout-minutes: 90
@@ -89,32 +107,32 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.sha }}
 
-      - name: Read Java info
+      - name: Java
         id: java_info
         uses: YunaBraska/java-info-action@11a434ffbf6bb3357363d1933be71a4076a90a6b # 3
 
-      - name: Set up JDK
+      - name: JDK
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
         with:
           java-version: ${{ steps.java_info.outputs.java_version }}
           distribution: temurin
           cache: maven
 
-      - name: Set up Go
+      - name: Go
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: '1.26.4'
           cache: false
 
-      - name: Set up Rust
+      - name: Rust
         uses: dtolnay/rust-toolchain@191af2e1955bbe165f9bbacff2d2438002dff4d4 # 1.96.0
 
-      - name: Verify binding toolchains
+      - name: Toolchains
         run: |
           go version
           rustc --version
 
-      - name: Install Linux native toolchain
+      - name: Native
         if: runner.os == 'Linux'
         run: |
           for attempt in 1 2 3; do
@@ -128,16 +146,16 @@ jobs:
             sleep 15
           done
 
-      - name: Resolve Maven local repository
+      - name: Repository
         run: |
           repo=$(./mvnw -q help:evaluate -Dexpression=settings.localRepository -DforceStdout | tail -n 1)
           echo "MAVEN_REPO_LOCAL=$repo" >> "$GITHUB_ENV"
 
-      - name: Install bundled external smoke artifacts
+      - name: Probes
         run: |
           sh .github/scripts/install-external-probe-artifacts.sh "$MAVEN_REPO_LOCAL"
 
-      - name: Verify core Maven suite
+      - name: Core
         run: |
           status=0
           ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -Dexec.skip=true -Dtest='!Cli*IntegrationTest,!CliExternalProbeAcceptanceIntegrationTest' verify || status=$?
@@ -152,7 +170,7 @@ jobs:
             exit "$status"
           fi
 
-      - name: Report coverage
+      - name: Coverage
         if: always()
         run: |
           python3 - <<'PY'
@@ -194,7 +212,7 @@ jobs:
           PY
 
   verify-cli-integration:
-    name: CLI tests · ${{ matrix.shard }} · Linux x64
+    name: ${{ matrix.label }}
     if: "${{ github.event_name != 'push' || !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}"
     runs-on: ubuntu-24.04
     timeout-minutes: 90
@@ -202,27 +220,41 @@ jobs:
       contents: read
     strategy:
       fail-fast: true
-      max-parallel: 6
+      max-parallel: 8
       matrix:
         include:
-          - shard: cli-general
+          - shard: cli-general-heavy
+            label: cli_heavy_linux_x64
             test-selector: >-
-              Cli*IntegrationTest,!CliExternalProbeAcceptanceIntegrationTest,!CliPackagingIntegrationTest,!CliJdkSemanticsIntegrationTest,!CliThreadRuntimeIntegrationTest,!CliRuntimeTranslationIntegrationTest
-          - shard: cli-jdk-semantics
+              CliNetworkIntegrationTest,CliCompatIntegrationTest,CliDependencyProjectIntegrationTest,CliIntegrationTest,CliPlatformExceptionPropagationIntegrationTest
+          - shard: cli-general-rest
+            label: cli_general_linux_x64
             test-selector: >-
-              CliJdkSemanticsIntegrationTest
-          - shard: cli-thread-runtime
+              Cli*IntegrationTest,!CliExternalProbeAcceptanceIntegrationTest,!CliPackagingIntegrationTest,!CliJdkSemanticsIntegrationTest,!CliThreadRuntimeIntegrationTest,!CliRuntimeTranslationIntegrationTest,!CliNetworkIntegrationTest,!CliCompatIntegrationTest,!CliDependencyProjectIntegrationTest,!CliIntegrationTest,!CliPlatformExceptionPropagationIntegrationTest,!CliStringBuilderIntegrationTest,!CliCoreSemanticsIntegrationTest,!CliFloatingMathMinMaxIntegrationTest,!CliStringApiIntegrationTest
+          - shard: cli-jdk-map
+            label: cli_jdkmap_linux_x64
             test-selector: >-
-              CliThreadRuntimeIntegrationTest
+              CliJdkSemanticsIntegrationTest#map*
+          - shard: cli-jdk-set-plus
+            label: cli_jdkset_linux_x64
+            test-selector: >-
+              CliJdkSemanticsIntegrationTest#set*,CliStringBuilderIntegrationTest,CliCoreSemanticsIntegrationTest,CliFloatingMathMinMaxIntegrationTest,CliStringApiIntegrationTest
+          - shard: cli-jdk-other-a
+            label: cli_jdkothera_linux_x64
+            test-selector: >-
+              CliJdkSemanticsIntegrationTest#string*+optional*+linked*+hash*+primitive*
+          - shard: cli-jdk-other-b
+            label: cli_jdkotherb_linux_x64
+            test-selector: >-
+              CliJdkSemanticsIntegrationTest#collection*+object*+void*+class*+system*+list*+concurrent*+member*+generated*+float*+file*+double*+array*+locale*+jdk*+integer*+exact*+duration*+default*+date*+character*+char*+captured*+boolean*+abstract*+wrapper*+unbound*+short*+root*+reference*+nested*+match*+main*+long*+iterator*+int*+exhaustive*+custom*+byte*+atomic*+math*
           - shard: cli-runtime-translation
+            label: cli_runtime_linux_x64
             test-selector: >-
               CliRuntimeTranslationIntegrationTest
-          - shard: cli-packaging
+          - shard: cli-thread-package-probes
+            label: cli_misc_linux_x64
             test-selector: >-
-              CliPackagingIntegrationTest
-          - shard: cli-external-probes
-            test-selector: >-
-              CliExternalProbeAcceptanceIntegrationTest
+              CliThreadRuntimeIntegrationTest,CliPackagingIntegrationTest,CliExternalProbeAcceptanceIntegrationTest
 
     steps:
       - name: Checkout
@@ -230,32 +262,32 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.sha }}
 
-      - name: Read Java info
+      - name: Java
         id: java_info
         uses: YunaBraska/java-info-action@11a434ffbf6bb3357363d1933be71a4076a90a6b # 3
 
-      - name: Set up JDK
+      - name: JDK
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
         with:
           java-version: ${{ steps.java_info.outputs.java_version }}
           distribution: temurin
           cache: maven
 
-      - name: Set up Go
+      - name: Go
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: '1.26.4'
           cache: false
 
-      - name: Set up Rust
+      - name: Rust
         uses: dtolnay/rust-toolchain@191af2e1955bbe165f9bbacff2d2438002dff4d4 # 1.96.0
 
-      - name: Verify binding toolchains
+      - name: Toolchains
         run: |
           go version
           rustc --version
 
-      - name: Install Linux native toolchain
+      - name: Native
         run: |
           for attempt in 1 2 3; do
             if sudo apt-get -o Acquire::ForceIPv4=true update \
@@ -268,16 +300,16 @@ jobs:
             sleep 15
           done
 
-      - name: Resolve Maven local repository
+      - name: Repository
         run: |
           repo=$(./mvnw -q help:evaluate -Dexpression=settings.localRepository -DforceStdout | tail -n 1)
           echo "MAVEN_REPO_LOCAL=$repo" >> "$GITHUB_ENV"
 
-      - name: Install bundled external smoke artifacts
+      - name: Probes
         run: |
           sh .github/scripts/install-external-probe-artifacts.sh "$MAVEN_REPO_LOCAL"
 
-      - name: Verify CLI integration Maven suite
+      - name: CLI
         run: |
           status=0
           ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -Dexec.skip=true -Dtest='${{ matrix.test-selector }}' verify || status=$?
@@ -292,7 +324,7 @@ jobs:
             exit "$status"
           fi
 
-      - name: Report coverage
+      - name: Coverage
         if: always()
         run: |
           python3 - <<'PY'
@@ -334,7 +366,7 @@ jobs:
           PY
 
   native-acceptance:
-    name: Native acceptance · ${{ matrix.target }}
+    name: ${{ matrix.label }}
     needs:
       - build-info
     permissions:
@@ -347,48 +379,82 @@ jobs:
           - target: linux-x64
             os: ubuntu-24.04
             sanitizer-scope: full
+            label: acceptance_linux_x64
           - target: linux-aarch64
             os: ubuntu-24.04-arm
             sanitizer-scope: platform-smoke
+            label: acceptance_linux_arm64
     uses: ./.github/workflows/native-proof.yml
     with:
       ref: ${{ inputs.ref || github.sha }}
       runner: ${{ matrix.os }}
       target: ${{ matrix.target }}
+      label: ${{ matrix.label }}
       sanitizer_scope: ${{ matrix.sanitizer-scope }}
       proof: acceptance
       version: ${{ needs.build-info.outputs.resolved_version }}
     secrets: inherit
 
   native-sanitizer:
-    name: Native sanitizer · ${{ matrix.target }}
+    name: ${{ matrix.label }}
     needs:
       - build-info
     permissions:
       contents: read
     strategy:
       fail-fast: true
-      max-parallel: 2
+      max-parallel: 9
       matrix:
         include:
           - target: linux-x64
             os: ubuntu-24.04
-            sanitizer-scope: full
+            scope: baseline
+            label: sanitizer_baseline_linux_x64
+          - target: linux-x64
+            os: ubuntu-24.04
+            scope: self_host
+            label: sanitizer_selfhost_linux_x64
+          - target: linux-x64
+            os: ubuntu-24.04
+            scope: gc_roots
+            label: sanitizer_gcroots_linux_x64
+          - target: linux-x64
+            os: ubuntu-24.04
+            scope: gc_values
+            label: sanitizer_gcvalues_linux_x64
+          - target: linux-x64
+            os: ubuntu-24.04
+            scope: runtime_containers
+            label: sanitizer_runtime_linux_x64
+          - target: linux-x64
+            os: ubuntu-24.04
+            scope: temporary_roots
+            label: sanitizer_roots_linux_x64
+          - target: linux-x64
+            os: ubuntu-24.04
+            scope: failure_exceptions
+            label: sanitizer_exceptions_linux_x64
+          - target: linux-x64
+            os: ubuntu-24.04
+            scope: failure_limits
+            label: sanitizer_limits_linux_x64
           - target: linux-aarch64
             os: ubuntu-24.04-arm
-            sanitizer-scope: platform-smoke
+            scope: platform_smoke
+            label: sanitizer_linux_arm64
     uses: ./.github/workflows/native-proof.yml
     with:
       ref: ${{ inputs.ref || github.sha }}
       runner: ${{ matrix.os }}
       target: ${{ matrix.target }}
-      sanitizer_scope: ${{ matrix.sanitizer-scope }}
+      label: ${{ matrix.label }}
+      sanitizer_scope: ${{ matrix.scope }}
       proof: sanitizer
       version: ${{ needs.build-info.outputs.resolved_version }}
     secrets: inherit
 
   native-package-self-host:
-    name: Native package · ${{ matrix.target }}
+    name: ${{ matrix.label }}
     needs:
       - build-info
     permissions:
@@ -401,29 +467,35 @@ jobs:
           - target: linux-x64
             os: ubuntu-24.04
             sanitizer-scope: full
+            label: package_linux_x64
             enabled: true
           - target: linux-aarch64
             os: ubuntu-24.04-arm
             sanitizer-scope: platform-smoke
+            label: package_linux_arm64
             enabled: true
           - target: macos-x64
             os: macos-15-intel
             sanitizer-scope: platform-smoke
+            label: package_mac_x64
             enabled: false
             reason: historical slower architecture lane
           - target: macos-aarch64
             os: macos-15
             sanitizer-scope: platform-smoke
+            label: package_mac_arm64
             enabled: false
             reason: local self-host proof exceeded the 45-minute job projection
           - target: windows-x64
             os: windows-2025
             sanitizer-scope: platform-smoke
+            label: package_win_x64
             enabled: false
             reason: native linker and process runtime are incomplete
           - target: windows-aarch64
             os: windows-11-arm
             sanitizer-scope: platform-smoke
+            label: package_win_arm64
             enabled: false
             reason: native linker and process runtime are incomplete
     uses: ./.github/workflows/native-proof.yml
@@ -431,14 +503,17 @@ jobs:
       ref: ${{ inputs.ref || github.sha }}
       runner: ${{ matrix.os }}
       target: ${{ matrix.target }}
+      label: ${{ matrix.label }}
       sanitizer_scope: ${{ matrix.sanitizer-scope }}
       proof: package-self-host
       enabled: ${{ matrix.enabled }}
       version: ${{ needs.build-info.outputs.resolved_version }}
+      bootstrap_generation: ${{ inputs.bootstrap_generation }}
+      timeout_minutes: ${{ inputs.package_timeout_minutes }}
     secrets: inherit
 
   platform-smoke:
-    name: Platform smoke · ${{ matrix.target }}
+    name: ${{ matrix.label }}
     strategy:
       fail-fast: true
       max-parallel: 6
@@ -446,21 +521,27 @@ jobs:
         include:
           - target: linux-x64
             os: ubuntu-24.04
+            label: linux_x64
             enabled: true
           - target: linux-arm64
             os: ubuntu-24.04-arm
+            label: linux_arm64
             enabled: true
           - target: macos-x64
             os: macos-15-intel
+            label: mac_x64
             enabled: true
           - target: macos-arm64
             os: macos-15
+            label: mac_arm64
             enabled: true
           - target: windows-x64
             os: windows-2025
+            label: win_x64
             enabled: true
           - target: windows-arm64
             os: windows-11-arm
+            label: win_arm64
             enabled: false
             reason: Temurin 25 is unavailable on the GitHub-hosted Windows ARM64 runner
     permissions:
@@ -470,11 +551,12 @@ jobs:
       ref: ${{ inputs.ref || github.sha }}
       runner: ${{ matrix.os }}
       target: ${{ matrix.target }}
+      label: ${{ matrix.label }}
       enabled: ${{ matrix.enabled }}
     secrets: inherit
 
   windows-runtime-smoke:
-    name: Windows runtime · ${{ matrix.shard }} · x64
+    name: ${{ matrix.label }}
     if: "${{ github.event_name != 'push' || !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}"
     runs-on: windows-latest
     timeout-minutes: 30
@@ -486,14 +568,16 @@ jobs:
       matrix:
         include:
           - shard: current-thread
+            label: runtime_current_win_x64
             test-selector: >-
               javan.codegen.RuntimeFilesTest#writeEmitsPlatformRecursiveRuntimeLockForSharedHeapState+writeMarksWindowsProcessExecutionUnsupportedUntilPorted+generatedRuntimeCrossCompilesToWindowsPeWhenMinGwIsAvailable+generatedRuntimeExecutesBasicWindowsProbeWhenHostCompilerIsAvailable+runtimeHostThreadGetsDistinctCurrentThreadAndDetachesCleanly+runtimeConcurrentHostThreadsCanAttachCollectDetachWithoutLeakingRoots+runtimeHostThreadRootFramesStayPublishedAcrossConcurrentGc+runtimeDetachedReachableCurrentThreadClearsThreadLocalStorageOnDetach+runtimeDetachedReachableCurrentThreadClearsNestedThreadLocalObjectGraphOnDetach+runtimeHostThreadThreadLocalValueSurvivesConcurrentGcAndDetachesCleanly+runtimeHostThreadThreadLocalObjectGraphSurvivesConcurrentGcAndDetachesCleanly+runtimeHostThreadThreadLocalSiblingRemoveKeepsRetainedGraphAliveDuringConcurrentGcAndDetachesCleanly+runtimeHostThreadThreadLocalOverwriteSurvivesRepeatedSafepointGcDuringMutationAndDetachesCleanly+runtimeHostThreadThreadLocalRemoveAndSiblingRetentionSurviveRepeatedSafepointGcDuringMutationAndDetachesCleanly+runtimeHostThreadThreadLocalMapGrowthSurvivesRepeatedSafepointGcAndDetachesCleanly+runtimeThreadLifecycleInventoryTracksCurrentThreadState
           - shard: worker-thread
+            label: runtime_worker_win_x64
             test-selector: >-
               javan.codegen.RuntimeFilesTest#runtimeThreadTargetSurvivesPreStartCollectionThroughWorkerField+runtimeThreadLifecycleInventoryDropsFinishedNonCurrentThreadObjectsAfterCollection+runtimeCompletedThreadDoesNotRetainTargetAfterCollectionWhenWorkerStaysReachable+runtimeCompletedReachableWorkerClearsThreadLocalStorageOnCompletion+runtimeStartedWorkerThreadLocalObjectGraphSurvivesConcurrentGcAndCleansUpAfterJoin+runtimeStartedWorkerThreadLocalOverwriteCollectsPreviousGraphDuringConcurrentGc+runtimeStartedWorkerThreadLocalRemoveCollectsRemovedGraphDuringConcurrentGc+runtimeStartedWorkerThreadLocalSiblingRemoveKeepsOtherGraphAliveDuringConcurrentGc+runtimeStartedWorkerThreadLocalSiblingRemoveKeepsOtherGraphAliveDuringRepeatedSafepointGc+runtimeStartedWorkerThreadLocalOverwriteSurvivesRepeatedParentSafepointGcDuringMutation+runtimeStartedWorkerThreadLocalRemoveAndSiblingRetentionSurviveRepeatedParentSafepointGcDuringMutation+runtimeSharedThreadLocalKeyRemainsThreadIsolatedAcrossWorkerRemoveAndConcurrentGc+runtimeCompletedReachableWorkerClearsNestedThreadLocalObjectGraphOnCompletion+runtimeParentCollectionPreservesBlockedWorkerLocalRootedObject
 
     steps:
-      - name: Enable Git long paths
+      - name: Longpaths
         shell: pwsh
         run: |
           git config --system core.longpaths true
@@ -503,18 +587,18 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.sha }}
 
-      - name: Read Java info
+      - name: Java
         id: java_info
         uses: YunaBraska/java-info-action@11a434ffbf6bb3357363d1933be71a4076a90a6b # 3
 
-      - name: Set up JDK
+      - name: JDK
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
         with:
           java-version: ${{ steps.java_info.outputs.java_version }}
           distribution: temurin
           cache: maven
 
-      - name: Set up MSYS2 toolchain
+      - name: MSYS2
         id: msys2
         uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2
         with:
@@ -523,18 +607,18 @@ jobs:
           install: >-
             mingw-w64-x86_64-gcc
 
-      - name: Add MinGW to PATH
+      - name: Path
         shell: pwsh
         run: |
           "${{ steps.msys2.outputs.msys2-location }}\\mingw64\\bin" |
             Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      - name: Verify Windows C compiler
+      - name: Compiler
         shell: pwsh
         run: |
           gcc --version
 
-      - name: Verify Windows runtime smoke
+      - name: Runtime
         env:
           CC: ${{ steps.msys2.outputs.msys2-location }}\\mingw64\\bin\\gcc.exe
         run: >-
@@ -543,7 +627,7 @@ jobs:
           test
 
   prepare-publication:
-    name: Prepare Maven publication
+    name: Publication
     needs:
       - build-info
       - verify-core
@@ -559,23 +643,23 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout verified commit
+      - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.build-info.outputs.commit_sha }}
 
-      - name: Read Java info
+      - name: Java
         id: java_info
         uses: YunaBraska/java-info-action@11a434ffbf6bb3357363d1933be71a4076a90a6b # 3
 
-      - name: Set up JDK
+      - name: JDK
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
         with:
           java-version: ${{ steps.java_info.outputs.java_version }}
           distribution: temurin
           cache: maven
 
-      - name: Build publication artifacts without repeating tests
+      - name: Package
         shell: sh
         env:
           BUILD_OUTPUT_TIMESTAMP: ${{ needs.build-info.outputs.build_output_timestamp }}
@@ -585,7 +669,7 @@ jobs:
           && ./mvnw -B -Ppublish -DskipTests -Dgpg.skip=true
           -Dproject.build.outputTimestamp="$BUILD_OUTPUT_TIMESTAMP" package
 
-      - name: Upload publication workspace
+      - name: Upload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: build-workspace

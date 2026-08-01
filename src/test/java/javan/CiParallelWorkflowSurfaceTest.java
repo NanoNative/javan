@@ -4,6 +4,10 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.stream.Stream;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -14,6 +18,31 @@ final class CiParallelWorkflowSurfaceTest {
     private static final Path RELEASE = Path.of(".github/workflows/release.yml");
     private static final Path PLATFORM_PROOF = Path.of(".github/workflows/platform-proof.yml");
     private static final Path PUBLISH_CENTRAL = Path.of(".github/workflows/publish-central.yml");
+
+    @Test
+    void workflowJobAndStepNamesRenderAsSingleTokens() throws Exception {
+        try (Stream<Path> workflows = Files.list(Path.of(".github/workflows"))) {
+            for (final Path workflow : workflows.filter(path -> path.toString().endsWith(".yml")).toList()) {
+                for (final String line : Files.readAllLines(workflow)) {
+                    if (line.startsWith("            label: ")) {
+                        assertThat(line.substring(line.indexOf("label: ") + 7))
+                            .as("single-token matrix label in %s: %s", workflow, line)
+                            .matches("[A-Za-z0-9_]+");
+                    }
+                    if (!line.startsWith("name: ")
+                        && !line.startsWith("    name: ")
+                        && !line.startsWith("      - name: ")) {
+                        continue;
+                    }
+                    final String name = line.substring(line.indexOf("name: ") + 6)
+                        .replaceAll("\\$\\{\\{[^}]+}}", "value");
+                    assertThat(name)
+                        .as("single-token display name in %s: %s", workflow, line)
+                        .matches("[A-Za-z0-9_]+");
+                }
+            }
+        }
+    }
 
     @Test
     void pullRequestAndMainWorkflowsDelegateToOneCommonBuild() throws Exception {
@@ -31,6 +60,24 @@ final class CiParallelWorkflowSurfaceTest {
     }
 
     @Test
+    void pullRequestsUseGenerationTwoWhileSnapshotsAndReleasesUseGenerationThree() throws Exception {
+        assertThat(Files.readString(BUILD_PR))
+            .contains("bootstrap_generation: 2")
+            .contains("package_timeout_minutes: 45");
+        assertThat(Files.readString(BUILD_MERGE))
+            .contains("bootstrap_generation: 3")
+            .contains("package_timeout_minutes: 90");
+        assertThat(Files.readString(RELEASE))
+            .contains("bootstrap_generation: 3")
+            .contains("package_timeout_minutes: 90");
+        assertThat(Files.readString(BUILD_COMMON))
+            .contains("bootstrap_generation:")
+            .contains("bootstrap_generation: ${{ inputs.bootstrap_generation }}");
+        assertThat(Files.readString(Path.of(".github/workflows/native-proof.yml")))
+            .contains("JAVAN_BOOTSTRAP_GENERATION: ${{ inputs.bootstrap_generation }}");
+    }
+
+    @Test
     void commonBuildSplitsLongNativeProofsIntoIndependentJobs() throws Exception {
         assertThat(Files.readString(BUILD_COMMON))
             .contains("verify-core:")
@@ -44,9 +91,31 @@ final class CiParallelWorkflowSurfaceTest {
     }
 
     @Test
+    void sanitizerProofsAreDurationBoundedWithoutDroppingTheFullSuite() throws Exception {
+        assertThat(Files.readString(BUILD_COMMON))
+            .contains("scope: baseline")
+            .contains("scope: self_host")
+            .contains("scope: gc_roots")
+            .contains("scope: gc_values")
+            .contains("scope: runtime_containers")
+            .contains("scope: temporary_roots")
+            .contains("scope: failure_exceptions")
+            .contains("scope: failure_limits");
+
+        final var invocations = Files.readAllLines(Path.of(".github/scripts/sanitizer-suite.sh")).stream()
+            .filter(line -> line.contains("sh .github/scripts/sanitizer-"))
+            .toList();
+        assertThat(invocations).hasSize(78);
+        assertThat(invocations.stream().filter(line -> line.contains("src/test/resources/projects/")).distinct())
+            .hasSize(77);
+        assertThat(invocations.stream().filter(line -> line.contains("sanitizer-self-host-smoke.sh")))
+            .hasSize(1);
+    }
+
+    @Test
     void commonBuildRunsAllRequestedOperatingSystemArchitecturesInParallel() throws Exception {
         assertThat(Files.readString(BUILD_COMMON))
-            .contains("name: Platform smoke · ${{ matrix.target }}")
+            .contains("name: ${{ matrix.label }}")
             .contains("max-parallel: 6")
             .contains("target: linux-x64", "os: ubuntu-24.04")
             .contains("target: linux-arm64", "os: ubuntu-24.04-arm")
@@ -74,22 +143,57 @@ final class CiParallelWorkflowSurfaceTest {
     }
 
     @Test
-    void cliSuitesUseSixIndependentDurationBalancedShards() throws Exception {
-        assertThat(Files.readString(BUILD_COMMON))
-            .contains("shard: cli-general")
-            .contains("shard: cli-jdk-semantics")
-            .contains("shard: cli-thread-runtime")
+    void cliSuitesUseEightIndependentDurationBalancedShards() throws Exception {
+        final String workflow = Files.readString(BUILD_COMMON);
+        assertThat(workflow)
+            .contains("shard: cli-general-heavy")
+            .contains("shard: cli-general-rest")
+            .contains("shard: cli-jdk-map")
+            .contains("shard: cli-jdk-set-plus")
+            .contains("shard: cli-jdk-other-a")
+            .contains("shard: cli-jdk-other-b")
             .contains("shard: cli-runtime-translation")
-            .contains("shard: cli-packaging")
-            .contains("shard: cli-external-probes")
-            .contains("max-parallel: 6");
+            .contains("shard: cli-thread-package-probes")
+            .contains("max-parallel: 8");
+
+        final Pattern methodPattern = Pattern.compile("^    void ([A-Za-z0-9_]+)\\(");
+        final Set<String> methods = new HashSet<>();
+        for (final String line : Files.readAllLines(Path.of("src/test/java/javan/CliJdkSemanticsIntegrationTest.java"))) {
+            final var matcher = methodPattern.matcher(line);
+            if (matcher.find()) {
+                methods.add(matcher.group(1));
+            }
+        }
+
+        final Set<String> assigned = new HashSet<>();
+        final var jdkSelectors = workflow.lines()
+            .map(String::trim)
+            .filter(line -> line.startsWith("CliJdkSemanticsIntegrationTest#"))
+            .toList();
+        assertThat(jdkSelectors).hasSize(4);
+        for (final String selector : jdkSelectors) {
+            final String methodSelector = selector.substring(selector.indexOf('#') + 1).split(",", 2)[0];
+            final var prefixes = Stream.of(methodSelector.split("\\+"))
+                .map(prefix -> prefix.replace("*", ""))
+                .toList();
+            final Set<String> selected = new HashSet<>();
+            methods.stream()
+                .filter(method -> prefixes.stream().anyMatch(method::startsWith))
+                .forEach(selected::add);
+            assertThat(selected).as("non-empty JDK selector %s", selector).isNotEmpty();
+            final Set<String> overlap = new HashSet<>(selected);
+            overlap.retainAll(assigned);
+            assertThat(overlap).as("disjoint JDK selector %s", selector).isEmpty();
+            assigned.addAll(selected);
+        }
+        assertThat(assigned).containsExactlyInAnyOrderElementsOf(methods);
     }
 
     @Test
     void mavenCentralPublishingRemainsPresentAndHardDisabled() throws Exception {
         assertThat(PUBLISH_CENTRAL).isRegularFile();
         assertThat(Files.readString(PUBLISH_CENTRAL))
-            .contains("name: CD · Publish Maven Central (disabled)")
+            .contains("name: Central")
             .contains("if: ${{ false }}")
             .contains("GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}")
             .contains("GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}")
@@ -100,6 +204,10 @@ final class CiParallelWorkflowSurfaceTest {
             .contains("-Dproject.build.outputTimestamp=\"$BUILD_OUTPUT_TIMESTAMP\"")
             .contains("-DskipTests deploy");
         assertThat(Files.readString(BUILD_MERGE))
+            .contains("publish-central:")
+            .contains("if: ${{ false }}")
+            .contains("uses: ./.github/workflows/publish-central.yml");
+        assertThat(Files.readString(RELEASE))
             .contains("publish-central:")
             .contains("if: ${{ false }}")
             .contains("uses: ./.github/workflows/publish-central.yml");
