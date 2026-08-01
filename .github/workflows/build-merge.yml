@@ -24,7 +24,7 @@ jobs:
       prepare_publication: true
       snapshot: true
       bootstrap_generation: 3
-      package_timeout_minutes: 240
+      package_timeout_minutes: 360
     secrets: inherit
 
   publish-central:
