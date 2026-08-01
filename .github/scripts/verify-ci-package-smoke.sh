@@ -4,6 +4,14 @@ set -eu
 ROOT=$(CDPATH= cd "$(dirname "$0")/../.." && pwd)
 cd "$ROOT"
 PACKAGE_SANITIZER_SCOPE=${JAVAN_PACKAGE_SANITIZER_SCOPE:-full}
+PACKAGE_PROOF_SCOPE=${JAVAN_PACKAGE_PROOF_SCOPE:-full}
+case "$PACKAGE_PROOF_SCOPE" in
+  bootstrap|full) ;;
+  *)
+    printf '%s\n' "Unsupported package proof scope: $PACKAGE_PROOF_SCOPE" >&2
+    exit 2
+    ;;
+esac
 
 assert_contains() {
   file=$1
@@ -83,6 +91,11 @@ assert_contains "$REPORT" '"errors": 0'
 assert_contains "$REPORT" '"warnings": 0'
 assert_contains "$REPORT" '"name": "reachability"'
 assert_contains "$REPORT" '"reachableMethods":'
+
+if [ "$PACKAGE_PROOF_SCOPE" = "bootstrap" ]; then
+  printf '%s\n' "Verified CI bootstrap package with $PACKAGE_BIN"
+  exit 0
+fi
 
 "$PACKAGE_BIN" build target/classes --main javan.Main --jar --output javan-package-selfhost-jar >/dev/null
 SELFHOST_JAR=$ROOT/target/.javan/dist/javan-package-selfhost-jar.jar

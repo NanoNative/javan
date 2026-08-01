@@ -73,10 +73,12 @@ final class CiParallelWorkflowSurfaceTest {
         assertThat(Files.readString(BUILD_COMMON))
             .contains("bootstrap_generation:")
             .contains("bootstrap_generation: ${{ inputs.bootstrap_generation }}")
+            .contains("package_scope: ${{ inputs.prepare_publication && 'full' || 'bootstrap' }}")
             .contains("sanitizer-scope: ${{ inputs.prepare_publication && 'full' || 'platform-smoke' }}")
             .contains("enabled: ${{ inputs.prepare_publication }}");
         assertThat(Files.readString(Path.of(".github/workflows/native-proof.yml")))
             .contains("JAVAN_BOOTSTRAP_GENERATION: ${{ inputs.bootstrap_generation }}")
+            .contains("JAVAN_PACKAGE_PROOF_SCOPE: ${{ inputs.package_scope }}")
             .contains("CC: ${{ inputs.bootstrap_generation == 2 && 'clang' || '' }}");
     }
 
