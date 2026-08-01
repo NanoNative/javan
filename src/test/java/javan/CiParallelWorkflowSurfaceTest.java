@@ -63,13 +63,13 @@ final class CiParallelWorkflowSurfaceTest {
     void pullRequestsUseGenerationTwoWhileSnapshotsAndReleasesUseGenerationThree() throws Exception {
         assertThat(Files.readString(BUILD_PR))
             .contains("bootstrap_generation: 2")
-            .contains("package_timeout_minutes: 120");
+            .contains("package_timeout_minutes: 360");
         assertThat(Files.readString(BUILD_MERGE))
             .contains("bootstrap_generation: 3")
-            .contains("package_timeout_minutes: 240");
+            .contains("package_timeout_minutes: 360");
         assertThat(Files.readString(RELEASE))
             .contains("bootstrap_generation: 3")
-            .contains("package_timeout_minutes: 240");
+            .contains("package_timeout_minutes: 360");
         assertThat(Files.readString(BUILD_COMMON))
             .contains("bootstrap_generation:")
             .contains("bootstrap_generation: ${{ inputs.bootstrap_generation }}")
