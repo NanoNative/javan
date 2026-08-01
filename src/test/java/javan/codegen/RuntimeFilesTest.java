@@ -7568,10 +7568,13 @@ final class RuntimeFilesTest {
 
                 printf("previous=%s\\n", (char*) javan_map_put(map, managed_aa, "updated"));
                 printf("equal=%s:%d\\n", (char*) javan_map_get(map, "Aa"), javan_map_size(map));
+                void* removed = javan_map_remove(map, managed_bb);
+                int contains_removed = javan_map_contains_key(map, "BB");
+                void* retained = javan_map_get(map, managed_aa);
                 printf("removed=%s:%d:%s\\n",
-                    (char*) javan_map_remove(map, managed_bb),
-                    javan_map_contains_key(map, "BB"),
-                    (char*) javan_map_get(map, managed_aa));
+                    (char*) removed,
+                    contains_removed,
+                    (char*) retained);
 
                 (void) javan_map_put(map, NULL, "null-key");
                 (void) javan_map_put(map, identity, "identity");
