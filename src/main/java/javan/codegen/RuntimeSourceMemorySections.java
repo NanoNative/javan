@@ -129,9 +129,13 @@ final class RuntimeSourceMemorySections {
             int mod_count;
             int view_flags;
             int enum_key_type_id;
+            int index_capacity;
+            int indexed_length;
             struct javan_object_map* backing;
             void** keys;
             void** values;
+            int* key_hashes;
+            int* index_buckets;
         } javan_object_map;
 
         typedef struct {
@@ -1676,6 +1680,30 @@ final class RuntimeSourceMemorySections {
                 javan_validate_runtime_managed_reference((void*) map->backing);
                 javan_validate_owned_runtime_buffer_reference((void*) map->keys);
                 javan_validate_owned_runtime_buffer_reference((void*) map->values);
+                javan_validate_owned_runtime_buffer_reference((void*) map->key_hashes);
+                javan_validate_owned_runtime_buffer_reference((void*) map->index_buckets);
+                if (map->index_capacity < 0
+                    || (map->index_capacity == 0 && map->index_buckets != NULL)
+                    || (map->index_capacity > 0 && map->index_buckets == NULL)
+                    || (map->index_capacity > 0
+                        && (map->index_capacity & (map->index_capacity - 1)) != 0)
+                    || map->indexed_length < -1
+                    || map->indexed_length > map->length) {
+                    javan_panic("invalid runtime map index metadata");
+                }
+                if (map->indexed_length == map->length && map->length > 0) {
+                    int indexed_entries = 0;
+                    for (int bucket = 0; bucket < map->index_capacity; bucket++) {
+                        int entry = map->index_buckets[bucket];
+                        if (entry < 0 || entry > map->length) {
+                            javan_panic("invalid runtime map index entry");
+                        }
+                        indexed_entries += entry == 0 ? 0 : 1;
+                    }
+                    if (indexed_entries != map->length) {
+                        javan_panic("incomplete runtime map index");
+                    }
+                }
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_STRING_BUILDER) {
                 javan_string_builder* builder = (javan_string_builder*) node->value;
                 if (builder->magic != JAVAN_STRING_BUILDER_MAGIC
@@ -2496,10 +2524,16 @@ final class RuntimeSourceMemorySections {
                 if (map != NULL && map->magic == JAVAN_OBJECT_MAP_MAGIC) {
                     javan_free_owned_runtime_buffer((void*) map->keys);
                     javan_free_owned_runtime_buffer((void*) map->values);
+                    javan_free_owned_runtime_buffer((void*) map->key_hashes);
+                    javan_free_owned_runtime_buffer((void*) map->index_buckets);
                     map->backing = NULL;
                     map->keys = NULL;
                     map->values = NULL;
+                    map->key_hashes = NULL;
+                    map->index_buckets = NULL;
                     map->capacity = 0;
+                    map->index_capacity = 0;
+                    map->indexed_length = -1;
                     map->length = 0;
                 }
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_STRING_BUILDER) {
@@ -7310,6 +7344,8 @@ final class RuntimeSourceMemorySections {
             javan_gc_mark_value((void*) map->backing);
             javan_gc_mark_value((void*) map->keys);
             javan_gc_mark_value((void*) map->values);
+            javan_gc_mark_value((void*) map->key_hashes);
+            javan_gc_mark_value((void*) map->index_buckets);
             for (int index = 0; index < map->length; index++) {
                 javan_gc_mark_value(map->keys[index]);
                 javan_gc_mark_value(map->values[index]);
@@ -9272,6 +9308,21 @@ final class RuntimeSourceMemorySections {
             return 1;
         }
 
+        static int javan_value_is_string(
+            void* value,
+            int type_id,
+            javan_allocation_node* allocation
+        ) {
+            if (value == NULL || type_id != 0) {
+                return 0;
+            }
+            if (allocation != NULL) {
+                return allocation->kind == JAVAN_HEAP_KIND_RUNTIME
+                    && allocation->runtime_kind == JAVAN_RUNTIME_KIND_STRING;
+            }
+            return javan_probably_string_key(value);
+        }
+
         int javan_object_equals(void* left, void* right) {
             if (left == right) {
                 return 1;
@@ -9295,10 +9346,16 @@ final class RuntimeSourceMemorySections {
                 return ((javan_boxed_long*) left)->value == ((javan_boxed_long*) right)->value;
             }
             if (left_type == right_type && left_type == JAVAN_TYPE_JAVA_LANG_FLOAT) {
-                return ((javan_boxed_float*) left)->value == ((javan_boxed_float*) right)->value;
+                return javan_record_float_equals(
+                    ((javan_boxed_float*) left)->value,
+                    ((javan_boxed_float*) right)->value
+                );
             }
             if (left_type == right_type && left_type == JAVAN_TYPE_JAVA_LANG_DOUBLE) {
-                return ((javan_boxed_double*) left)->value == ((javan_boxed_double*) right)->value;
+                return javan_record_double_equals(
+                    ((javan_boxed_double*) left)->value,
+                    ((javan_boxed_double*) right)->value
+                );
             }
             if (left_type == right_type && left_type == JAVAN_TYPE_JAVA_LANG_BOOLEAN) {
                 return ((javan_boxed_boolean*) left)->value == ((javan_boxed_boolean*) right)->value;
@@ -9312,15 +9369,61 @@ final class RuntimeSourceMemorySections {
             if (left_type == right_type && left_type == JAVAN_TYPE_JAVA_LANG_CHARACTER) {
                 return ((javan_boxed_character*) left)->value == ((javan_boxed_character*) right)->value;
             }
-            if (left_type == 0 && right_type == 0
-                && javan_probably_string_key(left) != 0
-                && javan_probably_string_key(right) != 0) {
+            javan_allocation_node* left_node = javan_find_allocation(left, NULL);
+            javan_allocation_node* right_node = javan_find_allocation(right, NULL);
+            if (javan_value_is_string(left, left_type, left_node) != 0
+                && javan_value_is_string(right, right_type, right_node) != 0) {
                 return strcmp((const char*) left, (const char*) right) == 0;
+            }
+            if (left_node != NULL
+                && right_node != NULL
+                && left_node->runtime_kind == JAVAN_RUNTIME_KIND_CLASS
+                && right_node->runtime_kind == JAVAN_RUNTIME_KIND_CLASS) {
+                return javan_runtime_class_equals(left, right);
             }
             if (left_type != 0 || right_type != 0) {
                 return 0;
             }
             return 0;
+        }
+
+        static int javan_map_key_hash(void* value) {
+            if (value == NULL) {
+                return 0;
+            }
+            int type_id = javan_registered_type_id(value);
+            if (type_id == JAVAN_TYPE_JAVA_LANG_INTEGER) {
+                return ((javan_boxed_int*) value)->value;
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_LONG) {
+                return javan_record_long_hash_code(((javan_boxed_long*) value)->value);
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_FLOAT) {
+                return javan_record_float_hash_code(((javan_boxed_float*) value)->value);
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_DOUBLE) {
+                return javan_record_double_hash_code(((javan_boxed_double*) value)->value);
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_BOOLEAN) {
+                return javan_record_boolean_hash_code(((javan_boxed_boolean*) value)->value);
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_BYTE) {
+                return ((javan_boxed_byte*) value)->value;
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_SHORT) {
+                return ((javan_boxed_short*) value)->value;
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_CHARACTER) {
+                return ((javan_boxed_character*) value)->value;
+            }
+            javan_allocation_node* allocation = javan_find_allocation(value, NULL);
+            if (javan_value_is_string(value, type_id, allocation) != 0) {
+                return javan_string_hash_code((const char*) value);
+            }
+            if (allocation != NULL && allocation->runtime_kind == JAVAN_RUNTIME_KIND_CLASS) {
+                return 0x4a415641;
+            }
+            return javan_record_reference_identity_hash_code(value);
         }
 
         int javan_record_hash_combine(int current, int component) {
@@ -11123,6 +11226,21 @@ final class RuntimeSourceMemorySections {
             return 1;
         }
 
+        static int javan_map_index_capacity_for(int entry_capacity) {
+            if (entry_capacity <= 0) {
+                return 0;
+            }
+            if (entry_capacity > 536870912) {
+                javan_panic("map capacity is too large");
+            }
+            int required = entry_capacity * 2;
+            int result = 8;
+            while (result < required) {
+                result *= 2;
+            }
+            return result;
+        }
+
         static javan_object_map* javan_map_new_with_capacity(int capacity, int immutable) {
             if (capacity < 0) {
                 javan_panic("negative map capacity");
@@ -11135,25 +11253,42 @@ final class RuntimeSourceMemorySections {
             map->mod_count = 0;
             map->view_flags = 0;
             map->enum_key_type_id = 0;
+            map->index_capacity = 0;
+            map->indexed_length = -1;
             map->backing = NULL;
             map->keys = NULL;
             map->values = NULL;
+            map->key_hashes = NULL;
+            map->index_buckets = NULL;
             javan_update_runtime_allocation_kind((void*) map, JAVAN_RUNTIME_KIND_OBJECT_MAP);
             if (capacity > 0) {
                 void** next_keys = NULL;
                 void** next_values = NULL;
+                int* next_hashes = NULL;
+                int* next_buckets = NULL;
+                int next_index_capacity = javan_map_index_capacity_for(capacity);
                 void** javan_map_owner_roots[] = {
                     (void**) &map,
                     (void**) &next_keys,
-                    (void**) &next_values
+                    (void**) &next_values,
+                    (void**) &next_hashes,
+                    (void**) &next_buckets
                 };
-                javan_root_frame_push(javan_map_owner_roots, 3);
+                javan_root_frame_push(javan_map_owner_roots, 5);
                 next_keys = (void**) javan_alloc((unsigned long) capacity * sizeof(void*));
                 javan_update_runtime_allocation_kind((void*) next_keys, JAVAN_RUNTIME_KIND_OWNED_BUFFER);
                 next_values = (void**) javan_alloc((unsigned long) capacity * sizeof(void*));
                 javan_update_runtime_allocation_kind((void*) next_values, JAVAN_RUNTIME_KIND_OWNED_BUFFER);
+                next_hashes = (int*) javan_alloc((unsigned long) capacity * sizeof(int));
+                javan_update_runtime_allocation_kind((void*) next_hashes, JAVAN_RUNTIME_KIND_OWNED_BUFFER);
+                next_buckets = (int*) javan_alloc((unsigned long) next_index_capacity * sizeof(int));
+                javan_update_runtime_allocation_kind((void*) next_buckets, JAVAN_RUNTIME_KIND_OWNED_BUFFER);
                 map->keys = next_keys;
                 map->values = next_values;
+                map->key_hashes = next_hashes;
+                map->index_buckets = next_buckets;
+                map->index_capacity = next_index_capacity;
+                map->indexed_length = 0;
                 javan_root_frame_pop(javan_map_owner_roots);
             }
             return map;
@@ -11175,6 +11310,8 @@ final class RuntimeSourceMemorySections {
             map->backing = backing;
             map->length = 0;
             map->capacity = 0;
+            map->index_capacity = 0;
+            map->indexed_length = -1;
             javan_root_frame_pop(roots);
             return map;
         }
@@ -11224,6 +11361,8 @@ final class RuntimeSourceMemorySections {
             return map->values[index];
         }
 
+        static void javan_map_rebuild_index(javan_object_map* map);
+
         static void javan_map_ensure_capacity(javan_object_map* map, int required) {
             if (required <= map->capacity) {
                 return;
@@ -11232,18 +11371,28 @@ final class RuntimeSourceMemorySections {
             while (next_capacity < required) {
                 next_capacity *= 2;
             }
+            map->indexed_length = -1;
             int created_keys = map->keys == NULL;
             int created_values = map->values == NULL;
+            int created_hashes = map->key_hashes == NULL;
+            int created_buckets = map->index_buckets == NULL;
             void** old_keys = map->keys;
             void** old_values = map->values;
+            int* old_hashes = map->key_hashes;
+            int* old_buckets = map->index_buckets;
             void** next_keys = old_keys;
             void** next_values = old_values;
+            int* next_hashes = old_hashes;
+            int* next_buckets = old_buckets;
+            int next_index_capacity = javan_map_index_capacity_for(next_capacity);
             void** javan_map_growth_roots[] = {
                 (void**) &map,
                 (void**) &next_keys,
-                (void**) &next_values
+                (void**) &next_values,
+                (void**) &next_hashes,
+                (void**) &next_buckets
             };
-            javan_root_frame_push(javan_map_growth_roots, 3);
+            javan_root_frame_push(javan_map_growth_roots, 5);
             next_keys = (void**) javan_realloc_owned_buffer(old_keys, (unsigned long) next_capacity * sizeof(void*));
             map->keys = next_keys;
             if (created_keys != 0) {
@@ -11258,19 +11407,93 @@ final class RuntimeSourceMemorySections {
             } else {
                 javan_heap_maybe_validate();
             }
-            if (next_keys == NULL || next_values == NULL) {
+            next_hashes = (int*) javan_realloc_owned_buffer(old_hashes, (unsigned long) next_capacity * sizeof(int));
+            map->key_hashes = next_hashes;
+            if (created_hashes != 0) {
+                javan_update_runtime_allocation_kind((void*) next_hashes, JAVAN_RUNTIME_KIND_OWNED_BUFFER);
+            } else {
+                javan_heap_maybe_validate();
+            }
+            next_buckets = (int*) javan_realloc_owned_buffer(
+                old_buckets,
+                (unsigned long) next_index_capacity * sizeof(int)
+            );
+            map->index_buckets = next_buckets;
+            map->index_capacity = next_index_capacity;
+            if (created_buckets != 0) {
+                javan_update_runtime_allocation_kind((void*) next_buckets, JAVAN_RUNTIME_KIND_OWNED_BUFFER);
+            } else {
+                javan_heap_maybe_validate();
+            }
+            if (next_keys == NULL || next_values == NULL || next_hashes == NULL || next_buckets == NULL) {
                 javan_panic("out of memory");
             }
             if (next_capacity > map->capacity) {
                 memset(next_keys + map->capacity, 0, (unsigned long) (next_capacity - map->capacity) * sizeof(void*));
                 memset(next_values + map->capacity, 0, (unsigned long) (next_capacity - map->capacity) * sizeof(void*));
+                memset(next_hashes + map->capacity, 0, (unsigned long) (next_capacity - map->capacity) * sizeof(int));
             }
             map->capacity = next_capacity;
             javan_root_frame_pop(javan_map_growth_roots);
+            javan_map_rebuild_index(map);
         }
 
         static int javan_map_key_equals(void* left, void* right) {
             return javan_object_equals(left, right);
+        }
+
+        static int javan_map_bucket_slot(javan_object_map* map, int hash, void* key) {
+            if (map->index_capacity <= 0 || map->index_buckets == NULL) {
+                return -1;
+            }
+            int slot = (int) ((uint32_t) hash & (uint32_t) (map->index_capacity - 1));
+            while (map->index_buckets[slot] != 0) {
+                int entry_index = map->index_buckets[slot] - 1;
+                if (entry_index < 0 || entry_index >= map->length) {
+                    javan_panic("corrupt runtime map index");
+                }
+                if (map->key_hashes[entry_index] == hash
+                    && javan_map_key_equals(map->keys[entry_index], key) != 0) {
+                    return slot;
+                }
+                slot = (slot + 1) & (map->index_capacity - 1);
+            }
+            return slot;
+        }
+
+        static void javan_map_index_insert(javan_object_map* map, int entry_index) {
+            int slot = javan_map_bucket_slot(
+                map,
+                map->key_hashes[entry_index],
+                map->keys[entry_index]
+            );
+            if (slot < 0 || map->index_buckets[slot] != 0) {
+                javan_panic("duplicate runtime map key index");
+            }
+            map->index_buckets[slot] = entry_index + 1;
+        }
+
+        static void javan_map_rebuild_index(javan_object_map* map) {
+            if (map->backing != NULL) {
+                map->indexed_length = -1;
+                return;
+            }
+            if (map->length == 0) {
+                if (map->index_buckets != NULL && map->index_capacity > 0) {
+                    memset(map->index_buckets, 0, (unsigned long) map->index_capacity * sizeof(int));
+                }
+                map->indexed_length = 0;
+                return;
+            }
+            if (map->key_hashes == NULL || map->index_buckets == NULL || map->index_capacity < (map->length * 2)) {
+                javan_panic("missing runtime map index storage");
+            }
+            memset(map->index_buckets, 0, (unsigned long) map->index_capacity * sizeof(int));
+            for (int index = 0; index < map->length; index++) {
+                map->key_hashes[index] = javan_map_key_hash(map->keys[index]);
+                javan_map_index_insert(map, index);
+            }
+            map->indexed_length = map->length;
         }
 
         static int (*javan_enum_ordinal_resolver)(int, void*) = NULL;
@@ -11287,13 +11510,22 @@ final class RuntimeSourceMemorySections {
         }
 
         static int javan_map_find(javan_object_map* map, void* key) {
+            if (map->backing != NULL) {
+                return javan_map_find(map->backing, key);
+            }
             if (map->enum_key_type_id > 0
                 && javan_map_enum_ordinal(map->enum_key_type_id, key) < 0) {
                 return -1;
             }
-            int length = javan_map_logical_length(map);
-            for (int index = 0; index < length; index++) {
-                if (javan_map_key_equals(javan_map_key_unchecked(map, index), key) != 0) {
+            if (map->indexed_length == map->length && map->index_capacity > 0) {
+                int hash = javan_map_key_hash(key);
+                int slot = javan_map_bucket_slot(map, hash, key);
+                return slot < 0 || map->index_buckets[slot] == 0
+                    ? -1
+                    : map->index_buckets[slot] - 1;
+            }
+            for (int index = 0; index < map->length; index++) {
+                if (javan_map_key_equals(map->keys[index], key) != 0) {
                     return index;
                 }
             }
@@ -12234,6 +12466,7 @@ final class RuntimeSourceMemorySections {
                 result->values[index] = entry->value;
                 result->length = index + 1;
             }
+            javan_map_rebuild_index(result);
             javan_root_frame_pop(javan_map_of_entries_roots);
             return result;
         }
@@ -12251,6 +12484,7 @@ final class RuntimeSourceMemorySections {
                 result->values[index] = javan_map_value_unchecked(source, index);
             }
             result->length = length;
+            javan_map_rebuild_index(result);
             javan_root_frame_pop(javan_map_copy_roots);
             return result;
         }
@@ -12313,13 +12547,22 @@ final class RuntimeSourceMemorySections {
             };
             javan_root_frame_push(javan_map_put_roots, 3);
             javan_map_ensure_capacity(map, map->length + 1);
+            int index_was_current = map->indexed_length == map->length;
             for (int cursor = map->length; cursor > insertion_index; cursor--) {
                 map->keys[cursor] = map->keys[cursor - 1];
                 map->values[cursor] = map->values[cursor - 1];
+                map->key_hashes[cursor] = map->key_hashes[cursor - 1];
             }
             map->keys[insertion_index] = key_root;
             map->values[insertion_index] = element_root;
+            map->key_hashes[insertion_index] = javan_map_key_hash(key_root);
             map->length++;
+            if (index_was_current != 0 && map->enum_key_type_id == 0 && insertion_index == map->length - 1) {
+                javan_map_index_insert(map, insertion_index);
+                map->indexed_length = map->length;
+            } else {
+                javan_map_rebuild_index(map);
+            }
             javan_root_frame_pop(javan_map_put_roots);
             map->mod_count++;
             return NULL;
@@ -12342,13 +12585,22 @@ final class RuntimeSourceMemorySections {
             };
             javan_root_frame_push(javan_map_put_absent_roots, 3);
             javan_map_ensure_capacity(map, map->length + 1);
+            int index_was_current = map->indexed_length == map->length;
             for (int cursor = map->length; cursor > insertion_index; cursor--) {
                 map->keys[cursor] = map->keys[cursor - 1];
                 map->values[cursor] = map->values[cursor - 1];
+                map->key_hashes[cursor] = map->key_hashes[cursor - 1];
             }
             map->keys[insertion_index] = key_root;
             map->values[insertion_index] = element_root;
+            map->key_hashes[insertion_index] = javan_map_key_hash(key_root);
             map->length++;
+            if (index_was_current != 0 && map->enum_key_type_id == 0 && insertion_index == map->length - 1) {
+                javan_map_index_insert(map, insertion_index);
+                map->indexed_length = map->length;
+            } else {
+                javan_map_rebuild_index(map);
+            }
             javan_root_frame_pop(javan_map_put_absent_roots);
             map->mod_count++;
             return NULL;
@@ -12401,8 +12653,10 @@ final class RuntimeSourceMemorySections {
             for (int index = 0; index < map->length; index++) {
                 map->keys[index] = NULL;
                 map->values[index] = NULL;
+                map->key_hashes[index] = 0;
             }
             map->length = 0;
+            javan_map_rebuild_index(map);
             map->mod_count++;
         }
 
@@ -12417,10 +12671,13 @@ final class RuntimeSourceMemorySections {
             for (int cursor = index + 1; cursor < map->length; cursor++) {
                 map->keys[cursor - 1] = map->keys[cursor];
                 map->values[cursor - 1] = map->values[cursor];
+                map->key_hashes[cursor - 1] = map->key_hashes[cursor];
             }
             map->length--;
             map->keys[map->length] = NULL;
             map->values[map->length] = NULL;
+            map->key_hashes[map->length] = 0;
+            javan_map_rebuild_index(map);
             map->mod_count++;
             return previous;
         }
@@ -12438,10 +12695,13 @@ final class RuntimeSourceMemorySections {
             for (int cursor = index + 1; cursor < map->length; cursor++) {
                 map->keys[cursor - 1] = map->keys[cursor];
                 map->values[cursor - 1] = map->values[cursor];
+                map->key_hashes[cursor - 1] = map->key_hashes[cursor];
             }
             map->length--;
             map->keys[map->length] = NULL;
             map->values[map->length] = NULL;
+            map->key_hashes[map->length] = 0;
+            javan_map_rebuild_index(map);
             map->mod_count++;
             return 1;
         }

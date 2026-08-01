@@ -55,43 +55,43 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout
+      - name: "🧑‍💻 Checkout [${{ inputs.ref || github.sha }}]"
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ inputs.ref || github.sha }}
 
-      - name: Java
+      - name: "🔍 Java"
         id: java_info
         uses: YunaBraska/java-info-action@11a434ffbf6bb3357363d1933be71a4076a90a6b # 3
 
-      - name: JDK
+      - name: "☕ JDK [${{ steps.java_info.outputs.java_version }}]"
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
         with:
           java-version: ${{ steps.java_info.outputs.java_version }}
           distribution: temurin
           cache: maven
 
-      - name: Version
+      - name: "🏷️ Version [${{ inputs.version }}]"
         shell: sh
         run: ./mvnw -B versions:set -DnewVersion="$JAVAN_VERSION" -DgenerateBackupPoms=false
 
-      - name: Go
+      - name: "🐹 Go [1.26.4]"
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: '1.26.4'
           cache: false
 
-      - name: Rust
+      - name: "🦀 Rust [1.96.0]"
         uses: dtolnay/rust-toolchain@191af2e1955bbe165f9bbacff2d2438002dff4d4 # 1.96.0
 
-      - name: Toolchains
+      - name: "🧰 Toolchains"
         shell: sh
         run: |
           set -eu
           go version
           rustc --version
 
-      - name: Linux
+      - name: "🐧 Linux [${{ inputs.target }}]"
         if: runner.os == 'Linux'
         shell: sh
         run: |
@@ -107,7 +107,7 @@ jobs:
             sleep 15
           done
 
-      - name: Windows
+      - name: "🪟 Windows [${{ inputs.target }}]"
         if: runner.os == 'Windows'
         id: msys2
         uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2
@@ -116,30 +116,30 @@ jobs:
           msystem: MINGW64
           install: mingw-w64-x86_64-gcc
 
-      - name: Path
+      - name: "📍 Path"
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           "${{ steps.msys2.outputs.msys2-location }}\\mingw64\\bin" |
             Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      - name: Repository
+      - name: "📁 Repository"
         shell: sh
         run: |
           set -eu
           repo=$(./mvnw -q help:evaluate -Dexpression=settings.localRepository -DforceStdout | tail -n 1)
           printf 'MAVEN_REPO_LOCAL=%s\n' "$repo" >> "$GITHUB_ENV"
 
-      - name: Probes
+      - name: "🧪 Probes"
         shell: sh
         run: sh .github/scripts/install-external-probe-artifacts.sh "$MAVEN_REPO_LOCAL"
 
-      - name: Compile
+      - name: "🔨 Compile [${{ inputs.target }}]"
         shell: sh
         run: >-
           ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -DskipTests compile test-compile
 
-      - name: Acceptance
+      - name: "🧪 Acceptance [${{ inputs.target }}]"
         if: inputs.proof == 'acceptance'
         shell: sh
         env:
@@ -147,12 +147,12 @@ jobs:
           JAVAN_REQUIRE_EXTERNAL_SMOKE: "true"
         run: sh .github/scripts/acceptance.sh
 
-      - name: Target
+      - name: "🎯 Target [${{ inputs.target }}]"
         if: inputs.proof == 'acceptance'
         shell: sh
         run: java -cp target/classes javan.Main build src/test/resources/projects/acceptance/hello --target '${{ inputs.target }}' --output 'hello-${{ inputs.target }}'
 
-      - name: Sanitizer
+      - name: "🧪 Sanitizer [${{ inputs.sanitizer_scope }}]"
         if: inputs.proof == 'sanitizer'
         shell: sh
         env:
@@ -160,7 +160,7 @@ jobs:
           JAVAN_SANITIZER_SCOPE: ${{ inputs.sanitizer_scope }}
         run: sh .github/scripts/sanitizer-suite.sh
 
-      - name: Package
+      - name: "📦 Package [gen${{ inputs.bootstrap_generation }}_${{ inputs.target }}]"
         if: inputs.proof == 'package-self-host'
         shell: sh
         env:
@@ -168,9 +168,10 @@ jobs:
           JAVAN_PACKAGE_TARGET: ${{ inputs.target }}
           JAVAN_PACKAGE_SANITIZER_SCOPE: ${{ inputs.sanitizer_scope }}
           JAVAN_BOOTSTRAP_GENERATION: ${{ inputs.bootstrap_generation }}
+          JAVAN_HEAP_LIMIT_BYTES: "2147483648"
         run: sh .github/scripts/verify-ci-package-smoke.sh
 
-      - name: Upload
+      - name: "📤 Upload [${{ inputs.target }}]"
         if: inputs.proof == 'package-self-host'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:

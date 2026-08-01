@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
-      - name: Plan
+      - name: "🧮 Plan [${{ github.event.release.tag_name || inputs.tag }}]"
         id: plan
         shell: sh
         env:
@@ -62,14 +62,14 @@ jobs:
             printf '%s:%s-scratch\n' "$repository" "$version"
             printf '%s:scratch\n' "$repository"
             printf 'EOF\n'
-          } >> "$GITHUB_OUTPUT"
+          } | tee -a "$GITHUB_OUTPUT"
 
-      - name: Checkout
+      - name: "🧑‍💻 Checkout [${{ steps.plan.outputs.tag }}]"
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ steps.plan.outputs.tag }}
 
-      - name: Download
+      - name: "📥 Download [${{ steps.plan.outputs.version }}]"
         shell: sh
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
@@ -86,20 +86,20 @@ jobs:
           sha256sum -c "javan-${RELEASE_VERSION}-linux-x64.tar.gz.sha256"
           sha256sum -c "javan-${RELEASE_VERSION}-linux-aarch64.tar.gz.sha256"
 
-      - name: QEMU
+      - name: "🧰 QEMU"
         uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
 
-      - name: Buildx
+      - name: "🧰 Buildx"
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
-      - name: Login
+      - name: "🔐 Login [ghcr]"
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.RELEASE_TOKEN || github.token }}
 
-      - name: Wolfi
+      - name: "📦 Wolfi [${{ steps.plan.outputs.version }}]"
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
@@ -115,7 +115,7 @@ jobs:
             org.opencontainers.image.version=${{ steps.plan.outputs.version }}
           tags: ${{ steps.plan.outputs.wolfi_tags }}
 
-      - name: Distroless
+      - name: "📦 Distroless [${{ steps.plan.outputs.version }}]"
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
@@ -131,7 +131,7 @@ jobs:
             org.opencontainers.image.version=${{ steps.plan.outputs.version }}
           tags: ${{ steps.plan.outputs.distroless_tags }}
 
-      - name: Scratch
+      - name: "📦 Scratch [${{ steps.plan.outputs.version }}]"
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
@@ -147,7 +147,7 @@ jobs:
             org.opencontainers.image.version=${{ steps.plan.outputs.version }}
           tags: ${{ steps.plan.outputs.scratch_tags }}
 
-      - name: Manifests
+      - name: "📋 Manifests [${{ steps.plan.outputs.version }}]"
         shell: sh
         env:
           IMAGE_REPOSITORY: ${{ steps.plan.outputs.repository }}
@@ -176,7 +176,7 @@ jobs:
           verify_image "$IMAGE_REPOSITORY:distroless"
           verify_image "$IMAGE_REPOSITORY:scratch"
 
-      - name: Showcase
+      - name: "🧪 Showcase [${{ steps.plan.outputs.version }}]"
         shell: sh
         env:
           IMAGE_REPOSITORY: ${{ steps.plan.outputs.repository }}

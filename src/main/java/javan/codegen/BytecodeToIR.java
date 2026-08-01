@@ -196,6 +196,7 @@ public final class BytecodeToIR {
         for (final EntryPoint entryPoint : reachableMethods) {
             entryPointsBySymbol.put(symbol(entryPoint), entryPoint);
         }
+        final Map<EntryPoint, List<EntryPoint>> calleesByCaller = callCalleesByCaller(callGraph);
         boolean changed;
         do {
             changed = false;
@@ -211,14 +212,12 @@ public final class BytecodeToIR {
                         continue;
                     }
                     final MethodRef calledMethod = instruction.methodRef().orElseThrow();
-                    for (final javan.analysis.CallEdge edge : callGraph.callEdges()) {
-                        if (!caller.equals(edge.caller())
-                            || edge.kind() != javan.analysis.CallEdge.Kind.CALL
-                            || !calledMethod.name().equals(edge.callee().methodName())
-                            || !calledMethod.descriptor().equals(edge.callee().descriptor())) {
+                    for (final EntryPoint callee : calleesByCaller.getOrDefault(caller, List.of())) {
+                        if (!calledMethod.name().equals(callee.methodName())
+                            || !calledMethod.descriptor().equals(callee.descriptor())) {
                             continue;
                         }
-                        for (final String throwableType : typesByMethod.getOrDefault(edge.callee(), Set.of())) {
+                        for (final String throwableType : typesByMethod.getOrDefault(callee, Set.of())) {
                             if (!caughtBy(method, instruction.offset(), throwableType) && callerTypes.add(throwableType)) {
                                 changed = true;
                             }
@@ -263,6 +262,22 @@ public final class BytecodeToIR {
             result.put(entry.getKey(), orderedThrowableTypes(entry.getValue()));
         }
         return Map.copyOf(result);
+    }
+
+    private static Map<EntryPoint, List<EntryPoint>> callCalleesByCaller(final CallGraph callGraph) {
+        final Map<EntryPoint, List<EntryPoint>> result = new HashMap<>();
+        for (final javan.analysis.CallEdge edge : callGraph.callEdges()) {
+            if (edge.kind() != javan.analysis.CallEdge.Kind.CALL) {
+                continue;
+            }
+            List<EntryPoint> callees = result.get(edge.caller());
+            if (callees == null) {
+                callees = new ArrayList<>();
+                result.put(edge.caller(), callees);
+            }
+            callees.add(edge.callee());
+        }
+        return result;
     }
 
     private static boolean matchesMaterializedLambdaCall(
@@ -669,8 +684,14 @@ public final class BytecodeToIR {
         if (instruction.op() == IrInstruction.Op.CALL_STATIC_VOID && instruction.expression().isEmpty()) {
             addTransportedThrowableTypes(instruction.value().orElseThrow(), dispatches, transportedThrowableTypes, result);
         }
-        instruction.expression().ifPresent(expression ->
-            collectTransportedThrowableTypes(expression, dispatches, transportedThrowableTypes, result));
+        if (instruction.expression().isPresent()) {
+            collectTransportedThrowableTypes(
+                instruction.expression().orElseThrow(),
+                dispatches,
+                transportedThrowableTypes,
+                result
+            );
+        }
     }
 
     private static void collectTransportedThrowableTypes(
