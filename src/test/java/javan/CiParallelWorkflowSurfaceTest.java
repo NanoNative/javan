@@ -63,13 +63,13 @@ final class CiParallelWorkflowSurfaceTest {
     void pullRequestsUseGenerationTwoWhileSnapshotsAndReleasesUseGenerationThree() throws Exception {
         assertThat(Files.readString(BUILD_PR))
             .contains("bootstrap_generation: 2")
-            .contains("package_timeout_minutes: 60");
+            .contains("package_timeout_minutes: 120");
         assertThat(Files.readString(BUILD_MERGE))
             .contains("bootstrap_generation: 3")
-            .contains("package_timeout_minutes: 90");
+            .contains("package_timeout_minutes: 240");
         assertThat(Files.readString(RELEASE))
             .contains("bootstrap_generation: 3")
-            .contains("package_timeout_minutes: 90");
+            .contains("package_timeout_minutes: 240");
         assertThat(Files.readString(BUILD_COMMON))
             .contains("bootstrap_generation:")
             .contains("bootstrap_generation: ${{ inputs.bootstrap_generation }}")
@@ -78,8 +78,7 @@ final class CiParallelWorkflowSurfaceTest {
             .contains("enabled: ${{ inputs.prepare_publication }}");
         assertThat(Files.readString(Path.of(".github/workflows/native-proof.yml")))
             .contains("JAVAN_BOOTSTRAP_GENERATION: ${{ inputs.bootstrap_generation }}")
-            .contains("JAVAN_PACKAGE_PROOF_SCOPE: ${{ inputs.package_scope }}")
-            .contains("CC: ${{ inputs.bootstrap_generation == 2 && 'clang' || '' }}");
+            .contains("JAVAN_PACKAGE_PROOF_SCOPE: ${{ inputs.package_scope }}");
     }
 
     @Test
