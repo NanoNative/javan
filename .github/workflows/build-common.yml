@@ -242,7 +242,7 @@ jobs:
           - shard: cli-jdk-other-a
             label: cli_jdkothera_linux_x64
             test-selector: >-
-              CliJdkSemanticsIntegrationTest#string*+optional*+linked*+hash*+primitive*
+              CliJdkSemanticsIntegrationTest#string*+optional*+linked*+hash*+primitive*+enum*+entry*+unknown*+unused*
           - shard: cli-jdk-other-b
             label: cli_jdkotherb_linux_x64
             test-selector: >-
