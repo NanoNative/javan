@@ -160,6 +160,7 @@ jobs:
         if: inputs.proof == 'package-self-host'
         shell: sh
         env:
+          CC: ${{ inputs.bootstrap_generation == 2 && 'clang' || '' }}
           JAVAN_PACKAGE_TARGET: ${{ inputs.target }}
           JAVAN_PACKAGE_SANITIZER_SCOPE: ${{ inputs.sanitizer_scope }}
           JAVAN_BOOTSTRAP_GENERATION: ${{ inputs.bootstrap_generation }}

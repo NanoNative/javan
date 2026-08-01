@@ -410,38 +410,47 @@ jobs:
             os: ubuntu-24.04
             scope: baseline
             label: sanitizer_baseline_linux_x64
+            enabled: true
           - target: linux-x64
             os: ubuntu-24.04
             scope: self_host
             label: sanitizer_selfhost_linux_x64
+            enabled: ${{ inputs.prepare_publication }}
           - target: linux-x64
             os: ubuntu-24.04
             scope: gc_roots
             label: sanitizer_gcroots_linux_x64
+            enabled: true
           - target: linux-x64
             os: ubuntu-24.04
             scope: gc_values
             label: sanitizer_gcvalues_linux_x64
+            enabled: true
           - target: linux-x64
             os: ubuntu-24.04
             scope: runtime_containers
             label: sanitizer_runtime_linux_x64
+            enabled: true
           - target: linux-x64
             os: ubuntu-24.04
             scope: temporary_roots
             label: sanitizer_roots_linux_x64
+            enabled: true
           - target: linux-x64
             os: ubuntu-24.04
             scope: failure_exceptions
             label: sanitizer_exceptions_linux_x64
+            enabled: true
           - target: linux-x64
             os: ubuntu-24.04
             scope: failure_limits
             label: sanitizer_limits_linux_x64
+            enabled: true
           - target: linux-aarch64
             os: ubuntu-24.04-arm
             scope: platform_smoke
             label: sanitizer_linux_arm64
+            enabled: true
     uses: ./.github/workflows/native-proof.yml
     with:
       ref: ${{ inputs.ref || github.sha }}
@@ -450,6 +459,7 @@ jobs:
       label: ${{ matrix.label }}
       sanitizer_scope: ${{ matrix.scope }}
       proof: sanitizer
+      enabled: ${{ matrix.enabled }}
       version: ${{ needs.build-info.outputs.resolved_version }}
     secrets: inherit
 
@@ -466,14 +476,14 @@ jobs:
         include:
           - target: linux-x64
             os: ubuntu-24.04
-            sanitizer-scope: full
+            sanitizer-scope: ${{ inputs.prepare_publication && 'full' || 'platform-smoke' }}
             label: package_linux_x64
             enabled: true
           - target: linux-aarch64
             os: ubuntu-24.04-arm
             sanitizer-scope: platform-smoke
             label: package_linux_arm64
-            enabled: true
+            enabled: ${{ inputs.prepare_publication }}
           - target: macos-x64
             os: macos-15-intel
             sanitizer-scope: platform-smoke
