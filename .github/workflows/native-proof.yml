@@ -164,7 +164,6 @@ jobs:
         if: inputs.proof == 'package-self-host'
         shell: sh
         env:
-          CC: ${{ inputs.bootstrap_generation == 2 && 'clang' || '' }}
           JAVAN_PACKAGE_PROOF_SCOPE: ${{ inputs.package_scope }}
           JAVAN_PACKAGE_TARGET: ${{ inputs.target }}
           JAVAN_PACKAGE_SANITIZER_SCOPE: ${{ inputs.sanitizer_scope }}
