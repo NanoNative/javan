@@ -37,6 +37,10 @@ on:
         required: false
         default: 45
         type: number
+      package_scope:
+        required: false
+        default: full
+        type: string
 
 permissions: {}
 
@@ -161,6 +165,7 @@ jobs:
         shell: sh
         env:
           CC: ${{ inputs.bootstrap_generation == 2 && 'clang' || '' }}
+          JAVAN_PACKAGE_PROOF_SCOPE: ${{ inputs.package_scope }}
           JAVAN_PACKAGE_TARGET: ${{ inputs.target }}
           JAVAN_PACKAGE_SANITIZER_SCOPE: ${{ inputs.sanitizer_scope }}
           JAVAN_BOOTSTRAP_GENERATION: ${{ inputs.bootstrap_generation }}
