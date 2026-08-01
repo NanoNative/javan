@@ -140,9 +140,9 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         final String releaseWorkflow = Files.readString(RELEASE_WORKFLOW);
 
         assertThat(releaseWorkflow)
-            .contains("- name: Homebrew")
+            .contains("- name: \"🍺 Homebrew")
             .contains(".github/scripts/generate-homebrew-formula.sh")
-            .contains("- name: Formula")
+            .contains("- name: \"🍺 Formula")
             .contains(".github/scripts/verify-homebrew-formula.sh");
     }
 
@@ -163,7 +163,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         final String nativeProof = Files.readString(NATIVE_PROOF);
 
         assertThat(nativeProof)
-            .contains("- name: Package")
+            .contains("- name: \"📦 Package")
             .contains("sh .github/scripts/verify-ci-package-smoke.sh");
     }
 
@@ -193,7 +193,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         final String ciWorkflow = Files.readString(BUILD_COMMON);
 
         assertThat(ciWorkflow)
-            .contains("- name: Coverage")
+            .contains("- name: \"📊 Coverage")
             .doesNotContain(
                 "JAVAN_COVERAGE_SOFT_TARGET",
                 "Soft target:",
@@ -268,9 +268,9 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         final String nativeProof = Files.readString(NATIVE_PROOF);
 
         assertThat(nativeProof)
-            .contains("- name: Package")
+            .contains("- name: \"📦 Package")
             .contains("sh .github/scripts/verify-ci-package-smoke.sh")
-            .contains("- name: Upload");
+            .contains("- name: \"📤 Upload");
     }
 
     @Test
@@ -278,11 +278,11 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         final String releaseWorkflow = Files.readString(RELEASE_WORKFLOW);
 
         assertThat(releaseWorkflow)
-            .contains("- name: Download")
+            .contains("- name: \"📥 Download")
             .contains("actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7")
             .contains("pattern: javan-*")
             .contains("merge-multiple: true")
-            .contains("- name: Metadata");
+            .contains("- name: \"🏷️ Metadata");
     }
 
     @Test
@@ -366,7 +366,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         final String containerWorkflow = Files.readString(CONTAINER_WORKFLOW);
 
         assertThat(containerWorkflow)
-            .contains("- name: Download")
+            .contains("- name: \"📥 Download")
             .contains("gh release download")
             .contains("linux-x64.tar.gz")
             .contains("linux-aarch64.tar.gz");
@@ -377,7 +377,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         final String containerWorkflow = Files.readString(CONTAINER_WORKFLOW);
 
         assertThat(containerWorkflow)
-            .contains("- name: Showcase")
+            .contains("- name: \"🧪 Showcase")
             .contains("JAVAN_IMAGE=\"$image\" sh .github/scripts/verify-showcase.sh");
     }
 

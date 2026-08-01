@@ -117,7 +117,7 @@ public final class ReachabilityAnalyzer {
                         "JAVAN011",
                         "reachable method cannot be resolved",
                         current.className(),
-                        current.methodName() + current.descriptor(),
+                        new StringBuilder(current.methodName()).append(current.descriptor()).toString(),
                         current.display(),
                         "Closed-world analysis requires every reachable method to be known.",
                         "Compile application classes and provide the complete dependency classpath before running javan."
@@ -232,11 +232,15 @@ public final class ReachabilityAnalyzer {
             "JAVAN012",
             "unsupported reachable application method call",
             current.className(),
-            current.methodName() + current.descriptor(),
+            methodSubject(current),
             target.display(),
             "Function.apply requires either a closed-world Function implementation class or a supported materialized Function lambda target.",
             "Provide a reachable Function implementation class or keep this exact function dispatch on the JVM until broader receiver support lands."
         );
+    }
+
+    private static String methodSubject(final EntryPoint entryPoint) {
+        return new StringBuilder(entryPoint.methodName()).append(entryPoint.descriptor()).toString();
     }
 
     private static void enqueueRecordReferenceObjectMethodTargets(
@@ -487,7 +491,7 @@ public final class ReachabilityAnalyzer {
                 "JAVAN012",
                 "unsupported reachable application method call",
                 current.className(),
-                current.methodName() + current.descriptor(),
+                methodSubject(current),
                 target.display(),
                 "Iterator.forEachRemaining requires either a closed-world Consumer implementation class or a supported materialized Consumer lambda target.",
                 "Provide a reachable Consumer implementation class or keep this exact iterator bulk-consumer flow on the JVM until broader receiver support lands."
@@ -508,7 +512,7 @@ public final class ReachabilityAnalyzer {
                 "JAVAN012",
                 "unsupported reachable application method call",
                 current.className(),
-                current.methodName() + current.descriptor(),
+                methodSubject(current),
                 target.display(),
                 "Iterable.forEach requires either a closed-world Consumer implementation class or a supported materialized Consumer lambda target.",
                 "Provide a reachable Consumer implementation class or keep this exact iterable bulk-consumer flow on the JVM until broader receiver support lands."
@@ -531,7 +535,7 @@ public final class ReachabilityAnalyzer {
                 "JAVAN012",
                 "unsupported reachable application method call",
                 current.className(),
-                current.methodName() + current.descriptor(),
+                methodSubject(current),
                 target.display(),
                 "Collection.removeIf requires either a closed-world Predicate implementation class or a supported inline Predicate lambda at the call site.",
                 "Provide a reachable Predicate implementation class, keep the Predicate lambda inline at the removeIf call, or keep this exact collection predicate-removal flow on the JVM until broader receiver support lands."
@@ -552,7 +556,7 @@ public final class ReachabilityAnalyzer {
                 "JAVAN012",
                 "unsupported reachable application method call",
                 current.className(),
-                current.methodName() + current.descriptor(),
+                methodSubject(current),
                 target.display(),
                 "Map.forEach requires either a closed-world BiConsumer implementation class or a supported materialized BiConsumer lambda target.",
                 "Provide a reachable BiConsumer implementation class or keep this exact map bulk-callback flow on the JVM until broader receiver support lands."
@@ -578,7 +582,7 @@ public final class ReachabilityAnalyzer {
                     "JAVAN012",
                     "unsupported reachable application method call",
                     current.className(),
-                    current.methodName() + current.descriptor(),
+                    methodSubject(current),
                     target.display(),
                     "Map.computeIfAbsent requires a closed-world Function implementation class or a supported direct function lambda target.",
                     "Provide a reachable Function implementation class or keep this exact map compute-if-absent flow on the JVM until broader callback support lands."
@@ -600,7 +604,7 @@ public final class ReachabilityAnalyzer {
                 "JAVAN012",
                 "unsupported reachable application method call",
                 current.className(),
-                current.methodName() + current.descriptor(),
+                methodSubject(current),
                 target.display(),
                 "Optional.filter requires a closed-world Predicate implementation class or a supported direct predicate lambda target.",
                 "Provide a reachable Predicate implementation class or keep this exact optional filter flow on the JVM until broader callback support lands."
@@ -626,7 +630,7 @@ public final class ReachabilityAnalyzer {
                     "JAVAN012",
                     "unsupported reachable application method call",
                     current.className(),
-                    current.methodName() + current.descriptor(),
+                    methodSubject(current),
                     target.display(),
                     "Optional.map requires a closed-world Function implementation class or a supported direct function lambda target.",
                     "Provide a reachable Function implementation class or keep this exact optional mapping flow on the JVM until broader callback support lands."
@@ -653,7 +657,7 @@ public final class ReachabilityAnalyzer {
                     "JAVAN012",
                     "unsupported reachable application method call",
                     current.className(),
-                    current.methodName() + current.descriptor(),
+                    methodSubject(current),
                     target.display(),
                     "Optional.flatMap requires a closed-world Function implementation class or a supported direct function lambda target.",
                     "Provide a reachable Function implementation class or keep this exact optional flat-mapping flow on the JVM until broader callback support lands."
@@ -675,7 +679,7 @@ public final class ReachabilityAnalyzer {
                 "JAVAN012",
                 "unsupported reachable application method call",
                 current.className(),
-                current.methodName() + current.descriptor(),
+                methodSubject(current),
                 target.display(),
                 "Optional.ifPresent requires either a closed-world Consumer implementation class or a supported materialized Consumer lambda target.",
                 "Provide a reachable Consumer implementation class or keep this exact optional callback flow on the JVM until broader callback support lands."
@@ -701,7 +705,7 @@ public final class ReachabilityAnalyzer {
                     "JAVAN012",
                     "unsupported reachable application method call",
                     current.className(),
-                    current.methodName() + current.descriptor(),
+                    methodSubject(current),
                     target.display(),
                     "Optional.or requires a closed-world Supplier implementation class or a supported direct supplier lambda target.",
                     "Provide a reachable Supplier implementation class or keep this exact optional fallback-optional flow on the JVM until broader callback support lands."
@@ -728,7 +732,7 @@ public final class ReachabilityAnalyzer {
                     "JAVAN012",
                     "unsupported reachable application method call",
                     current.className(),
-                    current.methodName() + current.descriptor(),
+                    methodSubject(current),
                     target.display(),
                     "Optional.orElseGet requires a closed-world Supplier implementation class or a supported direct supplier lambda target.",
                     "Provide a reachable Supplier implementation class or keep this exact optional fallback flow on the JVM until broader callback support lands."
@@ -755,7 +759,7 @@ public final class ReachabilityAnalyzer {
                     "JAVAN012",
                     "unsupported reachable application method call",
                     current.className(),
-                    current.methodName() + current.descriptor(),
+                    methodSubject(current),
                     target.display(),
                     "Objects.requireNonNullElseGet requires a closed-world Supplier implementation class or a supported direct supplier lambda target.",
                     "Provide a reachable Supplier implementation class or keep this exact null-fallback flow on the JVM until broader callback support lands."
@@ -777,7 +781,7 @@ public final class ReachabilityAnalyzer {
                 "JAVAN012",
                 "unsupported reachable application method call",
                 current.className(),
-                current.methodName() + current.descriptor(),
+                methodSubject(current),
                 target.display(),
                 isMapCompute(target)
                     ? "Map.compute requires either a closed-world BiFunction implementation class or a supported materialized BiFunction lambda target."
@@ -807,7 +811,7 @@ public final class ReachabilityAnalyzer {
                 "JAVAN012",
                 "unsupported reachable application method call",
                 current.className(),
-                current.methodName() + current.descriptor(),
+                methodSubject(current),
                 target.display(),
                 "Predicate.test requires either a closed-world Predicate implementation class or a supported materialized Predicate lambda target.",
                 "Provide a reachable Predicate implementation class or keep this exact predicate dispatch on the JVM until broader receiver support lands."
@@ -827,7 +831,7 @@ public final class ReachabilityAnalyzer {
                 "JAVAN012",
                 "unsupported reachable application method call",
                 current.className(),
-                current.methodName() + current.descriptor(),
+                methodSubject(current),
                 target.display(),
                 "Consumer.accept requires either a closed-world Consumer implementation class or a supported materialized Consumer lambda target.",
                 "Provide a reachable Consumer implementation class or keep this exact consumer dispatch on the JVM until broader receiver support lands."
@@ -847,7 +851,7 @@ public final class ReachabilityAnalyzer {
                 "JAVAN012",
                 "unsupported reachable application method call",
                 current.className(),
-                current.methodName() + current.descriptor(),
+                methodSubject(current),
                 target.display(),
                 "BiConsumer.accept requires either a closed-world BiConsumer implementation class or a supported materialized BiConsumer lambda target.",
                 "Provide a reachable BiConsumer implementation class or keep this exact bi-consumer dispatch on the JVM until broader receiver support lands."
@@ -872,7 +876,7 @@ public final class ReachabilityAnalyzer {
                     "JAVAN012",
                     "unsupported reachable application method call",
                     current.className(),
-                    current.methodName() + current.descriptor(),
+                    methodSubject(current),
                     target.display(),
                     "Supplier.get requires either a closed-world Supplier implementation class or a supported materialized Supplier lambda target.",
                     "Provide a reachable Supplier implementation class or keep this exact supplier dispatch on the JVM until broader receiver support lands."
@@ -911,7 +915,7 @@ public final class ReachabilityAnalyzer {
                 "JAVAN012",
                 "unsupported reachable application method call",
                 current.className(),
-                current.methodName() + current.descriptor(),
+                methodSubject(current),
                 target.display(),
                 "BiFunction.apply requires either a closed-world BiFunction implementation class or a supported materialized BiFunction lambda target.",
                 "Provide a reachable BiFunction implementation class or keep this exact bi-function dispatch on the JVM until broader receiver support lands."
@@ -957,7 +961,7 @@ public final class ReachabilityAnalyzer {
                     "JAVAN012",
                     "unsupported reachable application method call",
                     current.className(),
-                    current.methodName() + current.descriptor(),
+                    methodSubject(current),
                     target.display(),
                     "Catch-null functional-interface dispatch requires either a closed-world implementation class or a supported materialized lambda target.",
                     "Provide a reachable implementation class or keep this exact catch-null functional flow on the JVM until broader interface receiver support lands."
@@ -978,7 +982,7 @@ public final class ReachabilityAnalyzer {
                 "JAVAN012",
                 "unsupported reachable application method call",
                 current.className(),
-                current.methodName() + current.descriptor(),
+                methodSubject(current),
                 target.display(),
                 "Interface dispatch requires at least one concrete implementation in the closed world.",
                 "Add an implementation class or remove the unreachable interface call."
@@ -994,7 +998,7 @@ public final class ReachabilityAnalyzer {
                     "JAVAN011",
                     "reachable call target cannot be resolved",
                     current.className(),
-                    current.methodName() + current.descriptor(),
+                    methodSubject(current),
                     target.display(),
                     "Closed-world analysis requires every reachable non-JDK call target to be known.",
                     "Add the class to the project classes or dependency classpath."
@@ -1041,7 +1045,7 @@ public final class ReachabilityAnalyzer {
             "JAVAN012",
             "unsupported reachable application method call",
             current.className(),
-            current.methodName() + current.descriptor(),
+            methodSubject(current),
             target.display(),
             "The current native profile could not resolve a closed-world dispatch target.",
             "Make sure at least one concrete application class implements the invoked method."
@@ -1591,7 +1595,7 @@ public final class ReachabilityAnalyzer {
         if (!"valueOf".equals(entry.methodName())) {
             return false;
         }
-        return ("(Ljava/lang/String;)L" + entry.className() + ";").equals(entry.descriptor());
+        return enumValueOfDescriptor(entry.className()).equals(entry.descriptor());
     }
 
     private static Diagnostic unsupportedEnumValueOfDiagnostic(final EntryPoint current, final String subject) {
@@ -1599,7 +1603,7 @@ public final class ReachabilityAnalyzer {
             "JAVAN015",
             "unsupported reachable enum synthetic method",
             current.className(),
-            current.methodName() + current.descriptor(),
+            methodSubject(current),
             subject,
             "Enum.valueOf(String) requires deterministic enum lookup lowering, which is not implemented yet.",
             "Use direct enum constants, values(), ordinal(), name(), toString(), or enum switch until valueOf lowering is implemented."
@@ -1613,7 +1617,7 @@ public final class ReachabilityAnalyzer {
         if ("ordinal".equals(target.name()) && "()I".equals(target.descriptor())) {
             return EnumCallKind.SUPPORTED_SYNTHETIC;
         }
-        if ("values".equals(target.name()) && target.descriptor().equals("()[L" + target.owner() + ";")) {
+        if ("values".equals(target.name()) && target.descriptor().equals(enumValuesDescriptor(target.owner()))) {
             return EnumCallKind.SUPPORTED_SYNTHETIC;
         }
         if ("()Ljava/lang/String;".equals(target.descriptor())) {
@@ -1621,10 +1625,18 @@ public final class ReachabilityAnalyzer {
                 return EnumCallKind.INTRINSIC;
             }
         }
-        if ("valueOf".equals(target.name()) && ("(Ljava/lang/String;)L" + target.owner() + ";").equals(target.descriptor())) {
+        if ("valueOf".equals(target.name()) && enumValueOfDescriptor(target.owner()).equals(target.descriptor())) {
             return EnumCallKind.UNSUPPORTED_SYNTHETIC;
         }
         return EnumCallKind.NONE;
+    }
+
+    private static String enumValuesDescriptor(final String owner) {
+        return new StringBuilder("()[L").append(owner).append(';').toString();
+    }
+
+    private static String enumValueOfDescriptor(final String owner) {
+        return new StringBuilder("(Ljava/lang/String;)L").append(owner).append(';').toString();
     }
 
     private static boolean isJdkCall(final MethodRef target) {

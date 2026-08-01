@@ -70,13 +70,13 @@ jobs:
       commit_sha: ${{ steps.info.outputs.commit_sha }}
       build_output_timestamp: ${{ steps.info.outputs.build_output_timestamp }}
     steps:
-      - name: Checkout
+      - name: "🧑‍💻 Checkout [${{ inputs.ref || github.sha }}]"
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
           ref: ${{ inputs.ref || github.sha }}
 
-      - name: Resolve
+      - name: "🏷️ Resolve [${{ inputs.snapshot && 'snapshot' || 'release' }}]"
         id: info
         shell: sh
         env:
@@ -91,7 +91,7 @@ jobs:
             printf 'resolved_version=%s\n' "$version"
             printf 'commit_sha=%s\n' "$(git rev-parse HEAD)"
             printf 'build_output_timestamp=%s\n' "$(git log -1 --format=%cI HEAD)"
-          } >> "$GITHUB_OUTPUT"
+          } | tee -a "$GITHUB_OUTPUT"
 
   verify-core:
     name: core_linux_x64
@@ -102,37 +102,37 @@ jobs:
       contents: read
 
     steps:
-      - name: Checkout
+      - name: "🧑‍💻 Checkout [${{ inputs.ref || github.sha }}]"
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ inputs.ref || github.sha }}
 
-      - name: Java
+      - name: "🔍 Java"
         id: java_info
         uses: YunaBraska/java-info-action@11a434ffbf6bb3357363d1933be71a4076a90a6b # 3
 
-      - name: JDK
+      - name: "☕ JDK [${{ steps.java_info.outputs.java_version }}]"
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
         with:
           java-version: ${{ steps.java_info.outputs.java_version }}
           distribution: temurin
           cache: maven
 
-      - name: Go
+      - name: "🐹 Go [1.26.4]"
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: '1.26.4'
           cache: false
 
-      - name: Rust
+      - name: "🦀 Rust [1.96.0]"
         uses: dtolnay/rust-toolchain@191af2e1955bbe165f9bbacff2d2438002dff4d4 # 1.96.0
 
-      - name: Toolchains
+      - name: "🧰 Toolchains"
         run: |
           go version
           rustc --version
 
-      - name: Native
+      - name: "🔨 Native"
         if: runner.os == 'Linux'
         run: |
           for attempt in 1 2 3; do
@@ -146,16 +146,16 @@ jobs:
             sleep 15
           done
 
-      - name: Repository
+      - name: "📁 Repository"
         run: |
           repo=$(./mvnw -q help:evaluate -Dexpression=settings.localRepository -DforceStdout | tail -n 1)
           echo "MAVEN_REPO_LOCAL=$repo" >> "$GITHUB_ENV"
 
-      - name: Probes
+      - name: "🧪 Probes"
         run: |
           sh .github/scripts/install-external-probe-artifacts.sh "$MAVEN_REPO_LOCAL"
 
-      - name: Core
+      - name: "🧪 Core"
         run: |
           status=0
           ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -Dexec.skip=true -Dtest='!Cli*IntegrationTest,!CliExternalProbeAcceptanceIntegrationTest' verify || status=$?
@@ -170,7 +170,7 @@ jobs:
             exit "$status"
           fi
 
-      - name: Coverage
+      - name: "📊 Coverage [core]"
         if: always()
         run: |
           python3 - <<'PY'
@@ -257,37 +257,37 @@ jobs:
               CliThreadRuntimeIntegrationTest,CliPackagingIntegrationTest,CliExternalProbeAcceptanceIntegrationTest
 
     steps:
-      - name: Checkout
+      - name: "🧑‍💻 Checkout [${{ inputs.ref || github.sha }}]"
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ inputs.ref || github.sha }}
 
-      - name: Java
+      - name: "🔍 Java"
         id: java_info
         uses: YunaBraska/java-info-action@11a434ffbf6bb3357363d1933be71a4076a90a6b # 3
 
-      - name: JDK
+      - name: "☕ JDK [${{ steps.java_info.outputs.java_version }}]"
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
         with:
           java-version: ${{ steps.java_info.outputs.java_version }}
           distribution: temurin
           cache: maven
 
-      - name: Go
+      - name: "🐹 Go [1.26.4]"
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: '1.26.4'
           cache: false
 
-      - name: Rust
+      - name: "🦀 Rust [1.96.0]"
         uses: dtolnay/rust-toolchain@191af2e1955bbe165f9bbacff2d2438002dff4d4 # 1.96.0
 
-      - name: Toolchains
+      - name: "🧰 Toolchains"
         run: |
           go version
           rustc --version
 
-      - name: Native
+      - name: "🔨 Native"
         run: |
           for attempt in 1 2 3; do
             if sudo apt-get -o Acquire::ForceIPv4=true update \
@@ -300,16 +300,16 @@ jobs:
             sleep 15
           done
 
-      - name: Repository
+      - name: "📁 Repository"
         run: |
           repo=$(./mvnw -q help:evaluate -Dexpression=settings.localRepository -DforceStdout | tail -n 1)
           echo "MAVEN_REPO_LOCAL=$repo" >> "$GITHUB_ENV"
 
-      - name: Probes
+      - name: "🧪 Probes"
         run: |
           sh .github/scripts/install-external-probe-artifacts.sh "$MAVEN_REPO_LOCAL"
 
-      - name: CLI
+      - name: "🧪 CLI [${{ matrix.shard }}]"
         run: |
           status=0
           ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -Dexec.skip=true -Dtest='${{ matrix.test-selector }}' verify || status=$?
@@ -324,7 +324,7 @@ jobs:
             exit "$status"
           fi
 
-      - name: Coverage
+      - name: "📊 Coverage [${{ matrix.shard }}]"
         if: always()
         run: |
           python3 - <<'PY'
@@ -494,8 +494,7 @@ jobs:
             os: macos-15
             sanitizer-scope: platform-smoke
             label: package_mac_arm64
-            enabled: false
-            reason: local self-host proof exceeded the 45-minute job projection
+            enabled: true
           - target: windows-x64
             os: windows-2025
             sanitizer-scope: platform-smoke
@@ -588,28 +587,28 @@ jobs:
               javan.codegen.RuntimeFilesTest#runtimeThreadTargetSurvivesPreStartCollectionThroughWorkerField+runtimeThreadLifecycleInventoryDropsFinishedNonCurrentThreadObjectsAfterCollection+runtimeCompletedThreadDoesNotRetainTargetAfterCollectionWhenWorkerStaysReachable+runtimeCompletedReachableWorkerClearsThreadLocalStorageOnCompletion+runtimeStartedWorkerThreadLocalObjectGraphSurvivesConcurrentGcAndCleansUpAfterJoin+runtimeStartedWorkerThreadLocalOverwriteCollectsPreviousGraphDuringConcurrentGc+runtimeStartedWorkerThreadLocalRemoveCollectsRemovedGraphDuringConcurrentGc+runtimeStartedWorkerThreadLocalSiblingRemoveKeepsOtherGraphAliveDuringConcurrentGc+runtimeStartedWorkerThreadLocalSiblingRemoveKeepsOtherGraphAliveDuringRepeatedSafepointGc+runtimeStartedWorkerThreadLocalOverwriteSurvivesRepeatedParentSafepointGcDuringMutation+runtimeStartedWorkerThreadLocalRemoveAndSiblingRetentionSurviveRepeatedParentSafepointGcDuringMutation+runtimeSharedThreadLocalKeyRemainsThreadIsolatedAcrossWorkerRemoveAndConcurrentGc+runtimeCompletedReachableWorkerClearsNestedThreadLocalObjectGraphOnCompletion+runtimeParentCollectionPreservesBlockedWorkerLocalRootedObject
 
     steps:
-      - name: Longpaths
+      - name: "🪟 Longpaths [${{ matrix.label }}]"
         shell: pwsh
         run: |
           git config --system core.longpaths true
 
-      - name: Checkout
+      - name: "🧑‍💻 Checkout [${{ inputs.ref || github.sha }}]"
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ inputs.ref || github.sha }}
 
-      - name: Java
+      - name: "🔍 Java"
         id: java_info
         uses: YunaBraska/java-info-action@11a434ffbf6bb3357363d1933be71a4076a90a6b # 3
 
-      - name: JDK
+      - name: "☕ JDK [${{ steps.java_info.outputs.java_version }}]"
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
         with:
           java-version: ${{ steps.java_info.outputs.java_version }}
           distribution: temurin
           cache: maven
 
-      - name: MSYS2
+      - name: "🪟 MSYS2 [${{ matrix.label }}]"
         id: msys2
         uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2
         with:
@@ -618,18 +617,18 @@ jobs:
           install: >-
             mingw-w64-x86_64-gcc
 
-      - name: Path
+      - name: "📍 Path"
         shell: pwsh
         run: |
           "${{ steps.msys2.outputs.msys2-location }}\\mingw64\\bin" |
             Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      - name: Compiler
+      - name: "🔨 Compiler [${{ matrix.label }}]"
         shell: pwsh
         run: |
           gcc --version
 
-      - name: Runtime
+      - name: "🧪 Runtime [${{ matrix.label }}]"
         env:
           CC: ${{ steps.msys2.outputs.msys2-location }}\\mingw64\\bin\\gcc.exe
         run: >-
@@ -654,23 +653,23 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout
+      - name: "🧑‍💻 Checkout [${{ inputs.ref || github.sha }}]"
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.build-info.outputs.commit_sha }}
 
-      - name: Java
+      - name: "🔍 Java"
         id: java_info
         uses: YunaBraska/java-info-action@11a434ffbf6bb3357363d1933be71a4076a90a6b # 3
 
-      - name: JDK
+      - name: "☕ JDK [${{ steps.java_info.outputs.java_version }}]"
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
         with:
           java-version: ${{ steps.java_info.outputs.java_version }}
           distribution: temurin
           cache: maven
 
-      - name: Package
+      - name: "📦 Package [${{ needs.build-info.outputs.resolved_version }}]"
         shell: sh
         env:
           BUILD_OUTPUT_TIMESTAMP: ${{ needs.build-info.outputs.build_output_timestamp }}
@@ -680,7 +679,7 @@ jobs:
           && ./mvnw -B -Ppublish -DskipTests -Dgpg.skip=true
           -Dproject.build.outputTimestamp="$BUILD_OUTPUT_TIMESTAMP" package
 
-      - name: Upload
+      - name: "📤 Upload [maven]"
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: build-workspace

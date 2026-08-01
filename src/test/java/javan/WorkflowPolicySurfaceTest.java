@@ -43,13 +43,26 @@ final class WorkflowPolicySurfaceTest {
     }
 
     @Test
+    void repositoryOwnedOutputsAreAlsoVisibleInStepLogs() throws Exception {
+        for (final Path workflow : workflowFiles()) {
+            final String source = Files.readString(workflow);
+            assertThat(source)
+                .as(workflow + " must print every repository-owned GITHUB_OUTPUT payload")
+                .doesNotContain(">> \"$GITHUB_OUTPUT\"");
+            if (source.contains("$GITHUB_OUTPUT")) {
+                assertThat(source).contains("| tee -a \"$GITHUB_OUTPUT\"");
+            }
+        }
+    }
+
+    @Test
     void commonBuildReportsCoverageWithoutTargetsOrArtifacts() throws Exception {
         assertThat(Files.readString(BUILD_COMMON))
             .contains("name: core_linux_x64")
             .contains("name: ${{ matrix.label }}")
             .contains("-Dexec.skip=true -Dtest='!Cli*IntegrationTest,!CliExternalProbeAcceptanceIntegrationTest' verify")
             .contains("-Dexec.skip=true -Dtest='${{ matrix.test-selector }}' verify")
-            .contains("name: Coverage")
+            .contains("name: \"📊 Coverage")
             .contains("JaCoCo {counter_type.lower()} coverage: {covered}/{total} = {ratio:.2%}")
             .doesNotContain(
                 "JAVAN_COVERAGE_SOFT_TARGET",
@@ -102,7 +115,7 @@ final class WorkflowPolicySurfaceTest {
     @Test
     void windowsPlatformProofEnablesLongPathsBeforeCheckout() throws Exception {
         assertThat(Files.readString(PLATFORM_PROOF))
-            .contains("name: Longpaths")
+            .contains("name: \"🪟 Longpaths")
             .contains("git config --system core.longpaths true");
     }
 
@@ -147,15 +160,17 @@ final class WorkflowPolicySurfaceTest {
     }
 
     @Test
-    void nativePackagingKeepsSlowMacOsAndUnsupportedWindowsRowsVisibleButDisabled() throws Exception {
+    void nativePackagingEnablesMacArmAndKeepsUnsupportedRowsVisible() throws Exception {
         assertThat(Files.readString(BUILD_COMMON))
             .contains("target: macos-x64", "os: macos-15-intel")
             .contains("target: macos-aarch64", "os: macos-15")
             .contains("target: windows-x64", "os: windows-2025")
             .contains("target: windows-aarch64", "os: windows-11-arm")
             .contains("historical slower architecture lane")
-            .contains("local self-host proof exceeded the 45-minute job projection")
+            .contains("label: package_mac_arm64\n            enabled: true")
             .contains("enabled: false");
+        assertThat(Files.readString(NATIVE_PROOF))
+            .contains("JAVAN_HEAP_LIMIT_BYTES: \"2147483648\"");
     }
 
     @Test
@@ -167,7 +182,7 @@ final class WorkflowPolicySurfaceTest {
             .contains("OSSH_PASS: ${{ secrets.OSSH_PASS }}")
             .contains("OSSH_USER: ${{ secrets.OSSH_USER }}")
             .contains("name: build-workspace")
-            .contains("name: Wrapper")
+            .contains("name: \"🧰 Wrapper\"")
             .contains("./mvnw -B -Ppublish")
             .contains("-Dproject.build.outputTimestamp=\"$BUILD_OUTPUT_TIMESTAMP\"")
             .contains("-DskipTests deploy");

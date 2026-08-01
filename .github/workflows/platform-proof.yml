@@ -32,28 +32,28 @@ jobs:
       contents: read
 
     steps:
-      - name: Longpaths
+      - name: "🪟 Longpaths [${{ inputs.label }}]"
         if: runner.os == 'Windows'
         shell: pwsh
         run: git config --system core.longpaths true
 
-      - name: Checkout
+      - name: "🧑‍💻 Checkout [${{ inputs.ref || github.sha }}]"
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ inputs.ref || github.sha }}
 
-      - name: Java
+      - name: "🔍 Java"
         id: java_info
         uses: YunaBraska/java-info-action@11a434ffbf6bb3357363d1933be71a4076a90a6b # 3
 
-      - name: JDK
+      - name: "☕ JDK [${{ steps.java_info.outputs.java_version }}]"
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
         with:
           java-version: ${{ steps.java_info.outputs.java_version }}
           distribution: temurin
           cache: maven
 
-      - name: Verify
+      - name: "🧪 Verify [${{ inputs.label }}]"
         shell: bash
         run: >-
           ./mvnw -q -DskipTests compile

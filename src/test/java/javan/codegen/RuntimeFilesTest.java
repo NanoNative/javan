@@ -2817,8 +2817,9 @@ final class RuntimeFilesTest {
     @Test
     void writeIncludesAllocationLookupCacheForHotPaths() throws Exception {
         final Path runtime = new RuntimeFiles().write(tempDir);
+        final String source = Files.readString(runtime);
 
-        assertThat(Files.readString(runtime)).contains(
+        assertThat(source).contains(
             "#define JAVAN_ALLOCATION_CACHE_SIZE 4",
             "static void* javan_allocation_cache_values[JAVAN_ALLOCATION_CACHE_SIZE];",
             "static javan_allocation_node* javan_allocation_cache_nodes[JAVAN_ALLOCATION_CACHE_SIZE];",
@@ -2827,6 +2828,15 @@ final class RuntimeFilesTest {
             "javan_allocation_cache_remove(value);",
             "if (previous == NULL) {",
             "javan_allocation_node* cached = javan_allocation_cache_lookup(value);"
+        );
+        assertThat(source).contains(
+            "        javan_allocation_node* indexed = javan_allocation_registry_lookup(value);\n"
+                + "        if (indexed != NULL) {\n"
+                + "            javan_allocation_cache_store(value, indexed);\n"
+                + "        }\n"
+                + "        return indexed;\n"
+                + "    }\n"
+                + "    javan_allocation_node* prior = NULL;\n"
         );
     }
 
@@ -5198,7 +5208,7 @@ final class RuntimeFilesTest {
             list=1
             payload=2
             threads-live=2
-            live-live=16
+            live-live=20
             threads-after=1
             live-after=2
             roots=1
@@ -5323,7 +5333,7 @@ final class RuntimeFilesTest {
             list=1
             payload=2
             threads-live=2
-            live-live=16
+            live-live=20
             threads-after=1
             live-after=2
             roots=1
@@ -5423,7 +5433,7 @@ final class RuntimeFilesTest {
             """
             missing=1
             threads-live=2
-            live-live=8
+            live-live=10
             threads-after=1
             live-after=2
             roots=1
@@ -7250,6 +7260,8 @@ final class RuntimeFilesTest {
             "javan_validate_owned_runtime_buffer_reference((void*) list->values);",
             "javan_validate_owned_runtime_buffer_reference((void*) map->keys);",
             "javan_validate_owned_runtime_buffer_reference((void*) map->values);",
+            "javan_validate_owned_runtime_buffer_reference((void*) map->key_hashes);",
+            "javan_validate_owned_runtime_buffer_reference((void*) map->index_buckets);",
             "javan_validate_owned_runtime_buffer_reference((void*) builder->values);",
             "static void javan_validate_runtime_managed_reference(void* value)",
             "javan_validate_runtime_managed_reference((void*) builder->headers);",
@@ -7266,6 +7278,8 @@ final class RuntimeFilesTest {
             "javan_gc_mark_value((void*) list->values);",
             "javan_gc_mark_value((void*) map->keys);",
             "javan_gc_mark_value((void*) map->values);",
+            "javan_gc_mark_value((void*) map->key_hashes);",
+            "javan_gc_mark_value((void*) map->index_buckets);",
             "javan_gc_mark_value((void*) iterator->list);",
             "javan_gc_mark_value((void*) builder->values);",
             "javan_gc_mark_value(optional->value);",
@@ -7278,10 +7292,12 @@ final class RuntimeFilesTest {
             "javan_gc_mark_value((void*) builder->headers);",
             "javan_gc_mark_value(request->body);",
             "javan_gc_mark_value(publisher->value);",
-            "javan_root_frame_push(javan_map_owner_roots, 3);",
-            "javan_root_frame_push(javan_map_growth_roots, 3);",
+            "javan_root_frame_push(javan_map_owner_roots, 5);",
+            "javan_root_frame_push(javan_map_growth_roots, 5);",
             "map->keys = next_keys;",
             "map->values = next_values;",
+            "map->key_hashes = next_hashes;",
+            "map->index_buckets = next_buckets;",
             "void** javan_list_array_roots[] = {",
             "javan_root_frame_push(javan_list_array_roots, 1);",
             "javan_root_frame_pop(javan_list_array_roots);",
@@ -7467,6 +7483,205 @@ final class RuntimeFilesTest {
         );
 
         assertThat(stdout).isEqualTo("checksum=384\nlive=0\nbytes=0\n");
+    }
+
+    @Test
+    void runtimeMapStringLookupScalesWithoutLinearKeyScans() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* map = javan_hashmap_new();
+                void** roots[] = {
+                    (void**) &map
+                };
+                javan_root_frame_push(roots, 1);
+                for (int index = 0; index < 4096; index++) {
+                    void* key = javan_string_value_of_int(index);
+                    (void) javan_map_put(map, key, key);
+                }
+                int checksum = 0;
+                for (int index = 0; index < 4096; index++) {
+                    void* key = javan_string_value_of_int(index);
+                    void* value = javan_map_get(map, key);
+                    checksum += value == NULL ? 0 : javan_string_length((const char*) value);
+                }
+                printf("size=%d\\n", javan_map_size(map));
+                printf("checksum=%d\\n", checksum);
+                javan_root_frame_pop(roots);
+                javan_gc_collect();
+                javan_validate_heap_metadata();
+                printf("live=%lu\\n", javan_heap_live_allocations());
+                return 0;
+            }
+            """,
+            "67108864",
+            Map.of("JAVAN_GC_STRESS", "0"),
+            java.time.Duration.ofSeconds(10)
+        );
+
+        assertThat(stdout).isEqualTo("size=4096\nchecksum=15274\nlive=0\n");
+    }
+
+    @Test
+    void runtimeMapHashIndexPreservesCollisionsEqualityRemovalAndReuse() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* map = javan_hashmap_new();
+                const char* aa_part[] = {"Aa"};
+                const char* bb_part[] = {"BB"};
+                void* managed_aa = NULL;
+                void* managed_bb = NULL;
+                void* identity = NULL;
+                void* other_identity = NULL;
+                void** roots[] = {
+                    (void**) &map,
+                    (void**) &managed_aa,
+                    (void**) &managed_bb,
+                    (void**) &identity,
+                    (void**) &other_identity
+                };
+                javan_root_frame_push(roots, 5);
+                managed_aa = javan_string_concat("\\001", 1, aa_part);
+                managed_bb = javan_string_concat("\\001", 1, bb_part);
+                identity = javan_arraylist_new();
+                other_identity = javan_arraylist_new();
+
+                (void) javan_map_put(map, "Aa", "first");
+                (void) javan_map_put(map, "BB", "second");
+                printf("collision=%s:%s:%d\\n",
+                    (char*) javan_map_get(map, managed_aa),
+                    (char*) javan_map_get(map, managed_bb),
+                    javan_map_size(map));
+
+                printf("previous=%s\\n", (char*) javan_map_put(map, managed_aa, "updated"));
+                printf("equal=%s:%d\\n", (char*) javan_map_get(map, "Aa"), javan_map_size(map));
+                printf("removed=%s:%d:%s\\n",
+                    (char*) javan_map_remove(map, managed_bb),
+                    javan_map_contains_key(map, "BB"),
+                    (char*) javan_map_get(map, managed_aa));
+
+                (void) javan_map_put(map, NULL, "null-key");
+                (void) javan_map_put(map, identity, "identity");
+                printf("kinds=%s:%s:%d\\n",
+                    (char*) javan_map_get(map, NULL),
+                    (char*) javan_map_get(map, identity),
+                    javan_map_contains_key(map, other_identity));
+
+                javan_map_clear(map);
+                (void) javan_map_put(map, managed_bb, "reused");
+                printf("reuse=%s:%d\\n", (char*) javan_map_get(map, "BB"), javan_map_size(map));
+
+                javan_root_frame_pop(roots);
+                javan_gc_collect();
+                javan_validate_heap_metadata();
+                printf("live=%lu\\n", javan_heap_live_allocations());
+                return 0;
+            }
+            """,
+            "1048576"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            collision=first:second:2
+            previous=first
+            equal=updated:2
+            removed=second:0:updated
+            kinds=null-key:identity:0
+            reuse=reused:1
+            live=0
+            """
+        );
+    }
+
+    @Test
+    void runtimeMapBoxedFloatingKeysUseJavaSignedZeroAndNanEquality() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <math.h>
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* map = javan_hashmap_new();
+                void* float_positive_zero = javan_float_value_of(0.0f);
+                void* float_negative_zero = javan_float_value_of(-0.0f);
+                void* float_nan = javan_float_value_of(NAN);
+                void* float_nan_equal = javan_float_value_of(NAN);
+                void* double_positive_zero = javan_double_value_of(0.0);
+                void* double_negative_zero = javan_double_value_of(-0.0);
+                void* double_nan = javan_double_value_of(NAN);
+                void* double_nan_equal = javan_double_value_of(NAN);
+                void* query = NULL;
+                void** roots[] = {
+                    (void**) &map,
+                    (void**) &float_positive_zero,
+                    (void**) &float_negative_zero,
+                    (void**) &float_nan,
+                    (void**) &float_nan_equal,
+                    (void**) &double_positive_zero,
+                    (void**) &double_negative_zero,
+                    (void**) &double_nan,
+                    (void**) &double_nan_equal,
+                    (void**) &query
+                };
+                javan_root_frame_push(roots, 10);
+
+                (void) javan_map_put(map, float_positive_zero, "float-positive");
+                (void) javan_map_put(map, float_negative_zero, "float-negative");
+                (void) javan_map_put(map, float_nan, "float-nan-first");
+                (void) javan_map_put(map, float_nan_equal, "float-nan-updated");
+                (void) javan_map_put(map, double_positive_zero, "double-positive");
+                (void) javan_map_put(map, double_negative_zero, "double-negative");
+                (void) javan_map_put(map, double_nan, "double-nan-first");
+                (void) javan_map_put(map, double_nan_equal, "double-nan-updated");
+
+                query = javan_float_value_of(0.0f);
+                printf("float-positive=%s\\n", (char*) javan_map_get(map, query));
+                query = javan_float_value_of(-0.0f);
+                printf("float-negative=%s\\n", (char*) javan_map_get(map, query));
+                query = javan_float_value_of(NAN);
+                printf("float-nan=%s\\n", (char*) javan_map_get(map, query));
+                query = javan_double_value_of(0.0);
+                printf("double-positive=%s\\n", (char*) javan_map_get(map, query));
+                query = javan_double_value_of(-0.0);
+                printf("double-negative=%s\\n", (char*) javan_map_get(map, query));
+                query = javan_double_value_of(NAN);
+                printf("double-nan=%s\\n", (char*) javan_map_get(map, query));
+                printf("size=%d\\n", javan_map_size(map));
+
+                javan_root_frame_pop(roots);
+                javan_gc_collect();
+                javan_validate_heap_metadata();
+                printf("live=%lu\\n", javan_heap_live_allocations());
+                return 0;
+            }
+            """,
+            "1048576"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            float-positive=float-positive
+            float-negative=float-negative
+            float-nan=float-nan-updated
+            double-positive=double-positive
+            double-negative=double-negative
+            double-nan=double-nan-updated
+            size=6
+            live=0
+            """
+        );
     }
 
     @Test

@@ -20,7 +20,7 @@ final class CiParallelWorkflowSurfaceTest {
     private static final Path PUBLISH_CENTRAL = Path.of(".github/workflows/publish-central.yml");
 
     @Test
-    void workflowJobAndStepNamesRenderAsSingleTokens() throws Exception {
+    void workflowAndJobNamesStayCompactWhileStepsShowActionAndContext() throws Exception {
         try (Stream<Path> workflows = Files.list(Path.of(".github/workflows"))) {
             for (final Path workflow : workflows.filter(path -> path.toString().endsWith(".yml")).toList()) {
                 for (final String line : Files.readAllLines(workflow)) {
@@ -29,15 +29,21 @@ final class CiParallelWorkflowSurfaceTest {
                             .as("single-token matrix label in %s: %s", workflow, line)
                             .matches("[A-Za-z0-9_]+");
                     }
-                    if (!line.startsWith("name: ")
-                        && !line.startsWith("    name: ")
-                        && !line.startsWith("      - name: ")) {
+                    if (line.startsWith("      - name: ")) {
+                        final String step = line.substring(line.indexOf("name: ") + 6);
+                        assertThat(step)
+                            .as("decorated single-action step name in %s: %s", workflow, line)
+                            .matches("^\"\\S+ [A-Za-z0-9]+(?: \\[[^\\]]+\\])?\"$")
+                            .doesNotContain("secrets.");
+                        continue;
+                    }
+                    if (!line.startsWith("name: ") && !line.startsWith("    name: ")) {
                         continue;
                     }
                     final String name = line.substring(line.indexOf("name: ") + 6)
                         .replaceAll("\\$\\{\\{[^}]+}}", "value");
                     assertThat(name)
-                        .as("single-token display name in %s: %s", workflow, line)
+                        .as("single-token workflow or job name in %s: %s", workflow, line)
                         .matches("[A-Za-z0-9_]+");
                 }
             }
@@ -134,13 +140,13 @@ final class CiParallelWorkflowSurfaceTest {
     }
 
     @Test
-    void nativeArtifactsKeepEveryPlatformRowWhenSlowOrUnsupportedTargetsAreDisabled() throws Exception {
+    void nativeArtifactsKeepEveryPlatformRowAndEnableMacArmProof() throws Exception {
         assertThat(Files.readString(BUILD_COMMON))
             .contains("target: linux-x64", "target: linux-aarch64")
             .contains("target: macos-x64", "target: macos-aarch64")
             .contains("target: windows-x64", "target: windows-aarch64")
             .contains("historical slower architecture lane")
-            .contains("local self-host proof exceeded the 45-minute job projection")
+            .contains("label: package_mac_arm64\n            enabled: true")
             .contains("native linker and process runtime are incomplete")
             .contains("proof: package-self-host")
             .contains("enabled: ${{ matrix.enabled }}");
