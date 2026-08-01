@@ -1,4 +1,4 @@
-name: CI · Pull Request
+name: PR
 
 on:
   pull_request:
@@ -25,10 +25,12 @@ concurrency:
 
 jobs:
   verify:
-    name: PR checks
+    name: Verify
     permissions:
       contents: read
     uses: ./.github/workflows/build-common.yml
     with:
       ref: ${{ inputs.ref || github.sha }}
+      bootstrap_generation: 2
+      package_timeout_minutes: 45
     secrets: inherit

@@ -1,4 +1,4 @@
-name: CD · Publish Maven Central (disabled)
+name: Central
 
 on:
   workflow_call:
@@ -47,6 +47,7 @@ concurrency:
 
 jobs:
   publish:
+    name: Central
     if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -58,7 +59,7 @@ jobs:
       name: maven-central
       url: https://central.sonatype.com
     steps:
-      - name: Validate publishing secrets
+      - name: Secrets
         shell: sh
         env:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
@@ -72,7 +73,7 @@ jobs:
           : "${OSSH_PASS:?Missing required secret: OSSH_PASS}"
           : "${OSSH_USER:?Missing required secret: OSSH_USER}"
 
-      - name: Download verified publication workspace
+      - name: Download
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: build-workspace
@@ -81,11 +82,11 @@ jobs:
           repository: ${{ github.repository }}
           run-id: ${{ inputs.run_id || github.run_id }}
 
-      - name: Read Java info
+      - name: Java
         id: java_info
         uses: YunaBraska/java-info-action@11a434ffbf6bb3357363d1933be71a4076a90a6b # 3
 
-      - name: Set up publishing JDK and GPG
+      - name: JDK
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
         with:
           distribution: temurin
@@ -101,11 +102,11 @@ jobs:
           OSSH_PASS: ${{ secrets.OSSH_PASS }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
-      - name: Restore Maven wrapper
+      - name: Wrapper
         shell: sh
         run: chmod +x ./mvnw
 
-      - name: Publish Maven artifact
+      - name: Publish
         shell: sh
         env:
           DRY_RUN: ${{ inputs.dry_run }}

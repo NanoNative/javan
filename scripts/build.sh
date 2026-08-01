@@ -6,6 +6,14 @@ cd "$ROOT"
 
 OUTPUT=${1:-dist/javan}
 VERSION=$(./mvnw -q help:evaluate -Dexpression=project.version -DforceStdout | tail -n 1)
+GENERATION=${JAVAN_BOOTSTRAP_GENERATION:-3}
+case "$GENERATION" in
+  2|3) ;;
+  *)
+    printf '%s\n' "JAVAN_BOOTSTRAP_GENERATION must be 2 or 3, got: $GENERATION" >&2
+    exit 2
+    ;;
+esac
 
 REUSE_TARGET=${JAVAN_BUILD_REUSE_TARGET:-false}
 if [ "$REUSE_TARGET" = "true" ]; then
@@ -34,11 +42,15 @@ mkdir -p "$(dirname -- "$OUTPUT")"
 target/.javan/bin/javan-bootstrap-from-jvm build target/classes \
   --main javan.Main \
   --output javan-bootstrap-rebuilt
-target/.javan/bin/javan-bootstrap-rebuilt build target/classes \
-  --main javan.Main \
-  --output javan-bootstrap-verified
-target/.javan/bin/javan-bootstrap-verified --version >/dev/null
-cp target/.javan/bin/javan-bootstrap-verified "$OUTPUT"
+BUILT=target/.javan/bin/javan-bootstrap-rebuilt
+if [ "$GENERATION" = "3" ]; then
+  target/.javan/bin/javan-bootstrap-rebuilt build target/classes \
+    --main javan.Main \
+    --output javan-bootstrap-verified
+  BUILT=target/.javan/bin/javan-bootstrap-verified
+fi
+"$BUILT" --version >/dev/null
+cp "$BUILT" "$OUTPUT"
 if [ "$(uname -s)" = "Darwin" ] && command -v codesign >/dev/null 2>&1; then
   codesign --force --sign - "$OUTPUT" >/dev/null
 fi

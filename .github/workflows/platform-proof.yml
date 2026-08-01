@@ -1,4 +1,4 @@
-name: CI · Platform Proof
+name: Platform
 
 on:
   workflow_call:
@@ -13,6 +13,9 @@ on:
       target:
         required: true
         type: string
+      label:
+        required: true
+        type: string
       enabled:
         required: true
         type: boolean
@@ -21,7 +24,7 @@ permissions: {}
 
 jobs:
   platform-proof:
-    name: Platform smoke · ${{ inputs.target }}
+    name: ${{ inputs.label }}
     if: inputs.enabled
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 30
@@ -29,7 +32,7 @@ jobs:
       contents: read
 
     steps:
-      - name: Enable Git long paths
+      - name: Longpaths
         if: runner.os == 'Windows'
         shell: pwsh
         run: git config --system core.longpaths true
@@ -39,18 +42,18 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.sha }}
 
-      - name: Read Java info
+      - name: Java
         id: java_info
         uses: YunaBraska/java-info-action@11a434ffbf6bb3357363d1933be71a4076a90a6b # 3
 
-      - name: Set up JDK
+      - name: JDK
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
         with:
           java-version: ${{ steps.java_info.outputs.java_version }}
           distribution: temurin
           cache: maven
 
-      - name: Verify Java build and platform contracts
+      - name: Verify
         shell: bash
         run: >-
           ./mvnw -q -DskipTests compile

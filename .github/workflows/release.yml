@@ -1,4 +1,4 @@
-name: CD · Manual Release
+name: Release
 
 on:
   workflow_dispatch:
@@ -17,11 +17,12 @@ concurrency:
 
 jobs:
   validate-dispatch-ref:
+    name: Validate
     if: inputs.dry_run != true
     runs-on: ubuntu-24.04
     permissions: {}
     steps:
-      - name: Require main branch for publication
+      - name: Branch
         shell: sh
         run: |
           set -eu
@@ -31,6 +32,7 @@ jobs:
           fi
 
   build:
+    name: Build
     needs:
       - validate-dispatch-ref
     if: ${{ always() && (needs.validate-dispatch-ref.result == 'success' || needs.validate-dispatch-ref.result == 'skipped') }}
@@ -40,9 +42,12 @@ jobs:
     with:
       ref: ${{ github.sha }}
       prepare_publication: true
+      bootstrap_generation: 3
+      package_timeout_minutes: 90
     secrets: inherit
 
   publish-central:
+    name: Central
     needs:
       - build
     if: ${{ false }}
@@ -58,7 +63,7 @@ jobs:
     secrets: inherit
 
   publish:
-    name: publish GitHub release
+    name: GitHub
     needs:
       - build
     if: inputs.dry_run != true && needs.build.result == 'success'
@@ -67,7 +72,7 @@ jobs:
       actions: read
       contents: write
     steps:
-      - name: Require bot token
+      - name: Token
         shell: sh
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
@@ -75,33 +80,33 @@ jobs:
           set -eu
           : "${BOT_TOKEN:?Missing required secret: BOT_TOKEN}"
 
-      - name: Checkout verified commit
+      - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
           ref: ${{ needs.build.outputs.commit_sha }}
           token: ${{ secrets.BOT_TOKEN }}
 
-      - name: Download verified packages
+      - name: Download
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           pattern: javan-*
           path: dist/release
           merge-multiple: true
 
-      - name: Generate Homebrew formula
+      - name: Homebrew
         shell: sh
         env:
           RELEASE_VERSION: ${{ needs.build.outputs.resolved_version }}
         run: .github/scripts/generate-homebrew-formula.sh "$RELEASE_VERSION" "${GITHUB_REPOSITORY}"
 
-      - name: Verify Homebrew formula
+      - name: Formula
         shell: sh
         env:
           RELEASE_VERSION: ${{ needs.build.outputs.resolved_version }}
         run: .github/scripts/verify-homebrew-formula.sh dist/release/javan.rb "$RELEASE_VERSION" "${GITHUB_REPOSITORY}"
 
-      - name: Prepare release metadata
+      - name: Metadata
         shell: sh
         env:
           RELEASE_TAG: ${{ format('v{0}', needs.build.outputs.resolved_version) }}
@@ -148,7 +153,7 @@ jobs:
             printf 'Javan %s\n' "$RELEASE_TAG" > release-notes.md
           fi
 
-      - name: Commit release metadata and tag
+      - name: Commit
         shell: sh
         env:
           RELEASE_TAG: ${{ format('v{0}', needs.build.outputs.resolved_version) }}
@@ -168,7 +173,7 @@ jobs:
           git tag -a "$RELEASE_TAG" -m "$RELEASE_TAG [skip ci]"
           git push origin "refs/tags/$RELEASE_TAG"
 
-      - name: Publish release
+      - name: Publish
         shell: sh
         env:
           GH_TOKEN: ${{ secrets.BOT_TOKEN }}
