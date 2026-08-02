@@ -518,7 +518,7 @@ jobs:
       enabled: ${{ matrix.enabled }}
       version: ${{ needs.build-info.outputs.resolved_version }}
       bootstrap_generation: ${{ inputs.bootstrap_generation }}
-      package_scope: ${{ inputs.prepare_publication && 'full' || 'bootstrap' }}
+      package_scope: ${{ inputs.prepare_publication && startsWith(matrix.target, 'linux-') && 'full' || 'bootstrap' }}
       timeout_minutes: ${{ inputs.package_timeout_minutes }}
     secrets: inherit
 
