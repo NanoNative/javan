@@ -8735,6 +8735,38 @@ final class RuntimeSourceMemorySections {
             javan_panic("record generic value does not match declared shape");
         }
 
+        static int javan_record_shape_union_matches(void* value, const char* shape) {
+            const char* cursor = shape + 1;
+            int previous_type_id = 0;
+            int matched = value == NULL ? 1 : 0;
+            while (*cursor != '\\0') {
+                if (*cursor < '1' || *cursor > '9') {
+                    javan_panic("invalid generated record shape");
+                }
+                int type_id = 0;
+                while (*cursor >= '0' && *cursor <= '9') {
+                    int digit = *cursor - '0';
+                    if (type_id > (INT_MAX - digit) / 10) {
+                        javan_panic("invalid generated record shape");
+                    }
+                    type_id = (type_id * 10) + digit;
+                    cursor++;
+                }
+                if (*cursor != ';' || type_id <= previous_type_id) {
+                    javan_panic("invalid generated record shape");
+                }
+                if (matched == 0 && javan_record_shape_exact_type(value, type_id) != 0) {
+                    matched = 1;
+                }
+                previous_type_id = type_id;
+                cursor++;
+            }
+            if (previous_type_id == 0) {
+                javan_panic("invalid generated record shape");
+            }
+            return matched;
+        }
+
         static int javan_record_shape_type_id(const char* shape) {
             int index = 1;
             int sign = 1;
@@ -8880,6 +8912,12 @@ final class RuntimeSourceMemorySections {
                 }
                 return;
             }
+            if (shape[0] == 'p') {
+                if (javan_record_shape_union_matches(value, shape) == 0) {
+                    javan_record_shape_mismatch();
+                }
+                return;
+            }
             if (shape[0] == 'a') {
                 const char* expected_name = javan_record_shape_array_name(shape);
                 if (value == NULL) {
@@ -8959,7 +8997,7 @@ final class RuntimeSourceMemorySections {
             if (shape[0] == 'b') {
                 return javan_record_boxed_equals(left, right, javan_record_shape_type_id(shape));
             }
-            if (shape[0] == 'o') {
+            if (shape[0] == 'o' || shape[0] == 'p') {
                 return javan_record_object_equals_resolver_value == NULL
                     ? javan_record_reference_identity_equals(left, right)
                     : javan_record_object_equals_resolver_value(left, right);
@@ -9041,7 +9079,7 @@ final class RuntimeSourceMemorySections {
             if (shape[0] == 'b') {
                 return javan_record_boxed_hash_code(value, javan_record_shape_type_id(shape));
             }
-            if (shape[0] == 'o') {
+            if (shape[0] == 'o' || shape[0] == 'p') {
                 return javan_record_object_hash_code_resolver_value == NULL
                     ? javan_record_reference_identity_hash_code(value)
                     : javan_record_object_hash_code_resolver_value(value);

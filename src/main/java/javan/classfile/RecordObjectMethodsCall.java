@@ -1,8 +1,14 @@
 package javan.classfile;
 
+import javan.util.Strings2;
+
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Exact parsed metadata for a javac record {@code ObjectMethods.bootstrap} call site.
@@ -39,6 +45,219 @@ public record RecordObjectMethodsCall(List<RecordObjectMethodsCall.Component> co
         public String diagnosticType() {
             return field.signature().orElse(field.descriptor());
         }
+    }
+
+    /**
+     * Closed direct-reference record component plan.
+     */
+    public sealed interface DirectReferencePlan permits ExactReferencePlan, SealedReferenceUnionPlan {
+        /**
+         * Returns exact receiver targets in deterministic order.
+         *
+         * @return exact receiver targets
+         */
+        List<ReferenceTarget> targets();
+    }
+
+    /**
+     * Declared component position that determines whether a sealed union is admissible.
+     */
+    public enum ReferenceContext {
+        /** A direct record component, which may use a closed sealed-interface union. */
+        DIRECT_COMPONENT,
+        /** A List element, which is limited to an exact final concrete reference. */
+        LIST_ELEMENT
+    }
+
+    /**
+     * Exact final-owner plan for one direct record component type.
+     *
+     * @param target exact receiver target
+     */
+    public record ExactReferencePlan(ReferenceTarget target) implements DirectReferencePlan {
+        @Override
+        public List<ReferenceTarget> targets() {
+            return List.of(target);
+        }
+    }
+
+    /**
+     * Closed sealed-interface union plan for one direct record component type.
+     *
+     * @param targets permitted exact receiver targets in ASCII owner order
+     */
+    public record SealedReferenceUnionPlan(List<ReferenceTarget> targets) implements DirectReferencePlan {
+        public SealedReferenceUnionPlan {
+            targets = List.copyOf(targets);
+            if (targets.isEmpty()) {
+                throw new IllegalArgumentException("sealed reference union requires at least one target");
+            }
+        }
+    }
+
+    /**
+     * Exact receiver semantics required by a record object-method operation.
+     *
+     * @param owner exact receiver owner
+     * @param executableOwner exact owner of the executable operation, empty for identity semantics
+     */
+    public record ReferenceTarget(String owner, String executableOwner) {
+        public ReferenceTarget {
+            Objects.requireNonNull(owner, "owner");
+            Objects.requireNonNull(executableOwner, "executableOwner");
+        }
+
+        /**
+         * Returns true when this target invokes an executable implementation.
+         *
+         * @return true for executable value semantics
+         */
+        public boolean executable() {
+            return !executableOwner.isEmpty();
+        }
+
+        /**
+         * Returns true when this target uses identity semantics.
+         *
+         * @return true for identity semantics
+         */
+        public boolean identity() {
+            return executableOwner.isEmpty();
+        }
+    }
+
+    /**
+     * Plans a non-list, non-array declared reference component as either one final owner or a closed sealed union.
+     *
+     * @param classes loaded closed-world classes
+     * @param shape canonical declared component shape
+     * @param hashCode true for hashCode, false for equals
+     * @return exact final-owner or sealed-union plan when supported
+     */
+    public static Optional<DirectReferencePlan> directReferencePlan(
+        final Map<String, ClassFile> classes,
+        final Shape shape,
+        final boolean hashCode
+    ) {
+        return referencePlan(classes, shape, hashCode, ReferenceContext.DIRECT_COMPONENT);
+    }
+
+    /**
+     * Plans a declared reference according to its record component position.
+     *
+     * @param classes loaded closed-world classes
+     * @param shape canonical declared component shape
+     * @param hashCode true for hashCode, false for equals
+     * @param context direct component or nested List element position
+     * @return exact final-owner or direct sealed-union plan when supported
+     */
+    public static Optional<DirectReferencePlan> referencePlan(
+        final Map<String, ClassFile> classes,
+        final Shape shape,
+        final boolean hashCode,
+        final ReferenceContext context
+    ) {
+        Objects.requireNonNull(context, "context");
+        if (!shape.valid()
+            || shape.isArray()
+            || shape.isList()
+            || shape.isStringMap()
+            || shape.referenceOwner().isEmpty()) {
+            return Optional.empty();
+        }
+        final String owner = shape.referenceOwner().orElseThrow();
+        final ClassFile declared = classes.get(owner);
+        if (declared == null) {
+            return Optional.empty();
+        }
+        if (!declared.isInterface()) {
+            return exactFinalReferencePlan(classes, declared, hashCode);
+        }
+        if (context == ReferenceContext.LIST_ELEMENT) {
+            return Optional.empty();
+        }
+        if (declared.permittedSubclasses().isEmpty()) {
+            return Optional.empty();
+        }
+        final List<ReferenceTarget> targets = new ArrayList<>(declared.permittedSubclasses().size());
+        final Set<String> permittedOwners = new HashSet<>();
+        for (final String permittedOwner : declared.permittedSubclasses()) {
+            if (!permittedOwners.add(permittedOwner)) {
+                return Optional.empty();
+            }
+            final ClassFile permitted = classes.get(permittedOwner);
+            if (permitted == null
+                || permitted.isInterface()
+                || permitted.isAbstract()
+                || permitted.isEnum()
+                || !permitted.isFinal()
+                || !permitted.interfaces().contains(declared.name())) {
+                return Optional.empty();
+            }
+            final Optional<ReferenceTarget> target = referenceTarget(classes, permitted, hashCode);
+            if (target.isEmpty()) {
+                return Optional.empty();
+            }
+            insertReferenceTarget(targets, target.orElseThrow());
+        }
+        return Optional.of(new SealedReferenceUnionPlan(targets));
+    }
+
+    private static void insertReferenceTarget(
+        final List<ReferenceTarget> targets,
+        final ReferenceTarget target
+    ) {
+        int index = 0;
+        while (index < targets.size() && Strings2.compareAscii(targets.get(index).owner(), target.owner()) <= 0) {
+            index++;
+        }
+        targets.add(index, target);
+    }
+
+    private static Optional<DirectReferencePlan> exactFinalReferencePlan(
+        final Map<String, ClassFile> classes,
+        final ClassFile owner,
+        final boolean hashCode
+    ) {
+        if (owner.isInterface() || owner.isAbstract() || !owner.isFinal()) {
+            return Optional.empty();
+        }
+        final Optional<ReferenceTarget> target = referenceTarget(classes, owner, hashCode);
+        if (target.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(new ExactReferencePlan(target.orElseThrow()));
+    }
+
+    private static Optional<ReferenceTarget> referenceTarget(
+        final Map<String, ClassFile> classes,
+        final ClassFile receiver,
+        final boolean hashCode
+    ) {
+        if (receiver.isEnum()) {
+            return Optional.of(new ReferenceTarget(receiver.name(), ""));
+        }
+        final String methodName = hashCode ? "hashCode" : "equals";
+        final String descriptor = hashCode ? "()I" : "(Ljava/lang/Object;)Z";
+        String current = receiver.name();
+        final Set<String> visited = new HashSet<>();
+        while (visited.add(current)) {
+            if ("java/lang/Object".equals(current)) {
+                return Optional.of(new ReferenceTarget(receiver.name(), ""));
+            }
+            final ClassFile currentClass = classes.get(current);
+            if (currentClass == null) {
+                return Optional.empty();
+            }
+            final Optional<MethodInfo> method = currentClass.method(methodName, descriptor);
+            if (method.isPresent()) {
+                return !method.orElseThrow().isStatic() && method.orElseThrow().code().isPresent()
+                    ? Optional.of(new ReferenceTarget(receiver.name(), current))
+                    : Optional.empty();
+            }
+            current = currentClass.superName();
+        }
+        return Optional.empty();
     }
 
     /**

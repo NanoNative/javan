@@ -63,6 +63,7 @@ public final class ClassFileReader {
             resolveInstructions(methods, constantPool, classAttributes.bootstrapMethods()),
             classAttributes.sourceFile(),
             classAttributes.recordComponents(),
+            classAttributes.permittedSubclasses(),
             source,
             true
         );
@@ -228,6 +229,7 @@ public final class ClassFileReader {
         final List<BootstrapMethod> bootstrapMethods = new ArrayList<>();
         Optional<String> sourceFile = Optional.empty();
         Optional<List<RecordComponentInfo>> recordComponents = Optional.empty();
+        List<String> permittedSubclasses = List.of();
         for (int index = 0; index < count; index++) {
             final String attributeName = constantPool.utf8(in.u2());
             final long length = in.u4();
@@ -244,11 +246,79 @@ public final class ClassFileReader {
                 if (!attribute.exhausted()) {
                     throw new IOException("Invalid Record attribute length");
                 }
+            } else if ("PermittedSubclasses".equals(attributeName)) {
+                if (!permittedSubclasses.isEmpty()) {
+                    throw new IOException("Duplicate PermittedSubclasses attribute");
+                }
+                permittedSubclasses = readPermittedSubclassesAttribute(in, length, constantPool);
             } else {
                 in.skip(length);
             }
         }
-        return new ClassAttributes(List.copyOf(bootstrapMethods), sourceFile, recordComponents);
+        return new ClassAttributes(List.copyOf(bootstrapMethods), sourceFile, recordComponents, permittedSubclasses);
+    }
+
+    private static List<String> readPermittedSubclassesAttribute(
+        final ClassByteCursor in,
+        final long length,
+        final ConstantPool constantPool
+    ) throws IOException {
+        if (length < 2L) {
+            throw new IOException("Invalid PermittedSubclasses attribute length");
+        }
+        final ClassByteCursor attribute = new ClassByteCursor(in.bytes(length));
+        final int count = attribute.u2();
+        if (length != 2L + 2L * count) {
+            throw new IOException("Invalid PermittedSubclasses attribute length");
+        }
+        if (count == 0) {
+            throw new IOException("PermittedSubclasses attribute has no classes");
+        }
+        return readPermittedSubclasses(attribute, count, constantPool);
+    }
+
+    private static List<String> readPermittedSubclasses(
+        final ClassByteCursor in,
+        final int count,
+        final ConstantPool constantPool
+    ) throws IOException {
+        final List<String> result = new ArrayList<>(count);
+        final Set<String> owners = new HashSet<>();
+        for (int index = 0; index < count; index++) {
+            final int classIndex = in.u2();
+            final String owner = permittedSubclassName(classIndex, constantPool);
+            if (!owners.add(owner)) {
+                throw new IOException("Duplicate permitted subclass: " + owner);
+            }
+            result.add(owner);
+        }
+        return List.copyOf(result);
+    }
+
+    private static String permittedSubclassName(final int classIndex, final ConstantPool constantPool) throws IOException {
+        if (!constantPool.containsIndex(classIndex)) {
+            throw new IOException(
+                "Invalid PermittedSubclasses constant pool index " + classIndex + ": out of range"
+            );
+        }
+        if (constantPool.entryTag(classIndex).orElse(-1) != 7) {
+            throw new IOException(
+                "Invalid PermittedSubclasses constant pool index " + classIndex + ": expected CONSTANT_Class"
+            );
+        }
+        final int nameIndex = constantPool.classNameIndex(classIndex).orElseThrow();
+        if (!constantPool.containsIndex(nameIndex)) {
+            throw new IOException(
+                "Invalid PermittedSubclasses class name constant pool index " + nameIndex + ": out of range"
+            );
+        }
+        if (constantPool.entryTag(nameIndex).orElse(-1) != 1) {
+            throw new IOException(
+                "Invalid PermittedSubclasses class name constant pool index " + nameIndex
+                    + ": expected CONSTANT_Utf8"
+            );
+        }
+        return constantPool.utf8(nameIndex);
     }
 
     private static List<RecordComponentInfo> readRecordComponents(
@@ -317,7 +387,8 @@ public final class ClassFileReader {
     private record ClassAttributes(
         List<BootstrapMethod> bootstrapMethods,
         Optional<String> sourceFile,
-        Optional<List<RecordComponentInfo>> recordComponents
+        Optional<List<RecordComponentInfo>> recordComponents,
+        List<String> permittedSubclasses
     ) {
     }
 

@@ -266,6 +266,7 @@ public final class ReachabilityAnalyzer {
                 classes,
                 component.shape(),
                 hashCode,
+                RecordObjectMethodsCall.ReferenceContext.DIRECT_COMPONENT,
                 work,
                 workSet,
                 current,
@@ -279,6 +280,7 @@ public final class ReachabilityAnalyzer {
         final Map<String, ClassFile> classes,
         final RecordObjectMethodsCall.Shape shape,
         final boolean hashCode,
+        final RecordObjectMethodsCall.ReferenceContext context,
         final List<EntryPoint> work,
         final EntryPointMembership workSet,
         final EntryPoint current,
@@ -293,6 +295,7 @@ public final class ReachabilityAnalyzer {
                 classes,
                 shape.listElement().orElseThrow(),
                 hashCode,
+                RecordObjectMethodsCall.ReferenceContext.LIST_ELEMENT,
                 work,
                 workSet,
                 current,
@@ -305,42 +308,45 @@ public final class ReachabilityAnalyzer {
         if ("java/lang/String".equals(declaredOwner)) {
             return;
         }
-        final ClassFile declaredClass = classes.get(declaredOwner);
-        if (declaredClass == null || declaredClass.isInterface() || !declaredClass.isFinal()) {
+        final Optional<RecordObjectMethodsCall.DirectReferencePlan> plan =
+            RecordObjectMethodsCall.referencePlan(classes, shape, hashCode, context);
+        if (plan.isEmpty()) {
             return;
         }
-        final Optional<EntryPoint> target =
-            recordReferenceObjectMethodTarget(classes, declaredOwner, hashCode, entryPoints);
-        if (target.isEmpty()) {
-            return;
+        for (final RecordObjectMethodsCall.ReferenceTarget target : plan.orElseThrow().targets()) {
+            enqueueRecordReferenceObjectMethodTarget(
+                target,
+                hashCode,
+                work,
+                workSet,
+                current,
+                callEdges,
+                entryPoints
+            );
         }
-        final EntryPoint callee = target.orElseThrow();
-        enqueue(work, workSet, callee);
-        addEdge(callEdges, current, callee, CallEdge.Kind.CALL);
     }
 
-    private static Optional<EntryPoint> recordReferenceObjectMethodTarget(
-        final Map<String, ClassFile> classes,
-        final String receiver,
+    private static void enqueueRecordReferenceObjectMethodTarget(
+        final RecordObjectMethodsCall.ReferenceTarget target,
         final boolean hashCode,
+        final List<EntryPoint> work,
+        final EntryPointMembership workSet,
+        final EntryPoint current,
+        final CallEdgeTracker callEdges,
         final EntryPointPool entryPoints
     ) {
+        if (target.identity()) {
+            return;
+        }
         final String methodName = hashCode ? "hashCode" : "equals";
         final String descriptor = hashCode ? "()I" : "(Ljava/lang/Object;)Z";
-        String current = receiver;
-        final Set<String> visited = new HashSet<>();
-        while (classes.containsKey(current) && visited.add(current)) {
-            final ClassFile classFile = classes.get(current);
-            final Optional<MethodInfo> target = classFile.method(methodName, descriptor);
-            if (target.isPresent()) {
-                return !target.orElseThrow().isStatic()
-                    && target.orElseThrow().code().isPresent()
-                    ? Optional.of(entryPoints.entry(current, methodName, descriptor))
-                    : Optional.empty();
-            }
-            current = classFile.superName();
-        }
-        return Optional.empty();
+        final EntryPoint callee = entryPoints.entry(
+            target.executableOwner(),
+            methodName,
+            descriptor
+        );
+        enqueue(work, workSet, callee);
+        addEdge(callEdges, current, callee, CallEdge.Kind.CALL);
     }
 
     private static boolean sameEntry(final EntryPoint left, final EntryPoint right) {

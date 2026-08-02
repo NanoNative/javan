@@ -5420,6 +5420,9 @@ public final class StaticVerifier {
         if ("java/lang/String".equals(owner) || isRecordBoxedPrimitive(owner)) {
             return true;
         }
+        if (directRecordComponent) {
+            return RecordObjectMethodsCall.directReferencePlan(classes, shape, hashCode).isPresent();
+        }
         final ClassFile componentClass = classes.get(owner);
         return componentClass != null
             && !componentClass.isInterface()
@@ -5746,7 +5749,7 @@ public final class StaticVerifier {
             "unsupported record component type",
             descriptor,
             "Record equals/hashCode only admits closed reference shapes with complete native semantics.",
-            "Use String, a boxed primitive, an array, an exact List/ArrayList element shape, exact Map<String, String>, an enum, or a final closed-world class with a reachable equals/hashCode implementation."
+            "Use String, a boxed primitive, an array, an exact List/ArrayList element shape, exact Map<String, String>, an enum, a final closed-world class with a reachable equals/hashCode implementation, or a direct sealed interface with a complete supported final non-enum permitted set."
         );
     }
 

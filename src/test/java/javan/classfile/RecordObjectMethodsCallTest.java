@@ -11,9 +11,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.TestInstance.Lifecycle.PER_CLASS;
 import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 
@@ -128,6 +130,178 @@ final class RecordObjectMethodsCallTest {
         assertThat(RecordObjectMethodsCall.resolveHashCode(recordClass, hashCodeMethod, hashCodeDynamic))
             .map(RecordObjectMethodsCall::fields)
             .contains(recordClass.fields());
+    }
+
+    @Test
+    void plansDirectSealedInterfaceAsSortedExactLeaves() {
+        final ClassFile part = sealedPart(List.of("com/acme/Identity", "com/acme/Value"));
+        final ClassFile value = finalLeaf(part.name(), "com/acme/Value", false);
+        final ClassFile identity = finalLeaf(part.name(), "com/acme/Identity", true);
+        final RecordObjectMethodsCall.Shape shape = new RecordObjectMethodsCall.Shape(
+            "Lcom/acme/Part;", Optional.of(part.name()), Optional.empty(), true
+        );
+
+        assertThat(RecordObjectMethodsCall.directReferencePlan(
+            Map.of(part.name(), part, value.name(), value, identity.name(), identity), shape, false
+        )).contains(new RecordObjectMethodsCall.SealedReferenceUnionPlan(List.of(
+            new RecordObjectMethodsCall.ReferenceTarget(identity.name(), ""),
+            new RecordObjectMethodsCall.ReferenceTarget(value.name(), value.name())
+        )));
+    }
+
+    @Test
+    void rejectsEmptySealedReferenceUnion() {
+        assertThatThrownBy(() -> new RecordObjectMethodsCall.SealedReferenceUnionPlan(List.of()))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("sealed reference union requires at least one target");
+    }
+
+    @Test
+    void rejectsProgrammaticDuplicatePermittedOwners() {
+        final ClassFile part = sealedPart(List.of("com/acme/Value", "com/acme/Value"));
+        final ClassFile value = finalLeaf(part.name(), "com/acme/Value", false);
+        final RecordObjectMethodsCall.Shape shape = new RecordObjectMethodsCall.Shape(
+            "Lcom/acme/Part;", Optional.of(part.name()), Optional.empty(), true
+        );
+
+        assertThat(RecordObjectMethodsCall.directReferencePlan(
+            Map.of(part.name(), part, value.name(), value), shape, false
+        )).isEmpty();
+    }
+
+    @Test
+    void rejectsSealedInterfaceWithEnumLeaf() {
+        final ClassFile part = sealedPart(List.of("com/acme/Value"));
+        final ClassFile value = new ClassFile(
+            69,
+            "com/acme/Value",
+            "java/lang/Enum",
+            0x4010,
+            List.of(part.name()),
+            List.of(),
+            List.of(),
+            Path.of("com/acme/Value.class"),
+            true
+        );
+        final RecordObjectMethodsCall.Shape shape = new RecordObjectMethodsCall.Shape(
+            "Lcom/acme/Part;", Optional.of(part.name()), Optional.empty(), true
+        );
+
+        assertThat(RecordObjectMethodsCall.directReferencePlan(
+            Map.of(part.name(), part, value.name(), value), shape, false
+        )).isEmpty();
+    }
+
+    @Test
+    void rejectsSealedInterfaceWithIncompletePermittedClosure() {
+        final ClassFile part = sealedPart(List.of("com/acme/Missing"));
+        final RecordObjectMethodsCall.Shape shape = new RecordObjectMethodsCall.Shape(
+            "Lcom/acme/Part;", Optional.of(part.name()), Optional.empty(), true
+        );
+
+        assertThat(RecordObjectMethodsCall.directReferencePlan(Map.of(part.name(), part), shape, false)).isEmpty();
+    }
+
+    @Test
+    void rejectsSealedInterfaceWithAbstractPermittedLeaf() {
+        final ClassFile part = sealedPart(List.of("com/acme/AbstractValue"));
+        final ClassFile value = new ClassFile(
+            69,
+            "com/acme/AbstractValue",
+            "java/lang/Object",
+            0x0400,
+            List.of(part.name()),
+            List.of(),
+            List.of(),
+            Path.of("com/acme/AbstractValue.class"),
+            true
+        );
+        final RecordObjectMethodsCall.Shape shape = new RecordObjectMethodsCall.Shape(
+            "Lcom/acme/Part;", Optional.of(part.name()), Optional.empty(), true
+        );
+
+        assertThat(RecordObjectMethodsCall.directReferencePlan(
+            Map.of(part.name(), part, value.name(), value), shape, false
+        )).isEmpty();
+    }
+
+    @Test
+    void rejectsSealedInterfaceLeafWithMissingSuperclass() {
+        final ClassFile part = sealedPart(List.of("com/acme/Value"));
+        final ClassFile value = new ClassFile(
+            69,
+            "com/acme/Value",
+            "com/acme/MissingBase",
+            0x0010,
+            List.of(part.name()),
+            List.of(),
+            List.of(),
+            Path.of("com/acme/Value.class"),
+            true
+        );
+        final RecordObjectMethodsCall.Shape shape = new RecordObjectMethodsCall.Shape(
+            "Lcom/acme/Part;", Optional.of(part.name()), Optional.empty(), true
+        );
+
+        assertThat(RecordObjectMethodsCall.directReferencePlan(
+            Map.of(part.name(), part, value.name(), value), shape, false
+        )).isEmpty();
+    }
+
+    @Test
+    void rejectsAbstractExactReferenceOwner() {
+        final ClassFile value = new ClassFile(
+            69,
+            "com/acme/AbstractValue",
+            "java/lang/Object",
+            0x0400,
+            List.of(),
+            List.of(),
+            List.of(),
+            Path.of("com/acme/AbstractValue.class"),
+            true
+        );
+        final RecordObjectMethodsCall.Shape shape = new RecordObjectMethodsCall.Shape(
+            "Lcom/acme/AbstractValue;", Optional.of(value.name()), Optional.empty(), true
+        );
+
+        assertThat(RecordObjectMethodsCall.directReferencePlan(
+            Map.of(value.name(), value), shape, false
+        )).isEmpty();
+    }
+
+    @Test
+    void rejectsSealedInterfaceWithIndirectPermittedLeaf() {
+        final ClassFile part = sealedPart(List.of("com/acme/Leaf"));
+        final ClassFile leaf = new ClassFile(
+            69,
+            "com/acme/Leaf",
+            "com/acme/Base",
+            0x0010,
+            List.of(),
+            List.of(),
+            List.of(),
+            Path.of("com/acme/Leaf.class"),
+            true
+        );
+        final ClassFile base = new ClassFile(
+            69,
+            "com/acme/Base",
+            "java/lang/Object",
+            0,
+            List.of(part.name()),
+            List.of(),
+            List.of(),
+            Path.of("com/acme/Base.class"),
+            true
+        );
+        final RecordObjectMethodsCall.Shape shape = new RecordObjectMethodsCall.Shape(
+            "Lcom/acme/Part;", Optional.of(part.name()), Optional.empty(), true
+        );
+
+        assertThat(RecordObjectMethodsCall.directReferencePlan(
+            Map.of(part.name(), part, leaf.name(), leaf, base.name(), base), shape, false
+        )).isEmpty();
     }
 
     @Test
@@ -493,6 +667,45 @@ final class RecordObjectMethodsCallTest {
         final String descriptor
     ) {
         return classFile.method(name, descriptor).orElseThrow();
+    }
+
+    private static ClassFile sealedPart(final List<String> permittedSubclasses) {
+        return new ClassFile(
+            69,
+            "com/acme/Part",
+            "java/lang/Object",
+            0x0600,
+            List.of(),
+            List.of(),
+            List.of(),
+            Optional.empty(),
+            Optional.empty(),
+            permittedSubclasses,
+            Path.of("com/acme/Part.class"),
+            true
+        );
+    }
+
+    private static ClassFile finalLeaf(final String part, final String name, final boolean identity) {
+        final List<MethodInfo> methods = identity
+            ? List.of()
+            : List.of(new MethodInfo(
+                0,
+                "equals",
+                "(Ljava/lang/Object;)Z",
+                Optional.of(new CodeAttribute(0, 0, new byte[0], 0, List.of()))
+            ));
+        return new ClassFile(
+            69,
+            name,
+            "java/lang/Object",
+            0x0010,
+            List.of(part),
+            List.of(),
+            methods,
+            Path.of(name + ".class"),
+            true
+        );
     }
 
     private ClassFile copyRecordClass(

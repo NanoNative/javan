@@ -198,6 +198,56 @@ final class CliRecordObjectMethodsIntegrationTest extends CliIntegrationSupport 
     }
 
     @Test
+    void sealedValueLeafUsesValueEquality() {
+        assertThat(outputs("sealed-value-equality")).containsExactly("true\n", "true\n");
+    }
+
+    @Test
+    void sealedIdentityLeavesRemainDistinct() {
+        assertThat(outputs("sealed-distinct-identity")).containsExactly("false\n", "false\n");
+    }
+
+    @Test
+    void sealedSharedIdentityRemainsEqual() {
+        assertThat(outputs("sealed-shared-identity")).containsExactly("true\n", "true\n");
+    }
+
+    @Test
+    void sealedValueAndIdentityLeavesRemainUnequal() {
+        assertThat(outputs("sealed-cross-leaf")).containsExactly("false\n", "false\n");
+    }
+
+    @Test
+    void sealedValueLeafUsesValueHashCode() {
+        assertThat(outputs("sealed-value-hash")).containsExactly("7\n", "7\n");
+    }
+
+    @Test
+    void sealedInheritedValueLeafUsesCustomInheritedEquality() {
+        assertThat(outputs("sealed-inherited-equality")).containsExactly("true\n", "true\n");
+    }
+
+    @Test
+    void sealedInheritedValueLeafUsesCustomInheritedHashCode() {
+        assertThat(outputs("sealed-inherited-hash")).containsExactly("7\n", "7\n");
+    }
+
+    @Test
+    void sealedIdentityLeafHashCodeIsStableForOneObject() {
+        assertThat(outputs("sealed-repeated-identity-hash")).containsExactly("true\n", "true\n");
+    }
+
+    @Test
+    void sealedNullLeafUsesNullEquality() {
+        assertThat(outputs("sealed-null-equality")).containsExactly("true\n", "true\n");
+    }
+
+    @Test
+    void sealedNullLeafUsesZeroHashCode() {
+        assertThat(outputs("sealed-null-hash")).containsExactly("0\n", "0\n");
+    }
+
+    @Test
     void recordEqualsAcceptsSelf() {
         assertThat(outputs("self")).containsExactly("true\n", "true\n");
     }
@@ -619,6 +669,165 @@ final class CliRecordObjectMethodsIntegrationTest extends CliIntegrationSupport 
     }
 
     @Test
+    void nonFinalSealedLeafIsRejectedBeforeCodeGeneration() throws Exception {
+        assertThat(rejectedGenericRecordBuild("non-final-sealed-leaf", """
+            sealed interface Part permits Value {
+            }
+
+            non-sealed class Value implements Part {
+            }
+
+            record Holder(Part value) {
+            }
+
+            public final class Main {
+                public static void main(final String[] args) {
+                    System.out.println(new Holder(new Value()).hashCode());
+                }
+            }
+            """)).contains(
+                "error[JAVAN030]",
+                "unsupported record component type",
+                "direct sealed interface"
+            );
+    }
+
+    @Test
+    void incompleteDirectSealedClosureIsRejectedByJavan() throws Exception {
+        final Path dependency = dependencyJar("incomplete-sealed-closure", "com.acme.Part", """
+            package com.acme;
+
+            sealed interface Part permits Value, Missing {
+            }
+
+            final class Value implements Part {
+            }
+
+            final class Missing implements Part {
+            }
+            """);
+        final Path extractedDependency = tempDir.resolve("incomplete-sealed-closure-extracted");
+        final Path incompleteDependency = tempDir.resolve("incomplete-sealed-closure.jar");
+        final ProcessResult extractDependency = process(tempDir, List.of(
+            CliTestHarness.currentJarCommand(),
+            "--extract",
+            "--file",
+            dependency.toString(),
+            "--dir",
+            extractedDependency.toString()
+        ));
+        if (extractDependency.exitCode() != 0) {
+            throw new IllegalStateException(extractDependency.stderr());
+        }
+        Files.delete(extractedDependency.resolve("com/acme/Missing.class"));
+        final ProcessResult repackDependency = process(tempDir, List.of(
+            CliTestHarness.currentJarCommand(),
+            "--create",
+            "--file",
+            incompleteDependency.toString(),
+            "-C",
+            extractedDependency.toString(),
+            "."
+        ));
+        if (repackDependency.exitCode() != 0) {
+            throw new IllegalStateException(repackDependency.stderr());
+        }
+        final Path rejectedProject = project("incomplete-direct-sealed-closure");
+        writeJava(rejectedProject, "com.acme.Main", """
+            package com.acme;
+
+            record Holder(Part value) {
+            }
+
+            public final class Main {
+                public static void main(final String[] args) {
+                    System.out.println(new Holder(null).hashCode());
+                }
+            }
+            """);
+
+        final CliRun build = runSlow(
+            tempDir,
+            "build",
+            rejectedProject.toString(),
+            "--classpath",
+            incompleteDependency.toString()
+        );
+
+        assertThat(build.exitCode() + "\n" + build.stderr()).contains(
+            "2\nerror[JAVAN030]",
+            "unsupported record component type",
+            "direct sealed interface"
+        );
+    }
+
+    @Test
+    void listOfSealedInterfaceIsRejectedBeforeCodeGeneration() throws Exception {
+        assertThat(rejectedGenericRecordBuild("list-of-sealed-interface", """
+            import java.util.List;
+
+            sealed interface Part permits Value {
+            }
+
+            record Value(int value) implements Part {
+            }
+
+            record Holder(List<Part> value) {
+            }
+
+            public final class Main {
+                public static void main(final String[] args) {
+                    System.out.println(new Holder(List.of(new Value(7))).hashCode());
+                }
+            }
+        """)).contains("error[JAVAN030]", "unsupported record component type");
+    }
+
+    @Test
+    void sealedInterfaceWithEnumLeafIsRejectedBeforeCodeGeneration() throws Exception {
+        assertThat(rejectedGenericRecordBuild("sealed-enum-leaf", """
+            sealed interface Part permits Value {
+            }
+
+            enum Value implements Part {
+                INSTANCE
+            }
+
+            record Holder(Part value) {
+            }
+
+            public final class Main {
+                public static void main(final String[] args) {
+                    System.out.println(new Holder(Value.INSTANCE).hashCode());
+                }
+            }
+            """)).contains("error[JAVAN030]", "unsupported record component type");
+    }
+
+    @Test
+    void recursiveSealedHierarchyIsRejectedBeforeCodeGeneration() throws Exception {
+        assertThat(rejectedGenericRecordBuild("recursive-sealed-hierarchy", """
+            sealed interface Part permits Middle {
+            }
+
+            sealed interface Middle extends Part permits Leaf {
+            }
+
+            final class Leaf implements Middle {
+            }
+
+            record Holder(Part value) {
+            }
+
+            public final class Main {
+                public static void main(final String[] args) {
+                    System.out.println(new Holder(new Leaf()).hashCode());
+                }
+            }
+            """)).contains("error[JAVAN030]", "unsupported record component type");
+    }
+
+    @Test
     void recordToStringRemainsUnsupported() throws Exception {
         assertThat(rejectedRecordToStringBuild()).contains("error[JAVAN030]", "toString");
     }
@@ -842,6 +1051,42 @@ final class CliRecordObjectMethodsIntegrationTest extends CliIntegrationSupport 
             import java.util.LinkedHashMap;
             import java.util.List;
             import java.util.Map;
+
+            sealed interface SealedPart permits SealedValue, SealedInheritedValue, SealedIdentity {
+            }
+
+            record SealedValue(int value) implements SealedPart {
+            }
+
+            class SealedValueBase {
+                private final int value;
+
+                SealedValueBase(final int value) {
+                    this.value = value;
+                }
+
+                @Override
+                public boolean equals(final Object other) {
+                    return other instanceof SealedValueBase candidate && value == candidate.value;
+                }
+
+                @Override
+                public int hashCode() {
+                    return value;
+                }
+            }
+
+            final class SealedInheritedValue extends SealedValueBase implements SealedPart {
+                SealedInheritedValue(final int value) {
+                    super(value);
+                }
+            }
+
+            final class SealedIdentity implements SealedPart {
+            }
+
+            record SealedHolder(SealedPart value) {
+            }
 
             public final class Main {
                 record BooleanValue(boolean value) {
@@ -1076,6 +1321,57 @@ final class CliRecordObjectMethodsIntegrationTest extends CliIntegrationSupport 
                         final ConcreteValue second = new ConcreteValue(new Value(7));
                         System.out.println(first.equals(second));
                         System.out.println(first.hashCode());
+                        return;
+                    }
+                    if (scenario.equals("sealed-value-equality")) {
+                        System.out.println(new SealedHolder(new SealedValue(7)).equals(
+                            new SealedHolder(new SealedValue(7))
+                        ));
+                        return;
+                    }
+                    if (scenario.equals("sealed-distinct-identity")) {
+                        System.out.println(new SealedHolder(new SealedIdentity()).equals(
+                            new SealedHolder(new SealedIdentity())
+                        ));
+                        return;
+                    }
+                    if (scenario.equals("sealed-shared-identity")) {
+                        final SealedIdentity identity = new SealedIdentity();
+                        System.out.println(new SealedHolder(identity).equals(new SealedHolder(identity)));
+                        return;
+                    }
+                    if (scenario.equals("sealed-cross-leaf")) {
+                        System.out.println(new SealedHolder(new SealedValue(7)).equals(
+                            new SealedHolder(new SealedIdentity())
+                        ));
+                        return;
+                    }
+                    if (scenario.equals("sealed-value-hash")) {
+                        System.out.println(new SealedHolder(new SealedValue(7)).hashCode());
+                        return;
+                    }
+                    if (scenario.equals("sealed-inherited-equality")) {
+                        System.out.println(new SealedHolder(new SealedInheritedValue(7)).equals(
+                            new SealedHolder(new SealedInheritedValue(7))
+                        ));
+                        return;
+                    }
+                    if (scenario.equals("sealed-inherited-hash")) {
+                        System.out.println(new SealedHolder(new SealedInheritedValue(7)).hashCode());
+                        return;
+                    }
+                    if (scenario.equals("sealed-repeated-identity-hash")) {
+                        final SealedIdentity identity = new SealedIdentity();
+                        final SealedHolder holder = new SealedHolder(identity);
+                        System.out.println(holder.hashCode() == holder.hashCode());
+                        return;
+                    }
+                    if (scenario.equals("sealed-null-equality")) {
+                        System.out.println(new SealedHolder(null).equals(new SealedHolder(null)));
+                        return;
+                    }
+                    if (scenario.equals("sealed-null-hash")) {
+                        System.out.println(new SealedHolder(null).hashCode());
                         return;
                     }
                     if (scenario.equals("self")) {

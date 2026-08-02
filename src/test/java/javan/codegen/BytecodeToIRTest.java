@@ -13,6 +13,7 @@ import javan.classfile.Instruction;
 import javan.classfile.LineNumberEntry;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
+import javan.classfile.RecordObjectMethodsCall;
 import javan.ir.IrClass;
 import javan.ir.IrDispatch;
 import javan.ir.IrExpression;
@@ -45,32 +46,7 @@ final class BytecodeToIRTest {
     private Path tempDir;
 
     @Test
-    void recordReferenceDispatchTerminatesOnCyclicSuperclassHierarchy() {
-        final ClassFile leaf = classFile(
-            "com/acme/Leaf",
-            "com/acme/Cycle",
-            0x0010,
-            List.of(),
-            List.of(),
-            List.of()
-        );
-        final ClassFile cycle = classFile(
-            "com/acme/Cycle",
-            leaf.name(),
-            0x0010,
-            List.of(),
-            List.of(),
-            List.of()
-        );
-        assertThat(BytecodeToIRInvokeSupport.recordReferenceTarget(
-            Map.of(leaf.name(), leaf, cycle.name(), cycle),
-            leaf.name(),
-            false
-        )).isEmpty();
-    }
-
-    @Test
-    void recordReferenceEqualsDispatchTargetsFinalDependencyMethod() {
+    void encodesSealedRecordComponentAsAscendingExactTypeUnion() {
         final MethodInfo equals = method(
             0,
             "equals",
@@ -80,53 +56,97 @@ final class BytecodeToIRTest {
             plain(0, 4, "iconst_1"),
             plain(1, 172, "ireturn")
         );
-        final ClassFile dependency = new ClassFile(
+        final ClassFile part = new ClassFile(
             69,
-            "dep/Value",
+            "com/acme/Part",
+            "java/lang/Object",
+            0x0600,
+            List.of(),
+            List.of(),
+            List.of(),
+            Optional.empty(),
+            Optional.empty(),
+            List.of("com/acme/Value", "com/acme/Identity"),
+            Path.of("com/acme/Part.class"),
+            true
+        );
+        final ClassFile value = classFile(
+            "com/acme/Value",
             "java/lang/Object",
             0x0010,
+            List.of(part.name()),
             List.of(),
+            List.of(equals)
+        );
+        final ClassFile identity = classFile(
+            "com/acme/Identity",
+            "java/lang/Object",
+            0x0010,
+            List.of(part.name()),
             List.of(),
-            List.of(equals),
-            Path.of("dep/Value.class"),
-            false
+            List.of()
+        );
+        final RecordObjectMethodsCall.Shape shape = new RecordObjectMethodsCall.Shape(
+            "Lcom/acme/Part;",
+            Optional.of(part.name()),
+            Optional.empty(),
+            true
         );
 
-        assertThat(BytecodeToIRInvokeSupport.recordReferenceTarget(
-            Map.of(dependency.name(), dependency),
-            dependency.name(),
-            false
-        )).contains(new EntryPoint(dependency.name(), "equals", "(Ljava/lang/Object;)Z"));
+        assertThat(BytecodeToIRInvokeSupport.recordShapeEncoding(
+            Map.of(part.name(), part, value.name(), value, identity.name(), identity), shape
+        )).isEqualTo("p1;3;");
     }
 
     @Test
-    void recordReferenceHashCodeDispatchTargetsFinalDependencyMethod() {
-        final MethodInfo hashCode = method(
-            0,
-            "hashCode",
-            "()I",
-            1,
-            1,
-            plain(0, 4, "iconst_1"),
-            plain(1, 172, "ireturn")
-        );
-        final ClassFile dependency = new ClassFile(
+    void listOfSealedComponentIsRejectedBeforeShapeEncoding() {
+        final ClassFile part = new ClassFile(
             69,
-            "dep/Value",
+            "com/acme/Part",
+            "java/lang/Object",
+            0x0600,
+            List.of(),
+            List.of(),
+            List.of(),
+            Optional.empty(),
+            Optional.empty(),
+            List.of("com/acme/Value", "com/acme/Identity"),
+            Path.of("com/acme/Part.class"),
+            true
+        );
+        final ClassFile value = classFile(
+            "com/acme/Value",
             "java/lang/Object",
             0x0010,
+            List.of(part.name()),
             List.of(),
+            List.of()
+        );
+        final ClassFile identity = classFile(
+            "com/acme/Identity",
+            "java/lang/Object",
+            0x0010,
+            List.of(part.name()),
             List.of(),
-            List.of(hashCode),
-            Path.of("dep/Value.class"),
-            false
+            List.of()
+        );
+        final RecordObjectMethodsCall.Shape element = new RecordObjectMethodsCall.Shape(
+            "Lcom/acme/Part;",
+            Optional.of(part.name()),
+            Optional.empty(),
+            true
+        );
+        final RecordObjectMethodsCall.Shape list = new RecordObjectMethodsCall.Shape(
+            "Ljava/util/List;",
+            Optional.of("java/util/List"),
+            Optional.of(element),
+            true
         );
 
-        assertThat(BytecodeToIRInvokeSupport.recordReferenceTarget(
-            Map.of(dependency.name(), dependency),
-            dependency.name(),
-            true
-        )).contains(new EntryPoint(dependency.name(), "hashCode", "()I"));
+        assertThatThrownBy(() -> BytecodeToIRInvokeSupport.recordShapeEncoding(
+            Map.of(part.name(), part, value.name(), value, identity.name(), identity), list
+        )).isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("unsupported List record component sealed interface element");
     }
 
     @Test
