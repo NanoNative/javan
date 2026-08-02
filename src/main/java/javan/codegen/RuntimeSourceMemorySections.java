@@ -18,6 +18,17 @@ final class RuntimeSourceMemorySections {
         } javan_allocation_node;
 
         typedef struct {
+            void* value;
+            void* base;
+            unsigned long size;
+            int kind;
+            int type_id;
+            int collectible;
+            int runtime_kind;
+            const char* array_class_name;
+        } javan_allocation_metadata;
+
+        typedef struct {
             unsigned long long magic;
             unsigned long size;
         } javan_export_header;
@@ -1156,7 +1167,7 @@ final class RuntimeSourceMemorySections {
             return NULL;
         }
 
-        static void javan_allocation_registry_ensure_capacity(int required);
+        static int javan_allocation_registry_ensure_capacity(int required);
         static void javan_allocation_registry_put(void* value, javan_allocation_node* node);
         static void javan_allocation_registry_remove(void* value);
         static javan_allocation_node* javan_allocation_registry_lookup(void* value);
@@ -1181,6 +1192,13 @@ final class RuntimeSourceMemorySections {
                     javan_panic("out of memory");
                 }
             }
+            if (javan_allocation_index.length == INT_MAX
+                || javan_allocation_registry_ensure_capacity(javan_allocation_index.length + 1) == 0) {
+                javan_runtime_lock_leave();
+                free(node);
+                free(base);
+                javan_panic("out of memory");
+            }
             node->value = value;
             node->base = base;
             node->size = size;
@@ -1200,7 +1218,11 @@ final class RuntimeSourceMemorySections {
             javan_runtime_lock_leave();
         }
 
-        static javan_allocation_node* javan_find_allocation(void* value, javan_allocation_node** previous) {
+        static javan_allocation_node* javan_find_allocation_locked(void* value, javan_allocation_node** previous) {
+            if (javan_runtime_lock_depth_value <= 0) {
+                javan_panic("allocation lookup requires runtime lock");
+                return NULL;
+            }
             if (value == NULL) {
                 if (previous != NULL) {
                     *previous = NULL;
@@ -1217,6 +1239,7 @@ final class RuntimeSourceMemorySections {
                     javan_allocation_cache_store(value, indexed);
                     return indexed;
                 }
+                return NULL;
             }
             javan_allocation_node* prior = NULL;
             javan_allocation_node* node = javan_allocations;
@@ -1235,6 +1258,30 @@ final class RuntimeSourceMemorySections {
                 *previous = NULL;
             }
             return NULL;
+        }
+
+        static int javan_find_allocation(void* value, javan_allocation_metadata* snapshot) {
+            if (snapshot == NULL) {
+                javan_panic("allocation lookup requires snapshot");
+                return 0;
+            }
+            javan_runtime_lock_enter();
+            javan_allocation_node* node = javan_find_allocation_locked(value, NULL);
+            int found = node != NULL;
+            if (found != 0) {
+                snapshot->value = node->value;
+                snapshot->base = node->base;
+                snapshot->size = node->size;
+                snapshot->kind = node->kind;
+                snapshot->type_id = node->type_id;
+                snapshot->collectible = node->collectible;
+                snapshot->runtime_kind = node->runtime_kind;
+                snapshot->array_class_name = node->array_class_name;
+            } else {
+                memset(snapshot, 0, sizeof(javan_allocation_metadata));
+            }
+            javan_runtime_lock_leave();
+            return found;
         }
 
         void javan_register_type_descriptors(JavanTypeDescriptor* descriptors, int count) {
@@ -1330,7 +1377,7 @@ final class RuntimeSourceMemorySections {
 
         static void javan_update_allocation_metadata(void* value, int kind, int type_id) {
             javan_runtime_lock_enter();
-            javan_allocation_node* node = javan_find_allocation(value, NULL);
+            javan_allocation_node* node = javan_find_allocation_locked(value, NULL);
             if (node == NULL) {
                 javan_runtime_lock_leave();
                 javan_panic("unknown runtime allocation");
@@ -1348,7 +1395,7 @@ final class RuntimeSourceMemorySections {
 
         static void javan_update_array_class_name(void* value, const char* class_name) {
             javan_runtime_lock_enter();
-            javan_allocation_node* node = javan_find_allocation(value, NULL);
+            javan_allocation_node* node = javan_find_allocation_locked(value, NULL);
             if (node == NULL) {
                 javan_runtime_lock_leave();
                 javan_panic("unknown array allocation");
@@ -1368,7 +1415,7 @@ final class RuntimeSourceMemorySections {
 
         static void javan_update_runtime_allocation_kind(void* value, int runtime_kind) {
             javan_runtime_lock_enter();
-            javan_allocation_node* node = javan_find_allocation(value, NULL);
+            javan_allocation_node* node = javan_find_allocation_locked(value, NULL);
             if (node == NULL) {
                 javan_runtime_lock_leave();
                 javan_panic("unknown runtime allocation");
@@ -1536,7 +1583,7 @@ final class RuntimeSourceMemorySections {
             if (value == NULL) {
                 return;
             }
-            javan_allocation_node* buffer = javan_find_allocation(value, NULL);
+            javan_allocation_node* buffer = javan_find_allocation_locked(value, NULL);
             if (buffer == NULL
                 || buffer->kind != JAVAN_HEAP_KIND_RUNTIME
                 || buffer->runtime_kind != JAVAN_RUNTIME_KIND_OWNED_BUFFER) {
@@ -1571,8 +1618,10 @@ final class RuntimeSourceMemorySections {
             if (header == NULL) {
                 javan_panic("unsupported generated object runtime attachment");
             }
-            javan_allocation_node* node = javan_find_allocation(runtime_state, NULL);
-            if (node == NULL || node->kind != JAVAN_HEAP_KIND_RUNTIME || node->runtime_kind != runtime_kind) {
+            javan_allocation_metadata snapshot;
+            if (javan_find_allocation(runtime_state, &snapshot) == 0
+                || snapshot.kind != JAVAN_HEAP_KIND_RUNTIME
+                || snapshot.runtime_kind != runtime_kind) {
                 javan_panic("invalid generated object runtime attachment");
             }
             header->_javan_runtime_state = runtime_state;
@@ -1584,7 +1633,7 @@ final class RuntimeSourceMemorySections {
             if (value == NULL) {
                 return;
             }
-            if (javan_find_allocation(value, NULL) == NULL) {
+            if (javan_find_allocation_locked(value, NULL) == NULL) {
                 javan_panic("invalid runtime managed reference");
             }
         }
@@ -1859,68 +1908,68 @@ final class RuntimeSourceMemorySections {
             if (javan_is_system_class_loader(value) != 0) {
                 return (void*) "java.lang.ClassLoader$System";
             }
-            javan_allocation_node* node = javan_find_allocation(value, NULL);
-            if (node == NULL) {
+            javan_allocation_metadata snapshot;
+            if (javan_find_allocation(value, &snapshot) == 0) {
                 return value;
             }
-            if (node->runtime_kind == JAVAN_RUNTIME_KIND_STRING) {
+            if (snapshot.runtime_kind == JAVAN_RUNTIME_KIND_STRING) {
                 return value;
             }
-            if (node->runtime_kind == JAVAN_RUNTIME_KIND_STRING_BUILDER) {
+            if (snapshot.runtime_kind == JAVAN_RUNTIME_KIND_STRING_BUILDER) {
                 return javan_stringbuilder_to_string(value);
             }
-            if (node->runtime_kind == JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_BUILDER) {
+            if (snapshot.runtime_kind == JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_BUILDER) {
                 return javan_virtual_thread_builder_to_string(value);
             }
-            if (node->runtime_kind == JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_FACTORY) {
+            if (snapshot.runtime_kind == JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_FACTORY) {
                 return javan_virtual_thread_factory_to_string(value);
             }
-            if (node->runtime_kind == JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_EXECUTOR) {
+            if (snapshot.runtime_kind == JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_EXECUTOR) {
                 return javan_virtual_thread_executor_to_string(value);
             }
-            if (node->runtime_kind == JAVAN_RUNTIME_KIND_CLASS) {
+            if (snapshot.runtime_kind == JAVAN_RUNTIME_KIND_CLASS) {
                 return javan_runtime_class_get_name(value);
             }
-            if (node->runtime_kind == JAVAN_RUNTIME_KIND_INET_SOCKET_ADDRESS) {
+            if (snapshot.runtime_kind == JAVAN_RUNTIME_KIND_INET_SOCKET_ADDRESS) {
                 return javan_inet_socket_address_to_string(value);
             }
-            if (node->type_id == JAVAN_TYPE_JAVA_LANG_INTEGER) {
+            if (snapshot.type_id == JAVAN_TYPE_JAVA_LANG_INTEGER) {
                 return javan_string_value_of_int(javan_integer_int_value(value));
             }
-            if (node->type_id == JAVAN_TYPE_JAVA_LANG_LONG) {
+            if (snapshot.type_id == JAVAN_TYPE_JAVA_LANG_LONG) {
                 return javan_string_value_of_long(javan_long_long_value(value));
             }
-            if (node->type_id == JAVAN_TYPE_JAVA_LANG_FLOAT) {
+            if (snapshot.type_id == JAVAN_TYPE_JAVA_LANG_FLOAT) {
                 return javan_string_value_of_float(javan_float_float_value(value));
             }
-            if (node->type_id == JAVAN_TYPE_JAVA_LANG_DOUBLE) {
+            if (snapshot.type_id == JAVAN_TYPE_JAVA_LANG_DOUBLE) {
                 return javan_string_value_of_double(javan_double_double_value(value));
             }
-            if (node->type_id == JAVAN_TYPE_JAVA_LANG_BOOLEAN) {
+            if (snapshot.type_id == JAVAN_TYPE_JAVA_LANG_BOOLEAN) {
                 return javan_string_value_of_bool(javan_boolean_boolean_value(value));
             }
-            if (node->type_id == JAVAN_TYPE_JAVA_LANG_BYTE) {
+            if (snapshot.type_id == JAVAN_TYPE_JAVA_LANG_BYTE) {
                 return javan_string_value_of_int(javan_byte_byte_value(value));
             }
-            if (node->type_id == JAVAN_TYPE_JAVA_LANG_SHORT) {
+            if (snapshot.type_id == JAVAN_TYPE_JAVA_LANG_SHORT) {
                 return javan_string_value_of_int(javan_short_short_value(value));
             }
-            if (node->type_id == JAVAN_TYPE_JAVA_LANG_CHARACTER) {
+            if (snapshot.type_id == JAVAN_TYPE_JAVA_LANG_CHARACTER) {
                 return javan_string_value_of_char(javan_character_char_value(value));
             }
-            if (node->type_id == JAVAN_TYPE_JAVA_TIME_FORMAT_DATE_TIME_FORMATTER) {
+            if (snapshot.type_id == JAVAN_TYPE_JAVA_TIME_FORMAT_DATE_TIME_FORMATTER) {
                 return (void*) "DateTimeFormatter";
             }
-            if (node->type_id == JAVAN_TYPE_JAVA_TIME_FORMAT_DATE_TIME_FORMATTER_BUILDER) {
+            if (snapshot.type_id == JAVAN_TYPE_JAVA_TIME_FORMAT_DATE_TIME_FORMATTER_BUILDER) {
                 return (void*) "DateTimeFormatterBuilder";
             }
-            if (node->type_id == JAVAN_TYPE_JAVA_TIME_FORMAT_TEXT_STYLE) {
+            if (snapshot.type_id == JAVAN_TYPE_JAVA_TIME_FORMAT_TEXT_STYLE) {
                 return (void*) "TextStyle";
             }
-            if (node->type_id == JAVAN_TYPE_JAVA_UTIL_LOCALE) {
+            if (snapshot.type_id == JAVAN_TYPE_JAVA_UTIL_LOCALE) {
                 return (void*) "Locale";
             }
-            if (node->type_id == JAVAN_TYPE_JAVA_NIO_CHARSET_CHARSET) {
+            if (snapshot.type_id == JAVAN_TYPE_JAVA_NIO_CHARSET_CHARSET) {
                 return (void*) "UTF-8";
             }
             javan_panic("unsupported printable object");
@@ -1929,12 +1978,59 @@ final class RuntimeSourceMemorySections {
 
         void javan_validate_heap_metadata(void) {
             javan_runtime_lock_enter();
+            if (javan_allocation_index.capacity < 0 || javan_allocation_index.length < 0) {
+                javan_panic("invalid heap allocation index");
+            }
+            if (javan_allocation_index.capacity == 0) {
+                if (javan_allocation_index.values != NULL
+                    || javan_allocation_index.nodes != NULL
+                    || javan_allocation_index.length != 0) {
+                    javan_panic("invalid heap allocation index");
+                }
+            } else {
+                if (javan_allocation_index.values == NULL
+                    || javan_allocation_index.nodes == NULL
+                    || (javan_allocation_index.capacity & (javan_allocation_index.capacity - 1)) != 0
+                    || javan_allocation_index.length >= javan_allocation_index.capacity
+                    || javan_allocation_index.length
+                        >= javan_allocation_index.capacity - javan_allocation_index.length) {
+                    javan_panic("invalid heap allocation index");
+                }
+                int indexed_allocations = 0;
+                for (int index = 0; index < javan_allocation_index.capacity; index++) {
+                    void* indexed_value = javan_allocation_index.values[index];
+                    javan_allocation_node* indexed_node = javan_allocation_index.nodes[index];
+                    if ((indexed_value == NULL) != (indexed_node == NULL)) {
+                        javan_panic("invalid heap allocation index");
+                    }
+                    if (indexed_value != NULL) {
+                        if (javan_allocation_registry_lookup(indexed_value) != indexed_node) {
+                            javan_panic("invalid heap allocation index");
+                        }
+                        indexed_allocations++;
+                    }
+                }
+                if (indexed_allocations != javan_allocation_index.length) {
+                    javan_panic("invalid heap allocation index");
+                }
+            }
+            for (int index = 0; index < JAVAN_ALLOCATION_CACHE_SIZE; index++) {
+                void* cached_value = javan_allocation_cache_values[index];
+                javan_allocation_node* cached_node = javan_allocation_cache_nodes[index];
+                if ((cached_value == NULL) != (cached_node == NULL)
+                    || (cached_value != NULL && javan_allocation_registry_lookup(cached_value) != cached_node)) {
+                    javan_panic("invalid heap allocation cache");
+                }
+            }
             unsigned long live_allocations = 0;
             unsigned long live_bytes = 0;
             javan_allocation_node* node = javan_allocations;
             while (node != NULL) {
                 if (node->value == NULL || node->base == NULL) {
                     javan_panic("invalid heap allocation metadata");
+                }
+                if (javan_allocation_registry_lookup(node->value) != node) {
+                    javan_panic("heap allocation index mismatch");
                 }
                 if (node->size == 0) {
                     javan_panic("invalid heap allocation size");
@@ -1955,7 +2051,7 @@ final class RuntimeSourceMemorySections {
                         javan_panic("invalid generated object runtime attachment");
                     }
                     if (header->_javan_runtime_state != NULL) {
-                        javan_allocation_node* attached = javan_find_allocation(header->_javan_runtime_state, NULL);
+                        javan_allocation_node* attached = javan_find_allocation_locked(header->_javan_runtime_state, NULL);
                         if (attached == NULL
                             || attached->kind != JAVAN_HEAP_KIND_RUNTIME
                             || attached->runtime_kind != header->_javan_runtime_kind) {
@@ -2006,6 +2102,9 @@ final class RuntimeSourceMemorySections {
             }
             if (live_allocations != javan_live_allocations_value || live_bytes != javan_live_allocated_bytes_value) {
                 javan_panic("heap accounting mismatch");
+            }
+            if (live_allocations != (unsigned long) javan_allocation_index.length) {
+                javan_panic("heap allocation index mismatch");
             }
             if (javan_type_descriptor_count_value < 0) {
                 javan_panic("invalid type descriptor count");
@@ -2204,11 +2303,11 @@ final class RuntimeSourceMemorySections {
             unsigned long actual_size = size == 0 ? 1 : size;
             javan_prepare_allocation(actual_size);
             void* value = javan_calloc_checked(actual_size);
-            if (root_slot != NULL) {
-                *root_slot = value;
-            }
             if (javan_allocator_cleaning == 0) {
                 javan_track_allocation(value, value, actual_size, JAVAN_HEAP_KIND_RUNTIME, 0, runtime_kind);
+            }
+            if (root_slot != NULL) {
+                *root_slot = value;
             }
             javan_runtime_lock_leave();
             return value;
@@ -2279,7 +2378,7 @@ final class RuntimeSourceMemorySections {
                 return javan_alloc(size);
             }
             unsigned long actual_size = size == 0 ? 1 : size;
-            javan_allocation_node* node = javan_find_allocation(value, NULL);
+            javan_allocation_node* node = javan_find_allocation_locked(value, NULL);
             if (node == NULL) {
                 javan_runtime_lock_leave();
                 javan_panic("unknown runtime allocation");
@@ -2332,7 +2431,7 @@ final class RuntimeSourceMemorySections {
                 return;
             }
             javan_allocation_node* previous = NULL;
-            javan_allocation_node* node = javan_find_allocation(value, &previous);
+            javan_allocation_node* node = javan_find_allocation_locked(value, &previous);
             if (node == NULL) {
                 javan_runtime_lock_leave();
                 return;
@@ -2434,14 +2533,14 @@ final class RuntimeSourceMemorySections {
                 return;
             }
             javan_allocation_node* previous = NULL;
-            javan_allocation_node* node = javan_find_allocation(value, &previous);
+            javan_allocation_node* node = javan_find_allocation_locked(value, &previous);
             if (node == NULL) {
                 javan_runtime_lock_leave();
                 javan_panic("unknown runtime allocation");
             }
             javan_release_runtime_owned_buffers(node);
             previous = NULL;
-            node = javan_find_allocation(value, &previous);
+            node = javan_find_allocation_locked(value, &previous);
             if (node == NULL) {
                 javan_runtime_lock_leave();
                 return;
@@ -2508,27 +2607,44 @@ final class RuntimeSourceMemorySections {
             nodes[index] = node;
         }
 
-        static void javan_allocation_registry_ensure_capacity(int required) {
-            if ((required * 2) < javan_allocation_index.capacity) {
-                return;
+        static int javan_allocation_registry_ensure_capacity(int required) {
+            if (required <= 0 || required > INT_MAX / 2) {
+                return 0;
             }
             int old_capacity = javan_allocation_index.capacity;
             void** old_values = javan_allocation_index.values;
             javan_allocation_node** old_nodes = javan_allocation_index.nodes;
-            int next_capacity = old_capacity <= 0 ? 128 : old_capacity * 2;
-            while ((required * 2) >= next_capacity) {
+            if (old_capacity < 0
+                || (old_capacity > 0 && (old_capacity & (old_capacity - 1)) != 0)
+                || (old_capacity == 0 && (old_values != NULL || old_nodes != NULL))
+                || (old_capacity > 0 && (old_values == NULL || old_nodes == NULL))) {
+                return 0;
+            }
+            if (old_capacity > 0 && required < old_capacity - required) {
+                return 1;
+            }
+            int next_capacity = old_capacity == 0 ? 128 : old_capacity;
+            while (required >= next_capacity - required) {
+                if (next_capacity > INT_MAX / 2) {
+                    return 0;
+                }
                 next_capacity *= 2;
             }
-            void** next_values = (void**) javan_raw_calloc_retry((unsigned long) next_capacity * sizeof(void*));
+            unsigned long capacity = (unsigned long) next_capacity;
+            if (capacity > ULONG_MAX / (unsigned long) sizeof(void*)
+                || capacity > ULONG_MAX / (unsigned long) sizeof(javan_allocation_node*)) {
+                return 0;
+            }
+            void** next_values = (void**) javan_raw_calloc_retry(capacity * (unsigned long) sizeof(void*));
             if (next_values == NULL) {
-                javan_panic("out of memory");
+                return 0;
             }
             javan_allocation_node** next_nodes = (javan_allocation_node**) javan_raw_calloc_retry(
-                (unsigned long) next_capacity * sizeof(javan_allocation_node*)
+                capacity * (unsigned long) sizeof(javan_allocation_node*)
             );
             if (next_nodes == NULL) {
                 free(next_values);
-                javan_panic("out of memory");
+                return 0;
             }
             for (int index = 0; index < old_capacity; index++) {
                 if (old_values != NULL && old_values[index] != NULL && old_nodes[index] != NULL) {
@@ -2540,13 +2656,13 @@ final class RuntimeSourceMemorySections {
             javan_allocation_index.values = next_values;
             javan_allocation_index.nodes = next_nodes;
             javan_allocation_index.capacity = next_capacity;
+            return 1;
         }
 
         static void javan_allocation_registry_put(void* value, javan_allocation_node* node) {
             if (value == NULL || node == NULL) {
                 return;
             }
-            javan_allocation_registry_ensure_capacity(javan_allocation_index.length + 1);
             int index = javan_registry_slot(javan_allocation_index.values, javan_allocation_index.capacity, value);
             if (javan_allocation_index.values[index] == NULL) {
                 javan_allocation_index.length++;
@@ -2710,45 +2826,45 @@ final class RuntimeSourceMemorySections {
             if (value == NULL) {
                 return 0;
             }
-            javan_allocation_node* node = javan_find_allocation(value, NULL);
-            if (node == NULL) {
+            javan_allocation_metadata snapshot;
+            if (javan_find_allocation(value, &snapshot) == 0) {
                 return 0;
             }
             if (target == JAVAN_BUILTIN_INSTANCEOF_COLLECTION) {
-                return node->runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_LIST;
+                return snapshot.runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_LIST;
             }
             if (target == JAVAN_BUILTIN_INSTANCEOF_MAP) {
-                return node->runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_MAP;
+                return snapshot.runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_MAP;
             }
             if (target == JAVAN_BUILTIN_INSTANCEOF_MAP_ENTRY) {
-                return node->runtime_kind == JAVAN_RUNTIME_KIND_MAP_ENTRY;
+                return snapshot.runtime_kind == JAVAN_RUNTIME_KIND_MAP_ENTRY;
             }
             if (target == JAVAN_BUILTIN_INSTANCEOF_OBJECT_ARRAY) {
-                return node->kind == JAVAN_HEAP_KIND_ARRAY && node->type_id == JAVAN_ARRAY_KIND_OBJECT;
+                return snapshot.kind == JAVAN_HEAP_KIND_ARRAY && snapshot.type_id == JAVAN_ARRAY_KIND_OBJECT;
             }
             if (target == JAVAN_BUILTIN_INSTANCEOF_INT_ARRAY) {
-                return node->kind == JAVAN_HEAP_KIND_ARRAY && node->type_id == JAVAN_ARRAY_KIND_INT;
+                return snapshot.kind == JAVAN_HEAP_KIND_ARRAY && snapshot.type_id == JAVAN_ARRAY_KIND_INT;
             }
             if (target == JAVAN_BUILTIN_INSTANCEOF_LONG_ARRAY) {
-                return node->kind == JAVAN_HEAP_KIND_ARRAY && node->type_id == JAVAN_ARRAY_KIND_LONG;
+                return snapshot.kind == JAVAN_HEAP_KIND_ARRAY && snapshot.type_id == JAVAN_ARRAY_KIND_LONG;
             }
             if (target == JAVAN_BUILTIN_INSTANCEOF_FLOAT_ARRAY) {
-                return node->kind == JAVAN_HEAP_KIND_ARRAY && node->type_id == JAVAN_ARRAY_KIND_FLOAT;
+                return snapshot.kind == JAVAN_HEAP_KIND_ARRAY && snapshot.type_id == JAVAN_ARRAY_KIND_FLOAT;
             }
             if (target == JAVAN_BUILTIN_INSTANCEOF_DOUBLE_ARRAY) {
-                return node->kind == JAVAN_HEAP_KIND_ARRAY && node->type_id == JAVAN_ARRAY_KIND_DOUBLE;
+                return snapshot.kind == JAVAN_HEAP_KIND_ARRAY && snapshot.type_id == JAVAN_ARRAY_KIND_DOUBLE;
             }
             if (target == JAVAN_BUILTIN_INSTANCEOF_BYTE_ARRAY) {
-                return node->kind == JAVAN_HEAP_KIND_ARRAY && node->type_id == JAVAN_ARRAY_KIND_BYTE;
+                return snapshot.kind == JAVAN_HEAP_KIND_ARRAY && snapshot.type_id == JAVAN_ARRAY_KIND_BYTE;
             }
             if (target == JAVAN_BUILTIN_INSTANCEOF_BOOLEAN_ARRAY) {
-                return node->kind == JAVAN_HEAP_KIND_ARRAY && node->type_id == JAVAN_ARRAY_KIND_BOOLEAN;
+                return snapshot.kind == JAVAN_HEAP_KIND_ARRAY && snapshot.type_id == JAVAN_ARRAY_KIND_BOOLEAN;
             }
             if (target == JAVAN_BUILTIN_INSTANCEOF_SHORT_ARRAY) {
-                return node->kind == JAVAN_HEAP_KIND_ARRAY && node->type_id == JAVAN_ARRAY_KIND_SHORT;
+                return snapshot.kind == JAVAN_HEAP_KIND_ARRAY && snapshot.type_id == JAVAN_ARRAY_KIND_SHORT;
             }
             if (target == JAVAN_BUILTIN_INSTANCEOF_CHAR_ARRAY) {
-                return node->kind == JAVAN_HEAP_KIND_ARRAY && node->type_id == JAVAN_ARRAY_KIND_CHAR;
+                return snapshot.kind == JAVAN_HEAP_KIND_ARRAY && snapshot.type_id == JAVAN_ARRAY_KIND_CHAR;
             }
             javan_panic("unsupported builtin instanceof target");
             return 0;
@@ -3477,34 +3593,31 @@ final class RuntimeSourceMemorySections {
             if (state->exact_type_id == JAVAN_CLASS_EXACT_OBJECT) {
                 return object_value != NULL ? 1 : 0;
             }
+            javan_allocation_metadata snapshot;
+            int found = javan_find_allocation(object_value, &snapshot);
             if (state->exact_type_id == JAVAN_CLASS_EXACT_STRING) {
-                javan_allocation_node* node = javan_find_allocation(object_value, NULL);
-                if (node != NULL && node->runtime_kind == JAVAN_RUNTIME_KIND_STRING) {
+                if (found != 0 && snapshot.runtime_kind == JAVAN_RUNTIME_KIND_STRING) {
                     return 1;
                 }
-                if (node == NULL && javan_registered_type_id(object_value) == 0 && javan_probably_string_key(object_value) != 0) {
+                if (found == 0 && javan_registered_type_id(object_value) == 0 && javan_probably_string_key(object_value) != 0) {
                     return 1;
                 }
                 return 0;
             }
             if (state->exact_type_id == JAVAN_CLASS_EXACT_ARRAY_LIST) {
-                javan_allocation_node* node = javan_find_allocation(object_value, NULL);
-                return node != NULL && node->runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_LIST ? 1 : 0;
+                return found != 0 && snapshot.runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_LIST ? 1 : 0;
             }
             if (state->exact_type_id == JAVAN_CLASS_EXACT_HASH_MAP) {
-                javan_allocation_node* node = javan_find_allocation(object_value, NULL);
-                return node != NULL && node->runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_MAP ? 1 : 0;
+                return found != 0 && snapshot.runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_MAP ? 1 : 0;
             }
             if (state->exact_type_id == JAVAN_CLASS_EXACT_CLASS) {
-                javan_allocation_node* node = javan_find_allocation(object_value, NULL);
-                return node != NULL && node->runtime_kind == JAVAN_RUNTIME_KIND_CLASS ? 1 : 0;
+                return found != 0 && snapshot.runtime_kind == JAVAN_RUNTIME_KIND_CLASS ? 1 : 0;
             }
             if (state->exact_type_id == JAVAN_CLASS_EXACT_CLASS_LOADER) {
                 return javan_is_system_class_loader(object_value);
             }
             if (state->is_array != 0) {
-                javan_allocation_node* node = javan_find_allocation(object_value, NULL);
-                if (node == NULL || node->kind != JAVAN_HEAP_KIND_ARRAY) {
+                if (found == 0 || snapshot.kind != JAVAN_HEAP_KIND_ARRAY) {
                     return 0;
                 }
                 return javan_class_is_assignable_from((void*) state, javan_object_get_class(object_value));
@@ -3589,12 +3702,13 @@ final class RuntimeSourceMemorySections {
             if (javan_is_system_class_loader(value) != 0) {
                 return javan_runtime_class_literal("java.lang.ClassLoader", JAVAN_CLASS_EXACT_CLASS_LOADER, 0, 0, 0);
             }
-            javan_allocation_node* node = javan_find_allocation(value, NULL);
-            if (node != NULL && node->kind == JAVAN_HEAP_KIND_ARRAY) {
-                if (node->array_class_name == NULL || node->array_class_name[0] == '\\0') {
+            javan_allocation_metadata snapshot;
+            int found = javan_find_allocation(value, &snapshot);
+            if (found != 0 && snapshot.kind == JAVAN_HEAP_KIND_ARRAY) {
+                if (snapshot.array_class_name == NULL || snapshot.array_class_name[0] == '\\0') {
                     javan_panic("unsupported array class metadata");
                 }
-                return javan_runtime_class_literal(node->array_class_name, 0, 0, 1, 0);
+                return javan_runtime_class_literal(snapshot.array_class_name, 0, 0, 1, 0);
             }
             int type_id = javan_registered_type_id(value);
             if (type_id > 0) {
@@ -3604,19 +3718,19 @@ final class RuntimeSourceMemorySections {
                 }
                 javan_panic("unsupported generated object type");
             }
-            if (node != NULL && node->runtime_kind == JAVAN_RUNTIME_KIND_STRING) {
+            if (found != 0 && snapshot.runtime_kind == JAVAN_RUNTIME_KIND_STRING) {
                 return javan_runtime_class_literal("java.lang.String", JAVAN_CLASS_EXACT_STRING, 0, 0, 0);
             }
-            if (node == NULL && type_id == 0 && javan_probably_string_key(value) != 0) {
+            if (found == 0 && type_id == 0 && javan_probably_string_key(value) != 0) {
                 return javan_runtime_class_literal("java.lang.String", JAVAN_CLASS_EXACT_STRING, 0, 0, 0);
             }
-            if (node != NULL && node->runtime_kind == JAVAN_RUNTIME_KIND_CLASS) {
+            if (found != 0 && snapshot.runtime_kind == JAVAN_RUNTIME_KIND_CLASS) {
                 return javan_runtime_class_literal("java.lang.Class", JAVAN_CLASS_EXACT_CLASS, 0, 0, 0);
             }
-            if (node != NULL && node->runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_LIST) {
+            if (found != 0 && snapshot.runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_LIST) {
                 return javan_runtime_class_literal("java.util.ArrayList", JAVAN_CLASS_EXACT_ARRAY_LIST, 0, 0, 0);
             }
-            if (node != NULL && node->runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_MAP) {
+            if (found != 0 && snapshot.runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_MAP) {
                 return javan_runtime_class_literal("java.util.HashMap", JAVAN_CLASS_EXACT_HASH_MAP, 0, 0, 0);
             }
             if (type_id == JAVAN_TYPE_JAVA_LANG_INTEGER) {
@@ -5116,7 +5230,7 @@ final class RuntimeSourceMemorySections {
         int javan_heap_current_thread_root_present(void) {
             javan_runtime_lock_enter();
             int result = javan_current_thread_value != NULL
-                && javan_find_allocation(javan_current_thread_value, NULL) != NULL
+                && javan_find_allocation_locked(javan_current_thread_value, NULL) != NULL
                 && javan_thread_root_index(javan_current_thread_value) >= 0;
             javan_runtime_lock_leave();
             return result;
@@ -5396,7 +5510,7 @@ final class RuntimeSourceMemorySections {
                 javan_panic("missing caught throwable");
             }
             javan_runtime_lock_enter();
-            javan_allocation_node* node = javan_find_allocation(value, NULL);
+            javan_allocation_node* node = javan_find_allocation_locked(value, NULL);
             if (node == NULL
                 || node->kind != JAVAN_HEAP_KIND_RUNTIME
                 || node->runtime_kind != JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE) {
@@ -6872,7 +6986,7 @@ final class RuntimeSourceMemorySections {
             if (value == NULL) {
                 return;
             }
-            javan_allocation_node* node = javan_find_allocation(value, NULL);
+            javan_allocation_node* node = javan_find_allocation_locked(value, NULL);
             if (node == NULL) {
                 return;
             }
@@ -7063,6 +7177,7 @@ final class RuntimeSourceMemorySections {
             array->element_size = element_size;
             array->kind = kind;
             array->reserved = 0;
+            /* Generated array class metadata is borrowed for process lifetime. */
             array->class_name = class_name;
             javan_update_allocation_metadata((void*) array, JAVAN_HEAP_KIND_ARRAY, kind);
             javan_update_array_class_name((void*) array, class_name);
@@ -7394,7 +7509,7 @@ final class RuntimeSourceMemorySections {
             JavanNativeImportedByteArray result;
             int valid = 0;
             javan_runtime_lock_enter();
-            javan_allocation_node* node = javan_find_allocation(array, NULL);
+            javan_allocation_node* node = javan_find_allocation_locked(array, NULL);
             if (node != NULL && node->kind == JAVAN_HEAP_KIND_ARRAY && node->type_id == JAVAN_ARRAY_KIND_BYTE) {
                 javan_byte_array* values = (javan_byte_array*) array;
                 result.data = values->values;
@@ -8495,12 +8610,14 @@ final class RuntimeSourceMemorySections {
                 && javan_probably_string_key(right) != 0) {
                 return strcmp((const char*) left, (const char*) right) == 0;
             }
-            javan_allocation_node* left_node = javan_find_allocation(left, NULL);
-            javan_allocation_node* right_node = javan_find_allocation(right, NULL);
-            if (left_node != NULL
-                && right_node != NULL
-                && left_node->runtime_kind == JAVAN_RUNTIME_KIND_CLASS
-                && right_node->runtime_kind == JAVAN_RUNTIME_KIND_CLASS) {
+            javan_allocation_metadata left_snapshot;
+            javan_allocation_metadata right_snapshot;
+            int left_found = javan_find_allocation(left, &left_snapshot);
+            int right_found = javan_find_allocation(right, &right_snapshot);
+            if (left_found != 0
+                && right_found != 0
+                && left_snapshot.runtime_kind == JAVAN_RUNTIME_KIND_CLASS
+                && right_snapshot.runtime_kind == JAVAN_RUNTIME_KIND_CLASS) {
                 return javan_runtime_class_equals(left, right);
             }
             if (left_type != 0 || right_type != 0) {
@@ -8645,10 +8762,10 @@ final class RuntimeSourceMemorySections {
         }
 
         static int javan_list_is_direct_set_value(void* value) {
-            javan_allocation_node* allocation = javan_find_allocation(value, NULL);
-            if (allocation == NULL
-                || allocation->kind != JAVAN_HEAP_KIND_RUNTIME
-                || allocation->runtime_kind != JAVAN_RUNTIME_KIND_OBJECT_LIST) {
+            javan_allocation_metadata snapshot;
+            if (javan_find_allocation(value, &snapshot) == 0
+                || snapshot.kind != JAVAN_HEAP_KIND_RUNTIME
+                || snapshot.runtime_kind != JAVAN_RUNTIME_KIND_OBJECT_LIST) {
                 return 0;
             }
             return ((((javan_object_list*) value)->view_flags & JAVAN_LIST_VIEW_SET) != 0) ? 1 : 0;
@@ -8890,10 +9007,11 @@ final class RuntimeSourceMemorySections {
                 if (value == NULL) {
                     return;
                 }
-                javan_allocation_node* node = javan_find_allocation(value, NULL);
+                javan_allocation_metadata snapshot;
+                int found = javan_find_allocation(value, &snapshot);
                 if (javan_registered_type_id(value) != 0
-                    || (node != NULL && node->runtime_kind != JAVAN_RUNTIME_KIND_STRING)
-                    || (node == NULL && javan_probably_string_key(value) == 0)) {
+                    || (found != 0 && snapshot.runtime_kind != JAVAN_RUNTIME_KIND_STRING)
+                    || (found == 0 && javan_probably_string_key(value) == 0)) {
                     javan_record_shape_mismatch();
                 }
                 return;
@@ -8923,10 +9041,10 @@ final class RuntimeSourceMemorySections {
                 if (value == NULL) {
                     return;
                 }
-                javan_allocation_node* node = javan_find_allocation(value, NULL);
-                if (node == NULL
-                    || node->kind != JAVAN_HEAP_KIND_ARRAY
-                    || node->array_class_name == NULL
+                javan_allocation_metadata snapshot;
+                if (javan_find_allocation(value, &snapshot) == 0
+                    || snapshot.kind != JAVAN_HEAP_KIND_ARRAY
+                    || snapshot.array_class_name == NULL
                     || javan_record_shape_array_assignable(value, expected_name) == 0) {
                     javan_record_shape_mismatch();
                 }
@@ -8939,8 +9057,9 @@ final class RuntimeSourceMemorySections {
                 if (value == NULL) {
                     return;
                 }
-                javan_allocation_node* node = javan_find_allocation(value, NULL);
-                if (node == NULL || node->runtime_kind != JAVAN_RUNTIME_KIND_OBJECT_MAP) {
+                javan_allocation_metadata snapshot;
+                if (javan_find_allocation(value, &snapshot) == 0
+                    || snapshot.runtime_kind != JAVAN_RUNTIME_KIND_OBJECT_MAP) {
                     javan_record_shape_mismatch();
                 }
                 javan_object_map* map = (javan_object_map*) value;
@@ -8961,8 +9080,9 @@ final class RuntimeSourceMemorySections {
                 if (value == NULL) {
                     return;
                 }
-                javan_allocation_node* node = javan_find_allocation(value, NULL);
-                if (node == NULL || node->runtime_kind != JAVAN_RUNTIME_KIND_OBJECT_LIST) {
+                javan_allocation_metadata snapshot;
+                if (javan_find_allocation(value, &snapshot) == 0
+                    || snapshot.runtime_kind != JAVAN_RUNTIME_KIND_OBJECT_LIST) {
                     javan_record_shape_mismatch();
                 }
                 javan_object_list* list = (javan_object_list*) value;
@@ -11809,7 +11929,7 @@ final class RuntimeSourceMemorySections {
         }
 
         static javan_materialized_lambda_state* javan_materialized_lambda_state_node_unlocked(void* value) {
-            javan_allocation_node* state_node = javan_find_allocation(value, NULL);
+            javan_allocation_node* state_node = javan_find_allocation_locked(value, NULL);
             if (state_node == NULL
                 || state_node->kind != JAVAN_HEAP_KIND_RUNTIME
                 || state_node->runtime_kind != JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA
@@ -11829,7 +11949,7 @@ final class RuntimeSourceMemorySections {
                 return NULL;
             }
             if (state->capture_count > 0) {
-                javan_allocation_node* captures_node = javan_find_allocation((void*) state->captures, NULL);
+                javan_allocation_node* captures_node = javan_find_allocation_locked((void*) state->captures, NULL);
                 if (captures_node == NULL
                     || captures_node->kind != JAVAN_HEAP_KIND_RUNTIME
                     || captures_node->runtime_kind != JAVAN_RUNTIME_KIND_OWNED_BUFFER
@@ -11841,7 +11961,7 @@ final class RuntimeSourceMemorySections {
         }
 
         static javan_materialized_lambda_state* javan_materialized_lambda_wrapper_state_unlocked(void* value) {
-            javan_allocation_node* object_node = javan_find_allocation(value, NULL);
+            javan_allocation_node* object_node = javan_find_allocation_locked(value, NULL);
             if (object_node == NULL
                 || object_node->kind != JAVAN_HEAP_KIND_RUNTIME
                 || object_node->runtime_kind != JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA
