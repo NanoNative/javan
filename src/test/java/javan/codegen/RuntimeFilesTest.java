@@ -73,6 +73,17 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void runtimeHeaderAndSourceExposeFloatToDoubleHelper() throws Exception {
+        final String source = Files.readString(new RuntimeFiles().write(tempDir));
+        final String header = Files.readString(tempDir.resolve("javan_runtime.h"));
+
+        assertThat(List.of(
+            header.contains("double javan_f2d(float value);"),
+            source.contains("double javan_f2d(float value) {")
+        )).containsExactly(true, true);
+    }
+
+    @Test
     void runtimeDoubleToLongGuardsNaNAndRangeBeforeCasting() throws Exception {
         final String source = Files.readString(new RuntimeFiles().write(tempDir));
 
