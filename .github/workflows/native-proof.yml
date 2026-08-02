@@ -168,7 +168,7 @@ jobs:
           JAVAN_PACKAGE_TARGET: ${{ inputs.target }}
           JAVAN_PACKAGE_SANITIZER_SCOPE: ${{ inputs.sanitizer_scope }}
           JAVAN_BOOTSTRAP_GENERATION: ${{ inputs.bootstrap_generation }}
-          JAVAN_HEAP_LIMIT_BYTES: "2147483648"
+          JAVAN_HEAP_LIMIT_BYTES: ${{ startsWith(inputs.target, 'macos-') && '1073741824' || '2147483648' }}
         run: sh .github/scripts/verify-ci-package-smoke.sh
 
       - name: "📤 Upload [${{ inputs.target }}]"
