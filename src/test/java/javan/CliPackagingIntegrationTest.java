@@ -644,6 +644,84 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void staticLibraryExportedMathCeilLinksAndRunsFromCWithoutMathLibrary() throws Exception {
+        final Path project = project("generic-library");
+        writeJava(project, "com.acme.Math", """
+            package com.acme;
+
+            public final class Math {
+                private Math() {
+                }
+
+                public static double ceil(final double value) {
+                    return java.lang.Math.ceil(value);
+                }
+            }
+            """);
+
+        final CliRun build = run(
+            tempDir,
+            "build",
+            project.toString(),
+            "--kind",
+            "staticlib",
+            "--export",
+            "com.acme.Math.ceil"
+        );
+        final Path library = project.resolve(".javan/dist/libgeneric-library.a");
+        final Path caller = writeC(project, "caller.c", """
+            #include <stdio.h>
+            #include ".javan/dist/bindings/c/generic-library.h"
+
+            int main(void) {
+                printf("%.1f\\n", javan_export_com_acme_Math_ceil_double(7.25));
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("generic-library-caller");
+        final ProcessResult undefinedSymbols = build.exitCode() == 0
+            ? process(project, List.of("nm", "-u", library.toString()))
+            : new ProcessResult(-1, "", build.stderr());
+        final ProcessResult link = build.exitCode() == 0
+            ? process(project, List.of(
+                "cc",
+                caller.toString(),
+                library.toString(),
+                "-o",
+                binary.toString()
+            ))
+            : new ProcessResult(-1, "", build.stderr());
+        final ProcessResult execution = link.exitCode() == 0
+            ? process(project, List.of(binary.toString()))
+            : new ProcessResult(-1, "", link.stderr());
+
+        assertThat(new StaticLibraryCeilProof(
+            build.exitCode(),
+            undefinedSymbols.exitCode(),
+            hasExternalCeilSymbol(undefinedSymbols.stdout() + undefinedSymbols.stderr()),
+            link.exitCode(),
+            execution.exitCode(),
+            execution.stdout()
+        )).isEqualTo(new StaticLibraryCeilProof(0, 0, false, 0, 0, "8.0\n"));
+    }
+
+    private static boolean hasExternalCeilSymbol(final String symbols) {
+        return symbols.lines()
+            .map(String::strip)
+            .anyMatch(symbol -> symbol.matches("(?:U\\s+)?_?ceil(?:@@?\\S+)?"));
+    }
+
+    private record StaticLibraryCeilProof(
+        int buildExitCode,
+        int undefinedSymbolsExitCode,
+        boolean externalCeilSymbol,
+        int linkExitCode,
+        int executionExitCode,
+        String executionOutput
+    ) {
+    }
+
+    @Test
     void libraryAliasBuildsStaticSharedAndLanguageFolders() throws Exception {
         final Path project = project("library-friendly");
         writeJava(project, "com.acme.Math", """

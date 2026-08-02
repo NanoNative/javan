@@ -8217,6 +8217,69 @@ final class RuntimeFilesTest {
         )).doesNotContain("floor(value)");
     }
 
+    @Test
+    void mathCeilPreservesPositiveSignalingNanBits() throws Exception {
+        assertThat(mathCeilBits("7ff0000000001234")).isEqualTo("7ff0000000001234\n");
+    }
+
+    @Test
+    void mathCeilPreservesNegativeSignalingNanBits() throws Exception {
+        assertThat(mathCeilBits("fff0000000005678")).isEqualTo("fff0000000005678\n");
+    }
+
+    @Test
+    void mathCeilPreservesNegativeInfinityBits() throws Exception {
+        assertThat(mathCeilBits("fff0000000000000")).isEqualTo("fff0000000000000\n");
+    }
+
+    @Test
+    void mathCeilPreservesNegativeZeroBits() throws Exception {
+        assertThat(mathCeilBits("8000000000000000")).isEqualTo("8000000000000000\n");
+    }
+
+    @Test
+    void mathCeilRoundsPositiveFractionUp() throws Exception {
+        assertThat(mathCeilBits("401f000000000000")).isEqualTo("4020000000000000\n");
+    }
+
+    @Test
+    void mathCeilRoundsNegativeFractionTowardZero() throws Exception {
+        assertThat(mathCeilBits("c01d000000000000")).isEqualTo("c01c000000000000\n");
+    }
+
+    @Test
+    void mathCeilRoundsPositiveMinimumSubnormalToOne() throws Exception {
+        assertThat(mathCeilBits("0000000000000001")).isEqualTo("3ff0000000000000\n");
+    }
+
+    @Test
+    void mathCeilRoundsNegativeMinimumSubnormalToNegativeZero() throws Exception {
+        assertThat(mathCeilBits("8000000000000001")).isEqualTo("8000000000000000\n");
+    }
+
+    @Test
+    void mathCeilRoundsPositiveTwoToTheFiftyTwoBoundaryUp() throws Exception {
+        assertThat(mathCeilBits("432fffffffffffff")).isEqualTo("4330000000000000\n");
+    }
+
+    @Test
+    void mathCeilRoundsNegativeTwoToTheFiftyTwoBoundaryTowardZero() throws Exception {
+        assertThat(mathCeilBits("c32fffffffffffff")).isEqualTo("c32ffffffffffffe\n");
+    }
+
+    @Test
+    void mathCeilPreservesIntegralTwoToTheFiftyTwoBits() throws Exception {
+        assertThat(mathCeilBits("4330000000000000")).isEqualTo("4330000000000000\n");
+    }
+
+    @Test
+    void generatedRuntimeCeilHasNoExternalCeilCall() throws Exception {
+        assertThat(runtimeFunction(
+            Files.readString(new RuntimeFiles().write(tempDir)),
+            "double javan_math_ceil_double(double value)"
+        )).doesNotContain("ceil(value)");
+    }
+
     private String mathFloorBits(final String bits) throws Exception {
         return runRuntimeBoundaryProbe(
             """
@@ -8227,6 +8290,28 @@ final class RuntimeFilesTest {
 
             int main(void) {
                 const double result = javan_math_floor_double(
+                    javan_double_long_bits_to_double(0x%sLL)
+                );
+                uint64_t result_bits = UINT64_C(0);
+                memcpy(&result_bits, &result, sizeof(result_bits));
+                printf("%%016llx\\n", (unsigned long long) result_bits);
+                return 0;
+            }
+            """.formatted(bits),
+            "4096"
+        );
+    }
+
+    private String mathCeilBits(final String bits) throws Exception {
+        return runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdint.h>
+            #include <stdio.h>
+            #include <string.h>
+
+            int main(void) {
+                const double result = javan_math_ceil_double(
                     javan_double_long_bits_to_double(0x%sLL)
                 );
                 uint64_t result_bits = UINT64_C(0);

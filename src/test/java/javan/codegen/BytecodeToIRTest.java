@@ -21068,6 +21068,44 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersMathCeilDoubleToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(D)D",
+            2,
+            2,
+            plain(0, 38, "dload_0"),
+            invokeStatic(1, new MethodRef("java/lang/Math", "ceil", "(D)D")),
+            plain(2, 175, "dreturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnDouble(IrExpression.doubleCall(
+                "javan_math_ceil_double",
+                List.of(IrExpression.doubleLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
+    void rejectsMathCeilWithWrongDescriptor() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "(F)D",
+            2,
+            1,
+            plain(0, 34, "fload_0"),
+            invokeStatic(1, new MethodRef("java/lang/Math", "ceil", "(F)D")),
+            plain(2, 175, "dreturn")
+        )))
+            .isInstanceOf(DiagnosticException.class)
+            .hasMessageContaining("error[JAVAN040]: bytecode is not implemented by native code generation")
+            .hasMessageContaining("invokestatic java/lang/Math.ceil(F)D");
+    }
+
+    @Test
     void lowersMathAbsLongToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

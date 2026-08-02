@@ -75,6 +75,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void mathCeilDoubleIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Math",
+            "ceil",
+            "(D)D"
+        ))).isTrue();
+    }
+
+    @Test
+    void mathCeilWrongDescriptorIsNotSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Math",
+            "ceil",
+            "(F)D"
+        ))).isFalse();
+    }
+
+    @Test
     void mathFloorFloatIsNotSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/Math",

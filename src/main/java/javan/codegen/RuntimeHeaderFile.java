@@ -70,6 +70,7 @@ final class RuntimeHeaderFile {
         void javan_eprintln_bool(int value);
         int javan_math_round_float(float value);
         double javan_math_floor_double(double value);
+        double javan_math_ceil_double(double value);
         int javan_math_abs_int(int value);
         long long javan_math_abs_long(long long value);
         float javan_math_abs_float(float value);
