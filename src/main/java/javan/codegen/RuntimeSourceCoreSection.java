@@ -730,6 +730,35 @@ final class RuntimeSourceCoreSection {
             return value;
         }
 
+        double javan_math_ceil_double(double value) {
+            uint64_t bits = UINT64_C(0);
+            memcpy(&bits, &value, sizeof(bits));
+            const uint64_t exponent = (bits >> 52U) & UINT64_C(0x7ff);
+            if (exponent == UINT64_C(0x7ff)) {
+                return value;
+            }
+            const uint64_t sign_mask = UINT64_C(0x8000000000000000);
+            const uint64_t magnitude = bits & ~sign_mask;
+            if (magnitude == UINT64_C(0)) {
+                return value;
+            }
+            const uint64_t negative = bits & sign_mask;
+            if (exponent < UINT64_C(1023)) {
+                bits = negative == UINT64_C(0) ? UINT64_C(0x3ff0000000000000) : sign_mask;
+            } else if (exponent < UINT64_C(1075)) {
+                const uint64_t fractional_shift = UINT64_C(1075) - exponent;
+                const uint64_t fractional_mask = (UINT64_C(1) << fractional_shift) - UINT64_C(1);
+                if ((bits & fractional_mask) != UINT64_C(0)) {
+                    bits &= ~fractional_mask;
+                    if (negative == UINT64_C(0)) {
+                        bits += UINT64_C(1) << fractional_shift;
+                    }
+                }
+            }
+            memcpy(&value, &bits, sizeof(value));
+            return value;
+        }
+
         int javan_math_abs_int(int value) {
             if (value == INT_MIN) {
                 return value;
