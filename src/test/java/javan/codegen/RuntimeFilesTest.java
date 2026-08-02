@@ -4,7 +4,9 @@ import javan.TestProcesses;
 import javan.build.NativeLinkInputs;
 import javan.build.ResourceBundler;
 import javan.compat.JdkCallSupport;
+import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestFactory;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ResourceLock;
@@ -20,6 +22,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
+import static org.junit.jupiter.api.DynamicTest.dynamicTest;
 import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 
 @Execution(CONCURRENT)
@@ -346,6 +349,102 @@ final class RuntimeFilesTest {
                 return 0;
             }
             """, "512");
+
+        assertThat(stdout).isEqualTo("0\n");
+    }
+
+    @TestFactory
+    List<DynamicTest> sealedRecordShapeRejectsMalformedEncoding() throws Exception {
+        final Path runtime = new RuntimeFiles().write(tempDir);
+        final Path main = tempDir.resolve("record-shape-probe.c");
+        Files.writeString(main, """
+            #include "javan_runtime.h"
+            #include <setjmp.h>
+            #include <stdio.h>
+
+            int main(int argc, char** argv) {
+                if (argc != 2) {
+                    return 2;
+                }
+                jmp_buf target;
+                javan_panic_set_target(&target);
+                if (setjmp(target) == 0) {
+                    javan_record_shape_validate(NULL, argv[1]);
+                    javan_panic_clear_target(&target);
+                    puts("no panic");
+                    return 0;
+                }
+                javan_panic_clear_target(&target);
+                const char* error = javan_last_error();
+                printf("%s\\n", error == NULL ? "missing panic" : error);
+                return 0;
+            }
+            """);
+        final Path binary = new NativeLinker().link(
+            tempDir,
+            main,
+            runtime,
+            tempDir.resolve("record-shape-probe"),
+            NativeLinkInputs.empty(),
+            List.of()
+        );
+        return List.of(
+            "p", "p;", "p0;", "p01;", "p-1;", "p1", "p1;;",
+            "p2;1;", "p1;1;", "p2147483648;", "p1;2", "p1;tail"
+        ).stream().map(shape -> dynamicTest("rejects " + shape, () -> {
+            final TestProcesses.Result result = TestProcesses.run(
+                tempDir,
+                List.of(binary.toString(), shape),
+                java.time.Duration.ofSeconds(30),
+                Map.of("JAVAN_HEAP_LIMIT_BYTES", "4096", "JAVAN_GC_STRESS", "1")
+            );
+
+            assertThat(result.exitCode() + "\n" + result.stdout() + result.stderr())
+                .as("shape %s", shape)
+                .isEqualTo("0\ninvalid generated record shape\n");
+        })).toList();
+    }
+
+    @Test
+    void sealedRecordShapeRejectsValueOutsideUnion() throws Exception {
+        final String panic = runRuntimePanicProbe(
+            "javan_register_static_roots(0, 0);",
+            "javan_record_shape_validate(javan_integer_value_of(7), \"p2147483646;2147483647;\");"
+        );
+
+        assertThat(panic).isEqualTo("record generic value does not match declared shape\n");
+    }
+
+    @Test
+    void sealedRecordShapeParsesTrailingBytesAfterMembershipMatch() throws Exception {
+        final String panic = runRuntimePanicProbe(
+            """
+            javan_register_static_roots(0, 0);
+            struct javan_object_header* value =
+                (struct javan_object_header*) javan_alloc(sizeof(struct javan_object_header));
+            value->_javan_type_id = 1;
+            value->_javan_runtime_state = NULL;
+            value->_javan_runtime_kind = 0;
+            value->_javan_runtime_reserved = 0;
+            javan_register_object((void*) value, 1);
+            """,
+            "javan_record_shape_validate((void*) value, \"p1;tail\");"
+        );
+
+        assertThat(panic).isEqualTo("invalid generated record shape\n");
+    }
+
+    @Test
+    void sealedRecordShapeAcceptsNullWithZeroHash() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe("""
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                printf("%d\\n", javan_record_shape_hash_code(NULL, "p1;2147483647;"));
+                return 0;
+            }
+            """, "4096");
 
         assertThat(stdout).isEqualTo("0\n");
     }

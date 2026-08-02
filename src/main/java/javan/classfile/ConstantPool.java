@@ -163,6 +163,18 @@ public final class ConstantPool {
         return Optional.empty();
     }
 
+    boolean containsIndex(final int index) {
+        return index > 0 && index < entries.length;
+    }
+
+    Optional<Integer> classNameIndex(final int index) {
+        final Object entry = index > 0 && index < entries.length ? entries[index] : null;
+        if (entry instanceof ClassEntry classEntry) {
+            return Optional.of(classEntry.nameIndex());
+        }
+        return Optional.empty();
+    }
+
     /**
      * Resolves a method reference.
      *

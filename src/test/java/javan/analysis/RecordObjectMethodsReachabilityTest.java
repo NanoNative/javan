@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 
 @Execution(CONCURRENT)
@@ -70,6 +71,38 @@ final class RecordObjectMethodsReachabilityTest {
 
         assertThat(recordObjectMethods(graph, "hashCode"))
             .containsExactly("com/acme/Main$Holder.hashCode()I", "com/acme/Main$Leaf.hashCode()I");
+    }
+
+    @Test
+    void sealedComponentAddsOnlyExecutableLeafObjectMethodTarget() throws Exception {
+        final CallGraph graph = analyze("sealed-equals", sealedComponentSource(
+            "System.out.println(new Holder(new Value(7)).equals(new Holder(new Value(7))));"
+        ));
+
+        assertThat(recordObjectMethods(graph, "equals"))
+            .containsExactly("com/acme/Holder.equals(Ljava/lang/Object;)Z", "com/acme/ValueBase.equals(Ljava/lang/Object;)Z");
+    }
+
+    @Test
+    void sealedComponentDispatchMapsEachLeafToItsExactFunctionSymbol() throws Exception {
+        final Map<String, ClassFile> classes = compile("sealed-dispatch", sealedComponentSource(
+            "final Holder first = new Holder(new Value(7));"
+                + "System.out.println(first.equals(new Holder(new Value(7))));"
+                + "System.out.println(first.hashCode());"
+        ));
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(classes, "com/acme/Main");
+
+        assertThat(new BytecodeToIR().lower(classes, graph).dispatches().stream()
+            .filter(dispatch -> dispatch.symbol().startsWith("javan_dispatch_record_reference_"))
+            .flatMap(dispatch -> dispatch.targets().stream()
+                .map(target -> dispatch.symbol() + " " + target.owner() + " -> " + target.functionSymbol()))
+            .sorted()
+            .toList()).containsExactly(
+                "javan_dispatch_record_reference_equals com/acme/Identity -> javan_record_reference_identity_equals",
+                "javan_dispatch_record_reference_equals com/acme/Value -> javan_com_acme_ValueBase_equals__Ljava_lang_Object__Z",
+                "javan_dispatch_record_reference_hash_code com/acme/Identity -> javan_record_reference_identity_hash_code",
+                "javan_dispatch_record_reference_hash_code com/acme/Value -> javan_com_acme_ValueBase_hashCode___I"
+            );
     }
 
     @Test
@@ -207,6 +240,29 @@ final class RecordObjectMethodsReachabilityTest {
             .flatMap(dispatch -> dispatch.targets().stream())
             .map(target -> target.owner())
             .toList()).containsExactly("com/acme/Main$Child");
+    }
+
+    @Test
+    void listOfSealedComponentDoesNotExpandSealedLeafReachability() throws Exception {
+        final Map<String, ClassFile> classes = compile("list-sealed-dispatch", sealedListComponentSource(
+            "System.out.println(new Holder(List.of(new Value(7))).equals(new Holder(List.of(new Value(7)))));"
+        ));
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(classes, "com/acme/Main");
+
+        assertThat(recordObjectMethods(graph, "equals"))
+            .containsExactly("com/acme/Holder.equals(Ljava/lang/Object;)Z");
+    }
+
+    @Test
+    void listOfSealedComponentIsRejectedAtTheLoweringBoundary() throws Exception {
+        final Map<String, ClassFile> classes = compile("list-sealed-dispatch", sealedListComponentSource(
+            "System.out.println(new Holder(List.of(new Value(7))).equals(new Holder(List.of(new Value(7)))));"
+        ));
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(classes, "com/acme/Main");
+
+        assertThatThrownBy(() -> new BytecodeToIR().lower(classes, graph))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("unsupported List record component sealed interface element");
     }
 
     @Test
@@ -357,6 +413,93 @@ final class RecordObjectMethodsReachabilityTest {
                 record Holder(Leaf value) {
                 }
 
+                public static void main(final String[] args) {
+                    %s
+                }
+            }
+            """.formatted(statement);
+    }
+
+    private static String sealedComponentSource(final String statement) {
+        return """
+            package com.acme;
+
+            sealed interface Part permits Value, Identity {
+            }
+
+            class ValueBase {
+                private final int value;
+
+                ValueBase(final int value) {
+                    this.value = value;
+                }
+
+                @Override
+                public boolean equals(final Object other) {
+                    return other instanceof ValueBase candidate && value == candidate.value;
+                }
+
+                @Override
+                public int hashCode() {
+                    return value;
+                }
+            }
+
+            final class Value extends ValueBase implements Part {
+                Value(final int value) {
+                    super(value);
+                }
+            }
+
+            final class Identity implements Part {
+            }
+
+            record Holder(Part value) {
+            }
+
+            public final class Main {
+                public static void main(final String[] args) {
+                    %s
+                }
+            }
+            """.formatted(statement);
+    }
+
+    private static String sealedListComponentSource(final String statement) {
+        return """
+            package com.acme;
+
+            import java.util.List;
+
+            sealed interface Part permits Value, Identity {
+            }
+
+            class ValueBase {
+                private final int value;
+
+                ValueBase(final int value) {
+                    this.value = value;
+                }
+
+                @Override
+                public boolean equals(final Object other) {
+                    return other instanceof ValueBase candidate && value == candidate.value;
+                }
+            }
+
+            final class Value extends ValueBase implements Part {
+                Value(final int value) {
+                    super(value);
+                }
+            }
+
+            final class Identity implements Part {
+            }
+
+            record Holder(List<Part> value) {
+            }
+
+            public final class Main {
                 public static void main(final String[] args) {
                     %s
                 }

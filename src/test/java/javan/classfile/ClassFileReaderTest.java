@@ -4,11 +4,14 @@ import javan.compat.ClassMetadata;
 import javan.compat.ClassMetadataReader;
 import javan.compat.MemberMetadata;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
 
+import javax.tools.ToolProvider;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
@@ -20,6 +23,9 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 @Execution(CONCURRENT)
 final class ClassFileReaderTest {
     private static final Path SOURCE = Path.of("Modified.class");
+
+    @TempDir
+    private Path tempDir;
 
     @Test
     void readersDecodeModifiedUtf8ConstantPoolValues() throws Exception {
@@ -91,6 +97,114 @@ final class ClassFileReaderTest {
         assertThat(classFile.recordComponents()).contains(List.of(
             new RecordComponentInfo("value", "Ljava/lang/String;")
         ));
+    }
+
+    @Test
+    void readerParsesRealJavacPermittedSubclassesInSourceOrder() throws Exception {
+        final Path source = tempDir.resolve("Part.java");
+        final Path classes = tempDir.resolve("classes");
+        Files.writeString(source, """
+            sealed interface Part permits Value, Identity {
+            }
+
+            final class Value implements Part {
+            }
+
+            final class Identity implements Part {
+            }
+            """);
+        Files.createDirectories(classes);
+        final int result = ToolProvider.getSystemJavaCompiler().run(
+            null, null, null, "-d", classes.toString(), source.toString()
+        );
+        if (result != 0) {
+            throw new IllegalStateException("javac failed with exit code " + result);
+        }
+
+        assertThat(new ClassFileReader().read(Files.readAllBytes(classes.resolve("Part.class")), source)
+            .permittedSubclasses()).containsExactly("Value", "Identity");
+    }
+
+    @Test
+    void readerRejectsDuplicatePermittedSubclassesAttributes() {
+        assertThatThrownBy(() -> new ClassFileReader().read(classfileWithPermittedSubclasses(
+            permittedSubclasses(7), permittedSubclasses(7)
+        ), SOURCE)).isInstanceOf(IOException.class).hasMessage("Duplicate PermittedSubclasses attribute");
+    }
+
+    @Test
+    void readerRejectsDuplicatePermittedSubclassEntries() {
+        assertThatThrownBy(() -> new ClassFileReader().read(classfileWithPermittedSubclasses(
+            permittedSubclasses(7, 7)
+        ), SOURCE)).isInstanceOf(IOException.class).hasMessage("Duplicate permitted subclass: sample/Value");
+    }
+
+    @Test
+    void readerRejectsEmptyPermittedSubclassesAttribute() {
+        assertThatThrownBy(() -> new ClassFileReader().read(classfileWithPermittedSubclasses(
+            permittedSubclasses()
+        ), SOURCE)).isInstanceOf(IOException.class).hasMessage("PermittedSubclasses attribute has no classes");
+    }
+
+    @Test
+    void readerRejectsTrailingPermittedSubclassesAttributeBytes() {
+        assertThatThrownBy(() -> new ClassFileReader().read(classfileWithPermittedSubclasses(
+            new Bytes().u2(1).u2(7).u1(0).toByteArray()
+        ), SOURCE)).isInstanceOf(IOException.class).hasMessage("Invalid PermittedSubclasses attribute length");
+    }
+
+    @Test
+    void readerRejectsShortPermittedSubclassesAttribute() {
+        assertThatThrownBy(() -> new ClassFileReader().read(classfileWithPermittedSubclasses(
+            new Bytes().u2(1).u1(0).toByteArray()
+        ), SOURCE)).isInstanceOf(IOException.class).hasMessage("Invalid PermittedSubclasses attribute length");
+    }
+
+    @Test
+    void readerRejectsPermittedSubclassesAttributeWithShortCount() {
+        assertThatThrownBy(() -> new ClassFileReader().read(classfileWithPermittedSubclasses(
+            new Bytes().u1(0).toByteArray()
+        ), SOURCE)).isInstanceOf(IOException.class).hasMessage("Invalid PermittedSubclasses attribute length");
+    }
+
+    @Test
+    void readerRejectsPermittedSubclassEntryWithWrongConstantPoolKind() {
+        assertThatThrownBy(() -> new ClassFileReader().read(classfileWithPermittedSubclasses(
+            permittedSubclasses(6)
+        ), SOURCE)).isInstanceOf(IOException.class)
+            .hasMessage("Invalid PermittedSubclasses constant pool index 6: expected CONSTANT_Class");
+    }
+
+    @Test
+    void readerRejectsOutOfRangePermittedSubclassConstantPoolIndex() {
+        assertThatThrownBy(() -> new ClassFileReader().read(classfileWithPermittedSubclasses(
+            permittedSubclasses(10)
+        ), SOURCE)).isInstanceOf(IOException.class)
+            .hasMessage("Invalid PermittedSubclasses constant pool index 10: out of range");
+    }
+
+    @Test
+    void readerRejectsZeroPermittedSubclassConstantPoolIndex() {
+        assertThatThrownBy(() -> new ClassFileReader().read(classfileWithPermittedSubclasses(
+            permittedSubclasses(0)
+        ), SOURCE)).isInstanceOf(IOException.class)
+            .hasMessage("Invalid PermittedSubclasses constant pool index 0: out of range");
+    }
+
+    @Test
+    void readerRejectsPermittedSubclassNameWithWrongConstantPoolKind() {
+        assertThatThrownBy(() -> new ClassFileReader().read(
+            classfileWithMalformedPermittedSubclassNameIndex(4), SOURCE
+        )).isInstanceOf(IOException.class)
+            .hasMessage("Invalid PermittedSubclasses class name constant pool index 4: expected CONSTANT_Utf8");
+    }
+
+    @Test
+    void readerRejectsOutOfRangePermittedSubclassNameConstantPoolIndex() {
+        assertThatThrownBy(() -> new ClassFileReader().read(
+            classfileWithMalformedPermittedSubclassNameIndex(10), SOURCE
+        )).isInstanceOf(IOException.class)
+            .hasMessage("Invalid PermittedSubclasses class name constant pool index 10: out of range");
     }
 
     @Test
@@ -613,6 +727,69 @@ final class ClassFileReaderTest {
             .u2(5)
             .u2(6)
             .u2(0)
+            .toByteArray();
+    }
+
+    private static byte[] classfileWithPermittedSubclasses(final byte[]... attributes) {
+        final Bytes result = new Bytes()
+            .u4(0xCAFEBABEL)
+            .u2(0)
+            .u2(69)
+            .u2(10)
+            .utf8("sample/Part")
+            .classInfo(1)
+            .utf8("java/lang/Object")
+            .classInfo(3)
+            .utf8("PermittedSubclasses")
+            .utf8("sample/Value")
+            .classInfo(6)
+            .utf8("sample/Identity")
+            .classInfo(8)
+            .u2(0x0601)
+            .u2(2)
+            .u2(4)
+            .u2(0)
+            .u2(0)
+            .u2(0)
+            .u2(attributes.length);
+        for (final byte[] attribute : attributes) {
+            result.u2(5).u4(attribute.length).bytes(attribute);
+        }
+        return result.toByteArray();
+    }
+
+    private static byte[] permittedSubclasses(final int... classIndexes) {
+        final Bytes result = new Bytes().u2(classIndexes.length);
+        for (final int classIndex : classIndexes) {
+            result.u2(classIndex);
+        }
+        return result.toByteArray();
+    }
+
+    private static byte[] classfileWithMalformedPermittedSubclassNameIndex(final int nameIndex) {
+        final byte[] attribute = permittedSubclasses(7);
+        return new Bytes()
+            .u4(0xCAFEBABEL)
+            .u2(0)
+            .u2(69)
+            .u2(8)
+            .utf8("sample/Part")
+            .classInfo(1)
+            .utf8("java/lang/Object")
+            .classInfo(3)
+            .utf8("PermittedSubclasses")
+            .utf8("unused")
+            .classInfo(nameIndex)
+            .u2(0x0601)
+            .u2(2)
+            .u2(4)
+            .u2(0)
+            .u2(0)
+            .u2(0)
+            .u2(1)
+            .u2(5)
+            .u4(attribute.length)
+            .bytes(attribute)
             .toByteArray();
     }
 

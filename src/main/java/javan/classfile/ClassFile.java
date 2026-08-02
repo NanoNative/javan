@@ -16,6 +16,7 @@ import java.util.Optional;
  * @param methods methods declared by the class
  * @param sourceFile SourceFile attribute value when present
  * @param recordComponents Record attribute components when the attribute is present
+ * @param permittedSubclasses PermittedSubclasses attribute owners in source order, empty when absent
  * @param source source class file path
  * @param application whether the class belongs to the application input rather than a dependency
  */
@@ -29,10 +30,12 @@ public record ClassFile(
     List<MethodInfo> methods,
     Optional<String> sourceFile,
     Optional<List<RecordComponentInfo>> recordComponents,
+    List<String> permittedSubclasses,
     Path source,
     boolean application
 ) {
     private static final int ACC_FINAL = 0x0010;
+    private static final int ACC_ABSTRACT = 0x0400;
     private static final int ACC_INTERFACE = 0x0200;
     private static final int ACC_SYNTHETIC = 0x1000;
     private static final int ACC_ENUM = 0x4000;
@@ -71,6 +74,7 @@ public record ClassFile(
             methods,
             Optional.empty(),
             Optional.empty(),
+            List.of(),
             source,
             application
         );
@@ -112,6 +116,7 @@ public record ClassFile(
             methods,
             sourceFile,
             Optional.empty(),
+            List.of(),
             source,
             application
         );
@@ -121,6 +126,51 @@ public record ClassFile(
         if (recordComponents.isPresent()) {
             recordComponents = Optional.of(List.copyOf(recordComponents.orElseThrow()));
         }
+        permittedSubclasses = List.copyOf(permittedSubclasses);
+    }
+
+    /**
+     * Creates a class file without parsed permitted-subclass metadata.
+     *
+     * @param majorVersion class file major version
+     * @param name JVM internal class name
+     * @param superName JVM internal superclass name
+     * @param accessFlags class access flags
+     * @param interfaces JVM internal interface names implemented by this class
+     * @param fields fields declared by the class
+     * @param methods methods declared by the class
+     * @param sourceFile parsed source-file metadata
+     * @param recordComponents parsed record metadata
+     * @param source source class file path
+     * @param application whether the class belongs to the application input
+     */
+    public ClassFile(
+        final int majorVersion,
+        final String name,
+        final String superName,
+        final int accessFlags,
+        final List<String> interfaces,
+        final List<FieldInfo> fields,
+        final List<MethodInfo> methods,
+        final Optional<String> sourceFile,
+        final Optional<List<RecordComponentInfo>> recordComponents,
+        final Path source,
+        final boolean application
+    ) {
+        this(
+            majorVersion,
+            name,
+            superName,
+            accessFlags,
+            interfaces,
+            fields,
+            methods,
+            sourceFile,
+            recordComponents,
+            List.of(),
+            source,
+            application
+        );
     }
 
     /**
@@ -158,6 +208,18 @@ public record ClassFile(
      */
     public boolean isInterface() {
         if ((accessFlags & ACC_INTERFACE) == 0) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Returns true when this class file describes an abstract class or interface.
+     *
+     * @return true when abstract
+     */
+    public boolean isAbstract() {
+        if ((accessFlags & ACC_ABSTRACT) == 0) {
             return false;
         }
         return true;
@@ -213,6 +275,7 @@ public record ClassFile(
             methods,
             sourceFile,
             recordComponents,
+            permittedSubclasses,
             source,
             value
         );

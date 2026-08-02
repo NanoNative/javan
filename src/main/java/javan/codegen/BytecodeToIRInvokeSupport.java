@@ -11406,6 +11406,22 @@ final class BytecodeToIRInvokeSupport {
         final Map<String, IrDispatch> dispatches,
         final boolean hashCode
     ) {
+        markRecordReferenceObjectMethodDispatch(
+            classes,
+            shape,
+            dispatches,
+            hashCode,
+            RecordObjectMethodsCall.ReferenceContext.DIRECT_COMPONENT
+        );
+    }
+
+    private static void markRecordReferenceObjectMethodDispatch(
+        final Map<String, ClassFile> classes,
+        final RecordObjectMethodsCall.Shape shape,
+        final Map<String, IrDispatch> dispatches,
+        final boolean hashCode,
+        final RecordObjectMethodsCall.ReferenceContext context
+    ) {
         if (!shape.valid() || shape.isArray() || shape.referenceOwner().isEmpty()) {
             return;
         }
@@ -11417,7 +11433,8 @@ final class BytecodeToIRInvokeSupport {
                 classes,
                 shape.listElement().orElseThrow(),
                 dispatches,
-                hashCode
+                hashCode,
+                RecordObjectMethodsCall.ReferenceContext.LIST_ELEMENT
             );
             return;
         }
@@ -11425,6 +11442,21 @@ final class BytecodeToIRInvokeSupport {
         if ("java/lang/String".equals(owner) || recordBoxedTypeId(owner) != 0) {
             return;
         }
+        final Optional<RecordObjectMethodsCall.DirectReferencePlan> plan =
+            RecordObjectMethodsCall.referencePlan(classes, shape, hashCode, context);
+        if (plan.isEmpty()) {
+            return;
+        }
+        for (final RecordObjectMethodsCall.ReferenceTarget target : plan.orElseThrow().targets()) {
+            addRecordReferenceObjectMethodDispatchTarget(dispatches, target, hashCode);
+        }
+    }
+
+    private static void addRecordReferenceObjectMethodDispatchTarget(
+        final Map<String, IrDispatch> dispatches,
+        final RecordObjectMethodsCall.ReferenceTarget target,
+        final boolean hashCode
+    ) {
         final String symbol = hashCode ? RECORD_REFERENCE_HASH_CODE_DISPATCH : RECORD_REFERENCE_EQUALS_DISPATCH;
         final List<IrParameter> parameters = hashCode
             ? List.of(new IrParameter(IrType.OBJECT, "self"))
@@ -11432,58 +11464,62 @@ final class BytecodeToIRInvokeSupport {
         final IrDispatch existing =
             dispatches.getOrDefault(symbol, new IrDispatch(symbol, IrType.INT, parameters, List.of()));
         final List<IrDispatchTarget> targets = new ArrayList<>();
-        for (final IrDispatchTarget target : existing.targets()) {
-            if (owner.equals(target.owner())) {
+        for (final IrDispatchTarget existingTarget : existing.targets()) {
+            if (existingTarget.owner().equals(target.owner())) {
                 return;
             }
-            targets.add(target);
+            targets.add(existingTarget);
         }
-        final Optional<EntryPoint> target = recordReferenceTarget(classes, owner, hashCode);
-        final String functionSymbol = target.isPresent()
-            ? BytecodeToIR.symbol(target.orElseThrow())
+        final String functionSymbol = target.executable()
+            ? BytecodeToIR.symbol(new EntryPoint(
+                target.executableOwner(),
+                hashCode ? "hashCode" : "equals",
+                hashCode ? "()I" : "(Ljava/lang/Object;)Z"
+            ))
             : hashCode ? "javan_record_reference_identity_hash_code" : "javan_record_reference_identity_equals";
-        final IrDispatchTarget added = new IrDispatchTarget(owner, functionSymbol);
+        final IrDispatchTarget added = new IrDispatchTarget(target.owner(), functionSymbol);
         int insertionIndex = 0;
         while (insertionIndex < targets.size()
-            && Strings2.compareAscii(targets.get(insertionIndex).owner(), owner) <= 0) {
+            && Strings2.compareAscii(targets.get(insertionIndex).owner(), target.owner()) <= 0) {
             insertionIndex++;
         }
         targets.add(insertionIndex, added);
         dispatches.put(symbol, new IrDispatch(symbol, IrType.INT, parameters, List.copyOf(targets)));
     }
 
-    static Optional<EntryPoint> recordReferenceTarget(
+    static String recordShapeEncoding(
         final Map<String, ClassFile> classes,
-        final String receiver,
-        final boolean hashCode
+        final RecordObjectMethodsCall.Shape shape
     ) {
-        String current = receiver;
-        final String methodName = hashCode ? "hashCode" : "equals";
-        final String descriptor = hashCode ? "()I" : "(Ljava/lang/Object;)Z";
-        final Set<String> visited = new HashSet<>();
-        while (classes.containsKey(current) && visited.add(current)) {
-            final ClassFile classFile = classes.get(current);
-            final Optional<MethodInfo> target = classFile.method(methodName, descriptor);
-            if (target.isPresent()) {
-                return !target.orElseThrow().isStatic()
-                    && target.orElseThrow().code().isPresent()
-                    ? Optional.of(new EntryPoint(current, methodName, descriptor))
-                    : Optional.empty();
-            }
-            current = classFile.superName();
-        }
-        return Optional.empty();
+        return recordShapeEncoding(classes, shape, RecordObjectMethodsCall.ReferenceContext.DIRECT_COMPONENT);
     }
 
     private static String recordShapeEncoding(
         final Map<String, ClassFile> classes,
-        final RecordObjectMethodsCall.Shape shape
+        final RecordObjectMethodsCall.Shape shape,
+        final RecordObjectMethodsCall.ReferenceContext context
     ) {
         if (shape.isStringMap()) {
             return "m";
         }
         if (shape.isList()) {
-            return "l" + recordShapeEncoding(classes, shape.listElement().orElseThrow());
+            final RecordObjectMethodsCall.Shape element = shape.listElement().orElseThrow();
+            final Optional<RecordObjectMethodsCall.DirectReferencePlan> directElementPlan =
+                RecordObjectMethodsCall.referencePlan(
+                    classes,
+                    element,
+                    false,
+                    RecordObjectMethodsCall.ReferenceContext.DIRECT_COMPONENT
+                );
+            if (directElementPlan.isPresent()
+                && directElementPlan.orElseThrow() instanceof RecordObjectMethodsCall.SealedReferenceUnionPlan) {
+                throw new IllegalArgumentException("unsupported List record component sealed interface element");
+            }
+            return "l" + recordShapeEncoding(
+                classes,
+                element,
+                RecordObjectMethodsCall.ReferenceContext.LIST_ELEMENT
+            );
         }
         if (shape.isArray()) {
             final String binaryDescriptor = Strings2.replaceChar(shape.descriptor(), '/', '.');
@@ -11496,6 +11532,24 @@ final class BytecodeToIRInvokeSupport {
         final int boxedTypeId = recordBoxedTypeId(owner);
         if (boxedTypeId != 0) {
             return "b" + boxedTypeId + ";";
+        }
+        Optional<RecordObjectMethodsCall.DirectReferencePlan> plan =
+            RecordObjectMethodsCall.referencePlan(classes, shape, false, context);
+        if (plan.isEmpty()) {
+            plan = RecordObjectMethodsCall.referencePlan(classes, shape, true, context);
+        }
+        if (plan.isPresent() && plan.orElseThrow() instanceof RecordObjectMethodsCall.SealedReferenceUnionPlan union) {
+            final StringBuilder encoding = new StringBuilder("p");
+            int previousTypeId = 0;
+            for (final RecordObjectMethodsCall.ReferenceTarget target : union.targets()) {
+                final int typeId = exactTypeId(classes, target.owner());
+                if (typeId <= previousTypeId) {
+                    throw new IllegalStateException("sealed record shape type IDs must be strictly ascending");
+                }
+                encoding.append(typeId).append(';');
+                previousTypeId = typeId;
+            }
+            return encoding.toString();
         }
         final ClassFile ownerClass = classes.get(owner);
         return (ownerClass != null && ownerClass.isEnum() ? "e" : "o")
