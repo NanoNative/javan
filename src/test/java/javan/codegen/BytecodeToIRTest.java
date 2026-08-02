@@ -5702,6 +5702,27 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersLongToDoubleToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(J)D",
+            2,
+            2,
+            plain(0, 30, "lload_0"),
+            plain(1, 138, "l2d"),
+            plain(2, 175, "dreturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnDouble(IrExpression.doubleCall(
+                "javan_l2d",
+                List.of(IrExpression.longLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
     void rejectsObjectReturnWithoutStackValueWithSourceDiagnostic() {
         assertThatThrownBy(() -> lowerMain(method(
             0x0008,

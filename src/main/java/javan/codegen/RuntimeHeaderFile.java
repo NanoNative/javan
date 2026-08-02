@@ -123,6 +123,7 @@ final class RuntimeHeaderFile {
         float javan_i2f(int value);
         double javan_i2d(int value);
         int javan_l2i(long long value);
+        double javan_l2d(long long value);
         int javan_double_to_int(double value);
         int javan_i2b(int value);
         int javan_i2s(int value);
