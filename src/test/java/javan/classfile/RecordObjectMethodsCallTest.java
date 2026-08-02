@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 final class RecordObjectMethodsCallTest {
     private ClassFile recordClass;
     private ClassFile genericRecordClass;
+    private ClassFile mapRecordClass;
     private ClassFile ordinaryClass;
     private MethodInfo equalsMethod;
     private MethodInfo hashCodeMethod;
@@ -34,6 +35,7 @@ final class RecordObjectMethodsCallTest {
         final Path classes = tempDir.resolve("classes");
         final Path recordSource = sourceRoot.resolve("com/acme/Sample.java");
         final Path genericRecordSource = sourceRoot.resolve("com/acme/GenericSample.java");
+        final Path mapRecordSource = sourceRoot.resolve("com/acme/MapSample.java");
         final Path ordinarySource = sourceRoot.resolve("com/acme/Other.java");
         Files.createDirectories(recordSource.getParent());
         Files.createDirectories(classes);
@@ -69,6 +71,14 @@ final class RecordObjectMethodsCallTest {
             public record GenericSample(List<List<Sample>> values) {
             }
             """);
+        Files.writeString(mapRecordSource, """
+            package com.acme;
+
+            import java.util.Map;
+
+            public record MapSample(Map<String, String> values) {
+            }
+            """);
         final int exitCode = ToolProvider.getSystemJavaCompiler().run(
             null,
             null,
@@ -77,6 +87,7 @@ final class RecordObjectMethodsCallTest {
             classes.toString(),
             recordSource.toString(),
             genericRecordSource.toString(),
+            mapRecordSource.toString(),
             ordinarySource.toString()
         );
         if (exitCode != 0) {
@@ -94,6 +105,10 @@ final class RecordObjectMethodsCallTest {
         genericRecordClass = reader.read(
             Files.readAllBytes(classes.resolve("com/acme/GenericSample.class")),
             classes.resolve("com/acme/GenericSample.class")
+        );
+        mapRecordClass = reader.read(
+            Files.readAllBytes(classes.resolve("com/acme/MapSample.class")),
+            classes.resolve("com/acme/MapSample.class")
         );
         equalsMethod = requiredMethod(recordClass, "equals", "(Ljava/lang/Object;)Z");
         hashCodeMethod = requiredMethod(recordClass, "hashCode", "()I");
@@ -162,6 +177,92 @@ final class RecordObjectMethodsCallTest {
             method,
             requiredDynamic(method)
         )).map(call -> call.components().getFirst().shape()).contains(expected);
+    }
+
+    @Test
+    void retainsExactStringMapShapeFromRealJavacMetadata() {
+        final MethodInfo method = requiredMethod(mapRecordClass, "hashCode", "()I");
+
+        assertThat(RecordObjectMethodsCall.resolveHashCode(mapRecordClass, method, requiredDynamic(method)))
+            .map(call -> call.components().getFirst().shape().isStringMap())
+            .contains(true);
+    }
+
+    @Test
+    void malformedMapSignatureProducesInvalidShape() {
+        final FieldInfo originalField = mapRecordClass.fields().getFirst();
+        final RecordComponentInfo originalComponent = mapRecordClass.recordComponents().orElseThrow().getFirst();
+        final Optional<String> malformed = Optional.of("Ljava/util/Map<Ljava/lang/String;Ljava/lang/String;");
+        final FieldInfo field = new FieldInfo(
+            originalField.accessFlags(),
+            originalField.name(),
+            originalField.descriptor(),
+            malformed
+        );
+        final RecordComponentInfo component = new RecordComponentInfo(
+            originalComponent.name(),
+            originalComponent.descriptor(),
+            malformed
+        );
+        final MethodInfo method = requiredMethod(mapRecordClass, "hashCode", "()I");
+
+        assertThat(RecordObjectMethodsCall.resolveHashCode(
+            copyRecordClass(mapRecordClass, List.of(field), List.of(component)),
+            method,
+            requiredDynamic(method)
+        )).map(call -> call.components().getFirst().shape().valid()).contains(false);
+    }
+
+    @Test
+    void parameterizedStringMapSignatureProducesInvalidShape() {
+        final FieldInfo originalField = mapRecordClass.fields().getFirst();
+        final RecordComponentInfo originalComponent = mapRecordClass.recordComponents().orElseThrow().getFirst();
+        final Optional<String> malformed = Optional.of(
+            "Ljava/util/Map<Ljava/lang/String<Ljava/lang/Integer;>;Ljava/lang/String;>;"
+        );
+        final FieldInfo field = new FieldInfo(
+            originalField.accessFlags(),
+            originalField.name(),
+            originalField.descriptor(),
+            malformed
+        );
+        final RecordComponentInfo component = new RecordComponentInfo(
+            originalComponent.name(),
+            originalComponent.descriptor(),
+            malformed
+        );
+        final MethodInfo method = requiredMethod(mapRecordClass, "hashCode", "()I");
+
+        assertThat(RecordObjectMethodsCall.resolveHashCode(
+            copyRecordClass(mapRecordClass, List.of(field), List.of(component)),
+            method,
+            requiredDynamic(method)
+        )).map(call -> call.components().getFirst().shape().valid()).contains(false);
+    }
+
+    @Test
+    void mapDescriptorWithListSignatureProducesInvalidShape() {
+        final FieldInfo originalField = mapRecordClass.fields().getFirst();
+        final RecordComponentInfo originalComponent = mapRecordClass.recordComponents().orElseThrow().getFirst();
+        final Optional<String> listSignature = Optional.of("Ljava/util/List<Ljava/lang/String;>;");
+        final FieldInfo field = new FieldInfo(
+            originalField.accessFlags(),
+            originalField.name(),
+            originalField.descriptor(),
+            listSignature
+        );
+        final RecordComponentInfo component = new RecordComponentInfo(
+            originalComponent.name(),
+            originalComponent.descriptor(),
+            listSignature
+        );
+        final MethodInfo method = requiredMethod(mapRecordClass, "hashCode", "()I");
+
+        assertThat(RecordObjectMethodsCall.resolveHashCode(
+            copyRecordClass(mapRecordClass, List.of(field), List.of(component)),
+            method,
+            requiredDynamic(method)
+        )).map(call -> call.components().getFirst().shape().valid()).contains(false);
     }
 
     @Test

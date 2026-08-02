@@ -11409,6 +11409,9 @@ final class BytecodeToIRInvokeSupport {
         if (!shape.valid() || shape.isArray() || shape.referenceOwner().isEmpty()) {
             return;
         }
+        if (shape.isStringMap()) {
+            return;
+        }
         if (shape.isList()) {
             markRecordReferenceObjectMethodDispatch(
                 classes,
@@ -11476,6 +11479,9 @@ final class BytecodeToIRInvokeSupport {
         final Map<String, ClassFile> classes,
         final RecordObjectMethodsCall.Shape shape
     ) {
+        if (shape.isStringMap()) {
+            return "m";
+        }
         if (shape.isList()) {
             return "l" + recordShapeEncoding(classes, shape.listElement().orElseThrow());
         }

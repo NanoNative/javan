@@ -18,6 +18,7 @@ public record RecordObjectMethodsCall(List<RecordObjectMethodsCall.Component> co
             + "Ljava/lang/Class;Ljava/lang/String;[Ljava/lang/invoke/MethodHandle;)Ljava/lang/Object;";
     private static final String LIST = "java/util/List";
     private static final String ARRAY_LIST = "java/util/ArrayList";
+    private static final String MAP = "java/util/Map";
 
     public RecordObjectMethodsCall {
         components = List.copyOf(components);
@@ -46,12 +47,14 @@ public record RecordObjectMethodsCall(List<RecordObjectMethodsCall.Component> co
      * @param descriptor erased JVM descriptor
      * @param referenceOwner direct reference owner when present
      * @param listElement exact List element shape when present
+     * @param stringMap true for an exact direct Map&lt;String, String&gt; component
      * @param valid true when the signature has a closed syntactic shape
      */
     public record Shape(
         String descriptor,
         Optional<String> referenceOwner,
         Optional<Shape> listElement,
+        boolean stringMap,
         boolean valid
     ) {
         public Shape {
@@ -64,12 +67,38 @@ public record RecordObjectMethodsCall(List<RecordObjectMethodsCall.Component> co
         }
 
         /**
+         * Creates a shape without exact String Map metadata.
+         *
+         * @param descriptor erased JVM descriptor
+         * @param referenceOwner direct reference owner when present
+         * @param listElement exact List element shape when present
+         * @param valid true when the signature has a closed syntactic shape
+         */
+        public Shape(
+            final String descriptor,
+            final Optional<String> referenceOwner,
+            final Optional<Shape> listElement,
+            final boolean valid
+        ) {
+            this(descriptor, referenceOwner, listElement, false, valid);
+        }
+
+        /**
          * Returns true for an exact List or ArrayList shape.
          *
          * @return true when this shape has one planned List element
          */
         public boolean isList() {
             return listElement.isPresent();
+        }
+
+        /**
+         * Returns true for an exact Map&lt;String, String&gt; shape.
+         *
+         * @return true when this shape is the admitted Map shape
+         */
+        public boolean isStringMap() {
+            return stringMap;
         }
 
         /**
@@ -251,6 +280,18 @@ public record RecordObjectMethodsCall(List<RecordObjectMethodsCall.Component> co
             }
             return parsed.orElseThrow().shape();
         }
+        if (isMapOwner(owner.orElseThrow())) {
+            if (field.signature().isEmpty()) {
+                return invalidShape(descriptor);
+            }
+            final Optional<ParsedType> parsed = parseSignature(field.signature().orElseThrow());
+            if (parsed.isEmpty()
+                || !descriptor.equals(parsed.orElseThrow().erasure())
+                || !parsed.orElseThrow().shape().isStringMap()) {
+                return invalidShape(descriptor);
+            }
+            return parsed.orElseThrow().shape();
+        }
         if (field.signature().isEmpty()) {
             return referenceShape(descriptor, owner.orElseThrow());
         }
@@ -282,27 +323,35 @@ public record RecordObjectMethodsCall(List<RecordObjectMethodsCall.Component> co
     }
 
     private static Shape primitiveShape(final String descriptor) {
-        return new Shape(descriptor, Optional.empty(), Optional.empty(), true);
+        return new Shape(descriptor, Optional.empty(), Optional.empty(), false, true);
     }
 
     private static Shape arrayShape(final String descriptor) {
-        return new Shape(descriptor, Optional.empty(), Optional.empty(), true);
+        return new Shape(descriptor, Optional.empty(), Optional.empty(), false, true);
     }
 
     private static Shape referenceShape(final String descriptor, final String owner) {
-        return new Shape(descriptor, Optional.of(owner), Optional.empty(), true);
+        return new Shape(descriptor, Optional.of(owner), Optional.empty(), false, true);
     }
 
     private static Shape listShape(final String descriptor, final String owner, final Shape element) {
-        return new Shape(descriptor, Optional.of(owner), Optional.of(element), element.valid());
+        return new Shape(descriptor, Optional.of(owner), Optional.of(element), false, element.valid());
+    }
+
+    private static Shape stringMapShape(final String descriptor, final String owner) {
+        return new Shape(descriptor, Optional.of(owner), Optional.empty(), true, true);
     }
 
     private static Shape invalidShape(final String descriptor) {
-        return new Shape(descriptor, Optional.empty(), Optional.empty(), false);
+        return new Shape(descriptor, Optional.empty(), Optional.empty(), false, false);
     }
 
     private static boolean isListOwner(final String owner) {
         return LIST.equals(owner) || ARRAY_LIST.equals(owner);
+    }
+
+    private static boolean isMapOwner(final String owner) {
+        return MAP.equals(owner);
     }
 
     private record ParsedType(Shape shape, String erasure) {
@@ -395,8 +444,17 @@ public record RecordObjectMethodsCall(List<RecordObjectMethodsCall.Component> co
             }
             index++;
             final Shape shape;
-            if (isListOwner(owner) && arguments.size() == 1) {
+            if ("java/lang/String".equals(owner)) {
+                shape = invalidShape(descriptor);
+            } else if (isListOwner(owner) && arguments.size() == 1) {
                 shape = listShape(descriptor, owner, arguments.getFirst());
+            } else if (isMapOwner(owner)
+                && arguments.size() == 2
+                && exactStringShape(arguments.get(0))
+                && exactStringShape(arguments.get(1))) {
+                shape = stringMapShape(descriptor, owner);
+            } else if (isMapOwner(owner)) {
+                shape = invalidShape(descriptor);
             } else if (closed(arguments)) {
                 shape = referenceShape(descriptor, owner);
             } else {
@@ -412,6 +470,10 @@ public record RecordObjectMethodsCall(List<RecordObjectMethodsCall.Component> co
                 }
             }
             return true;
+        }
+
+        private static boolean exactStringShape(final Shape shape) {
+            return shape.valid() && "Ljava/lang/String;".equals(shape.descriptor());
         }
 
         private Optional<Shape> typeArgument() {
