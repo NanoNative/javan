@@ -11214,6 +11214,31 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
             """)).isEqualTo(typedHandlerParitySuccess("-4\n"));
     }
 
+    @Test
+    void mathMultiplyExactI2lProtectedHandlerIsAdmitted() throws Exception {
+        assertThat(runTypedHandlerParity("math-multiply-exact-i2l", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(widenedProduct(2));
+                }
+
+                private static long widenedProduct(final int intValue) {
+                    try {
+                        return Math.multiplyExact((long) intValue, intValue);
+                    } catch (final ArithmeticException ignored) {
+                        return -1L;
+                    }
+                }
+
+            }
+            """)).isEqualTo(typedHandlerParitySuccess("4\n"));
+    }
+
     private TypedHandlerParityResult runMapTypedHandlerParity(
         final String projectName,
         final String catchType,
