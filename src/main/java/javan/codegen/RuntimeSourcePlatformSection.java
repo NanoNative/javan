@@ -315,11 +315,12 @@ final class RuntimeSourcePlatformSection {
             if (value == NULL) {
                 javan_panic("null CharSequence");
             }
-            javan_allocation_node* node = javan_find_allocation(value, NULL);
-            if (node == NULL || node->runtime_kind == JAVAN_RUNTIME_KIND_STRING) {
+            javan_allocation_metadata snapshot;
+            if (javan_find_allocation(value, &snapshot) == 0
+                || snapshot.runtime_kind == JAVAN_RUNTIME_KIND_STRING) {
                 return javan_string_length((const char*) value);
             }
-            if (node->runtime_kind == JAVAN_RUNTIME_KIND_STRING_BUILDER) {
+            if (snapshot.runtime_kind == JAVAN_RUNTIME_KIND_STRING_BUILDER) {
                 return javan_stringbuilder_length(value);
             }
             javan_panic("unsupported CharSequence runtime");
@@ -330,11 +331,12 @@ final class RuntimeSourcePlatformSection {
             if (value == NULL) {
                 javan_panic("null CharSequence");
             }
-            javan_allocation_node* node = javan_find_allocation(value, NULL);
-            if (node == NULL || node->runtime_kind == JAVAN_RUNTIME_KIND_STRING) {
+            javan_allocation_metadata snapshot;
+            if (javan_find_allocation(value, &snapshot) == 0
+                || snapshot.runtime_kind == JAVAN_RUNTIME_KIND_STRING) {
                 return javan_string_char_at((const char*) value, index);
             }
-            if (node->runtime_kind == JAVAN_RUNTIME_KIND_STRING_BUILDER) {
+            if (snapshot.runtime_kind == JAVAN_RUNTIME_KIND_STRING_BUILDER) {
                 return javan_stringbuilder_char_at(value, index);
             }
             javan_panic("unsupported CharSequence runtime");

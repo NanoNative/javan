@@ -43,6 +43,1118 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void recordStringValidationBoundsBorrowedLookupMissesWithManyLiveAllocations() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            enum {
+                ALLOCATION_COUNT = 32768,
+                LOOKUP_COUNT = 131072
+            };
+
+            int main(void) {
+                const char borrowed[] = "borrowed record component";
+                javan_register_static_roots(0, 0);
+                for (int index = 0; index < ALLOCATION_COUNT; index++) {
+                    (void) javan_alloc(1);
+                }
+                for (int index = 0; index < LOOKUP_COUNT; index++) {
+                    javan_record_shape_validate((void*) "literal record component", "s");
+                    javan_record_shape_validate((void*) borrowed, "s");
+                }
+                javan_validate_heap_metadata();
+                puts("ok");
+                return 0;
+            }
+            """,
+            "65536",
+            Map.of("JAVAN_GC_STRESS", ""),
+            java.time.Duration.ofSeconds(6)
+        );
+
+        assertThat(stdout).isEqualTo("ok\n");
+    }
+
+    @Test
+    void recordStringValidationRejectsTrackedNonString() throws Exception {
+        final String panic = runRuntimePanicProbe(
+            "javan_register_static_roots(0, 0);",
+            "javan_record_shape_validate(javan_alloc(1), \"s\");"
+        );
+
+        assertThat(panic).isEqualTo("record generic value does not match declared shape\n");
+    }
+
+    @Test
+    void allocationIndexSurvivesGrowthDeletionReallocationAndCollection() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            enum { VALUE_COUNT = 640 };
+
+            int main(void) {
+                void* values[VALUE_COUNT];
+                javan_register_static_roots(0, 0);
+                javan_pending_throw("java/lang/Throwable", NULL, "", "", "", -1, -1, "");
+                javan_pending_clear();
+                javan_gc_collect();
+                const unsigned long baseline = javan_heap_live_allocations();
+                for (int index = 0; index < VALUE_COUNT; index++) {
+                    values[index] = javan_alloc(1);
+                }
+                for (int index = 0; index < VALUE_COUNT; index += 2) {
+                    javan_free(values[index]);
+                    values[index] = NULL;
+                }
+                void* list = javan_arraylist_new();
+                for (int index = 1; index < VALUE_COUNT; index += 2) {
+                    javan_arraylist_add(list, values[index]);
+                }
+                javan_free(list);
+                for (int index = 1; index < VALUE_COUNT; index += 2) {
+                    javan_free(values[index]);
+                }
+                javan_pending_throw("java/lang/Throwable", NULL, "", "", "", -1, -1, "");
+                (void) javan_pending_catch();
+                javan_pending_clear();
+                javan_gc_collect();
+                javan_validate_heap_metadata();
+                printf("%d\\n", javan_heap_live_allocations() == baseline);
+                return 0;
+            }
+            """,
+            "131072"
+        );
+
+        assertThat(stdout).isEqualTo("1\n");
+    }
+
+    @Test
+    void rootedAllocationValuesTableReservationFailureNeverPublishesFreedPointer() throws Exception {
+        assertThat(rootedAllocationRegistryReservationFailure(1)).isEqualTo("0\n1\n");
+    }
+
+    @Test
+    void rootedAllocationNodesTableReservationFailureNeverPublishesFreedPointer() throws Exception {
+        assertThat(rootedAllocationRegistryReservationFailure(2)).isEqualTo("0\n1\n");
+    }
+
+    @Test
+    void rootedAllocationNodeMetadataFailureNeverPublishesFreedPointer() throws Exception {
+        assertThat(rootedAllocationNodeMetadataFailure()).isEqualTo("0\n1\n");
+    }
+
+    @Test
+    void allocationRegistryCapacityOverflowRejectsWithoutMutation() throws Exception {
+        assertThat(runInstrumentedRuntimeProbe(
+            List.of(),
+            """
+            int javan_test_allocation_registry_capacity_overflow(void* tracked) {
+                javan_runtime_lock_enter();
+                void** values = javan_allocation_index.values;
+                javan_allocation_node** nodes = javan_allocation_index.nodes;
+                int length = javan_allocation_index.length;
+                int capacity = javan_allocation_index.capacity;
+                int occupied = javan_registry_slot(values, capacity, tracked);
+                void* indexed_value = values[occupied];
+                javan_allocation_node* indexed_node = nodes[occupied];
+                int accepted = javan_allocation_registry_ensure_capacity(INT_MAX / 2 + 1);
+                int unchanged = javan_allocation_index.values == values
+                    && javan_allocation_index.nodes == nodes
+                    && javan_allocation_index.length == length
+                    && javan_allocation_index.capacity == capacity
+                    && values[occupied] == indexed_value
+                    && nodes[occupied] == indexed_node;
+                javan_runtime_lock_leave();
+                return accepted == 0 && unchanged != 0;
+            }
+            """,
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            extern int javan_test_allocation_registry_capacity_overflow(void* tracked);
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* value = javan_alloc(1);
+                int passed = javan_test_allocation_registry_capacity_overflow(value);
+                javan_validate_heap_metadata();
+                javan_free(value);
+                printf("%d\\n", passed);
+                return 0;
+            }
+            """,
+            "4096",
+            Map.of("JAVAN_GC_STRESS", ""),
+            java.time.Duration.ofSeconds(30)
+        )).isEqualTo("0\n1\n");
+    }
+
+    @Test
+    void heapMetadataRejectsNonPowerOfTwoAllocationIndexCapacity() throws Exception {
+        assertThat(heapMetadataFailure(
+            """
+            static void* javan_test_non_power_of_two_values[3];
+            static javan_allocation_node* javan_test_non_power_of_two_nodes[3];
+
+            void javan_test_corrupt_allocation_index_capacity(void) {
+                javan_allocation_index.values = javan_test_non_power_of_two_values;
+                javan_allocation_index.nodes = javan_test_non_power_of_two_nodes;
+                javan_allocation_index.length = 0;
+                javan_allocation_index.capacity = 3;
+            }
+            """,
+            """
+            extern void javan_test_corrupt_allocation_index_capacity(void);
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                javan_test_corrupt_allocation_index_capacity();
+                return javan_heap_metadata_failure_result();
+            }
+            """
+        )).isEqualTo("0\ninvalid heap allocation index\n");
+    }
+
+    @Test
+    void heapMetadataRejectsAllocationIndexAtFiftyPercentLoad() throws Exception {
+        assertThat(heapMetadataFailure(
+            """
+            void javan_test_corrupt_allocation_index_load(void* value) {
+                (void) value;
+                javan_allocation_index.length = javan_allocation_index.capacity / 2;
+            }
+            """,
+            """
+            extern void javan_test_corrupt_allocation_index_load(void* value);
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* value = javan_alloc(1);
+                javan_test_corrupt_allocation_index_load(value);
+                return javan_heap_metadata_failure_result();
+            }
+            """
+        )).isEqualTo("0\ninvalid heap allocation index\n");
+    }
+
+    @Test
+    void forcedMovedReallocationKeepsAllocationMetadataValid() throws Exception {
+        assertThat(runInstrumentedRuntimeProbe(
+            List.of(
+                new RuntimeReplacement(
+                    "static void* javan_realloc_tracked(",
+                    """
+                    static void* javan_test_force_moved_realloc(void* value, unsigned long old_size, unsigned long size);
+
+                    static void* javan_realloc_tracked(
+                    """.stripTrailing()
+                ),
+                new RuntimeReplacement(
+                    "realloc(value, actual_size)",
+                    "javan_test_force_moved_realloc(value, node->size, actual_size)",
+                    2
+                )
+            ),
+            """
+            static int javan_test_force_moved_realloc_count = 0;
+
+            static void* javan_test_force_moved_realloc(void* value, unsigned long old_size, unsigned long size) {
+                void* next = malloc(size);
+                if (next == NULL) {
+                    return NULL;
+                }
+                memcpy(next, value, old_size < size ? old_size : size);
+                free(value);
+                javan_test_force_moved_realloc_count++;
+                return next;
+            }
+
+            int javan_test_forced_moved_reallocation(void) {
+                void* value = javan_alloc(8);
+                uintptr_t original_address = (uintptr_t) value;
+                memset(value, 0x5a, 8);
+                void* next = javan_realloc(value, 64);
+                int moved = (uintptr_t) next != original_address;
+                javan_allocation_metadata snapshot;
+                int old_removed = javan_find_allocation((void*) original_address, &snapshot) == 0;
+                int indexed = javan_find_allocation(next, &snapshot) != 0
+                    && snapshot.value == next && snapshot.base == next && snapshot.size == 64;
+                javan_validate_heap_metadata();
+                javan_free(next);
+                javan_validate_heap_metadata();
+                return moved != 0
+                    && old_removed != 0
+                    && indexed != 0
+                    && javan_test_force_moved_realloc_count == 1
+                    && javan_heap_live_allocations() == 0;
+            }
+            """,
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            extern int javan_test_forced_moved_reallocation(void);
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                printf("%d\\n", javan_test_forced_moved_reallocation());
+                return 0;
+            }
+            """,
+            "4096",
+            Map.of("JAVAN_GC_STRESS", ""),
+            java.time.Duration.ofSeconds(30)
+        )).isEqualTo("0\n1\n");
+    }
+
+    @Test
+    void concurrentExplicitFreeCannotInvalidateBuiltinInstanceOfMetadataSnapshot() throws Exception {
+        assertThat(runInstrumentedRuntimeProbe(
+            List.of(
+                new RuntimeReplacement(
+                    "static int javan_find_allocation(void* value, javan_allocation_metadata* snapshot) {",
+                    """
+                    static void javan_test_after_allocation_snapshot(javan_allocation_metadata* snapshot);
+                    static void javan_test_dispose_allocation_node(javan_allocation_node* node);
+
+                    static int javan_find_allocation(void* value, javan_allocation_metadata* snapshot) {
+                    """.stripTrailing()
+                ),
+                new RuntimeReplacement(
+                    """
+                    javan_runtime_lock_leave();
+                    return found;
+                    """.stripTrailing().indent(4).stripTrailing(),
+                    """
+                    javan_runtime_lock_leave();
+                    if (found != 0) {
+                        javan_test_after_allocation_snapshot(snapshot);
+                    }
+                    return found;
+                    """.stripTrailing().indent(4).stripTrailing()
+                ),
+                new RuntimeReplacement(
+                    """
+                    javan_allocation_registry_remove(value);
+                    free(node);
+                    free(base);
+                    javan_heap_maybe_validate();
+                    """.stripTrailing().indent(4).stripTrailing(),
+                    """
+                    javan_allocation_registry_remove(value);
+                    javan_test_dispose_allocation_node(node);
+                    free(base);
+                    javan_heap_maybe_validate();
+                    """.stripTrailing().indent(4).stripTrailing()
+                )
+            ),
+            """
+            static void javan_test_dispose_allocation_node(javan_allocation_node* node);
+
+            #include <stdatomic.h>
+
+            static void* javan_test_snapshot_target = NULL;
+            static javan_allocation_node* javan_test_deferred_node = NULL;
+            static atomic_int javan_test_snapshot_ready = ATOMIC_VAR_INIT(0);
+            static atomic_int javan_test_node_disposed = ATOMIC_VAR_INIT(0);
+
+            static void javan_test_thread_yield(void) {
+                #if defined(_WIN32)
+                (void) SwitchToThread();
+                #else
+                (void) sched_yield();
+                #endif
+            }
+
+            static void javan_test_after_allocation_snapshot(javan_allocation_metadata* snapshot) {
+                if (snapshot->value != javan_test_snapshot_target) {
+                    return;
+                }
+                atomic_store_explicit(&javan_test_snapshot_ready, 1, memory_order_release);
+                while (atomic_load_explicit(&javan_test_node_disposed, memory_order_acquire) == 0) {
+                    javan_test_thread_yield();
+                }
+            }
+
+            static void javan_test_dispose_allocation_node(javan_allocation_node* node) {
+                memset(node, 0xa5, sizeof(javan_allocation_node));
+                javan_test_deferred_node = node;
+                atomic_store_explicit(&javan_test_node_disposed, 1, memory_order_release);
+            }
+
+            void javan_test_set_snapshot_target(void* value) {
+                javan_test_snapshot_target = value;
+            }
+
+            int javan_test_snapshot_ready_value(void) {
+                return atomic_load_explicit(&javan_test_snapshot_ready, memory_order_acquire);
+            }
+
+            int javan_test_node_was_deferred(void) {
+                return javan_test_deferred_node != NULL
+                    && atomic_load_explicit(&javan_test_node_disposed, memory_order_acquire) != 0;
+            }
+
+            void javan_test_release_deferred_node(void) {
+                free(javan_test_deferred_node);
+                javan_test_deferred_node = NULL;
+            }
+            """,
+            """
+            #include "javan_runtime.h"
+            #include <stdatomic.h>
+            #include <stdio.h>
+
+            #if defined(_WIN32)
+            #include <windows.h>
+            #else
+            #include <pthread.h>
+            #include <sched.h>
+            #endif
+
+            static void* value;
+            static atomic_int instance_result = ATOMIC_VAR_INIT(0);
+
+            extern void javan_test_set_snapshot_target(void* value);
+            extern int javan_test_snapshot_ready_value(void);
+            extern int javan_test_node_was_deferred(void);
+            extern void javan_test_release_deferred_node(void);
+
+            static void javan_test_yield(void) {
+                #if defined(_WIN32)
+                (void) SwitchToThread();
+                #else
+                (void) sched_yield();
+                #endif
+            }
+
+            static void javan_test_lookup(void) {
+                atomic_store_explicit(
+                    &instance_result,
+                    javan_object_builtin_instance_of(value, 1),
+                    memory_order_release
+                );
+            }
+
+            static void javan_test_free(void) {
+                while (javan_test_snapshot_ready_value() == 0) {
+                    javan_test_yield();
+                }
+                javan_free(value);
+            }
+
+            #if defined(_WIN32)
+            static DWORD WINAPI javan_test_lookup_entry(LPVOID argument) {
+                (void) argument;
+                javan_test_lookup();
+                return 0;
+            }
+
+            static DWORD WINAPI javan_test_free_entry(LPVOID argument) {
+                (void) argument;
+                javan_test_free();
+                return 0;
+            }
+            #else
+            static void* javan_test_lookup_entry(void* argument) {
+                (void) argument;
+                javan_test_lookup();
+                return NULL;
+            }
+
+            static void* javan_test_free_entry(void* argument) {
+                (void) argument;
+                javan_test_free();
+                return NULL;
+            }
+            #endif
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                value = javan_arraylist_new();
+                javan_test_set_snapshot_target(value);
+                #if defined(_WIN32)
+                HANDLE lookup = CreateThread(NULL, 0, javan_test_lookup_entry, NULL, 0, NULL);
+                HANDLE freer = CreateThread(NULL, 0, javan_test_free_entry, NULL, 0, NULL);
+                if (lookup == NULL || freer == NULL) {
+                    if (lookup != NULL) CloseHandle(lookup);
+                    if (freer != NULL) CloseHandle(freer);
+                    return 2;
+                }
+                DWORD lookup_wait = WaitForSingleObject(lookup, INFINITE);
+                DWORD free_wait = WaitForSingleObject(freer, INFINITE);
+                CloseHandle(lookup);
+                CloseHandle(freer);
+                if (lookup_wait != WAIT_OBJECT_0 || free_wait != WAIT_OBJECT_0) {
+                    return 3;
+                }
+                #else
+                pthread_t lookup;
+                pthread_t freer;
+                if (pthread_create(&lookup, NULL, javan_test_lookup_entry, NULL) != 0) {
+                    return 2;
+                }
+                if (pthread_create(&freer, NULL, javan_test_free_entry, NULL) != 0) {
+                    (void) pthread_join(lookup, NULL);
+                    return 2;
+                }
+                if (pthread_join(lookup, NULL) != 0 || pthread_join(freer, NULL) != 0) {
+                    return 3;
+                }
+                #endif
+                int passed = atomic_load_explicit(&instance_result, memory_order_acquire) == 1
+                    && javan_test_node_was_deferred() != 0
+                    && javan_heap_live_allocations() == 0;
+                javan_test_release_deferred_node();
+                printf("%d\\n", passed);
+                return 0;
+            }
+            """,
+            "4096",
+            Map.of("JAVAN_GC_STRESS", ""),
+            java.time.Duration.ofSeconds(30)
+        )).isEqualTo("0\n1\n");
+    }
+
+    @Test
+    void objectEqualsUsesIndependentAllocationMetadataSnapshots() throws Exception {
+        assertThat(runInstrumentedRuntimeProbe(
+            List.of(
+                new RuntimeReplacement(
+                    "static int javan_find_allocation(void* value, javan_allocation_metadata* snapshot) {",
+                    """
+                    static void javan_test_record_snapshot_address(javan_allocation_metadata* snapshot);
+
+                    static int javan_find_allocation(void* value, javan_allocation_metadata* snapshot) {
+                    """.stripTrailing()
+                ),
+                new RuntimeReplacement(
+                    """
+                    javan_runtime_lock_leave();
+                    return found;
+                    """.stripTrailing().indent(4).stripTrailing(),
+                    """
+                    javan_runtime_lock_leave();
+                    if (found != 0) {
+                        javan_test_record_snapshot_address(snapshot);
+                    }
+                    return found;
+                    """.stripTrailing().indent(4).stripTrailing()
+                )
+            ),
+            """
+            static void* javan_test_left = NULL;
+            static void* javan_test_right = NULL;
+            static javan_allocation_metadata* javan_test_left_snapshot = NULL;
+            static javan_allocation_metadata* javan_test_right_snapshot = NULL;
+
+            static void javan_test_record_snapshot_address(javan_allocation_metadata* snapshot) {
+                if (snapshot->value == javan_test_left) {
+                    javan_test_left_snapshot = snapshot;
+                } else if (snapshot->value == javan_test_right) {
+                    javan_test_right_snapshot = snapshot;
+                }
+            }
+
+            int javan_test_object_equals_snapshot_addresses(void) {
+                javan_test_left = javan_arraylist_new();
+                javan_test_right = javan_arraylist_new();
+                ((unsigned char*) javan_test_left)[0] = 1;
+                ((unsigned char*) javan_test_right)[0] = 1;
+                int equals = javan_object_equals(javan_test_left, javan_test_right);
+                int independent = javan_test_left_snapshot != NULL
+                    && javan_test_right_snapshot != NULL
+                    && javan_test_left_snapshot != javan_test_right_snapshot;
+                javan_free(javan_test_left);
+                javan_free(javan_test_right);
+                return equals == 0 && independent != 0 && javan_heap_live_allocations() == 0;
+            }
+            """,
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            extern int javan_test_object_equals_snapshot_addresses(void);
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                printf("%d\\n", javan_test_object_equals_snapshot_addresses());
+                return 0;
+            }
+            """,
+            "4096",
+            Map.of("JAVAN_GC_STRESS", ""),
+            java.time.Duration.ofSeconds(30)
+        )).isEqualTo("0\n1\n");
+    }
+
+    @Test
+    void concurrentAuthoritativeMissesCompleteWhileAllocationRegistryGrowsAndFrees() throws Exception {
+        final InstrumentedRuntimeProbe probe = concurrentAuthoritativeMissesProbe();
+
+        assertThat(runInstrumentedRuntimeProbe(
+            probe.replacements(),
+            probe.runtimeProbe(),
+            probe.main(),
+            "131072",
+            Map.of("JAVAN_GC_STRESS", ""),
+            java.time.Duration.ofSeconds(30)
+        )).isEqualTo("0\n1\n");
+    }
+
+    @Test
+    void concurrentAuthoritativeMissesProbeWin32BranchCrossCompilesWhenMinGwIsAvailable() throws Exception {
+        final Path compiler = findFirstExecutableOnPath("x86_64-w64-mingw32-gcc");
+        assumeTrue(compiler != null, "MinGW cross compiler is not installed");
+        final InstrumentedRuntimeProbe probe = concurrentAuthoritativeMissesProbe();
+        final Path runtime = writeInstrumentedRuntimeProbe(probe.replacements(), probe.runtimeProbe(), probe.main());
+        final Path source = instrumentedRuntimeProbeSource();
+        final TestProcesses.Result mainCompile = TestProcesses.run(
+            tempDir,
+            mingwCompileCommand(compiler, source, tempDir.resolve("instrumented-runtime-probe-main.o")),
+            java.time.Duration.ofSeconds(60)
+        );
+        final TestProcesses.Result runtimeCompile = TestProcesses.run(
+            tempDir,
+            mingwCompileCommand(compiler, runtime, tempDir.resolve("instrumented-runtime-probe-runtime.o")),
+            java.time.Duration.ofSeconds(60)
+        );
+
+        assertThat(List.of(mainCompile.exitCode(), runtimeCompile.exitCode()))
+            .describedAs(mainCompile.stderr() + runtimeCompile.stderr())
+            .containsExactly(0, 0);
+    }
+
+    private InstrumentedRuntimeProbe concurrentAuthoritativeMissesProbe() {
+        return new InstrumentedRuntimeProbe(
+            List.of(new RuntimeReplacement(
+                """
+                static javan_allocation_node* javan_allocation_registry_lookup(void* value) {
+                    if (value == NULL || javan_allocation_index.capacity <= 0) {
+                """.stripTrailing(),
+                """
+                static void javan_test_record_allocation_registry_lookup_lock(void);
+
+                static javan_allocation_node* javan_allocation_registry_lookup(void* value) {
+                    javan_test_record_allocation_registry_lookup_lock();
+                    if (value == NULL || javan_allocation_index.capacity <= 0) {
+                """.stripTrailing()
+            )),
+            """
+            static int javan_test_unlocked_allocation_registry_lookup = 0;
+
+            static void javan_test_record_allocation_registry_lookup_lock(void) {
+                if (javan_runtime_lock_depth_value <= 0) {
+                    javan_test_unlocked_allocation_registry_lookup = 1;
+                }
+            }
+
+            int javan_test_authoritative_allocation_miss(void* value) {
+                javan_allocation_metadata snapshot;
+                return javan_find_allocation(value, &snapshot) == 0;
+            }
+
+            int javan_test_allocation_lookup_was_serialized(void) {
+                return javan_test_unlocked_allocation_registry_lookup == 0
+                    && javan_allocation_index.capacity >= 2048;
+            }
+            """,
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+            #include <stdatomic.h>
+
+            #if defined(_WIN32)
+            #include <windows.h>
+            #else
+            #include <pthread.h>
+            #endif
+
+            enum {
+                MUTATION_ROUNDS = 64,
+                VALUE_COUNT = 640,
+                MISS_COUNT = 131072,
+                FINDER_WORKER = 1,
+                MUTATOR_WORKER = 2
+            };
+
+            typedef struct {
+                int kind;
+            } javan_test_worker;
+
+            static char borrowed_values[MISS_COUNT];
+            static atomic_int miss_failed = ATOMIC_VAR_INIT(0);
+            static atomic_int mutation_failed = ATOMIC_VAR_INIT(0);
+            static atomic_int workers_ready = ATOMIC_VAR_INIT(0);
+            static atomic_int workers_started = ATOMIC_VAR_INIT(0);
+            static atomic_int workers_active = ATOMIC_VAR_INIT(0);
+            static atomic_int workers_overlapped = ATOMIC_VAR_INIT(0);
+            static atomic_int workers_cancelled = ATOMIC_VAR_INIT(0);
+
+            extern int javan_test_authoritative_allocation_miss(void* value);
+            extern int javan_test_allocation_lookup_was_serialized(void);
+
+            static int javan_test_wait_for_worker_overlap(void) {
+                atomic_fetch_add_explicit(&workers_ready, 1, memory_order_acq_rel);
+                while (atomic_load_explicit(&workers_started, memory_order_acquire) == 0
+                    && atomic_load_explicit(&workers_cancelled, memory_order_acquire) == 0) {
+                }
+                if (atomic_load_explicit(&workers_cancelled, memory_order_acquire) != 0) {
+                    return 0;
+                }
+                atomic_fetch_add_explicit(&workers_active, 1, memory_order_acq_rel);
+                while (atomic_load_explicit(&workers_active, memory_order_acquire) < 2
+                    && atomic_load_explicit(&workers_cancelled, memory_order_acquire) == 0) {
+                }
+                if (atomic_load_explicit(&workers_cancelled, memory_order_acquire) != 0) {
+                    return 0;
+                }
+                atomic_store_explicit(&workers_overlapped, 1, memory_order_release);
+                return 1;
+            }
+
+            static void javan_test_find_misses(void) {
+                for (int index = 0; index < MISS_COUNT; index++) {
+                    if (javan_test_authoritative_allocation_miss(&borrowed_values[index]) == 0) {
+                        atomic_store_explicit(&miss_failed, 1, memory_order_release);
+                        return;
+                    }
+                }
+            }
+
+            static void javan_test_grow_and_free(void) {
+                void* values[VALUE_COUNT];
+                for (int round = 0; round < MUTATION_ROUNDS; round++) {
+                    for (int index = 0; index < VALUE_COUNT; index++) {
+                        values[index] = javan_alloc(1);
+                        if (values[index] == NULL) {
+                            atomic_store_explicit(&mutation_failed, 1, memory_order_release);
+                            return;
+                        }
+                    }
+                    for (int index = VALUE_COUNT - 1; index >= 0; index--) {
+                        javan_free(values[index]);
+                    }
+                }
+            }
+
+            static void javan_test_run_worker(void* argument) {
+                javan_test_worker* worker = (javan_test_worker*) argument;
+                if (javan_test_wait_for_worker_overlap() == 0) {
+                    return;
+                }
+                if (worker->kind == FINDER_WORKER) {
+                    javan_test_find_misses();
+                    return;
+                }
+                javan_test_grow_and_free();
+            }
+
+            #if defined(_WIN32)
+            static DWORD WINAPI javan_test_worker_entry(LPVOID argument) {
+                javan_test_run_worker(argument);
+                return 0;
+            }
+            #else
+            static void* javan_test_worker_entry(void* argument) {
+                javan_test_run_worker(argument);
+                return NULL;
+            }
+            #endif
+
+            static void javan_test_cancel_workers(void) {
+                atomic_store_explicit(&workers_cancelled, 1, memory_order_release);
+                atomic_store_explicit(&workers_started, 1, memory_order_release);
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                javan_test_worker finder_worker = { FINDER_WORKER };
+                javan_test_worker mutator_worker = { MUTATOR_WORKER };
+                #if defined(_WIN32)
+                HANDLE finder = CreateThread(NULL, 0, javan_test_worker_entry, &finder_worker, 0, NULL);
+                if (finder == NULL) {
+                    return 2;
+                }
+                HANDLE mutator = CreateThread(NULL, 0, javan_test_worker_entry, &mutator_worker, 0, NULL);
+                if (mutator == NULL) {
+                    javan_test_cancel_workers();
+                    (void) WaitForSingleObject(finder, INFINITE);
+                    CloseHandle(finder);
+                    return 2;
+                }
+                #else
+                pthread_t finder;
+                pthread_t mutator;
+                if (pthread_create(&finder, NULL, javan_test_worker_entry, &finder_worker) != 0) {
+                    return 2;
+                }
+                if (pthread_create(&mutator, NULL, javan_test_worker_entry, &mutator_worker) != 0) {
+                    javan_test_cancel_workers();
+                    (void) pthread_join(finder, NULL);
+                    return 2;
+                }
+                #endif
+                while (atomic_load_explicit(&workers_ready, memory_order_acquire) < 2) {
+                }
+                atomic_store_explicit(&workers_started, 1, memory_order_release);
+                #if defined(_WIN32)
+                DWORD finder_wait = WaitForSingleObject(finder, INFINITE);
+                DWORD mutator_wait = WaitForSingleObject(mutator, INFINITE);
+                CloseHandle(finder);
+                CloseHandle(mutator);
+                if (finder_wait != WAIT_OBJECT_0 || mutator_wait != WAIT_OBJECT_0) {
+                    return 3;
+                }
+                #else
+                if (pthread_join(finder, NULL) != 0 || pthread_join(mutator, NULL) != 0) {
+                    return 3;
+                }
+                #endif
+                javan_validate_heap_metadata();
+                printf("%d\\n",
+                    atomic_load_explicit(&miss_failed, memory_order_acquire) == 0
+                        && atomic_load_explicit(&mutation_failed, memory_order_acquire) == 0
+                        && atomic_load_explicit(&workers_overlapped, memory_order_acquire) != 0
+                        && javan_test_allocation_lookup_was_serialized() != 0
+                        && javan_heap_live_allocations() == 0);
+                return 0;
+            }
+            """
+        );
+    }
+
+    @Test
+    void heapMetadataRejectsAllocationIndexEntryWithoutNode() throws Exception {
+        assertThat(heapMetadataFailure(
+            """
+            void javan_test_corrupt_allocation_index(void* value) {
+                int index = javan_registry_slot(javan_allocation_index.values, javan_allocation_index.capacity, value);
+                javan_allocation_index.nodes[index] = NULL;
+            }
+            """,
+            """
+            extern void javan_test_corrupt_allocation_index(void* value);
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* value = javan_alloc(1);
+                javan_test_corrupt_allocation_index(value);
+                return javan_heap_metadata_failure_result();
+            }
+            """
+        )).isEqualTo("0\ninvalid heap allocation index\n");
+    }
+
+    @Test
+    void heapMetadataRejectsCacheEntryWithoutNode() throws Exception {
+        assertThat(heapMetadataFailure(
+            """
+            void javan_test_corrupt_allocation_cache(void) {
+                javan_allocation_cache_nodes[0] = NULL;
+            }
+            """,
+            """
+            extern void javan_test_corrupt_allocation_cache(void);
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_alloc(1);
+                javan_test_corrupt_allocation_cache();
+                return javan_heap_metadata_failure_result();
+            }
+            """
+        )).isEqualTo("0\ninvalid heap allocation cache\n");
+    }
+
+    private String rootedAllocationRegistryReservationFailure(final int failureStep) throws Exception {
+        return runInstrumentedRuntimeProbe(
+            List.of(new RuntimeReplacement(
+                """
+                static void* javan_raw_calloc_retry(unsigned long size) {
+                    void* value = calloc(1, size);
+                    if (value == NULL) {
+                        javan_gc_collect();
+                        value = calloc(1, size);
+                    }
+                    return value;
+                }
+                """.stripTrailing(),
+                """
+                int javan_test_allocation_registry_reservation_failure_step = 0;
+                int javan_test_allocation_registry_reservation_failure_count = 0;
+
+                static void* javan_raw_calloc_retry(unsigned long size) {
+                    if (javan_test_allocation_registry_reservation_failure_step == 1) {
+                        javan_test_allocation_registry_reservation_failure_step = 0;
+                        javan_test_allocation_registry_reservation_failure_count++;
+                        return NULL;
+                    }
+                    if (javan_test_allocation_registry_reservation_failure_step == 2) {
+                        javan_test_allocation_registry_reservation_failure_step = 1;
+                    }
+                    void* value = calloc(1, size);
+                    if (value == NULL) {
+                        javan_gc_collect();
+                        value = calloc(1, size);
+                    }
+                    return value;
+                }
+                """.stripTrailing()
+            )),
+            """
+            void javan_test_alloc_rooted(void** root_slot) {
+                (void) javan_alloc_rooted(1, root_slot);
+            }
+            """,
+            """
+            #include "javan_runtime.h"
+            #include <setjmp.h>
+            #include <stdio.h>
+            #include <string.h>
+
+            extern int javan_test_allocation_registry_reservation_failure_step;
+            extern int javan_test_allocation_registry_reservation_failure_count;
+            extern void javan_test_alloc_rooted(void** root_slot);
+
+            int main(void) {
+                void* values[63];
+                static void* rooted = NULL;
+                javan_register_static_roots(0, 0);
+                for (int index = 0; index < 63; index++) {
+                    values[index] = javan_alloc(1);
+                }
+                jmp_buf target;
+                javan_panic_set_target(&target);
+                if (setjmp(target) == 0) {
+                    javan_test_allocation_registry_reservation_failure_step = %d;
+                    javan_test_alloc_rooted(&rooted);
+                    return 2;
+                }
+                int passed = strcmp(javan_last_error(), "out of memory") == 0
+                    && rooted == NULL
+                    && javan_test_allocation_registry_reservation_failure_count == 1;
+                javan_panic_clear_target(&target);
+                javan_clear_error();
+                javan_test_allocation_registry_reservation_failure_step = 0;
+                javan_validate_heap_metadata();
+                void* recovered = javan_alloc(1);
+                javan_free(recovered);
+                for (int index = 0; index < 63; index++) {
+                    javan_free(values[index]);
+                }
+                javan_validate_heap_metadata();
+                printf("%%d\\n", passed != 0
+                    && javan_last_error() == NULL
+                    && javan_heap_live_allocations() == 0
+                    && javan_heap_live_bytes() == 0);
+                return 0;
+            }
+            """.formatted(failureStep),
+            "4096",
+            Map.of("JAVAN_GC_STRESS", ""),
+            java.time.Duration.ofSeconds(30)
+        );
+    }
+
+    private String rootedAllocationNodeMetadataFailure() throws Exception {
+        return runInstrumentedRuntimeProbe(
+            List.of(
+                new RuntimeReplacement(
+                    "static void javan_track_allocation(",
+                    """
+                    static void* javan_test_allocation_node_malloc(void);
+
+                    static void javan_track_allocation(
+                    """.stripTrailing()
+                ),
+                new RuntimeReplacement(
+                    "malloc(sizeof(javan_allocation_node))",
+                    "javan_test_allocation_node_malloc()",
+                    2
+                )
+            ),
+            """
+            static int javan_test_allocation_node_malloc_fail = 0;
+            static int javan_test_allocation_node_malloc_count = 0;
+
+            static void* javan_test_allocation_node_malloc(void) {
+                if (javan_test_allocation_node_malloc_fail != 0) {
+                    javan_test_allocation_node_malloc_count++;
+                    return NULL;
+                }
+                return malloc(sizeof(javan_allocation_node));
+            }
+
+            void javan_test_alloc_rooted_with_node_failure(void** root_slot) {
+                javan_test_allocation_node_malloc_fail = 1;
+                (void) javan_alloc_rooted(1, root_slot);
+            }
+
+            int javan_test_allocation_node_malloc_attempts(void) {
+                return javan_test_allocation_node_malloc_count;
+            }
+            """,
+            """
+            #include "javan_runtime.h"
+            #include <setjmp.h>
+            #include <stdio.h>
+            #include <string.h>
+
+            extern void javan_test_alloc_rooted_with_node_failure(void** root_slot);
+            extern int javan_test_allocation_node_malloc_attempts(void);
+
+            int main(void) {
+                static void* rooted = NULL;
+                javan_register_static_roots(0, 0);
+                jmp_buf target;
+                javan_panic_set_target(&target);
+                if (setjmp(target) == 0) {
+                    javan_test_alloc_rooted_with_node_failure(&rooted);
+                    return 2;
+                }
+                int passed = strcmp(javan_last_error(), "out of memory") == 0
+                    && rooted == NULL
+                    && javan_test_allocation_node_malloc_attempts() == 2;
+                javan_panic_clear_target(&target);
+                javan_clear_error();
+                javan_validate_heap_metadata();
+                printf("%d\\n", passed != 0
+                    && javan_heap_live_allocations() == 0
+                    && javan_heap_live_bytes() == 0);
+                return 0;
+            }
+            """,
+            "4096",
+            Map.of("JAVAN_GC_STRESS", ""),
+            java.time.Duration.ofSeconds(30)
+        );
+    }
+
+    private String heapMetadataFailure(final String runtimeProbe, final String main) throws Exception {
+        return runInstrumentedRuntimeProbe(
+            List.of(),
+            """
+            int javan_heap_metadata_failure_result(void) {
+                jmp_buf target;
+                javan_panic_set_target(&target);
+                if (setjmp(target) == 0) {
+                    javan_validate_heap_metadata();
+                    return 2;
+                }
+                printf("%s\\n", javan_last_error());
+                return 0;
+            }
+            """ + runtimeProbe,
+            """
+            #include "javan_runtime.h"
+            #include <setjmp.h>
+            #include <stdio.h>
+
+            extern int javan_heap_metadata_failure_result(void);
+            """ + main,
+            "4096",
+            Map.of("JAVAN_GC_STRESS", ""),
+            java.time.Duration.ofSeconds(30)
+        );
+    }
+
+    private String runInstrumentedRuntimeProbe(
+        final List<RuntimeReplacement> replacements,
+        final String runtimeProbe,
+        final String main,
+        final String heapLimitBytes,
+        final Map<String, String> environmentOverrides,
+        final java.time.Duration timeout
+    ) throws Exception {
+        final Path runtime = writeInstrumentedRuntimeProbe(replacements, runtimeProbe, main);
+        final Path source = instrumentedRuntimeProbeSource();
+        final Path binary = new NativeLinker().link(
+            tempDir,
+            source,
+            runtime,
+            tempDir.resolve("instrumented-runtime-probe"),
+            NativeLinkInputs.empty(),
+            List.of()
+        );
+        final Map<String, String> environment = new java.util.LinkedHashMap<>();
+        environment.put("JAVAN_HEAP_LIMIT_BYTES", heapLimitBytes);
+        environment.putAll(environmentOverrides);
+        final TestProcesses.Result result = TestProcesses.run(
+            tempDir,
+            List.of(binary.toString()),
+            timeout,
+            environment
+        );
+
+        return result.exitCode() + "\n" + result.stdout() + result.stderr();
+    }
+
+    private Path writeInstrumentedRuntimeProbe(
+        final List<RuntimeReplacement> replacements,
+        final String runtimeProbe,
+        final String main
+    ) throws Exception {
+        final Path runtime = new RuntimeFiles().write(tempDir);
+        String instrumented = Files.readString(runtime);
+        for (final RuntimeReplacement replacement : replacements) {
+            int matches = 0;
+            int offset = 0;
+            while ((offset = instrumented.indexOf(replacement.target(), offset)) >= 0) {
+                matches++;
+                offset += replacement.target().length();
+            }
+            if (matches != replacement.expectedMatches()) {
+                throw new IllegalStateException(
+                    "runtime instrumentation target count was " + matches
+                        + ", expected " + replacement.expectedMatches()
+                        + ": " + replacement.target()
+                );
+            }
+            instrumented = instrumented.replace(replacement.target(), replacement.replacement());
+        }
+        Files.writeString(runtime, instrumented + "\n" + runtimeProbe);
+        Files.writeString(instrumentedRuntimeProbeSource(), main);
+
+        return runtime;
+    }
+
+    private Path instrumentedRuntimeProbeSource() {
+        return tempDir.resolve("instrumented-runtime-probe.c");
+    }
+
+    private static List<String> mingwCompileCommand(final Path compiler, final Path source, final Path output) {
+        return List.of(
+            compiler.toString(),
+            "-std=c11",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-Wno-error=unused-function",
+            "-Wno-error=unused-variable",
+            "-c",
+            source.toString(),
+            "-o",
+            output.toString()
+        );
+    }
+
+    private record RuntimeReplacement(String target, String replacement, int expectedMatches) {
+        private RuntimeReplacement(final String target, final String replacement) {
+            this(target, replacement, 1);
+        }
+    }
+
+    private record InstrumentedRuntimeProbe(
+        List<RuntimeReplacement> replacements,
+        String runtimeProbe,
+        String main
+    ) {
+    }
+
+    @Test
     void runtimeHeaderDeclaresDoubleToInt() throws Exception {
         new RuntimeFiles().write(tempDir);
         final String header = Files.readString(tempDir.resolve("javan_runtime.h"));
@@ -1628,7 +2740,7 @@ final class RuntimeFilesTest {
             "static int javan_heap_limit_growth_exceeded(unsigned long old_size, unsigned long new_size)",
             "unsigned long growth = new_size - old_size;",
             "javan_panic(\"unknown runtime allocation\")",
-            "javan_find_allocation(value, &previous)"
+            "javan_find_allocation_locked(value, &previous)"
         );
     }
 
