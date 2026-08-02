@@ -210,6 +210,113 @@ typedef struct {
 The result ABI was introduced with ABI version 2. Future layout changes require another
 version bump.
 
+## Generic Java-to-C Native Imports
+
+This is the direct Java-to-C import contract. It is separate from the generated C ABI
+export contract above.
+
+Configure static Java `native` methods and project-local link inputs in `javan.toml`:
+
+```toml
+[native]
+imports = [
+  "com.acme.NativeApi.mix(int,long,float,double,byte[]):long -> acme_mix",
+]
+sources = ["native/acme.c"]
+objects = ["native/acme.o"]
+library-search-paths = ["native/lib"]
+libraries = ["m"]
+frameworks = []
+
+[native.target.macos]
+sources = ["native/acme_macos.m"]
+frameworks = ["Foundation"]
+
+[native.target.macos-aarch64]
+libraries = ["compression"]
+```
+
+The project parser accepts multiline arrays of quoted strings and trailing commas in
+these configuration arrays. It is intentionally a small TOML parser, not full TOML:
+a physical newline inside a quoted array item is rejected.
+
+The import declaration names a Java method with `package.Class.method(parameters):return`
+syntax, followed by `->` and one external C symbol. The method must be `static native`.
+The supported import ABI is:
+
+- parameters: `int`, `long`, `float`, `double`, or non-null `byte[]`
+- return: `void`, `int`, `long`, `float`, or `double`
+- no Java receiver, `String`, object, primitive array other than `byte[]`, or imported
+  native return array is supported
+
+Configured C and Objective-C sources compile with the generated runtime-header directory
+on their include path, so they can include `javan_runtime.h` by name. That header is the
+canonical declaration source for `JavanNativeImportedByteArray`; do not duplicate the
+struct declaration in project sources. A corresponding C declaration is:
+
+```c
+#include "javan_runtime.h"
+
+long long acme_mix(
+    int arg0,
+    long long arg1,
+    float arg2,
+    double arg3,
+    JavanNativeImportedByteArray arg4
+);
+```
+
+For a `byte[]` parameter, `data` is a mutable borrowed pointer to the Java array storage
+and `length` is its element count. The generated wrapper roots the Java array until the
+external call returns. The external function may mutate the bytes, but must not retain
+the struct or its `data` pointer after return and must not free the storage. Copy it when
+longer-lived ownership is required. A null Java `byte[]` is rejected at the native
+boundary.
+
+When a reachable configured native method is used through a method reference, the
+instantiated SAM descriptor must equal the native implementation descriptor exactly.
+No boxing or unboxing adaptation is inserted. For example, `Consumer<byte[]>` referring
+to a native `void(byte[])` method is supported, while `Consumer<Integer>` referring to
+`void(int)` and `Supplier<Integer>` referring to `int()` are rejected deterministically.
+An unreachable mismatched method reference does not reject the build.
+
+All configured imports are parsed and validated before reachability filtering: the class
+and exact method must exist, be native, be static, and use the supported ABI. Invalid
+unreachable imports therefore reject `javan check` and `javan build`. Valid unreachable
+imports emit no generated wrapper, external symbol declaration, native call, or link
+reference, so their external symbols need not be provided.
+
+Link inputs are selected in this order: common `[native]` values, the platform overlay
+`[native.target.<platform>]`, then the exact target overlay
+`[native.target.<target>]`. Values append in declaration order; duplicates are rejected.
+The resolver normalizes the requested target before selecting overlays, so target IDs and
+overlay order are deterministic.
+
+- `sources`: existing regular `.c` or `.m` files
+- `objects`: existing regular `.o` or `.obj` files
+- `library-search-paths`: existing directories
+- `libraries`: named libraries passed to the linker
+- `frameworks`: named macOS frameworks passed to the linker; frameworks are rejected on
+  non-macOS hosts
+
+Configured paths must be relative to the project root, must not contain `..`, must stay
+within that root, and must use non-symlink regular files or directories as applicable.
+Source/object extensions are lowercase and restricted to the forms above. Import symbols
+must be valid non-reserved C identifiers; library and framework names use the supported
+linker-name character set. Path separators are rejected in all three name fields, and
+duplicate names are rejected. For static archive output, `library-search-paths`, named
+`libraries`, and `frameworks` are rejected; sources and objects may still be archived.
+
+Every reachable configured import must resolve while linking an application or shared
+library. Static archives deliberately retain unresolved configured external references for
+the final consumer link. Generated import wrappers use private ordinal C identifiers while
+the canonical Java method symbol remains the IR call key; canonical-key conflicts with
+generated functions and dispatches reject deterministically. C struct tags use their
+separate C namespace.
+
+This is compile/link-time direct symbol binding. Dynamic JNI loading, JVM native-method
+resolution, `System.load`, and `System.loadLibrary` remain unsupported.
+
 ## Exception Mapping
 
 Current behavior:

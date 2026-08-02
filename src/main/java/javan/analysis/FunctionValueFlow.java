@@ -185,16 +185,32 @@ public final class FunctionValueFlow {
         final Map<String, ClassFile> classes,
         final List<EntryPoint> reachableMethods
     ) {
+        return analyze(classes, reachableMethods, List.of());
+    }
+
+    /**
+     * Analyzes reachable methods with exact declared external leaves.
+     *
+     * @param classes parsed closed-world classes
+     * @param reachableMethods reachable methods
+     * @param declaredExternalLeaves exact declared external method identities
+     * @return exact callback use facts
+     */
+    public static Result analyze(
+        final Map<String, ClassFile> classes,
+        final List<EntryPoint> reachableMethods,
+        final List<EntryPoint> declaredExternalLeaves
+    ) {
         final Map<Site, ValueKind> functionKinds = containsTrackedUse(
             classes,
             reachableMethods,
             CallbackKind.FUNCTION
-        ) ? new Engine(classes, reachableMethods, CallbackKind.FUNCTION).analyze() : Map.of();
+        ) ? new Engine(classes, reachableMethods, declaredExternalLeaves, CallbackKind.FUNCTION).analyze() : Map.of();
         final Map<Site, ValueKind> supplierKinds = containsTrackedUse(
             classes,
             reachableMethods,
             CallbackKind.SUPPLIER
-        ) ? new Engine(classes, reachableMethods, CallbackKind.SUPPLIER).analyze() : Map.of();
+        ) ? new Engine(classes, reachableMethods, declaredExternalLeaves, CallbackKind.SUPPLIER).analyze() : Map.of();
         return new Result(functionKinds, supplierKinds, true);
     }
 
@@ -229,6 +245,7 @@ public final class FunctionValueFlow {
         private final Map<String, ClassFile> classes;
         private final List<EntryPoint> reachableMethods;
         private final Set<EntryPoint> reachableSet;
+        private final Set<EntryPoint> declaredExternalLeaves;
         private final CallbackKind callbackKind;
         private final Map<EntryPoint, int[]> parameterFacts = new LinkedHashMap<>();
         private final Map<EntryPoint, Integer> returnFacts = new LinkedHashMap<>();
@@ -241,11 +258,13 @@ public final class FunctionValueFlow {
         private Engine(
             final Map<String, ClassFile> classes,
             final List<EntryPoint> reachableMethods,
+            final List<EntryPoint> declaredExternalLeaves,
             final CallbackKind callbackKind
         ) {
             this.classes = classes;
             this.reachableMethods = List.copyOf(reachableMethods);
             this.reachableSet = Set.copyOf(reachableMethods);
+            this.declaredExternalLeaves = Set.copyOf(declaredExternalLeaves);
             this.callbackKind = callbackKind;
             initializeFacts();
         }
@@ -709,11 +728,18 @@ public final class FunctionValueFlow {
                 return;
             }
             final Optional<MethodInfo> resolvedMethod = method(target);
-            if (resolvedMethod.isEmpty() || resolvedMethod.orElseThrow().code().isEmpty()) {
+            if (resolvedMethod.isEmpty()) {
                 state.reject();
                 return;
             }
             final MethodInfo method = resolvedMethod.orElseThrow();
+            if (method.code().isEmpty()) {
+                if (isDeclaredExternalLeaf(target, method)) {
+                    return;
+                }
+                state.reject();
+                return;
+            }
             final Optional<Descriptor> resolvedDescriptor = methodDescriptor(method.descriptor());
             if (resolvedDescriptor.isEmpty()) {
                 state.reject();
@@ -773,11 +799,18 @@ public final class FunctionValueFlow {
             final State state
         ) {
             final Optional<MethodInfo> resolvedTarget = method(target);
-            if (resolvedTarget.isEmpty() || resolvedTarget.orElseThrow().code().isEmpty()) {
+            if (resolvedTarget.isEmpty()) {
                 state.reject();
                 return;
             }
             final MethodInfo targetMethod = resolvedTarget.orElseThrow();
+            if (targetMethod.code().isEmpty()) {
+                if (isDeclaredExternalLeaf(target, targetMethod)) {
+                    return;
+                }
+                state.reject();
+                return;
+            }
             final Optional<Descriptor> resolvedDescriptor = methodDescriptor(targetMethod.descriptor());
             if (resolvedDescriptor.isEmpty()) {
                 state.reject();
@@ -803,6 +836,13 @@ public final class FunctionValueFlow {
                 local += descriptor.parameters().get(index).width();
             }
             addParameterFacts(target, contributions);
+        }
+
+        private boolean isDeclaredExternalLeaf(final EntryPoint target, final MethodInfo method) {
+            return reachableSet.contains(target)
+                && declaredExternalLeaves.contains(target)
+                && method.isNative()
+                && method.isStatic();
         }
 
         private void addParameterFacts(final EntryPoint target, final int[] contribution) {

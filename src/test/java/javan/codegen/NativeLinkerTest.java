@@ -1,5 +1,6 @@
 package javan.codegen;
 
+import javan.build.NativeLinkInputs;
 import javan.util.ProcessRunner;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -210,12 +211,173 @@ final class NativeLinkerTest {
     }
 
     @Test
-    void linkSharedLibraryUsesDynamiclibOnMacHost() throws Exception {
+    void legacyAppOverloadMatchesExplicitEmptyInputs() throws Exception {
+        final RecordingProcessRunner runner = new RecordingProcessRunner(
+            new ProcessRunner.Result(0, "", ""),
+            new ProcessRunner.Result(0, "", "")
+        );
+        final NativeLinker linker = new NativeLinker(runner);
+        final Path output = tempDir.resolve("out/app");
+
+        withOsName("Linux", () -> {
+            linker.link(tempDir, tempDir.resolve("main.c"), tempDir.resolve("runtime.c"), output);
+            linker.link(tempDir, tempDir.resolve("main.c"), tempDir.resolve("runtime.c"), output, NativeLinkInputs.empty(), List.of());
+        });
+
+        assertThat(runner.commands().get(0)).isEqualTo(runner.commands().get(1));
+    }
+
+    @Test
+    void linkOrdersConfiguredInputsAfterGeneratedSources() throws Exception {
+        final RecordingProcessRunner runner = new RecordingProcessRunner(new ProcessRunner.Result(0, "", ""));
+        final Path source = tempDir.resolve("native/backend.c");
+        final Path object = tempDir.resolve("native/helper.o");
+        final Path firstSearchPath = tempDir.resolve("native/lib-one");
+        final Path secondSearchPath = tempDir.resolve("native/lib-two");
+        final Path output = tempDir.resolve("out/app");
+
+        withOsName("Linux", () -> new NativeLinker(runner).link(
+            tempDir,
+            tempDir.resolve("main.c"),
+            tempDir.resolve("runtime.c"),
+            output,
+            new NativeLinkInputs(
+                List.of(source),
+                List.of(object),
+                List.of(firstSearchPath, secondSearchPath),
+                List.of("alpha", "beta"),
+                List.of()
+            ),
+            List.of()
+        ));
+
+        assertThat(commandArguments(runner.commands())).containsExactlyElementsOf(List.of(
+            List.of(
+                "-pthread",
+                tempDir.resolve("main.c").toString(),
+                tempDir.resolve("runtime.c").toString(),
+                "-I",
+                tempDir.toString(),
+                source.toString(),
+                object.toString(),
+                "-L",
+                firstSearchPath.toString(),
+                "-L",
+                secondSearchPath.toString(),
+                "-lalpha",
+                "-lbeta",
+                "-o",
+                output.toString()
+            )
+        ));
+    }
+
+    @Test
+    void linkAddsMacFrameworksAfterConfiguredLibraries() throws Exception {
+        final RecordingProcessRunner runner = new RecordingProcessRunner(new ProcessRunner.Result(0, "", ""));
+        final Path output = tempDir.resolve("out/app");
+
+        withOsName("Mac OS X", () -> new NativeLinker(runner).link(
+            tempDir,
+            tempDir.resolve("main.c"),
+            tempDir.resolve("runtime.c"),
+            output,
+            new NativeLinkInputs(List.of(), List.of(), List.of(), List.of("objc"), List.of("Cocoa", "Metal")),
+            List.of()
+        ));
+
+        assertThat(commandArguments(runner.commands())).containsExactlyElementsOf(List.of(
+            List.of(
+                "-pthread",
+                tempDir.resolve("main.c").toString(),
+                tempDir.resolve("runtime.c").toString(),
+                "-lobjc",
+                "-framework",
+                "Cocoa",
+                "-framework",
+                "Metal",
+                "-o",
+                output.toString()
+            )
+        ));
+    }
+
+    @Test
+    void linkRejectsFrameworksOnNonMacHostBeforeRunningACommand() {
+        final NeverRunProcessRunner runner = new NeverRunProcessRunner();
+
+        assertThatThrownBy(() -> withOsName("Linux", () -> new NativeLinker(runner).link(
+            tempDir,
+            tempDir.resolve("main.c"),
+            tempDir.resolve("runtime.c"),
+            tempDir.resolve("out/app"),
+            new NativeLinkInputs(List.of(), List.of(), List.of(), List.of(), List.of("Cocoa")),
+            List.of()
+        ))).isInstanceOf(IOException.class)
+            .hasMessage("macOS frameworks are only supported on macOS hosts");
+    }
+
+    @Test
+    void linkReportsConfiguredImportedSymbolsPresentInFailureOutput() {
+        final RecordingProcessRunner runner = new RecordingProcessRunner(
+            new ProcessRunner.Result(1, "", "undefined reference to `alpha_symbol'\nUndefined symbols: \"_beta_symbol\"")
+        );
+
+        assertThatThrownBy(() -> withOsName("Linux", () -> new NativeLinker(runner).link(
+            tempDir,
+            tempDir.resolve("main.c"),
+            tempDir.resolve("runtime.c"),
+            tempDir.resolve("out/app"),
+            NativeLinkInputs.empty(),
+            List.of("alpha_symbol", "beta_symbol", "other_symbol")
+        ))).isInstanceOf(IOException.class)
+            .hasMessageStartingWith("Native link failed\nMissing native import symbols: alpha_symbol, beta_symbol\n");
+    }
+
+    @Test
+    void linkKeepsGenericFailureDiagnosticWhenNoImportedSymbolIsPresent() {
+        final RecordingProcessRunner runner = new RecordingProcessRunner(new ProcessRunner.Result(1, "stdout", "stderr"));
+
+        assertThatThrownBy(() -> withOsName("Linux", () -> new NativeLinker(runner).link(
+            tempDir,
+            tempDir.resolve("main.c"),
+            tempDir.resolve("runtime.c"),
+            tempDir.resolve("out/app"),
+            NativeLinkInputs.empty(),
+            List.of("missing_symbol")
+        ))).isInstanceOf(IOException.class)
+            .hasMessage("Native link failed\nstderrstdout");
+    }
+
+    @Test
+    void linkKeepsGenericFailureWhenConfiguredSymbolIsNotReportedUndefined() throws Exception {
+        final String stderr = "clang: error: invalid value 'alpha_symbol' in '-o' option\n";
+        final RecordingProcessRunner runner = new RecordingProcessRunner(new ProcessRunner.Result(1, "", stderr));
+        final IOException failure;
+        try {
+            new NativeLinker(runner).link(
+                tempDir,
+                tempDir.resolve("main.c"),
+                tempDir.resolve("runtime.c"),
+                tempDir.resolve("out/app"),
+                NativeLinkInputs.empty(),
+                List.of("alpha_symbol")
+            );
+            throw new AssertionError("Expected native link failure");
+        } catch (final IOException exception) {
+            failure = exception;
+        }
+
+        assertThat(failure).hasMessage("Native link failed\n" + stderr);
+    }
+
+    @Test
+    void linkSharedLibraryUsesDynamiclibOnDarwinHost() throws Exception {
         final RecordingProcessRunner runner = new RecordingProcessRunner(
             new ProcessRunner.Result(0, "", "")
         );
 
-        withOsName("Mac OS X", () -> {
+        withOsName("Darwin", () -> {
             final NativeLinker linker = new NativeLinker(runner);
             linker.linkSharedLibrary(
                 tempDir,
@@ -225,10 +387,7 @@ final class NativeLinkerTest {
             );
         });
 
-        assertThat(runner.commands()).singleElement().satisfies(command -> {
-            assertThat(command).contains("-dynamiclib", "-fPIC", "-pthread", "-o", tempDir.resolve("out/libdemo.dylib").toString());
-            assertThat(command).doesNotContain("-shared");
-        });
+        assertThat(runner.commands().get(0)).contains("-dynamiclib", "-Wl,-undefined,error");
     }
 
     @Test
@@ -247,10 +406,83 @@ final class NativeLinkerTest {
             );
         });
 
-        assertThat(runner.commands()).singleElement().satisfies(command -> {
-            assertThat(command).contains("-shared", "-fPIC", "-pthread", "-o", tempDir.resolve("out/libdemo.so").toString());
-            assertThat(command).doesNotContain("-dynamiclib");
+        assertThat(runner.commands().get(0)).contains("-shared", "-Wl,--no-undefined");
+    }
+
+    @Test
+    void linkSharedLibraryUsesNoUndefinedOnWindowsGnuDriver() throws Exception {
+        final RecordingProcessRunner runner = new RecordingProcessRunner(new ProcessRunner.Result(0, "", ""));
+
+        withOsName("Windows 11", () -> new NativeLinker(runner).linkSharedLibrary(
+            tempDir,
+            tempDir.resolve("main.c"),
+            tempDir.resolve("runtime.c"),
+            tempDir.resolve("out/demo.dll")
+        ));
+
+        assertThat(runner.commands().get(0)).contains("-shared", "-Wl,--no-undefined");
+    }
+
+    @Test
+    void legacySharedOverloadMatchesExplicitEmptyInputs() throws Exception {
+        final RecordingProcessRunner runner = new RecordingProcessRunner(
+            new ProcessRunner.Result(0, "", ""),
+            new ProcessRunner.Result(0, "", "")
+        );
+        final NativeLinker linker = new NativeLinker(runner);
+        final Path output = tempDir.resolve("out/libdemo.so");
+
+        withOsName("Linux", () -> {
+            linker.linkSharedLibrary(tempDir, tempDir.resolve("main.c"), tempDir.resolve("runtime.c"), output);
+            linker.linkSharedLibrary(
+                tempDir,
+                tempDir.resolve("main.c"),
+                tempDir.resolve("runtime.c"),
+                output,
+                NativeLinkInputs.empty(),
+                List.of()
+            );
         });
+
+        assertThat(runner.commands().get(0)).isEqualTo(runner.commands().get(1));
+    }
+
+    @Test
+    void sharedLinkOrdersConfiguredInputsAfterSharedFlags() throws Exception {
+        final RecordingProcessRunner runner = new RecordingProcessRunner(new ProcessRunner.Result(0, "", ""));
+        final Path source = tempDir.resolve("native/backend.c");
+        final Path object = tempDir.resolve("native/helper.o");
+        final Path searchPath = tempDir.resolve("native/lib");
+        final Path output = tempDir.resolve("out/libdemo.so");
+
+        withOsName("Linux", () -> new NativeLinker(runner).linkSharedLibrary(
+            tempDir,
+            tempDir.resolve("main.c"),
+            tempDir.resolve("runtime.c"),
+            output,
+            new NativeLinkInputs(List.of(source), List.of(object), List.of(searchPath), List.of("math"), List.of()),
+            List.of()
+        ));
+
+        assertThat(commandArguments(runner.commands())).containsExactlyElementsOf(List.of(
+            List.of(
+                "-pthread",
+                "-shared",
+                "-fPIC",
+                "-Wl,--no-undefined",
+                tempDir.resolve("main.c").toString(),
+                tempDir.resolve("runtime.c").toString(),
+                "-I",
+                tempDir.toString(),
+                source.toString(),
+                object.toString(),
+                "-L",
+                searchPath.toString(),
+                "-lmath",
+                "-o",
+                output.toString()
+            )
+        ));
     }
 
     @Test
@@ -299,6 +531,125 @@ final class NativeLinkerTest {
     }
 
     @Test
+    void legacyStaticOverloadMatchesExplicitEmptyInputs() throws Exception {
+        final RecordingProcessRunner runner = new RecordingProcessRunner(
+            new ProcessRunner.Result(0, "", ""),
+            new ProcessRunner.Result(0, "", ""),
+            new ProcessRunner.Result(0, "", ""),
+            new ProcessRunner.Result(0, "", ""),
+            new ProcessRunner.Result(0, "", ""),
+            new ProcessRunner.Result(0, "", "")
+        );
+        final NativeLinker linker = new NativeLinker(runner);
+        final Path output = tempDir.resolve("out/libdemo.a");
+
+        withOsName("Linux", () -> {
+            linker.linkStaticLibrary(tempDir, tempDir.resolve("main.c"), tempDir.resolve("runtime.c"), output);
+            linker.linkStaticLibrary(
+                tempDir,
+                tempDir.resolve("main.c"),
+                tempDir.resolve("runtime.c"),
+                output,
+                NativeLinkInputs.empty(),
+                List.of()
+            );
+        });
+
+        assertThat(runner.commands().subList(0, 3)).isEqualTo(runner.commands().subList(3, 6));
+    }
+
+    @Test
+    void staticLinkCompilesConfiguredSourcesThenArchivesConfiguredObject() throws Exception {
+        final RecordingProcessRunner runner = new RecordingProcessRunner(
+            new ProcessRunner.Result(0, "", ""),
+            new ProcessRunner.Result(0, "", ""),
+            new ProcessRunner.Result(0, "", ""),
+            new ProcessRunner.Result(0, "", ""),
+            new ProcessRunner.Result(0, "", "")
+        );
+        final Path firstSource = tempDir.resolve("native/first.c");
+        final Path secondSource = tempDir.resolve("native/second.m");
+        final Path configuredObject = tempDir.resolve("native/helper.o");
+        final Path output = tempDir.resolve("out/libdemo.a");
+
+        withOsName("Mac OS X", () -> new NativeLinker(runner).linkStaticLibrary(
+            tempDir,
+            tempDir.resolve("main.c"),
+            tempDir.resolve("runtime.c"),
+            output,
+            new NativeLinkInputs(
+                List.of(firstSource, secondSource),
+                List.of(configuredObject),
+                List.of(),
+                List.of(),
+                List.of()
+            ),
+            List.of()
+        ));
+
+        assertThat(commandArguments(runner.commands())).containsExactlyElementsOf(List.of(
+            List.of("-pthread", "-fPIC", "-c", tempDir.resolve("main.c").toString(), "-o", tempDir.resolve("out/objects/javan_library.o").toString()),
+            List.of("-pthread", "-fPIC", "-c", tempDir.resolve("runtime.c").toString(), "-o", tempDir.resolve("out/objects/javan_runtime.o").toString()),
+            List.of("-pthread", "-fPIC", "-I", tempDir.toString(), "-c", firstSource.toString(), "-o", tempDir.resolve("out/objects/native_input_0.o").toString()),
+            List.of("-pthread", "-fPIC", "-I", tempDir.toString(), "-c", secondSource.toString(), "-o", tempDir.resolve("out/objects/native_input_1.o").toString()),
+            List.of(
+                "rcs",
+                output.toString(),
+                tempDir.resolve("out/objects/javan_library.o").toString(),
+                tempDir.resolve("out/objects/javan_runtime.o").toString(),
+                tempDir.resolve("out/objects/native_input_0.o").toString(),
+                tempDir.resolve("out/objects/native_input_1.o").toString(),
+                configuredObject.toString()
+            )
+        ));
+    }
+
+    @Test
+    void staticLinkRejectsLibrarySearchPathsBeforeRunningCommand() {
+        final NeverRunProcessRunner runner = new NeverRunProcessRunner();
+
+        assertThatThrownBy(() -> withOsName("Linux", () -> new NativeLinker(runner).linkStaticLibrary(
+            tempDir,
+            tempDir.resolve("main.c"),
+            tempDir.resolve("runtime.c"),
+            tempDir.resolve("out/libdemo.a"),
+            new NativeLinkInputs(List.of(), List.of(), List.of(tempDir.resolve("native/lib")), List.of(), List.of()),
+            List.of()
+        ))).isInstanceOf(IOException.class)
+            .hasMessage("Static library link does not support library search paths");
+    }
+
+    @Test
+    void staticLinkRejectsNamedLibrariesBeforeRunningCommand() {
+        final NeverRunProcessRunner runner = new NeverRunProcessRunner();
+
+        assertThatThrownBy(() -> withOsName("Linux", () -> new NativeLinker(runner).linkStaticLibrary(
+            tempDir,
+            tempDir.resolve("main.c"),
+            tempDir.resolve("runtime.c"),
+            tempDir.resolve("out/libdemo.a"),
+            new NativeLinkInputs(List.of(), List.of(), List.of(), List.of("math"), List.of()),
+            List.of()
+        ))).isInstanceOf(IOException.class)
+            .hasMessage("Static library link does not support named libraries");
+    }
+
+    @Test
+    void staticLinkRejectsFrameworksOnMacBeforeRunningCommand() {
+        final NeverRunProcessRunner runner = new NeverRunProcessRunner();
+
+        assertThatThrownBy(() -> withOsName("Mac OS X", () -> new NativeLinker(runner).linkStaticLibrary(
+            tempDir,
+            tempDir.resolve("main.c"),
+            tempDir.resolve("runtime.c"),
+            tempDir.resolve("out/libdemo.a"),
+            new NativeLinkInputs(List.of(), List.of(), List.of(), List.of(), List.of("Cocoa")),
+            List.of()
+        ))).isInstanceOf(IOException.class)
+            .hasMessage("Static library link does not support frameworks");
+    }
+
+    @Test
     void linkStaticLibraryFailsWhenObjectCompilationFails() {
         final RecordingProcessRunner runner = new RecordingProcessRunner(
             new ProcessRunner.Result(1, "stdout", "stderr")
@@ -312,6 +663,25 @@ final class NativeLinkerTest {
         ))).isInstanceOf(IOException.class)
             .hasMessageContaining("Native compile failed")
             .hasMessageContaining("stderrstdout");
+    }
+
+    @Test
+    void staticLinkFailsWhenConfiguredSourceCompilationFails() {
+        final RecordingProcessRunner runner = new RecordingProcessRunner(
+            new ProcessRunner.Result(0, "", ""),
+            new ProcessRunner.Result(0, "", ""),
+            new ProcessRunner.Result(1, "stdout", "stderr")
+        );
+
+        assertThatThrownBy(() -> withOsName("Linux", () -> new NativeLinker(runner).linkStaticLibrary(
+            tempDir,
+            tempDir.resolve("main.c"),
+            tempDir.resolve("runtime.c"),
+            tempDir.resolve("out/libdemo.a"),
+            new NativeLinkInputs(List.of(tempDir.resolve("native/backend.c")), List.of(), List.of(), List.of(), List.of()),
+            List.of()
+        ))).isInstanceOf(IOException.class)
+            .hasMessage("Native compile failed\nstderrstdout");
     }
 
     @Test
@@ -330,6 +700,14 @@ final class NativeLinkerTest {
         ))).isInstanceOf(IOException.class)
             .hasMessageContaining("Native static library link failed")
             .hasMessageContaining("stderrstdout");
+    }
+
+    private static List<List<String>> commandArguments(final List<List<String>> commands) {
+        final List<List<String>> arguments = new ArrayList<>();
+        for (final List<String> command : commands) {
+            arguments.add(List.copyOf(command.subList(1, command.size())));
+        }
+        return List.copyOf(arguments);
     }
 
     private static void withOsName(final String osName, final ThrowingRunnable action) throws Exception {
@@ -376,6 +754,18 @@ final class NativeLinkerTest {
 
         private List<List<String>> commands() {
             return commands;
+        }
+    }
+
+    private static final class NeverRunProcessRunner extends ProcessRunner {
+        @Override
+        public ProcessRunner.Result run(final Path workingDirectory, final List<String> command) {
+            throw new AssertionError("Link command must not run");
+        }
+
+        @Override
+        public Optional<String> firstAvailable(final List<String> executables) {
+            return executables.isEmpty() ? Optional.empty() : Optional.of(executables.getFirst());
         }
     }
 }

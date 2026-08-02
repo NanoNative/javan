@@ -55,6 +55,8 @@ javan build . --library --export com.acme.Math.add --bindings c,rust,go,python
 Current supported output shapes:
 
 - Native executables from the supported bytecode/JDK subset.
+- Configured static Java-to-C native imports and project-local link inputs, with a narrow
+  primitive/borrowed-`byte[]` ABI: [native ABI contract](doc/spec/native-abi.md#generic-java-to-c-native-imports).
 - JVM jar output as a first-class build kind.
 - Native libraries with C ABI plus generated C, Rust, Go, and Python bindings for
   primitives, `String`, `byte[]`, and the current result/error ABI.

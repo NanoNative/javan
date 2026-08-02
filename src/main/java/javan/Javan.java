@@ -11,6 +11,8 @@ import javan.build.ExportResolver;
 import javan.build.LibraryBuildReports;
 import javan.build.JarPackager;
 import javan.build.LibraryFormat;
+import javan.build.NativeInteropConfig;
+import javan.build.NativeInteropResolver;
 import javan.build.ResourceBundler;
 import javan.build.RuntimeFeatureSelection;
 import javan.classfile.ClassFile;
@@ -71,6 +73,7 @@ public final class Javan {
     private final ClassFileScanner classFileScanner = new ClassFileScanner();
     private final ClassMetadataScanner classMetadataScanner = new ClassMetadataScanner();
     private final MainClassDetector mainClassDetector = new MainClassDetector();
+    private final NativeInteropResolver nativeInteropResolver = new NativeInteropResolver();
     private final ReachabilityAnalyzer reachabilityAnalyzer = new ReachabilityAnalyzer();
     private final StaticVerifier staticVerifier = new StaticVerifier();
     private final BytecodeToIR bytecodeToIR = new BytecodeToIR();
@@ -120,6 +123,11 @@ public final class Javan {
         final ProjectLayout layout = buildInvoker.ensureClasses(detected, options);
         reports.writeProject(layout, options.profile());
         final Map<String, ClassFile> classes = classFileScanner.scan(layout);
+        final String nativeTarget = options.targetTriple().isPresent()
+            ? RuntimeFootprintReports.normalizeTarget(options.targetTriple().orElseThrow())
+            : RuntimeFootprintReports.hostTarget();
+        final NativeInteropConfig nativeInterop = nativeInteropResolver.resolve(classes, layout.root(), nativeTarget);
+        final List<EntryPoint> nativeEntryPoints = nativeInterop.nativeEntryPoints();
         final List<ExportedMethod> exports;
         if (options.libraryBuild()) {
             exports = exportResolver.resolve(classes, layout.root(), options.exports());
@@ -130,16 +138,18 @@ public final class Javan {
         final String mainClass = mainDetection.mainClass();
         final CallGraph callGraph;
         if (options.libraryBuild()) {
-            callGraph = reachabilityAnalyzer.analyze(classes, entryPoints(exports));
+            callGraph = reachabilityAnalyzer.analyze(classes, entryPoints(exports), nativeEntryPoints);
         } else if (mainDetection.pass()) {
-            callGraph = reachabilityAnalyzer.analyze(classes, mainClass);
+            callGraph = reachabilityAnalyzer.analyze(classes, mainClass, nativeEntryPoints);
         } else {
             callGraph = emptyCallGraph();
         }
         final List<Diagnostic> diagnostics = new ArrayList<>(mainDetection.diagnostics());
         diagnostics.addAll(callGraph.diagnostics());
         if (mainDetection.pass()) {
-            diagnostics.addAll(staticVerifier.verify(classes, callGraph.reachableMethods()));
+            diagnostics.addAll(staticVerifier.verify(classes, callGraph.reachableMethods(), nativeEntryPoints));
+        } else {
+            diagnostics.addAll(staticVerifier.verifyConfiguredNativeImports(classes, nativeEntryPoints));
         }
         final DeduplicationPlanner.Plan deduplicationPlan = deduplicationPlanner.writePlan(layout.outputDirectory(), classes, callGraph);
         diagnostics.addAll(runtimeFeatureSelection.write(layout.root(), layout.outputDirectory(), deduplicationPlan).diagnostics());
@@ -151,7 +161,7 @@ public final class Javan {
         writeUnifiedReport(layout.outputDirectory());
         final List<Diagnostic> errors = errors(diagnostics);
         if (!errors.isEmpty()) {
-            return new CheckResult(layout, classes, mainClass, callGraph, diagnostics, exports);
+            return new CheckResult(layout, classes, mainClass, callGraph, nativeInterop, diagnostics, exports);
         }
         out.println("Checking static Java profile...");
         printText(out, "  build kind:        ", Strings2.toAsciiLowerCase(options.buildKindName()));
@@ -163,7 +173,7 @@ public final class Javan {
         printInt(out, "  reachable methods: ", callGraph.reachableMethods().size());
         printInt(out, "  diagnostics:       ", diagnostics.size());
         printWarnings(diagnostics, out);
-        return new CheckResult(layout, classes, mainClass, callGraph, diagnostics, exports);
+        return new CheckResult(layout, classes, mainClass, callGraph, nativeInterop, diagnostics, exports);
     }
 
     /**
@@ -202,18 +212,22 @@ public final class Javan {
         if (!check.pass()) {
             return BuildResult.failed(check.diagnostics());
         }
+        final NativeInteropConfig reachableNativeInterop = check.nativeInterop().forReachableMethods(
+            check.callGraph().reachableMethods()
+        );
         final Path generated = check.layout().outputDirectory().resolve("generated");
         final IrProgram program = bytecodeToIR.lower(
             check.classes(),
             check.callGraph(),
-            SourceLineIndex.from(check.layout())
+            SourceLineIndex.from(check.layout()),
+            reachableNativeInterop
         );
         exceptionReports.write(check.layout().outputDirectory(), program);
         final Path artifact;
         if (options.appBuild()) {
-            artifact = buildApp(check, program, generated, options, out);
+            artifact = buildApp(check, program, generated, reachableNativeInterop, options, out);
         } else {
-            artifact = buildLibrary(check, program, generated, options, out);
+            artifact = buildLibrary(check, program, generated, reachableNativeInterop, options, out);
         }
         return BuildResult.success(artifact, check.diagnostics());
     }
@@ -222,15 +236,23 @@ public final class Javan {
         final CheckResult check,
         final IrProgram program,
         final Path generated,
+        final NativeInteropConfig nativeInterop,
         final Options options,
         final PrintStream out
     )
         throws IOException, InterruptedException {
         final List<ResourceBundler.ResourceFile> resources = resourceBundler.bundle(check.layout());
-        final Path mainC = cCodegen.generate(program, generated);
+        final Path mainC = cCodegen.generate(program, generated, nativeInterop);
         final Path runtimeC = runtimeFiles.write(generated, resources);
         final Path output = check.layout().outputDirectory().resolve("bin").resolve(check.layout().outputName());
-        final Path binary = nativeLinker.link(check.layout().root(), mainC, runtimeC, output);
+        final Path binary = nativeLinker.link(
+            check.layout().root(),
+            mainC,
+            runtimeC,
+            output,
+            nativeInterop.linkInputs(),
+            nativeInterop.externalSymbols()
+        );
         runtimeContractReports.write(check.layout().outputDirectory(), "app", List.of(binary));
         runtimeFootprintReports.write(
             check.layout().outputDirectory(),
@@ -251,16 +273,17 @@ public final class Javan {
         final CheckResult check,
         final IrProgram program,
         final Path generated,
+        final NativeInteropConfig nativeInterop,
         final Options options,
         final PrintStream out
     ) throws IOException, InterruptedException {
         final List<ResourceBundler.ResourceFile> resources = resourceBundler.bundle(check.layout());
-        final Path libraryC = cCodegen.generateLibrary(program, generated, check.exports());
+        final Path libraryC = cCodegen.generateLibrary(program, generated, check.exports(), nativeInterop);
         final Path runtimeC = runtimeFiles.write(generated, resources);
         final List<Path> artifacts = new ArrayList<>();
         for (final LibraryFormat format : options.libraryFormats()) {
             final Path output = libraryArtifactPath(format, check.layout().outputDirectory(), check.layout().outputName());
-            artifacts.add(linkLibraryFormat(format, check.layout().root(), libraryC, runtimeC, output));
+            artifacts.add(linkLibraryFormat(format, check.layout().root(), libraryC, runtimeC, output, nativeInterop));
         }
         final List<Path> bindings = bindingGenerator.generate(
             check.layout().outputDirectory(),
@@ -638,13 +661,28 @@ public final class Javan {
         final Path root,
         final Path libraryC,
         final Path runtimeC,
-        final Path output
+        final Path output,
+        final NativeInteropConfig nativeInterop
     ) throws IOException, InterruptedException {
         if ("STATIC".equals(Options.formatName(format))) {
-            return nativeLinker.linkStaticLibrary(root, libraryC, runtimeC, output);
+            return nativeLinker.linkStaticLibrary(
+                root,
+                libraryC,
+                runtimeC,
+                output,
+                nativeInterop.linkInputs(),
+                nativeInterop.externalSymbols()
+            );
         }
         if ("SHARED".equals(Options.formatName(format))) {
-            return nativeLinker.linkSharedLibrary(root, libraryC, runtimeC, output);
+            return nativeLinker.linkSharedLibrary(
+                root,
+                libraryC,
+                runtimeC,
+                output,
+                nativeInterop.linkInputs(),
+                nativeInterop.externalSymbols()
+            );
         }
         throw new IllegalStateException("Unsupported library format");
     }
@@ -685,6 +723,7 @@ public final class Javan {
      * @param classes parsed classes
      * @param mainClass JVM internal main class
      * @param callGraph reachable call graph
+     * @param nativeInterop resolved native interop configuration
      * @param diagnostics non-fatal diagnostics
      * @param exports native library exports
      */
@@ -693,6 +732,7 @@ public final class Javan {
         Map<String, ClassFile> classes,
         String mainClass,
         CallGraph callGraph,
+        NativeInteropConfig nativeInterop,
         List<Diagnostic> diagnostics,
         List<ExportedMethod> exports
     ) {

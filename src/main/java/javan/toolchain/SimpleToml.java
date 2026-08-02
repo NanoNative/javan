@@ -13,14 +13,19 @@ public final class SimpleToml {
     }
 
     /**
-     * Parses scalar TOML values into section-qualified keys.
+     * Parses supported TOML values into section-qualified keys.
      *
      * @param content TOML content
      * @return parsed key/value map
+     * @throws NullPointerException when {@code content} is null
+     * @throws IllegalArgumentException when TOML syntax is invalid or a fully-qualified key repeats
      */
     public static Map<String, String> parse(final String content) {
         final Map<String, String> values = new TreeMap<>();
         String section = "";
+        String multilineArrayKey = null;
+        StringBuilder multilineArray = null;
+        int multilineArrayLastLine = 0;
         int lineNumber = 1;
         int start = 0;
         for (int index = 0; index <= content.length(); index++) {
@@ -32,6 +37,26 @@ public final class SimpleToml {
                 end--;
             }
             final String line = Strings2.trimAscii(stripComment(Strings2.slice(content, start, end)));
+            if (multilineArray != null) {
+                multilineArray.append('\n').append(line);
+                if (!line.isEmpty()) {
+                    multilineArrayLastLine = lineNumber;
+                }
+                if (arrayComplete(multilineArray)) {
+                    final String value = parseValue(multilineArray.toString(), lineNumber);
+                    if (values.containsKey(multilineArrayKey)) {
+                        throw new IllegalArgumentException("Duplicate TOML key: " + multilineArrayKey + " at line " + lineNumber);
+                    }
+                    values.put(multilineArrayKey, value);
+                    multilineArrayKey = null;
+                    multilineArray = null;
+                } else if (index == content.length()) {
+                    throw new IllegalArgumentException("Unterminated TOML array at line " + multilineArrayLastLine);
+                }
+                lineNumber++;
+                start = index + 1;
+                continue;
+            }
             if (line.isEmpty()) {
                 lineNumber++;
                 start = index + 1;
@@ -51,13 +76,44 @@ public final class SimpleToml {
                 throw new IllegalArgumentException("Expected key = value at line " + lineNumber);
             }
             final String key = Strings2.trimAscii(line.substring(0, equals));
-            final String value = parseValue(Strings2.trimAscii(line.substring(equals + 1)), lineNumber);
             final String fullKey = section.isEmpty() ? key : section + "." + key;
+            final String rawValue = Strings2.trimAscii(line.substring(equals + 1));
+            if (rawValue.startsWith("[") && !arrayComplete(rawValue)) {
+                multilineArrayKey = fullKey;
+                multilineArray = new StringBuilder(rawValue);
+                multilineArrayLastLine = lineNumber;
+                if (index == content.length()) {
+                    throw new IllegalArgumentException("Unterminated TOML array at line " + lineNumber);
+                }
+                lineNumber++;
+                start = index + 1;
+                continue;
+            }
+            final String value = parseValue(rawValue, lineNumber);
+            if (values.containsKey(fullKey)) {
+                throw new IllegalArgumentException("Duplicate TOML key: " + fullKey + " at line " + lineNumber);
+            }
             values.put(fullKey, value);
             lineNumber++;
             start = index + 1;
         }
         return Map.copyOf(values);
+    }
+
+    private static boolean arrayComplete(final CharSequence value) {
+        boolean quoted = false;
+        boolean escaped = false;
+        for (int index = 0; index < value.length(); index++) {
+            final char character = value.charAt(index);
+            if (character == '"' && !escaped) {
+                quoted = !quoted;
+            }
+            if (character == ']' && !quoted) {
+                return true;
+            }
+            escaped = character == '\\' && !escaped;
+        }
+        return false;
     }
 
     private static String stripComment(final String line) {

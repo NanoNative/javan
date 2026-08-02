@@ -1,9 +1,12 @@
 package javan.codegen;
 
 import javan.ir.IrFunction;
+import javan.analysis.CMethodSymbols;
+import javan.analysis.EntryPoint;
 import javan.ir.IrMaterializedLambdaTarget;
 import javan.build.AbiType;
 import javan.build.ExportedMethod;
+import javan.build.NativeInteropConfig;
 import javan.classfile.MethodRef;
 import javan.ir.IrClass;
 import javan.ir.IrDispatch;
@@ -57,6 +60,27 @@ public final class CCodegen {
      * @throws IOException when writing fails
      */
     public Path generate(final IrProgram program, final Path generatedDirectory) throws IOException {
+        return generate(program, generatedDirectory, NativeInteropConfig.empty());
+    }
+
+    /**
+     * Writes the generated C program with declared native imports.
+     *
+     * @param program IR program
+     * @param generatedDirectory output directory
+     * @param nativeInterop declared native imports
+     * @return generated main C file
+     * @throws IOException when writing fails
+     * @throws IllegalArgumentException when a native import descriptor is unsupported
+     */
+    public Path generate(
+        final IrProgram program,
+        final Path generatedDirectory,
+        final NativeInteropConfig nativeInterop
+    ) throws IOException {
+        validateNativeWrapperNamespace(program, nativeInterop);
+        validateImportedNativeDescriptors(nativeInterop);
+        final NativeWrapperSymbols nativeWrapperSymbols = NativeWrapperSymbols.create(nativeInterop);
         final CodegenFeatures features = codegenFeatures(program);
         final List<String> objectResultSymbols = objectResultSymbols(program);
         final StringBuilder c = new StringBuilder();
@@ -90,6 +114,7 @@ public final class CCodegen {
                 c.append(";").append(System.lineSeparator());
             }
         }
+        emitImportedNativeSignatures(nativeInterop, nativeWrapperSymbols, c);
         for (final IrDispatch dispatch : program.dispatches()) {
             emitDispatchSignature(dispatch, c);
             c.append(";").append(System.lineSeparator());
@@ -114,12 +139,13 @@ public final class CCodegen {
         emitExactFunctionOrNullHelpers(program, c);
         emitExactTemporalBridgeHelpers(c);
         emitThreadHelpers(program, c);
-        emitMaterializedLambdaHelpers(program, c);
+        emitMaterializedLambdaHelpers(program, nativeWrapperSymbols, c);
+        emitImportedNativeWrappers(nativeInterop, nativeWrapperSymbols, c);
         for (final IrDispatch dispatch : program.dispatches()) {
             emitDispatch(program, dispatch, c);
         }
         for (final IrFunction function : program.functions()) {
-            emitFunction(program, function, objectResultSymbols, c, true);
+            emitFunction(program, function, objectResultSymbols, nativeWrapperSymbols, c, true);
         }
         return Files2.writeString(generatedDirectory.resolve("main.c"), c.toString());
     }
@@ -138,6 +164,29 @@ public final class CCodegen {
         final Path generatedDirectory,
         final List<ExportedMethod> exports
     ) throws IOException {
+        return generateLibrary(program, generatedDirectory, exports, NativeInteropConfig.empty());
+    }
+
+    /**
+     * Writes generated C for a native library with declared native imports.
+     *
+     * @param program IR program
+     * @param generatedDirectory output directory
+     * @param exports library exports
+     * @param nativeInterop declared native imports
+     * @return generated C file
+     * @throws IOException when writing fails
+     * @throws IllegalArgumentException when a native import descriptor is unsupported
+     */
+    public Path generateLibrary(
+        final IrProgram program,
+        final Path generatedDirectory,
+        final List<ExportedMethod> exports,
+        final NativeInteropConfig nativeInterop
+    ) throws IOException {
+        validateNativeWrapperNamespace(program, nativeInterop);
+        validateImportedNativeDescriptors(nativeInterop);
+        final NativeWrapperSymbols nativeWrapperSymbols = NativeWrapperSymbols.create(nativeInterop);
         final CodegenFeatures features = codegenFeatures(program);
         final List<String> objectResultSymbols = objectResultSymbols(program);
         final StringBuilder c = new StringBuilder();
@@ -169,6 +218,7 @@ public final class CCodegen {
             emitSignature(function, c, true);
             c.append(";").append(System.lineSeparator());
         }
+        emitImportedNativeSignatures(nativeInterop, nativeWrapperSymbols, c);
         for (final IrDispatch dispatch : program.dispatches()) {
             emitDispatchSignature(dispatch, c);
             c.append(";").append(System.lineSeparator());
@@ -192,16 +242,17 @@ public final class CCodegen {
         emitExactEnumLookupHelpers(program, c);
         emitExactFunctionOrNullHelpers(program, c);
         emitThreadHelpers(program, c);
-        emitMaterializedLambdaHelpers(program, c);
+        emitMaterializedLambdaHelpers(program, nativeWrapperSymbols, c);
+        emitImportedNativeWrappers(nativeInterop, nativeWrapperSymbols, c);
         for (final IrDispatch dispatch : program.dispatches()) {
             emitDispatch(program, dispatch, c);
         }
         for (final IrFunction function : program.functions()) {
-            emitFunction(program, function, objectResultSymbols, c, false);
+            emitFunction(program, function, objectResultSymbols, nativeWrapperSymbols, c, false);
         }
-        emitLibraryInitializer(program, c);
+        emitLibraryInitializer(program, nativeWrapperSymbols, c);
         for (final ExportedMethod export : exports) {
-            emitExportWrapper(export, c);
+            emitExportWrapper(export, nativeWrapperSymbols, c);
             emitResultWrapper(export, c);
         }
         return Files2.writeString(generatedDirectory.resolve("library.c"), c.toString());
@@ -840,7 +891,11 @@ public final class CCodegen {
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
     }
 
-    private static void emitDispatch(final IrProgram program, final IrDispatch dispatch, final StringBuilder c) {
+    private static void emitDispatch(
+        final IrProgram program,
+        final IrDispatch dispatch,
+        final StringBuilder c
+    ) {
         final java.util.Map<String, Integer> typeIds = typeIds(program);
         emitDispatchSignature(dispatch, c);
         c.append(" {").append(System.lineSeparator());
@@ -911,7 +966,11 @@ public final class CCodegen {
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
     }
 
-    private static void emitMaterializedLambdaHelpers(final IrProgram program, final StringBuilder c) {
+    private static void emitMaterializedLambdaHelpers(
+        final IrProgram program,
+        final NativeWrapperSymbols nativeWrapperSymbols,
+        final StringBuilder c
+    ) {
         if (program.materializedLambdaTargets().isEmpty()) {
             return;
         }
@@ -926,7 +985,7 @@ public final class CCodegen {
                 continue;
             }
             c.append("        case ").append(target.targetId()).append(": ");
-            emitMaterializedLambdaInvocation(c, target, "result", "self", List.of("arg"));
+            emitMaterializedLambdaInvocation(c, target, "result", "self", List.of("arg"), nativeWrapperSymbols);
             c.append("; return;").append(System.lineSeparator());
         }
         c.append("        default: javan_panic(\"unsupported materialized object lambda target\");").append(System.lineSeparator());
@@ -942,7 +1001,7 @@ public final class CCodegen {
                 continue;
             }
             c.append("        case ").append(target.targetId()).append(": ");
-            emitMaterializedLambdaInvocation(c, target, "result", "self", List.of("arg"));
+            emitMaterializedLambdaInvocation(c, target, "result", "self", List.of("arg"), nativeWrapperSymbols);
             c.append("; return;").append(System.lineSeparator());
         }
         c.append("        default: javan_panic(\"unsupported materialized long object lambda target\");").append(System.lineSeparator());
@@ -963,7 +1022,7 @@ public final class CCodegen {
                 continue;
             }
             c.append("        case ").append(target.targetId()).append(": ");
-            emitMaterializedLambdaInvocation(c, target, "result", "self", List.of());
+            emitMaterializedLambdaInvocation(c, target, "result", "self", List.of(), nativeWrapperSymbols);
             c.append("; return;").append(System.lineSeparator());
         }
         c.append("        default: javan_panic(\"unsupported materialized supplier lambda target\");").append(System.lineSeparator());
@@ -982,7 +1041,7 @@ public final class CCodegen {
                 continue;
             }
             c.append("        case ").append(target.targetId()).append(": ");
-            emitMaterializedLambdaInvocation(c, target, "result", "self", List.of("first_arg", "second_arg"));
+            emitMaterializedLambdaInvocation(c, target, "result", "self", List.of("first_arg", "second_arg"), nativeWrapperSymbols);
             c.append("; return;").append(System.lineSeparator());
         }
         c.append("        default: javan_panic(\"unsupported materialized two-argument object lambda target\");").append(System.lineSeparator());
@@ -1001,7 +1060,7 @@ public final class CCodegen {
                 continue;
             }
             c.append("        case ").append(target.targetId()).append(": return ");
-            emitMaterializedLambdaInvocation(c, target, "", "self", List.of("arg"));
+            emitMaterializedLambdaInvocation(c, target, "", "self", List.of("arg"), nativeWrapperSymbols);
             c.append(";").append(System.lineSeparator());
         }
         c.append("        default: javan_panic(\"unsupported materialized boolean lambda target\");").append(System.lineSeparator());
@@ -1020,7 +1079,7 @@ public final class CCodegen {
                 continue;
             }
             c.append("        case ").append(target.targetId()).append(": ");
-            emitMaterializedLambdaInvocation(c, target, "", "self", List.of("arg"));
+            emitMaterializedLambdaInvocation(c, target, "", "self", List.of("arg"), nativeWrapperSymbols);
             c.append("; return;").append(System.lineSeparator());
         }
         c.append("        default: javan_panic(\"unsupported materialized void lambda target\");").append(System.lineSeparator());
@@ -1038,7 +1097,7 @@ public final class CCodegen {
                 continue;
             }
             c.append("        case ").append(target.targetId()).append(": ");
-            emitMaterializedLambdaInvocation(c, target, "", "self", List.of("first_arg", "second_arg"));
+            emitMaterializedLambdaInvocation(c, target, "", "self", List.of("first_arg", "second_arg"), nativeWrapperSymbols);
             c.append("; return;").append(System.lineSeparator());
         }
         c.append("        default: javan_panic(\"unsupported materialized two-argument void lambda target\");").append(System.lineSeparator());
@@ -1051,9 +1110,10 @@ public final class CCodegen {
         final IrMaterializedLambdaTarget target,
         final String resultExpression,
         final String selfExpression,
-        final List<String> argumentExpressions
+        final List<String> argumentExpressions,
+        final NativeWrapperSymbols nativeWrapperSymbols
     ) {
-        c.append(target.functionSymbol()).append("(");
+        c.append(nativeWrapperSymbols.resolve(target.functionSymbol())).append("(");
         boolean first = resultExpression.length() == 0;
         if (!first) {
             c.append(resultExpression);
@@ -1095,6 +1155,7 @@ public final class CCodegen {
         final IrProgram program,
         final IrFunction function,
         final List<String> objectResultSymbols,
+        final NativeWrapperSymbols nativeWrapperSymbols,
         final StringBuilder c,
         final boolean emitMain
     ) {
@@ -1122,7 +1183,7 @@ public final class CCodegen {
             c.append("    javan_register_enum_ordinal_resolver(javan_generated_enum_ordinal);")
                 .append(System.lineSeparator());
             emitRecordReferenceObjectMethodResolverRegistration(program, c);
-            emitClassInitializers(program, c);
+            emitClassInitializers(program, nativeWrapperSymbols, c);
             c.append("    javan_gc_safe_point();").append(System.lineSeparator());
         } else {
             c.append("    javan_gc_safe_point();").append(System.lineSeparator());
@@ -1137,6 +1198,7 @@ public final class CCodegen {
                 rootFrameSymbol,
                 !rootNames.isEmpty(),
                 objectResultSymbols,
+                nativeWrapperSymbols,
                 c
             );
             if (hasStatementSafePoint(instruction)) {
@@ -1196,7 +1258,11 @@ public final class CCodegen {
         return true;
     }
 
-    private static void emitLibraryInitializer(final IrProgram program, final StringBuilder c) {
+    private static void emitLibraryInitializer(
+        final IrProgram program,
+        final NativeWrapperSymbols nativeWrapperSymbols,
+        final StringBuilder c
+    ) {
         c.append("static int javan_library_initialized = 0;").append(System.lineSeparator());
         c.append("static void javan_library_init(void) {").append(System.lineSeparator());
         c.append("    if (javan_library_initialized != 0) {").append(System.lineSeparator());
@@ -1207,13 +1273,17 @@ public final class CCodegen {
         c.append("    javan_register_enum_ordinal_resolver(javan_generated_enum_ordinal);")
             .append(System.lineSeparator());
         emitRecordReferenceObjectMethodResolverRegistration(program, c);
-        emitClassInitializers(program, c);
+        emitClassInitializers(program, nativeWrapperSymbols, c);
         c.append("    javan_gc_safe_point();").append(System.lineSeparator());
         c.append("    javan_library_initialized = 1;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
     }
 
-    private static void emitExportWrapper(final ExportedMethod export, final StringBuilder c) {
+    private static void emitExportWrapper(
+        final ExportedMethod export,
+        final NativeWrapperSymbols nativeWrapperSymbols,
+        final StringBuilder c
+    ) {
         emitExportSignature(export, c);
         c.append(" {").append(System.lineSeparator());
         c.append("    jmp_buf javan_export_panic_target;").append(System.lineSeparator());
@@ -1256,8 +1326,9 @@ public final class CCodegen {
             }
             c.append("    javan_runtime_lock_leave();").append(System.lineSeparator());
         }
-        final String call = export.internalSymbol() + "(" + exportArguments(export) + ")";
-        final String objectCall = export.internalSymbol()
+        final String internalSymbol = nativeWrapperSymbols.resolve(export.internalSymbol());
+        final String call = internalSymbol + "(" + exportArguments(export) + ")";
+        final String objectCall = internalSymbol
             + "((void**) &javan_export_object_result"
             + (export.parameterTypes().isEmpty() ? "" : ", " + exportArguments(export))
             + ")";
@@ -2048,9 +2119,10 @@ public final class CCodegen {
         final String function,
         final String cast,
         final javan.ir.IrExpression expression,
-        final List<String> objectResultSymbols
+        final List<String> objectResultSymbols,
+        final NativeWrapperSymbols nativeWrapperSymbols
     ) {
-        final ExpressionPlan plan = new ExpressionPlan(objectResultSymbols);
+        final ExpressionPlan plan = new ExpressionPlan(objectResultSymbols, nativeWrapperSymbols);
         final String value = plan.expression(expression);
         final String indent = emitExpressionScopeStart(plan, c);
         c.append(indent)
@@ -2068,9 +2140,10 @@ public final class CCodegen {
         final String target,
         final javan.ir.IrExpression expression,
         final boolean collectorVisibleRootWrite,
-        final List<String> objectResultSymbols
+        final List<String> objectResultSymbols,
+        final NativeWrapperSymbols nativeWrapperSymbols
     ) {
-        final ExpressionPlan plan = new ExpressionPlan(objectResultSymbols);
+        final ExpressionPlan plan = new ExpressionPlan(objectResultSymbols, nativeWrapperSymbols);
         final String value = plan.expression(expression);
         final String indent = emitExpressionScopeStart(plan, c);
         if (collectorVisibleRootWrite) {
@@ -2093,9 +2166,10 @@ public final class CCodegen {
         final String[] ownerField,
         final java.util.List<javan.ir.IrExpression> arguments,
         final boolean collectorVisibleReferenceWrite,
-        final List<String> objectResultSymbols
+        final List<String> objectResultSymbols,
+        final NativeWrapperSymbols nativeWrapperSymbols
     ) {
-        final ExpressionPlan plan = new ExpressionPlan(objectResultSymbols);
+        final ExpressionPlan plan = new ExpressionPlan(objectResultSymbols, nativeWrapperSymbols);
         final String receiver = plan.expression(arguments.get(0));
         final String value = plan.expression(arguments.get(1));
         final String indent = emitExpressionScopeStart(plan, c);
@@ -2123,9 +2197,10 @@ public final class CCodegen {
         final StringBuilder c,
         final String function,
         final java.util.List<javan.ir.IrExpression> arguments,
-        final List<String> objectResultSymbols
+        final List<String> objectResultSymbols,
+        final NativeWrapperSymbols nativeWrapperSymbols
     ) {
-        final ExpressionPlan plan = new ExpressionPlan(objectResultSymbols);
+        final ExpressionPlan plan = new ExpressionPlan(objectResultSymbols, nativeWrapperSymbols);
         final String array = plan.expression(arguments.get(0));
         final String index = plan.expression(arguments.get(1));
         final String value = plan.expression(arguments.get(2));
@@ -2148,9 +2223,10 @@ public final class CCodegen {
         final String label,
         final javan.ir.IrExpression condition,
         final String sourceContextSymbol,
-        final List<String> objectResultSymbols
+        final List<String> objectResultSymbols,
+        final NativeWrapperSymbols nativeWrapperSymbols
     ) {
-        final ExpressionPlan plan = new ExpressionPlan(objectResultSymbols);
+        final ExpressionPlan plan = new ExpressionPlan(objectResultSymbols, nativeWrapperSymbols);
         final String value = plan.expression(condition);
         if (plan.isEmpty()) {
             if (sourceContextSymbol.length() == 0) {
@@ -2197,11 +2273,16 @@ public final class CCodegen {
 
     private static final class ExpressionPlan {
         private final List<String> objectResultSymbols;
+        private final NativeWrapperSymbols nativeWrapperSymbols;
         private final java.util.List<Temporary> temporaries = new java.util.ArrayList<>();
         private final java.util.List<Assignment> assignments = new java.util.ArrayList<>();
 
-        private ExpressionPlan(final List<String> objectResultSymbols) {
+        private ExpressionPlan(
+            final List<String> objectResultSymbols,
+            final NativeWrapperSymbols nativeWrapperSymbols
+        ) {
             this.objectResultSymbols = objectResultSymbols;
+            this.nativeWrapperSymbols = nativeWrapperSymbols;
         }
 
         String expression(final javan.ir.IrExpression expression) {
@@ -2329,7 +2410,8 @@ public final class CCodegen {
                         + expression(expression.arguments().get(1))
                         + ")";
                 case CALL:
-                    return expression.value() + "(" + expressionArguments(expression.arguments()) + ")";
+                    return nativeWrapperSymbols.resolve(expression.value())
+                        + "(" + expressionArguments(expression.arguments()) + ")";
                 case OBJECT_ALLOCATION:
                     return allocatorSymbol(expression.value()) + "()";
                 case OBJECT_ARRAY_ALLOCATION:
@@ -2522,6 +2604,7 @@ public final class CCodegen {
         final String rootFrameSymbol,
         final boolean hasRootFrame,
         final List<String> objectResultSymbols,
+        final NativeWrapperSymbols nativeWrapperSymbols,
         final StringBuilder c
     ) {
         final boolean sourceContext = shouldEmitSourceContext(instruction);
@@ -2537,56 +2620,56 @@ public final class CCodegen {
                     .append(System.lineSeparator());
                 break;
             case PRINTLN_INT:
-                emitPrintCall(c, "javan_println_int", "", instruction.expression().orElseThrow(), objectResultSymbols);
+                emitPrintCall(c, "javan_println_int", "", instruction.expression().orElseThrow(), objectResultSymbols, nativeWrapperSymbols);
                 break;
             case PRINTLN_ERROR_INT:
-                emitPrintCall(c, "javan_eprintln_int", "", instruction.expression().orElseThrow(), objectResultSymbols);
+                emitPrintCall(c, "javan_eprintln_int", "", instruction.expression().orElseThrow(), objectResultSymbols, nativeWrapperSymbols);
                 break;
             case PRINTLN_LONG:
-                emitPrintCall(c, "javan_println_long", "", instruction.expression().orElseThrow(), objectResultSymbols);
+                emitPrintCall(c, "javan_println_long", "", instruction.expression().orElseThrow(), objectResultSymbols, nativeWrapperSymbols);
                 break;
             case PRINTLN_ERROR_LONG:
-                emitPrintCall(c, "javan_eprintln_long", "", instruction.expression().orElseThrow(), objectResultSymbols);
+                emitPrintCall(c, "javan_eprintln_long", "", instruction.expression().orElseThrow(), objectResultSymbols, nativeWrapperSymbols);
                 break;
             case PRINTLN_FLOAT:
-                emitPrintCall(c, "javan_println_float", "", instruction.expression().orElseThrow(), objectResultSymbols);
+                emitPrintCall(c, "javan_println_float", "", instruction.expression().orElseThrow(), objectResultSymbols, nativeWrapperSymbols);
                 break;
             case PRINTLN_ERROR_FLOAT:
-                emitPrintCall(c, "javan_eprintln_float", "", instruction.expression().orElseThrow(), objectResultSymbols);
+                emitPrintCall(c, "javan_eprintln_float", "", instruction.expression().orElseThrow(), objectResultSymbols, nativeWrapperSymbols);
                 break;
             case PRINTLN_DOUBLE:
-                emitPrintCall(c, "javan_println_double", "", instruction.expression().orElseThrow(), objectResultSymbols);
+                emitPrintCall(c, "javan_println_double", "", instruction.expression().orElseThrow(), objectResultSymbols, nativeWrapperSymbols);
                 break;
             case PRINTLN_ERROR_DOUBLE:
-                emitPrintCall(c, "javan_eprintln_double", "", instruction.expression().orElseThrow(), objectResultSymbols);
+                emitPrintCall(c, "javan_eprintln_double", "", instruction.expression().orElseThrow(), objectResultSymbols, nativeWrapperSymbols);
                 break;
             case PRINTLN_BOOLEAN:
-                emitPrintCall(c, "javan_println_bool", "", instruction.expression().orElseThrow(), objectResultSymbols);
+                emitPrintCall(c, "javan_println_bool", "", instruction.expression().orElseThrow(), objectResultSymbols, nativeWrapperSymbols);
                 break;
             case PRINTLN_ERROR_BOOLEAN:
-                emitPrintCall(c, "javan_eprintln_bool", "", instruction.expression().orElseThrow(), objectResultSymbols);
+                emitPrintCall(c, "javan_eprintln_bool", "", instruction.expression().orElseThrow(), objectResultSymbols, nativeWrapperSymbols);
                 break;
             case PRINTLN_OBJECT:
-                emitPrintCall(c, "javan_println_object_value", "", instruction.expression().orElseThrow(), objectResultSymbols);
+                emitPrintCall(c, "javan_println_object_value", "", instruction.expression().orElseThrow(), objectResultSymbols, nativeWrapperSymbols);
                 break;
             case PRINTLN_ERROR_OBJECT:
-                emitPrintCall(c, "javan_eprintln_object_value", "", instruction.expression().orElseThrow(), objectResultSymbols);
+                emitPrintCall(c, "javan_eprintln_object_value", "", instruction.expression().orElseThrow(), objectResultSymbols, nativeWrapperSymbols);
                 break;
             case PRINT_OBJECT:
-                emitPrintCall(c, "javan_print_object_value", "", instruction.expression().orElseThrow(), objectResultSymbols);
+                emitPrintCall(c, "javan_print_object_value", "", instruction.expression().orElseThrow(), objectResultSymbols, nativeWrapperSymbols);
                 break;
             case PRINT_ERROR_OBJECT:
-                emitPrintCall(c, "javan_eprint_object_value", "", instruction.expression().orElseThrow(), objectResultSymbols);
+                emitPrintCall(c, "javan_eprint_object_value", "", instruction.expression().orElseThrow(), objectResultSymbols, nativeWrapperSymbols);
                 break;
             case CALL_STATIC_VOID:
                 if (instruction.expression().isPresent()) {
-                    final ExpressionPlan plan = new ExpressionPlan(objectResultSymbols);
+                    final ExpressionPlan plan = new ExpressionPlan(objectResultSymbols, nativeWrapperSymbols);
                     final String call = plan.expression(instruction.expression().orElseThrow());
                     final String indent = emitExpressionScopeStart(plan, c);
                     c.append(indent).append(call).append(";").append(System.lineSeparator());
                     emitExpressionScopeEnd(plan, c);
                 } else {
-                    c.append("    ").append(instruction.value().orElseThrow()).append("();").append(System.lineSeparator());
+                    c.append("    ").append(nativeWrapperSymbols.resolve(instruction.value().orElseThrow())).append("();").append(System.lineSeparator());
                 }
                 break;
             case ASSIGN_INT:
@@ -2598,7 +2681,8 @@ public final class CCodegen {
                     instruction.value().orElseThrow(),
                     instruction.expression().orElseThrow(),
                     false,
-                    objectResultSymbols
+                    objectResultSymbols,
+                    nativeWrapperSymbols
                 );
                 break;
             case ASSIGN_OBJECT:
@@ -2607,37 +2691,38 @@ public final class CCodegen {
                     instruction.value().orElseThrow(),
                     instruction.expression().orElseThrow(),
                     true,
-                    objectResultSymbols
+                    objectResultSymbols,
+                    nativeWrapperSymbols
                 );
                 break;
             case ASSIGN_FIELD_INT: {
                 final String[] ownerField = ownerField(instruction.value().orElseThrow());
                 final java.util.List<javan.ir.IrExpression> arguments = instruction.expression().orElseThrow().arguments();
-                emitFieldAssignment(c, ownerField, arguments, false, objectResultSymbols);
+                emitFieldAssignment(c, ownerField, arguments, false, objectResultSymbols, nativeWrapperSymbols);
                 break;
             }
             case ASSIGN_FIELD_LONG: {
                 final String[] ownerField = ownerField(instruction.value().orElseThrow());
                 final java.util.List<javan.ir.IrExpression> arguments = instruction.expression().orElseThrow().arguments();
-                emitFieldAssignment(c, ownerField, arguments, false, objectResultSymbols);
+                emitFieldAssignment(c, ownerField, arguments, false, objectResultSymbols, nativeWrapperSymbols);
                 break;
             }
             case ASSIGN_FIELD_FLOAT: {
                 final String[] ownerField = ownerField(instruction.value().orElseThrow());
                 final java.util.List<javan.ir.IrExpression> arguments = instruction.expression().orElseThrow().arguments();
-                emitFieldAssignment(c, ownerField, arguments, false, objectResultSymbols);
+                emitFieldAssignment(c, ownerField, arguments, false, objectResultSymbols, nativeWrapperSymbols);
                 break;
             }
             case ASSIGN_FIELD_DOUBLE: {
                 final String[] ownerField = ownerField(instruction.value().orElseThrow());
                 final java.util.List<javan.ir.IrExpression> arguments = instruction.expression().orElseThrow().arguments();
-                emitFieldAssignment(c, ownerField, arguments, false, objectResultSymbols);
+                emitFieldAssignment(c, ownerField, arguments, false, objectResultSymbols, nativeWrapperSymbols);
                 break;
             }
             case ASSIGN_FIELD_OBJECT: {
                 final String[] ownerField = ownerField(instruction.value().orElseThrow());
                 final java.util.List<javan.ir.IrExpression> arguments = instruction.expression().orElseThrow().arguments();
-                emitFieldAssignment(c, ownerField, arguments, true, objectResultSymbols);
+                emitFieldAssignment(c, ownerField, arguments, true, objectResultSymbols, nativeWrapperSymbols);
                 break;
             }
             case ASSIGN_STATIC_FIELD_INT:
@@ -2650,7 +2735,8 @@ public final class CCodegen {
                     staticFieldSymbol(ownerField[0], ownerField[1]),
                     instruction.expression().orElseThrow(),
                     false,
-                    objectResultSymbols
+                    objectResultSymbols,
+                    nativeWrapperSymbols
                 );
                 break;
             }
@@ -2661,37 +2747,38 @@ public final class CCodegen {
                     staticFieldSymbol(ownerField[0], ownerField[1]),
                     instruction.expression().orElseThrow(),
                     true,
-                    objectResultSymbols
+                    objectResultSymbols,
+                    nativeWrapperSymbols
                 );
                 break;
             }
             case ASSIGN_ARRAY_OBJECT: {
                 final java.util.List<javan.ir.IrExpression> arguments = instruction.expression().orElseThrow().arguments();
-                emitArraySet(c, "javan_object_array_set", arguments, objectResultSymbols);
+                emitArraySet(c, "javan_object_array_set", arguments, objectResultSymbols, nativeWrapperSymbols);
                 break;
             }
             case ASSIGN_ARRAY_INT: {
                 final java.util.List<javan.ir.IrExpression> arguments = instruction.expression().orElseThrow().arguments();
-                emitArraySet(c, "javan_int_array_set", arguments, objectResultSymbols);
+                emitArraySet(c, "javan_int_array_set", arguments, objectResultSymbols, nativeWrapperSymbols);
                 break;
             }
             case ASSIGN_ARRAY_BYTE:
-                emitArraySet(c, "javan_byte_array_set", instruction.expression().orElseThrow().arguments(), objectResultSymbols);
+                emitArraySet(c, "javan_byte_array_set", instruction.expression().orElseThrow().arguments(), objectResultSymbols, nativeWrapperSymbols);
                 break;
             case ASSIGN_ARRAY_SHORT:
-                emitArraySet(c, "javan_short_array_set", instruction.expression().orElseThrow().arguments(), objectResultSymbols);
+                emitArraySet(c, "javan_short_array_set", instruction.expression().orElseThrow().arguments(), objectResultSymbols, nativeWrapperSymbols);
                 break;
             case ASSIGN_ARRAY_CHAR:
-                emitArraySet(c, "javan_char_array_set", instruction.expression().orElseThrow().arguments(), objectResultSymbols);
+                emitArraySet(c, "javan_char_array_set", instruction.expression().orElseThrow().arguments(), objectResultSymbols, nativeWrapperSymbols);
                 break;
             case ASSIGN_ARRAY_LONG:
-                emitArraySet(c, "javan_long_array_set", instruction.expression().orElseThrow().arguments(), objectResultSymbols);
+                emitArraySet(c, "javan_long_array_set", instruction.expression().orElseThrow().arguments(), objectResultSymbols, nativeWrapperSymbols);
                 break;
             case ASSIGN_ARRAY_FLOAT:
-                emitArraySet(c, "javan_float_array_set", instruction.expression().orElseThrow().arguments(), objectResultSymbols);
+                emitArraySet(c, "javan_float_array_set", instruction.expression().orElseThrow().arguments(), objectResultSymbols, nativeWrapperSymbols);
                 break;
             case ASSIGN_ARRAY_DOUBLE:
-                emitArraySet(c, "javan_double_array_set", instruction.expression().orElseThrow().arguments(), objectResultSymbols);
+                emitArraySet(c, "javan_double_array_set", instruction.expression().orElseThrow().arguments(), objectResultSymbols, nativeWrapperSymbols);
                 break;
             case LABEL:
                 c.append(instruction.value().orElseThrow()).append(":").append(System.lineSeparator());
@@ -2703,10 +2790,10 @@ public final class CCodegen {
                     .append(System.lineSeparator());
                 break;
             case BRANCH_IF:
-                emitBranchIf(c, instruction.value().orElseThrow(), instruction.expression().orElseThrow(), sourceContextSymbol, objectResultSymbols);
+                emitBranchIf(c, instruction.value().orElseThrow(), instruction.expression().orElseThrow(), sourceContextSymbol, objectResultSymbols, nativeWrapperSymbols);
                 break;
             case PANIC: {
-                final ExpressionPlan plan = new ExpressionPlan(objectResultSymbols);
+                final ExpressionPlan plan = new ExpressionPlan(objectResultSymbols, nativeWrapperSymbols);
                 final String value = plan.expression(instruction.expression().orElseThrow());
                 final String indent = emitExpressionScopeStart(plan, c);
                 if (instruction.sourceLocation().isPresent()) {
@@ -2722,7 +2809,7 @@ public final class CCodegen {
                 break;
             }
             case SET_PENDING:
-                emitSetPending(instruction, objectResultSymbols, c);
+                emitSetPending(instruction, objectResultSymbols, nativeWrapperSymbols, c);
                 break;
             case THROW_PENDING:
                 emitThrowPending(
@@ -2733,6 +2820,7 @@ public final class CCodegen {
                     hasRootFrame,
                     sourceContextSymbol,
                     objectResultSymbols,
+                    nativeWrapperSymbols,
                     c
                 );
                 break;
@@ -2762,7 +2850,7 @@ public final class CCodegen {
             case RETURN_FLOAT:
             case RETURN_DOUBLE:
             case RETURN_OBJECT:
-                emitReturnValue(instruction.expression().orElseThrow(), rootFrameSymbol, hasRootFrame, sourceContextSymbol, objectResultSymbols, c);
+                emitReturnValue(instruction.expression().orElseThrow(), rootFrameSymbol, hasRootFrame, sourceContextSymbol, objectResultSymbols, nativeWrapperSymbols, c);
                 break;
         }
         if (sourceContext && shouldClearSourceContextAfterInstruction(instruction)) {
@@ -2778,9 +2866,10 @@ public final class CCodegen {
         final boolean hasRootFrame,
         final String sourceContextSymbol,
         final List<String> objectResultSymbols,
+        final NativeWrapperSymbols nativeWrapperSymbols,
         final StringBuilder c
     ) {
-        emitSetPending(instruction, objectResultSymbols, c);
+        emitSetPending(instruction, objectResultSymbols, nativeWrapperSymbols, c);
         emitPendingPropagation(
             entry,
             functionReturnType,
@@ -2794,9 +2883,10 @@ public final class CCodegen {
     private static void emitSetPending(
         final IrInstruction instruction,
         final List<String> objectResultSymbols,
+        final NativeWrapperSymbols nativeWrapperSymbols,
         final StringBuilder c
     ) {
-        final ExpressionPlan plan = new ExpressionPlan(objectResultSymbols);
+        final ExpressionPlan plan = new ExpressionPlan(objectResultSymbols, nativeWrapperSymbols);
         final String message = plan.expression(instruction.expression().orElseThrow());
         final String indent = emitExpressionScopeStart(plan, c);
         final IrSourceLocation location = instruction.sourceLocation().orElseThrow();
@@ -2949,13 +3039,14 @@ public final class CCodegen {
         final boolean hasRootFrame,
         final String sourceContextSymbol,
         final List<String> objectResultSymbols,
+        final NativeWrapperSymbols nativeWrapperSymbols,
         final StringBuilder c
     ) {
         if (expression.type() == javan.ir.IrType.OBJECT) {
-            emitObjectReturnValue(expression, rootFrameSymbol, hasRootFrame, sourceContextSymbol, objectResultSymbols, c);
+            emitObjectReturnValue(expression, rootFrameSymbol, hasRootFrame, sourceContextSymbol, objectResultSymbols, nativeWrapperSymbols, c);
             return;
         }
-        final ExpressionPlan plan = new ExpressionPlan(objectResultSymbols);
+        final ExpressionPlan plan = new ExpressionPlan(objectResultSymbols, nativeWrapperSymbols);
         final String value = plan.expression(expression);
         if (!hasRootFrame && plan.isEmpty() && sourceContextSymbol.length() == 0) {
             c.append("    return ")
@@ -2995,9 +3086,10 @@ public final class CCodegen {
         final boolean hasRootFrame,
         final String sourceContextSymbol,
         final List<String> objectResultSymbols,
+        final NativeWrapperSymbols nativeWrapperSymbols,
         final StringBuilder c
     ) {
-        final ExpressionPlan plan = new ExpressionPlan(objectResultSymbols);
+        final ExpressionPlan plan = new ExpressionPlan(objectResultSymbols, nativeWrapperSymbols);
         final String value = plan.expression(expression);
         final String indent;
         if (plan.isEmpty()) {
@@ -3024,6 +3116,323 @@ public final class CCodegen {
         emitRootFramePop(rootFrameSymbol, hasRootFrame, c, indent);
         c.append(indent).append("return;").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
+    }
+
+    private static void validateImportedNativeDescriptors(final NativeInteropConfig nativeInterop) {
+        for (final NativeInteropConfig.ImportBinding binding : nativeInterop.imports()) {
+            importedNativeSignature(binding);
+        }
+    }
+
+    private static void validateNativeWrapperNamespace(
+        final IrProgram program,
+        final NativeInteropConfig nativeInterop
+    ) {
+        for (final NativeInteropConfig.ImportBinding binding : nativeInterop.imports()) {
+            final String wrapper = CMethodSymbols.symbol(binding.entryPoint());
+            for (final IrFunction function : program.functions()) {
+                if (wrapper.equals(function.symbol())) {
+                    throw nativeWrapperCollision(
+                        wrapper,
+                        binding.entryPoint(),
+                        new EntryPoint(function.owner(), function.name(), function.descriptor())
+                    );
+                }
+            }
+            for (final IrDispatch dispatch : program.dispatches()) {
+                if (wrapper.equals(dispatch.symbol())) {
+                    throw new IllegalArgumentException(
+                        "Native import wrapper symbol collision: " + wrapper + " for "
+                            + binding.entryPoint().display() + " and generated dispatch " + dispatch.symbol()
+                    );
+                }
+                for (final IrDispatchTarget target : dispatch.targets()) {
+                    if (wrapper.equals(target.functionSymbol())) {
+                        throw new IllegalArgumentException(
+                            "Static native import cannot be a dispatch target: " + binding.entryPoint().display()
+                                + " via generated dispatch " + dispatch.symbol()
+                        );
+                    }
+                }
+            }
+        }
+        for (int index = 0; index < nativeInterop.imports().size(); index++) {
+            final NativeInteropConfig.ImportBinding binding = nativeInterop.imports().get(index);
+            final String wrapper = nativeWrapperSymbol(index);
+            for (final IrFunction function : program.functions()) {
+                if (wrapper.equals(function.symbol())) {
+                    throw new IllegalArgumentException(
+                        "Native import private wrapper symbol collision: " + wrapper + " for "
+                            + binding.entryPoint().display() + " and "
+                            + new EntryPoint(function.owner(), function.name(), function.descriptor()).display()
+                    );
+                }
+            }
+            for (final IrDispatch dispatch : program.dispatches()) {
+                if (wrapper.equals(dispatch.symbol())) {
+                    throw new IllegalArgumentException(
+                        "Native import private wrapper symbol collision: " + wrapper + " for "
+                            + binding.entryPoint().display() + " and generated dispatch " + dispatch.symbol()
+                    );
+                }
+            }
+        }
+    }
+
+    private static String nativeWrapperSymbol(final int ordinal) {
+        return "javan_native_import_wrapper_" + ordinal + "_fn";
+    }
+
+    private static IllegalArgumentException nativeWrapperCollision(
+        final String symbol,
+        final EntryPoint nativeMethod,
+        final EntryPoint emittedMethod
+    ) {
+        return new IllegalArgumentException(
+            "Native import wrapper symbol collision: " + symbol + " for "
+                + nativeMethod.display() + " and " + emittedMethod.display()
+        );
+    }
+
+    private static final class NativeWrapperSymbols {
+        private final java.util.Map<String, String> wrappers;
+
+        private NativeWrapperSymbols(final java.util.Map<String, String> wrappers) {
+            this.wrappers = java.util.Map.copyOf(wrappers);
+        }
+
+        private static NativeWrapperSymbols create(final NativeInteropConfig nativeInterop) {
+            final java.util.Map<String, String> wrappers = new java.util.LinkedHashMap<>();
+            for (int index = 0; index < nativeInterop.imports().size(); index++) {
+                final NativeInteropConfig.ImportBinding binding = nativeInterop.imports().get(index);
+                wrappers.put(CMethodSymbols.symbol(binding.entryPoint()), nativeWrapperSymbol(index));
+            }
+            return new NativeWrapperSymbols(wrappers);
+        }
+
+        private String resolve(final String canonicalSymbol) {
+            final String wrapper = wrappers.get(canonicalSymbol);
+            return wrapper == null ? canonicalSymbol : wrapper;
+        }
+
+        private String wrapper(final NativeInteropConfig.ImportBinding binding) {
+            return resolve(CMethodSymbols.symbol(binding.entryPoint()));
+        }
+    }
+
+    private static void emitImportedNativeSignatures(
+        final NativeInteropConfig nativeInterop,
+        final NativeWrapperSymbols nativeWrapperSymbols,
+        final StringBuilder c
+    ) {
+        for (final NativeInteropConfig.ImportBinding binding : nativeInterop.imports()) {
+            final ImportedNativeSignature signature = importedNativeSignature(binding);
+            emitImportedNativeExternalSignature(binding, signature, c);
+            c.append(';').append(System.lineSeparator());
+            emitImportedNativeWrapperSignature(binding, signature, nativeWrapperSymbols, c);
+            c.append(';').append(System.lineSeparator());
+        }
+    }
+
+    private static void emitImportedNativeWrappers(
+        final NativeInteropConfig nativeInterop,
+        final NativeWrapperSymbols nativeWrapperSymbols,
+        final StringBuilder c
+    ) {
+        if (nativeInterop.imports().isEmpty()) {
+            return;
+        }
+        c.append(System.lineSeparator());
+        for (final NativeInteropConfig.ImportBinding binding : nativeInterop.imports()) {
+            emitImportedNativeWrapper(binding, importedNativeSignature(binding), nativeWrapperSymbols, c);
+        }
+    }
+
+    private static void emitImportedNativeWrapper(
+        final NativeInteropConfig.ImportBinding binding,
+        final ImportedNativeSignature signature,
+        final NativeWrapperSymbols nativeWrapperSymbols,
+        final StringBuilder c
+    ) {
+        emitImportedNativeWrapperSignature(binding, signature, nativeWrapperSymbols, c);
+        c.append(" {").append(System.lineSeparator());
+        for (int index = 0; index < signature.parameterTypes().size(); index++) {
+            if (signature.parameterTypes().get(index) == ImportedNativeAbiType.BYTE_ARRAY) {
+                c.append("    JavanNativeImportedByteArray arg")
+                    .append(index)
+                    .append("_native = javan_native_import_byte_array(arg")
+                    .append(index)
+                    .append(");")
+                    .append(System.lineSeparator());
+            }
+        }
+        final String call = binding.externalSymbol() + "(" + importedNativeCallArguments(signature.parameterTypes()) + ")";
+        if (signature.returnType() == ImportedNativeAbiType.VOID) {
+            c.append("    ").append(call).append(';').append(System.lineSeparator());
+            c.append("    return;").append(System.lineSeparator());
+        } else {
+            c.append("    return ").append(call).append(';').append(System.lineSeparator());
+        }
+        c.append('}').append(System.lineSeparator()).append(System.lineSeparator());
+    }
+
+    private static void emitImportedNativeExternalSignature(
+        final NativeInteropConfig.ImportBinding binding,
+        final ImportedNativeSignature signature,
+        final StringBuilder c
+    ) {
+        c.append(signature.returnType().externalCName())
+            .append(' ')
+            .append(binding.externalSymbol())
+            .append('(');
+        emitImportedNativeParameters(signature.parameterTypes(), c, true);
+        c.append(')');
+    }
+
+    private static void emitImportedNativeWrapperSignature(
+        final NativeInteropConfig.ImportBinding binding,
+        final ImportedNativeSignature signature,
+        final NativeWrapperSymbols nativeWrapperSymbols,
+        final StringBuilder c
+    ) {
+        c.append("static ")
+            .append(signature.returnType().wrapperCName())
+            .append(' ')
+            .append(nativeWrapperSymbols.wrapper(binding))
+            .append('(');
+        emitImportedNativeParameters(signature.parameterTypes(), c, false);
+        c.append(')');
+    }
+
+    private static void emitImportedNativeParameters(
+        final List<ImportedNativeAbiType> parameterTypes,
+        final StringBuilder c,
+        final boolean external
+    ) {
+        if (parameterTypes.isEmpty()) {
+            c.append("void");
+            return;
+        }
+        for (int index = 0; index < parameterTypes.size(); index++) {
+            if (index > 0) {
+                c.append(", ");
+            }
+            final ImportedNativeAbiType type = parameterTypes.get(index);
+            c.append(external ? type.externalCName() : type.wrapperCName())
+                .append(" arg")
+                .append(index);
+        }
+    }
+
+    private static String importedNativeCallArguments(final List<ImportedNativeAbiType> parameterTypes) {
+        final StringBuilder result = new StringBuilder();
+        for (int index = 0; index < parameterTypes.size(); index++) {
+            if (index > 0) {
+                result.append(", ");
+            }
+            result.append("arg").append(index);
+            if (parameterTypes.get(index) == ImportedNativeAbiType.BYTE_ARRAY) {
+                result.append("_native");
+            }
+        }
+        return result.toString();
+    }
+
+    private static ImportedNativeSignature importedNativeSignature(
+        final NativeInteropConfig.ImportBinding binding
+    ) {
+        final String descriptor = binding.entryPoint().descriptor();
+        if (descriptor.length() < 3 || descriptor.charAt(0) != '(') {
+            throw unsupportedImportedNativeDescriptor(binding);
+        }
+        final List<ImportedNativeAbiType> parameterTypes = new java.util.ArrayList<>();
+        int index = 1;
+        while (index < descriptor.length() && descriptor.charAt(index) != ')') {
+            final char value = descriptor.charAt(index);
+            if (value == 'I') {
+                parameterTypes.add(ImportedNativeAbiType.INT);
+                index++;
+            } else if (value == 'J') {
+                parameterTypes.add(ImportedNativeAbiType.LONG);
+                index++;
+            } else if (value == 'F') {
+                parameterTypes.add(ImportedNativeAbiType.FLOAT);
+                index++;
+            } else if (value == 'D') {
+                parameterTypes.add(ImportedNativeAbiType.DOUBLE);
+                index++;
+            } else if (value == '['
+                && index + 1 < descriptor.length()
+                && descriptor.charAt(index + 1) == 'B') {
+                parameterTypes.add(ImportedNativeAbiType.BYTE_ARRAY);
+                index += 2;
+            } else {
+                throw unsupportedImportedNativeDescriptor(binding);
+            }
+        }
+        if (index >= descriptor.length() || descriptor.charAt(index) != ')') {
+            throw unsupportedImportedNativeDescriptor(binding);
+        }
+        index++;
+        if (index != descriptor.length() - 1) {
+            throw unsupportedImportedNativeDescriptor(binding);
+        }
+        final ImportedNativeAbiType returnType;
+        final char result = descriptor.charAt(index);
+        if (result == 'V') {
+            returnType = ImportedNativeAbiType.VOID;
+        } else if (result == 'I') {
+            returnType = ImportedNativeAbiType.INT;
+        } else if (result == 'J') {
+            returnType = ImportedNativeAbiType.LONG;
+        } else if (result == 'F') {
+            returnType = ImportedNativeAbiType.FLOAT;
+        } else if (result == 'D') {
+            returnType = ImportedNativeAbiType.DOUBLE;
+        } else {
+            throw unsupportedImportedNativeDescriptor(binding);
+        }
+        return new ImportedNativeSignature(parameterTypes, returnType);
+    }
+
+    private static IllegalArgumentException unsupportedImportedNativeDescriptor(
+        final NativeInteropConfig.ImportBinding binding
+    ) {
+        return new IllegalArgumentException("Unsupported native import descriptor: " + binding.entryPoint().display());
+    }
+
+    private enum ImportedNativeAbiType {
+        VOID("void", "void"),
+        INT("int", "int"),
+        LONG("long long", "long long"),
+        FLOAT("float", "float"),
+        DOUBLE("double", "double"),
+        BYTE_ARRAY("JavanNativeImportedByteArray", "void*");
+
+        private final String externalCName;
+        private final String wrapperCName;
+
+        ImportedNativeAbiType(final String externalCName, final String wrapperCName) {
+            this.externalCName = externalCName;
+            this.wrapperCName = wrapperCName;
+        }
+
+        private String externalCName() {
+            return externalCName;
+        }
+
+        private String wrapperCName() {
+            return wrapperCName;
+        }
+    }
+
+    private record ImportedNativeSignature(
+        List<ImportedNativeAbiType> parameterTypes,
+        ImportedNativeAbiType returnType
+    ) {
+        private ImportedNativeSignature {
+            parameterTypes = List.copyOf(parameterTypes);
+        }
     }
 
     private static void emitSignature(final IrFunction function, final StringBuilder c, final boolean isStatic) {
@@ -3104,7 +3513,11 @@ public final class CCodegen {
         }
     }
 
-    private static void emitClassInitializers(final IrProgram program, final StringBuilder c) {
+    private static void emitClassInitializers(
+        final IrProgram program,
+        final NativeWrapperSymbols nativeWrapperSymbols,
+        final StringBuilder c
+    ) {
         emitEnumConstantInitializers(program, c);
         final List<IrFunction> initializers = new java.util.ArrayList<>();
         for (final IrFunction function : program.functions()) {
@@ -3114,7 +3527,7 @@ public final class CCodegen {
         }
         for (final IrFunction function : initializers) {
             c.append("    ")
-                .append(function.symbol())
+                .append(nativeWrapperSymbols.resolve(function.symbol()))
                 .append("();")
                 .append(System.lineSeparator());
         }
