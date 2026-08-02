@@ -4844,6 +4844,19 @@ final class RuntimeSourceMemorySections {
             return (int) value;
         }
 
+        long long javan_double_to_long(double value) {
+            if (value != value) {
+                return 0LL;
+            }
+            if (value >= 0x1p63) {
+                return LLONG_MAX;
+            }
+            if (value <= -0x1p63) {
+                return LLONG_MIN;
+            }
+            return (long long) value;
+        }
+
         int javan_is_supported_number(void* value) {
             int type_id = javan_registered_type_id(value);
             return type_id == JAVAN_TYPE_JAVA_LANG_INTEGER
