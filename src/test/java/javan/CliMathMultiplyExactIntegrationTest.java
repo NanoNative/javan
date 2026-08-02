@@ -136,6 +136,13 @@ final class CliMathMultiplyExactIntegrationTest extends CliIntegrationSupport {
                     }
                 }
 
+                private static void discardWidenedProduct(final int intValue) {
+                    try {
+                        Math.multiplyExact((long) intValue, intValue);
+                    } catch (final ArithmeticException ignored) {
+                    }
+                }
+
                 private static int intPositiveOverflow() {
                     try {
                         return Math.multiplyExact(Integer.MAX_VALUE, 2);
@@ -332,6 +339,9 @@ final class CliMathMultiplyExactIntegrationTest extends CliIntegrationSupport {
                         System.out.println(minimumMultiplierOverflow());
                     } else if ("caught-loaded-overflow".equals(scenario)) {
                         System.out.println(loadedOperands(Long.MAX_VALUE, 2));
+                    } else if ("discarded-long-int-result".equals(scenario)) {
+                        discardWidenedProduct(2);
+                        System.out.println("discarded-long-int-result-ok");
                     } else if ("long-long-positive".equals(scenario)) {
                         System.out.println(Math.multiplyExact(2_000_000_000L, 3_000_000_000L));
                     } else if ("long-long-negative".equals(scenario)) {
@@ -590,6 +600,11 @@ final class CliMathMultiplyExactIntegrationTest extends CliIntegrationSupport {
     @Test
     void loadedOperandOverflowCanBeCaught() {
         assertThat(nativeRun("caught-loaded-overflow")).isEqualTo(jvmRun("caught-loaded-overflow"));
+    }
+
+    @Test
+    void discardedLongIntResultMatchesJvm() {
+        assertThat(nativeRun("discarded-long-int-result")).isEqualTo(jvmRun("discarded-long-int-result"));
     }
 
     @Test

@@ -3168,7 +3168,7 @@ public final class StaticVerifier {
         if (opcode >= 26 && opcode <= 33) {
             return true;
         }
-        return opcode == 133;
+        return opcode == 88 || opcode == 133;
     }
 
     private static boolean supportedFinallyRethrowHandler(
