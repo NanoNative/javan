@@ -7374,6 +7374,27 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        JavanNativeImportedByteArray javan_native_import_byte_array(void* array) {
+            if (array == NULL) {
+                javan_panic("native import byte[] argument is null");
+            }
+            JavanNativeImportedByteArray result;
+            int valid = 0;
+            javan_runtime_lock_enter();
+            javan_allocation_node* node = javan_find_allocation(array, NULL);
+            if (node != NULL && node->kind == JAVAN_HEAP_KIND_ARRAY && node->type_id == JAVAN_ARRAY_KIND_BYTE) {
+                javan_byte_array* values = (javan_byte_array*) array;
+                result.data = values->values;
+                result.length = values->length;
+                valid = 1;
+            }
+            javan_runtime_lock_leave();
+            if (valid == 0) {
+                javan_panic("native import argument is not byte[]");
+            }
+            return result;
+        }
+
         int javan_short_array_get(void* array, int index) {
             javan_short_array* values = (javan_short_array*) javan_array_checked(array);
             javan_array_bounds_checked((javan_array_header*) values, index);

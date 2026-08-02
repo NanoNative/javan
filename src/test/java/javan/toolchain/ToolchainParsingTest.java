@@ -33,6 +33,12 @@ final class ToolchainParsingTest {
     }
 
     @Test
+    void simpleTomlRejectsUnclosedSectionHeader() {
+        assertThatThrownBy(() -> SimpleToml.parse("[native\n"))
+            .hasMessage("Expected key = value at line 1");
+    }
+
+    @Test
     void simpleTomlRejectsMissingEquals() {
         assertThatThrownBy(() -> SimpleToml.parse("toolchain\n"))
             .isInstanceOf(IllegalArgumentException.class)
@@ -44,6 +50,48 @@ final class ToolchainParsingTest {
         assertThatThrownBy(() -> SimpleToml.parse("toolchain =   \n"))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessage("Missing TOML value at line 1");
+    }
+
+    @Test
+    void simpleTomlRejectsDuplicateFullyQualifiedKey() {
+        assertThatThrownBy(() -> SimpleToml.parse("[native]\nlibraries = [\"first\"]\nlibraries = [\"second\"]\n"))
+            .hasMessage("Duplicate TOML key: native.libraries at line 3");
+    }
+
+    @Test
+    void simpleTomlRejectsUnterminatedMultilineArray() {
+        assertThatThrownBy(() -> SimpleToml.parse("[native]\nimports = [\n  \"sample.NativeApi.probe():int -> sample_probe\",\n"))
+            .hasMessage("Unterminated TOML array at line 3");
+    }
+
+    @Test
+    void simpleTomlKeepsHashInsideQuotedValue() {
+        assertThat(SimpleToml.parse("name = \"temurin#25\"\n"))
+            .isEqualTo(Map.of("name", "temurin#25"));
+    }
+
+    @Test
+    void simpleTomlRejectsDuplicateMultilineArrayKey() {
+        assertThatThrownBy(() -> SimpleToml.parse("[native]\nimports = [\n  \"first\"\n]\nimports = [\n  \"second\"\n]\n"))
+            .hasMessage("Duplicate TOML key: native.imports at line 7");
+    }
+
+    @Test
+    void simpleTomlRejectsUnterminatedArrayAtEndOfInput() {
+        assertThatThrownBy(() -> SimpleToml.parse("imports = ["))
+            .hasMessage("Unterminated TOML array at line 1");
+    }
+
+    @Test
+    void simpleTomlParsesFinalValueWithoutTrailingNewline() {
+        assertThat(SimpleToml.parse("name = \"temurin\""))
+            .isEqualTo(Map.of("name", "temurin"));
+    }
+
+    @Test
+    void simpleTomlRejectsNullContent() {
+        assertThatThrownBy(() -> SimpleToml.parse(null))
+            .isInstanceOf(NullPointerException.class);
     }
 
     @Test

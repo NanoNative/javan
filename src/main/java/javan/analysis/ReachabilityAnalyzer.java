@@ -37,8 +37,24 @@ public final class ReachabilityAnalyzer {
      * @return call graph
      */
     public CallGraph analyze(final Map<String, ClassFile> classes, final String mainClass) {
+        return analyze(classes, mainClass, List.of());
+    }
+
+    /**
+     * Analyzes reachability from a main class with declared external leaves.
+     *
+     * @param classes parsed closed-world classes
+     * @param mainClass JVM internal main class
+     * @param declaredExternalLeaves exact declared external method identities
+     * @return call graph
+     */
+    public CallGraph analyze(
+        final Map<String, ClassFile> classes,
+        final String mainClass,
+        final List<EntryPoint> declaredExternalLeaves
+    ) {
         final EntryPoint entry = new EntryPoint(mainClass, "main", "([Ljava/lang/String;)V");
-        return analyze(classes, List.of(entry));
+        return analyze(classes, List.of(entry), declaredExternalLeaves);
     }
 
     /**
@@ -49,6 +65,22 @@ public final class ReachabilityAnalyzer {
      * @return call graph
      */
     public CallGraph analyze(final Map<String, ClassFile> classes, final List<EntryPoint> entries) {
+        return analyze(classes, entries, List.of());
+    }
+
+    /**
+     * Analyzes reachability from explicit entry points with declared external leaves.
+     *
+     * @param classes parsed closed-world classes
+     * @param entries entry points
+     * @param declaredExternalLeaves exact declared external method identities
+     * @return call graph
+     */
+    public CallGraph analyze(
+        final Map<String, ClassFile> classes,
+        final List<EntryPoint> entries,
+        final List<EntryPoint> declaredExternalLeaves
+    ) {
         if (entries.isEmpty()) {
             throw new IllegalArgumentException("Reachability requires at least one entry point");
         }
@@ -147,7 +179,7 @@ public final class ReachabilityAnalyzer {
         }
         final List<EntryPoint> closedReachable = List.copyOf(reachable);
         final FunctionValueFlow.Result functionValueFlow =
-            FunctionValueFlow.analyze(classes, closedReachable);
+            FunctionValueFlow.analyze(classes, closedReachable, declaredExternalLeaves);
         return new CallGraph(
             roots.getFirst(),
             closedReachable,

@@ -643,7 +643,7 @@ public record LambdaMetafactoryCall(
     private static boolean singleObjectInput(final String descriptor) {
         final Optional<String> input = new LambdaMetafactoryCall("", "", "", "", new MethodRef("", "", ""), -1, descriptor, List.of())
             .inputDescriptor();
-        return input.isPresent() && input.orElseThrow().startsWith("L");
+        return input.isPresent() && (input.orElseThrow().startsWith("L") || input.orElseThrow().startsWith("["));
     }
 
     private static boolean singleObjectOrLongInput(final String descriptor) {

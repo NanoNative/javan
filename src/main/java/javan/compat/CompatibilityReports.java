@@ -491,6 +491,7 @@ public final class CompatibilityReports {
             pass("resource-file-copy"),
             pass("resource-stale-removal"),
             pass("native-resource-distribution"),
+            pass("native-import-configured-static-abi"),
             pass("resource-system-loader-stream"),
             pass("resource-loader-instance-stream"),
             pass("library-static-int-export"),

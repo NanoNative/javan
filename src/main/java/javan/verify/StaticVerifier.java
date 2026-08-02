@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -46,8 +47,25 @@ public final class StaticVerifier {
      * @return diagnostics
      */
     public List<Diagnostic> verify(final Map<String, ClassFile> classes, final List<EntryPoint> reachable) {
-        final List<Diagnostic> diagnostics = new ArrayList<>();
+        return verify(classes, reachable, List.of());
+    }
+
+    /**
+     * Verifies parsed classes with exact configured native imports.
+     *
+     * @param classes parsed classes
+     * @param reachable reachable method identities
+     * @param nativeEntryPoints exact configured native method identities
+     * @return diagnostics
+     */
+    public List<Diagnostic> verify(
+        final Map<String, ClassFile> classes,
+        final List<EntryPoint> reachable,
+        final List<EntryPoint> nativeEntryPoints
+    ) {
+        final List<Diagnostic> diagnostics = new ArrayList<>(verifyConfiguredNativeImports(classes, nativeEntryPoints));
         final ReachableEntries reachableEntries = new ReachableEntries(reachable);
+        final Set<EntryPoint> nativeEntryPointSet = Set.copyOf(nativeEntryPoints);
         final MethodRefFactsCache methodRefFacts = new MethodRefFactsCache(classes);
         for (final ClassFile classFile : classes.values()) {
             for (final MethodInfo method : classFile.methods()) {
@@ -58,11 +76,107 @@ public final class StaticVerifier {
                     method,
                     isReachable,
                     reachableEntries,
-                    methodRefFacts
+                    methodRefFacts,
+                    nativeEntryPointSet
                 ));
             }
         }
         return List.copyOf(diagnostics);
+    }
+
+    /**
+     * Verifies only exact configured native declarations without analyzing unrelated unreachable code.
+     *
+     * @param classes parsed classes
+     * @param nativeEntryPoints exact configured native method identities
+     * @return configured-native diagnostics in declaration order
+     * @throws NullPointerException when an argument or configured entry is null
+     * @throws IllegalArgumentException when a configured entry no longer resolves to a native method
+     */
+    public List<Diagnostic> verifyConfiguredNativeImports(
+        final Map<String, ClassFile> classes,
+        final List<EntryPoint> nativeEntryPoints
+    ) {
+        Objects.requireNonNull(classes, "classes");
+        final List<EntryPoint> configured = List.copyOf(
+            Objects.requireNonNull(nativeEntryPoints, "nativeEntryPoints")
+        );
+        final List<Diagnostic> diagnostics = new ArrayList<>();
+        for (int index = 0; index < configured.size(); index++) {
+            final EntryPoint entryPoint = configured.get(index);
+            final ClassFile classFile = classes.get(entryPoint.className());
+            if (classFile == null) {
+                throw invalidConfiguredNative(entryPoint);
+            }
+            final MethodInfo method = classFile.method(entryPoint.methodName(), entryPoint.descriptor()).orElse(null);
+            if (method == null || !method.isNative()) {
+                throw invalidConfiguredNative(entryPoint);
+            }
+            diagnostics.addAll(configuredNativeDiagnostics(classFile, method, entryPoint));
+        }
+        return List.copyOf(diagnostics);
+    }
+
+    private List<Diagnostic> configuredNativeDiagnostics(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final EntryPoint nativeMethod
+    ) {
+        if (!method.isStatic()) {
+            return List.of(error(
+                classFile,
+                method,
+                "JAVAN013",
+                "native import must be static",
+                nativeMethod.display(),
+                "Direct external symbols cannot receive a Java object receiver.",
+                "Declare the native method static."
+            ));
+        }
+        if (!supportedNativeImportAbi(method.descriptor())) {
+            return List.of(error(
+                classFile,
+                method,
+                "JAVAN013",
+                "native import ABI is not supported",
+                nativeMethod.display(),
+                "Native imports support void/int/long/float/double returns and int/long/float/double or non-null borrowed byte[] parameters.",
+                "Use only the supported native import ABI."
+            ));
+        }
+        return List.of();
+    }
+
+    private static IllegalArgumentException invalidConfiguredNative(final EntryPoint entryPoint) {
+        return new IllegalArgumentException("Configured native method cannot be verified: " + entryPoint.display());
+    }
+
+    private static boolean supportedNativeImportAbi(final String descriptor) {
+        if (descriptor.length() < 3 || descriptor.charAt(0) != '(') {
+            return false;
+        }
+        int index = 1;
+        while (index < descriptor.length() && descriptor.charAt(index) != ')') {
+            final char parameter = descriptor.charAt(index);
+            if (parameter == 'I' || parameter == 'J' || parameter == 'F' || parameter == 'D') {
+                index++;
+            } else if (parameter == '['
+                && index + 1 < descriptor.length()
+                && descriptor.charAt(index + 1) == 'B') {
+                index += 2;
+            } else {
+                return false;
+            }
+        }
+        if (index >= descriptor.length() || descriptor.charAt(index) != ')') {
+            return false;
+        }
+        index++;
+        if (index != descriptor.length() - 1) {
+            return false;
+        }
+        final char result = descriptor.charAt(index);
+        return result == 'V' || result == 'I' || result == 'J' || result == 'F' || result == 'D';
     }
 
     private static final class ReachableEntries {
@@ -177,19 +291,34 @@ public final class StaticVerifier {
         final MethodInfo method,
         final int reachable,
         final ReachableEntries reachableEntries,
-        final MethodRefFactsCache methodRefFacts
+        final MethodRefFactsCache methodRefFacts,
+        final Set<EntryPoint> nativeEntryPoints
     ) {
         final List<Diagnostic> diagnostics = new ArrayList<>();
         if (reachable == 1 && method.isNative()) {
-            diagnostics.add(error(
-                classFile,
-                method,
-                "JAVAN013",
-                "native methods are not supported",
-                method.name() + method.descriptor(),
-                "The current runtime cannot link arbitrary JNI/native methods.",
-                "Replace the native method with Java code or a future javan runtime intrinsic."
-            ));
+            final EntryPoint nativeMethod = new EntryPoint(classFile.name(), method.name(), method.descriptor());
+            final boolean configuredNative = nativeEntryPoints.contains(nativeMethod);
+            if (!configuredNative && !method.isStatic()) {
+                diagnostics.add(error(
+                    classFile,
+                    method,
+                    "JAVAN013",
+                    "native import must be static",
+                    nativeMethod.display(),
+                    "Direct external symbols cannot receive a Java object receiver.",
+                    "Declare the native method static."
+                ));
+            } else if (!configuredNative) {
+                diagnostics.add(error(
+                    classFile,
+                    method,
+                    "JAVAN013",
+                    "native import is not declared",
+                    nativeMethod.display(),
+                    "Reachable native methods require an exact configured import declaration.",
+                    "Declare the exact native method in [native].imports."
+                ));
+            }
         }
         if (reachable == 0 && JavanNativeSubstitutions.isSubstitutedFallbackMethod(classFile.name(), method)) {
             return diagnostics;
@@ -213,6 +342,14 @@ public final class StaticVerifier {
             if (ExactMethodSupport.isExactLoweredMethod(classFile, method)) {
                 return diagnostics;
             }
+            diagnostics.addAll(configuredNativeMethodReferenceDiagnostics(
+                classFile,
+                method,
+                methodCode,
+                reachable,
+                reachableEntries,
+                nativeEntryPoints
+            ));
             final int hasMonitorInstructions = containsMonitorInstructions(methodCode) ? 1 : 0;
             final int exactVirtualThreadWrapperMethod = isSupportedExactVirtualThreadWrapperMethod(classes, classFile, method) ? 1 : 0;
             if (hasMonitorInstructions == 1) {
@@ -260,6 +397,54 @@ public final class StaticVerifier {
             }
         }
         return diagnostics;
+    }
+
+    private static List<Diagnostic> configuredNativeMethodReferenceDiagnostics(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final CodeAttribute code,
+        final int reachable,
+        final ReachableEntries reachableEntries,
+        final Set<EntryPoint> nativeEntryPoints
+    ) {
+        if (reachable == 0) {
+            return List.of();
+        }
+        final List<Diagnostic> diagnostics = new ArrayList<>();
+        for (final Instruction instruction : code.instructions()) {
+            if (instruction.dynamicRef().isEmpty()) {
+                continue;
+            }
+            final Optional<LambdaMetafactoryCall> resolved = LambdaMetafactoryCall.resolve(
+                instruction.dynamicRef().orElseThrow()
+            );
+            if (resolved.isEmpty()) {
+                continue;
+            }
+            final LambdaMetafactoryCall lambda = resolved.orElseThrow();
+            final MethodRef implementation = lambda.implementation();
+            final EntryPoint target = new EntryPoint(
+                implementation.owner(),
+                implementation.name(),
+                implementation.descriptor()
+            );
+            if (!nativeEntryPoints.contains(target)
+                || !reachableEntries.contains(target.className(), target.methodName(), target.descriptor())
+                || lambda.instantiatedMethodDescriptor().equals(implementation.descriptor())) {
+                continue;
+            }
+            diagnostics.add(error(
+                classFile,
+                method,
+                "JAVAN013",
+                "configured native method reference requires exact descriptors",
+                target.display(),
+                "Configured native method references require identical instantiated SAM and implementation descriptors: "
+                    + lambda.instantiatedMethodDescriptor() + " != " + implementation.descriptor(),
+                "Use a method reference whose instantiated SAM descriptor exactly matches the configured native method."
+            ));
+        }
+        return List.copyOf(diagnostics);
     }
 
     private static List<Diagnostic> boundedOptionalOrElseThrowDiagnostics(

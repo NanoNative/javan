@@ -146,6 +146,10 @@ final class RuntimeHeaderFile {
             int length;
         } JavanByteArray;
         typedef struct {
+            signed char* data;
+            int length;
+        } JavanNativeImportedByteArray;
+        typedef struct {
             int ok;
             char* code;
             char* message;
@@ -237,6 +241,8 @@ final class RuntimeHeaderFile {
         void javan_byte_array_set(void* array, int index, int value);
         void* javan_byte_array_from(const signed char* data, int length);
         JavanByteArray javan_byte_array_export(void* array);
+        /* Borrowed mutable view valid only for the external call; the generated caller roots the array. Do not retain or free data. */
+        JavanNativeImportedByteArray javan_native_import_byte_array(void* array);
         void* javan_short_array_new(int length);
         int javan_short_array_get(void* array, int index);
         void javan_short_array_set(void* array, int index, int value);

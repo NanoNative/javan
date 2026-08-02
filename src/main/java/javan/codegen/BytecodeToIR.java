@@ -1,8 +1,10 @@
 package javan.codegen;
 
 import javan.analysis.CallGraph;
+import javan.analysis.CMethodSymbols;
 import javan.analysis.EntryPoint;
 import javan.analysis.FunctionValueFlow;
+import javan.build.NativeInteropConfig;
 import javan.classfile.ClassFile;
 import javan.classfile.CodeAttribute;
 import javan.classfile.DynamicRef;
@@ -76,7 +78,7 @@ public final class BytecodeToIR {
      * @return lowered IR program
      */
     public IrProgram lower(final Map<String, ClassFile> classes, final CallGraph callGraph) {
-        return lower(classes, callGraph, SourceLineIndex.empty());
+        return lower(classes, callGraph, SourceLineIndex.empty(), NativeInteropConfig.empty());
     }
 
     /**
@@ -92,6 +94,24 @@ public final class BytecodeToIR {
         final CallGraph callGraph,
         final SourceLineIndex sourceLines
     ) {
+        return lower(classes, callGraph, sourceLines, NativeInteropConfig.empty());
+    }
+
+    /**
+     * Lowers reachable methods to IR with source-line lookup and declared native imports.
+     *
+     * @param classes parsed classes
+     * @param callGraph reachable call graph
+     * @param sourceLines source-line index
+     * @param nativeInterop declared native imports
+     * @return lowered IR program
+     */
+    public IrProgram lower(
+        final Map<String, ClassFile> classes,
+        final CallGraph callGraph,
+        final SourceLineIndex sourceLines,
+        final NativeInteropConfig nativeInterop
+    ) {
         final List<IrFunction> functions = new ArrayList<>();
         final Map<String, IrDispatch> dispatches = new LinkedHashMap<>();
         final List<EntryPoint> reachableMethods = BytecodeToIRMetadataSupport.sortedEntryPoints(callGraph.reachableMethods());
@@ -103,7 +123,7 @@ public final class BytecodeToIR {
             BytecodeToIRInvokeSupport.materializedLambdaMethods(classes, reachableMethods);
         final FunctionValueFlow.Result functionValueFlow = callGraph.functionValueFlow().complete()
             ? callGraph.functionValueFlow()
-            : FunctionValueFlow.analyze(classes, reachableMethods);
+            : FunctionValueFlow.analyze(classes, reachableMethods, nativeInterop.nativeEntryPoints());
         final List<EntryPoint> runnableThreadTargets = BytecodeToIRInvokeSupport.runnableThreadTargets(classes, reachableMethods);
         final Map<String, List<String>> transportedThrowableTypes =
             transportedThrowableTypes(classes, callGraph, reachableMethods, materializedLambdaTargets);
@@ -120,6 +140,9 @@ public final class BytecodeToIR {
             );
         }
         for (final EntryPoint reachable : reachableMethods) {
+            if (configuredNativeLeaf(classes, reachable, nativeInterop)) {
+                continue;
+            }
             functions.add(lowerFunction(
                 classes,
                 reachable,
@@ -139,6 +162,26 @@ public final class BytecodeToIR {
             List.copyOf(materializedLambdaTargets),
             enumDispatchConstants(classes)
         );
+    }
+
+    private static boolean configuredNativeLeaf(
+        final Map<String, ClassFile> classes,
+        final EntryPoint entryPoint,
+        final NativeInteropConfig nativeInterop
+    ) {
+        if (nativeInterop.importBinding(entryPoint).isEmpty()) {
+            return false;
+        }
+        final ClassFile classFile = classes.get(entryPoint.className());
+        if (classFile == null) {
+            return false;
+        }
+        final Optional<MethodInfo> resolved = classFile.method(entryPoint.methodName(), entryPoint.descriptor());
+        if (resolved.isEmpty()) {
+            return false;
+        }
+        final MethodInfo method = resolved.orElseThrow();
+        return method.isNative() && method.isStatic() && method.code().isEmpty();
     }
 
     private static Map<String, List<String>> transportedThrowableTypes(
@@ -3682,17 +3725,7 @@ public final class BytecodeToIR {
      * @return C symbol
      */
     public static String symbol(final EntryPoint entryPoint) {
-        return "javan_" + (entryPoint.className() + "_" + entryPoint.methodName() + "_" + entryPoint.descriptor())
-            .replace('/', '_')
-            .replace('<', '_')
-            .replace('>', '_')
-            .replace('(', '_')
-            .replace(')', '_')
-            .replace(';', '_')
-            .replace('[', '_')
-            .replace(']', '_')
-            .replace('$', '_')
-            .replace('.', '_');
+        return CMethodSymbols.symbol(entryPoint);
     }
 
     static String dispatchSymbol(final MethodRef methodRef) {
