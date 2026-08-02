@@ -8725,6 +8725,10 @@ final class RuntimeSourceMemorySections {
             return list->values[index];
         }
 
+        static int javan_map_logical_length(javan_object_map* map);
+        static void* javan_map_key_unchecked(javan_object_map* map, int index);
+        static void* javan_map_value_unchecked(javan_object_map* map, int index);
+
         """;
     private static final String SOURCE_RECORD_SHAPES = """
         static void javan_record_shape_mismatch(void) {
@@ -8890,6 +8894,28 @@ final class RuntimeSourceMemorySections {
                 }
                 return;
             }
+            if (shape[0] == 'm') {
+                if (shape[1] != '\\0') {
+                    javan_panic("invalid generated record shape");
+                }
+                if (value == NULL) {
+                    return;
+                }
+                javan_allocation_node* node = javan_find_allocation(value, NULL);
+                if (node == NULL || node->runtime_kind != JAVAN_RUNTIME_KIND_OBJECT_MAP) {
+                    javan_record_shape_mismatch();
+                }
+                javan_object_map* map = (javan_object_map*) value;
+                if (map->magic != JAVAN_OBJECT_MAP_MAGIC) {
+                    javan_record_shape_mismatch();
+                }
+                int length = javan_map_logical_length(map);
+                for (int index = 0; index < length; index++) {
+                    javan_record_shape_validate(javan_map_key_unchecked(map, index), "s");
+                    javan_record_shape_validate(javan_map_value_unchecked(map, index), "s");
+                }
+                return;
+            }
             if (shape[0] == 'l') {
                 if (shape[1] == '\\0') {
                     javan_panic("invalid generated record shape");
@@ -8937,6 +8963,39 @@ final class RuntimeSourceMemorySections {
                 return javan_record_object_equals_resolver_value == NULL
                     ? javan_record_reference_identity_equals(left, right)
                     : javan_record_object_equals_resolver_value(left, right);
+            }
+            if (shape[0] == 'm') {
+                javan_object_map* left_map = (javan_object_map*) left;
+                javan_object_map* right_map = (javan_object_map*) right;
+                int length = javan_map_logical_length(left_map);
+                if (length != javan_map_logical_length(right_map)) {
+                    return 0;
+                }
+                for (int index = 0; index < length; index++) {
+                    void* key = javan_map_key_unchecked(left_map, index);
+                    int matched = 0;
+                    for (int candidate = 0; candidate < length; candidate++) {
+                        if (javan_record_shape_equals_prevalidated(
+                            key,
+                            javan_map_key_unchecked(right_map, candidate),
+                            "s"
+                        ) != 0) {
+                            if (javan_record_shape_equals_prevalidated(
+                                javan_map_value_unchecked(left_map, index),
+                                javan_map_value_unchecked(right_map, candidate),
+                                "s"
+                            ) == 0) {
+                                return 0;
+                            }
+                            matched = 1;
+                            break;
+                        }
+                    }
+                    if (matched == 0) {
+                        return 0;
+                    }
+                }
+                return 1;
             }
             if (shape[0] != 'l') {
                 javan_panic("invalid generated record shape");
@@ -8986,6 +9045,19 @@ final class RuntimeSourceMemorySections {
                 return javan_record_object_hash_code_resolver_value == NULL
                     ? javan_record_reference_identity_hash_code(value)
                     : javan_record_object_hash_code_resolver_value(value);
+            }
+            if (shape[0] == 'm') {
+                javan_object_map* map = (javan_object_map*) value;
+                uint32_t hash = 0U;
+                int length = javan_map_logical_length(map);
+                for (int index = 0; index < length; index++) {
+                    void* key = javan_map_key_unchecked(map, index);
+                    void* entry_value = javan_map_value_unchecked(map, index);
+                    int key_hash = key == NULL ? 0 : javan_string_hash_code((const char*) key);
+                    int value_hash = entry_value == NULL ? 0 : javan_string_hash_code((const char*) entry_value);
+                    hash = hash + ((uint32_t) key_hash ^ (uint32_t) value_hash);
+                }
+                return (int32_t) hash;
             }
             if (shape[0] != 'l') {
                 javan_panic("invalid generated record shape");

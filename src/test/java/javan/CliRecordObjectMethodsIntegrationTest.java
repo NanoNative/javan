@@ -218,6 +218,48 @@ final class CliRecordObjectMethodsIntegrationTest extends CliIntegrationSupport 
     }
 
     @Test
+    void mapComponentsUseEntryEqualityAndOrderIndependentHashCode() {
+        assertThat(outputs("map")).containsExactly(
+            "true\nfalse\nfalse\nfalse\n-1004803451\n-1004803451\n",
+            "true\nfalse\nfalse\nfalse\n-1004803451\n-1004803451\n"
+        );
+    }
+
+    @Test
+    void nullMapComponentsUseNullEqualityAndZeroHashCode() {
+        assertThat(outputs("null-map")).containsExactly("true\n0\n", "true\n0\n");
+    }
+
+    @Test
+    void emptyMapComponentsUseValueEqualityAndZeroHashCode() {
+        assertThat(outputs("empty-map")).containsExactly("true\n0\n", "true\n0\n");
+    }
+
+    @Test
+    void recordsContainingStringMapsComposeInsideLists() {
+        assertThat(outputs("map-record-list"))
+            .containsExactly("true\n112004941\n", "true\n112004941\n");
+    }
+
+    @Test
+    void unsafeRawMapInsertionFailsWithStableRuntimeDiagnostic() throws Exception {
+        assertThat(unsafeRawMapRuntimeFailure(
+            "unsafe-raw-map-value-hash-runtime",
+            "raw.put(\"safe\", Integer.valueOf(7));",
+            "System.out.println(new Strings(unsafe).hashCode());"
+        )).contains("record generic value does not match declared shape");
+    }
+
+    @Test
+    void unsafeRawMapKeyFailsDuringEqualsWithStableRuntimeDiagnostic() throws Exception {
+        assertThat(unsafeRawMapRuntimeFailure(
+            "unsafe-raw-map-key-equals-runtime",
+            "raw.put(Integer.valueOf(7), \"safe\");",
+            "System.out.println(new Strings(unsafe).equals(new Strings(Map.of(\"safe\", \"safe\"))));"
+        )).contains("record generic value does not match declared shape");
+    }
+
+    @Test
     void listsOfFinalValueRecordsUseElementObjectMethods() {
         assertThat(outputs("record-list")).containsExactly("true\n3752\n", "true\n3752\n");
     }
@@ -446,7 +488,7 @@ final class CliRecordObjectMethodsIntegrationTest extends CliIntegrationSupport 
             import java.util.List;
             import java.util.Map;
 
-            record Unsupported(Map<String, String> value) {
+            record Unsupported(Map<String, Integer> value) {
             }
 
             record Unsafe(List<Unsupported> value) {
@@ -455,8 +497,74 @@ final class CliRecordObjectMethodsIntegrationTest extends CliIntegrationSupport 
             public final class Main {
                 public static void main(final String[] args) {
                     System.out.println(
-                        new Unsafe(List.of(new Unsupported(Map.of()))).hashCode()
+                        new Unsafe(List.of(new Unsupported(Map.of("value", Integer.valueOf(7))))).hashCode()
                     );
+                }
+            }
+        """)).contains("unsupported record component type");
+    }
+
+    @Test
+    void rawMapComponentIsRejectedBeforeCodeGeneration() throws Exception {
+        assertThat(rejectedGenericRecordBuild("raw-map", """
+            import java.util.Map;
+
+            record Unsafe(Map value) {
+            }
+
+            public final class Main {
+                public static void main(final String[] args) {
+                    System.out.println(new Unsafe(Map.of("key", "value")).hashCode());
+                }
+            }
+            """)).contains("unsupported record component type");
+    }
+
+    @Test
+    void wildcardStringMapComponentIsRejectedBeforeCodeGeneration() throws Exception {
+        assertThat(rejectedGenericRecordBuild("wildcard-string-map", """
+            import java.util.Map;
+
+            record Unsafe(Map<? extends String, String> value) {
+            }
+
+            public final class Main {
+                public static void main(final String[] args) {
+                    System.out.println(new Unsafe(Map.of("key", "value")).hashCode());
+                }
+            }
+            """)).contains("unsupported record component type");
+    }
+
+    @Test
+    void concreteHashMapComponentIsRejectedBeforeCodeGeneration() throws Exception {
+        assertThat(rejectedGenericRecordBuild("concrete-hash-map", """
+            import java.util.HashMap;
+            import java.util.Map;
+
+            record Unsafe(HashMap<String, String> value) {
+            }
+
+            public final class Main {
+                public static void main(final String[] args) {
+                    System.out.println(new Unsafe(new HashMap<>(Map.of("key", "value"))).hashCode());
+                }
+            }
+            """)).contains("unsupported record component type");
+    }
+
+    @Test
+    void nestedStringMapListComponentIsRejectedBeforeCodeGeneration() throws Exception {
+        assertThat(rejectedGenericRecordBuild("nested-string-map-list", """
+            import java.util.List;
+            import java.util.Map;
+
+            record Unsafe(List<Map<String, String>> value) {
+            }
+
+            public final class Main {
+                public static void main(final String[] args) {
+                    System.out.println(new Unsafe(List.of(Map.of("key", "value"))).hashCode());
                 }
             }
             """)).contains("unsupported record component type");
@@ -638,6 +746,48 @@ final class CliRecordObjectMethodsIntegrationTest extends CliIntegrationSupport 
         return result.stderr();
     }
 
+    private String unsafeRawMapRuntimeFailure(
+        final String projectName,
+        final String insertion,
+        final String recordOperation
+    ) throws Exception {
+        final Path unsafeProject = project(projectName);
+        writeJava(unsafeProject, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashMap;
+            import java.util.Map;
+
+            public final class Main {
+                record Strings(Map<String, String> value) {
+                }
+
+                private Main() {
+                }
+
+                @SuppressWarnings({"rawtypes", "unchecked"})
+                public static void main(final String[] args) {
+                    final Map raw = new LinkedHashMap();
+                    %s
+                    final Map<String, String> unsafe = (Map<String, String>) raw;
+                    %s
+                }
+            }
+            """.formatted(insertion, recordOperation));
+        final CliRun build = runSlow(tempDir, "build", unsafeProject.toString());
+        if (build.exitCode() != 0) {
+            throw new IllegalStateException(build.stderr());
+        }
+        final ProcessResult result = processSlow(
+            unsafeProject,
+            List.of(unsafeProject.resolve(".javan/bin/" + projectName).toString())
+        );
+        if (result.exitCode() == 0) {
+            throw new IllegalStateException("unsafe generic record value was accepted");
+        }
+        return result.stderr();
+    }
+
     private String customListCarrierFailure() throws Exception {
         final String projectName = "custom-list-carrier-runtime";
         final Path unsafeProject = project(projectName);
@@ -688,7 +838,10 @@ final class CliRecordObjectMethodsIntegrationTest extends CliIntegrationSupport 
             package com.acme;
 
             import java.util.ArrayList;
+            import java.util.Collections;
+            import java.util.LinkedHashMap;
             import java.util.List;
+            import java.util.Map;
 
             public final class Main {
                 record BooleanValue(boolean value) {
@@ -737,6 +890,12 @@ final class CliRecordObjectMethodsIntegrationTest extends CliIntegrationSupport 
                 }
 
                 record ArrayListValue(ArrayList<String> value) {
+                }
+
+                record MapValue(Map<String, String> value) {
+                }
+
+                record MapRecordListValue(List<MapValue> value) {
                 }
 
                 record RecordListValue(List<Child> value) {
@@ -939,6 +1098,60 @@ final class CliRecordObjectMethodsIntegrationTest extends CliIntegrationSupport 
                         final ArrayListValue first = new ArrayListValue(new ArrayList<>(List.of("a", "b")));
                         final ArrayListValue second = new ArrayListValue(new ArrayList<>(List.of("a", "b")));
                         System.out.println(first.equals(second));
+                        System.out.println(first.hashCode());
+                        return;
+                    }
+                    if (scenario.equals("map")) {
+                        final Map<String, String> firstValues = new LinkedHashMap<>();
+                        firstValues.put(new String("first"), new String("value"));
+                        firstValues.put(null, new String("null-key"));
+                        firstValues.put(new String("null-value"), null);
+                        final Map<String, String> equalValues = new LinkedHashMap<>();
+                        equalValues.put(new String("null-value"), null);
+                        equalValues.put(null, new String("null-key"));
+                        equalValues.put(new String("first"), new String("value"));
+                        final Map<String, String> equalView = Collections.unmodifiableMap(equalValues);
+                        final Map<String, String> changedValues = new LinkedHashMap<>();
+                        changedValues.put(new String("null-value"), null);
+                        changedValues.put(null, new String("null-key"));
+                        changedValues.put(new String("first"), new String("changed"));
+                        final Map<String, String> shortValues = new LinkedHashMap<>();
+                        shortValues.put(new String("first"), new String("value"));
+                        shortValues.put(null, new String("null-key"));
+                        final Map<String, String> missingKeyValues = new LinkedHashMap<>();
+                        missingKeyValues.put(new String("other"), new String("value"));
+                        missingKeyValues.put(null, new String("null-key"));
+                        missingKeyValues.put(new String("null-value"), null);
+                        final MapValue first = new MapValue(firstValues);
+                        final MapValue equal = new MapValue(equalView);
+                        System.out.println(first.equals(equal));
+                        System.out.println(first.equals(new MapValue(changedValues)));
+                        System.out.println(first.equals(new MapValue(shortValues)));
+                        System.out.println(first.equals(new MapValue(missingKeyValues)));
+                        System.out.println(first.hashCode());
+                        System.out.println(equal.hashCode());
+                        return;
+                    }
+                    if (scenario.equals("null-map")) {
+                        final MapValue first = new MapValue(null);
+                        System.out.println(first.equals(new MapValue(null)));
+                        System.out.println(first.hashCode());
+                        return;
+                    }
+                    if (scenario.equals("empty-map")) {
+                        final MapValue first = new MapValue(Map.of());
+                        System.out.println(first.equals(new MapValue(Map.of())));
+                        System.out.println(first.hashCode());
+                        return;
+                    }
+                    if (scenario.equals("map-record-list")) {
+                        final MapRecordListValue first = new MapRecordListValue(
+                            List.of(new MapValue(Map.of("key", "value")))
+                        );
+                        final MapRecordListValue equal = new MapRecordListValue(
+                            List.of(new MapValue(Map.of("key", "value")))
+                        );
+                        System.out.println(first.equals(equal));
                         System.out.println(first.hashCode());
                         return;
                     }

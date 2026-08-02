@@ -5390,14 +5390,31 @@ public final class StaticVerifier {
         final RecordObjectMethodsCall.Shape shape,
         final boolean hashCode
     ) {
+        return supportedRecordComponentShape(classes, shape, hashCode, true);
+    }
+
+    private static boolean supportedRecordComponentShape(
+        final Map<String, ClassFile> classes,
+        final RecordObjectMethodsCall.Shape shape,
+        final boolean hashCode,
+        final boolean directRecordComponent
+    ) {
         if (!shape.valid()) {
             return false;
         }
         if (shape.isArray() || shape.referenceOwner().isEmpty()) {
             return true;
         }
+        if (shape.isStringMap()) {
+            return directRecordComponent;
+        }
         if (shape.isList()) {
-            return supportedRecordComponentShape(classes, shape.listElement().orElseThrow(), hashCode);
+            return supportedRecordComponentShape(
+                classes,
+                shape.listElement().orElseThrow(),
+                hashCode,
+                false
+            );
         }
         final String owner = shape.referenceOwner().orElseThrow();
         if ("java/lang/String".equals(owner) || isRecordBoxedPrimitive(owner)) {
@@ -5729,7 +5746,7 @@ public final class StaticVerifier {
             "unsupported record component type",
             descriptor,
             "Record equals/hashCode only admits closed reference shapes with complete native semantics.",
-            "Use String, a boxed primitive, an array, an exact List/ArrayList element shape, an enum, or a final closed-world class with a reachable equals/hashCode implementation."
+            "Use String, a boxed primitive, an array, an exact List/ArrayList element shape, exact Map<String, String>, an enum, or a final closed-world class with a reachable equals/hashCode implementation."
         );
     }
 
