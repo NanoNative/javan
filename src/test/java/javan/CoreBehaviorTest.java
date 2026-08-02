@@ -351,6 +351,11 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void bytecodeSupportClassifiesFloatToDoubleAsNativeSupported() {
+        assertThat(BytecodeSupport.classify(141)).isEqualTo(BytecodeSupport.Status.NATIVE_SUPPORTED);
+    }
+
+    @Test
     void bytecodeSupportPublishesDoubleToInt() {
         assertThat(BytecodeSupport.nativeSupportedOpcodes()).contains(142);
     }
@@ -358,6 +363,11 @@ final class CoreBehaviorTest {
     @Test
     void bytecodeSupportPublishesDoubleToLong() {
         assertThat(BytecodeSupport.nativeSupportedOpcodes()).contains(143);
+    }
+
+    @Test
+    void bytecodeSupportPublishesFloatToDouble() {
+        assertThat(BytecodeSupport.nativeSupportedOpcodes()).contains(141);
     }
 
     @Test

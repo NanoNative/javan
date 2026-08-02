@@ -953,6 +953,10 @@ final class RuntimeSourceCoreSection {
             return (int) value;
         }
 
+        double javan_f2d(float value) {
+            return (double) value;
+        }
+
         double javan_l2d(long long value) {
             const int negative = value < 0;
             const uint64_t magnitude = negative
