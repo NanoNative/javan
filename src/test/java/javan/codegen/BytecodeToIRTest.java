@@ -5702,6 +5702,27 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersDoubleToLongToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(D)J",
+            2,
+            2,
+            plain(0, 38, "dload_0"),
+            plain(1, 143, "d2l"),
+            plain(2, 173, "lreturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnLong(IrExpression.longCall(
+                "javan_double_to_long",
+                List.of(IrExpression.doubleLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
     void lowersLongToDoubleToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

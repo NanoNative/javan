@@ -48,6 +48,17 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void runtimeHeaderAndSourceExposeDoubleToLongHelper() throws Exception {
+        final String source = Files.readString(new RuntimeFiles().write(tempDir));
+        final String header = Files.readString(tempDir.resolve("javan_runtime.h"));
+
+        assertThat(List.of(
+            header.contains("long long javan_double_to_long(double value);"),
+            source.contains("long long javan_double_to_long(double value) {")
+        )).containsExactly(true, true);
+    }
+
+    @Test
     void runtimeHeaderAndSourceExposeLongToDoubleHelper() throws Exception {
         final String source = Files.readString(new RuntimeFiles().write(tempDir));
         final String header = Files.readString(tempDir.resolve("javan_runtime.h"));
@@ -56,6 +67,117 @@ final class RuntimeFilesTest {
             header.contains("double javan_l2d(long long value);"),
             source.contains("double javan_l2d(long long value) {")
         )).containsExactly(true, true);
+    }
+
+    @Test
+    void runtimeDoubleToLongGuardsNaNAndRangeBeforeCasting() throws Exception {
+        final String source = Files.readString(new RuntimeFiles().write(tempDir));
+
+        assertThat(source).contains("""
+            long long javan_double_to_long(double value) {
+                if (value != value) {
+                    return 0LL;
+                }
+                if (value >= 0x1p63) {
+                    return LLONG_MAX;
+                }
+                if (value <= -0x1p63) {
+                    return LLONG_MIN;
+                }
+                return (long long) value;
+            }
+            """.stripTrailing());
+    }
+
+    @Test
+    void runtimeDoubleToLongBuildsJavaValuesAtBoundaries() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe("""
+            #include "javan_runtime.h"
+            #include <stdint.h>
+            #include <stdio.h>
+            #include <string.h>
+
+            static double from_bits(uint64_t bits) {
+                double value;
+                memcpy(&value, &bits, sizeof(value));
+                return value;
+            }
+
+            int main(void) {
+                const uint64_t values[] = {
+                    UINT64_C(0x0000000000000000), UINT64_C(0x8000000000000000),
+                    UINT64_C(0x401f000000000000), UINT64_C(0xc01f000000000000),
+                    UINT64_C(0x0000000000000001), UINT64_C(0x8000000000000001),
+                    UINT64_C(0x7ff8000000001234), UINT64_C(0x7ff0000000000000),
+                    UINT64_C(0xfff0000000000000), UINT64_C(0x43e0000000000000),
+                    UINT64_C(0xc3e0000000000000), UINT64_C(0x43dfffffffffffff),
+                    UINT64_C(0xc3dfffffffffffff), UINT64_C(0x43e0000000000001),
+                    UINT64_C(0xc3e0000000000001), UINT64_C(0x7fefffffffffffff),
+                    UINT64_C(0xffefffffffffffff)
+                };
+                for (unsigned long index = 0; index < sizeof(values) / sizeof(values[0]); index++) {
+                    printf("%lld\\n", javan_double_to_long(from_bits(values[index])));
+                }
+                return 0;
+            }
+            """, "512");
+
+        assertThat(stdout).isEqualTo("""
+            0
+            0
+            7
+            -7
+            0
+            0
+            0
+            9223372036854775807
+            -9223372036854775808
+            9223372036854775807
+            -9223372036854775808
+            9223372036854774784
+            -9223372036854774784
+            9223372036854775807
+            -9223372036854775808
+            9223372036854775807
+            -9223372036854775808
+            """);
+    }
+
+    @Test
+    void runtimeDoubleToLongTruncatesTowardZeroUnderUpwardRounding() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe("""
+            #include "javan_runtime.h"
+            #include <fenv.h>
+            #include <stdint.h>
+            #include <stdio.h>
+            #include <string.h>
+
+            #pragma STDC FENV_ACCESS ON
+
+            static double from_bits(uint64_t bits) {
+                double value;
+                memcpy(&value, &bits, sizeof(value));
+                return value;
+            }
+
+            int main(void) {
+            #if defined(FE_UPWARD)
+                if (fesetround(FE_UPWARD) == 0) {
+                    printf("%lld\\n", javan_double_to_long(from_bits(UINT64_C(0x401f000000000000))));
+                    printf("%lld\\n", javan_double_to_long(from_bits(UINT64_C(0xc01f000000000000))));
+                    return 0;
+                }
+            #endif
+                puts("fenv-unavailable");
+                return 0;
+            }
+            """, "512", fenvLinkInputs());
+
+        assumeTrue(!stdout.equals("fenv-unavailable\\n"), "C fenv cannot set FE_UPWARD");
+        assertThat(stdout).isEqualTo("""
+            7
+            -7
+            """);
     }
 
     @Test
