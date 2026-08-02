@@ -1,6 +1,7 @@
 package javan.codegen;
 
 import javan.TestProcesses;
+import javan.build.NativeLinkInputs;
 import javan.build.ResourceBundler;
 import javan.compat.JdkCallSupport;
 import org.junit.jupiter.api.Test;
@@ -47,6 +48,17 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void runtimeHeaderAndSourceExposeLongToDoubleHelper() throws Exception {
+        final String source = Files.readString(new RuntimeFiles().write(tempDir));
+        final String header = Files.readString(tempDir.resolve("javan_runtime.h"));
+
+        assertThat(List.of(
+            header.contains("double javan_l2d(long long value);"),
+            source.contains("double javan_l2d(long long value) {")
+        )).containsExactly(true, true);
+    }
+
+    @Test
     void runtimeDoubleToIntGuardsNaNAndRangeBeforeCasting() throws Exception {
         final String source = Files.readString(new RuntimeFiles().write(tempDir));
 
@@ -64,6 +76,91 @@ final class RuntimeFilesTest {
                 return (int) value;
             }
             """.stripTrailing());
+    }
+
+    @Test
+    void runtimeLongToDoubleBuildsJavaRawBitsAtBoundaries() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe("""
+            #include "javan_runtime.h"
+            #include <limits.h>
+            #include <stdint.h>
+            #include <stdio.h>
+            #include <string.h>
+
+            static unsigned long long raw_bits(double value) {
+                uint64_t bits = UINT64_C(0);
+                memcpy(&bits, &value, sizeof(bits));
+                return (unsigned long long) bits;
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                printf("%016llx\\n", raw_bits(javan_l2d(0LL)));
+                printf("%016llx\\n", raw_bits(javan_l2d(1LL)));
+                printf("%016llx\\n", raw_bits(javan_l2d(-1LL)));
+                printf("%016llx\\n", raw_bits(javan_l2d(9007199254740991LL)));
+                printf("%016llx\\n", raw_bits(javan_l2d(9007199254740992LL)));
+                printf("%016llx\\n", raw_bits(javan_l2d(9007199254740993LL)));
+                printf("%016llx\\n", raw_bits(javan_l2d(9007199254740995LL)));
+                printf("%016llx\\n", raw_bits(javan_l2d(-9007199254740993LL)));
+                printf("%016llx\\n", raw_bits(javan_l2d(-9007199254740995LL)));
+                printf("%016llx\\n", raw_bits(javan_l2d(LLONG_MIN)));
+                printf("%016llx\\n", raw_bits(javan_l2d(LLONG_MAX)));
+                return 0;
+            }
+            """, "512");
+
+        assertThat(stdout).isEqualTo("""
+            0000000000000000
+            3ff0000000000000
+            bff0000000000000
+            433fffffffffffff
+            4340000000000000
+            4340000000000000
+            4340000000000002
+            c340000000000000
+            c340000000000002
+            c3e0000000000000
+            43e0000000000000
+            """);
+    }
+
+    @Test
+    void runtimeLongToDoubleUsesJavaTiesToEvenUnderUpwardRounding() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe("""
+            #include "javan_runtime.h"
+            #include <fenv.h>
+            #include <stdint.h>
+            #include <stdio.h>
+            #include <string.h>
+
+            #pragma STDC FENV_ACCESS ON
+
+            static unsigned long long raw_bits(double value) {
+                uint64_t bits = UINT64_C(0);
+                memcpy(&bits, &value, sizeof(bits));
+                return (unsigned long long) bits;
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+            #if defined(FE_UPWARD)
+                if (fesetround(FE_UPWARD) == 0) {
+                    printf("%016llx\\n", raw_bits(javan_l2d(9007199254740993LL)));
+                    printf("%016llx\\n", raw_bits(javan_l2d(9007199254740995LL)));
+                    return 0;
+                }
+            #endif
+                puts("fenv-unavailable");
+                return 0;
+            }
+            """, "512", fenvLinkInputs());
+
+        assumeTrue(!stdout.equals("fenv-unavailable\n"), "C fenv cannot set FE_UPWARD");
+        assertThat(stdout).isEqualTo("""
+            4340000000000000
+            4340000000000002
+            """);
     }
 
     @Test
@@ -8297,6 +8394,23 @@ final class RuntimeFilesTest {
     private String runRuntimeBoundaryProbe(
         final String source,
         final String heapLimitBytes,
+        final NativeLinkInputs linkInputs
+    ) throws Exception {
+        final RuntimeProbeOutput output = runRuntimeBoundaryProbeOutput(
+            source,
+            heapLimitBytes,
+            Map.of(),
+            java.time.Duration.ofSeconds(30),
+            linkInputs
+        );
+
+        assertThat(output.stderr()).isEmpty();
+        return output.stdout();
+    }
+
+    private String runRuntimeBoundaryProbe(
+        final String source,
+        final String heapLimitBytes,
         final Map<String, String> environmentOverrides
     ) throws Exception {
         return runRuntimeBoundaryProbe(source, heapLimitBytes, environmentOverrides, java.time.Duration.ofSeconds(30));
@@ -8332,10 +8446,33 @@ final class RuntimeFilesTest {
         final Map<String, String> environmentOverrides,
         final java.time.Duration timeout
     ) throws Exception {
+        return runRuntimeBoundaryProbeOutput(
+            source,
+            heapLimitBytes,
+            environmentOverrides,
+            timeout,
+            NativeLinkInputs.empty()
+        );
+    }
+
+    private RuntimeProbeOutput runRuntimeBoundaryProbeOutput(
+        final String source,
+        final String heapLimitBytes,
+        final Map<String, String> environmentOverrides,
+        final java.time.Duration timeout,
+        final NativeLinkInputs linkInputs
+    ) throws Exception {
         final Path runtime = new RuntimeFiles().write(tempDir);
         final Path main = tempDir.resolve("probe.c");
         Files.writeString(main, source);
-        final Path binary = new NativeLinker().link(tempDir, main, runtime, tempDir.resolve("probe"));
+        final Path binary = new NativeLinker().link(
+            tempDir,
+            main,
+            runtime,
+            tempDir.resolve("probe"),
+            linkInputs,
+            List.of()
+        );
         final Map<String, String> environment = new java.util.LinkedHashMap<>();
         environment.put("JAVAN_HEAP_LIMIT_BYTES", heapLimitBytes);
         environment.put("JAVAN_GC_STRESS", "1");
@@ -8362,6 +8499,14 @@ final class RuntimeFilesTest {
             .describedAs(result.stderr())
             .isEqualTo(0);
         return new RuntimeProbeOutput(result.stdout(), result.stderr());
+    }
+
+    private static NativeLinkInputs fenvLinkInputs() {
+        final String osName = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT);
+        if (!osName.contains("linux")) {
+            return NativeLinkInputs.empty();
+        }
+        return new NativeLinkInputs(List.of(), List.of(), List.of(), List.of("m"), List.of());
     }
 
     private static boolean isWindowsHost() {

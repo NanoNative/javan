@@ -953,6 +953,69 @@ final class RuntimeSourceCoreSection {
             return (int) value;
         }
 
+        double javan_l2d(long long value) {
+            const int negative = value < 0;
+            const uint64_t magnitude = negative
+                ? UINT64_C(0) - (uint64_t) value
+                : (uint64_t) value;
+            uint64_t bits = negative ? UINT64_C(0x8000000000000000) : UINT64_C(0);
+            if (magnitude == UINT64_C(0)) {
+                double result = 0.0;
+                memcpy(&result, &bits, sizeof(result));
+                return result;
+            }
+
+            unsigned int exponent = 0U;
+            uint64_t remaining = magnitude;
+            if (remaining >= (UINT64_C(1) << 32U)) {
+                remaining >>= 32U;
+                exponent += 32U;
+            }
+            if (remaining >= (UINT64_C(1) << 16U)) {
+                remaining >>= 16U;
+                exponent += 16U;
+            }
+            if (remaining >= (UINT64_C(1) << 8U)) {
+                remaining >>= 8U;
+                exponent += 8U;
+            }
+            if (remaining >= (UINT64_C(1) << 4U)) {
+                remaining >>= 4U;
+                exponent += 4U;
+            }
+            if (remaining >= (UINT64_C(1) << 2U)) {
+                remaining >>= 2U;
+                exponent += 2U;
+            }
+            if (remaining >= (UINT64_C(1) << 1U)) {
+                exponent += 1U;
+            }
+
+            uint64_t significand;
+            if (exponent <= 52U) {
+                significand = magnitude << (52U - exponent);
+            } else {
+                const unsigned int discarded_shift = exponent - 52U;
+                const uint64_t discarded_mask = (UINT64_C(1) << discarded_shift) - UINT64_C(1);
+                const uint64_t discarded = magnitude & discarded_mask;
+                significand = magnitude >> discarded_shift;
+                const uint64_t halfway = UINT64_C(1) << (discarded_shift - 1U);
+                if (discarded > halfway || (discarded == halfway && (significand & UINT64_C(1)) != UINT64_C(0))) {
+                    significand++;
+                    if (significand == (UINT64_C(1) << 53U)) {
+                        significand >>= 1U;
+                        exponent++;
+                    }
+                }
+            }
+
+            bits |= ((uint64_t) (exponent + 1023U) << 52U)
+                | (significand & UINT64_C(0x000fffffffffffff));
+            double result = 0.0;
+            memcpy(&result, &bits, sizeof(result));
+            return result;
+        }
+
         int javan_i2b(int value) {
             return (int) ((signed char) value);
         }
