@@ -644,6 +644,55 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void staticLibraryExportedDoubleToFloatInitializesAndRunsFromC() throws Exception {
+        final Path project = project("library-double-to-float");
+        writeJava(project, "com.acme.Narrow", """
+            package com.acme;
+
+            public final class Narrow {
+                private Narrow() {
+                }
+
+                public static float narrow(final double value) {
+                    return (float) value;
+                }
+            }
+            """);
+
+        requireBuildSuccess(run(
+            tempDir,
+            "build",
+            project.toString(),
+            "--kind",
+            "staticlib",
+            "--export",
+            "com.acme.Narrow.narrow"
+        ));
+        final Path caller = writeC(project, "caller.c", """
+            #include <stdio.h>
+            #include ".javan/dist/bindings/c/library-double-to-float.h"
+
+            int main(void) {
+                printf("%.1f\\n", javan_export_com_acme_Narrow_narrow_double(1.5));
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("library-double-to-float-caller");
+        final ProcessResult link = process(project, List.of(
+            "cc",
+            caller.toString(),
+            project.resolve(".javan/dist/liblibrary-double-to-float.a").toString(),
+            "-o",
+            binary.toString()
+        ));
+        if (link.exitCode() != 0) {
+            throw new AssertionError(link.stderr());
+        }
+
+        assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo("1.5\n");
+    }
+
+    @Test
     void staticLibraryExportedMathCeilLinksAndRunsFromCWithoutMathLibrary() throws Exception {
         final Path project = project("generic-library");
         writeJava(project, "com.acme.Math", """

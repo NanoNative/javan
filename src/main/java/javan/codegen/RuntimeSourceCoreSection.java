@@ -36,10 +36,22 @@ final class RuntimeSourceCoreSection {
         #include <sys/stat.h>
         #include <sys/time.h>
         #include <time.h>
+        #if defined(__FAST_MATH__) || (defined(__FINITE_MATH_ONLY__) && __FINITE_MATH_ONLY__ != 0)
+        #error "Javan requires strict floating-point compiler mode"
+        #endif
+        #if !defined(FLT_HAS_SUBNORM) || FLT_HAS_SUBNORM != 1 || !defined(DBL_HAS_SUBNORM) || DBL_HAS_SUBNORM != 1
+        #error "Javan requires binary32 and binary64 subnormal support"
+        #endif
         #if CHAR_BIT != 8 || FLT_RADIX != 2 || DBL_MANT_DIG != 53 || DBL_MIN_EXP != -1021 || DBL_MAX_EXP != 1024
         #error "Javan requires IEEE 754 binary64 double"
         #endif
+        #if FLT_RADIX != 2 || FLT_MANT_DIG != 24 || FLT_MIN_EXP != -125 || FLT_MAX_EXP != 128
+        #error "Javan requires IEEE 754 binary32 float"
+        #endif
+        _Static_assert(sizeof(uint32_t) == 4, "Javan requires 32-bit uint32_t");
+        _Static_assert(sizeof(uint64_t) == 8, "Javan requires 64-bit uint64_t");
         _Static_assert(sizeof(double) == 8, "Javan requires 64-bit double");
+        _Static_assert(sizeof(float) == 4, "Javan requires 32-bit float");
         #if defined(_MSC_VER)
         #define JAVAN_THREAD_LOCAL __declspec(thread)
         #else
@@ -984,6 +996,113 @@ final class RuntimeSourceCoreSection {
 
         double javan_f2d(float value) {
             return (double) value;
+        }
+
+        void javan_runtime_validate_floating_layout(void) {
+            const double double_one = 1.0;
+            const double double_negative_zero = -0.0;
+            const double double_min_subnormal = 0x1p-1074;
+            const double double_infinity = INFINITY;
+            const double double_nan = NAN;
+            const float float_one = 1.0f;
+            const float float_negative_zero = -0.0f;
+            const float float_min_subnormal = 0x1p-149f;
+            const float float_infinity = INFINITY;
+            const float float_nan = NAN;
+            uint64_t double_one_bits = UINT64_C(0);
+            uint64_t double_negative_zero_bits = UINT64_C(0);
+            uint64_t double_min_subnormal_bits = UINT64_C(0);
+            uint64_t double_infinity_bits = UINT64_C(0);
+            uint32_t float_one_bits = UINT32_C(0);
+            uint32_t float_negative_zero_bits = UINT32_C(0);
+            uint32_t float_min_subnormal_bits = UINT32_C(0);
+            uint32_t float_infinity_bits = UINT32_C(0);
+            memcpy(&double_one_bits, &double_one, sizeof(double_one_bits));
+            memcpy(&double_negative_zero_bits, &double_negative_zero, sizeof(double_negative_zero_bits));
+            memcpy(&double_min_subnormal_bits, &double_min_subnormal, sizeof(double_min_subnormal_bits));
+            memcpy(&double_infinity_bits, &double_infinity, sizeof(double_infinity_bits));
+            memcpy(&float_one_bits, &float_one, sizeof(float_one_bits));
+            memcpy(&float_negative_zero_bits, &float_negative_zero, sizeof(float_negative_zero_bits));
+            memcpy(&float_min_subnormal_bits, &float_min_subnormal, sizeof(float_min_subnormal_bits));
+            memcpy(&float_infinity_bits, &float_infinity, sizeof(float_infinity_bits));
+            if (double_one_bits != UINT64_C(0x3ff0000000000000)
+                || double_negative_zero_bits != UINT64_C(0x8000000000000000)
+                || double_min_subnormal_bits != UINT64_C(0x0000000000000001)
+                || double_infinity_bits != UINT64_C(0x7ff0000000000000)
+                || double_nan == double_nan
+                || float_one_bits != UINT32_C(0x3f800000)
+                || float_negative_zero_bits != UINT32_C(0x80000000)
+                || float_min_subnormal_bits != UINT32_C(0x00000001)
+                || float_infinity_bits != UINT32_C(0x7f800000)
+                || float_nan == float_nan) {
+                javan_panic("Javan requires IEEE binary32 and binary64 floating object layout");
+            }
+        }
+
+        static uint64_t javan_round_right_even(uint64_t value, unsigned int shift) {
+            const uint64_t truncated = value >> shift;
+            const uint64_t remainder_mask = (UINT64_C(1) << shift) - UINT64_C(1);
+            const uint64_t remainder = value & remainder_mask;
+            const uint64_t halfway = UINT64_C(1) << (shift - 1U);
+            return truncated + (remainder > halfway || (remainder == halfway && (truncated & UINT64_C(1)) != UINT64_C(0)));
+        }
+
+        float javan_d2f(double value) {
+            uint64_t input_bits = UINT64_C(0);
+            memcpy(&input_bits, &value, sizeof(input_bits));
+            const uint32_t sign = (uint32_t) (input_bits >> 63U) << 31U;
+            const uint32_t double_exponent = (uint32_t) ((input_bits >> 52U) & UINT64_C(0x7ff));
+            const uint64_t double_fraction = input_bits & UINT64_C(0x000fffffffffffff);
+            uint32_t output_bits = sign;
+
+            if (double_exponent == UINT32_C(0x7ff)) {
+                /* Java narrowing guarantees a float NaN; Javan chooses one positive canonical binary32 NaN. */
+                output_bits = double_fraction == UINT64_C(0)
+                    ? sign | UINT32_C(0x7f800000)
+                    : UINT32_C(0x7fc00000);
+            } else if (double_exponent != UINT32_C(0) || double_fraction != UINT64_C(0)) {
+                uint64_t significand = double_fraction;
+                unsigned int leading_bit = 0U;
+                int exponent;
+                if (double_exponent == UINT32_C(0)) {
+                    uint64_t remaining = significand;
+                    while (remaining > UINT64_C(1)) {
+                        remaining >>= 1U;
+                        leading_bit++;
+                    }
+                    exponent = (int) leading_bit - 1074;
+                } else {
+                    significand |= UINT64_C(1) << 52U;
+                    leading_bit = 52U;
+                    exponent = (int) double_exponent - 1023;
+                }
+                if (exponent > 127) {
+                    output_bits = sign | UINT32_C(0x7f800000);
+                } else if (exponent >= -126) {
+                    uint64_t rounded = significand;
+                    if (leading_bit > 23U) {
+                        rounded = javan_round_right_even(rounded, leading_bit - 23U);
+                    } else {
+                        rounded <<= 23U - leading_bit;
+                    }
+                    if (rounded == (UINT64_C(1) << 24U)) {
+                        rounded >>= 1U;
+                        exponent++;
+                    }
+                    output_bits = exponent > 127
+                        ? sign | UINT32_C(0x7f800000)
+                        : sign | ((uint32_t) (exponent + 127) << 23U) | ((uint32_t) rounded & UINT32_C(0x007fffff));
+                } else if (exponent >= -150) {
+                    const unsigned int shift = (unsigned int) (-exponent - 97);
+                    const uint64_t rounded = javan_round_right_even(significand, shift);
+                    output_bits = rounded >= (UINT64_C(1) << 23U)
+                        ? sign | UINT32_C(0x00800000)
+                        : sign | (uint32_t) rounded;
+                }
+            }
+            float result = 0.0f;
+            memcpy(&result, &output_bits, sizeof(result));
+            return result;
         }
 
         double javan_l2d(long long value) {

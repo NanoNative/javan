@@ -5792,6 +5792,27 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersDoubleToFloatToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(D)F",
+            2,
+            2,
+            plain(0, 38, "dload_0"),
+            plain(1, 144, "d2f"),
+            plain(2, 174, "freturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnFloat(IrExpression.floatCall(
+                "javan_d2f",
+                List.of(IrExpression.doubleLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
     void lowersFloatToDoubleToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

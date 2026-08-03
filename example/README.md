@@ -47,6 +47,7 @@ request second request
 map 9
 samples 3
 copy 8
+1.5
 name-length 8
 char e
 same true
