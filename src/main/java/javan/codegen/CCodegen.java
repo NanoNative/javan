@@ -364,7 +364,7 @@ public final class CCodegen {
                     .append(", \"")
                     .append(escapeCString(displayClassName(classInfo.jvmName())))
                     .append("\", ")
-                    .append(classInfo.enumConstants().isEmpty() ? 0 : 1)
+                    .append(classInfo.enumClass() ? 1 : 0)
                     .append(", ")
                     .append(objectFields.size())
                     .append(", ");
@@ -879,7 +879,7 @@ public final class CCodegen {
                 .append(", ")
                 .append(typeId)
                 .append(", ")
-                .append(classInfo.enumConstants().isEmpty() ? 0 : 1)
+                .append(classInfo.enumClass() ? 1 : 0)
                 .append(", 0, 1, ")
                 .append(typeId)
                 .append(");")

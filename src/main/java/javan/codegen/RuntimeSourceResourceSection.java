@@ -169,11 +169,13 @@ final class RuntimeSourceResourceSection {
                     (void**) &name_root
                 };
                 javan_root_frame_push(roots, 2);
-                javan_runtime_class_state* state = javan_runtime_class_checked(class_root);
+                javan_runtime_lock_enter();
+                javan_runtime_class_state* state = javan_runtime_class_checked_unlocked(class_root);
                 char* resource_path = javan_class_resource_path(state, (const char*) name_root);
                 const javan_embedded_resource* resource = javan_embedded_resource_find(resource_path);
                 free(resource_path);
                 void* stream = javan_embedded_resource_as_stream(resource);
+                javan_runtime_lock_leave();
                 javan_root_frame_pop(roots);
                 return stream;
             }

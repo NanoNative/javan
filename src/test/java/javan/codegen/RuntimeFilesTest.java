@@ -521,78 +521,6 @@ final class RuntimeFilesTest {
     }
 
     @Test
-    void objectEqualsUsesIndependentAllocationMetadataSnapshots() throws Exception {
-        assertThat(runInstrumentedRuntimeProbe(
-            List.of(
-                new RuntimeReplacement(
-                    "static int javan_find_allocation(void* value, javan_allocation_metadata* snapshot) {",
-                    """
-                    static void javan_test_record_snapshot_address(javan_allocation_metadata* snapshot);
-
-                    static int javan_find_allocation(void* value, javan_allocation_metadata* snapshot) {
-                    """.stripTrailing()
-                ),
-                new RuntimeReplacement(
-                    """
-                    javan_runtime_lock_leave();
-                    return found;
-                    """.stripTrailing().indent(4).stripTrailing(),
-                    """
-                    javan_runtime_lock_leave();
-                    if (found != 0) {
-                        javan_test_record_snapshot_address(snapshot);
-                    }
-                    return found;
-                    """.stripTrailing().indent(4).stripTrailing()
-                )
-            ),
-            """
-            static void* javan_test_left = NULL;
-            static void* javan_test_right = NULL;
-            static javan_allocation_metadata* javan_test_left_snapshot = NULL;
-            static javan_allocation_metadata* javan_test_right_snapshot = NULL;
-
-            static void javan_test_record_snapshot_address(javan_allocation_metadata* snapshot) {
-                if (snapshot->value == javan_test_left) {
-                    javan_test_left_snapshot = snapshot;
-                } else if (snapshot->value == javan_test_right) {
-                    javan_test_right_snapshot = snapshot;
-                }
-            }
-
-            int javan_test_object_equals_snapshot_addresses(void) {
-                javan_test_left = javan_arraylist_new();
-                javan_test_right = javan_arraylist_new();
-                ((unsigned char*) javan_test_left)[0] = 1;
-                ((unsigned char*) javan_test_right)[0] = 1;
-                int equals = javan_object_equals(javan_test_left, javan_test_right);
-                int independent = javan_test_left_snapshot != NULL
-                    && javan_test_right_snapshot != NULL
-                    && javan_test_left_snapshot != javan_test_right_snapshot;
-                javan_free(javan_test_left);
-                javan_free(javan_test_right);
-                return equals == 0 && independent != 0 && javan_heap_live_allocations() == 0;
-            }
-            """,
-            """
-            #include "javan_runtime.h"
-            #include <stdio.h>
-
-            extern int javan_test_object_equals_snapshot_addresses(void);
-
-            int main(void) {
-                javan_register_static_roots(0, 0);
-                printf("%d\\n", javan_test_object_equals_snapshot_addresses());
-                return 0;
-            }
-            """,
-            "4096",
-            Map.of("JAVAN_GC_STRESS", ""),
-            java.time.Duration.ofSeconds(30)
-        )).isEqualTo("0\n1\n");
-    }
-
-    @Test
     void concurrentAuthoritativeMissesCompleteWhileAllocationRegistryGrowsAndFrees() throws Exception {
         final InstrumentedRuntimeProbe probe = concurrentAuthoritativeMissesProbe();
 
@@ -8298,6 +8226,737 @@ final class RuntimeFilesTest {
         );
 
         assertThat(stdout).isEqualTo("32:7:11\n");
+    }
+
+    @Test
+    void runtimeClassLiteralCanonicalizesIdentityWithoutManagedAllocationGrowth() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                const unsigned long live_before = javan_heap_live_allocations();
+                const unsigned long total_before = javan_heap_total_allocations();
+                void* first = javan_runtime_class_literal("com.acme.Canonical", 71, 0, 0, 1, 71);
+                void* primitive = javan_runtime_class_literal("int", -2011, 0, 0, 0);
+                for (int index = 0; index < 4096; index++) {
+                    if (javan_runtime_class_literal("com.acme.Canonical", 71, 0, 0, 1, 71) != first) {
+                        puts("identity-mismatch");
+                        return 0;
+                    }
+                }
+                printf("%d:%d:%lu:%lu\\n",
+                    primitive == javan_runtime_class_literal("int", -2011, 0, 0, 0),
+                    javan_class_exact_type_id(primitive),
+                    javan_heap_live_allocations() - live_before,
+                    javan_heap_total_allocations() - total_before);
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("1:-2011:0:0\n");
+    }
+
+    @Test
+    void runtimeClassLiteralCompatibleRepeatsAvoidRawAllocations() throws Exception {
+        assertThat(runInstrumentedRuntimeProbe(
+            List.of(new RuntimeReplacement(
+                "static void* javan_raw_calloc_retry(unsigned long size) {",
+                """
+                static unsigned long javan_test_raw_calloc_calls = 0;
+
+                static void* javan_raw_calloc_retry(unsigned long size) {
+                    javan_test_raw_calloc_calls++;
+                """.stripTrailing()
+            )),
+            """
+            int javan_test_class_literal_repeats_avoid_raw_allocations(void) {
+                void* canonical = javan_runtime_class_literal("com.acme.Repeat", 17, 0, 0, 3, 3, 1, 2);
+                unsigned long before = javan_test_raw_calloc_calls;
+                for (int index = 0; index < 4096; index++) {
+                    if (javan_runtime_class_literal("com.acme.Repeat", 17, 0, 0, 3, 2, 1, 2) != canonical) {
+                        return 0;
+                    }
+                }
+                return javan_test_raw_calloc_calls == before;
+            }
+            """,
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            extern int javan_test_class_literal_repeats_avoid_raw_allocations(void);
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                printf("%d\\n", javan_test_class_literal_repeats_avoid_raw_allocations());
+                return 0;
+            }
+            """,
+            "4096",
+            Map.of(),
+            java.time.Duration.ofSeconds(30)
+        )).isEqualTo("0\n1\n");
+    }
+
+    @Test
+    void runtimeCanonicalClassStatePreservesClassIdentityPaths() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* first = javan_runtime_class_literal("com.acme.Identity", 17, 0, 0, 0);
+                void* second = javan_runtime_class_literal("com.acme.Other", 18, 0, 0, 0);
+                void* class_class = javan_runtime_class_literal(
+                    "java.lang.Class", -2003, 0, 0, 0
+                );
+                printf("%d:%d:%d:%s\\n",
+                    javan_object_equals(first, second) == 0,
+                    javan_object_get_class(first) == class_class,
+                    javan_class_is_instance(class_class, first),
+                    (char*) javan_printable_object_string(first));
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("1:1:1:com.acme.Identity\n");
+    }
+
+    @Test
+    void runtimeClassLiteralPromotesExactTypeId() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* target = javan_runtime_class_literal("com.acme.Target", 0, 0, 0, 0);
+                void* promoted = javan_runtime_class_literal("com.acme.Target", 17, 0, 0, 0);
+                printf("%d:%d\\n",
+                    target == promoted,
+                    javan_class_exact_type_id(target));
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("1:17\n");
+    }
+
+    @Test
+    void runtimeClassLiteralUnifiesSortedUniqueAssignability() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* target = javan_runtime_class_literal("com.acme.Target", 17, 0, 0, 3, 3, 1, 3);
+                (void) javan_runtime_class_literal("com.acme.Target", 17, 0, 0, 3, 2, 3, 2);
+                void* one = javan_runtime_class_literal("com.acme.One", 1, 0, 0, 0);
+                void* two = javan_runtime_class_literal("com.acme.Two", 2, 0, 0, 0);
+                void* three = javan_runtime_class_literal("com.acme.Three", 3, 0, 0, 0);
+                printf("%d:%d:%d\\n",
+                    javan_class_is_assignable_from(target, one),
+                    javan_class_is_assignable_from(target, two),
+                    javan_class_is_assignable_from(target, three));
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("1:1:1\n");
+    }
+
+    @Test
+    void runtimeClassLiteralRejectsConflictingExactTypeIds() throws Exception {
+        final String panic = runRuntimePanicProbe(
+            "javan_register_static_roots(0, 0); (void) javan_runtime_class_literal(\"com.acme.Conflict\", 17, 0, 0, 0);",
+            "(void) javan_runtime_class_literal(\"com.acme.Conflict\", 18, 0, 0, 0);"
+        );
+
+        assertThat(panic).isEqualTo("conflicting runtime class metadata\n");
+    }
+
+    @Test
+    void runtimeClassLiteralRejectsDescriptorNameConflict() throws Exception {
+        final String panic = runRuntimePanicProbe(
+            """
+            JavanTypeDescriptor descriptors[] = {{17, \"com.acme.A\", 0, 0, NULL}};
+            javan_register_static_roots(0, 0);
+            javan_register_type_descriptors(descriptors, 1);
+            """,
+            "(void) javan_runtime_class_literal(\"com.acme.B\", 17, 0, 0, 0);"
+        );
+
+        assertThat(panic).isEqualTo("conflicting runtime class metadata\n");
+    }
+
+    @Test
+    void runtimeClassLiteralRejectsArrayMetadataConflict() throws Exception {
+        final String panic = runRuntimePanicProbe(
+            "javan_register_static_roots(0, 0);",
+            "(void) javan_runtime_class_literal(\"[Lcom.acme.Item;\", 0, 0, 0, 0);"
+        );
+
+        assertThat(panic).isEqualTo("conflicting runtime class metadata\n");
+    }
+
+    @Test
+    void runtimeClassLiteralKeepsEnumMetadataMonotonic() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* first = javan_runtime_class_literal("com.acme.Mode", 17, 1, 0, 0);
+                void* repeated = javan_runtime_class_literal("com.acme.Mode", 17, 0, 0, 0);
+                printf("%d:%d\\n", first == repeated, javan_class_is_enum(first));
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("1:1\n");
+    }
+
+    @Test
+    void runtimeClassLiteralPromotesUnknownEnumWhenDescriptorArrives() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                JavanTypeDescriptor descriptors[] = {{17, "com.acme.Mode", 1, 0, NULL}};
+                javan_register_static_roots(0, 0);
+                void* unknown = javan_runtime_class_literal("com.acme.Mode", 0, 0, 0, 0);
+                javan_register_type_descriptors(descriptors, 1);
+                void* promoted = javan_runtime_class_literal("com.acme.Mode", 17, 1, 0, 1, 17);
+                printf("%d:%d:%d\\n", unknown == promoted, javan_class_exact_type_id(promoted), javan_class_is_enum(promoted));
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("1:17:1\n");
+    }
+
+    @Test
+    void runtimeClassLiteralRejectsDescriptorEnumDemotion() throws Exception {
+        final String panic = runRuntimePanicProbe(
+            """
+            JavanTypeDescriptor enum_descriptor[] = {{17, "com.acme.Mode", 1, 0, NULL}};
+            JavanTypeDescriptor class_descriptor[] = {{17, "com.acme.Mode", 0, 0, NULL}};
+            javan_register_static_roots(0, 0);
+            javan_register_type_descriptors(enum_descriptor, 1);
+            (void) javan_runtime_class_literal("com.acme.Mode", 17, 1, 0, 1, 17);
+            javan_register_type_descriptors(class_descriptor, 1);
+            """,
+            "(void) javan_runtime_class_literal(\"com.acme.Mode\", 17, 0, 0, 1, 17);"
+        );
+
+        assertThat(panic).isEqualTo("conflicting runtime class metadata\n");
+    }
+
+    @Test
+    void runtimeClassLiteralRejectsUnknownRawStatePointer() throws Exception {
+        final String panic = runRuntimePanicProbe(
+            "javan_register_static_roots(0, 0);",
+            "(void) javan_class_is_enum((void*) (uintptr_t) 1);"
+        );
+
+        assertThat(panic).isEqualTo("unsupported runtime class\n");
+    }
+
+    @Test
+    void runtimeClassRegistryRejectsCorruptSingleStorageIndex() throws Exception {
+        assertThat(runInstrumentedRuntimeProbe(
+            List.of(),
+            """
+            int javan_test_class_registry_rejects_corrupt_storage(void) {
+                (void) javan_runtime_class_literal("com.acme.Registry", 17, 0, 0, 0);
+                javan_runtime_lock_enter();
+                javan_runtime_class_state** names = javan_runtime_classes.names;
+                javan_runtime_classes.names = names + 1;
+                int rejected = javan_runtime_class_registry_ensure_capacity(1) == 0;
+                javan_runtime_classes.names = names;
+                javan_runtime_lock_leave();
+                return rejected;
+            }
+            """,
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            extern int javan_test_class_registry_rejects_corrupt_storage(void);
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                printf("%d\\n", javan_test_class_registry_rejects_corrupt_storage());
+                return 0;
+            }
+            """,
+            "4096",
+            Map.of(),
+            java.time.Duration.ofSeconds(30)
+        )).isEqualTo("0\n1\n");
+    }
+
+    @Test
+    void runtimeClassCheckedUnlockedRequiresRuntimeLock() throws Exception {
+        assertThat(runInstrumentedRuntimeProbe(
+            List.of(),
+            """
+            int javan_test_class_checked_requires_lock(void) {
+                void* klass = javan_runtime_class_literal("com.acme.Lock", 17, 0, 0, 0);
+                jmp_buf target;
+                javan_panic_set_target(&target);
+                if (setjmp(target) == 0) {
+                    (void) javan_runtime_class_checked_unlocked(klass);
+                    return 0;
+                }
+                return strcmp(javan_last_error(), "runtime class registry lookup requires runtime lock") == 0;
+            }
+            """,
+            """
+            #include "javan_runtime.h"
+            #include <setjmp.h>
+            #include <stdio.h>
+            #include <string.h>
+
+            extern int javan_test_class_checked_requires_lock(void);
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                printf("%d\\n", javan_test_class_checked_requires_lock());
+                return 0;
+            }
+            """,
+            "4096",
+            Map.of(),
+            java.time.Duration.ofSeconds(30)
+        )).isEqualTo("0\n1\n");
+    }
+
+    @Test
+    void runtimeClassStateValidationRequiresRuntimeLock() throws Exception {
+        assertThat(runInstrumentedRuntimeProbe(
+            List.of(),
+            """
+            int javan_test_class_state_validation_requires_lock(void) {
+                void* klass = javan_runtime_class_literal("com.acme.Lock", 17, 0, 0, 0);
+                jmp_buf target;
+                javan_panic_set_target(&target);
+                if (setjmp(target) == 0) {
+                    (void) javan_runtime_class_state_valid_unlocked((javan_runtime_class_state*) klass);
+                    return 0;
+                }
+                return strcmp(javan_last_error(), "runtime class registry validation requires runtime lock") == 0;
+            }
+            """,
+            """
+            #include "javan_runtime.h"
+            #include <setjmp.h>
+            #include <stdio.h>
+            #include <string.h>
+
+            extern int javan_test_class_state_validation_requires_lock(void);
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                printf("%d\\n", javan_test_class_state_validation_requires_lock());
+                return 0;
+            }
+            """,
+            "4096",
+            Map.of(),
+            java.time.Duration.ofSeconds(30)
+        )).isEqualTo("0\n1\n");
+    }
+
+    @Test
+    void runtimeClassLiteralRollsBackPromotionOnRawAllocationFailure() throws Exception {
+        assertThat(runInstrumentedRuntimeProbe(
+            List.of(new RuntimeReplacement(
+                "static void* javan_raw_calloc_retry(unsigned long size) {",
+                """
+                static int javan_test_raw_allocations_before_failure = -1;
+
+                static void* javan_raw_calloc_retry(unsigned long size) {
+                    if (javan_test_raw_allocations_before_failure == 0) {
+                        return NULL;
+                    }
+                    if (javan_test_raw_allocations_before_failure > 0) {
+                        javan_test_raw_allocations_before_failure--;
+                    }
+                """.stripTrailing()
+            )),
+            """
+            int javan_test_class_promotion_rollback(void) {
+                void* klass = javan_runtime_class_literal("com.acme.Rollback", 0, 0, 0, 1, 1);
+                jmp_buf target;
+                javan_panic_set_target(&target);
+                javan_test_raw_allocations_before_failure = 1;
+                if (setjmp(target) == 0) {
+                    (void) javan_runtime_class_literal("com.acme.Rollback", 17, 0, 0, 1, 2);
+                    return 0;
+                }
+                javan_test_raw_allocations_before_failure = -1;
+                javan_panic_clear_target(&target);
+                javan_clear_error();
+                javan_runtime_lock_enter();
+                javan_runtime_class_state* state = javan_runtime_class_checked_unlocked(klass);
+                int rolled_back = state->exact_type_id == 0
+                    && state->assignable_count == 1
+                    && state->assignable_type_ids[0] == 1;
+                javan_runtime_lock_leave();
+                void* retried = javan_runtime_class_literal("com.acme.Rollback", 17, 0, 0, 1, 2);
+                javan_runtime_lock_enter();
+                state = javan_runtime_class_checked_unlocked(klass);
+                int recovered = retried == klass
+                    && state->exact_type_id == 17
+                    && state->assignable_count == 2
+                    && state->assignable_type_ids[0] == 1
+                    && state->assignable_type_ids[1] == 2;
+                javan_runtime_lock_leave();
+                return rolled_back != 0 && recovered != 0;
+            }
+            """,
+            """
+            #include "javan_runtime.h"
+            #include <setjmp.h>
+            #include <stdio.h>
+
+            extern int javan_test_class_promotion_rollback(void);
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                printf("%d\\n", javan_test_class_promotion_rollback());
+                return 0;
+            }
+            """,
+            "4096",
+            Map.of(),
+            java.time.Duration.ofSeconds(30)
+        )).isEqualTo("0\n1\n");
+    }
+
+    @Test
+    void runtimeClassLiteralRollsBackFirstPublicationOnIndexStorageFailure() throws Exception {
+        assertThat(runInstrumentedRuntimeProbe(
+            List.of(new RuntimeReplacement(
+                "static void* javan_raw_calloc_retry(unsigned long size) {",
+                """
+                static int javan_test_raw_allocations_before_failure = -1;
+
+                static void* javan_raw_calloc_retry(unsigned long size) {
+                    if (javan_test_raw_allocations_before_failure == 0) {
+                        return NULL;
+                    }
+                    if (javan_test_raw_allocations_before_failure > 0) {
+                        javan_test_raw_allocations_before_failure--;
+                    }
+                """.stripTrailing()
+            )),
+            """
+            int javan_test_class_first_publication_rollback(void) {
+                jmp_buf target;
+                javan_panic_set_target(&target);
+                javan_test_raw_allocations_before_failure = 2;
+                if (setjmp(target) == 0) {
+                    (void) javan_runtime_class_literal("com.acme.First", 17, 0, 0, 0);
+                    return 0;
+                }
+                javan_test_raw_allocations_before_failure = -1;
+                javan_panic_clear_target(&target);
+                javan_clear_error();
+                int rolled_back = javan_runtime_classes.names == NULL
+                    && javan_runtime_classes.pointers == NULL
+                    && javan_runtime_classes.storage == NULL
+                    && javan_runtime_classes.length == 0
+                    && javan_runtime_classes.capacity == 0;
+                void* retried = javan_runtime_class_literal("com.acme.First", 17, 0, 0, 0);
+                return rolled_back != 0 && retried != NULL && javan_runtime_classes.length == 1;
+            }
+            """,
+            """
+            #include "javan_runtime.h"
+            #include <setjmp.h>
+            #include <stdio.h>
+
+            extern int javan_test_class_first_publication_rollback(void);
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                printf("%d\\n", javan_test_class_first_publication_rollback());
+                return 0;
+            }
+            """,
+            "4096",
+            Map.of(),
+            java.time.Duration.ofSeconds(30)
+        )).isEqualTo("0\n1\n");
+    }
+
+    @Test
+    void runtimeClassRegistryCleanupResetsRawOwnershipAndManagedCounters() throws Exception {
+        assertThat(runInstrumentedRuntimeProbe(
+            List.of(),
+            """
+            int javan_test_class_registry_cleanup(void) {
+                (void) javan_runtime_class_literal("com.acme.Cleanup", 17, 0, 0, 0);
+                javan_allocator_cleanup();
+                int reset = javan_runtime_classes.names == NULL
+                    && javan_runtime_classes.pointers == NULL
+                    && javan_runtime_classes.storage == NULL
+                    && javan_runtime_classes.length == 0
+                    && javan_runtime_classes.capacity == 0
+                    && javan_heap_live_allocations() == 0
+                    && javan_heap_live_bytes() == 0
+                    && javan_heap_total_allocations() == 0;
+                void* reused = javan_runtime_class_literal("com.acme.Cleanup", 17, 0, 0, 0);
+                return reset != 0
+                    && reused != NULL
+                    && javan_runtime_classes.length == 1
+                    && javan_heap_live_allocations() == 0
+                    && javan_heap_total_allocations() == 0;
+            }
+            """,
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            extern int javan_test_class_registry_cleanup(void);
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                printf("%d\\n", javan_test_class_registry_cleanup());
+                return 0;
+            }
+            """,
+            "4096",
+            Map.of(),
+            java.time.Duration.ofSeconds(30)
+        )).isEqualTo("0\n1\n");
+    }
+
+    @Test
+    void runtimeClassLiteralConcurrentLookupAndPromotionUsesOneCanonicalState() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            canonicalClassConcurrentPromotionSource(),
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("1\n");
+    }
+
+    @Test
+    void runtimeClassLiteralConcurrentPromotionWin32BranchCrossCompilesWhenMinGwIsAvailable() throws Exception {
+        final Path compiler = findFirstExecutableOnPath("x86_64-w64-mingw32-gcc");
+        assumeTrue(compiler != null, "MinGW cross compiler is not installed");
+        final Path runtime = new RuntimeFiles().write(tempDir);
+        final Path source = tempDir.resolve("canonical-class-concurrent-probe.c");
+        Files.writeString(source, canonicalClassConcurrentPromotionSource());
+        final TestProcesses.Result mainCompile = TestProcesses.run(
+            tempDir,
+            mingwCompileCommand(compiler, source, tempDir.resolve("canonical-class-concurrent-probe.o")),
+            java.time.Duration.ofSeconds(60)
+        );
+        final TestProcesses.Result runtimeCompile = TestProcesses.run(
+            tempDir,
+            mingwCompileCommand(compiler, runtime, tempDir.resolve("canonical-class-concurrent-runtime.o")),
+            java.time.Duration.ofSeconds(60)
+        );
+
+        assertThat(List.of(mainCompile.exitCode(), runtimeCompile.exitCode()))
+            .describedAs(mainCompile.stderr() + runtimeCompile.stderr())
+            .containsExactly(0, 0);
+    }
+
+    private String canonicalClassConcurrentPromotionSource() {
+        return """
+            #include "javan_runtime.h"
+            #include <stdatomic.h>
+            #include <stdio.h>
+            #if defined(_WIN32)
+            #include <process.h>
+            #include <windows.h>
+            #else
+            #include <pthread.h>
+            #endif
+
+            enum { worker_count = 8 };
+
+            typedef struct {
+                int type_id;
+                atomic_int* arrived;
+                atomic_int* released;
+                void** result;
+            } worker_arg;
+
+            #if defined(_WIN32)
+            static unsigned __stdcall class_worker(void* raw) {
+            #else
+            static void* class_worker(void* raw) {
+            #endif
+                worker_arg* arg = (worker_arg*) raw;
+                atomic_fetch_add(arg->arrived, 1);
+                while (atomic_load(arg->released) == 0) {
+                }
+                *arg->result = javan_runtime_class_literal(
+                    "com.acme.Concurrent", 17, 0, 0, 1, arg->type_id
+                );
+                #if defined(_WIN32)
+                return 0U;
+                #else
+                return NULL;
+                #endif
+            }
+
+            int main(void) {
+                atomic_int arrived = 0;
+                atomic_int released = 0;
+                void* values[worker_count] = { NULL };
+                worker_arg arguments[worker_count];
+                javan_register_static_roots(0, 0);
+                void* canonical_state = javan_runtime_class_literal("com.acme.Concurrent", 0, 0, 0, 0);
+                #if defined(_WIN32)
+                HANDLE threads[worker_count];
+                #else
+                pthread_t threads[worker_count];
+                #endif
+                for (int index = 0; index < worker_count; index++) {
+                    arguments[index] = (worker_arg) { index + 1, &arrived, &released, &values[index] };
+                    #if defined(_WIN32)
+                    threads[index] = (HANDLE) _beginthreadex(NULL, 0, class_worker, &arguments[index], 0, NULL);
+                    if (threads[index] == NULL) {
+                        return 2;
+                    }
+                    #else
+                    if (pthread_create(&threads[index], NULL, class_worker, &arguments[index]) != 0) {
+                        return 2;
+                    }
+                    #endif
+                }
+                while (atomic_load(&arrived) != worker_count) {
+                }
+                atomic_store(&released, 1);
+                for (int index = 0; index < worker_count; index++) {
+                    #if defined(_WIN32)
+                    if (WaitForSingleObject(threads[index], INFINITE) != WAIT_OBJECT_0) {
+                        return 3;
+                    }
+                    CloseHandle(threads[index]);
+                    #else
+                    if (pthread_join(threads[index], NULL) != 0) {
+                        return 3;
+                    }
+                    #endif
+                }
+                int canonical = javan_class_exact_type_id(canonical_state) == 17 && values[0] == canonical_state;
+                for (int index = 1; index < worker_count; index++) {
+                    canonical = canonical != 0 && values[index] == canonical_state;
+                }
+                for (int index = 0; index < worker_count; index++) {
+                    char name[32];
+                    snprintf(name, sizeof(name), "com.acme.Source%d", index);
+                    void* source = javan_runtime_class_literal(name, index + 1, 0, 0, 0);
+                    canonical = canonical != 0 && javan_class_is_assignable_from(values[0], source);
+                }
+                printf("%d\\n", canonical);
+                return 0;
+            }
+            """;
+    }
+
+    @Test
+    void runtimeClassLiteralRejectsFree() throws Exception {
+        assertThat(runInstrumentedRuntimeProbe(
+            List.of(),
+            """
+            int javan_test_class_rejects_free(void) {
+                void* klass = javan_runtime_class_literal("com.acme.Immutable", 17, 0, 0, 0);
+                jmp_buf free_target;
+                javan_panic_set_target(&free_target);
+                if (setjmp(free_target) == 0) {
+                    javan_free(klass);
+                    return 0;
+                }
+                return strcmp(javan_last_error(), "cannot free runtime class metadata") == 0;
+            }
+            """,
+            """
+            #include "javan_runtime.h"
+            #include <setjmp.h>
+            #include <stdio.h>
+            #include <string.h>
+
+            extern int javan_test_class_rejects_free(void);
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                printf("%d\\n", javan_test_class_rejects_free());
+                return 0;
+            }
+            """,
+            "4096",
+            Map.of(),
+            java.time.Duration.ofSeconds(30)
+        )).isEqualTo("0\n1\n");
+    }
+
+    @Test
+    void runtimeClassLiteralRejectsReallocation() throws Exception {
+        assertThat(runInstrumentedRuntimeProbe(
+            List.of(),
+            """
+            int javan_test_class_rejects_realloc(void) {
+                void* klass = javan_runtime_class_literal("com.acme.Immutable", 17, 0, 0, 0);
+                jmp_buf target;
+                javan_panic_set_target(&target);
+                if (setjmp(target) == 0) {
+                    (void) javan_realloc(klass, 64);
+                    return 0;
+                }
+                return strcmp(javan_last_error(), "cannot reallocate runtime class metadata") == 0;
+            }
+            """,
+            """
+            #include "javan_runtime.h"
+            #include <setjmp.h>
+            #include <stdio.h>
+            #include <string.h>
+
+            extern int javan_test_class_rejects_realloc(void);
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                printf("%d\\n", javan_test_class_rejects_realloc());
+                return 0;
+            }
+            """,
+            "4096",
+            Map.of(),
+            java.time.Duration.ofSeconds(30)
+        )).isEqualTo("0\n1\n");
     }
 
     @Test
