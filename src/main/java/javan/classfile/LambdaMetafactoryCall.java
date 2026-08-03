@@ -623,6 +623,60 @@ public record LambdaMetafactoryCall(
     }
 
     /**
+     * Returns whether this is a static custom SAM with reference captures, one long input, and an object return.
+     *
+     * @return true when the typed long-to-object materialized-lambda runtime can represent the call
+     */
+    public boolean isMaterializedCapturedLongObjectLambda() {
+        if (isDirectlyLowerable()
+            || interfaceOwner.startsWith("java/")
+            || implementationReferenceKind != 6
+            || capturedParameterDescriptors.isEmpty()
+            || !hasObjectCaptures()
+            || !singleLongInput(samMethodDescriptor)
+            || !objectReturn(samMethodDescriptor)
+            || !singleLongInput(instantiatedMethodDescriptor)
+            || !objectReturn(instantiatedMethodDescriptor)
+            || !objectReturn(implementation.descriptor())) {
+            return false;
+        }
+        final List<String> parameters = parameterDescriptors(implementation.descriptor());
+        if (!parametersMatchDescriptor(implementation.descriptor(), parameters)
+            || parameters.size() != capturedParameterDescriptors.size() + 1
+            || !"J".equals(parameters.getLast())) {
+            return false;
+        }
+        for (int index = 0; index < capturedParameterDescriptors.size(); index++) {
+            if (!sameOrObjectCompatible(capturedParameterDescriptors.get(index), parameters.get(index))) {
+                return false;
+            }
+        }
+        final String implementationReturn = returnDescriptor(implementation.descriptor()).orElseThrow();
+        final String instantiatedReturn = returnDescriptor(instantiatedMethodDescriptor).orElseThrow();
+        final String samReturn = returnDescriptor(samMethodDescriptor).orElseThrow();
+        return sameOrObjectCompatible(implementationReturn, instantiatedReturn)
+            && sameOrObjectCompatible(instantiatedReturn, samReturn);
+    }
+
+    /**
+     * Returns whether the captured static long-to-object custom SAM interface and implementation are application-owned.
+     *
+     * @param classes parsed closed-world classes
+     * @return true when both owners are application classes
+     */
+    public boolean isMaterializedCapturedLongObjectLambda(final Map<String, ClassFile> classes) {
+        if (!isMaterializedCapturedLongObjectLambda()) {
+            return false;
+        }
+        final ClassFile interfaceClass = classes.get(interfaceOwner);
+        final ClassFile implementationClass = classes.get(implementation.owner());
+        return interfaceClass != null
+            && interfaceClass.application()
+            && implementationClass != null
+            && implementationClass.application();
+    }
+
+    /**
      * Returns whether this is a zero-capture custom SAM boolean-return materialization.
      *
      * @return true when the current native profile can materialize the lambda as an object

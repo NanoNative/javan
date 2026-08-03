@@ -328,6 +328,298 @@ final class LambdaMetafactoryCallTest {
     }
 
     @Test
+    void capturedStaticCustomLongLambdaAcceptsReferenceCapture() {
+        final LambdaMetafactoryCall resolved = staticCustomLongLambda(
+            "(Ljava/util/List;)Lcom/acme/KeySource;",
+            "(J)Ljava/lang/String;",
+            "(Ljava/util/List;J)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isMaterializedCapturedLongObjectLambda(applicationStaticLongSamClasses())).isTrue();
+    }
+
+    @Test
+    void capturedStaticCustomLongLambdaAcceptsErasedSamReturn() {
+        final LambdaMetafactoryCall resolved = staticCustomLongLambda(
+            "(Ljava/util/List;)Lcom/acme/KeySource;",
+            "(J)Ljava/lang/Object;",
+            "(Ljava/util/List;J)Ljava/lang/String;",
+            "(J)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isMaterializedCapturedLongObjectLambda(applicationStaticLongSamClasses())).isTrue();
+    }
+
+    @Test
+    void capturedStaticCustomLongLambdaAcceptsImplementationReturnNarrowerThanInstantiatedObject() {
+        final LambdaMetafactoryCall resolved = staticCustomLongLambda(
+            "(Ljava/util/List;)Lcom/acme/KeySource;",
+            "(J)Ljava/lang/Object;",
+            "(Ljava/util/List;J)Ljava/lang/String;",
+            "(J)Ljava/lang/Object;"
+        );
+
+        assertThat(resolved.isMaterializedCapturedLongObjectLambda(applicationStaticLongSamClasses())).isTrue();
+    }
+
+    @Test
+    void capturedStaticCustomLongLambdaRejectsInstantiatedReturnBroaderThanSam() {
+        final LambdaMetafactoryCall resolved = staticCustomLongLambda(
+            "(Ljava/util/List;)Lcom/acme/KeySource;",
+            "(J)Ljava/lang/String;",
+            "(Ljava/util/List;J)Ljava/lang/Object;",
+            "(J)Ljava/lang/Object;"
+        );
+
+        assertThat(resolved.isMaterializedCapturedLongObjectLambda(applicationStaticLongSamClasses())).isFalse();
+    }
+
+    @Test
+    void capturedStaticCustomLongLambdaRejectsUnprovenHierarchyReturn() {
+        final LambdaMetafactoryCall resolved = staticCustomLongLambda(
+            "(Ljava/util/List;)Lcom/acme/KeySource;",
+            "(J)Ljava/lang/CharSequence;",
+            "(Ljava/util/List;J)Ljava/lang/String;",
+            "(J)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isMaterializedCapturedLongObjectLambda(applicationStaticLongSamClasses())).isFalse();
+    }
+
+    @Test
+    void capturedStaticCustomLongLambdaRejectsZeroCaptures() {
+        final LambdaMetafactoryCall resolved = staticCustomLongLambda(
+            "()Lcom/acme/KeySource;",
+            "(J)Ljava/lang/String;",
+            "(J)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isMaterializedCapturedLongObjectLambda(applicationStaticLongSamClasses())).isFalse();
+    }
+
+    @Test
+    void capturedStaticCustomLongLambdaRejectsPrimitiveCapture() {
+        final LambdaMetafactoryCall resolved = staticCustomLongLambda(
+            "(I)Lcom/acme/KeySource;",
+            "(J)Ljava/lang/String;",
+            "(IJ)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isMaterializedCapturedLongObjectLambda(applicationStaticLongSamClasses())).isFalse();
+    }
+
+    @Test
+    void capturedStaticCustomLongLambdaRejectsDependencyInterface() {
+        final LambdaMetafactoryCall resolved = staticCustomLongLambda(
+            "(Ljava/util/List;)Ldep/KeySource;",
+            "(J)Ljava/lang/String;",
+            "(Ljava/util/List;J)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isMaterializedCapturedLongObjectLambda(dependencyStaticLongSamInterfaceClasses())).isFalse();
+    }
+
+    @Test
+    void capturedStaticCustomLongLambdaRejectsJavaOwnedInterface() {
+        final LambdaMetafactoryCall resolved = staticCustomLongLambda(
+            "(Ljava/util/List;)Ljava/lang/KeySource;",
+            "(J)Ljava/lang/String;",
+            "(Ljava/util/List;J)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isMaterializedCapturedLongObjectLambda()).isFalse();
+    }
+
+    @Test
+    void capturedLongObjectClassifierRejectsDirectlyLowerableFunction() {
+        final LambdaMetafactoryCall resolved = LambdaMetafactoryCall.resolve(dynamicRef(
+            "apply",
+            "(Ljava/util/List;)Ljava/util/function/Function;",
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            List.of(
+                BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                BootstrapArgument.methodHandle(
+                    6,
+                    new MethodRef("com/acme/Main", "lambda$apply$0", "(Ljava/util/List;Ljava/lang/Object;)Ljava/lang/String;")
+                ),
+                BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/String;")
+            )
+        )).orElseThrow();
+
+        assertThat(resolved.isMaterializedCapturedLongObjectLambda()).isFalse();
+    }
+
+    @Test
+    void capturedStaticCustomLongLambdaRejectsNonStaticImplementation() {
+        final LambdaMetafactoryCall resolved = staticCustomLongLambda(
+            "(Ljava/util/List;)Lcom/acme/KeySource;",
+            "(J)Ljava/lang/String;",
+            "(Ljava/util/List;J)Ljava/lang/String;",
+            "(J)Ljava/lang/String;",
+            5
+        );
+
+        assertThat(resolved.isMaterializedCapturedLongObjectLambda()).isFalse();
+    }
+
+    @Test
+    void capturedStaticCustomLongLambdaRejectsNonLongSamInput() {
+        final LambdaMetafactoryCall resolved = staticCustomLongLambda(
+            "(Ljava/util/List;)Lcom/acme/KeySource;",
+            "(D)Ljava/lang/String;",
+            "(Ljava/util/List;J)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isMaterializedCapturedLongObjectLambda()).isFalse();
+    }
+
+    @Test
+    void capturedStaticCustomLongLambdaRejectsPrimitiveSamReturn() {
+        final LambdaMetafactoryCall resolved = staticCustomLongLambda(
+            "(Ljava/util/List;)Lcom/acme/KeySource;",
+            "(J)I",
+            "(Ljava/util/List;J)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isMaterializedCapturedLongObjectLambda()).isFalse();
+    }
+
+    @Test
+    void capturedStaticCustomLongLambdaRejectsNonLongInstantiatedInput() {
+        final LambdaMetafactoryCall resolved = staticCustomLongLambda(
+            "(Ljava/util/List;)Lcom/acme/KeySource;",
+            "(J)Ljava/lang/String;",
+            "(Ljava/util/List;J)Ljava/lang/String;",
+            "(D)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isMaterializedCapturedLongObjectLambda()).isFalse();
+    }
+
+    @Test
+    void capturedStaticCustomLongLambdaRejectsPrimitiveInstantiatedReturn() {
+        final LambdaMetafactoryCall resolved = staticCustomLongLambda(
+            "(Ljava/util/List;)Lcom/acme/KeySource;",
+            "(J)Ljava/lang/String;",
+            "(Ljava/util/List;J)Ljava/lang/String;",
+            "(J)I"
+        );
+
+        assertThat(resolved.isMaterializedCapturedLongObjectLambda()).isFalse();
+    }
+
+    @Test
+    void capturedStaticCustomLongLambdaRejectsPrimitiveImplementationReturn() {
+        final LambdaMetafactoryCall resolved = staticCustomLongLambda(
+            "(Ljava/util/List;)Lcom/acme/KeySource;",
+            "(J)Ljava/lang/String;",
+            "(Ljava/util/List;J)I"
+        );
+
+        assertThat(resolved.isMaterializedCapturedLongObjectLambda()).isFalse();
+    }
+
+    @Test
+    void capturedStaticCustomLongLambdaRejectsMalformedImplementationParameters() {
+        final LambdaMetafactoryCall resolved = staticCustomLongLambda(
+            "(Ljava/util/List;)Lcom/acme/KeySource;",
+            "(J)Ljava/lang/String;",
+            "([)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isMaterializedCapturedLongObjectLambda()).isFalse();
+    }
+
+    @Test
+    void capturedStaticCustomLongLambdaRejectsExtraImplementationParameter() {
+        final LambdaMetafactoryCall resolved = staticCustomLongLambda(
+            "(Ljava/util/List;)Lcom/acme/KeySource;",
+            "(J)Ljava/lang/String;",
+            "(Ljava/util/List;Ljava/lang/Object;J)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isMaterializedCapturedLongObjectLambda()).isFalse();
+    }
+
+    @Test
+    void capturedStaticCustomLongLambdaRejectsNonLongImplementationInput() {
+        final LambdaMetafactoryCall resolved = staticCustomLongLambda(
+            "(Ljava/util/List;)Lcom/acme/KeySource;",
+            "(J)Ljava/lang/String;",
+            "(Ljava/util/List;D)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isMaterializedCapturedLongObjectLambda()).isFalse();
+    }
+
+    @Test
+    void capturedStaticCustomLongLambdaRejectsIncompatibleCapture() {
+        final LambdaMetafactoryCall resolved = staticCustomLongLambda(
+            "(Ljava/util/List;)Lcom/acme/KeySource;",
+            "(J)Ljava/lang/String;",
+            "(Ljava/lang/String;J)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isMaterializedCapturedLongObjectLambda()).isFalse();
+    }
+
+    @Test
+    void capturedStaticCustomLongLambdaRejectsImplementationReturnBroaderThanInstantiatedReturn() {
+        final LambdaMetafactoryCall resolved = staticCustomLongLambda(
+            "(Ljava/util/List;)Lcom/acme/KeySource;",
+            "(J)Ljava/lang/String;",
+            "(Ljava/util/List;J)Ljava/lang/Object;"
+        );
+
+        assertThat(resolved.isMaterializedCapturedLongObjectLambda()).isFalse();
+    }
+
+    @Test
+    void capturedStaticCustomLongLambdaRejectsMissingInterfaceClass() {
+        final LambdaMetafactoryCall resolved = staticCustomLongLambda(
+            "(Ljava/util/List;)Lcom/acme/KeySource;",
+            "(J)Ljava/lang/String;",
+            "(Ljava/util/List;J)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isMaterializedCapturedLongObjectLambda(Map.of(
+            "com/acme/Main",
+            classFile("com/acme/Main", true)
+        ))).isFalse();
+    }
+
+    @Test
+    void capturedStaticCustomLongLambdaRejectsMissingImplementationClass() {
+        final LambdaMetafactoryCall resolved = staticCustomLongLambda(
+            "(Ljava/util/List;)Lcom/acme/KeySource;",
+            "(J)Ljava/lang/String;",
+            "(Ljava/util/List;J)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isMaterializedCapturedLongObjectLambda(Map.of(
+            "com/acme/KeySource",
+            classFile("com/acme/KeySource", true)
+        ))).isFalse();
+    }
+
+    @Test
+    void capturedStaticCustomLongLambdaRejectsDependencyImplementationClass() {
+        final LambdaMetafactoryCall resolved = staticCustomLongLambda(
+            "(Ljava/util/List;)Lcom/acme/KeySource;",
+            "(J)Ljava/lang/String;",
+            "(Ljava/util/List;J)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isMaterializedCapturedLongObjectLambda(Map.of(
+            "com/acme/KeySource",
+            classFile("com/acme/KeySource", true),
+            "com/acme/Main",
+            classFile("com/acme/Main", false)
+        ))).isFalse();
+    }
+
+    @Test
     void zeroCaptureStaticCustomLongLambdaRejectsCapturedReference() {
         final LambdaMetafactoryCall resolved = staticCustomLongLambda(
             "(Ljava/lang/String;)Lcom/acme/KeySource;",
@@ -1222,6 +1514,36 @@ final class LambdaMetafactoryCallTest {
         final String samDescriptor,
         final String implementationDescriptor
     ) {
+        return staticCustomLongLambda(
+            callSiteDescriptor,
+            samDescriptor,
+            implementationDescriptor,
+            samDescriptor
+        );
+    }
+
+    private static LambdaMetafactoryCall staticCustomLongLambda(
+        final String callSiteDescriptor,
+        final String samDescriptor,
+        final String implementationDescriptor,
+        final String instantiatedDescriptor
+    ) {
+        return staticCustomLongLambda(
+            callSiteDescriptor,
+            samDescriptor,
+            implementationDescriptor,
+            instantiatedDescriptor,
+            6
+        );
+    }
+
+    private static LambdaMetafactoryCall staticCustomLongLambda(
+        final String callSiteDescriptor,
+        final String samDescriptor,
+        final String implementationDescriptor,
+        final String instantiatedDescriptor,
+        final int implementationReferenceKind
+    ) {
         return LambdaMetafactoryCall.resolve(dynamicRef(
             "key",
             callSiteDescriptor,
@@ -1230,10 +1552,10 @@ final class LambdaMetafactoryCallTest {
             List.of(
                 BootstrapArgument.methodType(samDescriptor),
                 BootstrapArgument.methodHandle(
-                    6,
+                    implementationReferenceKind,
                     new MethodRef("com/acme/Main", "lambda$key$0", implementationDescriptor)
                 ),
-                BootstrapArgument.methodType(samDescriptor)
+                BootstrapArgument.methodType(instantiatedDescriptor)
             )
         )).orElseThrow();
     }

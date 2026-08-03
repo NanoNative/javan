@@ -1075,8 +1075,11 @@ public final class ReachabilityAnalyzer {
         final boolean materializedBoundCustom = resolved.isMaterializedBoundCustomObjectLambda(classes);
         final boolean materializedStaticLongCustom =
             resolved.isZeroCaptureMaterializedLongObjectLambda(classes);
+        final boolean materializedCapturedLongCustom =
+            resolved.isMaterializedCapturedLongObjectLambda(classes);
         if (resolved.isZeroCaptureMaterializedObjectLambda()
             || materializedStaticLongCustom
+            || materializedCapturedLongCustom
             || resolved.isZeroCaptureMaterializedBooleanLambda()
             || resolved.isMaterializedBiFunctionLambda()
             || resolved.isMaterializedVoidLambda()
@@ -1095,6 +1098,7 @@ public final class ReachabilityAnalyzer {
         if (!resolved.isDirectlyLowerable(classes)
             && !resolved.isZeroCaptureMaterializedObjectLambda()
             && !materializedStaticLongCustom
+            && !materializedCapturedLongCustom
             && !resolved.isZeroCaptureMaterializedBooleanLambda()
             && !resolved.isMaterializedBiFunctionLambda()
             && !resolved.isMaterializedVoidLambda()
