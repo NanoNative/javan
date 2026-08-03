@@ -37,6 +37,7 @@ public final class Main {
         System.out.println("map " + snapshot.get("requests").score());
         System.out.println("samples " + samples[0]);
         System.out.println("copy " + copy[3]);
+        System.out.println((float) 1.5d);
         System.out.println("name-length " + requests.name().length());
         System.out.println("char " + requests.name().charAt(4));
         System.out.println("same " + requests.name().equals("requests"));

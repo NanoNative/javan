@@ -43,6 +43,148 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void runtimeHeaderDeclaresDoubleToFloatHelper() throws Exception {
+        new RuntimeFiles().write(tempDir);
+
+        assertThat(Files.readString(tempDir.resolve("javan_runtime.h"))).contains("float javan_d2f(double value);");
+    }
+
+    @Test
+    void runtimeDoubleToFloatConvertsExactFiniteValue() throws Exception {
+        assertThat(doubleToFloatBits("UINT64_C(0x3ff8000000000000)")).isEqualTo("3fc00000\n");
+    }
+
+    @Test
+    void runtimeDoubleToFloatRoundsOrdinaryFiniteValue() throws Exception {
+        assertThat(doubleToFloatBits("UINT64_C(0x3ff0000018000000)")).isEqualTo("3f800001\n");
+    }
+
+    @Test
+    void runtimeDoubleToFloatRoundsPositiveTieToEven() throws Exception {
+        assertThat(doubleToFloatBits("UINT64_C(0x3ff0000010000000)")).isEqualTo("3f800000\n");
+    }
+
+    @Test
+    void runtimeDoubleToFloatRoundsNegativeTieToEven() throws Exception {
+        assertThat(doubleToFloatBits("UINT64_C(0xbff0000010000000)")).isEqualTo("bf800000\n");
+    }
+
+    @Test
+    void runtimeDoubleToFloatRoundsOddLowerTieToEven() throws Exception {
+        assertThat(doubleToFloatBits("UINT64_C(0x3ff0000030000000)")).isEqualTo("3f800002\n");
+    }
+
+    @Test
+    void runtimeDoubleToFloatPreservesPositiveZero() throws Exception {
+        assertThat(doubleToFloatBits("UINT64_C(0x0000000000000000)")).isEqualTo("00000000\n");
+    }
+
+    @Test
+    void runtimeDoubleToFloatPreservesNegativeZero() throws Exception {
+        assertThat(doubleToFloatBits("UINT64_C(0x8000000000000000)")).isEqualTo("80000000\n");
+    }
+
+    @Test
+    void runtimeDoubleToFloatPreservesPositiveInfinity() throws Exception {
+        assertThat(doubleToFloatBits("UINT64_C(0x7ff0000000000000)")).isEqualTo("7f800000\n");
+    }
+
+    @Test
+    void runtimeDoubleToFloatPreservesNegativeInfinity() throws Exception {
+        assertThat(doubleToFloatBits("UINT64_C(0xfff0000000000000)")).isEqualTo("ff800000\n");
+    }
+
+    @Test
+    void runtimeDoubleToFloatCanonicalizesPositiveQuietNan() throws Exception {
+        assertThat(doubleToFloatBits("UINT64_C(0x7ff8000000000001)")).isEqualTo("7fc00000\n");
+    }
+
+    @Test
+    void runtimeDoubleToFloatCanonicalizesNegativeQuietNan() throws Exception {
+        assertThat(doubleToFloatBits("UINT64_C(0xfff8000000000001)")).isEqualTo("7fc00000\n");
+    }
+
+    @Test
+    void runtimeDoubleToFloatCanonicalizesPositiveSignalingNan() throws Exception {
+        assertThat(doubleToFloatBits("UINT64_C(0x7ff0000000000001)")).isEqualTo("7fc00000\n");
+    }
+
+    @Test
+    void runtimeDoubleToFloatCanonicalizesNegativeSignalingNan() throws Exception {
+        assertThat(doubleToFloatBits("UINT64_C(0xfff0000000000001)")).isEqualTo("7fc00000\n");
+    }
+
+    @Test
+    void runtimeDoubleToFloatGraduallyUnderflows() throws Exception {
+        assertThat(doubleToFloatBits("UINT64_C(0x3800000000000000)")).isEqualTo("00400000\n");
+    }
+
+    @Test
+    void runtimeDoubleToFloatPreservesMinimumBinary32Subnormal() throws Exception {
+        assertThat(doubleToFloatBits("UINT64_C(0x36a0000000000000)")).isEqualTo("00000001\n");
+    }
+
+    @Test
+    void runtimeDoubleToFloatRoundsPositiveHalfMinimumBinary32SubnormalToZero() throws Exception {
+        assertThat(doubleToFloatBits("UINT64_C(0x3690000000000000)")).isEqualTo("00000000\n");
+    }
+
+    @Test
+    void runtimeDoubleToFloatRoundsNegativeHalfMinimumBinary32SubnormalToZero() throws Exception {
+        assertThat(doubleToFloatBits("UINT64_C(0xb690000000000000)")).isEqualTo("80000000\n");
+    }
+
+    @Test
+    void runtimeDoubleToFloatCarriesMinimumNormalTie() throws Exception {
+        assertThat(doubleToFloatBits("UINT64_C(0x380fffffe0000000)")).isEqualTo("00800000\n");
+    }
+
+    @Test
+    void runtimeDoubleToFloatPreservesMaximumFiniteFloat() throws Exception {
+        assertThat(doubleToFloatBits("UINT64_C(0x47efffffe0000000)")).isEqualTo("7f7fffff\n");
+    }
+
+    @Test
+    void runtimeDoubleToFloatKeepsValueBelowOverflowThresholdFinite() throws Exception {
+        assertThat(doubleToFloatBits("UINT64_C(0x47efffffefffffff)")).isEqualTo("7f7fffff\n");
+    }
+
+    @Test
+    void runtimeDoubleToFloatRoundsOverflowTieToInfinity() throws Exception {
+        assertThat(doubleToFloatBits("UINT64_C(0x47effffff0000000)")).isEqualTo("7f800000\n");
+    }
+
+    @Test
+    void runtimeDoubleToFloatRoundsPositiveOverflowToInfinity() throws Exception {
+        assertThat(doubleToFloatBits("UINT64_C(0x7fefffffffffffff)")).isEqualTo("7f800000\n");
+    }
+
+    @Test
+    void runtimeDoubleToFloatRoundsNegativeOverflowToInfinity() throws Exception {
+        assertThat(doubleToFloatBits("UINT64_C(0xffefffffffffffff)")).isEqualTo("ff800000\n");
+    }
+
+    @Test
+    void runtimeDoubleToFloatRoundsMinimumPositiveBinary64SubnormalToZero() throws Exception {
+        assertThat(doubleToFloatBits("UINT64_C(0x0000000000000001)")).isEqualTo("00000000\n");
+    }
+
+    @Test
+    void runtimeDoubleToFloatRoundsMinimumNegativeBinary64SubnormalToNegativeZero() throws Exception {
+        assertThat(doubleToFloatBits("UINT64_C(0x8000000000000001)")).isEqualTo("80000000\n");
+    }
+
+    @Test
+    void runtimeDoubleToFloatCarriesFiniteNormalMantissa() throws Exception {
+        assertThat(doubleToFloatBits("UINT64_C(0x3ffffffff0000000)")).isEqualTo("40000000\n");
+    }
+
+    @Test
+    void runtimeDoubleToFloatRoundsNegativeOverflowMidpointToInfinity() throws Exception {
+        assertThat(doubleToFloatBits("UINT64_C(0xc7effffff0000000)")).isEqualTo("ff800000\n");
+    }
+
+    @Test
     void recordStringValidationBoundsBorrowedLookupMissesWithManyLiveAllocations() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -3149,6 +3291,41 @@ final class RuntimeFilesTest {
             .isEqualTo(0);
         assertThat(output).exists();
         assertThat(Files.readAllBytes(output)).startsWith((byte) 'M', (byte) 'Z');
+    }
+
+    @Test
+    void generatedRuntimeDoubleToFloatCrossCompilesToWindowsPeWhenMinGwIsAvailable() throws Exception {
+        final Path compiler = findFirstExecutableOnPath("x86_64-w64-mingw32-gcc");
+        assumeTrue(compiler != null, "MinGW cross compiler is not installed");
+        final Path runtime = new RuntimeFiles().write(tempDir);
+        final Path main = tempDir.resolve("windows-double-to-float-probe.c");
+        Files.writeString(main, """
+            #include "javan_runtime.h"
+
+            int main(void) {
+                return javan_d2f(1.5) == 1.5f ? 0 : 1;
+            }
+            """);
+        final TestProcesses.Result result = TestProcesses.run(
+            tempDir,
+            List.of(
+                compiler.toString(),
+                "-std=c11",
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                "-Wno-error=unused-function",
+                "-Wno-error=unused-variable",
+                main.toString(),
+                runtime.toString(),
+                "-lws2_32",
+                "-o",
+                tempDir.resolve("windows-double-to-float-probe.exe").toString()
+            ),
+            java.time.Duration.ofSeconds(60)
+        );
+
+        assertThat(result.exitCode()).describedAs(result.stderr()).isZero();
     }
 
     @Test
@@ -9885,6 +10062,33 @@ final class RuntimeFilesTest {
             }
             """.formatted(bits),
             "4096"
+        );
+    }
+
+    private String doubleToFloatBits(final String bits) throws Exception {
+        return runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <inttypes.h>
+            #include <stdint.h>
+            #include <stdio.h>
+            #include <string.h>
+
+            static double from_bits(uint64_t value) {
+                double result = 0.0;
+                memcpy(&result, &value, sizeof(result));
+                return result;
+            }
+
+            int main(void) {
+                uint32_t result = UINT32_C(0);
+                const float narrowed = javan_d2f(from_bits(%s));
+                memcpy(&result, &narrowed, sizeof(result));
+                printf("%%08" PRIx32 "\\n", result);
+                return 0;
+            }
+            """.formatted(bits),
+            "512"
         );
     }
 

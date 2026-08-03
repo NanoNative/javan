@@ -1162,6 +1162,7 @@ public final class CCodegen {
         final boolean entry = appEntry(emitMain, function, program);
         if (entry) {
             c.append("int main(int argc, char** argv) {").append(System.lineSeparator());
+            c.append("    javan_runtime_validate_floating_layout();").append(System.lineSeparator());
             c.append("    javan_runtime_profile_consume_args(&argc, &argv);").append(System.lineSeparator());
             c.append("    (void) argc;").append(System.lineSeparator());
             c.append("    (void) argv;").append(System.lineSeparator());
@@ -1268,6 +1269,7 @@ public final class CCodegen {
         c.append("    if (javan_library_initialized != 0) {").append(System.lineSeparator());
         c.append("        return;").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
+        c.append("    javan_runtime_validate_floating_layout();").append(System.lineSeparator());
         c.append("    javan_register_generated_type_descriptors();").append(System.lineSeparator());
         c.append("    javan_register_generated_roots();").append(System.lineSeparator());
         c.append("    javan_register_enum_ordinal_resolver(javan_generated_enum_ordinal);")
