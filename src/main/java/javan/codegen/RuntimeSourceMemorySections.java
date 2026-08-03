@@ -9166,6 +9166,9 @@ final class RuntimeSourceMemorySections {
             if (value == NULL) {
                 return 0;
             }
+            if (javan_runtime_class_registry_contains(value) != 0) {
+                return 0x4a415641;
+            }
             int type_id = javan_registered_type_id(value);
             if (type_id == JAVAN_TYPE_JAVA_LANG_INTEGER) {
                 return ((javan_boxed_int*) value)->value;
