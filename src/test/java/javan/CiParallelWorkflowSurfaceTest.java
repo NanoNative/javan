@@ -16,6 +16,7 @@ final class CiParallelWorkflowSurfaceTest {
     private static final Path BUILD_PR = Path.of(".github/workflows/build-pr.yml");
     private static final Path BUILD_MERGE = Path.of(".github/workflows/build-merge.yml");
     private static final Path RELEASE = Path.of(".github/workflows/release.yml");
+    private static final Path NATIVE_PROOF = Path.of(".github/workflows/native-proof.yml");
     private static final Path PLATFORM_PROOF = Path.of(".github/workflows/platform-proof.yml");
     private static final Path PUBLISH_CENTRAL = Path.of(".github/workflows/publish-central.yml");
 
@@ -111,6 +112,9 @@ final class CiParallelWorkflowSurfaceTest {
             .contains("scope: temporary_roots")
             .contains("scope: failure_exceptions")
             .contains("scope: failure_limits");
+        assertThat(Files.readString(NATIVE_PROOF))
+            .contains("if: runner.os == 'Linux' && inputs.proof != 'sanitizer'")
+            .contains("install -y --fix-missing build-essential mingw-w64");
 
         final var invocations = Files.readAllLines(Path.of(".github/scripts/sanitizer-suite.sh")).stream()
             .filter(line -> line.contains("sh .github/scripts/sanitizer-"))
