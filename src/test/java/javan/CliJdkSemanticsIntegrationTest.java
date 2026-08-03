@@ -1540,8 +1540,12 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        assertThat(process(project, List.of(project.resolve(".javan/bin/collections-empty-map-entry-set").toString())).stdout())
-            .isEqualTo(jvmOutput);
+        final ProcessResult nativeRun = process(
+            project,
+            List.of(project.resolve(".javan/bin/collections-empty-map-entry-set").toString())
+        );
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("true\nobject\ntrue\n");
     }
 

@@ -218,7 +218,7 @@ final class CiParallelWorkflowSurfaceTest {
             .contains("if: ${{ false }}")
             .contains("uses: ./.github/workflows/publish-central.yml");
         assertThat(Files.readString(RELEASE))
-            .contains("publish-central:")
+            .contains("central:")
             .contains("if: ${{ false }}")
             .contains("uses: ./.github/workflows/publish-central.yml");
     }
