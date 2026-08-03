@@ -68,7 +68,6 @@
     {"feature": "primitive-array-clone", "jdk25": "pass"},
     {"feature": "generated-object-clone-single-threaded", "jdk25": "pass"},
     {"feature": "generated-object-clone-concurrent-return-handoff", "jdk25": "pass"},
-    {"feature": "eclipse-compiler-enum-switch-self-host", "jdk25": "pass"},
     {"feature": "main-args", "jdk25": "pass"},
     {"feature": "jar-output", "jdk25": "pass"},
     {"feature": "jar-main-manifest", "jdk25": "pass"},

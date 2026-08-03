@@ -559,7 +559,10 @@ public final class VirtualThreadInvokePatterns {
             if (localSlot == slot) {
                 return parameterType;
             }
-            localSlot += parameterType.slotWidth();
+            localSlot += switch (parameterType) {
+                case LONG, DOUBLE -> 2;
+                default -> 1;
+            };
         }
         return null;
     }

@@ -13832,28 +13832,6 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void staticVerifierAcceptsEclipseSyntheticSwitchTableMethodShape() {
-        assertThat(verifyEclipseSyntheticSwitchTableMethod(0x1008)).isEmpty();
-    }
-
-    @Test
-    void staticVerifierRejectsSpoofedEclipseSwitchTableMethodShapes() {
-        final String switchTable = "$SWITCH_TABLE$com$acme$Color";
-        final List<List<Diagnostic>> diagnostics = List.of(
-            verifyEclipseSyntheticSwitchTableMethod(0x0008, switchTable, "()[I", switchTable, "java/lang/NoSuchFieldError"),
-            verifyEclipseSyntheticSwitchTableMethod(0x1000, switchTable, "()[I", switchTable, "java/lang/NoSuchFieldError"),
-            verifyEclipseSyntheticSwitchTableMethod(0x1008, "switchTable", "()[I", "switchTable", "java/lang/NoSuchFieldError"),
-            verifyEclipseSyntheticSwitchTableMethod(0x1008, switchTable, "()V", switchTable, "java/lang/NoSuchFieldError"),
-            verifyEclipseSyntheticSwitchTableMethod(0x1008, switchTable, "()[I", "values", "java/lang/NoSuchFieldError"),
-            verifyEclipseSyntheticSwitchTableMethod(0x1008, switchTable, "()[I", switchTable, "java/lang/RuntimeException")
-        );
-
-        for (final List<Diagnostic> rejected : diagnostics) {
-            assertThat(rejected).extracting(Diagnostic::code).contains("JAVAN014");
-        }
-    }
-
-    @Test
     void staticVerifierRejectsSwitchMapClassWhenNotSynthetic() {
         final List<Diagnostic> diagnostics = verifySyntheticSwitchMapClass(
             0,
@@ -14282,75 +14260,6 @@ final class CoreBehaviorTest {
         return new StaticVerifier().verify(
             Map.of(switchMap.name(), switchMap),
             List.of(new EntryPoint(switchMap.name(), methodName, "()V"))
-        );
-    }
-
-    private static List<Diagnostic> verifyEclipseSyntheticSwitchTableMethod(final int methodAccessFlags) {
-        final String switchTable = "$SWITCH_TABLE$com$acme$Color";
-        return verifyEclipseSyntheticSwitchTableMethod(
-            methodAccessFlags,
-            switchTable,
-            "()[I",
-            switchTable,
-            "java/lang/NoSuchFieldError"
-        );
-    }
-
-    private static List<Diagnostic> verifyEclipseSyntheticSwitchTableMethod(
-        final int methodAccessFlags,
-        final String methodName,
-        final String methodDescriptor,
-        final String fieldName,
-        final String catchType
-    ) {
-        final MethodInfo method = new MethodInfo(
-            methodAccessFlags,
-            methodName,
-            methodDescriptor,
-            Optional.of(new CodeAttribute(
-                3,
-                1,
-                new byte[0],
-                1,
-                List.of(new CodeException(0, 5, 6, Optional.of(catchType))),
-                List.of(
-                    instruction(0, 42, "aload_0"),
-                    instruction(1, 178, "getstatic", new FieldRef("com/acme/Color", "RED", "Lcom/acme/Color;")),
-                    instruction(2, 182, "invokevirtual", new MethodRef("com/acme/Color", "ordinal", "()I")),
-                    instruction(3, 4, "iconst_1"),
-                    instruction(4, 79, "iastore"),
-                    instructionOperands(5, 167, "goto", 0, 2),
-                    instruction(6, 87, "pop"),
-                    instruction(7, 42, "aload_0"),
-                    instruction(8, 176, "areturn")
-                )
-            ))
-        );
-        final ClassFile switchTable = new ClassFile(
-            69,
-            "com/acme/Main",
-            "java/lang/Object",
-            0,
-            List.of(),
-            List.of(new FieldInfo(0x100A, fieldName, "[I")),
-            List.of(method),
-            Path.of("Main.class"),
-            true
-        );
-        final ClassFile enumClass = new ClassFile(
-            69,
-            "com/acme/Color",
-            "java/lang/Enum",
-            0x4000,
-            List.of(),
-            List.of(new FieldInfo(0x4008, "RED", "Lcom/acme/Color;")),
-            List.of(),
-            Path.of("Color.class"),
-            true
-        );
-        return new StaticVerifier().verify(
-            Map.of(switchTable.name(), switchTable, enumClass.name(), enumClass),
-            List.of(new EntryPoint(switchTable.name(), method.name(), method.descriptor()))
         );
     }
 

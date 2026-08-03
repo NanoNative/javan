@@ -140,7 +140,6 @@ final class CompatibilityReportsTest {
             "| `primitive-array-clone` | pass |",
             "| `generated-object-clone-single-threaded` | pass |",
             "| `generated-object-clone-concurrent-return-handoff` | pass |",
-            "| `eclipse-compiler-enum-switch-self-host` | pass |",
             "| `string-intrinsics` | pass |",
             "| `jdk-intrinsics-boolean-parse` | pass |",
             "| `resource-system-loader-stream` | pass |",
