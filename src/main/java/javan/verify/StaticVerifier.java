@@ -3178,7 +3178,14 @@ public final class StaticVerifier {
             && ("(II)I".equals(target.descriptor()) || "(JJ)J".equals(target.descriptor()))) {
             return true;
         }
-        if ("subtractExact".equals(target.name()) && "(JJ)J".equals(target.descriptor())) {
+        if ("subtractExact".equals(target.name())
+            && ("(II)I".equals(target.descriptor()) || "(JJ)J".equals(target.descriptor()))) {
+            return true;
+        }
+        if (("incrementExact".equals(target.name())
+            || "decrementExact".equals(target.name())
+            || "negateExact".equals(target.name()))
+            && ("(I)I".equals(target.descriptor()) || "(J)J".equals(target.descriptor()))) {
             return true;
         }
         if ("toIntExact".equals(target.name()) && "(J)I".equals(target.descriptor())) {

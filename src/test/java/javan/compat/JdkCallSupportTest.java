@@ -147,12 +147,16 @@ final class JdkCallSupportTest {
     }
 
     @Test
-    void mathSubtractExactIntIsNotSupported() {
-        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
-            "java/lang/Math",
-            "subtractExact",
-            "(II)I"
-        ))).isFalse();
+    void additionalMathExactCallsAreSupported() {
+        assertThat(List.of(
+            new MethodRef("java/lang/Math", "subtractExact", "(II)I"),
+            new MethodRef("java/lang/Math", "incrementExact", "(I)I"),
+            new MethodRef("java/lang/Math", "incrementExact", "(J)J"),
+            new MethodRef("java/lang/Math", "decrementExact", "(I)I"),
+            new MethodRef("java/lang/Math", "decrementExact", "(J)J"),
+            new MethodRef("java/lang/Math", "negateExact", "(I)I"),
+            new MethodRef("java/lang/Math", "negateExact", "(J)J")
+        )).allMatch(JdkCallSupport::isSupported);
     }
 
     @Test

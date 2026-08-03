@@ -73,6 +73,9 @@ final class IntrinsicUsageReportsTest {
             new IntrinsicCallCount("Math.addExact", 0),
             new IntrinsicCallCount("Math.subtractExact", 0),
             new IntrinsicCallCount("Math.multiplyExact", 0),
+            new IntrinsicCallCount("Math.incrementExact", 0),
+            new IntrinsicCallCount("Math.decrementExact", 0),
+            new IntrinsicCallCount("Math.negateExact", 0),
             new IntrinsicCallCount("Math.toIntExact", 0),
             new IntrinsicCallCount("System.nanoTime", 2),
             new IntrinsicCallCount("System.currentTimeMillis", 0),
@@ -328,7 +331,7 @@ final class IntrinsicUsageReportsTest {
     }
 
     @Test
-    void reportsMathSubtractExactIntAsUnsupportedCandidate() {
+    void countsReachableMathSubtractExactIntAsIntrinsic() {
         final IntrinsicUsageReports reports = new IntrinsicUsageReports();
         final EntryPoint entry = new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V");
         final Map<String, ClassFile> classes = Map.of(
@@ -340,8 +343,8 @@ final class IntrinsicUsageReportsTest {
             ))
         );
 
-        assertThat(reports.analyze(classes, List.of(entry)).unsupportedJdkCallCandidates())
-            .containsExactly(new UnsupportedJdkCallCandidate("java/lang/Math.subtractExact(II)I", 1));
+        assertThat(reports.analyze(classes, List.of(entry)).intrinsics())
+            .contains(new IntrinsicCallCount("Math.subtractExact", 1));
     }
 
     @Test

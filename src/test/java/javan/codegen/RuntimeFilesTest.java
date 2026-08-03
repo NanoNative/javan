@@ -10412,6 +10412,61 @@ final class RuntimeFilesTest {
         );
     }
 
+    private String exactLongUnaryOverflow(final String symbol, final String value) throws Exception {
+        return runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <limits.h>
+            #include <stdio.h>
+
+            int main(void) {
+                printf("%%d\\n", %s(%s));
+                return 0;
+            }
+            """.formatted(symbol, value),
+            "4096"
+        );
+    }
+
+    private String subtractExactIntOverflow(final String left, final String right) throws Exception {
+        return runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <limits.h>
+            #include <stdio.h>
+
+            int main(void) {
+                printf(
+                    "%%d\\n",
+                    javan_math_subtract_exact_int_overflows(%s, %s)
+                );
+                return 0;
+            }
+            """.formatted(left, right),
+            "4096"
+        );
+    }
+
+    @Test
+    void subtractExactIntRejectsMaximumMinusNegativeOne() throws Exception {
+        assertThat(subtractExactIntOverflow("INT_MAX", "-1")).isEqualTo("1\n");
+    }
+
+    @Test
+    void incrementExactLongRejectsMaximumValue() throws Exception {
+        assertThat(exactLongUnaryOverflow("javan_math_increment_exact_long_overflows", "LLONG_MAX")).isEqualTo("1\n");
+    }
+
+    @Test
+    void decrementExactLongRejectsMinimumValue() throws Exception {
+        assertThat(exactLongUnaryOverflow("javan_math_decrement_exact_long_overflows", "LLONG_MIN")).isEqualTo("1\n");
+    }
+
+    @Test
+    void negateExactLongRejectsMinimumValue() throws Exception {
+        assertThat(exactLongUnaryOverflow("javan_math_negate_exact_long_overflows", "LLONG_MIN")).isEqualTo("1\n");
+    }
+
     @Test
     void longNegationReturnsZeroForZero() throws Exception {
         assertThat(longNegation("0LL")).isEqualTo("0\n");

@@ -87,6 +87,8 @@ final class RuntimeHeaderFile {
         int javan_math_add_exact_int(int left, int right);
         int javan_math_add_exact_long_overflows(long long left, long long right);
         long long javan_math_add_exact_long(long long left, long long right);
+        int javan_math_subtract_exact_int_overflows(int left, int right);
+        int javan_math_subtract_exact_int(int left, int right);
         int javan_math_subtract_exact_long_overflows(long long left, long long right);
         long long javan_math_subtract_exact_long(long long left, long long right);
         int javan_math_multiply_exact_int_overflows(int left, int right);
@@ -95,6 +97,18 @@ final class RuntimeHeaderFile {
         long long javan_math_multiply_exact_long_int(long long left, int right);
         int javan_math_multiply_exact_long_long_overflows(long long left, long long right);
         long long javan_math_multiply_exact_long_long(long long left, long long right);
+        int javan_math_increment_exact_int_overflows(int value);
+        int javan_math_increment_exact_int(int value);
+        int javan_math_increment_exact_long_overflows(long long value);
+        long long javan_math_increment_exact_long(long long value);
+        int javan_math_decrement_exact_int_overflows(int value);
+        int javan_math_decrement_exact_int(int value);
+        int javan_math_decrement_exact_long_overflows(long long value);
+        long long javan_math_decrement_exact_long(long long value);
+        int javan_math_negate_exact_int_overflows(int value);
+        int javan_math_negate_exact_int(int value);
+        int javan_math_negate_exact_long_overflows(long long value);
+        long long javan_math_negate_exact_long(long long value);
         int javan_math_to_int_exact_overflows(long long value);
         int javan_math_to_int_exact(long long value);
         int javan_decimal_parse_status(
