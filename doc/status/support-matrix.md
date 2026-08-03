@@ -9,8 +9,8 @@ External project names do not belong in this matrix; this ledger stays compiler-
 
 | Measure | Count |
 | --- | ---: |
-| rows | 305 |
-| pass | 305 |
+| rows | 304 |
+| pass | 304 |
 | scoped | 0 |
 | target | 0 |
 | rejected | 0 |
