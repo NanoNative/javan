@@ -5516,6 +5516,7 @@ public final class StaticVerifier {
         return lambda.isDirectlyLowerable(classes)
             || lambda.isZeroCaptureMaterializedObjectLambda()
             || lambda.isZeroCaptureMaterializedLongObjectLambda(classes)
+            || lambda.isMaterializedCapturedLongObjectLambda(classes)
             || lambda.isZeroCaptureMaterializedBooleanLambda()
             || lambda.isMaterializedBiFunctionLambda()
             || lambda.isMaterializedVoidLambda()

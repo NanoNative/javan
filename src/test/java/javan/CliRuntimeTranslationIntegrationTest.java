@@ -5073,6 +5073,129 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void staticCustomLongSamWithCapturedListBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("static-custom-long-sam-captured-list");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.List;
+
+            public final class Main {
+                private final KeySource keySource;
+
+                private Main(final KeySource keySource) {
+                    this.keySource = keySource;
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> rows = List.of("zero", "one");
+                    final KeySource source = index -> rows.get((int) index);
+                    final Main application = new Main(source);
+                    System.out.println(application.keyLater(new PrefixKeySource(), application.keySource, 1L));
+                }
+
+                private String keyLater(final KeySource ignored, final KeySource selected, final long index) {
+                    return selected.key(index);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.KeySource", """
+            package com.acme;
+
+            @FunctionalInterface
+            public interface KeySource {
+                String key(long index);
+            }
+            """);
+        writeJava(project, "com.acme.PrefixKeySource", """
+            package com.acme;
+
+            public final class PrefixKeySource implements KeySource {
+                @Override
+                public String key(final long index) {
+                    return "prefix-" + index;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String nativeOutput = run.exitCode() == 0
+            ? process(
+                project,
+                List.of(project.resolve(".javan/bin/static-custom-long-sam-captured-list").toString()),
+                defaultProcessTimeout(),
+                java.util.Map.of("JAVAN_GC_STRESS", "1")
+            ).stdout()
+            : "";
+
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
+    void staticCustomLongSamWithMultipleReferenceCapturesBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("static-custom-long-sam-multiple-captures");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.List;
+
+            public final class Main {
+                private final KeySource keySource;
+
+                private Main(final KeySource keySource) {
+                    this.keySource = keySource;
+                }
+
+                public static void main(final String[] args) {
+                    final String prefix = args.length == 0 ? "row-" : args[0];
+                    final List<String> rows = List.of("zero", "one");
+                    final KeySource source = index -> prefix + rows.get((int) index);
+                    final Main application = new Main(source);
+                    System.out.println(application.keyLater(new PrefixKeySource(), application.keySource, 1L));
+                }
+
+                private String keyLater(final KeySource ignored, final KeySource selected, final long index) {
+                    return selected.key(index);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.KeySource", """
+            package com.acme;
+
+            @FunctionalInterface
+            public interface KeySource {
+                String key(long index);
+            }
+            """);
+        writeJava(project, "com.acme.PrefixKeySource", """
+            package com.acme;
+
+            public final class PrefixKeySource implements KeySource {
+                @Override
+                public String key(final long index) {
+                    return "prefix-" + index;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String nativeOutput = run.exitCode() == 0
+            ? process(
+                project,
+                List.of(project.resolve(".javan/bin/static-custom-long-sam-multiple-captures").toString()),
+                defaultProcessTimeout(),
+                java.util.Map.of("JAVAN_GC_STRESS", "1")
+            ).stdout()
+            : "";
+
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
     void boundCustomLongSamWithConcreteAndMaterializedReceiversBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("bound-custom-long-sam-mixed-receivers");
         writeJava(project, "com.acme.Main", """

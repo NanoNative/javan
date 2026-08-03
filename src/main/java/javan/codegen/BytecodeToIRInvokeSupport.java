@@ -10747,8 +10747,11 @@ final class BytecodeToIRInvokeSupport {
                 final boolean materializedBoundCustom = resolved.isMaterializedBoundCustomObjectLambda(classes);
                 final boolean materializedStaticLongCustom =
                     resolved.isZeroCaptureMaterializedLongObjectLambda(classes);
+                final boolean materializedCapturedLongCustom =
+                    resolved.isMaterializedCapturedLongObjectLambda(classes);
                 if (!resolved.isZeroCaptureMaterializedObjectLambda()
                     && !materializedStaticLongCustom
+                    && !materializedCapturedLongCustom
                     && !resolved.isZeroCaptureMaterializedBooleanLambda()
                     && !resolved.isMaterializedBiFunctionLambda()
                     && !materializedFunction
@@ -10863,8 +10866,11 @@ final class BytecodeToIRInvokeSupport {
         final boolean materializedBoundCustom = resolved.isMaterializedBoundCustomObjectLambda(classes);
         final boolean materializedStaticLongCustom =
             resolved.isZeroCaptureMaterializedLongObjectLambda(classes);
+        final boolean materializedCapturedLongCustom =
+            resolved.isMaterializedCapturedLongObjectLambda(classes);
         if (resolved.isZeroCaptureMaterializedObjectLambda()
             || materializedStaticLongCustom
+            || materializedCapturedLongCustom
             || resolved.isZeroCaptureMaterializedBooleanLambda()
             || resolved.isMaterializedBiFunctionLambda()
             || materializedFunction
