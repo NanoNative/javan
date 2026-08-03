@@ -7,22 +7,18 @@ import javan.analysis.FunctionValueFlow;
 import javan.build.NativeInteropConfig;
 import javan.classfile.ClassFile;
 import javan.classfile.CodeAttribute;
-import javan.classfile.DynamicRef;
 import javan.classfile.FieldRef;
 import javan.classfile.FieldInfo;
 import javan.classfile.Instruction;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
 import javan.compat.JdkCallSupport;
-import javan.compat.JavanNativeSubstitutions;
 import javan.compat.ExactMethodSupport;
-import javan.ir.IrClass;
 import javan.ir.IrDispatch;
 import javan.ir.IrDispatchTarget;
 import javan.ir.IrFunction;
 import javan.ir.IrMaterializedLambdaTarget;
 import javan.ir.IrExpression;
-import javan.ir.IrField;
 import javan.ir.IrInstruction;
 import javan.ir.IrLocal;
 import javan.ir.IrParameter;
@@ -116,23 +112,23 @@ public final class BytecodeToIR {
         final Map<String, IrDispatch> dispatches = new LinkedHashMap<>();
         final List<EntryPoint> reachableMethods = BytecodeToIRMetadataSupport.sortedEntryPoints(callGraph.reachableMethods());
         final List<IrMaterializedLambdaTarget> materializedLambdaTargets =
-            BytecodeToIRInvokeSupport.functionOrNullTargets(classes, reachableMethods);
+            BytecodeToIRDynamicSupport.functionOrNullTargets(classes, reachableMethods);
         final Map<String, Integer> functionOrNullTargetIds =
-            BytecodeToIRInvokeSupport.functionOrNullTargetIds(classes, reachableMethods);
+            BytecodeToIRDynamicSupport.functionOrNullTargetIds(classes, reachableMethods);
         final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods =
-            BytecodeToIRInvokeSupport.materializedLambdaMethods(classes, reachableMethods);
+            BytecodeToIRDynamicSupport.materializedLambdaMethods(classes, reachableMethods);
         final FunctionValueFlow.Result functionValueFlow = callGraph.functionValueFlow().complete()
             ? callGraph.functionValueFlow()
             : FunctionValueFlow.analyze(classes, reachableMethods, nativeInterop.nativeEntryPoints());
-        final List<EntryPoint> runnableThreadTargets = BytecodeToIRInvokeSupport.runnableThreadTargets(classes, reachableMethods);
+        final List<EntryPoint> runnableThreadTargets = BytecodeToIRThreadSupport.runnableThreadTargets(classes, reachableMethods);
         final Map<String, List<String>> transportedThrowableTypes =
             transportedThrowableTypes(classes, callGraph, reachableMethods, materializedLambdaTargets);
         if (!runnableThreadTargets.isEmpty()) {
-            final MethodRef runnableRun = BytecodeToIRInvokeSupport.runnableRunMethodRef();
+            final MethodRef runnableRun = BytecodeToIRThreadSupport.runnableRunMethodRef();
             final String dispatchSymbol = dispatchSymbol(runnableRun);
             dispatches.putIfAbsent(
                 dispatchSymbol,
-                BytecodeToIRInvokeSupport.dispatch(
+                BytecodeToIRDynamicSupport.dispatch(
                     dispatchSymbol,
                     MethodDescriptor.parse(runnableRun.descriptor()),
                     runnableThreadTargets
@@ -906,15 +902,6 @@ public final class BytecodeToIR {
         );
     }
 
-
-
-
-
-
-
-
-
-
     static void lowerInstruction(
         final Map<String, ClassFile> classes,
         final ClassFile classFile,
@@ -978,7 +965,7 @@ public final class BytecodeToIR {
             case 6:
             case 7:
             case 8:
-                BytecodeToIRInvokeSupport.pushConstant(classes, classFile, method, instruction, stack);
+                BytecodeToIRDynamicSupport.pushConstant(classes, classFile, method, instruction, stack);
                 break;
             case 9:
             case 10:
@@ -987,11 +974,11 @@ public final class BytecodeToIR {
             case 13:
             case 14:
             case 15:
-                BytecodeToIRInvokeSupport.pushConstant(classes, classFile, method, instruction, stack);
+                BytecodeToIRDynamicSupport.pushConstant(classes, classFile, method, instruction, stack);
                 break;
             case 16:
             case 17:
-                BytecodeToIRInvokeSupport.pushConstant(classes, classFile, method, instruction, stack);
+                BytecodeToIRDynamicSupport.pushConstant(classes, classFile, method, instruction, stack);
                 break;
             case 21:
                 stack.add(StackValue.intExpression(local(classFile, method, locals, unsigned(instruction.operands()[0]), IrType.INT)));
@@ -1362,7 +1349,7 @@ public final class BytecodeToIR {
             case 18:
             case 19:
             case 20:
-                BytecodeToIRInvokeSupport.pushConstant(classes, classFile, method, instruction, stack);
+                BytecodeToIRDynamicSupport.pushConstant(classes, classFile, method, instruction, stack);
                 break;
             case 180:
                 BytecodeToIRInvokeSupport.pushInstanceField(classFile, method, instruction, stack);
@@ -1413,7 +1400,7 @@ public final class BytecodeToIR {
                 );
                 break;
             case 185:
-                BytecodeToIRInvokeSupport.lowerInterfaceCall(
+                BytecodeToIRThreadSupport.lowerInterfaceCall(
                     classes,
                     classFile,
                     method,
@@ -1427,7 +1414,7 @@ public final class BytecodeToIR {
                 );
                 break;
             case 186:
-                BytecodeToIRInvokeSupport.lowerDynamicCall(
+                BytecodeToIRDynamicSupport.lowerDynamicCall(
                     classes,
                     classFile,
                     method,
@@ -1440,7 +1427,7 @@ public final class BytecodeToIR {
                 );
                 break;
             case 187:
-                BytecodeToIRInvokeSupport.newObject(classes, classFile, method, instruction, instructions, stack, localDeclarations);
+                BytecodeToIRDynamicSupport.newObject(classes, classFile, method, instruction, instructions, stack, localDeclarations);
                 break;
             case 188:
                 newPrimitiveArray(classFile, method, instruction, instructions, stack, localDeclarations);
@@ -1880,7 +1867,7 @@ public final class BytecodeToIR {
     }
 
     private static String objectArrayBinaryName(final String componentJvmName) {
-        final String componentBinaryName = BytecodeToIRInvokeSupport.binaryClassName(componentJvmName);
+        final String componentBinaryName = BytecodeToIRDynamicSupport.binaryClassName(componentJvmName);
         if (componentJvmName.startsWith("[")) {
             return "[" + componentBinaryName;
         }
