@@ -46,6 +46,33 @@ final class BytecodeToIRTest {
     private Path tempDir;
 
     @Test
+    void fiveArgumentCompatibilityConstructorDerivesEnumClassFromConstants() {
+        final IrClass irClass = new IrClass(
+            "com/acme/Color",
+            "javan_class_com_acme_Color",
+            List.of(),
+            List.of(),
+            List.of("RED")
+        );
+
+        assertThat(irClass.enumClass()).isTrue();
+    }
+
+    @Test
+    void sixArgumentCompatibilityConstructorDerivesEnumClassAndPreservesCloneable() {
+        final IrClass irClass = new IrClass(
+            "com/acme/Color",
+            "javan_class_com_acme_Color",
+            List.of(),
+            List.of(),
+            List.of("RED"),
+            true
+        );
+
+        assertThat(irClass).extracting(IrClass::enumClass, IrClass::cloneable).containsExactly(true, true);
+    }
+
+    @Test
     void encodesSealedRecordComponentAsAscendingExactTypeUnion() {
         final MethodInfo equals = method(
             0,
@@ -195,6 +222,7 @@ final class BytecodeToIRTest {
                     new IrField(IrType.OBJECT, "READY", "field_READY")
                 ),
                 List.of("READY"),
+                false,
                 true
             ),
             new IrClass(

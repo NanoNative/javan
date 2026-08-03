@@ -522,7 +522,16 @@ final class RuntimeSourceMemorySections {
             int capacity;
         } javan_allocation_registry;
 
+        typedef struct {
+            javan_runtime_class_state** names;
+            javan_runtime_class_state** pointers;
+            void* storage;
+            int length;
+            int capacity;
+        } javan_runtime_class_registry;
+
         static javan_allocation_node* javan_allocations = NULL;
+        static javan_runtime_class_registry javan_runtime_classes = { NULL, NULL, NULL, 0, 0 };
         static JavanObjectHandle* javan_object_handles = NULL;
         static void* javan_allocation_cache_values[JAVAN_ALLOCATION_CACHE_SIZE];
         static javan_allocation_node* javan_allocation_cache_nodes[JAVAN_ALLOCATION_CACHE_SIZE];
@@ -725,6 +734,9 @@ final class RuntimeSourceMemorySections {
         static void javan_heap_maybe_validate(void);
         static void javan_object_registry_cleanup(void);
         static void javan_object_handle_cleanup_all(void);
+        static void javan_runtime_class_registry_cleanup(void);
+        static int javan_runtime_class_registry_contains(void* value);
+        static void javan_runtime_class_registry_validate_unlocked(void);
         static void javan_gc_mark_object_handles(void);
         static int javan_registered_type_id(void* value);
         static JavanTypeDescriptor* javan_type_descriptor_for(int type_id);
@@ -943,6 +955,7 @@ final class RuntimeSourceMemorySections {
             javan_thread_root_cleanup();
             javan_object_handle_cleanup_all();
             javan_object_registry_cleanup();
+            javan_runtime_class_registry_cleanup();
             for (int index = 0; index < JAVAN_ALLOCATION_CACHE_SIZE; index++) {
                 javan_allocation_cache_values[index] = NULL;
                 javan_allocation_cache_nodes[index] = NULL;
@@ -1633,7 +1646,8 @@ final class RuntimeSourceMemorySections {
             if (value == NULL) {
                 return;
             }
-            if (javan_find_allocation_locked(value, NULL) == NULL) {
+            if (javan_runtime_class_registry_contains(value) == 0
+                && javan_find_allocation_locked(value, NULL) == NULL) {
                 javan_panic("invalid runtime managed reference");
             }
         }
@@ -1741,17 +1755,6 @@ final class RuntimeSourceMemorySections {
                 javan_map_entry_state* state = (javan_map_entry_state*) node->value;
                 if (state->magic != JAVAN_MAP_ENTRY_MAGIC) {
                     javan_panic("invalid map entry metadata");
-                }
-            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_CLASS) {
-                javan_runtime_class_state* state = (javan_runtime_class_state*) node->value;
-                if (state->magic != JAVAN_RUNTIME_CLASS_MAGIC
-                    || state->binary_name == NULL
-                    || state->binary_name[0] == '\\0'
-                    || state->is_enum < 0
-                    || state->is_array < 0
-                    || state->assignable_count < 0
-                    || (state->assignable_count > 0 && state->assignable_type_ids == NULL)) {
-                    javan_panic("invalid runtime class metadata");
                 }
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_HTTP_REQUEST_BUILDER) {
                 javan_http_request_builder_value* builder = (javan_http_request_builder_value*) node->value;
@@ -1908,6 +1911,9 @@ final class RuntimeSourceMemorySections {
             if (javan_is_system_class_loader(value) != 0) {
                 return (void*) "java.lang.ClassLoader$System";
             }
+            if (javan_runtime_class_registry_contains(value) != 0) {
+                return javan_runtime_class_get_name(value);
+            }
             javan_allocation_metadata snapshot;
             if (javan_find_allocation(value, &snapshot) == 0) {
                 return value;
@@ -1926,9 +1932,6 @@ final class RuntimeSourceMemorySections {
             }
             if (snapshot.runtime_kind == JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_EXECUTOR) {
                 return javan_virtual_thread_executor_to_string(value);
-            }
-            if (snapshot.runtime_kind == JAVAN_RUNTIME_KIND_CLASS) {
-                return javan_runtime_class_get_name(value);
             }
             if (snapshot.runtime_kind == JAVAN_RUNTIME_KIND_INET_SOCKET_ADDRESS) {
                 return javan_inet_socket_address_to_string(value);
@@ -1978,6 +1981,7 @@ final class RuntimeSourceMemorySections {
 
         void javan_validate_heap_metadata(void) {
             javan_runtime_lock_enter();
+            javan_runtime_class_registry_validate_unlocked();
             if (javan_allocation_index.capacity < 0 || javan_allocation_index.length < 0) {
                 javan_panic("invalid heap allocation index");
             }
@@ -2377,6 +2381,10 @@ final class RuntimeSourceMemorySections {
                 javan_runtime_lock_leave();
                 return javan_alloc(size);
             }
+            if (javan_runtime_class_registry_contains(value) != 0) {
+                javan_runtime_lock_leave();
+                javan_panic("cannot reallocate runtime class metadata");
+            }
             unsigned long actual_size = size == 0 ? 1 : size;
             javan_allocation_node* node = javan_find_allocation_locked(value, NULL);
             if (node == NULL) {
@@ -2429,6 +2437,10 @@ final class RuntimeSourceMemorySections {
             if (value == NULL) {
                 javan_runtime_lock_leave();
                 return;
+            }
+            if (javan_runtime_class_registry_contains(value) != 0) {
+                javan_runtime_lock_leave();
+                javan_panic("cannot free runtime class metadata");
             }
             javan_allocation_node* previous = NULL;
             javan_allocation_node* node = javan_find_allocation_locked(value, &previous);
@@ -2531,6 +2543,10 @@ final class RuntimeSourceMemorySections {
             if (value == NULL) {
                 javan_runtime_lock_leave();
                 return;
+            }
+            if (javan_runtime_class_registry_contains(value) != 0) {
+                javan_runtime_lock_leave();
+                javan_panic("cannot free runtime class metadata");
             }
             javan_allocation_node* previous = NULL;
             javan_allocation_node* node = javan_find_allocation_locked(value, &previous);
@@ -3124,16 +3140,294 @@ final class RuntimeSourceMemorySections {
             return state;
         }
 
-        static javan_runtime_class_state* javan_runtime_class_checked(void* value) {
-            if (value == NULL) {
-                javan_panic("unsupported runtime class");
+        """;
+
+    private static final String SOURCE_HEAP_ALLOC_CLASSES = """
+        static unsigned long javan_runtime_class_name_hash(const char* binary_name) {
+            unsigned long hash = 2166136261UL;
+            for (const unsigned char* current = (const unsigned char*) binary_name; *current != '\\0'; current++) {
+                hash ^= (unsigned long) *current;
+                hash *= 16777619UL;
             }
-            javan_runtime_class_state* state = (javan_runtime_class_state*) value;
-            if (state->magic != JAVAN_RUNTIME_CLASS_MAGIC
+            return hash;
+        }
+
+        static int javan_runtime_class_name_slot(
+            javan_runtime_class_state** names,
+            int capacity,
+            const char* binary_name
+        ) {
+            int index = (int) (javan_runtime_class_name_hash(binary_name) & (unsigned long) (capacity - 1));
+            while (names[index] != NULL && strcmp(names[index]->binary_name, binary_name) != 0) {
+                index = (index + 1) & (capacity - 1);
+            }
+            return index;
+        }
+
+        static int javan_runtime_class_pointer_slot(
+            javan_runtime_class_state** pointers,
+            int capacity,
+            void* value
+        ) {
+            int index = (int) (javan_registry_hash(value) & (unsigned long) (capacity - 1));
+            while (pointers[index] != NULL && pointers[index] != value) {
+                index = (index + 1) & (capacity - 1);
+            }
+            return index;
+        }
+
+        static javan_runtime_class_state* javan_runtime_class_registry_lookup_name_unlocked(const char* binary_name) {
+            if (javan_runtime_lock_depth_value <= 0) {
+                javan_panic("runtime class registry lookup requires runtime lock");
+            }
+            if (binary_name == NULL || javan_runtime_classes.capacity <= 0) {
+                return NULL;
+            }
+            int index = javan_runtime_class_name_slot(
+                javan_runtime_classes.names,
+                javan_runtime_classes.capacity,
+                binary_name
+            );
+            return javan_runtime_classes.names[index];
+        }
+
+        static javan_runtime_class_state* javan_runtime_class_registry_lookup_pointer_unlocked(void* value) {
+            if (javan_runtime_lock_depth_value <= 0) {
+                javan_panic("runtime class registry lookup requires runtime lock");
+            }
+            if (value == NULL || javan_runtime_classes.capacity <= 0) {
+                return NULL;
+            }
+            int index = javan_runtime_class_pointer_slot(
+                javan_runtime_classes.pointers,
+                javan_runtime_classes.capacity,
+                value
+            );
+            return javan_runtime_classes.pointers[index] == value ? javan_runtime_classes.pointers[index] : NULL;
+        }
+
+        static void javan_runtime_class_registry_reinsert(
+            javan_runtime_class_state** names,
+            javan_runtime_class_state** pointers,
+            int capacity,
+            javan_runtime_class_state* state
+        ) {
+            names[javan_runtime_class_name_slot(names, capacity, state->binary_name)] = state;
+            pointers[javan_runtime_class_pointer_slot(pointers, capacity, (void*) state)] = state;
+        }
+
+        static int javan_runtime_class_registry_ensure_capacity(int required) {
+            if (javan_runtime_lock_depth_value <= 0) {
+                javan_panic("runtime class registry mutation requires runtime lock");
+            }
+            if (required <= 0 || required > INT_MAX / 2) {
+                return 0;
+            }
+            int old_capacity = javan_runtime_classes.capacity;
+            if (old_capacity < 0
+                || (old_capacity == 0 && (javan_runtime_classes.names != NULL
+                    || javan_runtime_classes.pointers != NULL
+                    || javan_runtime_classes.storage != NULL
+                    || javan_runtime_classes.length != 0))
+                || (old_capacity > 0 && (javan_runtime_classes.names == NULL
+                    || javan_runtime_classes.pointers == NULL
+                    || javan_runtime_classes.storage == NULL
+                    || javan_runtime_classes.names != (javan_runtime_class_state**) javan_runtime_classes.storage
+                    || javan_runtime_classes.pointers != javan_runtime_classes.names + old_capacity
+                    || (old_capacity & (old_capacity - 1)) != 0
+                    || javan_runtime_classes.length < 0
+                    || javan_runtime_classes.length >= old_capacity
+                    || javan_runtime_classes.length >= old_capacity - javan_runtime_classes.length))) {
+                return 0;
+            }
+            if (old_capacity > 0 && required < old_capacity - required) {
+                return 1;
+            }
+            int next_capacity = old_capacity == 0 ? 128 : old_capacity;
+            while (required >= next_capacity - required) {
+                if (next_capacity > INT_MAX / 2) {
+                    return 0;
+                }
+                next_capacity *= 2;
+            }
+            unsigned long entries = (unsigned long) next_capacity;
+            if (entries > ULONG_MAX / (2UL * (unsigned long) sizeof(javan_runtime_class_state*))) {
+                return 0;
+            }
+            void* storage = javan_raw_calloc_retry(entries * 2UL * sizeof(javan_runtime_class_state*));
+            if (storage == NULL) {
+                return 0;
+            }
+            javan_runtime_class_state** names = (javan_runtime_class_state**) storage;
+            javan_runtime_class_state** pointers = names + next_capacity;
+            for (int index = 0; index < old_capacity; index++) {
+                javan_runtime_class_state* state = javan_runtime_classes.names[index];
+                if (state != NULL) {
+                    javan_runtime_class_registry_reinsert(names, pointers, next_capacity, state);
+                }
+            }
+            free(javan_runtime_classes.storage);
+            javan_runtime_classes.names = names;
+            javan_runtime_classes.pointers = pointers;
+            javan_runtime_classes.storage = storage;
+            javan_runtime_classes.capacity = next_capacity;
+            return 1;
+        }
+
+        static int javan_runtime_class_valid_exact_type_id(int exact_type_id) {
+            return exact_type_id >= 0
+                || (exact_type_id <= JAVAN_TYPE_JAVA_LANG_INTEGER
+                    && exact_type_id >= JAVAN_TYPE_JAVA_NIO_CHARSET_CHARSET)
+                || (exact_type_id >= JAVAN_CLASS_EXACT_PRIMITIVE_VOID
+                    && exact_type_id <= JAVAN_CLASS_EXACT_STRING);
+        }
+
+        static int javan_runtime_class_validate_metadata(
+            const char* binary_name,
+            int exact_type_id,
+            int is_enum,
+            int is_array,
+            JavanTypeDescriptor* descriptor
+        ) {
+            int derived_array = binary_name[0] == '[' ? 1 : 0;
+            if ((is_array != 0 ? 1 : 0) != derived_array
+                || javan_runtime_class_valid_exact_type_id(exact_type_id) == 0) {
+                javan_panic("conflicting runtime class metadata");
+            }
+            int requested_enum = is_enum != 0 ? 1 : 0;
+            if ((derived_array != 0 || exact_type_id < 0) && requested_enum != 0) {
+                javan_panic("conflicting runtime class metadata");
+            }
+            if (descriptor != NULL) {
+                if (descriptor->name == NULL || strcmp(descriptor->name, binary_name) != 0) {
+                    javan_panic("conflicting runtime class metadata");
+                }
+                int descriptor_enum = descriptor->is_enum != 0 ? 1 : 0;
+                if (requested_enum != descriptor_enum) {
+                    javan_panic("conflicting runtime class metadata");
+                }
+                return descriptor_enum;
+            }
+            return requested_enum;
+        }
+
+        static int javan_runtime_class_assignability_compare(const void* left, const void* right) {
+            int left_value = *(const int*) left;
+            int right_value = *(const int*) right;
+            return left_value < right_value ? -1 : (left_value > right_value ? 1 : 0);
+        }
+
+        static int javan_runtime_class_state_valid_unlocked(javan_runtime_class_state* state) {
+            if (javan_runtime_lock_depth_value <= 0) {
+                javan_panic("runtime class registry validation requires runtime lock");
+            }
+            if (state == NULL
+                || state->magic != JAVAN_RUNTIME_CLASS_MAGIC
                 || state->binary_name == NULL
                 || state->binary_name[0] == '\\0'
+                || state->is_enum < 0
+                || state->is_enum > 1
+                || state->is_array < 0
+                || state->is_array > 1
+                || state->is_array != (state->binary_name[0] == '[' ? 1 : 0)
+                || javan_runtime_class_valid_exact_type_id(state->exact_type_id) == 0
                 || state->assignable_count < 0
                 || (state->assignable_count > 0 && state->assignable_type_ids == NULL)) {
+                return 0;
+            }
+            for (int index = 0; index < state->assignable_count; index++) {
+                if (state->assignable_type_ids[index] <= 0
+                    || (index > 0 && state->assignable_type_ids[index - 1] >= state->assignable_type_ids[index])) {
+                    return 0;
+                }
+            }
+            return 1;
+        }
+
+        static void javan_runtime_class_registry_validate_unlocked(void) {
+            if (javan_runtime_lock_depth_value <= 0) {
+                javan_panic("runtime class registry validation requires runtime lock");
+            }
+            if (javan_runtime_classes.capacity == 0) {
+                if (javan_runtime_classes.names != NULL
+                    || javan_runtime_classes.pointers != NULL
+                    || javan_runtime_classes.storage != NULL
+                    || javan_runtime_classes.length != 0) {
+                    javan_panic("invalid runtime class registry");
+                }
+                return;
+            }
+            if (javan_runtime_classes.capacity < 0
+                || (javan_runtime_classes.capacity & (javan_runtime_classes.capacity - 1)) != 0
+                || javan_runtime_classes.names == NULL
+                || javan_runtime_classes.pointers == NULL
+                || javan_runtime_classes.storage == NULL
+                || javan_runtime_classes.names != (javan_runtime_class_state**) javan_runtime_classes.storage
+                || javan_runtime_classes.pointers != javan_runtime_classes.names + javan_runtime_classes.capacity
+                || javan_runtime_classes.length < 0
+                || javan_runtime_classes.length >= javan_runtime_classes.capacity
+                || javan_runtime_classes.length >= javan_runtime_classes.capacity - javan_runtime_classes.length) {
+                javan_panic("invalid runtime class registry");
+            }
+            int names = 0;
+            int pointers = 0;
+            for (int index = 0; index < javan_runtime_classes.capacity; index++) {
+                javan_runtime_class_state* state = javan_runtime_classes.names[index];
+                if (state == NULL) {
+                    continue;
+                }
+                if (javan_runtime_class_state_valid_unlocked(state) == 0
+                    || javan_runtime_class_registry_lookup_name_unlocked(state->binary_name) != state
+                    || javan_runtime_class_registry_lookup_pointer_unlocked((void*) state) != state) {
+                    javan_panic("invalid runtime class registry");
+                }
+                names++;
+            }
+            for (int index = 0; index < javan_runtime_classes.capacity; index++) {
+                javan_runtime_class_state* state = javan_runtime_classes.pointers[index];
+                if (state != NULL) {
+                    if (javan_runtime_class_state_valid_unlocked(state) == 0
+                        || javan_runtime_class_registry_lookup_name_unlocked(state->binary_name) != state) {
+                        javan_panic("invalid runtime class registry");
+                    }
+                    pointers++;
+                }
+            }
+            if (names != javan_runtime_classes.length || pointers != names) {
+                javan_panic("invalid runtime class registry");
+            }
+        }
+
+        static int javan_runtime_class_registry_contains(void* value) {
+            javan_runtime_lock_enter();
+            int result = javan_runtime_class_registry_lookup_pointer_unlocked(value) != NULL ? 1 : 0;
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        static void javan_runtime_class_registry_cleanup(void) {
+            javan_runtime_lock_enter();
+            for (int index = 0; index < javan_runtime_classes.capacity; index++) {
+                javan_runtime_class_state* state = javan_runtime_classes.names[index];
+                if (state != NULL) {
+                    free((void*) state->binary_name);
+                    free(state->assignable_type_ids);
+                    free(state);
+                }
+            }
+            free(javan_runtime_classes.storage);
+            javan_runtime_classes.names = NULL;
+            javan_runtime_classes.pointers = NULL;
+            javan_runtime_classes.storage = NULL;
+            javan_runtime_classes.length = 0;
+            javan_runtime_classes.capacity = 0;
+            javan_runtime_lock_leave();
+        }
+
+        static javan_runtime_class_state* javan_runtime_class_checked_unlocked(void* value) {
+            javan_runtime_class_state* state = javan_runtime_class_registry_lookup_pointer_unlocked(value);
+            if (javan_runtime_class_state_valid_unlocked(state) == 0
+                || javan_runtime_class_registry_lookup_name_unlocked(state->binary_name) != state) {
                 javan_panic("unsupported runtime class");
             }
             return state;
@@ -3178,37 +3472,172 @@ final class RuntimeSourceMemorySections {
             if (binary_name == NULL || binary_name[0] == '\\0' || assignable_count < 0) {
                 javan_panic("invalid runtime class name");
             }
-            unsigned long binary_name_length = (unsigned long) strlen(binary_name) + 1UL;
-            unsigned long assignable_offset = sizeof(javan_runtime_class_state) + binary_name_length;
-            unsigned long assignable_alignment = sizeof(int);
-            if ((assignable_offset % assignable_alignment) != 0UL) {
-                assignable_offset += assignable_alignment - (assignable_offset % assignable_alignment);
-            }
-            unsigned long assignable_bytes = assignable_count > 0
-                ? (unsigned long) assignable_count * sizeof(int)
-                : 0UL;
-            void* state_root = javan_alloc(assignable_offset + assignable_bytes);
-            javan_runtime_class_state* state = (javan_runtime_class_state*) state_root;
-            char* stored_binary_name = ((char*) state_root) + sizeof(javan_runtime_class_state);
-            state->magic = JAVAN_RUNTIME_CLASS_MAGIC;
-            state->exact_type_id = exact_type_id;
-            state->is_enum = is_enum != 0 ? 1 : 0;
-            state->is_array = is_array != 0 ? 1 : 0;
-            state->assignable_count = assignable_count;
-            state->assignable_type_ids = NULL;
-            memcpy(stored_binary_name, binary_name, binary_name_length);
-            state->binary_name = stored_binary_name;
-            if (assignable_count > 0) {
-                state->assignable_type_ids = (int*) (((char*) state_root) + assignable_offset);
+            javan_runtime_lock_enter();
+            javan_allocator_ensure_cleanup();
+            JavanTypeDescriptor* descriptor = exact_type_id > 0 ? javan_type_descriptor_for(exact_type_id) : NULL;
+            int derived_enum = javan_runtime_class_validate_metadata(
+                binary_name, exact_type_id, is_enum, is_array, descriptor
+            );
+            javan_runtime_class_state* state = javan_runtime_class_registry_lookup_name_unlocked(binary_name);
+            if (state != NULL) {
+                if ((state->exact_type_id != 0 && exact_type_id != 0 && state->exact_type_id != exact_type_id)
+                    || (descriptor != NULL && state->is_enum != derived_enum
+                        && (state->is_enum != 0 || derived_enum == 0 || state->exact_type_id != 0))) {
+                    javan_panic("conflicting runtime class metadata");
+                }
+                int requires_union = 0;
                 va_list arguments;
                 va_start(arguments, assignable_count);
                 for (int index = 0; index < assignable_count; index++) {
-                    state->assignable_type_ids[index] = va_arg(arguments, int);
+                    int type_id = va_arg(arguments, int);
+                    if (type_id <= 0) {
+                        va_end(arguments);
+                        javan_panic("invalid runtime class assignability");
+                    }
+                    int present = 0;
+                    for (int assigned = 0; assigned < state->assignable_count; assigned++) {
+                        if (state->assignable_type_ids[assigned] == type_id) {
+                            present = 1;
+                            break;
+                        }
+                    }
+                    requires_union = requires_union != 0 || present == 0 ? 1 : 0;
                 }
                 va_end(arguments);
+                int next_exact_type_id = state->exact_type_id == 0 ? exact_type_id : state->exact_type_id;
+                int next_is_enum = state->is_enum != 0 || derived_enum != 0 ? 1 : 0;
+                if (requires_union == 0) {
+                    state->exact_type_id = next_exact_type_id;
+                    state->is_enum = next_is_enum;
+                    javan_runtime_lock_leave();
+                    return (void*) state;
+                }
             }
-            javan_update_runtime_allocation_kind(state_root, JAVAN_RUNTIME_KIND_CLASS);
-            return state_root;
+            int* incoming = NULL;
+            int incoming_count = 0;
+            if (assignable_count > 0) {
+                if ((unsigned long) assignable_count > ULONG_MAX / sizeof(int)) {
+                    javan_panic("invalid runtime class assignability");
+                }
+                incoming = (int*) javan_raw_calloc_retry((unsigned long) assignable_count * sizeof(int));
+                if (incoming == NULL) {
+                    javan_panic("out of memory");
+                }
+                va_list arguments;
+                va_start(arguments, assignable_count);
+                for (int index = 0; index < assignable_count; index++) {
+                    incoming[index] = va_arg(arguments, int);
+                    if (incoming[index] <= 0) {
+                        va_end(arguments);
+                        free(incoming);
+                        javan_panic("invalid runtime class assignability");
+                    }
+                }
+                va_end(arguments);
+                qsort(incoming, (size_t) assignable_count, sizeof(int), javan_runtime_class_assignability_compare);
+                for (int index = 0; index < assignable_count; index++) {
+                    if (index == 0 || incoming[index] != incoming[index - 1]) {
+                        incoming[incoming_count++] = incoming[index];
+                    }
+                }
+            }
+            if (state != NULL) {
+                if (state->assignable_count > INT_MAX - incoming_count) {
+                    free(incoming);
+                    javan_panic("invalid runtime class assignability");
+                }
+                int merged_capacity = state->assignable_count + incoming_count;
+                int* merged = NULL;
+                int merged_count = 0;
+                if (merged_capacity > 0) {
+                    if ((unsigned long) merged_capacity > ULONG_MAX / sizeof(int)) {
+                        free(incoming);
+                        javan_panic("invalid runtime class assignability");
+                    }
+                    merged = (int*) javan_raw_calloc_retry((unsigned long) merged_capacity * sizeof(int));
+                    if (merged == NULL) {
+                        free(incoming);
+                        javan_panic("out of memory");
+                    }
+                    int existing_index = 0;
+                    int incoming_index = 0;
+                    while (existing_index < state->assignable_count || incoming_index < incoming_count) {
+                        int candidate;
+                        if (incoming_index >= incoming_count
+                            || (existing_index < state->assignable_count
+                                && state->assignable_type_ids[existing_index] < incoming[incoming_index])) {
+                            candidate = state->assignable_type_ids[existing_index++];
+                        } else if (existing_index >= state->assignable_count
+                            || incoming[incoming_index] < state->assignable_type_ids[existing_index]) {
+                            candidate = incoming[incoming_index++];
+                        } else {
+                            candidate = state->assignable_type_ids[existing_index];
+                            existing_index++;
+                            incoming_index++;
+                        }
+                        if (merged_count == 0 || merged[merged_count - 1] != candidate) {
+                            merged[merged_count++] = candidate;
+                        }
+                    }
+                }
+                free(incoming);
+                int next_exact_type_id = state->exact_type_id == 0 ? exact_type_id : state->exact_type_id;
+                int next_is_enum = state->is_enum != 0 || derived_enum != 0 ? 1 : 0;
+                if (state->exact_type_id != next_exact_type_id
+                    || state->is_enum != next_is_enum
+                    || state->assignable_count != merged_count) {
+                    int* previous = state->assignable_type_ids;
+                    state->exact_type_id = next_exact_type_id;
+                    state->is_enum = next_is_enum;
+                    state->assignable_type_ids = merged;
+                    state->assignable_count = merged_count;
+                    free(previous);
+                } else {
+                    free(merged);
+                }
+                javan_runtime_lock_leave();
+                return (void*) state;
+            }
+            unsigned long binary_name_length = (unsigned long) strlen(binary_name) + 1UL;
+            if (binary_name_length == 0
+                || binary_name_length > ULONG_MAX - sizeof(javan_runtime_class_state)
+                || (unsigned long) incoming_count > ULONG_MAX / sizeof(int)
+                || ((unsigned long) incoming_count * sizeof(int))
+                    > ULONG_MAX - sizeof(javan_runtime_class_state) - binary_name_length) {
+                free(incoming);
+                javan_panic("invalid runtime class metadata");
+            }
+            javan_runtime_class_state* next = (javan_runtime_class_state*) javan_raw_calloc_retry(sizeof(javan_runtime_class_state));
+            char* copied_binary_name = next == NULL ? NULL : (char*) javan_raw_calloc_retry(binary_name_length);
+            if (next == NULL || copied_binary_name == NULL) {
+                free(next);
+                free(copied_binary_name);
+                free(incoming);
+                javan_panic("out of memory");
+            }
+            if (javan_runtime_class_registry_ensure_capacity(javan_runtime_classes.length + 1) == 0) {
+                free(next);
+                free(copied_binary_name);
+                free(incoming);
+                javan_panic("out of memory");
+            }
+            memcpy(copied_binary_name, binary_name, binary_name_length);
+            next->magic = JAVAN_RUNTIME_CLASS_MAGIC;
+            next->exact_type_id = exact_type_id;
+            next->is_enum = derived_enum;
+            next->is_array = binary_name[0] == '[' ? 1 : 0;
+            next->assignable_count = incoming_count;
+            next->assignable_type_ids = incoming;
+            next->binary_name = copied_binary_name;
+            javan_runtime_class_registry_reinsert(
+                javan_runtime_classes.names,
+                javan_runtime_classes.pointers,
+                javan_runtime_classes.capacity,
+                next
+            );
+            javan_runtime_classes.length++;
+            javan_runtime_lock_leave();
+            return (void*) next;
         }
 
         static int javan_runtime_class_primitive_descriptor_char(int exact_type_id) {
@@ -3611,7 +4040,7 @@ final class RuntimeSourceMemorySections {
                 return found != 0 && snapshot.runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_MAP ? 1 : 0;
             }
             if (state->exact_type_id == JAVAN_CLASS_EXACT_CLASS) {
-                return found != 0 && snapshot.runtime_kind == JAVAN_RUNTIME_KIND_CLASS ? 1 : 0;
+                return javan_runtime_class_registry_contains(object_value);
             }
             if (state->exact_type_id == JAVAN_CLASS_EXACT_CLASS_LOADER) {
                 return javan_is_system_class_loader(object_value);
@@ -3629,15 +4058,16 @@ final class RuntimeSourceMemorySections {
             if (object_value == NULL) {
                 return 0;
             }
-            javan_runtime_class_state* state = javan_runtime_class_checked(class_value);
+            javan_runtime_lock_enter();
+            javan_runtime_class_state* state = javan_runtime_class_checked_unlocked(class_value);
             if (javan_runtime_class_builtin_instance(state, object_value) != 0) {
+                javan_runtime_lock_leave();
                 return 1;
             }
             int object_type_id = javan_registered_type_id(object_value);
-            if (object_type_id != 0) {
-                return javan_runtime_class_accepts_type_id(state, object_type_id);
-            }
-            return 0;
+            int result = object_type_id != 0 ? javan_runtime_class_accepts_type_id(state, object_type_id) : 0;
+            javan_runtime_lock_leave();
+            return result;
         }
 
         void* javan_class_cast(void* class_value, void* object_value) {
@@ -3652,15 +4082,26 @@ final class RuntimeSourceMemorySections {
         }
 
         int javan_class_is_enum(void* class_value) {
-            return javan_runtime_class_checked(class_value)->is_enum;
+            javan_runtime_lock_enter();
+            int result = javan_runtime_class_checked_unlocked(class_value)->is_enum;
+            javan_runtime_lock_leave();
+            return result;
         }
 
         int javan_class_is_array(void* class_value) {
-            return javan_runtime_class_checked(class_value)->is_array;
+            javan_runtime_lock_enter();
+            int result = javan_runtime_class_checked_unlocked(class_value)->is_array;
+            javan_runtime_lock_leave();
+            return result;
         }
 
         int javan_class_is_primitive(void* class_value) {
-            return javan_runtime_class_is_primitive_exact_type_id(javan_runtime_class_checked(class_value)->exact_type_id);
+            javan_runtime_lock_enter();
+            int result = javan_runtime_class_is_primitive_exact_type_id(
+                javan_runtime_class_checked_unlocked(class_value)->exact_type_id
+            );
+            javan_runtime_lock_leave();
+            return result;
         }
 
         int javan_class_is_assignable_from(void* target, void* source) {
@@ -3675,9 +4116,10 @@ final class RuntimeSourceMemorySections {
                 (void**) &source_component
             };
             javan_root_frame_push(roots, 4);
+            javan_runtime_lock_enter();
             int result = 0;
-            javan_runtime_class_state* target_state = javan_runtime_class_checked(target_root);
-            javan_runtime_class_state* source_state = javan_runtime_class_checked(source_root);
+            javan_runtime_class_state* target_state = javan_runtime_class_checked_unlocked(target_root);
+            javan_runtime_class_state* source_state = javan_runtime_class_checked_unlocked(source_root);
             if (strcmp(target_state->binary_name, source_state->binary_name) == 0) {
                 result = 1;
             } else if (target_state->exact_type_id == JAVAN_CLASS_EXACT_OBJECT) {
@@ -3691,6 +4133,7 @@ final class RuntimeSourceMemorySections {
                     result = javan_class_is_assignable_from(target_component, source_component);
                 }
             }
+            javan_runtime_lock_leave();
             javan_root_frame_pop(roots);
             return result;
         }
@@ -3701,6 +4144,9 @@ final class RuntimeSourceMemorySections {
             }
             if (javan_is_system_class_loader(value) != 0) {
                 return javan_runtime_class_literal("java.lang.ClassLoader", JAVAN_CLASS_EXACT_CLASS_LOADER, 0, 0, 0);
+            }
+            if (javan_runtime_class_registry_contains(value) != 0) {
+                return javan_runtime_class_literal("java.lang.Class", JAVAN_CLASS_EXACT_CLASS, 0, 0, 0);
             }
             javan_allocation_metadata snapshot;
             int found = javan_find_allocation(value, &snapshot);
@@ -3723,9 +4169,6 @@ final class RuntimeSourceMemorySections {
             }
             if (found == 0 && type_id == 0 && javan_probably_string_key(value) != 0) {
                 return javan_runtime_class_literal("java.lang.String", JAVAN_CLASS_EXACT_STRING, 0, 0, 0);
-            }
-            if (found != 0 && snapshot.runtime_kind == JAVAN_RUNTIME_KIND_CLASS) {
-                return javan_runtime_class_literal("java.lang.Class", JAVAN_CLASS_EXACT_CLASS, 0, 0, 0);
             }
             if (found != 0 && snapshot.runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_LIST) {
                 return javan_runtime_class_literal("java.util.ArrayList", JAVAN_CLASS_EXACT_ARRAY_LIST, 0, 0, 0);
@@ -3799,7 +4242,9 @@ final class RuntimeSourceMemorySections {
                 (void**) &result
             };
             javan_root_frame_push(roots, 2);
-            result = javan_string_from(javan_runtime_class_checked(class_root)->binary_name);
+            javan_runtime_lock_enter();
+            result = javan_string_from(javan_runtime_class_checked_unlocked(class_root)->binary_name);
+            javan_runtime_lock_leave();
             javan_root_frame_pop(roots);
             return result;
         }
@@ -3837,15 +4282,18 @@ final class RuntimeSourceMemorySections {
                 (void**) &result
             };
             javan_root_frame_push(roots, 2);
-            javan_runtime_class_state* state = javan_runtime_class_checked(class_root);
+            javan_runtime_lock_enter();
+            javan_runtime_class_state* state = javan_runtime_class_checked_unlocked(class_root);
             const char* primitive_name = javan_runtime_class_primitive_type_name(state->exact_type_id);
             if (primitive_name != NULL) {
                 result = javan_string_from(primitive_name);
+                javan_runtime_lock_leave();
                 javan_root_frame_pop(roots);
                 return result;
             }
             if (state->is_array == 0) {
                 result = javan_string_from(state->binary_name);
+                javan_runtime_lock_leave();
                 javan_root_frame_pop(roots);
                 return result;
             }
@@ -3917,6 +4365,7 @@ final class RuntimeSourceMemorySections {
             result = javan_string_from(type_name);
             free(type_name);
             free(owned_base_name);
+            javan_runtime_lock_leave();
             javan_root_frame_pop(roots);
             return result;
         }
@@ -3929,7 +4378,8 @@ final class RuntimeSourceMemorySections {
                 (void**) &result
             };
             javan_root_frame_push(roots, 2);
-            javan_runtime_class_state* state = javan_runtime_class_checked(class_root);
+            javan_runtime_lock_enter();
+            javan_runtime_class_state* state = javan_runtime_class_checked_unlocked(class_root);
             const char* binary_name = state->binary_name;
             if (state->is_array != 0) {
                 int dimensions = 0;
@@ -3951,11 +4401,13 @@ final class RuntimeSourceMemorySections {
                     binary_name = component_binary_name;
                 } else {
                     result = javan_string_from("java.lang");
+                    javan_runtime_lock_leave();
                     javan_root_frame_pop(roots);
                     return result;
                 }
             } else if (javan_runtime_class_is_primitive_exact_type_id(state->exact_type_id) != 0) {
                 result = javan_string_from("java.lang");
+                javan_runtime_lock_leave();
                 javan_root_frame_pop(roots);
                 return result;
             }
@@ -3965,6 +4417,7 @@ final class RuntimeSourceMemorySections {
                     free((void*) binary_name);
                 }
                 result = javan_string_from("");
+                javan_runtime_lock_leave();
                 javan_root_frame_pop(roots);
                 return result;
             }
@@ -3983,6 +4436,7 @@ final class RuntimeSourceMemorySections {
             if (binary_name != state->binary_name) {
                 free((void*) binary_name);
             }
+            javan_runtime_lock_leave();
             javan_root_frame_pop(roots);
             return result;
         }
@@ -3995,10 +4449,12 @@ final class RuntimeSourceMemorySections {
                 (void**) &result
             };
             javan_root_frame_push(roots, 2);
-            javan_runtime_class_state* state = javan_runtime_class_checked(class_root);
+            javan_runtime_lock_enter();
+            javan_runtime_class_state* state = javan_runtime_class_checked_unlocked(class_root);
             const char* primitive_name = javan_runtime_class_primitive_type_name(state->exact_type_id);
             if (primitive_name != NULL) {
                 result = javan_string_from(primitive_name);
+                javan_runtime_lock_leave();
                 javan_root_frame_pop(roots);
                 return result;
             }
@@ -4079,6 +4535,7 @@ final class RuntimeSourceMemorySections {
             result = javan_string_from(rendered);
             free(rendered);
             free(owned_base_name);
+            javan_runtime_lock_leave();
             javan_root_frame_pop(roots);
             return result;
         }
@@ -4091,13 +4548,15 @@ final class RuntimeSourceMemorySections {
                 (void**) &result
             };
             javan_root_frame_push(roots, 2);
-            javan_runtime_class_state* state = javan_runtime_class_checked(class_root);
+            javan_runtime_lock_enter();
+            javan_runtime_class_state* state = javan_runtime_class_checked_unlocked(class_root);
             int primitive_descriptor = javan_runtime_class_primitive_descriptor_char(state->exact_type_id);
             if (primitive_descriptor != 0) {
                 char descriptor[2];
                 descriptor[0] = (char) primitive_descriptor;
                 descriptor[1] = '\\0';
                 result = javan_string_from(descriptor);
+                javan_runtime_lock_leave();
                 javan_root_frame_pop(roots);
                 return result;
             }
@@ -4122,6 +4581,7 @@ final class RuntimeSourceMemorySections {
                 descriptor[binary_length] = '\\0';
                 result = javan_string_from(descriptor);
                 free(descriptor);
+                javan_runtime_lock_leave();
                 javan_root_frame_pop(roots);
                 return result;
             }
@@ -4138,6 +4598,7 @@ final class RuntimeSourceMemorySections {
             descriptor[binary_length + 2UL] = '\\0';
             result = javan_string_from(descriptor);
             free(descriptor);
+            javan_runtime_lock_leave();
             javan_root_frame_pop(roots);
             return result;
         }
@@ -4150,12 +4611,15 @@ final class RuntimeSourceMemorySections {
                 (void**) &result
             };
             javan_root_frame_push(roots, 2);
-            javan_runtime_class_state* state = javan_runtime_class_checked(class_root);
+            javan_runtime_lock_enter();
+            javan_runtime_class_state* state = javan_runtime_class_checked_unlocked(class_root);
             if (state->is_array == 0) {
+                javan_runtime_lock_leave();
                 javan_root_frame_pop(roots);
                 return NULL;
             }
             result = javan_runtime_class_component_type_from_binary_name(state->binary_name);
+            javan_runtime_lock_leave();
             javan_root_frame_pop(roots);
             return result;
         }
@@ -4168,13 +4632,15 @@ final class RuntimeSourceMemorySections {
                 (void**) &result
             };
             javan_root_frame_push(roots, 2);
-            javan_runtime_class_state* state = javan_runtime_class_checked(class_root);
+            javan_runtime_lock_enter();
+            javan_runtime_class_state* state = javan_runtime_class_checked_unlocked(class_root);
             if (state->exact_type_id == JAVAN_CLASS_EXACT_PRIMITIVE_VOID) {
                 javan_panic("Class.arrayType unsupported for void");
             }
             const char* primitive_array_binary_name = javan_runtime_class_primitive_array_binary_name(state->exact_type_id);
             if (primitive_array_binary_name != NULL) {
                 result = javan_runtime_class_from_binary_name(primitive_array_binary_name);
+                javan_runtime_lock_leave();
                 javan_root_frame_pop(roots);
                 return result;
             }
@@ -4188,6 +4654,7 @@ final class RuntimeSourceMemorySections {
                 memcpy(array_binary_name + 1, state->binary_name, binary_length + 1UL);
                 result = javan_runtime_class_from_binary_name(array_binary_name);
                 free(array_binary_name);
+                javan_runtime_lock_leave();
                 javan_root_frame_pop(roots);
                 return result;
             }
@@ -4202,12 +4669,16 @@ final class RuntimeSourceMemorySections {
             array_binary_name[binary_length + 3UL] = '\\0';
             result = javan_runtime_class_from_binary_name(array_binary_name);
             free(array_binary_name);
+            javan_runtime_lock_leave();
             javan_root_frame_pop(roots);
             return result;
         }
 
         int javan_class_exact_type_id(void* class_value) {
-            return javan_runtime_class_checked(class_value)->exact_type_id;
+            javan_runtime_lock_enter();
+            int result = javan_runtime_class_checked_unlocked(class_value)->exact_type_id;
+            javan_runtime_lock_leave();
+            return result;
         }
 
         """;
@@ -8555,20 +9026,24 @@ final class RuntimeSourceMemorySections {
         }
 
         static int javan_runtime_class_equals(void* left, void* right) {
-            javan_runtime_class_state* left_state = javan_runtime_class_checked(left);
-            javan_runtime_class_state* right_state = javan_runtime_class_checked(right);
+            javan_runtime_lock_enter();
+            javan_runtime_class_state* left_state = javan_runtime_class_checked_unlocked(left);
+            javan_runtime_class_state* right_state = javan_runtime_class_checked_unlocked(right);
             if (left_state->exact_type_id != right_state->exact_type_id
                 || left_state->is_enum != right_state->is_enum
                 || left_state->is_array != right_state->is_array
                 || strcmp(left_state->binary_name, right_state->binary_name) != 0
                 || left_state->assignable_count != right_state->assignable_count) {
+                javan_runtime_lock_leave();
                 return 0;
             }
             for (int index = 0; index < left_state->assignable_count; index++) {
                 if (left_state->assignable_type_ids[index] != right_state->assignable_type_ids[index]) {
+                    javan_runtime_lock_leave();
                     return 0;
                 }
             }
+            javan_runtime_lock_leave();
             return 1;
         }
 
@@ -8578,6 +9053,13 @@ final class RuntimeSourceMemorySections {
             }
             if (left == NULL || right == NULL) {
                 return 0;
+            }
+            int left_is_class = javan_runtime_class_registry_contains(left);
+            int right_is_class = javan_runtime_class_registry_contains(right);
+            if (left_is_class != 0 || right_is_class != 0) {
+                return left_is_class != 0 && right_is_class != 0
+                    ? javan_runtime_class_equals(left, right)
+                    : 0;
             }
             int left_type = javan_registered_type_id(left);
             int right_type = javan_registered_type_id(right);
@@ -8609,16 +9091,6 @@ final class RuntimeSourceMemorySections {
                 && javan_probably_string_key(left) != 0
                 && javan_probably_string_key(right) != 0) {
                 return strcmp((const char*) left, (const char*) right) == 0;
-            }
-            javan_allocation_metadata left_snapshot;
-            javan_allocation_metadata right_snapshot;
-            int left_found = javan_find_allocation(left, &left_snapshot);
-            int right_found = javan_find_allocation(right, &right_snapshot);
-            if (left_found != 0
-                && right_found != 0
-                && left_snapshot.runtime_kind == JAVAN_RUNTIME_KIND_CLASS
-                && right_snapshot.runtime_kind == JAVAN_RUNTIME_KIND_CLASS) {
-                return javan_runtime_class_equals(left, right);
             }
             if (left_type != 0 || right_type != 0) {
                 return 0;
@@ -9009,7 +9481,8 @@ final class RuntimeSourceMemorySections {
                 }
                 javan_allocation_metadata snapshot;
                 int found = javan_find_allocation(value, &snapshot);
-                if (javan_registered_type_id(value) != 0
+                if (javan_runtime_class_registry_contains(value) != 0
+                    || javan_registered_type_id(value) != 0
                     || (found != 0 && snapshot.runtime_kind != JAVAN_RUNTIME_KIND_STRING)
                     || (found == 0 && javan_probably_string_key(value) == 0)) {
                     javan_record_shape_mismatch();
@@ -10640,7 +11113,8 @@ final class RuntimeSourceMemorySections {
             if (key_type == NULL) {
                 javan_panic("null EnumMap key type");
             }
-            javan_runtime_class_state* state = javan_runtime_class_checked(key_type);
+            javan_runtime_lock_enter();
+            javan_runtime_class_state* state = javan_runtime_class_checked_unlocked(key_type);
             if (state->is_enum == 0 || state->exact_type_id <= 0) {
                 javan_panic("EnumMap key type is not an enum");
             }
@@ -10648,6 +11122,7 @@ final class RuntimeSourceMemorySections {
                 javan_panic("EnumMap initialized from non-empty map");
             }
             map->enum_key_type_id = state->exact_type_id;
+            javan_runtime_lock_leave();
         }
 
         static int javan_hashmap_capacity_for_expected_mappings(int num_mappings) {
@@ -12516,6 +12991,7 @@ final class RuntimeSourceMemorySections {
         String result = SOURCE_HEAP_ALLOC_HEAD;
         result = result + SOURCE_HEAP_TAIL_B;
         result = result + SOURCE_HEAP_TAIL_C;
+        result = result + SOURCE_HEAP_ALLOC_CLASSES;
         result = result + SOURCE_HEAP_ALLOC_EXECUTOR;
         result = result + SOURCE_HEAP_ALLOC_DATE_TIME;
         result = result + platformThrowableHierarchy();

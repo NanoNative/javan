@@ -32,6 +32,7 @@ final class BytecodeToIRMetadataSupport {
                 instanceFields(classes, classFile),
                 fields(classFile, true),
                 enumConstants(classFile),
+                classFile.isEnum(),
                 GeneratedObjectCloneSupport.status(classes, classFile)
                     == GeneratedObjectCloneSupport.Status.SUPPORTED
             ));
