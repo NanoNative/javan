@@ -120,7 +120,7 @@ final class BytecodeToIRTest {
             true
         );
 
-        assertThat(BytecodeToIRInvokeSupport.recordShapeEncoding(
+        assertThat(BytecodeToIRDynamicSupport.recordShapeEncoding(
             Map.of(part.name(), part, value.name(), value, identity.name(), identity), shape
         )).isEqualTo("p1;3;");
     }
@@ -170,7 +170,7 @@ final class BytecodeToIRTest {
             true
         );
 
-        assertThatThrownBy(() -> BytecodeToIRInvokeSupport.recordShapeEncoding(
+        assertThatThrownBy(() -> BytecodeToIRDynamicSupport.recordShapeEncoding(
             Map.of(part.name(), part, value.name(), value, identity.name(), identity), list
         )).isInstanceOf(IllegalArgumentException.class)
             .hasMessage("unsupported List record component sealed interface element");
@@ -2586,7 +2586,7 @@ final class BytecodeToIRTest {
         final ClassFile classFile = classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(method));
         final Instruction instruction = method.code().orElseThrow().instructions().get(1);
 
-        assertThat(BytecodeToIRInvokeSupport.lowerLambdaMetafactoryDynamic(
+        assertThat(BytecodeToIRDynamicSupport.lowerLambdaMetafactoryDynamic(
             Map.of("com/acme/Main", classFile),
             classFile,
             method,
@@ -2794,14 +2794,14 @@ final class BytecodeToIRTest {
         ));
         final Instruction instruction = method.code().orElseThrow().instructions().get(1);
 
-        assertThat(BytecodeToIRInvokeSupport.lowerLambdaMetafactoryDynamic(
+        assertThat(BytecodeToIRDynamicSupport.lowerLambdaMetafactoryDynamic(
             Map.of("com/acme/Main", classFile),
             classFile,
             method,
             instruction,
             new ArrayList<>(),
             instruction.dynamicRef().orElseThrow(),
-            BytecodeToIRInvokeSupport.functionOrNullTargetIds(
+            BytecodeToIRDynamicSupport.functionOrNullTargetIds(
                 Map.of("com/acme/Main", classFile),
                 List.of(new EntryPoint("com/acme/Main", "buildPrimitiveCaptureConsumer", "(I)Ljava/util/function/Consumer;"))
             )
@@ -3872,13 +3872,13 @@ final class BytecodeToIRTest {
             new EntryPoint("com/acme/NoCode", "buildObjectLambda", "()Lcom/acme/ObjectFn;")
         );
 
-        assertThat(BytecodeToIRInvokeSupport.functionOrNullTargetIds(classes, reachable))
+        assertThat(BytecodeToIRDynamicSupport.functionOrNullTargetIds(classes, reachable))
             .hasSize(1)
             .containsEntry(
                 "com/acme/ObjectFn#apply#(Ljava/lang/Object;)Ljava/lang/Object;#com/acme/Main.lambda$object$0(Ljava/lang/Object;)Ljava/lang/Object;#0#0#0",
                 Integer.valueOf(1)
             );
-        assertThat(BytecodeToIRInvokeSupport.materializedLambdaMethods(classes, reachable))
+        assertThat(BytecodeToIRDynamicSupport.materializedLambdaMethods(classes, reachable))
             .hasSize(1)
             .containsEntry(
                 new MethodRef("com/acme/ObjectFn", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;"),
@@ -11056,31 +11056,31 @@ final class BytecodeToIRTest {
 
     @Test
     void lowersThreadLocalConstructorPredicateForSupportedSignature() {
-        assertThat(BytecodeToIRInvokeSupport.lowerThreadLocalConstructor(new MethodRef("java/lang/ThreadLocal", "<init>", "()V")))
+        assertThat(BytecodeToIRCollectionSupport.lowerThreadLocalConstructor(new MethodRef("java/lang/ThreadLocal", "<init>", "()V")))
             .isTrue();
     }
 
     @Test
     void lowersInheritableThreadLocalConstructorPredicateForSupportedSignature() {
-        assertThat(BytecodeToIRInvokeSupport.lowerThreadLocalConstructor(new MethodRef("java/lang/InheritableThreadLocal", "<init>", "()V")))
+        assertThat(BytecodeToIRCollectionSupport.lowerThreadLocalConstructor(new MethodRef("java/lang/InheritableThreadLocal", "<init>", "()V")))
             .isTrue();
     }
 
     @Test
     void lowersThreadLocalConstructorPredicateRejectsWrongOwner() {
-        assertThat(BytecodeToIRInvokeSupport.lowerThreadLocalConstructor(new MethodRef("java/lang/Object", "<init>", "()V")))
+        assertThat(BytecodeToIRCollectionSupport.lowerThreadLocalConstructor(new MethodRef("java/lang/Object", "<init>", "()V")))
             .isFalse();
     }
 
     @Test
     void lowersThreadLocalConstructorPredicateRejectsWrongName() {
-        assertThat(BytecodeToIRInvokeSupport.lowerThreadLocalConstructor(new MethodRef("java/lang/ThreadLocal", "get", "()V")))
+        assertThat(BytecodeToIRCollectionSupport.lowerThreadLocalConstructor(new MethodRef("java/lang/ThreadLocal", "get", "()V")))
             .isFalse();
     }
 
     @Test
     void lowersThreadLocalConstructorPredicateRejectsWrongDescriptor() {
-        assertThat(BytecodeToIRInvokeSupport.lowerThreadLocalConstructor(new MethodRef("java/lang/ThreadLocal", "<init>", "(I)V")))
+        assertThat(BytecodeToIRCollectionSupport.lowerThreadLocalConstructor(new MethodRef("java/lang/ThreadLocal", "<init>", "(I)V")))
             .isFalse();
     }
 
@@ -11088,7 +11088,7 @@ final class BytecodeToIRTest {
     void lowersAtomicBooleanDefaultConstructorPredicateForSupportedSignature() {
         final List<IrInstruction> instructions = new ArrayList<>();
 
-        assertThat(BytecodeToIRInvokeSupport.lowerAtomicBooleanConstructor(
+        assertThat(BytecodeToIRCollectionSupport.lowerAtomicBooleanConstructor(
             new MethodRef("java/util/concurrent/atomic/AtomicBoolean", "<init>", "()V"),
             instructions,
             List.of(),
@@ -11106,7 +11106,7 @@ final class BytecodeToIRTest {
     void lowersAtomicBooleanConstructorWithInitialValuePredicateForSupportedSignature() {
         final List<IrInstruction> instructions = new ArrayList<>();
 
-        assertThat(BytecodeToIRInvokeSupport.lowerAtomicBooleanConstructor(
+        assertThat(BytecodeToIRCollectionSupport.lowerAtomicBooleanConstructor(
             new MethodRef("java/util/concurrent/atomic/AtomicBoolean", "<init>", "(Z)V"),
             instructions,
             List.of(IrExpression.intLocal("arg1")),
@@ -11165,7 +11165,7 @@ final class BytecodeToIRTest {
     void lowersAtomicIntegerConstructorWithInitialValuePredicateForSupportedSignature() {
         final List<IrInstruction> instructions = new ArrayList<>();
 
-        assertThat(BytecodeToIRInvokeSupport.lowerAtomicIntegerConstructor(
+        assertThat(BytecodeToIRCollectionSupport.lowerAtomicIntegerConstructor(
             new MethodRef("java/util/concurrent/atomic/AtomicInteger", "<init>", "(I)V"),
             instructions,
             List.of(IrExpression.intLocal("arg1")),
@@ -11224,7 +11224,7 @@ final class BytecodeToIRTest {
     void lowersAtomicReferenceDefaultConstructorPredicateForSupportedSignature() {
         final List<IrInstruction> instructions = new ArrayList<>();
 
-        assertThat(BytecodeToIRInvokeSupport.lowerAtomicReferenceConstructor(
+        assertThat(BytecodeToIRCollectionSupport.lowerAtomicReferenceConstructor(
             new MethodRef("java/util/concurrent/atomic/AtomicReference", "<init>", "()V"),
             instructions,
             List.of(),
@@ -11242,7 +11242,7 @@ final class BytecodeToIRTest {
     void lowersAtomicReferenceConstructorWithInitialValuePredicateForSupportedSignature() {
         final List<IrInstruction> instructions = new ArrayList<>();
 
-        assertThat(BytecodeToIRInvokeSupport.lowerAtomicReferenceConstructor(
+        assertThat(BytecodeToIRCollectionSupport.lowerAtomicReferenceConstructor(
             new MethodRef("java/util/concurrent/atomic/AtomicReference", "<init>", "(Ljava/lang/Object;)V"),
             instructions,
             List.of(IrExpression.objectLocal("arg1")),
@@ -12743,7 +12743,7 @@ final class BytecodeToIRTest {
 
     @Test
     void lowerAtomicBooleanInstanceCallRejectsUnsupportedMethodShape() {
-        assertThat(BytecodeToIRInvokeSupport.lowerAtomicBooleanInstanceCall(
+        assertThat(BytecodeToIRCollectionSupport.lowerAtomicBooleanInstanceCall(
             classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of()),
             method(0x0008, "main", "()V", 0, 0),
             new MethodRef("java/util/concurrent/atomic/AtomicBoolean", "lazySet", "(Z)V"),
@@ -12891,7 +12891,7 @@ final class BytecodeToIRTest {
 
     @Test
     void lowerThreadLocalInstanceCallRejectsUnsupportedMethodShape() {
-        assertThat(BytecodeToIRInvokeSupport.lowerThreadLocalInstanceCall(
+        assertThat(BytecodeToIRCollectionSupport.lowerThreadLocalInstanceCall(
             new MethodRef("java/lang/ThreadLocal", "initialValue", "()Ljava/lang/Object;"),
             new ArrayList<>(),
             new ArrayList<>(),
@@ -12903,7 +12903,7 @@ final class BytecodeToIRTest {
 
     @Test
     void lowerThreadLocalInstanceCallRejectsWrongOwner() {
-        assertThat(BytecodeToIRInvokeSupport.lowerThreadLocalInstanceCall(
+        assertThat(BytecodeToIRCollectionSupport.lowerThreadLocalInstanceCall(
             new MethodRef("java/lang/Object", "get", "()Ljava/lang/Object;"),
             new ArrayList<>(),
             new ArrayList<>(),
@@ -12959,21 +12959,21 @@ final class BytecodeToIRTest {
 
     @Test
     void recognizesThreadOfVirtualBuilderUnstartedMethod() {
-        assertThat(BytecodeToIRInvokeSupport.isVirtualThreadBuilderUnstarted(
+        assertThat(BytecodeToIRThreadSupport.isVirtualThreadBuilderUnstarted(
             new MethodRef("java/lang/Thread$Builder$OfVirtual", "unstarted", "(Ljava/lang/Runnable;)Ljava/lang/Thread;")
         )).isTrue();
     }
 
     @Test
     void rejectsNonUnstartedThreadOfVirtualBuilderMethod() {
-        assertThat(BytecodeToIRInvokeSupport.isVirtualThreadBuilderUnstarted(
+        assertThat(BytecodeToIRThreadSupport.isVirtualThreadBuilderUnstarted(
             new MethodRef("java/lang/Thread$Builder$OfVirtual", "start", "(Ljava/lang/Runnable;)Ljava/lang/Thread;")
         )).isFalse();
     }
 
     @Test
     void rejectsWrongDescriptorForThreadOfVirtualBuilderUnstartedMethod() {
-        assertThat(BytecodeToIRInvokeSupport.isVirtualThreadBuilderUnstarted(
+        assertThat(BytecodeToIRThreadSupport.isVirtualThreadBuilderUnstarted(
             new MethodRef("java/lang/Thread$Builder$OfVirtual", "unstarted", "()Ljava/lang/Thread;")
         )).isFalse();
     }
@@ -13764,7 +13764,7 @@ final class BytecodeToIRTest {
             )
         );
 
-        assertThat(BytecodeToIRInvokeSupport.inferVirtualThreadTarget(classes, instructions, 6)).isEmpty();
+        assertThat(BytecodeToIRThreadSupport.inferVirtualThreadTarget(classes, instructions, 6)).isEmpty();
     }
 
     @Test
@@ -13788,7 +13788,7 @@ final class BytecodeToIRTest {
             )
         );
 
-        assertThat(BytecodeToIRInvokeSupport.inferVirtualThreadTarget(classes, instructions, 4)).isEmpty();
+        assertThat(BytecodeToIRThreadSupport.inferVirtualThreadTarget(classes, instructions, 4)).isEmpty();
     }
 
     @Test
@@ -13815,7 +13815,7 @@ final class BytecodeToIRTest {
             )
         );
 
-        assertThat(BytecodeToIRInvokeSupport.inferVirtualThreadTarget(classes, instructions, 7)).isEmpty();
+        assertThat(BytecodeToIRThreadSupport.inferVirtualThreadTarget(classes, instructions, 7)).isEmpty();
     }
 
     @Test
@@ -15754,7 +15754,7 @@ final class BytecodeToIRTest {
 
     @Test
     void inferRunnableThreadTargetRejectsTooSmallInstructionPrefix() {
-        final Optional<EntryPoint> target = BytecodeToIRInvokeSupport.inferRunnableThreadTarget(
+        final Optional<EntryPoint> target = BytecodeToIRThreadSupport.inferRunnableThreadTarget(
             Map.of(),
             List.of(invokeSpecial(0, new MethodRef("java/lang/Thread", "<init>", "(Ljava/lang/Runnable;)V"))),
             0
@@ -15779,7 +15779,7 @@ final class BytecodeToIRTest {
             )
         );
 
-        final Optional<EntryPoint> target = BytecodeToIRInvokeSupport.inferRunnableThreadTarget(
+        final Optional<EntryPoint> target = BytecodeToIRThreadSupport.inferRunnableThreadTarget(
             classes,
             List.of(
                 classInstruction(0, 187, "new", "java/lang/Thread"),
@@ -15822,7 +15822,7 @@ final class BytecodeToIRTest {
             ))
         );
 
-        final Optional<EntryPoint> target = BytecodeToIRInvokeSupport.inferRunnableThreadTarget(
+        final Optional<EntryPoint> target = BytecodeToIRThreadSupport.inferRunnableThreadTarget(
             classes,
             List.of(
                 classInstruction(0, 187, "new", "java/lang/Thread"),
@@ -15854,7 +15854,7 @@ final class BytecodeToIRTest {
             )
         );
 
-        final Optional<EntryPoint> target = BytecodeToIRInvokeSupport.inferRunnableThreadTarget(
+        final Optional<EntryPoint> target = BytecodeToIRThreadSupport.inferRunnableThreadTarget(
             classes,
             List.of(
                 classInstruction(0, 187, "new", "java/lang/Thread"),
@@ -15892,7 +15892,7 @@ final class BytecodeToIRTest {
             )
         );
 
-        assertThat(BytecodeToIRInvokeSupport.containsReachableThreadStart(
+        assertThat(BytecodeToIRThreadSupport.containsReachableThreadStart(
             classes,
             List.of(new EntryPoint("com/acme/Main", "main", "()V"))
         )).isFalse();
@@ -15927,7 +15927,7 @@ final class BytecodeToIRTest {
             ))
         );
 
-        assertThat(BytecodeToIRInvokeSupport.allRunnableThreadTargets(classes))
+        assertThat(BytecodeToIRThreadSupport.allRunnableThreadTargets(classes))
             .containsExactly(new EntryPoint("com/acme/Task", "run", "()V"));
     }
 
@@ -15963,7 +15963,7 @@ final class BytecodeToIRTest {
 
     @Test
     void lowerJdkThreadInstanceCallReturnsFalseForUnsupportedOwner() {
-        final boolean lowered = BytecodeToIRInvokeSupport.lowerJdkThreadInstanceCall(
+        final boolean lowered = BytecodeToIRThreadSupport.lowerJdkThreadInstanceCall(
             Map.of(),
             sinkClass(),
             method(0x0008, "main", "(Ljava/lang/Object;)V", 1, 1, plain(0, 177, "return")),
@@ -15982,7 +15982,7 @@ final class BytecodeToIRTest {
 
     @Test
     void lowerJdkThreadInstanceCallReturnsFalseForUnsupportedThreadMethod() {
-        final boolean lowered = BytecodeToIRInvokeSupport.lowerJdkThreadInstanceCall(
+        final boolean lowered = BytecodeToIRThreadSupport.lowerJdkThreadInstanceCall(
             Map.of(),
             sinkClass(),
             method(0x0008, "main", "(Ljava/lang/Thread;)V", 1, 1, plain(0, 177, "return")),
@@ -16006,7 +16006,7 @@ final class BytecodeToIRTest {
             classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(new MethodInfo(0x0008, "main", "()V", Optional.empty())))
         );
 
-        assertThat(BytecodeToIRInvokeSupport.containsReachableThreadStart(
+        assertThat(BytecodeToIRThreadSupport.containsReachableThreadStart(
             classes,
             List.of(new EntryPoint("com/acme/Main", "main", "()V"))
         )).isFalse();
@@ -16039,7 +16039,7 @@ final class BytecodeToIRTest {
             )
         );
 
-        assertThat(BytecodeToIRInvokeSupport.runnableThreadTargets(
+        assertThat(BytecodeToIRThreadSupport.runnableThreadTargets(
             classes,
             List.of(new EntryPoint("com/acme/Main", "main", "()V"))
         )).isEmpty();
@@ -16068,7 +16068,7 @@ final class BytecodeToIRTest {
 
     @Test
     void lowerJdkThreadInstanceCallReturnsFalseForMatchingNameWrongDescriptor() {
-        final boolean lowered = BytecodeToIRInvokeSupport.lowerJdkThreadInstanceCall(
+        final boolean lowered = BytecodeToIRThreadSupport.lowerJdkThreadInstanceCall(
             Map.of(),
             sinkClass(),
             method(0x0008, "main", "(Ljava/lang/Thread;)V", 1, 1, plain(0, 177, "return")),
@@ -16087,7 +16087,7 @@ final class BytecodeToIRTest {
 
     @Test
     void lowerJdkThreadInstanceCallReturnsFalseForThreadIsAliveWrongDescriptor() {
-        final boolean lowered = BytecodeToIRInvokeSupport.lowerJdkThreadInstanceCall(
+        final boolean lowered = BytecodeToIRThreadSupport.lowerJdkThreadInstanceCall(
             Map.of(),
             sinkClass(),
             method(0x0008, "main", "(Ljava/lang/Thread;)V", 1, 1, plain(0, 177, "return")),
@@ -16113,7 +16113,7 @@ final class BytecodeToIRTest {
             BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("arg1"))
         ));
 
-        final boolean lowered = BytecodeToIRInvokeSupport.lowerJdkThreadInstanceCall(
+        final boolean lowered = BytecodeToIRThreadSupport.lowerJdkThreadInstanceCall(
             Map.of(),
             sinkClass(),
             method(0x0008, "main", "(Ljava/lang/Thread;Ljava/time/Duration;)V", 2, 2, plain(0, 177, "return")),
@@ -16180,7 +16180,7 @@ final class BytecodeToIRTest {
 
     @Test
     void lowerJdkNetworkInstanceCallReturnsFalseForInetAddressMatchingNameWrongDescriptor() {
-        final boolean lowered = BytecodeToIRInvokeSupport.lowerJdkNetworkInstanceCall(
+        final boolean lowered = BytecodeToIRThreadSupport.lowerJdkNetworkInstanceCall(
             sinkClass(),
             method(0x0008, "main", "(Ljava/net/InetAddress;)V", 1, 1, plain(0, 177, "return")),
             invokeVirtual(0, new MethodRef("java/net/InetAddress", "getCanonicalHostName", "(I)Ljava/lang/String;")),
@@ -16303,7 +16303,7 @@ final class BytecodeToIRTest {
 
     @Test
     void lowerJdkNetworkInstanceCallReturnsFalseForInetSocketAddressToStringWrongDescriptor() {
-        final boolean lowered = BytecodeToIRInvokeSupport.lowerJdkNetworkInstanceCall(
+        final boolean lowered = BytecodeToIRThreadSupport.lowerJdkNetworkInstanceCall(
             sinkClass(),
             method(0x0008, "main", "(Ljava/net/InetSocketAddress;)V", 1, 1, plain(0, 177, "return")),
             invokeVirtual(0, new MethodRef("java/net/InetSocketAddress", "toString", "(I)Ljava/lang/String;")),
