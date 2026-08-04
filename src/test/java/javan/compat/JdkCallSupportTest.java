@@ -75,6 +75,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void mathRoundDoubleIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Math",
+            "round",
+            "(D)J"
+        ))).isTrue();
+    }
+
+    @Test
     void mathCeilDoubleIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/Math",

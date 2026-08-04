@@ -1350,6 +1350,18 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksMathRoundFloatAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Math", "round", "(F)I")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksMathRoundDoubleAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Math", "round", "(D)J")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksAdditionalMathExactCallsAsSupported() {
         assertThat(List.of(
             new MethodRef("java/lang/Math", "subtractExact", "(II)I"),

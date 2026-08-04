@@ -846,6 +846,13 @@ final class BytecodeToIRMathSupport {
             )));
             return true;
         }
+        if ("round".equals(methodRef.name()) && "(D)J".equals(methodRef.descriptor())) {
+            stack.add(StackValue.longExpression(IrExpression.longCall(
+                    "javan_math_round_double",
+                    List.of(popDouble(classFile, method, stack))
+            )));
+            return true;
+        }
         if ("floor".equals(methodRef.name()) && "(D)D".equals(methodRef.descriptor())) {
             stack.add(StackValue.doubleExpression(IrExpression.doubleCall(
                 "javan_math_floor_double",
