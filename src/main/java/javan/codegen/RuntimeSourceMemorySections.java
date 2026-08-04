@@ -9311,12 +9311,13 @@ final class RuntimeSourceMemorySections {
         static int javan_value_is_string(
             void* value,
             int type_id,
-            javan_allocation_node* allocation
+            int allocation_found,
+            const javan_allocation_metadata* allocation
         ) {
             if (value == NULL || type_id != 0) {
                 return 0;
             }
-            if (allocation != NULL) {
+            if (allocation_found != 0) {
                 return allocation->kind == JAVAN_HEAP_KIND_RUNTIME
                     && allocation->runtime_kind == JAVAN_RUNTIME_KIND_STRING;
             }
@@ -9369,16 +9370,18 @@ final class RuntimeSourceMemorySections {
             if (left_type == right_type && left_type == JAVAN_TYPE_JAVA_LANG_CHARACTER) {
                 return ((javan_boxed_character*) left)->value == ((javan_boxed_character*) right)->value;
             }
-            javan_allocation_node* left_node = javan_find_allocation(left, NULL);
-            javan_allocation_node* right_node = javan_find_allocation(right, NULL);
-            if (javan_value_is_string(left, left_type, left_node) != 0
-                && javan_value_is_string(right, right_type, right_node) != 0) {
+            javan_allocation_metadata left_allocation;
+            javan_allocation_metadata right_allocation;
+            int left_found = javan_find_allocation(left, &left_allocation);
+            int right_found = javan_find_allocation(right, &right_allocation);
+            if (javan_value_is_string(left, left_type, left_found, &left_allocation) != 0
+                && javan_value_is_string(right, right_type, right_found, &right_allocation) != 0) {
                 return strcmp((const char*) left, (const char*) right) == 0;
             }
-            if (left_node != NULL
-                && right_node != NULL
-                && left_node->runtime_kind == JAVAN_RUNTIME_KIND_CLASS
-                && right_node->runtime_kind == JAVAN_RUNTIME_KIND_CLASS) {
+            if (left_found != 0
+                && right_found != 0
+                && left_allocation.runtime_kind == JAVAN_RUNTIME_KIND_CLASS
+                && right_allocation.runtime_kind == JAVAN_RUNTIME_KIND_CLASS) {
                 return javan_runtime_class_equals(left, right);
             }
             if (left_type != 0 || right_type != 0) {
@@ -9419,11 +9422,12 @@ final class RuntimeSourceMemorySections {
             if (type_id == JAVAN_TYPE_JAVA_LANG_CHARACTER) {
                 return ((javan_boxed_character*) value)->value;
             }
-            javan_allocation_node* allocation = javan_find_allocation(value, NULL);
-            if (javan_value_is_string(value, type_id, allocation) != 0) {
+            javan_allocation_metadata allocation;
+            int allocation_found = javan_find_allocation(value, &allocation);
+            if (javan_value_is_string(value, type_id, allocation_found, &allocation) != 0) {
                 return javan_string_hash_code((const char*) value);
             }
-            if (allocation != NULL && allocation->runtime_kind == JAVAN_RUNTIME_KIND_CLASS) {
+            if (allocation_found != 0 && allocation.runtime_kind == JAVAN_RUNTIME_KIND_CLASS) {
                 return 0x4a415641;
             }
             return javan_record_reference_identity_hash_code(value);
