@@ -275,6 +275,76 @@ final class CliFloatingMathMinMaxIntegrationTest extends CliIntegrationSupport {
             """);
     }
 
+    @Test
+    void doubleRoundRoundsBelowHalfDown() throws Exception {
+        assertNativeOutputMatchesJvm("double-round-below-half", """
+            System.out.println(Math.round(1.49d));
+            """);
+    }
+
+    @Test
+    void doubleRoundRoundsPositiveHalfTowardPositiveInfinity() throws Exception {
+        assertNativeOutputMatchesJvm("double-round-positive-half", """
+            System.out.println(Math.round(1.5d));
+            """);
+    }
+
+    @Test
+    void doubleRoundRoundsNegativeHalfTowardPositiveInfinity() throws Exception {
+        assertNativeOutputMatchesJvm("double-round-negative-half", """
+            System.out.println(Math.round(-1.5d));
+            """);
+    }
+
+    @Test
+    void doubleRoundRoundsNegativeHalfToZero() throws Exception {
+        assertNativeOutputMatchesJvm("double-round-negative-half-zero", """
+            System.out.println(Math.round(-0.5d));
+            """);
+    }
+
+    @Test
+    void doubleRoundRoundsNegativeZeroToZero() throws Exception {
+        assertNativeOutputMatchesJvm("double-round-negative-zero", """
+            System.out.println(Math.round(-0.0d));
+            """);
+    }
+
+    @Test
+    void doubleRoundRoundsNanToZero() throws Exception {
+        assertNativeOutputMatchesJvm("double-round-nan", """
+            System.out.println(Math.round(Double.longBitsToDouble(0x7ff8000000001234L)));
+            """);
+    }
+
+    @Test
+    void doubleRoundSaturatesPositiveInfinity() throws Exception {
+        assertNativeOutputMatchesJvm("double-round-positive-infinity", """
+            System.out.println(Math.round(1.0d / 0.0d));
+            """);
+    }
+
+    @Test
+    void doubleRoundSaturatesNegativeInfinity() throws Exception {
+        assertNativeOutputMatchesJvm("double-round-negative-infinity", """
+            System.out.println(Math.round(-1.0d / 0.0d));
+            """);
+    }
+
+    @Test
+    void doubleRoundSaturatesMaximumFiniteValue() throws Exception {
+        assertNativeOutputMatchesJvm("double-round-maximum-finite", """
+            System.out.println(Math.round(Double.MAX_VALUE));
+            """);
+    }
+
+    @Test
+    void doubleRoundSaturatesMinimumFiniteValue() throws Exception {
+        assertNativeOutputMatchesJvm("double-round-minimum-finite", """
+            System.out.println(Math.round(-Double.MAX_VALUE));
+            """);
+    }
+
     private void assertNativeOutputMatchesJvm(final String projectName, final String body) throws Exception {
         assertNativeOutputMatchesJvm(projectName, body, "");
     }

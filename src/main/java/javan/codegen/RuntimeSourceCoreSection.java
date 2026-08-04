@@ -709,6 +709,45 @@ final class RuntimeSourceCoreSection {
             return negative ? -(int) magnitude : (int) magnitude;
         }
 
+        long long javan_math_round_double(double value) {
+            uint64_t bits = 0ULL;
+            memcpy(&bits, &value, sizeof(bits));
+            const uint64_t exponent = (bits >> 52U) & 0x7ffULL;
+            const uint64_t fraction = bits & 0x000fffffffffffffULL;
+            const int negative = (bits & 0x8000000000000000ULL) != 0ULL;
+            if (exponent == 0x7ffULL) {
+                if (fraction != 0ULL) {
+                    return 0LL;
+                }
+                return negative ? LLONG_MIN : LLONG_MAX;
+            }
+            if (exponent == 0ULL) {
+                return 0LL;
+            }
+            const int unbiased_exponent = (int) exponent - 1023;
+            if (unbiased_exponent < -1) {
+                return 0LL;
+            }
+            if (unbiased_exponent >= 63) {
+                return negative ? LLONG_MIN : LLONG_MAX;
+            }
+            const uint64_t significand = 0x0010000000000000ULL | fraction;
+            if (unbiased_exponent >= 52) {
+                const uint64_t magnitude = significand << (unsigned int) (unbiased_exponent - 52);
+                return negative ? -(long long) magnitude : (long long) magnitude;
+            }
+            const unsigned int fractional_shift = (unsigned int) (52 - unbiased_exponent);
+            uint64_t magnitude = significand >> fractional_shift;
+            const uint64_t fractional_mask = (1ULL << fractional_shift) - 1ULL;
+            const uint64_t fractional_part = significand & fractional_mask;
+            const uint64_t half = 1ULL << (fractional_shift - 1U);
+            if ((!negative && fractional_part >= half)
+                || (negative && fractional_part > half)) {
+                magnitude++;
+            }
+            return negative ? -(long long) magnitude : (long long) magnitude;
+        }
+
         double javan_math_floor_double(double value) {
             uint64_t bits = UINT64_C(0);
             memcpy(&bits, &value, sizeof(bits));
