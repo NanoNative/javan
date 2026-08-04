@@ -114,7 +114,9 @@ final class CiParallelWorkflowSurfaceTest {
             .contains("scope: failure_limits");
         assertThat(Files.readString(NATIVE_PROOF))
             .contains("if: runner.os == 'Linux' && inputs.proof != 'sanitizer'")
-            .contains("install -y --fix-missing build-essential mingw-w64");
+            .contains("set -- build-essential")
+            .contains("windows-*) set -- \"$@\" mingw-w64 ;;")
+            .contains("install -y --fix-missing \"$@\"");
 
         final var invocations = Files.readAllLines(Path.of(".github/scripts/sanitizer-suite.sh")).stream()
             .filter(line -> line.contains("sh .github/scripts/sanitizer-"))
