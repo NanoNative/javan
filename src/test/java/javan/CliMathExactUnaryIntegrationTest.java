@@ -12,6 +12,7 @@ import org.junit.jupiter.api.parallel.Resources;
 import java.nio.file.Path;
 import java.util.List;
 
+import static javan.testing.TestSuite.NativeTest;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.TestInstance.Lifecycle.PER_CLASS;
 import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
@@ -20,6 +21,7 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @TestInstance(PER_CLASS)
 @ResourceLock("native-cli-heavy")
 @ResourceLock(value = Resources.SYSTEM_PROPERTIES, mode = ResourceAccessMode.READ)
+@NativeTest
 final class CliMathExactUnaryIntegrationTest extends CliIntegrationSupport {
     private static final String MAIN_CLASS = "com.acme.Main";
 
