@@ -22,6 +22,7 @@
         <maven-surefire-plugin.version>3.5.6</maven-surefire-plugin.version>
         <jacoco-maven-plugin.version>0.8.14</jacoco-maven-plugin.version>
         <surefireArgLine/>
+        <javan.test.excluded-groups/>
 
         <!-- ########## BUILD ########## -->
         <project.encoding>UTF-8</project.encoding>
@@ -188,6 +189,7 @@
                 <version>${maven-surefire-plugin.version}</version>
                 <configuration>
                     <argLine>@{surefireArgLine} -Djavan.childJacocoArgLine=@{surefireArgLine} -Djavan.childJacocoDir=${project.build.directory}/jacoco-child</argLine>
+                    <excludedGroups>${javan.test.excluded-groups}</excludedGroups>
                     <forkCount>2</forkCount>
                 </configuration>
             </plugin>
@@ -268,6 +270,18 @@
     </build>
 
     <profiles>
+        <profile>
+            <id>quick</id>
+            <properties>
+                <javan.test.excluded-groups>native,packaging,external</javan.test.excluded-groups>
+            </properties>
+        </profile>
+        <profile>
+            <id>standard</id>
+            <properties>
+                <javan.test.excluded-groups>packaging,external</javan.test.excluded-groups>
+            </properties>
+        </profile>
         <profile>
             <id>publish</id>
             <properties>

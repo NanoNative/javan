@@ -1,5 +1,7 @@
 package javan;
 
+import javan.testing.TestSuite.ExternalTest;
+
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Tag;
@@ -35,6 +37,7 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @Tag("external-probe")
 @ResourceLock("native-cli-heavy")
 @ResourceLock(value = Resources.SYSTEM_PROPERTIES, mode = ResourceAccessMode.READ)
+@ExternalTest
 final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupport {
     @Test
     void realProbesDeclareCompilerOwnedGenericEvidence() throws Exception {

@@ -1,5 +1,7 @@
 package javan;
 
+import javan.testing.TestSuite.PackagingTest;
+
 import javan.cli.Cli;
 import javan.cli.Version;
 import javan.reporting.RuntimeFootprintReports;
@@ -38,6 +40,7 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @ResourceLock("native-cli-heavy")
 @ResourceLock(value = Resources.SYSTEM_PROPERTIES, mode = ResourceAccessMode.READ)
+@PackagingTest
 final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     private Path primitiveLiteralBootstrap;
 

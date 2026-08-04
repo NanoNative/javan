@@ -1,13 +1,13 @@
 package javan;
 
+import javan.testing.TestSuite.ExternalTest;
+import javan.testing.TestSuite.NativeTest;
+import javan.testing.TestSuite.PackagingTest;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.HashSet;
-import java.util.Set;
 import java.util.stream.Stream;
-import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -157,50 +157,59 @@ final class CiParallelWorkflowSurfaceTest {
     }
 
     @Test
-    void cliSuitesUseEightIndependentDurationBalancedShards() throws Exception {
+    void cliSuitesUseDocumentedSuitesAndAutomaticShards() throws Exception {
         final String workflow = Files.readString(BUILD_COMMON);
-        assertThat(workflow)
-            .contains("shard: cli-general-heavy")
-            .contains("shard: cli-general-rest")
-            .contains("shard: cli-jdk-map")
-            .contains("shard: cli-jdk-set-plus")
-            .contains("shard: cli-jdk-other-a")
-            .contains("shard: cli-jdk-other-b")
-            .contains("shard: cli-runtime-translation")
-            .contains("shard: cli-thread-package-probes")
-            .contains("max-parallel: 8");
+        final String cliWorkflow = workflow.substring(
+            workflow.indexOf("  verify-cli-integration:"),
+            workflow.indexOf("  native-acceptance:")
+        );
+        assertThat(cliWorkflow)
+            .contains("{ suite: native, shard: 0, shards: 6")
+            .contains("{ suite: native, shard: 5, shards: 6")
+            .contains("{ suite: packaging, shard: 0, shards: 1")
+            .contains("{ suite: external, shard: 0, shards: 1")
+            .contains("javan.testing.CiTestShardPlanner")
+            .contains("test_selector=%s\\n")
+            .contains("max-parallel: 8")
+            .doesNotContain("matrix.test-selector", "CliJdkSemanticsIntegrationTest#");
 
-        final Pattern methodPattern = Pattern.compile("^    void ([A-Za-z0-9_]+)\\(");
-        final Set<String> methods = new HashSet<>();
-        for (final String line : Files.readAllLines(Path.of("src/test/java/javan/CliJdkSemanticsIntegrationTest.java"))) {
-            final var matcher = methodPattern.matcher(line);
-            if (matcher.find()) {
-                methods.add(matcher.group(1));
-            }
-        }
-
-        final Set<String> assigned = new HashSet<>();
-        final var jdkSelectors = workflow.lines()
-            .map(String::trim)
-            .filter(line -> line.startsWith("CliJdkSemanticsIntegrationTest#"))
-            .toList();
-        assertThat(jdkSelectors).hasSize(4);
-        for (final String selector : jdkSelectors) {
-            final String methodSelector = selector.substring(selector.indexOf('#') + 1).split(",", 2)[0];
-            final var prefixes = Stream.of(methodSelector.split("\\+"))
-                .map(prefix -> prefix.replace("*", ""))
+        try (Stream<Path> tests = Files.list(Path.of("src/test/java/javan"))) {
+            final var cliTests = tests
+                .filter(path -> path.getFileName().toString().matches("Cli.*IntegrationTest[.]java"))
                 .toList();
-            final Set<String> selected = new HashSet<>();
-            methods.stream()
-                .filter(method -> prefixes.stream().anyMatch(method::startsWith))
-                .forEach(selected::add);
-            assertThat(selected).as("non-empty JDK selector %s", selector).isNotEmpty();
-            final Set<String> overlap = new HashSet<>(selected);
-            overlap.retainAll(assigned);
-            assertThat(overlap).as("disjoint JDK selector %s", selector).isEmpty();
-            assigned.addAll(selected);
+            int nativeTests = 0;
+            int packagingTests = 0;
+            int externalTests = 0;
+            for (final Path test : cliTests) {
+                final String simpleName = test.getFileName().toString().replace(".java", "");
+                final Class<?> testClass = Class.forName("javan." + simpleName);
+                final boolean nativeTest = testClass.isAnnotationPresent(NativeTest.class);
+                final boolean packagingTest = testClass.isAnnotationPresent(PackagingTest.class);
+                final boolean externalTest = testClass.isAnnotationPresent(ExternalTest.class);
+                assertThat(Stream.of(nativeTest, packagingTest, externalTest).filter(Boolean::booleanValue))
+                    .as("exactly one test suite for %s", simpleName)
+                    .hasSize(1);
+                nativeTests += nativeTest ? 1 : 0;
+                packagingTests += packagingTest ? 1 : 0;
+                externalTests += externalTest ? 1 : 0;
+            }
+            assertThat(nativeTests).isEqualTo(cliTests.size() - 2);
+            assertThat(packagingTests).isOne();
+            assertThat(externalTests).isOne();
         }
-        assertThat(assigned).containsExactlyInAnyOrderElementsOf(methods);
+        assertThat(Files.readString(Path.of("src/test/java/javan/testing/TestSuite.java")))
+            .contains("Generates, compiles, and executes native C through the JavaN CLI.")
+            .contains("Builds and verifies distributable or self-hosted JavaN packages.")
+            .contains("Uses external probe artifacts, toolchains, or services.");
+        assertThat(Files.readString(Path.of("pom.xml")))
+            .contains("<id>quick</id>", "<id>standard</id>")
+            .contains("<javan.test.excluded-groups>native,packaging,external</javan.test.excluded-groups>")
+            .contains("<javan.test.excluded-groups>packaging,external</javan.test.excluded-groups>");
+        assertThat(Files.readString(Path.of("doc/spec/testing.md")))
+            .contains("./mvnw -Pquick verify")
+            .contains("./mvnw -Pstandard verify")
+            .contains("./mvnw clean verify")
+            .contains("./mvnw -Dgroups=native test");
     }
 
     @Test
