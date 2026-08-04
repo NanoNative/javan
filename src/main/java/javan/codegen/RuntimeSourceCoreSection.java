@@ -880,6 +880,16 @@ final class RuntimeSourceCoreSection {
             return left + right;
         }
 
+        int javan_math_subtract_exact_int_overflows(int left, int right) {
+            const long long result = (long long) left - (long long) right;
+            return result < INT_MIN || result > INT_MAX;
+        }
+
+        int javan_math_subtract_exact_int(int left, int right) {
+            const long long result = (long long) left - (long long) right;
+            return (int) result;
+        }
+
         int javan_math_subtract_exact_long_overflows(long long left, long long right) {
             return (right > 0 && left < LLONG_MIN + right)
                 || (right < 0 && left > LLONG_MAX + right);
@@ -933,6 +943,54 @@ final class RuntimeSourceCoreSection {
 
         long long javan_math_multiply_exact_long_long(long long left, long long right) {
             return left * right;
+        }
+
+        int javan_math_increment_exact_int_overflows(int value) {
+            return value == INT_MAX;
+        }
+
+        int javan_math_increment_exact_int(int value) {
+            return value + 1;
+        }
+
+        int javan_math_increment_exact_long_overflows(long long value) {
+            return value == LLONG_MAX;
+        }
+
+        long long javan_math_increment_exact_long(long long value) {
+            return value + 1LL;
+        }
+
+        int javan_math_decrement_exact_int_overflows(int value) {
+            return value == INT_MIN;
+        }
+
+        int javan_math_decrement_exact_int(int value) {
+            return value - 1;
+        }
+
+        int javan_math_decrement_exact_long_overflows(long long value) {
+            return value == LLONG_MIN;
+        }
+
+        long long javan_math_decrement_exact_long(long long value) {
+            return value - 1LL;
+        }
+
+        int javan_math_negate_exact_int_overflows(int value) {
+            return value == INT_MIN;
+        }
+
+        int javan_math_negate_exact_int(int value) {
+            return -value;
+        }
+
+        int javan_math_negate_exact_long_overflows(long long value) {
+            return value == LLONG_MIN;
+        }
+
+        long long javan_math_negate_exact_long(long long value) {
+            return -value;
         }
 
         int javan_math_to_int_exact_overflows(long long value) {

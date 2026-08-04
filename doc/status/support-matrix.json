@@ -11,8 +11,8 @@
     "rule": "done = supported variants + rejected variants; unknown leftovers must be 0 for a release-gated JDK"
   },
   "counts": {
-    "rows": 305,
-    "pass": 305,
+    "rows": 306,
+    "pass": 306,
     "scoped": 0,
     "target": 0,
     "rejected": 0
@@ -50,6 +50,7 @@
     {"feature": "operand-chained-field-load-temporary-root", "jdk25": "pass"},
     {"feature": "operand-chained-call-receiver-temporary-root", "jdk25": "pass"},
     {"feature": "jdk-intrinsics-math-abs-min-max", "jdk25": "pass"},
+    {"feature": "jdk-intrinsics-math-exact", "jdk25": "pass"},
     {"feature": "jdk-intrinsics-objects-require-non-null", "jdk25": "pass"},
     {"feature": "jdk-intrinsics-system-time", "jdk25": "pass"},
     {"feature": "jdk-intrinsics-system-arraycopy", "jdk25": "pass"},

@@ -84,12 +84,12 @@ final class CompatibilityReportsTest {
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 2, \"callables\": 3, \"totalCallables\": 6, \"leftCallables\": 3, \"coveragePercent\": \"50.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 3, \"explicitRejectedCallables\": 3, \"doneCallables\": 6, \"unknownCallables\": 0, \"totalCallables\": 6, \"donePercent\": \"100.0\"}",
-            "\"supportRows\": 305",
-            "\"passRows\": 305",
+            "\"supportRows\": 306",
+            "\"passRows\": 306",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 305",
+            "\"accountedRows\": 306",
             "\"unaccountedRows\": 0"
         );
     }

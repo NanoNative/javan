@@ -4,6 +4,8 @@ import javan.classfile.MethodRef;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 
@@ -1348,9 +1350,18 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void keepsMathSubtractExactIntUnknown() {
-        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Math", "subtractExact", "(II)I")))
-            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+    void marksAdditionalMathExactCallsAsSupported() {
+        assertThat(List.of(
+            new MethodRef("java/lang/Math", "subtractExact", "(II)I"),
+            new MethodRef("java/lang/Math", "incrementExact", "(I)I"),
+            new MethodRef("java/lang/Math", "incrementExact", "(J)J"),
+            new MethodRef("java/lang/Math", "decrementExact", "(I)I"),
+            new MethodRef("java/lang/Math", "decrementExact", "(J)J"),
+            new MethodRef("java/lang/Math", "negateExact", "(I)I"),
+            new MethodRef("java/lang/Math", "negateExact", "(J)J")
+        )).allSatisfy(method ->
+            assertThat(JdkCallableAccounting.status(method)).isEqualTo(JdkCallableAccounting.Status.SUPPORTED)
+        );
     }
 
     @Test
