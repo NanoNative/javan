@@ -84,12 +84,12 @@ final class CompatibilityReportsTest {
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 2, \"callables\": 3, \"totalCallables\": 6, \"leftCallables\": 3, \"coveragePercent\": \"50.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 3, \"explicitRejectedCallables\": 3, \"doneCallables\": 6, \"unknownCallables\": 0, \"totalCallables\": 6, \"donePercent\": \"100.0\"}",
-            "\"supportRows\": 304",
-            "\"passRows\": 304",
+            "\"supportRows\": 305",
+            "\"passRows\": 305",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 304",
+            "\"accountedRows\": 305",
             "\"unaccountedRows\": 0"
         );
     }
@@ -140,6 +140,7 @@ final class CompatibilityReportsTest {
             "| `primitive-array-clone` | pass |",
             "| `generated-object-clone-single-threaded` | pass |",
             "| `generated-object-clone-concurrent-return-handoff` | pass |",
+            "| `eclipse-compiler-enum-switch-self-host` | pass |",
             "| `string-intrinsics` | pass |",
             "| `jdk-intrinsics-boolean-parse` | pass |",
             "| `resource-system-loader-stream` | pass |",

@@ -485,6 +485,7 @@ public final class CompatibilityReports {
             pass("primitive-array-clone"),
             pass("generated-object-clone-single-threaded"),
             pass("generated-object-clone-concurrent-return-handoff"),
+            pass("eclipse-compiler-enum-switch-self-host"),
             pass("main-args"),
             pass("jar-output"),
             pass("jar-main-manifest"),

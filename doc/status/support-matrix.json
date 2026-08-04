@@ -11,8 +11,8 @@
     "rule": "done = supported variants + rejected variants; unknown leftovers must be 0 for a release-gated JDK"
   },
   "counts": {
-    "rows": 304,
-    "pass": 304,
+    "rows": 305,
+    "pass": 305,
     "scoped": 0,
     "target": 0,
     "rejected": 0
@@ -68,6 +68,7 @@
     {"feature": "primitive-array-clone", "jdk25": "pass"},
     {"feature": "generated-object-clone-single-threaded", "jdk25": "pass"},
     {"feature": "generated-object-clone-concurrent-return-handoff", "jdk25": "pass"},
+    {"feature": "eclipse-compiler-enum-switch-self-host", "jdk25": "pass"},
     {"feature": "main-args", "jdk25": "pass"},
     {"feature": "jar-output", "jdk25": "pass"},
     {"feature": "jar-main-manifest", "jdk25": "pass"},
