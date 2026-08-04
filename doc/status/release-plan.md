@@ -59,6 +59,27 @@ If they disagree, repair the disagreement before widening implementation.
 | R9 | Container publication | Released Linux assets drive reproducible image verification. |
 | R10 | Release rehearsal | A dry run completes all required gates without publishing side effects. |
 
+## Native build efficiency lane
+
+Status: Planned. This is a product-performance lane, not an excuse to delay correctness,
+ownership, package, or cross-platform release gates.
+
+Javan must make repeated native builds practical without risking stale or non-reproducible
+output. The implementation plan is detailed in [the native build cache roadmap](../spec/roadmap.md#0295a-native-build-cache-and-bounded-parallel-compilation).
+
+Exit criteria:
+
+- Content-addressed reuse is correct for generated sources, native objects, and final outputs.
+- Every cache key includes input byte content, ordered dependencies, resources, target, build
+  options, Javan/runtime identity, and native-toolchain identity; uncertain state is a miss.
+- Independent native compilation work uses a bounded, memory-aware worker pool, with a
+  deterministic serial fallback and an explicit user override.
+- Concurrent builds cannot publish partial artifacts or corrupt another build's cache entry.
+- Public-entrypoint measurements report cold, warm, and one-input-changed build time, peak
+  memory, cache hit/miss stages, and invalidation reasons for a representative supported app.
+- The initial target is a warm native rebuild of a normal supported service in under 30 seconds
+  on the recorded reference machine. It is a target, not a current performance claim.
+
 ## Slice rules
 
 Work exactly one blocker and one primary gate at a time. Prefer a failing required CI or

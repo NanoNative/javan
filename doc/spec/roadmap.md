@@ -475,6 +475,84 @@ Rules:
 - "easy" commands may infer; reports must say exactly what was inferred
 - JSON and Markdown reports stay on disk for humans, CI, IDEs, and build plugins
 
+## 0.295a Native Build Cache And Bounded Parallel Compilation
+
+Status: Planned. This is a performance and DX track after active correctness and release
+blockers. It must never trade cache correctness, reproducibility, or memory safety for a
+shorter build time.
+
+Current state:
+
+- Native output is generated and linked directly for each build; no verified content-addressed
+  native build cache exists.
+- The app/shared-library linker invokes the host C compiler once over generated main and runtime
+  C sources. Static-library object compilation is sequential. There is no bounded parallel
+  native compilation pipeline.
+- No public, repeatable Javan native-build benchmark exists. Do not claim parity with Go or
+  GraalVM before measuring the same supported application on the same machine.
+
+Goal:
+
+- Make unchanged supported projects fast to rebuild while preserving exactly the same observable
+  binary behavior as a clean build.
+- Bound native compiler concurrency by available memory as well as CPU so larger builds slow down
+  rather than exhaust the host.
+- Make cache behavior inspectable: users, CI, and IDE integrations must be able to see which
+  stages were reused and why a rebuild happened.
+
+### Cache contract
+
+- Store cache entries under the project-owned `.javan/cache/` by default. A future configurable
+  shared cache may reuse the same content-addressed format, but must not silently mix projects,
+  targets, toolchains, or Javan versions.
+- Treat the cache as disposable acceleration, never as source of truth. `--no-cache` must execute
+  a clean native build, and a missing, corrupt, incomplete, or unverifiable entry is a cache miss.
+- Build a cache key from exact class and JAR byte digests, ordered classpath/dependency metadata,
+  resource digests, entrypoint, artifact kind, target, build/configuration options, Javan version,
+  IR/runtime-source schema identity, selected C compiler identity/version, and compiler/link flags.
+- Invalidate conservatively when any key input is unknown. A false miss costs time; a false hit can
+  ship the wrong program and is unacceptable.
+- Cache generated C only when its lowering/runtime identity matches. Cache native object files only
+  when their exact source digest, target, compiler identity, and flags match. Cache final artifacts
+  only when every linked input matches.
+- Write each entry into a unique temporary directory, verify its manifest and digests, then publish
+  it atomically. Failed, cancelled, or interrupted builds never publish reusable outputs.
+- Serialize publication per cache key. Different keys may proceed concurrently, but must not share
+  mutable output or temporary directories.
+
+### Bounded native compilation
+
+- Split native work into independently compilable translation units before introducing parallel
+  workers. The final link remains one deterministic step after all required objects are present.
+- Default worker count must be bounded by both CPU and a conservative memory budget. The scheduler
+  must reduce active workers when its configured memory budget would be exceeded, rather than
+  spawning every available CPU worker.
+- Provide `--jobs <n>` for an explicit cap and `--jobs 1` as the deterministic diagnostic
+  fallback. The default and chosen cap must be reported.
+- A compiler failure stops scheduling new work, preserves the first useful diagnostic, waits for
+  already-started workers to finish safely, and leaves no partial final artifact or cache entry.
+- Parallel execution must not change generated source ordering, object ordering, diagnostic order,
+  artifact contents, or report format. If a host compiler/toolchain cannot satisfy that contract,
+  use the serial path.
+- Keep JUnit test parallelism separate from native compilation concurrency. Test isolation and
+  compiler-process memory budgets are different control planes.
+
+### Required proof and measurement
+
+- Add public CLI integration tests for cold miss, full warm hit, one-class change, resource change,
+  dependency/order change, target/flag/toolchain change, corrupt-entry recovery, `--no-cache`, and
+  concurrent invocations of the same project.
+- Prove `--jobs 1` and a bounded parallel run produce byte-identical outputs where the platform
+  toolchain supports reproducible binaries; otherwise prove identical program output, reports,
+  and recorded link inputs while documenting the platform limitation.
+- Add a public benchmark command or stable report section recording wall time, peak process memory,
+  cache hit/miss stages, invalidation reasons, target, Javan revision, and native toolchain version.
+- Establish a representative supported service fixture that is generic and compiler-owned; it must
+  not mention external probe projects or services.
+- Measure clean build, warm unchanged rebuild, and one-class-changed rebuild on a documented
+  reference machine. The provisional target is a warm native rebuild under 30 seconds; revise the
+  target only from recorded measurements, not intuition.
+
 ## 0.296 Runtime Module Selection And Footprint
 
 Status: implemented reporting and disabled-module enforcement slice. See
