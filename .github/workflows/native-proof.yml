@@ -96,9 +96,13 @@ jobs:
         shell: sh
         run: |
           set -eu
+          set -- build-essential
+          case '${{ inputs.target }}' in
+            windows-*) set -- "$@" mingw-w64 ;;
+          esac
           for attempt in 1 2 3; do
             if sudo apt-get -o Acquire::ForceIPv4=true update \
-              && sudo apt-get -o Acquire::ForceIPv4=true install -y --fix-missing build-essential mingw-w64; then
+              && sudo apt-get -o Acquire::ForceIPv4=true install -y --fix-missing "$@"; then
               exit 0
             fi
             if [ "$attempt" -eq 3 ]; then
