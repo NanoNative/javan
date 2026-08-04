@@ -61,7 +61,8 @@ final class WorkflowPolicySurfaceTest {
             .contains("name: core_linux_x64")
             .contains("name: ${{ matrix.label }}")
             .contains("-Dexec.skip=true -Dtest='!Cli*IntegrationTest,!CliExternalProbeAcceptanceIntegrationTest' verify")
-            .contains("-Dexec.skip=true -Dtest='${{ matrix.test-selector }}' verify")
+            .contains("-Dgroups='${{ matrix.suite }}'")
+            .contains("-Dtest='${{ steps.tests.outputs.test_selector }}' verify")
             .contains("name: \"📊 Coverage")
             .contains("JaCoCo {counter_type.lower()} coverage: {covered}/{total} = {ratio:.2%}")
             .doesNotContain(

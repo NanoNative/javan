@@ -1,5 +1,7 @@
 package javan;
 
+import javan.testing.TestSuite.NativeTest;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ResourceLock;
@@ -12,6 +14,7 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 
 @Execution(SAME_THREAD)
 @ResourceLock("native-cli-heavy")
+@NativeTest
 final class CliFloatingMathMinMaxIntegrationTest extends CliIntegrationSupport {
     @Test
     void floatMinReturnsLeftNanRawBitsFromNativeLibrary() throws Exception {

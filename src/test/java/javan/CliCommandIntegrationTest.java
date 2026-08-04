@@ -1,5 +1,7 @@
 package javan;
 
+import javan.testing.TestSuite.NativeTest;
+
 import javan.cli.Cli;
 import javan.cli.Version;
 import org.junit.jupiter.api.Test;
@@ -28,6 +30,7 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @Execution(SAME_THREAD)
 @ResourceLock("native-cli-heavy")
 @ResourceLock(Resources.SYSTEM_PROPERTIES)
+@NativeTest
 final class CliCommandIntegrationTest {
     @TempDir
     private Path tempDir;

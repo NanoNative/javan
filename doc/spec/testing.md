@@ -28,6 +28,52 @@ process, instruments child `java ... javan.Main` runs into `target/jacoco-child/
 merges all of them into `target/jacoco-merged.exec`, and runs the report from that merged
 file.
 
+## Verification Vocabulary
+
+| Term | Question it answers | Values |
+| --- | --- | --- |
+| Suite | Which related tests run? | `core` (untagged default), `native`, `packaging`, `external` |
+| Depth | How much runs locally? | `quick`, `standard`, `full` |
+| Proof | What native evidence does CI collect? | `smoke`, `acceptance`, `sanitizer`, `package` |
+| Target | Which operating system and architecture run it? | `linux_x64`, `linux_arm64`, `mac_x64`, `mac_arm64`, `win_x64`, `win_arm64` |
+
+A depth selects suites. CI then runs additional proofs on its configured targets. These are separate
+dimensions: `quick` is not a suite, and `smoke` is not a depth.
+
+## Local Verification
+
+Use the smallest depth that covers the current change. Every command uses the normal Maven
+lifecycle and writes its JaCoCo report to `target/site/jacoco/index.html`; only the full command
+measures every Java-test suite.
+
+| Depth | Command | Includes | Use it for |
+| --- | --- | --- | --- |
+| Quick | `./mvnw -Pquick verify` | Compiler/core tests; excludes native, packaging, and external suites | Normal edit/compile feedback |
+| Standard | `./mvnw -Pstandard verify` | Core plus native CLI behavior; excludes packaging and external probes | Before pushing an ordinary compiler/runtime change |
+| Full | `./mvnw clean verify` | Every test suite from a clean build | Release, packaging, workflow, or broad cross-cutting changes |
+
+For a failing-first regression, run the narrow test while editing, then run the appropriate
+depth above:
+
+```sh
+./mvnw -Dtest='ClassName#methodName' test
+```
+
+CLI integration classes declare exactly one documented execution suite:
+
+- `@NativeTest` generates, compiles, and executes native C through the JavaN CLI.
+- `@PackagingTest` builds and verifies distributable or self-hosted packages.
+- `@ExternalTest` uses external probe artifacts, toolchains, or services.
+
+Ordinary JVM-only tests need no annotation; they belong to the default `core` suite. Only tests
+that require a more expensive or external boundary opt into a named annotation.
+
+These annotations are composed JUnit tags defined in `javan.testing.TestSuite`. Maven can also
+run a suite directly, for example `./mvnw -Dgroups=native test`. CI discovers tagged suites and
+shards the native suite automatically; contributors do not maintain class or method selectors in
+workflow YAML. Adding a CLI integration class without exactly one suite fails the workflow policy
+test.
+
 ## Generated Compatibility Status
 
 Full `mvn verify` on JDK 25 runs the canonical `javan compat` command against the already
@@ -60,7 +106,8 @@ the verification commands while allowing release orchestration to remain separat
 The CI work is divided by independent proof rather than running the longest native checks
 serially:
 
-- six CLI integration shards run with `max-parallel: 6`
+- six automatically discovered native CLI shards plus dedicated packaging and external suites run
+  with `max-parallel: 8`
 - native acceptance, sanitizer, and package/self-host proofs run as separate jobs for both
   Linux x64 and Linux arm64
 - lightweight compiler/platform contract smoke runs on Linux, macOS, and Windows for x64

@@ -1,5 +1,7 @@
 package javan;
 
+import javan.testing.TestSuite.NativeTest;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ResourceAccessMode;
@@ -18,6 +20,7 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @Execution(SAME_THREAD)
 @ResourceLock("native-cli-heavy")
 @ResourceLock(value = Resources.SYSTEM_PROPERTIES, mode = ResourceAccessMode.READ)
+@NativeTest
 final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     @Test
     void objectsRequireNonNullElseReturnsFallbackBuildsAndMatchesJvmOutput() throws Exception {
