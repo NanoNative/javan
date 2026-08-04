@@ -2833,8 +2833,9 @@ final class RuntimeFilesTest {
             "        javan_allocation_node* indexed = javan_allocation_registry_lookup(value);\n"
                 + "        if (indexed != NULL) {\n"
                 + "            javan_allocation_cache_store(value, indexed);\n"
+                + "            return indexed;\n"
                 + "        }\n"
-                + "        return indexed;\n"
+                + "        return NULL;\n"
                 + "    }\n"
                 + "    javan_allocation_node* prior = NULL;\n"
         );
