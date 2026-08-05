@@ -69,12 +69,13 @@ public final class CiTestWorkerPlanner {
         for (int index = 0; index < workerCount; index++) {
             workers.add(new ArrayList<>());
         }
+        final boolean splitClasses = methodsByClass.size() < workerCount;
         methodsByClass.entrySet().stream()
             .sorted(Comparator.<Map.Entry<String, List<String>>>comparingInt(entry -> entry.getValue().size())
                 .reversed()
                 .thenComparing(Map.Entry::getKey))
             .forEach(entry -> {
-                if (entry.getValue().size() > LARGE_CLASS_METHODS) {
+                if (splitClasses || entry.getValue().size() > LARGE_CLASS_METHODS) {
                     entry.getValue().forEach(test -> leastLoaded(workers).add(test));
                 } else {
                     leastLoaded(workers).addAll(entry.getValue());

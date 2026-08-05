@@ -209,11 +209,10 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
 
         assertThat(ciWorkflow)
             .contains("windows-runtime-smoke:")
-            .contains("label: runtime_current_win_x64", "label: runtime_worker_win_x64")
-            .contains("shard: current-thread")
-            .contains("shard: worker-thread")
-            .contains("generatedRuntimeCrossCompilesToWindowsPeWhenMinGwIsAvailable")
-            .contains("runtimeParentCollectionPreservesBlockedWorkerLocalRootedObject");
+            .contains("label: runtime_0_win_x64", "label: runtime_1_win_x64")
+            .contains("worker_index: 0", "worker_index: 1", "worker_count: 2")
+            .contains("-Dgroups=windows")
+            .doesNotContain("test-selector:", "RuntimeFilesTest#");
     }
 
     @Test

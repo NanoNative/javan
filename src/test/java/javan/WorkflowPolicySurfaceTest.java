@@ -22,6 +22,10 @@ final class WorkflowPolicySurfaceTest {
     private static final Path JUNIT_PLATFORM_PROPERTIES = Path.of("src/test/resources/junit-platform.properties");
     private static final Path POM = Path.of("pom.xml");
     private static final Path WORKFLOW_ROOT = Path.of(".github/workflows");
+    private static final Path INSTALL_EXTERNAL_PROBES =
+        Path.of(".github/scripts/install-external-probe-artifacts.sh");
+    private static final Path LIST_EXTERNAL_PROBES =
+        Path.of(".github/scripts/list-external-probe-artifacts.sh");
 
     @Test
     void entryWorkflowsQueueWithoutCancelingInFlightRuns() throws Exception {
@@ -60,7 +64,7 @@ final class WorkflowPolicySurfaceTest {
         assertThat(Files.readString(BUILD_COMMON))
             .contains("name: core_linux_x64")
             .contains("name: ${{ matrix.label }}")
-            .contains("-Dexec.skip=true -Dtest='!Cli*IntegrationTest,!CliExternalProbeAcceptanceIntegrationTest' verify")
+            .contains("-Dexec.skip=true -Pquick verify")
             .contains("-Dgroups='${{ matrix.suite }}'")
             .contains("-Dtest='${{ steps.tests.outputs.test_selector }}' verify")
             .contains("name: \"📊 Coverage")
@@ -72,6 +76,37 @@ final class WorkflowPolicySurfaceTest {
                 "jacoco-core-linux-x64",
                 "jacoco-cli-integration-${{ matrix.worker_index }}"
             );
+    }
+
+    @Test
+    void workflowsUseProfilesOrTagsInsteadOfLiteralTestSelectors() throws Exception {
+        for (final Path workflow : workflowFiles()) {
+            final String source = Files.readString(workflow);
+            assertThat(source)
+                .as(workflow + " must not own Java test class or method selectors")
+                .doesNotContain("!Cli*IntegrationTest", "test-selector:");
+            for (final String line : Files.readAllLines(workflow)) {
+                if (line.contains("-Dtest=")) {
+                    assertThat(line)
+                        .as(workflow + " must obtain Maven test selectors from the suite planner")
+                        .contains("${{ steps.tests.outputs.test_selector }}");
+                }
+            }
+        }
+        assertThat(Files.readString(PLATFORM_PROOF)).contains("-Dgroups=platform test");
+        assertThat(Files.readString(BUILD_COMMON))
+            .contains("-Dgroups=windows")
+            .contains("javan.testing.CiTestWorkerPlanner");
+    }
+
+    @Test
+    void workflowsReuseOwnedScriptsAndKeepPrivateProbeDiscoveryTogether() throws Exception {
+        assertThat(Files.readString(CONTAINER_IMAGES_WORKFLOW))
+            .contains("sh .github/scripts/verify-image.sh")
+            .doesNotContain("verify_image()");
+        assertThat(LIST_EXTERNAL_PROBES).doesNotExist();
+        assertThat(Files.readString(INSTALL_EXTERNAL_PROBES))
+            .contains("groupId=", "artifactId=", "version=");
     }
 
     @Test

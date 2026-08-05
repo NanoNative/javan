@@ -158,7 +158,7 @@ jobs:
       - name: "🧪 Core"
         run: |
           status=0
-          ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -Dexec.skip=true -Dtest='!Cli*IntegrationTest,!CliExternalProbeAcceptanceIntegrationTest' verify || status=$?
+          ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -Dexec.skip=true -Pquick verify || status=$?
 
           if find target -maxdepth 1 -type f -name 'jacoco-surefire-*.exec' -print -quit | grep -q . \
             || [ -d target/jacoco-child ]; then
@@ -568,14 +568,12 @@ jobs:
       max-parallel: 2
       matrix:
         include:
-          - shard: current-thread
-            label: runtime_current_win_x64
-            test-selector: >-
-              javan.codegen.RuntimeFilesTest#writeEmitsPlatformRecursiveRuntimeLockForSharedHeapState+writeMarksWindowsProcessExecutionUnsupportedUntilPorted+generatedRuntimeCrossCompilesToWindowsPeWhenMinGwIsAvailable+generatedRuntimeExecutesBasicWindowsProbeWhenHostCompilerIsAvailable+runtimeHostThreadGetsDistinctCurrentThreadAndDetachesCleanly+runtimeConcurrentHostThreadsCanAttachCollectDetachWithoutLeakingRoots+runtimeHostThreadRootFramesStayPublishedAcrossConcurrentGc+runtimeDetachedReachableCurrentThreadClearsThreadLocalStorageOnDetach+runtimeDetachedReachableCurrentThreadClearsNestedThreadLocalObjectGraphOnDetach+runtimeHostThreadThreadLocalValueSurvivesConcurrentGcAndDetachesCleanly+runtimeHostThreadThreadLocalObjectGraphSurvivesConcurrentGcAndDetachesCleanly+runtimeHostThreadThreadLocalSiblingRemoveKeepsRetainedGraphAliveDuringConcurrentGcAndDetachesCleanly+runtimeHostThreadThreadLocalOverwriteSurvivesRepeatedSafepointGcDuringMutationAndDetachesCleanly+runtimeHostThreadThreadLocalRemoveAndSiblingRetentionSurviveRepeatedSafepointGcDuringMutationAndDetachesCleanly+runtimeHostThreadThreadLocalMapGrowthSurvivesRepeatedSafepointGcAndDetachesCleanly+runtimeThreadLifecycleInventoryTracksCurrentThreadState
-          - shard: worker-thread
-            label: runtime_worker_win_x64
-            test-selector: >-
-              javan.codegen.RuntimeFilesTest#runtimeThreadTargetSurvivesPreStartCollectionThroughWorkerField+runtimeThreadLifecycleInventoryDropsFinishedNonCurrentThreadObjectsAfterCollection+runtimeCompletedThreadDoesNotRetainTargetAfterCollectionWhenWorkerStaysReachable+runtimeCompletedReachableWorkerClearsThreadLocalStorageOnCompletion+runtimeStartedWorkerThreadLocalObjectGraphSurvivesConcurrentGcAndCleansUpAfterJoin+runtimeStartedWorkerThreadLocalOverwriteCollectsPreviousGraphDuringConcurrentGc+runtimeStartedWorkerThreadLocalRemoveCollectsRemovedGraphDuringConcurrentGc+runtimeStartedWorkerThreadLocalSiblingRemoveKeepsOtherGraphAliveDuringConcurrentGc+runtimeStartedWorkerThreadLocalSiblingRemoveKeepsOtherGraphAliveDuringRepeatedSafepointGc+runtimeStartedWorkerThreadLocalOverwriteSurvivesRepeatedParentSafepointGcDuringMutation+runtimeStartedWorkerThreadLocalRemoveAndSiblingRetentionSurviveRepeatedParentSafepointGcDuringMutation+runtimeSharedThreadLocalKeyRemainsThreadIsolatedAcrossWorkerRemoveAndConcurrentGc+runtimeCompletedReachableWorkerClearsNestedThreadLocalObjectGraphOnCompletion+runtimeParentCollectionPreservesBlockedWorkerLocalRootedObject
+          - worker_index: 0
+            worker_count: 2
+            label: runtime_0_win_x64
+          - worker_index: 1
+            worker_count: 2
+            label: runtime_1_win_x64
 
     steps:
       - name: "🪟 Longpaths [${{ matrix.label }}]"
@@ -619,13 +617,27 @@ jobs:
         run: |
           gcc --version
 
-      - name: "🧪 Runtime [${{ matrix.label }}]"
+      - name: "🧭 Discover [windows_${{ matrix.worker_index }}]"
+        id: tests
+        shell: pwsh
+        run: |
+          ./mvnw.cmd -q -DskipTests test-compile
+          $selector = (./mvnw.cmd -q `
+            -Dexec.classpathScope=test `
+            -Dexec.mainClass=javan.testing.CiTestWorkerPlanner `
+            "-Dexec.args=windows ${{ matrix.worker_index }} ${{ matrix.worker_count }}" `
+            exec:java | Select-Object -Last 1).Trim()
+          "test_selector=$selector" | Tee-Object -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: "🧪 Test [windows_${{ matrix.worker_index }}]"
         env:
           CC: ${{ steps.msys2.outputs.msys2-location }}\\mingw64\\bin\\gcc.exe
-        run: >-
-          ./mvnw.cmd -q
-          '-Dtest=${{ matrix.test-selector }}'
-          test
+        shell: pwsh
+        run: |
+          ./mvnw.cmd -q `
+            -Dgroups=windows `
+            "-Dtest=${{ steps.tests.outputs.test_selector }}" `
+            test
 
   prepare-publication:
     name: Publication
