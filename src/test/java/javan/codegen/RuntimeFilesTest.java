@@ -7487,7 +7487,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
-    void runtimeMapStringLookupScalesWithoutLinearKeyScans() throws Exception {
+    void runtimeMapStringLookupScalesWhenGcStressIsDisabled() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
             #include "javan_runtime.h"

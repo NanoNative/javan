@@ -2217,7 +2217,7 @@ final class RuntimeSourceMemorySections {
             }
             char* end = NULL;
             unsigned long interval = strtoul(value, &end, 10);
-            if (end == value || interval == 0) {
+            if (end == value) {
                 interval = 1;
             }
             javan_heap_stress_interval = interval;
