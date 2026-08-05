@@ -70,7 +70,7 @@ final class WorkflowPolicySurfaceTest {
                 "Soft target:",
                 "Upload coverage artifact",
                 "jacoco-core-linux-x64",
-                "jacoco-cli-integration-${{ matrix.shard }}"
+                "jacoco-cli-integration-${{ matrix.worker_index }}"
             );
     }
 

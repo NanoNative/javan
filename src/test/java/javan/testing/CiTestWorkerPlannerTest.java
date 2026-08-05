@@ -9,17 +9,17 @@ import java.util.stream.IntStream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
-final class CiTestShardPlannerTest {
+final class CiTestWorkerPlannerTest {
     @Test
-    void nativeShardsAreNonEmptyDisjointAndComplete() {
-        final Set<String> expected = expand(CiTestShardPlanner.selector("native", 0, 1));
+    void nativeWorkersAreNonEmptyDisjointAndComplete() {
+        final Set<String> expected = expand(CiTestWorkerPlanner.selector("native", 0, 1));
         final Set<String> assigned = new HashSet<>();
 
         IntStream.range(0, 6).forEach(index -> {
-            final Set<String> shard = expand(CiTestShardPlanner.selector("native", index, 6));
-            assertThat(shard).isNotEmpty();
-            assertThat(shard.stream().filter(assigned::contains)).isEmpty();
-            assigned.addAll(shard);
+            final Set<String> worker = expand(CiTestWorkerPlanner.selector("native", index, 6));
+            assertThat(worker).isNotEmpty();
+            assertThat(worker.stream().filter(assigned::contains)).isEmpty();
+            assigned.addAll(worker);
         });
 
         assertThat(assigned).containsExactlyInAnyOrderElementsOf(expected);
@@ -27,15 +27,15 @@ final class CiTestShardPlannerTest {
 
     @Test
     void dedicatedPhasesAreDiscoverable() {
-        assertThat(expand(CiTestShardPlanner.selector("packaging", 0, 1))).isNotEmpty();
-        assertThat(expand(CiTestShardPlanner.selector("external", 0, 1))).isNotEmpty();
+        assertThat(expand(CiTestWorkerPlanner.selector("packaging", 0, 1))).isNotEmpty();
+        assertThat(expand(CiTestWorkerPlanner.selector("external", 0, 1))).isNotEmpty();
     }
 
     @Test
-    void invalidShardIsRejectedClearly() {
+    void invalidWorkerIsRejectedClearly() {
         assertThatIllegalArgumentException()
-            .isThrownBy(() -> CiTestShardPlanner.selector("native", 1, 1))
-            .withMessage("shard index must be within shard count");
+            .isThrownBy(() -> CiTestWorkerPlanner.selector("native", 1, 1))
+            .withMessage("worker index must be within worker count");
     }
 
     private static Set<String> expand(final String selector) {

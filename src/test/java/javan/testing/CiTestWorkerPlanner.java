@@ -17,23 +17,23 @@ import java.util.Set;
 
 import static org.junit.platform.launcher.TagFilter.includeTags;
 
-/** Discovers one execution suite and deterministically divides it between CI runners. */
-public final class CiTestShardPlanner {
+/** Discovers one execution suite and deterministically divides it between CI workers. */
+public final class CiTestWorkerPlanner {
     private static final int LARGE_CLASS_METHODS = 100;
 
-    private CiTestShardPlanner() {
+    private CiTestWorkerPlanner() {
     }
 
     public static void main(final String[] args) {
         if (args.length != 3) {
-            throw new IllegalArgumentException("usage: <suite> <shard-index> <shard-count>");
+            throw new IllegalArgumentException("usage: <suite> <worker-index> <worker-count>");
         }
         System.out.println(selector(args[0], Integer.parseInt(args[1]), Integer.parseInt(args[2])));
     }
 
-    static String selector(final String suite, final int shardIndex, final int shardCount) {
-        if (shardCount < 1 || shardIndex < 0 || shardIndex >= shardCount) {
-            throw new IllegalArgumentException("shard index must be within shard count");
+    static String selector(final String suite, final int workerIndex, final int workerCount) {
+        if (workerCount < 1 || workerIndex < 0 || workerIndex >= workerCount) {
+            throw new IllegalArgumentException("worker index must be within worker count");
         }
 
         final LauncherDiscoveryRequest request = LauncherDiscoveryRequestBuilder.request()
@@ -52,22 +52,22 @@ public final class CiTestShardPlanner {
             .sorted()
             .toList();
 
-        final List<String> selected = distribute(tests, shardCount).get(shardIndex);
+        final List<String> selected = distribute(tests, workerCount).get(workerIndex);
         if (selected.isEmpty()) {
-            throw new IllegalStateException("suite " + suite + " produced an empty shard " + shardIndex);
+            throw new IllegalStateException("suite " + suite + " produced an empty worker " + workerIndex);
         }
         return toSurefireSelector(selected);
     }
 
-    private static List<List<String>> distribute(final List<String> tests, final int shardCount) {
+    private static List<List<String>> distribute(final List<String> tests, final int workerCount) {
         final Map<String, List<String>> methodsByClass = new LinkedHashMap<>();
         for (final String test : tests) {
             final int separator = test.indexOf('#');
             methodsByClass.computeIfAbsent(test.substring(0, separator), ignored -> new ArrayList<>()).add(test);
         }
-        final List<List<String>> shards = new ArrayList<>();
-        for (int index = 0; index < shardCount; index++) {
-            shards.add(new ArrayList<>());
+        final List<List<String>> workers = new ArrayList<>();
+        for (int index = 0; index < workerCount; index++) {
+            workers.add(new ArrayList<>());
         }
         methodsByClass.entrySet().stream()
             .sorted(Comparator.<Map.Entry<String, List<String>>>comparingInt(entry -> entry.getValue().size())
@@ -75,16 +75,16 @@ public final class CiTestShardPlanner {
                 .thenComparing(Map.Entry::getKey))
             .forEach(entry -> {
                 if (entry.getValue().size() > LARGE_CLASS_METHODS) {
-                    entry.getValue().forEach(test -> leastLoaded(shards).add(test));
+                    entry.getValue().forEach(test -> leastLoaded(workers).add(test));
                 } else {
-                    leastLoaded(shards).addAll(entry.getValue());
+                    leastLoaded(workers).addAll(entry.getValue());
                 }
             });
-        return shards;
+        return workers;
     }
 
-    private static List<String> leastLoaded(final List<List<String>> shards) {
-        return shards.stream().min(Comparator.comparingInt(List::size)).orElseThrow();
+    private static List<String> leastLoaded(final List<List<String>> workers) {
+        return workers.stream().min(Comparator.comparingInt(List::size)).orElseThrow();
     }
 
     private static String toSurefireSelector(final List<String> tests) {

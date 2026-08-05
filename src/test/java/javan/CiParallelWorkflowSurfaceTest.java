@@ -92,7 +92,7 @@ final class CiParallelWorkflowSurfaceTest {
     void commonBuildSplitsLongNativeProofsIntoIndependentJobs() throws Exception {
         assertThat(Files.readString(BUILD_COMMON))
             .contains("verify-core:")
-            .contains("verify-cli-integration:")
+            .contains("cli:")
             .contains("native-acceptance:")
             .contains("native-sanitizer:")
             .contains("native-package-self-host:")
@@ -159,18 +159,20 @@ final class CiParallelWorkflowSurfaceTest {
     }
 
     @Test
-    void cliSuitesUseDocumentedSuitesAndAutomaticShards() throws Exception {
+    void cliSuitesUseDocumentedSuitesAndAutomaticWorkers() throws Exception {
         final String workflow = Files.readString(BUILD_COMMON);
         final String cliWorkflow = workflow.substring(
-            workflow.indexOf("  verify-cli-integration:"),
+            workflow.indexOf("  cli:"),
             workflow.indexOf("  native-acceptance:")
         );
         assertThat(cliWorkflow)
-            .contains("{ suite: native, shard: 0, shards: 6")
-            .contains("{ suite: native, shard: 5, shards: 6")
-            .contains("{ suite: packaging, shard: 0, shards: 1")
-            .contains("{ suite: external, shard: 0, shards: 1")
-            .contains("javan.testing.CiTestShardPlanner")
+            .contains("{ suite: native, worker_index: 0, worker_count: 6")
+            .contains("{ suite: native, worker_index: 5, worker_count: 6")
+            .contains("{ suite: packaging, worker_index: 0, worker_count: 1")
+            .contains("{ suite: external, worker_index: 0, worker_count: 1")
+            .contains("javan.testing.CiTestWorkerPlanner")
+            .contains("Discover [${{ matrix.suite }}_${{ matrix.worker_index }}]")
+            .contains("Test [${{ matrix.suite }}_${{ matrix.worker_index }}]")
             .contains("test_selector=%s\\n")
             .contains("max-parallel: 8")
             .doesNotContain("matrix.test-selector", "CliJdkSemanticsIntegrationTest#");
