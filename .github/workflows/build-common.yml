@@ -211,7 +211,7 @@ jobs:
           summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
           PY
 
-  verify-cli-integration:
+  cli:
     name: ${{ matrix.label }}
     if: "${{ github.event_name != 'push' || !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}"
     runs-on: ubuntu-24.04
@@ -221,16 +221,18 @@ jobs:
     strategy:
       fail-fast: true
       max-parallel: 8
+      # Same JUnit suites as local Maven runs. Six native workers shorten CI;
+      # discovery keeps class and method selectors out of this workflow.
       matrix:
         include:
-          - { suite: native, shard: 0, shards: 6, label: native_0_linux_x64 }
-          - { suite: native, shard: 1, shards: 6, label: native_1_linux_x64 }
-          - { suite: native, shard: 2, shards: 6, label: native_2_linux_x64 }
-          - { suite: native, shard: 3, shards: 6, label: native_3_linux_x64 }
-          - { suite: native, shard: 4, shards: 6, label: native_4_linux_x64 }
-          - { suite: native, shard: 5, shards: 6, label: native_5_linux_x64 }
-          - { suite: packaging, shard: 0, shards: 1, label: packaging_linux_x64 }
-          - { suite: external, shard: 0, shards: 1, label: external_linux_x64 }
+          - { suite: native, worker_index: 0, worker_count: 6, label: native_0_linux_x64 }
+          - { suite: native, worker_index: 1, worker_count: 6, label: native_1_linux_x64 }
+          - { suite: native, worker_index: 2, worker_count: 6, label: native_2_linux_x64 }
+          - { suite: native, worker_index: 3, worker_count: 6, label: native_3_linux_x64 }
+          - { suite: native, worker_index: 4, worker_count: 6, label: native_4_linux_x64 }
+          - { suite: native, worker_index: 5, worker_count: 6, label: native_5_linux_x64 }
+          - { suite: packaging, worker_index: 0, worker_count: 1, label: packaging_linux_x64 }
+          - { suite: external, worker_index: 0, worker_count: 1, label: external_linux_x64 }
 
     steps:
       - name: "🧑‍💻 Checkout [${{ inputs.ref || github.sha }}]"
@@ -285,18 +287,18 @@ jobs:
         run: |
           sh .github/scripts/install-external-probe-artifacts.sh "$MAVEN_REPO_LOCAL"
 
-      - name: "🧭 Select [${{ matrix.suite }}_${{ matrix.shard }}]"
+      - name: "🧭 Discover [${{ matrix.suite }}_${{ matrix.worker_index }}]"
         id: tests
         run: |
           ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -DskipTests test-compile
           selector=$(./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" \
             -Dexec.classpathScope=test \
-            -Dexec.mainClass=javan.testing.CiTestShardPlanner \
-            -Dexec.args='${{ matrix.suite }} ${{ matrix.shard }} ${{ matrix.shards }}' \
+            -Dexec.mainClass=javan.testing.CiTestWorkerPlanner \
+            -Dexec.args='${{ matrix.suite }} ${{ matrix.worker_index }} ${{ matrix.worker_count }}' \
             exec:java)
           printf 'test_selector=%s\n' "$selector" | tee -a "$GITHUB_OUTPUT"
 
-      - name: "🧪 CLI [${{ matrix.suite }}_${{ matrix.shard }}]"
+      - name: "🧪 Test [${{ matrix.suite }}_${{ matrix.worker_index }}]"
         run: |
           status=0
           ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -Dexec.skip=true \
@@ -313,7 +315,7 @@ jobs:
             exit "$status"
           fi
 
-      - name: "📊 Coverage [${{ matrix.suite }}_${{ matrix.shard }}]"
+      - name: "📊 Coverage [${{ matrix.suite }}_${{ matrix.worker_index }}]"
         if: always()
         run: |
           python3 - <<'PY'
@@ -630,7 +632,7 @@ jobs:
     needs:
       - build-info
       - verify-core
-      - verify-cli-integration
+      - cli
       - native-acceptance
       - native-sanitizer
       - native-package-self-host

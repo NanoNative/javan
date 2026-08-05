@@ -223,7 +223,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
 
         assertThat(commonWorkflow)
             .contains("verify-core:")
-            .contains("verify-cli-integration:")
+            .contains("cli:")
             .contains("native-acceptance:")
             .contains("native-sanitizer:")
             .contains("native-package-self-host:")

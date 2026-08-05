@@ -70,9 +70,10 @@ that require a more expensive or external boundary opt into a named annotation.
 
 These annotations are composed JUnit tags defined in `javan.testing.TestSuite`. Maven can also
 run a suite directly, for example `./mvnw -Dgroups=native test`. CI discovers tagged suites and
-shards the native suite automatically; contributors do not maintain class or method selectors in
-workflow YAML. Adding a CLI integration class without exactly one suite fails the workflow policy
-test.
+distributes the native suite across six workers automatically; contributors do not maintain class
+or method selectors in workflow YAML. `worker_index` identifies one worker, while `worker_count`
+states how many workers share that suite. Adding a CLI integration class without exactly one suite
+fails the workflow policy test.
 
 ## Generated Compatibility Status
 
@@ -106,7 +107,7 @@ the verification commands while allowing release orchestration to remain separat
 The CI work is divided by independent proof rather than running the longest native checks
 serially:
 
-- six automatically discovered native CLI shards plus dedicated packaging and external suites run
+- six automatically discovered native CLI workers plus dedicated packaging and external suites run
   with `max-parallel: 8`
 - native acceptance, sanitizer, and package/self-host proofs run as separate jobs for both
   Linux x64 and Linux arm64
