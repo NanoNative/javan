@@ -12,11 +12,28 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 final class CiTestWorkerPlannerTest {
     @Test
     void nativeWorkersAreNonEmptyDisjointAndComplete() {
-        final Set<String> expected = expand(CiTestWorkerPlanner.selector("native", 0, 1));
+        assertWorkersComplete("native", 6);
+    }
+
+    @Test
+    void windowsWorkersAreNonEmptyDisjointAndComplete() {
+        assertWorkersComplete("windows", 2);
+        final int first = expand(CiTestWorkerPlanner.selector("windows", 0, 2)).size();
+        final int second = expand(CiTestWorkerPlanner.selector("windows", 1, 2)).size();
+        assertThat(Math.abs(first - second)).isLessThanOrEqualTo(1);
+    }
+
+    @Test
+    void platformPhaseIsDiscoverable() {
+        assertThat(expand(CiTestWorkerPlanner.selector("platform", 0, 1))).isNotEmpty();
+    }
+
+    private static void assertWorkersComplete(final String suite, final int workerCount) {
+        final Set<String> expected = expand(CiTestWorkerPlanner.selector(suite, 0, 1));
         final Set<String> assigned = new HashSet<>();
 
-        IntStream.range(0, 6).forEach(index -> {
-            final Set<String> worker = expand(CiTestWorkerPlanner.selector("native", index, 6));
+        IntStream.range(0, workerCount).forEach(index -> {
+            final Set<String> worker = expand(CiTestWorkerPlanner.selector(suite, index, workerCount));
             assertThat(worker).isNotEmpty();
             assertThat(worker.stream().filter(assigned::contains)).isEmpty();
             assigned.addAll(worker);

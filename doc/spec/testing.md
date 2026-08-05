@@ -35,6 +35,7 @@ file.
 | Suite | Which related tests run? | `core` (untagged default), `native`, `packaging`, `external` |
 | Depth | How much runs locally? | `quick`, `standard`, `full` |
 | Proof | What native evidence does CI collect? | `smoke`, `acceptance`, `sanitizer`, `package` |
+| Portability | Which core subset repeats on another host? | `platform`, `windows` |
 | Target | Which operating system and architecture run it? | `linux_x64`, `linux_arm64`, `mac_x64`, `mac_arm64`, `win_x64`, `win_arm64` |
 
 A depth selects suites. CI then runs additional proofs on its configured targets. These are separate
@@ -64,16 +65,20 @@ CLI integration classes declare exactly one documented execution suite:
 - `@NativeTest` generates, compiles, and executes native C through the JavaN CLI.
 - `@PackagingTest` builds and verifies distributable or self-hosted packages.
 - `@ExternalTest` uses external probe artifacts, toolchains, or services.
+- `@PlatformTest` repeats portable JVM-only behavior on every enabled OS and architecture.
+- `@WindowsTest` compiles or executes the generated runtime with the Windows toolchain.
 
-Ordinary JVM-only tests need no annotation; they belong to the default `core` suite. Only tests
-that require a more expensive or external boundary opt into a named annotation.
+Ordinary JVM-only tests need no annotation; they belong to the default `core` suite. Portability
+annotations select focused repeats without removing those tests from normal local Maven depths.
 
 These annotations are composed JUnit tags defined in `javan.testing.TestSuite`. Maven can also
-run a suite directly, for example `./mvnw -Dgroups=native test`. CI discovers tagged suites and
-distributes the native suite across six workers automatically; contributors do not maintain class
-or method selectors in workflow YAML. `worker_index` identifies one worker, while `worker_count`
-states how many workers share that suite. Adding a CLI integration class without exactly one suite
-fails the workflow policy test.
+run a phase directly, for example `./mvnw -Dgroups=native test`,
+`./mvnw -Dgroups=platform test`, or `./mvnw -Dgroups=windows test`. CI discovers tagged suites and
+distributes native tests across six workers and Windows tests across two workers automatically;
+contributors do not maintain class or method selectors in workflow YAML. `worker_index` identifies
+one worker, while `worker_count` states how many workers share that phase. Adding a CLI integration
+class without exactly one suite fails the workflow policy test, and any literal test selector in a
+workflow fails policy verification.
 
 ## Generated Compatibility Status
 
@@ -111,11 +116,11 @@ serially:
   with `max-parallel: 8`
 - native acceptance, sanitizer, and package/self-host proofs run as separate jobs for both
   Linux x64 and Linux arm64
-- lightweight compiler/platform contract smoke runs on Linux, macOS, and Windows for x64
-  and arm64
-- verified native packages run on Linux; macOS package rows remain explicit and disabled
-  after the arm64 proof exceeded its job-time projection and x64 was already the slower
-  architecture lane; Windows package rows remain explicit and disabled
+- annotation-selected compiler/platform contract smoke runs on Linux and macOS for x64 and arm64,
+  plus Windows x64; the Windows arm64 row remains explicit and disabled until Temurin 25 is available
+- verified native packages run on Linux x64 and macOS arm64; Linux arm64 joins publication builds,
+  macOS x64 remains disabled as the historical slower architecture lane, and Windows package rows
+  remain explicit and disabled
 
 Every operating-system/architecture row remains in the matrix with an explicit `enabled`
 flag. If a preview runner is unreliable, or a secondary architecture is disproportionately

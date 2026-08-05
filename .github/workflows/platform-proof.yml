@@ -55,8 +55,4 @@ jobs:
 
       - name: "🧪 Verify [${{ inputs.label }}]"
         shell: bash
-        run: >-
-          ./mvnw -q -DskipTests compile
-          && ./mvnw -q
-          -Dtest='javan.reporting.RuntimeFootprintReportsTest,javan.compat.JdkCallSupportTest,javan.classfile.ClassFileReaderTest'
-          test
+        run: ./mvnw -q -Dgroups=platform test

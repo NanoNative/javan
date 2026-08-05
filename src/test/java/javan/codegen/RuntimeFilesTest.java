@@ -4,6 +4,7 @@ import javan.TestProcesses;
 import javan.build.NativeLinkInputs;
 import javan.build.ResourceBundler;
 import javan.compat.JdkCallSupport;
+import javan.testing.TestSuite.WindowsTest;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
@@ -2986,6 +2987,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsTest
     void writeEmitsPlatformRecursiveRuntimeLockForSharedHeapState() throws Exception {
         final Path runtime = new RuntimeFiles().write(tempDir);
 
@@ -3252,6 +3254,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsTest
     void writeMarksWindowsProcessExecutionUnsupportedUntilPorted() throws Exception {
         final Path runtime = new RuntimeFiles().write(tempDir);
 
@@ -3263,6 +3266,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsTest
     void generatedRuntimeCrossCompilesToWindowsPeWhenMinGwIsAvailable() throws Exception {
         final Path compiler = findFirstExecutableOnPath("x86_64-w64-mingw32-gcc");
         assumeTrue(compiler != null, "MinGW cross compiler is not installed");
@@ -3340,6 +3344,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsTest
     void generatedRuntimeExecutesBasicWindowsProbeWhenHostCompilerIsAvailable() throws Exception {
         assumeTrue(isWindowsHost(), "Host is not Windows");
         final Path compiler = findFirstExecutableOnPath("gcc.exe", "gcc", "x86_64-w64-mingw32-gcc.exe", "x86_64-w64-mingw32-gcc");
@@ -3727,6 +3732,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsTest
     void runtimeHostThreadGetsDistinctCurrentThreadAndDetachesCleanly() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -3799,6 +3805,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsTest
     void runtimeConcurrentHostThreadsCanAttachCollectDetachWithoutLeakingRoots() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -3920,6 +3927,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsTest
     void runtimeHostThreadRootFramesStayPublishedAcrossConcurrentGc() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -4096,6 +4104,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsTest
     void runtimeHostThreadThreadLocalValueSurvivesConcurrentGcAndDetachesCleanly() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -4203,6 +4212,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsTest
     void runtimeHostThreadThreadLocalObjectGraphSurvivesConcurrentGcAndDetachesCleanly() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -4328,6 +4338,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsTest
     void runtimeHostThreadThreadLocalSiblingRemoveKeepsRetainedGraphAliveDuringConcurrentGcAndDetachesCleanly() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -4595,6 +4606,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsTest
     void runtimeHostThreadThreadLocalOverwriteSurvivesRepeatedSafepointGcDuringMutationAndDetachesCleanly() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -4767,6 +4779,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsTest
     void runtimeHostThreadThreadLocalRemoveAndSiblingRetentionSurviveRepeatedSafepointGcDuringMutationAndDetachesCleanly() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -4948,6 +4961,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsTest
     void runtimeHostThreadThreadLocalMapGrowthSurvivesRepeatedSafepointGcAndDetachesCleanly() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -5109,6 +5123,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsTest
     void runtimeStartedWorkerThreadLocalObjectGraphSurvivesConcurrentGcAndCleansUpAfterJoin() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -5219,6 +5234,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsTest
     void runtimeStartedWorkerThreadLocalOverwriteCollectsPreviousGraphDuringConcurrentGc() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -5344,6 +5360,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsTest
     void runtimeStartedWorkerThreadLocalRemoveCollectsRemovedGraphDuringConcurrentGc() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -5444,6 +5461,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsTest
     void runtimeStartedWorkerThreadLocalSiblingRemoveKeepsOtherGraphAliveDuringConcurrentGc() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -5576,6 +5594,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsTest
     void runtimeThreadLifecycleInventoryTracksCurrentThreadState() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -5615,6 +5634,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsTest
     void runtimeThreadTargetSurvivesPreStartCollectionThroughWorkerField() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -5650,6 +5670,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsTest
     void runtimeThreadLifecycleInventoryDropsFinishedNonCurrentThreadObjectsAfterCollection() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -5700,6 +5721,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsTest
     void runtimeCompletedThreadDoesNotRetainTargetAfterCollectionWhenWorkerStaysReachable() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -5735,6 +5757,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsTest
     void runtimeCompletedReachableWorkerClearsThreadLocalStorageOnCompletion() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -5780,6 +5803,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsTest
     void runtimeStartedWorkerThreadLocalSiblingRemoveKeepsOtherGraphAliveDuringRepeatedSafepointGc() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -5923,6 +5947,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsTest
     void runtimeStartedWorkerThreadLocalOverwriteSurvivesRepeatedParentSafepointGcDuringMutation() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -6075,6 +6100,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsTest
     void runtimeStartedWorkerThreadLocalRemoveAndSiblingRetentionSurviveRepeatedParentSafepointGcDuringMutation() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -6242,6 +6268,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsTest
     void runtimeSharedThreadLocalKeyRemainsThreadIsolatedAcrossWorkerRemoveAndConcurrentGc() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -6392,6 +6419,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsTest
     void runtimeCompletedReachableWorkerClearsNestedThreadLocalObjectGraphOnCompletion() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -6444,6 +6472,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsTest
     void runtimeDetachedReachableCurrentThreadClearsThreadLocalStorageOnDetach() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -6481,6 +6510,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsTest
     void runtimeDetachedReachableCurrentThreadClearsNestedThreadLocalObjectGraphOnDetach() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -7167,6 +7197,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsTest
     void runtimeParentCollectionPreservesBlockedWorkerLocalRootedObject() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """

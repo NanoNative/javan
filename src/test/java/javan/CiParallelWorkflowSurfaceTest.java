@@ -3,6 +3,8 @@ package javan;
 import javan.testing.TestSuite.ExternalTest;
 import javan.testing.TestSuite.NativeTest;
 import javan.testing.TestSuite.PackagingTest;
+import javan.testing.TestSuite.PlatformTest;
+import javan.testing.TestSuite.WindowsTest;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
@@ -99,6 +101,69 @@ final class CiParallelWorkflowSurfaceTest {
             .contains("platform-smoke:")
             .contains("windows-runtime-smoke:")
             .doesNotContain("native-smoke:");
+    }
+
+    @Test
+    void platformAndWindowsProofsUseDocumentedSuitesInsteadOfOwnedSelectors() throws Exception {
+        assertThat(Files.readString(PLATFORM_PROOF))
+            .contains("-Dgroups=platform test")
+            .doesNotContain("RuntimeFootprintReportsTest", "JdkCallSupportTest", "ClassFileReaderTest");
+
+        final String common = Files.readString(BUILD_COMMON);
+        final String windows = common.substring(
+            common.indexOf("  windows-runtime-smoke:"),
+            common.indexOf("  prepare-publication:")
+        );
+        assertThat(windows)
+            .contains("worker_index: 0", "worker_index: 1", "worker_count: 2")
+            .contains("javan.testing.CiTestWorkerPlanner")
+            .contains("-Dgroups=windows")
+            .doesNotContain("test-selector:", "RuntimeFilesTest#");
+
+        for (final String testClass : java.util.List.of(
+            "javan.reporting.RuntimeFootprintReportsTest",
+            "javan.compat.JdkCallSupportTest",
+            "javan.classfile.ClassFileReaderTest"
+        )) {
+            assertThat(Class.forName(testClass).isAnnotationPresent(PlatformTest.class))
+                .as(testClass + " must remain in the platform phase")
+                .isTrue();
+        }
+        assertThat(Stream.of(Class.forName("javan.codegen.RuntimeFilesTest").getDeclaredMethods())
+            .filter(method -> method.isAnnotationPresent(WindowsTest.class))
+            .map(method -> method.getName()))
+            .containsExactlyInAnyOrder(
+                "writeEmitsPlatformRecursiveRuntimeLockForSharedHeapState",
+                "writeMarksWindowsProcessExecutionUnsupportedUntilPorted",
+                "generatedRuntimeCrossCompilesToWindowsPeWhenMinGwIsAvailable",
+                "generatedRuntimeExecutesBasicWindowsProbeWhenHostCompilerIsAvailable",
+                "runtimeHostThreadGetsDistinctCurrentThreadAndDetachesCleanly",
+                "runtimeConcurrentHostThreadsCanAttachCollectDetachWithoutLeakingRoots",
+                "runtimeHostThreadRootFramesStayPublishedAcrossConcurrentGc",
+                "runtimeDetachedReachableCurrentThreadClearsThreadLocalStorageOnDetach",
+                "runtimeDetachedReachableCurrentThreadClearsNestedThreadLocalObjectGraphOnDetach",
+                "runtimeHostThreadThreadLocalValueSurvivesConcurrentGcAndDetachesCleanly",
+                "runtimeHostThreadThreadLocalObjectGraphSurvivesConcurrentGcAndDetachesCleanly",
+                "runtimeHostThreadThreadLocalSiblingRemoveKeepsRetainedGraphAliveDuringConcurrentGcAndDetachesCleanly",
+                "runtimeHostThreadThreadLocalOverwriteSurvivesRepeatedSafepointGcDuringMutationAndDetachesCleanly",
+                "runtimeHostThreadThreadLocalRemoveAndSiblingRetentionSurviveRepeatedSafepointGcDuringMutationAndDetachesCleanly",
+                "runtimeHostThreadThreadLocalMapGrowthSurvivesRepeatedSafepointGcAndDetachesCleanly",
+                "runtimeThreadLifecycleInventoryTracksCurrentThreadState",
+                "runtimeThreadTargetSurvivesPreStartCollectionThroughWorkerField",
+                "runtimeThreadLifecycleInventoryDropsFinishedNonCurrentThreadObjectsAfterCollection",
+                "runtimeCompletedThreadDoesNotRetainTargetAfterCollectionWhenWorkerStaysReachable",
+                "runtimeCompletedReachableWorkerClearsThreadLocalStorageOnCompletion",
+                "runtimeStartedWorkerThreadLocalObjectGraphSurvivesConcurrentGcAndCleansUpAfterJoin",
+                "runtimeStartedWorkerThreadLocalOverwriteCollectsPreviousGraphDuringConcurrentGc",
+                "runtimeStartedWorkerThreadLocalRemoveCollectsRemovedGraphDuringConcurrentGc",
+                "runtimeStartedWorkerThreadLocalSiblingRemoveKeepsOtherGraphAliveDuringConcurrentGc",
+                "runtimeStartedWorkerThreadLocalSiblingRemoveKeepsOtherGraphAliveDuringRepeatedSafepointGc",
+                "runtimeStartedWorkerThreadLocalOverwriteSurvivesRepeatedParentSafepointGcDuringMutation",
+                "runtimeStartedWorkerThreadLocalRemoveAndSiblingRetentionSurviveRepeatedParentSafepointGcDuringMutation",
+                "runtimeSharedThreadLocalKeyRemainsThreadIsolatedAcrossWorkerRemoveAndConcurrentGc",
+                "runtimeCompletedReachableWorkerClearsNestedThreadLocalObjectGraphOnCompletion",
+                "runtimeParentCollectionPreservesBlockedWorkerLocalRootedObject"
+            );
     }
 
     @Test
@@ -204,7 +269,9 @@ final class CiParallelWorkflowSurfaceTest {
         assertThat(Files.readString(Path.of("src/test/java/javan/testing/TestSuite.java")))
             .contains("Generates, compiles, and executes native C through the JavaN CLI.")
             .contains("Builds and verifies distributable or self-hosted JavaN packages.")
-            .contains("Uses external probe artifacts, toolchains, or services.");
+            .contains("Uses external probe artifacts, toolchains, or services.")
+            .contains("Runs portable JVM-only behavior on every enabled CI operating system and architecture.")
+            .contains("Compiles or executes the generated runtime with the supported Windows toolchain.");
         assertThat(Files.readString(Path.of("pom.xml")))
             .contains("<id>quick</id>", "<id>standard</id>")
             .contains("<javan.test.excluded-groups>native,packaging,external</javan.test.excluded-groups>")
@@ -213,7 +280,9 @@ final class CiParallelWorkflowSurfaceTest {
             .contains("./mvnw -Pquick verify")
             .contains("./mvnw -Pstandard verify")
             .contains("./mvnw clean verify")
-            .contains("./mvnw -Dgroups=native test");
+            .contains("./mvnw -Dgroups=native test")
+            .contains("./mvnw -Dgroups=platform test")
+            .contains("./mvnw -Dgroups=windows test");
     }
 
     @Test

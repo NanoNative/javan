@@ -38,4 +38,20 @@ public final class TestSuite {
     @Tag("external")
     public @interface ExternalTest {
     }
+
+    /** Runs portable JVM-only behavior on every enabled CI operating system and architecture. */
+    @Documented
+    @Target({TYPE, METHOD})
+    @Retention(RUNTIME)
+    @Tag("platform")
+    public @interface PlatformTest {
+    }
+
+    /** Compiles or executes the generated runtime with the supported Windows toolchain. */
+    @Documented
+    @Target({TYPE, METHOD})
+    @Retention(RUNTIME)
+    @Tag("windows")
+    public @interface WindowsTest {
+    }
 }

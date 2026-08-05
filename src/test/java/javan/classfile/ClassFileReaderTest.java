@@ -3,6 +3,7 @@ package javan.classfile;
 import javan.compat.ClassMetadata;
 import javan.compat.ClassMetadataReader;
 import javan.compat.MemberMetadata;
+import javan.testing.TestSuite.PlatformTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
@@ -21,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 
 @Execution(CONCURRENT)
+@PlatformTest
 final class ClassFileReaderTest {
     private static final Path SOURCE = Path.of("Modified.class");
 

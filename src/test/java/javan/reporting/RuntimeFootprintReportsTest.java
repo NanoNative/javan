@@ -1,5 +1,6 @@
 package javan.reporting;
 
+import javan.testing.TestSuite.PlatformTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Isolated;
@@ -13,6 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @Isolated
+@PlatformTest
 final class RuntimeFootprintReportsTest {
     @TempDir
     private Path tempDir;
