@@ -25,15 +25,10 @@ public final class CiTestWorkerPlanner {
     }
 
     public static void main(final String[] args) {
-        final String[] plannerArgs = args.length == 1 ? args[0].split(":", -1) : args;
-        if (plannerArgs.length != 3) {
-            throw new IllegalArgumentException("usage: <suite> <worker-index> <worker-count> or <suite>:<worker-index>:<worker-count>");
+        if (args.length != 3) {
+            throw new IllegalArgumentException("usage: <suite> <worker-index> <worker-count>");
         }
-        System.out.println(selector(
-            plannerArgs[0],
-            Integer.parseInt(plannerArgs[1]),
-            Integer.parseInt(plannerArgs[2])
-        ));
+        System.out.println(selector(args[0], Integer.parseInt(args[1]), Integer.parseInt(args[2])));
     }
 
     static String selector(final String suite, final int workerIndex, final int workerCount) {

@@ -557,26 +557,15 @@ jobs:
     secrets: inherit
 
   windows-runtime-smoke:
-    name: ${{ matrix.label }}
+    name: runtime_win_x64
     if: "${{ github.event_name != 'push' || !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}"
     runs-on: windows-latest
     timeout-minutes: 30
     permissions:
       contents: read
-    strategy:
-      fail-fast: true
-      max-parallel: 2
-      matrix:
-        include:
-          - worker_index: 0
-            worker_count: 2
-            label: runtime_0_win_x64
-          - worker_index: 1
-            worker_count: 2
-            label: runtime_1_win_x64
 
     steps:
-      - name: "🪟 Longpaths [${{ matrix.label }}]"
+      - name: "🪟 Longpaths [win_x64]"
         shell: pwsh
         run: |
           git config --system core.longpaths true
@@ -597,7 +586,7 @@ jobs:
           distribution: temurin
           cache: maven
 
-      - name: "🪟 MSYS2 [${{ matrix.label }}]"
+      - name: "🪟 MSYS2 [win_x64]"
         id: msys2
         uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2
         with:
@@ -612,32 +601,16 @@ jobs:
           "${{ steps.msys2.outputs.msys2-location }}\\mingw64\\bin" |
             Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      - name: "🔨 Compiler [${{ matrix.label }}]"
+      - name: "🔨 Compiler [win_x64]"
         shell: pwsh
         run: |
           gcc --version
 
-      - name: "🧭 Discover [windows_${{ matrix.worker_index }}]"
-        id: tests
-        shell: pwsh
-        run: |
-          ./mvnw.cmd -q -DskipTests test-compile
-          $selector = (./mvnw.cmd -q `
-            -Dexec.classpathScope=test `
-            -Dexec.mainClass=javan.testing.CiTestWorkerPlanner `
-            -Dexec.args=windows:${{ matrix.worker_index }}:${{ matrix.worker_count }} `
-            exec:java | Select-Object -Last 1).Trim()
-          "test_selector=$selector" | Tee-Object -FilePath $env:GITHUB_OUTPUT -Append
-
-      - name: "🧪 Test [windows_${{ matrix.worker_index }}]"
+      - name: "🧪 Test [win_x64]"
         env:
           CC: ${{ steps.msys2.outputs.msys2-location }}\\mingw64\\bin\\gcc.exe
         shell: pwsh
-        run: |
-          ./mvnw.cmd -q `
-            -Dgroups=windows `
-            "-Dtest=${{ steps.tests.outputs.test_selector }}" `
-            test
+        run: ./mvnw.cmd -q -Dgroups=windows test
 
   prepare-publication:
     name: Publication

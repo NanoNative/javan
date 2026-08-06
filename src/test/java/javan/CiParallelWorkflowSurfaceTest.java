@@ -115,11 +115,16 @@ final class CiParallelWorkflowSurfaceTest {
             common.indexOf("  prepare-publication:")
         );
         assertThat(windows)
-            .contains("worker_index: 0", "worker_index: 1", "worker_count: 2")
-            .contains("javan.testing.CiTestWorkerPlanner")
-            .contains("-Dexec.args=windows:${{ matrix.worker_index }}:${{ matrix.worker_count }}")
-            .contains("-Dgroups=windows")
-            .doesNotContain("test-selector:", "RuntimeFilesTest#");
+            .contains("name: runtime_win_x64")
+            .contains("./mvnw.cmd -q -Dgroups=windows test")
+            .doesNotContain(
+                "worker_index:",
+                "worker_count:",
+                "CiTestWorkerPlanner",
+                "-Dtest=",
+                "test-selector:",
+                "RuntimeFilesTest#"
+            );
 
         for (final String testClass : java.util.List.of(
             "javan.reporting.RuntimeFootprintReportsTest",
