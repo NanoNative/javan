@@ -557,15 +557,25 @@ jobs:
     secrets: inherit
 
   windows-runtime-smoke:
-    name: runtime_win_x64
+    name: ${{ matrix.label }}
     if: "${{ github.event_name != 'push' || !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}"
-    runs-on: windows-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     permissions:
       contents: read
+    strategy:
+      fail-fast: true
+      max-parallel: 2
+      matrix:
+        include:
+          - os: windows-2025
+            label: runtime_win_x64
+            msystem: MINGW64
+            compiler: mingw-w64-x86_64-gcc
+            toolchain: mingw64
 
     steps:
-      - name: "🪟 Longpaths [win_x64]"
+      - name: "🪟 Longpaths [${{ matrix.label }}]"
         shell: pwsh
         run: |
           git config --system core.longpaths true
@@ -586,31 +596,30 @@ jobs:
           distribution: temurin
           cache: maven
 
-      - name: "🪟 MSYS2 [win_x64]"
+      - name: "🪟 MSYS2 [${{ matrix.label }}]"
         id: msys2
         uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2
         with:
           update: true
-          msystem: MINGW64
-          install: >-
-            mingw-w64-x86_64-gcc
+          msystem: ${{ matrix.msystem }}
+          install: ${{ matrix.compiler }}
 
       - name: "📍 Path"
         shell: pwsh
         run: |
-          "${{ steps.msys2.outputs.msys2-location }}\\mingw64\\bin" |
+          "${{ steps.msys2.outputs.msys2-location }}\\${{ matrix.toolchain }}\\bin" |
             Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      - name: "🔨 Compiler [win_x64]"
+      - name: "🔨 Compiler [${{ matrix.label }}]"
         shell: pwsh
         run: |
           gcc --version
 
-      - name: "🧪 Test [win_x64]"
+      - name: "🧪 Test [${{ matrix.label }}]"
         env:
-          CC: ${{ steps.msys2.outputs.msys2-location }}\\mingw64\\bin\\gcc.exe
+          CC: ${{ steps.msys2.outputs.msys2-location }}\\${{ matrix.toolchain }}\\bin\\gcc.exe
         shell: pwsh
-        run: ./mvnw.cmd -q -Dgroups=windows test
+        run: ./mvnw.cmd -q -Dgroups=windows-compatibility test
 
   prepare-publication:
     name: Publication

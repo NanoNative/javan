@@ -16,14 +16,6 @@ final class CiTestWorkerPlannerTest {
     }
 
     @Test
-    void windowsWorkersAreNonEmptyDisjointAndComplete() {
-        assertWorkersComplete("windows", 2);
-        final int first = expand(CiTestWorkerPlanner.selector("windows", 0, 2)).size();
-        final int second = expand(CiTestWorkerPlanner.selector("windows", 1, 2)).size();
-        assertThat(Math.abs(first - second)).isLessThanOrEqualTo(1);
-    }
-
-    @Test
     void platformPhaseIsDiscoverable() {
         assertThat(expand(CiTestWorkerPlanner.selector("platform", 0, 1))).isNotEmpty();
     }

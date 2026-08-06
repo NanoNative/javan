@@ -66,19 +66,21 @@ CLI integration classes declare exactly one documented execution suite:
 - `@PackagingTest` builds and verifies distributable or self-hosted packages.
 - `@ExternalTest` uses external probe artifacts, toolchains, or services.
 - `@PlatformTest` repeats portable JVM-only behavior on every enabled OS and architecture.
-- `@WindowsTest` compiles or executes the generated runtime with the Windows toolchain.
+- `@WindowsCompatibilityProof` temporarily selects portable runtime checks that CI repeats with a
+  Windows toolchain while support is incomplete. It is not a Windows-only test category and should
+  disappear once the complete relevant suite runs on every supported Windows target.
 
 Ordinary JVM-only tests need no annotation; they belong to the default `core` suite. Portability
 annotations select focused repeats without removing those tests from normal local Maven depths.
 
 These annotations are composed JUnit tags defined in `javan.testing.TestSuite`. Maven can also
 run a phase directly, for example `./mvnw -Dgroups=native test`,
-`./mvnw -Dgroups=platform test`, or `./mvnw -Dgroups=windows test`. CI discovers and distributes
-native tests across six workers automatically. Windows uses the same tagged Maven phase in one job
-and JUnit runs its methods concurrently. Contributors do not maintain class or method selectors in
-workflow YAML. `worker_index` identifies one native worker, while `worker_count` states how many
-workers share that phase. Adding a CLI integration class without exactly one suite fails the
-workflow policy test, and any literal test selector in a workflow fails policy verification.
+`./mvnw -Dgroups=platform test`, or `./mvnw -Dgroups=windows-compatibility test`. CI discovers and distributes
+native tests across six workers automatically. Each enabled Windows runtime matrix row uses the same
+tagged Maven phase, and JUnit runs its methods concurrently. Contributors do not maintain class or
+method selectors in workflow YAML. `worker_index` identifies one native worker, while `worker_count`
+states how many workers share that phase. Adding a CLI integration class without exactly one suite
+fails the workflow policy test, and any literal test selector in a workflow fails policy verification.
 
 ## Generated Compatibility Status
 

@@ -4,7 +4,7 @@ import javan.testing.TestSuite.ExternalTest;
 import javan.testing.TestSuite.NativeTest;
 import javan.testing.TestSuite.PackagingTest;
 import javan.testing.TestSuite.PlatformTest;
-import javan.testing.TestSuite.WindowsTest;
+import javan.testing.TestSuite.WindowsCompatibilityProof;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
@@ -115,8 +115,16 @@ final class CiParallelWorkflowSurfaceTest {
             common.indexOf("  prepare-publication:")
         );
         assertThat(windows)
-            .contains("name: runtime_win_x64")
-            .contains("./mvnw.cmd -q -Dgroups=windows test")
+            .contains(
+                "name: ${{ matrix.label }}",
+                "runs-on: ${{ matrix.os }}",
+                "os: windows-2025",
+                "label: runtime_win_x64",
+                "msystem: MINGW64",
+                "compiler: mingw-w64-x86_64-gcc",
+                "toolchain: mingw64"
+            )
+            .contains("./mvnw.cmd -q -Dgroups=windows-compatibility test")
             .doesNotContain(
                 "worker_index:",
                 "worker_count:",
@@ -136,7 +144,7 @@ final class CiParallelWorkflowSurfaceTest {
                 .isTrue();
         }
         assertThat(Stream.of(Class.forName("javan.codegen.RuntimeFilesTest").getDeclaredMethods())
-            .filter(method -> method.isAnnotationPresent(WindowsTest.class))
+            .filter(method -> method.isAnnotationPresent(WindowsCompatibilityProof.class))
             .map(method -> method.getName()))
             .containsExactlyInAnyOrder(
                 "writeEmitsPlatformRecursiveRuntimeLockForSharedHeapState",
@@ -277,7 +285,7 @@ final class CiParallelWorkflowSurfaceTest {
             .contains("Builds and verifies distributable or self-hosted JavaN packages.")
             .contains("Uses external probe artifacts, toolchains, or services.")
             .contains("Runs portable JVM-only behavior on every enabled CI operating system and architecture.")
-            .contains("Compiles or executes the generated runtime with the supported Windows toolchain.");
+            .contains("This is a temporary compatibility proof, not a Windows-only test category;");
         assertThat(Files.readString(Path.of("pom.xml")))
             .contains("<id>quick</id>", "<id>standard</id>")
             .contains("<javan.test.excluded-groups>native,packaging,external</javan.test.excluded-groups>")
@@ -288,7 +296,7 @@ final class CiParallelWorkflowSurfaceTest {
             .contains("./mvnw clean verify")
             .contains("./mvnw -Dgroups=native test")
             .contains("./mvnw -Dgroups=platform test")
-            .contains("./mvnw -Dgroups=windows test");
+            .contains("./mvnw -Dgroups=windows-compatibility test");
     }
 
     @Test
