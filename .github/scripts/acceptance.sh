@@ -28,7 +28,7 @@ elif [ -f "$ROOT/target/classes/javan/Main.class" ]; then
   chmod +x "$JAVAN_BIN"
 else
   printf '%s\n' "Missing javan runtime: build target/classes or set JAVAN_BIN=/path/to/javan." >&2
-  printf '%s\n' "Run mvn -q package first." >&2
+  printf '%s\n' "Run ./mvnw -q package first." >&2
   exit 2
 fi
 
@@ -391,7 +391,7 @@ accepts_runtime_contract_report() {
   assert_contains "$full_project/.javan/reports/runtime.json" "\"frameRootInventory\": true"
   assert_contains "$full_project/.javan/reports/runtime.json" "\"managedHeap\": false"
   assert_contains "$full_project/.javan/reports/runtime.json" "\"gc\": \"partial-mark-sweep\""
-  assert_contains "$full_project/.javan/reports/runtime.json" "\"gcStrategy\": \"single-threaded-entry-statement-and-return-safe-point-generated-object-object-array-primitive-array-boxed-primitive-wrapper-runtime-string-runtime-container-and-owned-container-storage-mark-sweep\""
+  assert_contains "$full_project/.javan/reports/runtime.json" "\"gcStrategy\": \"runtime-lock-serialized-entry-statement-and-return-safe-point-generated-object-object-array-primitive-array-boxed-primitive-wrapper-runtime-string-runtime-container-and-owned-container-storage-mark-sweep-with-registered-platform-worker-roots\""
   assert_contains "$full_project/.javan/reports/runtime.json" "\"gcStress\": \"metadata-verify-and-safe-point-collection\""
   assert_contains "$full_project/.javan/reports/runtime.json" "\"gcExcludedAllocationKinds\": [\"explicit-runtime-temporaries\", \"ffi-exports\"]"
   assert_contains "$full_project/.javan/reports/runtime.json" "\"runtimeContainerTraversal\": \"precise-rooted-runtime-container-mark-sweep\""
@@ -409,13 +409,13 @@ accepts_runtime_contract_report() {
   assert_contains "$full_project/.javan/reports/runtime.json" "\"statementSafePointScope\": \"generated-label-and-non-terminal-statement-boundaries\""
   assert_contains "$full_project/.javan/reports/runtime.json" "\"returnValueRoots\": true"
   assert_contains "$full_project/.javan/reports/runtime.json" "\"protectedObjectReturns\": true"
-  assert_contains "$full_project/.javan/reports/runtime.json" "\"protectedObjectReturnScope\": \"single-threaded-static-return-root-through-callee-safe-point-and-frame-pop\""
+  assert_contains "$full_project/.javan/reports/runtime.json" "\"protectedObjectReturnScope\": \"generated-object-call-caller-owned-rooted-result-slot-with-lock-scoped-publication-through-callee-safe-point-and-frame-pop\""
   assert_contains "$full_project/.javan/reports/runtime.json" "\"staticRootInventory\": true"
   assert_contains "$full_project/.javan/reports/runtime.json" "\"localRootInventory\": true"
   assert_contains "$full_project/.javan/reports/runtime.json" "\"localRootLiveness\": true"
   assert_contains "$full_project/.javan/reports/runtime.json" "\"localRootLivenessModel\": \"cfg-safe-point-dead-root-clearing\""
   assert_contains "$full_project/.javan/reports/runtime.json" "\"rootScanning\": false"
-  assert_contains "$full_project/.javan/reports/runtime.json" "\"rootModel\": \"generated-static-frame-return-and-expression-root-inventory-no-heap-scan\""
+  assert_contains "$full_project/.javan/reports/runtime.json" "\"rootModel\": \"generated-static-local-parameter-expression-caller-owned-result-and-registered-platform-worker-root-inventory-no-conservative-heap-scan\""
   assert_contains "$full_project/.javan/reports/runtime.json" "\"threadRoots\": true"
   assert_contains "$full_project/.javan/reports/runtime.json" "\"threadRootRegistry\": true"
   assert_contains "$full_project/.javan/reports/runtime.json" "\"threadRootScope\": \"parallel-host-thread-bootstrap-live-thread-root-registry-current-thread-root-membership-and-thread-target-field-traversal\""

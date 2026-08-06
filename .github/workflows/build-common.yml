@@ -1,0 +1,680 @@
+name: Verify
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        required: false
+        default: ''
+        type: string
+      prepare_publication:
+        required: false
+        default: false
+        type: boolean
+      snapshot:
+        required: false
+        default: false
+        type: boolean
+      bootstrap_generation:
+        required: false
+        default: 3
+        type: number
+      package_timeout_minutes:
+        required: false
+        default: 90
+        type: number
+    outputs:
+      resolved_version:
+        description: Version used for publication artifacts
+        value: ${{ jobs.build-info.outputs.resolved_version }}
+      commit_sha:
+        description: Commit built by this workflow
+        value: ${{ jobs.build-info.outputs.commit_sha }}
+      build_output_timestamp:
+        description: Reproducible build timestamp from the built commit
+        value: ${{ jobs.build-info.outputs.build_output_timestamp }}
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to build
+        required: false
+        default: ''
+        type: string
+      snapshot:
+        description: Append -SNAPSHOT to the UTC date version
+        required: false
+        default: false
+        type: boolean
+      bootstrap_generation:
+        description: Native compiler bootstrap generation
+        required: false
+        default: 3
+        type: number
+      package_timeout_minutes:
+        description: Native package job timeout
+        required: false
+        default: 90
+        type: number
+
+permissions: {}
+
+jobs:
+  build-info:
+    name: Metadata
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      resolved_version: ${{ steps.info.outputs.resolved_version }}
+      commit_sha: ${{ steps.info.outputs.commit_sha }}
+      build_output_timestamp: ${{ steps.info.outputs.build_output_timestamp }}
+    steps:
+      - name: "🧑‍💻 Checkout [${{ inputs.ref || github.sha }}]"
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: "🏷️ Resolve [${{ inputs.snapshot && 'snapshot' || 'release' }}]"
+        id: info
+        shell: sh
+        env:
+          SNAPSHOT: ${{ inputs.snapshot }}
+        run: |
+          set -eu
+          version=$(date -u +%Y.%m.%d)
+          if [ "$SNAPSHOT" = "true" ]; then
+            version=$version-SNAPSHOT
+          fi
+          {
+            printf 'resolved_version=%s\n' "$version"
+            printf 'commit_sha=%s\n' "$(git rev-parse HEAD)"
+            printf 'build_output_timestamp=%s\n' "$(git log -1 --format=%cI HEAD)"
+          } | tee -a "$GITHUB_OUTPUT"
+
+  verify-core:
+    name: core_linux_x64
+    if: "${{ github.event_name != 'push' || !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+
+    steps:
+      - name: "🧑‍💻 Checkout [${{ inputs.ref || github.sha }}]"
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: "🔍 Java"
+        id: java_info
+        uses: YunaBraska/java-info-action@11a434ffbf6bb3357363d1933be71a4076a90a6b # 3
+
+      - name: "☕ JDK [${{ steps.java_info.outputs.java_version }}]"
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
+        with:
+          java-version: ${{ steps.java_info.outputs.java_version }}
+          distribution: temurin
+          cache: maven
+
+      - name: "🐹 Go [1.26.4]"
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.26.4'
+          cache: false
+
+      - name: "🦀 Rust [1.96.0]"
+        uses: dtolnay/rust-toolchain@191af2e1955bbe165f9bbacff2d2438002dff4d4 # 1.96.0
+
+      - name: "🧰 Toolchains"
+        run: |
+          go version
+          rustc --version
+
+      - name: "🔨 Native"
+        if: runner.os == 'Linux'
+        run: |
+          for attempt in 1 2 3; do
+            if sudo apt-get -o Acquire::ForceIPv4=true update \
+              && sudo apt-get -o Acquire::ForceIPv4=true install -y --fix-missing build-essential mingw-w64; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep 15
+          done
+
+      - name: "📁 Repository"
+        run: |
+          repo=$(./mvnw -q help:evaluate -Dexpression=settings.localRepository -DforceStdout | tail -n 1)
+          echo "MAVEN_REPO_LOCAL=$repo" >> "$GITHUB_ENV"
+
+      - name: "🧪 Probes"
+        run: |
+          sh .github/scripts/install-external-probe-artifacts.sh "$MAVEN_REPO_LOCAL"
+
+      - name: "🧪 Core"
+        run: |
+          status=0
+          ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -Dexec.skip=true -Pquick verify || status=$?
+
+          if find target -maxdepth 1 -type f -name 'jacoco-surefire-*.exec' -print -quit | grep -q . \
+            || [ -d target/jacoco-child ]; then
+            ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -DskipTests jacoco:merge@merge-coverage jacoco:report@report || true
+          fi
+
+          if [ "$status" -ne 0 ]; then
+            python3 -c $'import pathlib\nimport xml.etree.ElementTree as ET\n\nreport = pathlib.Path("target/site/jacoco/jacoco.xml")\nif not report.exists():\n    print("JaCoCo report missing after failed verify.")\nelse:\n    root = ET.parse(report).getroot()\n    bundle = {counter.attrib["type"]: counter.attrib for counter in root.findall("counter")}\n    for counter_type in ("BRANCH", "LINE"):\n        counter = bundle.get(counter_type)\n        if counter is None:\n            continue\n        missed = int(counter["missed"])\n        covered = int(counter["covered"])\n        total = missed + covered\n        ratio = covered / total if total else 1.0\n        print(f"JaCoCo {counter_type.lower()} bundle ratio: {covered}/{total} = {ratio:.6%}")'
+            exit "$status"
+          fi
+
+      - name: "📊 Coverage [core]"
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import xml.etree.ElementTree as ET
+
+          report = pathlib.Path("target/site/jacoco/jacoco.xml")
+          summary_path = pathlib.Path(os.environ["GITHUB_STEP_SUMMARY"])
+          if not report.exists():
+              print("JaCoCo report missing; coverage summary skipped.")
+              summary_path.write_text(
+                  "# Coverage\n\nJaCoCo report missing. Coverage summary skipped.\n",
+                  encoding="utf-8"
+              )
+              raise SystemExit(0)
+
+          root = ET.parse(report).getroot()
+          counters = {counter.attrib["type"]: counter.attrib for counter in root.findall("counter")}
+          summary_lines = [
+              "# Coverage",
+              "",
+              "| Counter | Covered | Total | Ratio |",
+              "| --- | ---: | ---: | ---: |",
+          ]
+          for counter_type in ("LINE", "BRANCH"):
+              counter = counters.get(counter_type)
+              if counter is None:
+                  continue
+              missed = int(counter["missed"])
+              covered = int(counter["covered"])
+              total = missed + covered
+              ratio = covered / total if total else 1.0
+              print(f"JaCoCo {counter_type.lower()} coverage: {covered}/{total} = {ratio:.2%}")
+              summary_lines.append(
+                  f"| {counter_type.lower()} | {covered} | {total} | {ratio:.2%} |"
+              )
+          summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
+          PY
+
+  cli:
+    name: ${{ matrix.label }}
+    if: "${{ github.event_name != 'push' || !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: true
+      max-parallel: 8
+      # Same JUnit suites as local Maven runs. Six native workers shorten CI;
+      # discovery keeps class and method selectors out of this workflow.
+      matrix:
+        include:
+          - { suite: native, worker_index: 0, worker_count: 6, label: native_0_linux_x64 }
+          - { suite: native, worker_index: 1, worker_count: 6, label: native_1_linux_x64 }
+          - { suite: native, worker_index: 2, worker_count: 6, label: native_2_linux_x64 }
+          - { suite: native, worker_index: 3, worker_count: 6, label: native_3_linux_x64 }
+          - { suite: native, worker_index: 4, worker_count: 6, label: native_4_linux_x64 }
+          - { suite: native, worker_index: 5, worker_count: 6, label: native_5_linux_x64 }
+          - { suite: packaging, worker_index: 0, worker_count: 1, label: packaging_linux_x64 }
+          - { suite: external, worker_index: 0, worker_count: 1, label: external_linux_x64 }
+
+    steps:
+      - name: "🧑‍💻 Checkout [${{ inputs.ref || github.sha }}]"
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: "🔍 Java"
+        id: java_info
+        uses: YunaBraska/java-info-action@11a434ffbf6bb3357363d1933be71a4076a90a6b # 3
+
+      - name: "☕ JDK [${{ steps.java_info.outputs.java_version }}]"
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
+        with:
+          java-version: ${{ steps.java_info.outputs.java_version }}
+          distribution: temurin
+          cache: maven
+
+      - name: "🐹 Go [1.26.4]"
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.26.4'
+          cache: false
+
+      - name: "🦀 Rust [1.96.0]"
+        uses: dtolnay/rust-toolchain@191af2e1955bbe165f9bbacff2d2438002dff4d4 # 1.96.0
+
+      - name: "🧰 Toolchains"
+        run: |
+          go version
+          rustc --version
+
+      - name: "🔨 Native"
+        run: |
+          for attempt in 1 2 3; do
+            if sudo apt-get -o Acquire::ForceIPv4=true update \
+              && sudo apt-get -o Acquire::ForceIPv4=true install -y --fix-missing build-essential mingw-w64; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep 15
+          done
+
+      - name: "📁 Repository"
+        run: |
+          repo=$(./mvnw -q help:evaluate -Dexpression=settings.localRepository -DforceStdout | tail -n 1)
+          echo "MAVEN_REPO_LOCAL=$repo" >> "$GITHUB_ENV"
+
+      - name: "🧪 Probes"
+        run: |
+          sh .github/scripts/install-external-probe-artifacts.sh "$MAVEN_REPO_LOCAL"
+
+      - name: "🧭 Discover [${{ matrix.suite }}_${{ matrix.worker_index }}]"
+        id: tests
+        run: |
+          ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -DskipTests test-compile
+          selector=$(./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" \
+            -Dexec.classpathScope=test \
+            -Dexec.mainClass=javan.testing.CiTestWorkerPlanner \
+            -Dexec.args='${{ matrix.suite }} ${{ matrix.worker_index }} ${{ matrix.worker_count }}' \
+            exec:java)
+          printf 'test_selector=%s\n' "$selector" | tee -a "$GITHUB_OUTPUT"
+
+      - name: "🧪 Test [${{ matrix.suite }}_${{ matrix.worker_index }}]"
+        run: |
+          status=0
+          ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -Dexec.skip=true \
+            -Dgroups='${{ matrix.suite }}' \
+            -Dtest='${{ steps.tests.outputs.test_selector }}' verify || status=$?
+
+          if find target -maxdepth 1 -type f -name 'jacoco-surefire-*.exec' -print -quit | grep -q . \
+            || [ -d target/jacoco-child ]; then
+            ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -DskipTests jacoco:merge@merge-coverage jacoco:report@report || true
+          fi
+
+          if [ "$status" -ne 0 ]; then
+            python3 -c $'import pathlib\nimport xml.etree.ElementTree as ET\n\nreport = pathlib.Path("target/site/jacoco/jacoco.xml")\nif not report.exists():\n    print("JaCoCo report missing after failed verify.")\nelse:\n    root = ET.parse(report).getroot()\n    bundle = {counter.attrib["type"]: counter.attrib for counter in root.findall("counter")}\n    for counter_type in ("BRANCH", "LINE"):\n        counter = bundle.get(counter_type)\n        if counter is None:\n            continue\n        missed = int(counter["missed"])\n        covered = int(counter["covered"])\n        total = missed + covered\n        ratio = covered / total if total else 1.0\n        print(f"JaCoCo {counter_type.lower()} bundle ratio: {covered}/{total} = {ratio:.6%}")'
+            exit "$status"
+          fi
+
+      - name: "📊 Coverage [${{ matrix.suite }}_${{ matrix.worker_index }}]"
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import xml.etree.ElementTree as ET
+
+          report = pathlib.Path("target/site/jacoco/jacoco.xml")
+          summary_path = pathlib.Path(os.environ["GITHUB_STEP_SUMMARY"])
+          if not report.exists():
+              print("JaCoCo report missing; coverage summary skipped.")
+              summary_path.write_text(
+                  "# Coverage\n\nJaCoCo report missing. Coverage summary skipped.\n",
+                  encoding="utf-8"
+              )
+              raise SystemExit(0)
+
+          root = ET.parse(report).getroot()
+          counters = {counter.attrib["type"]: counter.attrib for counter in root.findall("counter")}
+          summary_lines = [
+              "# Coverage",
+              "",
+              "| Counter | Covered | Total | Ratio |",
+              "| --- | ---: | ---: | ---: |",
+          ]
+          for counter_type in ("LINE", "BRANCH"):
+              counter = counters.get(counter_type)
+              if counter is None:
+                  continue
+              missed = int(counter["missed"])
+              covered = int(counter["covered"])
+              total = missed + covered
+              ratio = covered / total if total else 1.0
+              print(f"JaCoCo {counter_type.lower()} coverage: {covered}/{total} = {ratio:.2%}")
+              summary_lines.append(
+                  f"| {counter_type.lower()} | {covered} | {total} | {ratio:.2%} |"
+              )
+          summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
+          PY
+
+  native-acceptance:
+    name: ${{ matrix.label }}
+    needs:
+      - build-info
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: true
+      max-parallel: 2
+      matrix:
+        include:
+          - target: linux-x64
+            os: ubuntu-24.04
+            sanitizer-scope: full
+            label: acceptance_linux_x64
+          - target: linux-aarch64
+            os: ubuntu-24.04-arm
+            sanitizer-scope: platform-smoke
+            label: acceptance_linux_arm64
+    uses: ./.github/workflows/native-proof.yml
+    with:
+      ref: ${{ inputs.ref || github.sha }}
+      runner: ${{ matrix.os }}
+      target: ${{ matrix.target }}
+      label: ${{ matrix.label }}
+      sanitizer_scope: ${{ matrix.sanitizer-scope }}
+      proof: acceptance
+      version: ${{ needs.build-info.outputs.resolved_version }}
+    secrets: inherit
+
+  native-sanitizer:
+    name: ${{ matrix.label }}
+    needs:
+      - build-info
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: true
+      max-parallel: 9
+      matrix:
+        include:
+          - target: linux-x64
+            os: ubuntu-24.04
+            scope: baseline
+            label: sanitizer_baseline_linux_x64
+            enabled: true
+          - target: linux-x64
+            os: ubuntu-24.04
+            scope: self_host
+            label: sanitizer_selfhost_linux_x64
+            enabled: ${{ inputs.prepare_publication }}
+          - target: linux-x64
+            os: ubuntu-24.04
+            scope: gc_roots
+            label: sanitizer_gcroots_linux_x64
+            enabled: true
+          - target: linux-x64
+            os: ubuntu-24.04
+            scope: gc_values
+            label: sanitizer_gcvalues_linux_x64
+            enabled: true
+          - target: linux-x64
+            os: ubuntu-24.04
+            scope: runtime_containers
+            label: sanitizer_runtime_linux_x64
+            enabled: true
+          - target: linux-x64
+            os: ubuntu-24.04
+            scope: temporary_roots
+            label: sanitizer_roots_linux_x64
+            enabled: true
+          - target: linux-x64
+            os: ubuntu-24.04
+            scope: failure_exceptions
+            label: sanitizer_exceptions_linux_x64
+            enabled: true
+          - target: linux-x64
+            os: ubuntu-24.04
+            scope: failure_limits
+            label: sanitizer_limits_linux_x64
+            enabled: true
+          - target: linux-aarch64
+            os: ubuntu-24.04-arm
+            scope: platform_smoke
+            label: sanitizer_linux_arm64
+            enabled: true
+    uses: ./.github/workflows/native-proof.yml
+    with:
+      ref: ${{ inputs.ref || github.sha }}
+      runner: ${{ matrix.os }}
+      target: ${{ matrix.target }}
+      label: ${{ matrix.label }}
+      sanitizer_scope: ${{ matrix.scope }}
+      proof: sanitizer
+      enabled: ${{ matrix.enabled }}
+      version: ${{ needs.build-info.outputs.resolved_version }}
+    secrets: inherit
+
+  native-package-self-host:
+    name: ${{ matrix.label }}
+    needs:
+      - build-info
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: true
+      max-parallel: 6
+      matrix:
+        include:
+          - target: linux-x64
+            os: ubuntu-24.04
+            sanitizer-scope: ${{ inputs.prepare_publication && 'full' || 'platform-smoke' }}
+            label: package_linux_x64
+            enabled: true
+          - target: linux-aarch64
+            os: ubuntu-24.04-arm
+            sanitizer-scope: platform-smoke
+            label: package_linux_arm64
+            enabled: ${{ inputs.prepare_publication }}
+          - target: macos-x64
+            os: macos-15-intel
+            sanitizer-scope: platform-smoke
+            label: package_mac_x64
+            enabled: false
+            reason: historical slower architecture lane
+          - target: macos-aarch64
+            os: macos-15
+            sanitizer-scope: platform-smoke
+            label: package_mac_arm64
+            enabled: true
+          - target: windows-x64
+            os: windows-2025
+            sanitizer-scope: platform-smoke
+            label: package_win_x64
+            enabled: false
+            reason: native linker and process runtime are incomplete
+          - target: windows-aarch64
+            os: windows-11-arm
+            sanitizer-scope: platform-smoke
+            label: package_win_arm64
+            enabled: false
+            reason: native linker and process runtime are incomplete
+    uses: ./.github/workflows/native-proof.yml
+    with:
+      ref: ${{ inputs.ref || github.sha }}
+      runner: ${{ matrix.os }}
+      target: ${{ matrix.target }}
+      label: ${{ matrix.label }}
+      sanitizer_scope: ${{ matrix.sanitizer-scope }}
+      proof: package-self-host
+      enabled: ${{ matrix.enabled }}
+      version: ${{ needs.build-info.outputs.resolved_version }}
+      bootstrap_generation: ${{ inputs.bootstrap_generation }}
+      package_scope: ${{ inputs.prepare_publication && startsWith(matrix.target, 'linux-') && 'full' || 'bootstrap' }}
+      timeout_minutes: ${{ inputs.package_timeout_minutes }}
+    secrets: inherit
+
+  platform-smoke:
+    name: ${{ matrix.label }}
+    strategy:
+      fail-fast: true
+      max-parallel: 6
+      matrix:
+        include:
+          - target: linux-x64
+            os: ubuntu-24.04
+            label: linux_x64
+            enabled: true
+          - target: linux-arm64
+            os: ubuntu-24.04-arm
+            label: linux_arm64
+            enabled: true
+          - target: macos-x64
+            os: macos-15-intel
+            label: mac_x64
+            enabled: true
+          - target: macos-arm64
+            os: macos-15
+            label: mac_arm64
+            enabled: true
+          - target: windows-x64
+            os: windows-2025
+            label: win_x64
+            enabled: true
+          - target: windows-arm64
+            os: windows-11-arm
+            label: win_arm64
+            enabled: false
+            reason: Temurin 25 is unavailable on the GitHub-hosted Windows ARM64 runner
+    permissions:
+      contents: read
+    uses: ./.github/workflows/platform-proof.yml
+    with:
+      ref: ${{ inputs.ref || github.sha }}
+      runner: ${{ matrix.os }}
+      target: ${{ matrix.target }}
+      label: ${{ matrix.label }}
+      enabled: ${{ matrix.enabled }}
+    secrets: inherit
+
+  windows-runtime-smoke:
+    name: ${{ matrix.label }}
+    if: "${{ github.event_name != 'push' || !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}"
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: true
+      max-parallel: 2
+      matrix:
+        include:
+          - os: windows-2025
+            label: runtime_win_x64
+            msystem: MINGW64
+            compiler: mingw-w64-x86_64-gcc
+            toolchain: mingw64
+
+    steps:
+      - name: "🪟 Longpaths [${{ matrix.label }}]"
+        shell: pwsh
+        run: |
+          git config --system core.longpaths true
+
+      - name: "🧑‍💻 Checkout [${{ inputs.ref || github.sha }}]"
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: "🔍 Java"
+        id: java_info
+        uses: YunaBraska/java-info-action@11a434ffbf6bb3357363d1933be71a4076a90a6b # 3
+
+      - name: "☕ JDK [${{ steps.java_info.outputs.java_version }}]"
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
+        with:
+          java-version: ${{ steps.java_info.outputs.java_version }}
+          distribution: temurin
+          cache: maven
+
+      - name: "🪟 MSYS2 [${{ matrix.label }}]"
+        id: msys2
+        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2
+        with:
+          update: true
+          msystem: ${{ matrix.msystem }}
+          install: ${{ matrix.compiler }}
+
+      - name: "📍 Path"
+        shell: pwsh
+        run: |
+          "${{ steps.msys2.outputs.msys2-location }}\\${{ matrix.toolchain }}\\bin" |
+            Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: "🔨 Compiler [${{ matrix.label }}]"
+        shell: pwsh
+        run: |
+          gcc --version
+
+      - name: "🧪 Test [${{ matrix.label }}]"
+        env:
+          CC: ${{ steps.msys2.outputs.msys2-location }}\\${{ matrix.toolchain }}\\bin\\gcc.exe
+        shell: pwsh
+        run: ./mvnw.cmd -q -Dgroups=windows-compatibility test
+
+  prepare-publication:
+    name: Publication
+    needs:
+      - build-info
+      - verify-core
+      - cli
+      - native-acceptance
+      - native-sanitizer
+      - native-package-self-host
+      - platform-smoke
+      - windows-runtime-smoke
+    if: inputs.prepare_publication
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: "🧑‍💻 Checkout [${{ inputs.ref || github.sha }}]"
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.build-info.outputs.commit_sha }}
+
+      - name: "🔍 Java"
+        id: java_info
+        uses: YunaBraska/java-info-action@11a434ffbf6bb3357363d1933be71a4076a90a6b # 3
+
+      - name: "☕ JDK [${{ steps.java_info.outputs.java_version }}]"
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
+        with:
+          java-version: ${{ steps.java_info.outputs.java_version }}
+          distribution: temurin
+          cache: maven
+
+      - name: "📦 Package [${{ needs.build-info.outputs.resolved_version }}]"
+        shell: sh
+        env:
+          BUILD_OUTPUT_TIMESTAMP: ${{ needs.build-info.outputs.build_output_timestamp }}
+          RELEASE_VERSION: ${{ needs.build-info.outputs.resolved_version }}
+        run: >-
+          ./mvnw -B versions:set -DnewVersion="$RELEASE_VERSION" -DgenerateBackupPoms=false
+          && ./mvnw -B -Ppublish -DskipTests -Dgpg.skip=true
+          -Dproject.build.outputTimestamp="$BUILD_OUTPUT_TIMESTAMP" package
+
+      - name: "📤 Upload [maven]"
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: build-workspace
+          retention-days: 1
+          if-no-files-found: error
+          include-hidden-files: true
+          path: |
+            .mvn
+            mvnw
+            mvnw.cmd
+            pom.xml
+            src
+            target/*.jar

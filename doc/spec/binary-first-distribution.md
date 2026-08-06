@@ -123,7 +123,7 @@ Before a first public binary release:
 - macOS aarch64 archive builds and verifies remotely.
 - Linux `amd64`/`arm64` Wolfi, distroless, and scratch images build remotely from
   published release assets.
-- archives contain only final numeric versions.
+- archives contain only UTC date versions in `YYYY.MM.DD` format.
 - archive verification extracts the package and proves packaged `bin/javan`.
 - packaged `bin/javan --version`, `javan doctor`, `javan build example`,
   showcase report generation, stale-report-resistant self-check/report, package-built

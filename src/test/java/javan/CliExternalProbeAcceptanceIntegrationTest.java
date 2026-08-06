@@ -1,5 +1,7 @@
 package javan;
 
+import javan.testing.TestSuite.ExternalTest;
+
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Tag;
@@ -35,6 +37,7 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @Tag("external-probe")
 @ResourceLock("native-cli-heavy")
 @ResourceLock(value = Resources.SYSTEM_PROPERTIES, mode = ResourceAccessMode.READ)
+@ExternalTest
 final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupport {
     @Test
     void realProbesDeclareCompilerOwnedGenericEvidence() throws Exception {
@@ -266,31 +269,35 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
     }
 
     @Test
-    void realProbeArtifactListingIsMetadataDrivenAndDeduplicated() throws Exception {
+    void realProbeArtifactInstallationIsMetadataDrivenAndDeduplicated() throws Exception {
         final Path probesRoot = tempDir.resolve("external-probes");
+        final Path artifactsRoot = tempDir.resolve("external-artifacts");
+        final Path repository = tempDir.resolve("repository");
         writeProbe(probesRoot.resolve("beta"), "beta", "com.example", "beta-lib", "1.0.0", "beta-out\n");
         writeProbe(probesRoot.resolve("alpha"), "alpha", "com.example", "alpha-lib", "2.0.0", "alpha-out\n");
         writeProbe(probesRoot.resolve("alpha-copy"), "alpha-copy", "com.example", "alpha-lib", "2.0.0", "alpha-copy-out\n");
+        writeExternalArtifactSource(artifactsRoot, "alpha-lib", "2.0.0", "AlphaValue");
+        writeExternalArtifactSource(artifactsRoot, "beta-lib", "1.0.0", "BetaValue");
 
-        final ProcessResult run = process(
-            tempDir,
-            List.of("sh", Path.of(".github/scripts/list-external-probe-artifacts.sh").toAbsolutePath().normalize().toString(), probesRoot.toString()),
-            Duration.ofSeconds(20)
-        );
+        final ProcessResult run = runExternalProbeInstaller(repository, artifactsRoot, probesRoot);
 
         assertThat(run.exitCode()).isZero();
         assertThat(run.stderr()).isEmpty();
-        assertThat(run.stdout()).isEqualTo("""
-            com.example:alpha-lib:2.0.0
-            com.example:beta-lib:1.0.0
-            """);
+        assertThat(mavenArtifact(repository, "com.example", "alpha-lib", "2.0.0")).isRegularFile();
+        assertThat(mavenArtifact(repository, "com.example", "beta-lib", "1.0.0")).isRegularFile();
+        try (Stream<Path> files = Files.walk(repository)) {
+            assertThat(files.filter(path -> path.toString().endsWith(".jar")).count()).isEqualTo(2);
+        }
     }
 
     @Test
-    void realProbeArtifactListingFailsClearlyWhenMetadataIsIncomplete() throws Exception {
+    void realProbeArtifactInstallationFailsClearlyWhenMetadataIsIncomplete() throws Exception {
         final Path probesRoot = tempDir.resolve("external-probes");
+        final Path artifactsRoot = tempDir.resolve("external-artifacts");
+        final Path repository = tempDir.resolve("repository");
         final Path brokenProbe = probesRoot.resolve("broken");
         Files.createDirectories(brokenProbe);
+        Files.createDirectories(artifactsRoot);
         Files.writeString(
             brokenProbe.resolve("probe.properties"),
             """
@@ -300,11 +307,7 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
                 """
         );
 
-        final ProcessResult run = process(
-            tempDir,
-            List.of("sh", Path.of(".github/scripts/list-external-probe-artifacts.sh").toAbsolutePath().normalize().toString(), probesRoot.toString()),
-            Duration.ofSeconds(20)
-        );
+        final ProcessResult run = runExternalProbeInstaller(repository, artifactsRoot, probesRoot);
 
         assertThat(run.exitCode()).isEqualTo(1);
         assertThat(run.stdout()).isEmpty();
@@ -408,20 +411,44 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
     }
 
     private void installBundledExternalProbeArtifacts(final Path repository) throws Exception {
-        final ProcessResult run = process(
+        final ProcessResult run = runExternalProbeInstaller(
+            repository,
+            Path.of("src/test/resources/external-artifacts").toAbsolutePath().normalize(),
+            Path.of("src/test/resources/external-probes").toAbsolutePath().normalize()
+        );
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stderr()).isEmpty();
+    }
+
+    private ProcessResult runExternalProbeInstaller(
+        final Path repository,
+        final Path artifactsRoot,
+        final Path probesRoot
+    ) throws Exception {
+        return process(
             tempDir,
             List.of(
                 "sh",
                 Path.of(".github/scripts/install-external-probe-artifacts.sh").toAbsolutePath().normalize().toString(),
                 repository.toString(),
-                Path.of("src/test/resources/external-artifacts").toAbsolutePath().normalize().toString(),
-                Path.of("src/test/resources/external-probes").toAbsolutePath().normalize().toString()
+                artifactsRoot.toString(),
+                probesRoot.toString()
             ),
             Duration.ofSeconds(60)
         );
+    }
 
-        assertThat(run.exitCode()).isZero();
-        assertThat(run.stderr()).isEmpty();
+    private static void writeExternalArtifactSource(
+        final Path artifactsRoot,
+        final String artifactId,
+        final String version,
+        final String className
+    ) throws IOException {
+        final Path source = artifactsRoot.resolve(artifactId).resolve(version)
+            .resolve("src/main/java/com/example/" + className + ".java");
+        Files.createDirectories(source.getParent());
+        Files.writeString(source, "package com.example; public final class " + className + " {}\n");
     }
 
     private static Path mavenArtifact(final Path repository, final String groupId, final String artifactId, final String version) {

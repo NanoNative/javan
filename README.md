@@ -21,7 +21,7 @@ normal Java source.
 From this checkout:
 
 ```sh
-mvn -q package
+./mvnw -q package
 java -jar target/javan-*.jar --version
 java -jar target/javan-*.jar build example --output native-showcase
 example/.javan/bin/native-showcase

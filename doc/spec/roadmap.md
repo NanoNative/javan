@@ -116,8 +116,8 @@ Implemented details:
 - generated support matrix docs
 - full Maven verification refreshes the tracked compatibility status from already compiled
   classes through the same `javan compat` entrypoint
-- Eclipse Temurin 25.0.1 on Linux x64 is the pinned reference for the tracked JDK inventory,
-  with a dedicated strict CI lifecycle gate
+- Linux x64 is the canonical platform for the tracked JDK inventory, with Java resolved from
+  the project declaration by the same action as every other CI job
 
 Current gates:
 
@@ -127,10 +127,9 @@ Current gates:
   support
 - stale support-matrix Markdown or JSON is regenerated automatically on every full JDK 25
   Maven verification and fails once with an exact rerun instruction
-- the tracked JDK page is also regenerated and gated on the pinned reference JDK; other JDK
-  25 vendors and patches generate their active report without modifying the reference page
-- CI provisions and requires the exact reference vendor, version, OS, and architecture
-  before running the same `mvn verify` lifecycle; there is no separate generation,
+- the tracked JDK page is also regenerated and gated on the canonical Linux x64 platform; its
+  stable report names the Java feature rather than a vendor or patch build
+- CI requires the canonical platform before running the same `mvn verify` lifecycle; there is no separate generation,
   comparison, or copy command
 
 Open acceptance criteria:
@@ -608,8 +607,8 @@ Trade-offs:
 
 Acceptance criteria:
 
-- host-native CI covers `linux-x64` and `linux-aarch64`; the required local host gate
-  covers macOS aarch64, while `macos-x64` remains deferred
+- host-native CI covers Linux and macOS x64/aarch64; Windows package rows remain disabled
+  in place until their runtime/linker proof exists
 - runtime footprint reports list host target, requested target, actual target, artifact
   bytes, footprint statuses, and OS/ARCH coverage rows
 - mismatched `--target` fails before native codegen until cross-linking is implemented

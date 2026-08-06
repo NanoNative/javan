@@ -4,7 +4,7 @@ package javan.cli;
  * Resolves the packaged javan version.
  */
 public final class Version {
-    private static final String VERSION = "2026.6.14";
+    private static final String VERSION = "${project.version}";
 
     private Version() {
     }
@@ -12,7 +12,7 @@ public final class Version {
     /**
      * Returns the version number.
      *
-     * @return version number or a development fallback
+     * @return version number
      */
     public static String number() {
         return VERSION;
@@ -26,5 +26,4 @@ public final class Version {
     public static String full() {
         return "javan " + VERSION;
     }
-
 }

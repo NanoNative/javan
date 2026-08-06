@@ -1,5 +1,7 @@
 package javan;
 
+import javan.testing.TestSuite.NativeTest;
+
 import javan.cli.Cli;
 import javan.cli.Version;
 import javan.reporting.RuntimeFootprintReports;
@@ -35,6 +37,7 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @Execution(SAME_THREAD)
 @ResourceLock("native-cli-heavy")
 @ResourceLock(value = Resources.SYSTEM_PROPERTIES, mode = ResourceAccessMode.READ)
+@NativeTest
 final class CliIntegrationTest extends CliIntegrationSupport {
     @Test
     void mainPrintsVersionFromChildJvm() throws Exception {

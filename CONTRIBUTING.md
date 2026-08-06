@@ -13,15 +13,16 @@ javan is a minimal native-first Java toolchain. Contributions should keep Java s
 
 - Use Java 25. Compatibility verification rejects another feature release before it can
   rewrite versioned matrix keys.
-- Use Maven for local verification.
+- Use Maven for local verification. The canonical quick, standard, and full commands are in
+  [Testing Policy](doc/spec/testing.md#local-verification).
 - Install a native C toolchain when testing generated binaries or the full release gate.
 - The release gate builds Javan through Javan's own native backend.
 
 ```sh
-mvn verify
+./mvnw -Pstandard verify
 ```
 
-This command also generates the active-JDK compatibility reports and refreshes the tracked
+Every `verify` command also generates the active-JDK compatibility reports and refreshes the tracked
 support matrix through the compiler's canonical report generator. If tracked status changed,
 Maven writes the current files and fails once so the generated change can be reviewed; rerun
 the same command to confirm it is stable. No separate report command or manual copy step is

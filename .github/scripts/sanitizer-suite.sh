@@ -6,12 +6,16 @@ cd "$ROOT"
 
 SANITIZER_SCOPE=${JAVAN_SANITIZER_SCOPE:-full}
 case "$SANITIZER_SCOPE" in
-  full|platform-smoke) ;;
+  full|platform_smoke|baseline|self_host|gc_roots|gc_values|runtime_containers|temporary_roots|failure_exceptions|failure_limits) ;;
   *)
     printf '%s\n' "Unsupported sanitizer scope: $SANITIZER_SCOPE" >&2
     exit 2
     ;;
 esac
+
+runs_scope() {
+  [ "$SANITIZER_SCOPE" = "full" ] || [ "$SANITIZER_SCOPE" = "$1" ]
+}
 
 JAVAN_GC_STRESS=${JAVAN_GC_STRESS:-64}
 JAVAN_GC_SAFEPOINT_INTERVAL=${JAVAN_GC_SAFEPOINT_INTERVAL:-1}
@@ -133,6 +137,7 @@ assert_library_sanitizer_summary() {
   assert_json_number_at_least "$NATIVE_LIBRARY_REPORT" actualGcCollectedAllocations 1000
 }
 
+if runs_scope baseline || [ "$SANITIZER_SCOPE" = "platform_smoke" ]; then
 JAVAN_HEAP_LIMIT_BYTES=32768 \
 JAVAN_SANITIZER_COUNTER_CHECK=true \
 JAVAN_SANITIZER_MAX_LIVE_ALLOCATIONS=0 \
@@ -189,12 +194,14 @@ assert_contains "$THREAD_CURRENT_REPORT" '"kind": "app"'
 assert_contains "$THREAD_CURRENT_REPORT" '"counterCheck": "true"'
 assert_contains "$THREAD_CURRENT_REPORT" '"failureSignatures": "false"'
 assert_thread_inventory_summary "$THREAD_CURRENT_REPORT"
+assert_library_sanitizer_summary
+fi
 
-if [ "$SANITIZER_SCOPE" = "platform-smoke" ]; then
-  assert_library_sanitizer_summary
+if [ "$SANITIZER_SCOPE" = "platform_smoke" ] || [ "$SANITIZER_SCOPE" = "baseline" ]; then
   exit 0
 fi
 
+if runs_scope self_host; then
 JAVAN_SANITIZER_SELF_HOST_MAX_LIVE_ALLOCATIONS=0 \
 JAVAN_SANITIZER_SELF_HOST_MAX_LIVE_BYTES=0 \
 JAVAN_SANITIZER_SELF_HOST_MAX_ROOT_FRAME_DEPTH=0 \
@@ -222,6 +229,9 @@ assert_sanitizer_proof_summary target self-host
 SELF_HOST_REPORT=target/.javan/reports/report.json
 assert_json_number_at_least "$SELF_HOST_REPORT" actualTotalAllocations 1
 assert_json_number_at_least "$SELF_HOST_REPORT" actualGcCollections 1
+fi
+
+if runs_scope gc_roots; then
 sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/static-root-inventory
 JAVAN_HEAP_LIMIT_BYTES=4096 \
   sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/string-static-root
@@ -235,7 +245,9 @@ sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile
 
 JAVAN_HEAP_LIMIT_BYTES=8192 \
   sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/primitive-array-gc
+fi
 
+if runs_scope gc_values; then
 JAVAN_HEAP_LIMIT_BYTES=4096 \
 JAVAN_GC_STRESS=1 \
 JAVAN_GC_SAFEPOINT_INTERVAL=1 \
@@ -285,9 +297,9 @@ JAVAN_HEAP_LIMIT_BYTES=6000 \
 JAVAN_GC_STRESS=1 \
 JAVAN_GC_SAFEPOINT_INTERVAL=1 \
   sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/cfg-local-root-liveness-gc
+fi
 
-assert_library_sanitizer_summary
-
+if runs_scope runtime_containers; then
 JAVAN_HEAP_LIMIT_BYTES=4096 \
   sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/string-growth-limit
 
@@ -334,7 +346,9 @@ JAVAN_HEAP_LIMIT_BYTES=12288 \
 JAVAN_HEAP_LIMIT_BYTES=512 \
 JAVAN_GC_STRESS=1 \
   sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-realloc-growth-fit
+fi
 
+if runs_scope temporary_roots; then
 JAVAN_HEAP_LIMIT_BYTES=4096 \
 JAVAN_GC_STRESS=1 \
 JAVAN_GC_SAFEPOINT_INTERVAL=1 \
@@ -404,13 +418,17 @@ JAVAN_HEAP_LIMIT_BYTES=4096 \
 JAVAN_GC_STRESS=1 \
 JAVAN_GC_SAFEPOINT_INTERVAL=1 \
   sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-directory-stream-source-root
+fi
 
+if runs_scope failure_limits; then
 JAVAN_MAX_ALLOCATION_BYTES=24 \
 JAVAN_SANITIZER_COMPARE_JVM=false \
 JAVAN_SANITIZER_EXPECTED_EXIT=1 \
 JAVAN_SANITIZER_EXPECTED_STDERR_CONTAINS="out of memory" \
   sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-directory-stream-result-allocation-limit-panic
+fi
 
+if runs_scope failure_exceptions; then
 JAVAN_HEAP_LIMIT_BYTES=4096 \
 JAVAN_GC_STRESS=1 \
 JAVAN_GC_SAFEPOINT_INTERVAL=1 \
@@ -471,7 +489,9 @@ JAVAN_SANITIZER_COMPARE_JVM=false \
 JAVAN_SANITIZER_EXPECTED_EXIT=1 \
 JAVAN_SANITIZER_EXPECTED_STDERR_CONTAINS="negative array length" \
   sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/negative-array-length
+fi
 
+if runs_scope failure_limits; then
 JAVAN_MAX_ALLOCATION_BYTES=64 \
 JAVAN_SANITIZER_COMPARE_JVM=false \
 JAVAN_SANITIZER_EXPECTED_EXIT=1 \
@@ -550,7 +570,10 @@ JAVAN_SANITIZER_COMPARE_JVM=false \
 JAVAN_SANITIZER_EXPECTED_EXIT=1 \
 JAVAN_SANITIZER_EXPECTED_STDERR_CONTAINS="out of memory" \
   sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/heap-limit-live-root-panic
+fi
 
+if runs_scope failure_exceptions; then
 JAVAN_SANITIZER_COMPARE_JVM=false \
 JAVAN_SANITIZER_EXPECTED_EXIT=7 \
   sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/system-exit
+fi

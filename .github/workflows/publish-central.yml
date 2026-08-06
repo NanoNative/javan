@@ -1,0 +1,123 @@
+name: Central
+
+on:
+  workflow_call:
+    inputs:
+      run_id:
+        required: false
+        default: ''
+        type: string
+      dry_run:
+        required: false
+        default: false
+        type: boolean
+      build_output_timestamp:
+        required: true
+        type: string
+    secrets:
+      GPG_PASSPHRASE:
+        required: true
+      GPG_SIGNING_KEY:
+        required: true
+      OSSH_PASS:
+        required: true
+      OSSH_USER:
+        required: true
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Workflow run containing the build-workspace artifact
+        required: true
+        type: string
+      dry_run:
+        description: Build and validate the Central bundle without uploading it
+        required: false
+        default: true
+        type: boolean
+      build_output_timestamp:
+        description: Reproducible timestamp from the verified commit
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: publish-central-disabled
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Central
+    if: ${{ false }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+      deployments: write
+    environment:
+      name: maven-central
+      url: https://central.sonatype.com
+    steps:
+      - name: "🔐 Secrets"
+        shell: sh
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
+          OSSH_PASS: ${{ secrets.OSSH_PASS }}
+          OSSH_USER: ${{ secrets.OSSH_USER }}
+        run: |
+          set -eu
+          : "${GPG_PASSPHRASE:?Missing required secret: GPG_PASSPHRASE}"
+          : "${GPG_SIGNING_KEY:?Missing required secret: GPG_SIGNING_KEY}"
+          : "${OSSH_PASS:?Missing required secret: OSSH_PASS}"
+          : "${OSSH_USER:?Missing required secret: OSSH_USER}"
+
+      - name: "📥 Download [${{ inputs.run_id }}]"
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: build-workspace
+          path: ${{ github.workspace }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.run_id || github.run_id }}
+
+      - name: "🔍 Java"
+        id: java_info
+        uses: YunaBraska/java-info-action@11a434ffbf6bb3357363d1933be71a4076a90a6b # 3
+
+      - name: "☕ JDK [${{ steps.java_info.outputs.java_version }}]"
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
+        with:
+          distribution: temurin
+          java-version: ${{ steps.java_info.outputs.java_version }}
+          cache: maven
+          server-id: central
+          server-username: OSSH_USER
+          server-password: OSSH_PASS
+          gpg-private-key: ${{ secrets.GPG_SIGNING_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
+        env:
+          OSSH_USER: ${{ secrets.OSSH_USER }}
+          OSSH_PASS: ${{ secrets.OSSH_PASS }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: "🧰 Wrapper"
+        shell: sh
+        run: chmod +x ./mvnw
+
+      - name: "🚀 Publish [central]"
+        shell: sh
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          BUILD_OUTPUT_TIMESTAMP: ${{ inputs.build_output_timestamp }}
+          OSSH_USER: ${{ secrets.OSSH_USER }}
+          OSSH_PASS: ${{ secrets.OSSH_PASS }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          set -eu
+          if [ "$DRY_RUN" = "true" ]; then
+            ./mvnw -B -Ppublish -Dproject.build.outputTimestamp="$BUILD_OUTPUT_TIMESTAMP" -DskipTests -Dgpg.skip=true -DskipPublishing=true deploy
+          else
+            ./mvnw -B -Ppublish -Dproject.build.outputTimestamp="$BUILD_OUTPUT_TIMESTAMP" -DskipTests deploy
+          fi

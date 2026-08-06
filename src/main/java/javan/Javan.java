@@ -381,8 +381,8 @@ public final class Javan {
         final String jsonPath = reports.resolve("runtime-profiling.json").toString();
         final String markdownPath = reports.resolve("runtime-profiling.md").toString();
         return List.of(
-            "--javan-runtime-profile-json=" + jsonPath,
-            "--javan-runtime-profile-md=" + markdownPath
+            new StringBuilder("--javan-runtime-profile-json=").append(jsonPath).toString(),
+            new StringBuilder("--javan-runtime-profile-md=").append(markdownPath).toString()
         );
     }
 

@@ -398,13 +398,16 @@ public final class ConstantPool {
     }
 
     private static boolean referenceKindMatchesTag(final int referenceKind, final int referenceTag) {
-        return switch (referenceKind) {
-            case 1, 2, 3, 4 -> referenceTag == 9;
-            case 5, 8 -> referenceTag == 10;
-            case 6, 7 -> referenceTag == 10 || referenceTag == 11;
-            case 9 -> referenceTag == 11;
-            default -> false;
-        };
+        if (referenceKind >= 1 && referenceKind <= 4) {
+            return referenceTag == 9;
+        }
+        if (referenceKind == 5 || referenceKind == 8) {
+            return referenceTag == 10;
+        }
+        if (referenceKind == 6 || referenceKind == 7) {
+            return referenceTag == 10 || referenceTag == 11;
+        }
+        return referenceKind == 9 && referenceTag == 11;
     }
 
     private Optional<String> utf8Value(final int index) {

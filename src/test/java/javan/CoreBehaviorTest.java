@@ -216,6 +216,15 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void entryPointEqualityPreservesRecordNullSemantics() {
+        final EntryPoint left = new EntryPoint(null, null, null);
+        final EntryPoint right = new EntryPoint(null, null, null);
+
+        assertThat(left).isEqualTo(right);
+        assertThat(left.hashCode()).isZero();
+    }
+
+    @Test
     void fileScannerIncludesNestedPackageNamedBuild() throws Exception {
         final Path classFile = tempDir.resolve("classes/javan/build/Foo.class");
         Files.createDirectories(classFile.getParent());
@@ -6320,12 +6329,22 @@ final class CoreBehaviorTest {
             "java/lang/Record",
             "toString",
             "()Ljava/lang/String;",
-            Optional.of(new DynamicRef("toString", "()Ljava/lang/String;", "java/lang/runtime/ObjectMethods", "other", "()V", List.of())),
+            Optional.of(new DynamicRef(
+                "toString",
+                "()Ljava/lang/String;",
+                "java/lang/runtime/ObjectMethods",
+                "other",
+                "()V",
+                List.of("not-a-concat-recipe")
+            )),
             false
         );
 
         assertThat(diagnostics).hasSize(1);
         assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN130");
+        assertThat(diagnostics.getFirst().reason())
+            .contains("arguments=1")
+            .doesNotContain("recipeLength", "constantPlaceholder");
     }
 
     @Test
