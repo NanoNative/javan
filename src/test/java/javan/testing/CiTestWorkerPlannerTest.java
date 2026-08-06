@@ -7,6 +7,7 @@ import java.util.Set;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 final class CiTestWorkerPlannerTest {
@@ -26,6 +27,12 @@ final class CiTestWorkerPlannerTest {
     @Test
     void platformPhaseIsDiscoverable() {
         assertThat(expand(CiTestWorkerPlanner.selector("platform", 0, 1))).isNotEmpty();
+    }
+
+    @Test
+    void packedCommandLineAvoidsWindowsBatchArgumentSplitting() {
+        assertThatCode(() -> CiTestWorkerPlanner.main(new String[]{"windows:0:2"}))
+            .doesNotThrowAnyException();
     }
 
     private static void assertWorkersComplete(final String suite, final int workerCount) {

@@ -117,6 +117,7 @@ final class CiParallelWorkflowSurfaceTest {
         assertThat(windows)
             .contains("worker_index: 0", "worker_index: 1", "worker_count: 2")
             .contains("javan.testing.CiTestWorkerPlanner")
+            .contains("-Dexec.args=windows:${{ matrix.worker_index }}:${{ matrix.worker_count }}")
             .contains("-Dgroups=windows")
             .doesNotContain("test-selector:", "RuntimeFilesTest#");
 
