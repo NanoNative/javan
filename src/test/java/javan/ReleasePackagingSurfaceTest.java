@@ -213,8 +213,13 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
 
         assertThat(windows)
             .contains("windows-runtime-smoke:")
-            .contains("name: runtime_win_x64")
-            .contains("./mvnw.cmd -q -Dgroups=windows test")
+            .contains(
+                "name: ${{ matrix.label }}",
+                "runs-on: ${{ matrix.os }}",
+                "os: windows-2025",
+                "label: runtime_win_x64"
+            )
+            .contains("./mvnw.cmd -q -Dgroups=windows-compatibility test")
             .doesNotContain("worker_index:", "worker_count:", "test-selector:", "RuntimeFilesTest#");
     }
 

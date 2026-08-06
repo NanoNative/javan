@@ -47,11 +47,15 @@ public final class TestSuite {
     public @interface PlatformTest {
     }
 
-    /** Compiles or executes the generated runtime with the supported Windows toolchain. */
+    /**
+     * Selects portable runtime checks that CI repeats on Windows while platform support is
+     * incomplete. This is a temporary compatibility proof, not a Windows-only test category;
+     * remove it when the complete relevant suite runs on every supported Windows target.
+     */
     @Documented
     @Target({TYPE, METHOD})
     @Retention(RUNTIME)
-    @Tag("windows")
-    public @interface WindowsTest {
+    @Tag("windows-compatibility")
+    public @interface WindowsCompatibilityProof {
     }
 }
