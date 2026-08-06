@@ -625,7 +625,7 @@ jobs:
           $selector = (./mvnw.cmd -q `
             -Dexec.classpathScope=test `
             -Dexec.mainClass=javan.testing.CiTestWorkerPlanner `
-            "-Dexec.args=windows ${{ matrix.worker_index }} ${{ matrix.worker_count }}" `
+            -Dexec.args=windows:${{ matrix.worker_index }}:${{ matrix.worker_count }} `
             exec:java | Select-Object -Last 1).Trim()
           "test_selector=$selector" | Tee-Object -FilePath $env:GITHUB_OUTPUT -Append
 
