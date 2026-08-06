@@ -138,7 +138,7 @@ final class RuntimeSourceMemorySections {
             int magic;
             int length;
             int capacity;
-            int reserved;
+            int byte_capacity;
             char* values;
         } javan_string_builder;
 
@@ -1476,6 +1476,20 @@ final class RuntimeSourceMemorySections {
             javan_runtime_lock_leave();
         }
 
+        static int javan_string_uses_modified_utf8(const char* value) {
+            if (value == NULL) {
+                return 0;
+            }
+            javan_runtime_lock_enter();
+            javan_allocation_node* node = javan_find_allocation_locked((void*) value, NULL);
+            int uses_modified_utf8 = node != NULL
+                && node->kind == JAVAN_HEAP_KIND_RUNTIME
+                && (node->runtime_kind == JAVAN_RUNTIME_KIND_STRING
+                    || node->runtime_kind == JAVAN_RUNTIME_KIND_OWNED_BUFFER);
+            javan_runtime_lock_leave();
+            return uses_modified_utf8;
+        }
+
         void javan_root_frame_push(void*** roots, int count) {
             javan_runtime_lock_enter();
             if (count < 0) {
@@ -1673,10 +1687,14 @@ final class RuntimeSourceMemorySections {
                 javan_validate_owned_runtime_buffer_reference((void*) map->values);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_STRING_BUILDER) {
                 javan_string_builder* builder = (javan_string_builder*) node->value;
-                if (builder->magic != JAVAN_STRING_BUILDER_MAGIC || builder->length < 0 || builder->capacity < 0 || builder->length > builder->capacity) {
+                if (builder->magic != JAVAN_STRING_BUILDER_MAGIC
+                    || builder->length < 0
+                    || builder->capacity < 0
+                    || builder->byte_capacity < 0
+                    || builder->length > builder->capacity) {
                     javan_panic("invalid runtime string builder metadata");
                 }
-                if (builder->values != NULL && (builder->capacity < 0 || builder->length > builder->capacity)) {
+                if (builder->values != NULL && ((unsigned long) strlen(builder->values) > (unsigned long) builder->byte_capacity)) {
                     javan_panic("invalid runtime string builder owned buffer");
                 }
                 javan_validate_owned_runtime_buffer_reference((void*) builder->values);
@@ -2497,6 +2515,7 @@ final class RuntimeSourceMemorySections {
                     javan_free_owned_runtime_buffer((void*) builder->values);
                     builder->values = NULL;
                     builder->capacity = 0;
+                    builder->byte_capacity = 0;
                     builder->length = 0;
                 }
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_PROCESS_RESULT) {
@@ -7877,6 +7896,9 @@ final class RuntimeSourceMemorySections {
             if (first <= 0x7FU) {
                 return 1;
             }
+            if (first == 0xC0U && remaining >= 2 && value[1] == 0x80U) {
+                return -2;
+            }
             if (first >= 0xC2U && first <= 0xDFU) {
                 return remaining >= 2 && (value[1] & 0xC0U) == 0x80U ? 2 : 0;
             }
@@ -7914,7 +7936,19 @@ final class RuntimeSourceMemorySections {
                 if (width == 0) {
                     javan_panic("invalid UTF-8 string");
                 }
-                if (width < 0) {
+                if (width == -2) {
+                    input_index += 2;
+                    output_length++;
+                } else if (width == -3
+                    && value[input_index] == 0xEDU
+                    && value[input_index + 1] >= 0xA0U && value[input_index + 1] <= 0xAFU
+                    && input_index + 6 <= length
+                    && value[input_index + 3] == 0xEDU
+                    && value[input_index + 4] >= 0xB0U && value[input_index + 4] <= 0xBFU
+                    && (value[input_index + 5] & 0xC0U) == 0x80U) {
+                    input_index += 6;
+                    output_length += 4;
+                } else if (width < 0) {
                     input_index -= width;
                     output_length++;
                 } else {
@@ -7923,6 +7957,55 @@ final class RuntimeSourceMemorySections {
                 }
             }
             return output_length;
+        }
+
+        static void* javan_string_from_utf8_bytes(const char* value, int length) {
+            if (value == NULL || length < 0) {
+                javan_panic("invalid UTF-8 string input");
+            }
+            const unsigned char* input = (const unsigned char*) value;
+            int input_index = 0;
+            int output_length = 0;
+            while (input_index < length) {
+                if (input[input_index] == 0U) {
+                    if (output_length > INT_MAX - 2) {
+                        javan_panic("string length overflow");
+                    }
+                    output_length += 2;
+                    input_index++;
+                    continue;
+                }
+                int width = javan_wtf8_sequence_width(input + input_index, length - input_index);
+                if (width <= 0 || output_length > INT_MAX - width) {
+                    javan_panic("invalid UTF-8 string");
+                }
+                output_length += width;
+                input_index += width;
+            }
+            void* source_root = (void*) value;
+            void** javan_string_utf8_bytes_roots[] = {
+                (void**) &source_root
+            };
+            javan_root_frame_push(javan_string_utf8_bytes_roots, 1);
+            char* result = javan_string_alloc((unsigned long) output_length + 1UL);
+            input = (const unsigned char*) source_root;
+            input_index = 0;
+            char* output = result;
+            while (input_index < length) {
+                if (input[input_index] == 0U) {
+                    *output++ = (char) 0xC0U;
+                    *output++ = (char) 0x80U;
+                    input_index++;
+                    continue;
+                }
+                int width = javan_wtf8_sequence_width(input + input_index, length - input_index);
+                memcpy(output, input + input_index, (unsigned long) width);
+                output += width;
+                input_index += width;
+            }
+            *output = '\\0';
+            javan_root_frame_pop(javan_string_utf8_bytes_roots);
+            return result;
         }
 
         void* javan_string_get_bytes_charset(const char* value, void* charset) {
@@ -7942,7 +8025,29 @@ final class RuntimeSourceMemorySections {
             int output_index = 0;
             while (input_index < input_length) {
                 int width = javan_wtf8_sequence_width(input + input_index, input_length - input_index);
-                if (width < 0) {
+                if (width == -2) {
+                    result->values[output_index++] = 0;
+                    input_index += 2;
+                } else if (width == -3
+                    && input[input_index] == 0xEDU
+                    && input[input_index + 1] >= 0xA0U && input[input_index + 1] <= 0xAFU
+                    && input_index + 6 <= input_length
+                    && input[input_index + 3] == 0xEDU
+                    && input[input_index + 4] >= 0xB0U && input[input_index + 4] <= 0xBFU
+                    && (input[input_index + 5] & 0xC0U) == 0x80U) {
+                    unsigned int high = ((unsigned int) (input[input_index] & 0x0FU) << 12)
+                        | ((unsigned int) (input[input_index + 1] & 0x3FU) << 6)
+                        | (unsigned int) (input[input_index + 2] & 0x3FU);
+                    unsigned int low = ((unsigned int) (input[input_index + 3] & 0x0FU) << 12)
+                        | ((unsigned int) (input[input_index + 4] & 0x3FU) << 6)
+                        | (unsigned int) (input[input_index + 5] & 0x3FU);
+                    unsigned int code_point = 0x10000U + ((high - 0xD800U) << 10) + (low - 0xDC00U);
+                    result->values[output_index++] = (signed char) (0xF0U | (code_point >> 18));
+                    result->values[output_index++] = (signed char) (0x80U | ((code_point >> 12) & 0x3FU));
+                    result->values[output_index++] = (signed char) (0x80U | ((code_point >> 6) & 0x3FU));
+                    result->values[output_index++] = (signed char) (0x80U | (code_point & 0x3FU));
+                    input_index += 6;
+                } else if (width < 0) {
                     result->values[output_index++] = 63;
                     input_index -= width;
                 } else {
@@ -8301,26 +8406,48 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        static int javan_modified_utf8_char_length(int value) {
+            unsigned int ch = (unsigned int) value & 0xFFFFU;
+            if (ch == 0U) {
+                return 2;
+            }
+            if (ch <= 0x7FU) {
+                return 1;
+            }
+            if (ch <= 0x7FFU) {
+                return 2;
+            }
+            return 3;
+        }
+
+        static char* javan_modified_utf8_write_char(char* out, int value) {
+            unsigned int ch = (unsigned int) value & 0xFFFFU;
+            if (ch == 0U) {
+                *out++ = (char) 0xC0U;
+                *out++ = (char) 0x80U;
+            } else if (ch <= 0x7FU) {
+                *out++ = (char) ch;
+            } else if (ch <= 0x7FFU) {
+                *out++ = (char) (0xC0U | (ch >> 6));
+                *out++ = (char) (0x80U | (ch & 0x3FU));
+            } else {
+                *out++ = (char) (0xE0U | (ch >> 12));
+                *out++ = (char) (0x80U | ((ch >> 6) & 0x3FU));
+                *out++ = (char) (0x80U | (ch & 0x3FU));
+            }
+            return out;
+        }
+
         static int javan_utf8_length_from_utf16(const unsigned short* values, int offset, int count) {
             int length = 0;
             int index = offset;
             int end = offset + count;
             while (index < end) {
-                unsigned int ch = values[index];
-                if (ch == 0) {
-                    javan_panic("native String profile does not support U+0000");
+                int char_length = javan_modified_utf8_char_length(values[index]);
+                if (length > INT_MAX - char_length) {
+                    javan_panic("string length overflow");
                 }
-                if (ch <= 0x7F) {
-                    length++;
-                } else if (ch <= 0x7FF) {
-                    length += 2;
-                } else if (ch >= 0xD800 && ch <= 0xDBFF && index + 1 < end
-                    && values[index + 1] >= 0xDC00 && values[index + 1] <= 0xDFFF) {
-                    length += 4;
-                    index++;
-                } else {
-                    length += 3;
-                }
+                length += char_length;
                 index++;
             }
             return length;
@@ -8330,26 +8457,7 @@ final class RuntimeSourceMemorySections {
             int index = offset;
             int end = offset + count;
             while (index < end) {
-                unsigned int ch = values[index];
-                if (ch <= 0x7F) {
-                    *out++ = (char) ch;
-                } else if (ch <= 0x7FF) {
-                    *out++ = (char) (0xC0 | (ch >> 6));
-                    *out++ = (char) (0x80 | (ch & 0x3F));
-                } else if (ch >= 0xD800 && ch <= 0xDBFF && index + 1 < end
-                    && values[index + 1] >= 0xDC00 && values[index + 1] <= 0xDFFF) {
-                    unsigned int low = values[index + 1];
-                    unsigned int code_point = 0x10000 + ((ch - 0xD800) << 10) + (low - 0xDC00);
-                    *out++ = (char) (0xF0 | (code_point >> 18));
-                    *out++ = (char) (0x80 | ((code_point >> 12) & 0x3F));
-                    *out++ = (char) (0x80 | ((code_point >> 6) & 0x3F));
-                    *out++ = (char) (0x80 | (code_point & 0x3F));
-                    index++;
-                } else {
-                    *out++ = (char) (0xE0 | (ch >> 12));
-                    *out++ = (char) (0x80 | ((ch >> 6) & 0x3F));
-                    *out++ = (char) (0x80 | (ch & 0x3F));
-                }
+                out = javan_modified_utf8_write_char(out, values[index]);
                 index++;
             }
             return out;
@@ -8373,78 +8481,19 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
-        int javan_string_length(const char* value) {
-            if (value == NULL) {
-                javan_panic("null string");
-            }
-            return (int) strlen(value);
-        }
-
-        int javan_string_hash_code(const char* value) {
-            if (value == NULL) {
-                javan_panic("null string");
-            }
-            const unsigned char* current = (const unsigned char*) value;
-            uint32_t hash = 0U;
-            while (*current != 0U) {
-                unsigned int code_point = 0U;
-                unsigned char first = *current++;
-                if ((first & 0x80U) == 0U) {
-                    code_point = first;
-                } else if ((first & 0xE0U) == 0xC0U) {
-                    unsigned char second = *current++;
-                    if ((second & 0xC0U) != 0x80U) {
-                        javan_panic("invalid UTF-8 string");
-                    }
-                    code_point = ((unsigned int) (first & 0x1FU) << 6) | (unsigned int) (second & 0x3FU);
-                } else if ((first & 0xF0U) == 0xE0U) {
-                    unsigned char second = *current++;
-                    unsigned char third = *current++;
-                    if ((second & 0xC0U) != 0x80U || (third & 0xC0U) != 0x80U) {
-                        javan_panic("invalid UTF-8 string");
-                    }
-                    code_point = ((unsigned int) (first & 0x0FU) << 12)
-                        | ((unsigned int) (second & 0x3FU) << 6)
-                        | (unsigned int) (third & 0x3FU);
-                } else if ((first & 0xF8U) == 0xF0U) {
-                    unsigned char second = *current++;
-                    unsigned char third = *current++;
-                    unsigned char fourth = *current++;
-                    if ((second & 0xC0U) != 0x80U || (third & 0xC0U) != 0x80U || (fourth & 0xC0U) != 0x80U) {
-                        javan_panic("invalid UTF-8 string");
-                    }
-                    code_point = ((unsigned int) (first & 0x07U) << 18)
-                        | ((unsigned int) (second & 0x3FU) << 12)
-                        | ((unsigned int) (third & 0x3FU) << 6)
-                        | (unsigned int) (fourth & 0x3FU);
-                } else {
-                    javan_panic("invalid UTF-8 string");
-                }
-                if (code_point <= 0xFFFFU) {
-                    hash = (hash * 31U) + code_point;
-                } else if (code_point <= 0x10FFFFU) {
-                    unsigned int adjusted = code_point - 0x10000U;
-                    unsigned int high = 0xD800U + (adjusted >> 10);
-                    unsigned int low = 0xDC00U + (adjusted & 0x3FFU);
-                    hash = (hash * 31U) + high;
-                    hash = (hash * 31U) + low;
-                } else {
-                    javan_panic("invalid UTF-8 string");
-                }
-            }
-            return (int) hash;
-        }
-
-        int javan_string_is_empty(const char* value) {
-            return javan_string_length(value) == 0;
-        }
-
-        static unsigned int javan_utf8_next_code_point(const unsigned char** cursor) {
+        static unsigned int javan_utf8_next_code_point(const unsigned char** cursor, int modified_utf8) {
             const unsigned char* current = *cursor;
             unsigned char first = *current;
             if ((first & 0x80U) == 0U) {
                 *cursor = current + 1;
                 return first;
+            }
+            if (first == 0xC0U && current[1] == 0x80U) {
+                if (modified_utf8 == 0) {
+                    javan_panic("invalid UTF-8 string");
+                }
+                *cursor = current + 2;
+                return 0U;
             }
             if (first >= 0xC2U && first <= 0xDFU) {
                 unsigned char second = current[1];
@@ -8494,13 +8543,95 @@ final class RuntimeSourceMemorySections {
             return 0U;
         }
 
+        static int javan_utf16_length_from_utf8(const char* value) {
+            if (value == NULL) {
+                javan_panic("null string");
+            }
+            const unsigned char* current = (const unsigned char*) value;
+            int modified_utf8 = javan_string_uses_modified_utf8(value);
+            int length = 0;
+            while (*current != 0U) {
+                unsigned int code_point = javan_utf8_next_code_point(&current, modified_utf8);
+                if (length > INT_MAX - (code_point > 0xFFFFU ? 2 : 1)) {
+                    javan_panic("string length overflow");
+                }
+                length += code_point > 0xFFFFU ? 2 : 1;
+            }
+            return length;
+        }
+
+        static int javan_utf16_char_at_utf8(const char* value, int index) {
+            const unsigned char* current = (const unsigned char*) value;
+            int modified_utf8 = javan_string_uses_modified_utf8(value);
+            int current_index = 0;
+            while (*current != 0U) {
+                unsigned int code_point = javan_utf8_next_code_point(&current, modified_utf8);
+                if (code_point <= 0xFFFFU) {
+                    if (current_index == index) {
+                        return (int) code_point;
+                    }
+                    current_index++;
+                } else {
+                    unsigned int adjusted = code_point - 0x10000U;
+                    if (current_index == index) {
+                        return (int) (0xD800U + (adjusted >> 10));
+                    }
+                    if (current_index + 1 == index) {
+                        return (int) (0xDC00U + (adjusted & 0x3FFU));
+                    }
+                    current_index += 2;
+                }
+            }
+            javan_panic("string index out of bounds");
+            return 0;
+        }
+
+        static int javan_string_region_matches(const char* left, int left_offset, const char* right, int right_offset, int count) {
+            for (int index = 0; index < count; index++) {
+                if (javan_utf16_char_at_utf8(left, left_offset + index)
+                    != javan_utf16_char_at_utf8(right, right_offset + index)) {
+                    return 0;
+                }
+            }
+            return 1;
+        }
+
+        int javan_string_length(const char* value) {
+            return javan_utf16_length_from_utf8(value);
+        }
+
+        int javan_string_hash_code(const char* value) {
+            if (value == NULL) {
+                javan_panic("null string");
+            }
+            const unsigned char* current = (const unsigned char*) value;
+            int modified_utf8 = javan_string_uses_modified_utf8(value);
+            uint32_t hash = 0U;
+            while (*current != 0U) {
+                unsigned int code_point = javan_utf8_next_code_point(&current, modified_utf8);
+                if (code_point <= 0xFFFFU) {
+                    hash = (hash * 31U) + code_point;
+                } else {
+                    unsigned int adjusted = code_point - 0x10000U;
+                    hash = (hash * 31U) + 0xD800U + (adjusted >> 10);
+                    hash = (hash * 31U) + 0xDC00U + (adjusted & 0x3FFU);
+                }
+            }
+            return (int) hash;
+        }
+
+        int javan_string_is_empty(const char* value) {
+            return javan_string_length(value) == 0;
+        }
+
         int javan_string_is_blank(const char* value) {
             if (value == NULL) {
                 javan_panic("null string");
             }
             const unsigned char* current = (const unsigned char*) value;
+            int modified_utf8 = javan_string_uses_modified_utf8(value);
             while (*current != 0U) {
-                unsigned int code_point = javan_utf8_next_code_point(&current);
+                unsigned int code_point = javan_utf8_next_code_point(&current, modified_utf8);
                 if (!javan_character_is_whitespace((int) code_point)) {
                     return 0;
                 }
@@ -8513,7 +8644,7 @@ final class RuntimeSourceMemorySections {
             if (index < 0 || index >= length) {
                 javan_panic("string index out of bounds");
             }
-            return (unsigned char) value[index];
+            return javan_utf16_char_at_utf8(value, index);
         }
 
         int javan_string_index_of_char(const char* value, int ch) {
@@ -8527,7 +8658,7 @@ final class RuntimeSourceMemorySections {
                 return -1;
             }
             for (int index = start; index < length; index++) {
-                if (((unsigned char) value[index]) == (unsigned int) (ch & 0xff)) {
+                if (javan_utf16_char_at_utf8(value, index) == (ch & 0xffff)) {
                     return index;
                 }
             }
@@ -8552,14 +8683,7 @@ final class RuntimeSourceMemorySections {
                 return -1;
             }
             for (int index = start; index <= length - needle_length; index++) {
-                int matched = 1;
-                for (int needle_index = 0; needle_index < needle_length; needle_index++) {
-                    if (value[index + needle_index] != needle[needle_index]) {
-                        matched = 0;
-                        break;
-                    }
-                }
-                if (matched) {
+                if (javan_string_region_matches(value, index, needle, 0, needle_length)) {
                     return index;
                 }
             }
@@ -8578,7 +8702,7 @@ final class RuntimeSourceMemorySections {
             }
             int start = from_index >= length ? length - 1 : from_index;
             for (int index = start; index >= 0; index--) {
-                if (((unsigned char) value[index]) == (unsigned int) (ch & 0xff)) {
+                if (javan_utf16_char_at_utf8(value, index) == (ch & 0xffff)) {
                     return index;
                 }
             }
@@ -8607,14 +8731,7 @@ final class RuntimeSourceMemorySections {
             }
             int start = from_index > length - needle_length ? length - needle_length : from_index;
             for (int index = start; index >= 0; index--) {
-                int matched = 1;
-                for (int needle_index = 0; needle_index < needle_length; needle_index++) {
-                    if (value[index + needle_index] != needle[needle_index]) {
-                        matched = 0;
-                        break;
-                    }
-                }
-                if (matched) {
+                if (javan_string_region_matches(value, index, needle, 0, needle_length)) {
                     return index;
                 }
             }
@@ -8625,72 +8742,108 @@ final class RuntimeSourceMemorySections {
             if (left == NULL || right == NULL) {
                 return left == right;
             }
-            return strcmp(left, right) == 0;
+            int left_length = javan_string_length(left);
+            int right_length = javan_string_length(right);
+            return left_length == right_length && javan_string_region_matches(left, 0, right, 0, left_length);
         }
 
         int javan_string_contains(const char* left, const char* right) {
             if (left == NULL || right == NULL) {
                 javan_panic("null string");
             }
-            return strstr(left, right) != NULL;
+            return javan_string_index_of_string(left, right) >= 0;
         }
 
         int javan_string_starts_with(const char* left, const char* prefix) {
             if (left == NULL || prefix == NULL) {
                 javan_panic("null string");
             }
-            size_t prefix_length = strlen(prefix);
-            return strncmp(left, prefix, prefix_length) == 0;
+            int prefix_length = javan_string_length(prefix);
+            int left_length = javan_string_length(left);
+            return prefix_length <= left_length && javan_string_region_matches(left, 0, prefix, 0, prefix_length);
         }
 
         int javan_string_starts_with_from(const char* left, const char* prefix, int from_index) {
             if (left == NULL || prefix == NULL) {
                 javan_panic("null string");
             }
-            size_t left_length = strlen(left);
-            size_t prefix_length = strlen(prefix);
+            int left_length = javan_string_length(left);
+            int prefix_length = javan_string_length(prefix);
             if (from_index < 0) {
                 return 0;
             }
-            if ((size_t) from_index > left_length) {
+            if (from_index > left_length) {
                 return 0;
             }
-            if (prefix_length > left_length - (size_t) from_index) {
+            if (prefix_length > left_length - from_index) {
                 return 0;
             }
-            return strncmp(left + from_index, prefix, prefix_length) == 0;
+            return javan_string_region_matches(left, from_index, prefix, 0, prefix_length);
         }
 
         int javan_string_ends_with(const char* left, const char* suffix) {
             if (left == NULL || suffix == NULL) {
                 javan_panic("null string");
             }
-            size_t left_length = strlen(left);
-            size_t suffix_length = strlen(suffix);
+            int left_length = javan_string_length(left);
+            int suffix_length = javan_string_length(suffix);
             if (suffix_length > left_length) {
                 return 0;
             }
-            return strcmp(left + (left_length - suffix_length), suffix) == 0;
+            return javan_string_region_matches(left, left_length - suffix_length, suffix, 0, suffix_length);
+        }
+
+        static void* javan_string_copy_utf16_range(const char* value, int begin, int end) {
+            int byte_length = 0;
+            for (int index = begin; index < end; index++) {
+                int char_length = javan_modified_utf8_char_length(javan_utf16_char_at_utf8(value, index));
+                if (byte_length > INT_MAX - char_length) {
+                    javan_panic("string length overflow");
+                }
+                byte_length += char_length;
+            }
+            void* source_root = (void*) value;
+            void** javan_string_substring_roots[] = {
+                (void**) &source_root
+            };
+            javan_root_frame_push(javan_string_substring_roots, 1);
+            char* result = javan_string_alloc((unsigned long) byte_length + 1UL);
+            char* out = result;
+            for (int index = begin; index < end; index++) {
+                out = javan_modified_utf8_write_char(out, javan_utf16_char_at_utf8((const char*) source_root, index));
+            }
+            *out = '\\0';
+            javan_root_frame_pop(javan_string_substring_roots);
+            return result;
         }
 
         void* javan_string_replace_char(const char* value, int old_ch, int new_ch) {
             if (value == NULL) {
                 javan_panic("null string");
             }
-            unsigned long length = strlen(value);
+            int length = javan_string_length(value);
+            int byte_length = 0;
+            for (int index = 0; index < length; index++) {
+                int current = javan_utf16_char_at_utf8(value, index);
+                int replacement = current == (old_ch & 0xffff) ? new_ch : current;
+                int char_length = javan_modified_utf8_char_length(replacement);
+                if (byte_length > INT_MAX - char_length) {
+                    javan_panic("string length overflow");
+                }
+                byte_length += char_length;
+            }
             void* source_root = (void*) value;
             void** javan_string_replace_roots[] = {
                 (void**) &source_root
             };
             javan_root_frame_push(javan_string_replace_roots, 1);
-            char* result = javan_string_alloc(length + 1);
-            unsigned char old_value = (unsigned char) (old_ch & 0xff);
-            unsigned char new_value = (unsigned char) (new_ch & 0xff);
-            for (unsigned long index = 0; index < length; index++) {
-                unsigned char ch = (unsigned char) ((const char*) source_root)[index];
-                result[index] = (char) (ch == old_value ? new_value : ch);
+            char* result = javan_string_alloc((unsigned long) byte_length + 1UL);
+            char* out = result;
+            for (int index = 0; index < length; index++) {
+                int current = javan_utf16_char_at_utf8((const char*) source_root, index);
+                out = javan_modified_utf8_write_char(out, current == (old_ch & 0xffff) ? new_ch : current);
             }
-            result[length] = '\\0';
+            *out = '\\0';
             javan_root_frame_pop(javan_string_replace_roots);
             return result;
         }
@@ -8703,6 +8856,7 @@ final class RuntimeSourceMemorySections {
                 javan_panic("negative string repeat count");
             }
             int length = javan_string_length(value);
+            unsigned long byte_length = strlen(value);
             if (count == 0 || length == 0) {
                 return javan_string_copy("");
             }
@@ -8712,15 +8866,18 @@ final class RuntimeSourceMemorySections {
             if (length > INT_MAX / count) {
                 javan_panic("string length overflow");
             }
-            int repeated_length = length * count;
+            if (byte_length > (ULONG_MAX - 1UL) / (unsigned long) count) {
+                javan_panic("string length overflow");
+            }
+            unsigned long repeated_length = byte_length * (unsigned long) count;
             void* source_root = (void*) value;
             void** javan_string_repeat_roots[] = {
                 (void**) &source_root
             };
             javan_root_frame_push(javan_string_repeat_roots, 1);
-            char* result = javan_string_alloc((unsigned long) repeated_length + 1UL);
+            char* result = javan_string_alloc(repeated_length + 1UL);
             for (int index = 0; index < count; index++) {
-                memcpy(result + (index * length), (const char*) source_root, (unsigned long) length);
+                memcpy(result + ((unsigned long) index * byte_length), (const char*) source_root, byte_length);
             }
             result[repeated_length] = '\\0';
             javan_root_frame_pop(javan_string_repeat_roots);
@@ -8731,13 +8888,13 @@ final class RuntimeSourceMemorySections {
             if (value == NULL) {
                 javan_panic("null string");
             }
-            int length = (int) strlen(value);
+            int length = javan_string_length(value);
             int begin = 0;
-            while (begin < length && ((unsigned char) value[begin]) <= 32) {
+            while (begin < length && javan_utf16_char_at_utf8(value, begin) <= 32) {
                 begin++;
             }
             int end = length;
-            while (end > begin && ((unsigned char) value[end - 1]) <= 32) {
+            while (end > begin && javan_utf16_char_at_utf8(value, end - 1) <= 32) {
                 end--;
             }
             return javan_string_substring_range(value, begin, end);
@@ -8747,9 +8904,9 @@ final class RuntimeSourceMemorySections {
             if (value == NULL) {
                 javan_panic("null string");
             }
-            int length = (int) strlen(value);
+            int length = javan_string_length(value);
             int begin = 0;
-            while (begin < length && ((unsigned char) value[begin]) <= 32) {
+            while (begin < length && javan_character_is_whitespace(javan_utf16_char_at_utf8(value, begin))) {
                 begin++;
             }
             return javan_string_substring_range(value, begin, length);
@@ -8759,8 +8916,8 @@ final class RuntimeSourceMemorySections {
             if (value == NULL) {
                 javan_panic("null string");
             }
-            int end = (int) strlen(value);
-            while (end > 0 && ((unsigned char) value[end - 1]) <= 32) {
+            int end = javan_string_length(value);
+            while (end > 0 && javan_character_is_whitespace(javan_utf16_char_at_utf8(value, end - 1))) {
                 end--;
             }
             return javan_string_substring_range(value, 0, end);
@@ -8992,19 +9149,7 @@ final class RuntimeSourceMemorySections {
             if (begin < 0 || end < begin || end > length) {
                 javan_panic("string index out of bounds");
             }
-            int result_length = end - begin;
-            void* source_root = (void*) value;
-            void** javan_string_substring_roots[] = {
-                (void**) &source_root
-            };
-            javan_root_frame_push(javan_string_substring_roots, 1);
-            char* result = javan_string_alloc((unsigned long) result_length + 1);
-            if (result_length > 0) {
-                memcpy(result, ((const char*) source_root) + begin, (unsigned long) result_length);
-            }
-            result[result_length] = '\\0';
-            javan_root_frame_pop(javan_string_substring_roots);
-            return result;
+            return javan_string_copy_utf16_range(value, begin, end);
         }
         """;
     private static final String SOURCE_COLLECTIONS_HEAD = """
@@ -12527,9 +12672,19 @@ final class RuntimeSourceMemorySections {
             if (fseek(file, 0, SEEK_SET) != 0) {
                 javan_panic("process output rewind failed");
             }
-            char* result = javan_string_alloc((unsigned long) length + 1);
-            unsigned long read = fread(result, 1, (unsigned long) length, file);
-            result[read] = '\\0';
+            if (length > INT_MAX) {
+                javan_panic("process output is too large");
+            }
+            char* bytes = (char*) javan_alloc((unsigned long) (length == 0 ? 1 : length));
+            unsigned long read = fread(bytes, 1, (unsigned long) length, file);
+            void* bytes_root = bytes;
+            void** roots[] = {
+                (void**) &bytes_root
+            };
+            javan_root_frame_push(roots, 1);
+            char* result = (char*) javan_string_from_utf8_bytes((const char*) bytes_root, (int) read);
+            javan_root_frame_pop(roots);
+            javan_free(bytes);
             return result;
         }
 
