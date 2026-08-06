@@ -206,13 +206,16 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     @Test
     void ciWorkflowKeepsWindowsRuntimeSmokeGate() throws Exception {
         final String ciWorkflow = Files.readString(BUILD_COMMON);
+        final String windows = ciWorkflow.substring(
+            ciWorkflow.indexOf("  windows-runtime-smoke:"),
+            ciWorkflow.indexOf("  prepare-publication:")
+        );
 
-        assertThat(ciWorkflow)
+        assertThat(windows)
             .contains("windows-runtime-smoke:")
-            .contains("label: runtime_0_win_x64", "label: runtime_1_win_x64")
-            .contains("worker_index: 0", "worker_index: 1", "worker_count: 2")
-            .contains("-Dgroups=windows")
-            .doesNotContain("test-selector:", "RuntimeFilesTest#");
+            .contains("name: runtime_win_x64")
+            .contains("./mvnw.cmd -q -Dgroups=windows test")
+            .doesNotContain("worker_index:", "worker_count:", "test-selector:", "RuntimeFilesTest#");
     }
 
     @Test

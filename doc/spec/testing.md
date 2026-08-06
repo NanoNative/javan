@@ -73,12 +73,12 @@ annotations select focused repeats without removing those tests from normal loca
 
 These annotations are composed JUnit tags defined in `javan.testing.TestSuite`. Maven can also
 run a phase directly, for example `./mvnw -Dgroups=native test`,
-`./mvnw -Dgroups=platform test`, or `./mvnw -Dgroups=windows test`. CI discovers tagged suites and
-distributes native tests across six workers and Windows tests across two workers automatically;
-contributors do not maintain class or method selectors in workflow YAML. `worker_index` identifies
-one worker, while `worker_count` states how many workers share that phase. Adding a CLI integration
-class without exactly one suite fails the workflow policy test, and any literal test selector in a
-workflow fails policy verification.
+`./mvnw -Dgroups=platform test`, or `./mvnw -Dgroups=windows test`. CI discovers and distributes
+native tests across six workers automatically. Windows uses the same tagged Maven phase in one job
+and JUnit runs its methods concurrently. Contributors do not maintain class or method selectors in
+workflow YAML. `worker_index` identifies one native worker, while `worker_count` states how many
+workers share that phase. Adding a CLI integration class without exactly one suite fails the
+workflow policy test, and any literal test selector in a workflow fails policy verification.
 
 ## Generated Compatibility Status
 
