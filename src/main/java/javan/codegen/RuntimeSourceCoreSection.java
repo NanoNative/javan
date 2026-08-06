@@ -470,24 +470,70 @@ final class RuntimeSourceCoreSection {
             context->previous = NULL;
         }
 
+        static int javan_write_string_utf8(FILE* stream, const char* value) {
+            const unsigned char* cursor = (const unsigned char*) (value == NULL ? "" : value);
+            while (*cursor != 0U) {
+                if (cursor[0] == 0xC0U && cursor[1] == 0x80U) {
+                    fputc(0, stream);
+                    cursor += 2;
+                    continue;
+                }
+                if (cursor[0] == 0xEDU
+                    && cursor[1] >= 0xA0U && cursor[1] <= 0xAFU
+                    && (cursor[2] & 0xC0U) == 0x80U) {
+                    unsigned int high = ((unsigned int) (cursor[0] & 0x0FU) << 12)
+                        | ((unsigned int) (cursor[1] & 0x3FU) << 6)
+                        | (unsigned int) (cursor[2] & 0x3FU);
+                    cursor += 3;
+                    if (cursor[0] == 0xEDU
+                        && cursor[1] >= 0xB0U && cursor[1] <= 0xBFU
+                        && (cursor[2] & 0xC0U) == 0x80U) {
+                        unsigned int low = ((unsigned int) (cursor[0] & 0x0FU) << 12)
+                            | ((unsigned int) (cursor[1] & 0x3FU) << 6)
+                            | (unsigned int) (cursor[2] & 0x3FU);
+                        unsigned int code_point = 0x10000U + ((high - 0xD800U) << 10) + (low - 0xDC00U);
+                        fputc((int) (0xF0U | (code_point >> 18)), stream);
+                        fputc((int) (0x80U | ((code_point >> 12) & 0x3FU)), stream);
+                        fputc((int) (0x80U | ((code_point >> 6) & 0x3FU)), stream);
+                        fputc((int) (0x80U | (code_point & 0x3FU)), stream);
+                        cursor += 3;
+                        continue;
+                    }
+                    fputc('?', stream);
+                    continue;
+                }
+                if (cursor[0] == 0xEDU
+                    && cursor[1] >= 0xB0U && cursor[1] <= 0xBFU
+                    && (cursor[2] & 0xC0U) == 0x80U) {
+                    fputc('?', stream);
+                    cursor += 3;
+                    continue;
+                }
+                fputc((int) *cursor, stream);
+                cursor++;
+            }
+            return ferror(stream) == 0;
+        }
+
         void javan_println(const char* value) {
-            puts(value == NULL ? "" : value);
+            (void) javan_write_string_utf8(stdout, value);
+            fputc('\\n', stdout);
             fflush(stdout);
         }
 
         void javan_print(const char* value) {
-            fputs(value == NULL ? "" : value, stdout);
+            (void) javan_write_string_utf8(stdout, value);
             fflush(stdout);
         }
 
         void javan_eprintln(const char* value) {
-            fputs(value == NULL ? "" : value, stderr);
+            (void) javan_write_string_utf8(stderr, value);
             fputc('\\n', stderr);
             fflush(stderr);
         }
 
         void javan_eprint(const char* value) {
-            fputs(value == NULL ? "" : value, stderr);
+            (void) javan_write_string_utf8(stderr, value);
             fflush(stderr);
         }
 

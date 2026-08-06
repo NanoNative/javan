@@ -7255,7 +7255,9 @@ final class RuntimeFilesTest {
             "javan_validate_runtime_managed_reference((void*) builder->headers);",
             "javan_validate_runtime_managed_reference((void*) request->headers);",
             "javan_validate_runtime_managed_reference(publisher->value);",
-            "builder->values != NULL && (builder->capacity < 0 || builder->length > builder->capacity)",
+            "builder->byte_capacity < 0",
+            "builder->length > builder->capacity",
+            "(unsigned long) strlen(builder->values) > (unsigned long) builder->byte_capacity",
             "static void* javan_realloc_tracked(void* value, unsigned long size, int validate_after)",
             "static void* javan_realloc_owned_buffer(void* value, unsigned long size)",
             "static void javan_free_owned_runtime_buffer(void* value)",
@@ -7544,12 +7546,14 @@ final class RuntimeFilesTest {
         final Path runtime = new RuntimeFiles().write(tempDir);
 
         assertThat(Files.readString(runtime)).contains(
-            "if (required == INT_MAX) {",
+            "if (required < 0 || required == INT_MAX) {",
             "javan_panic(\"string builder length overflow\");",
-            "if (builder->values != NULL && required <= builder->capacity) {",
-            "if (next_capacity > (INT_MAX - 2) / 2) {",
-            "next_capacity = next_capacity * 2 + 2;",
-            "char* next = (char*) javan_realloc_owned_buffer(builder->values, (unsigned long) next_capacity + 1UL);"
+            "required_capacity <= builder->capacity",
+            "required_bytes <= builder->byte_capacity",
+            "if (next > (INT_MAX - 2) / 2) {",
+            "next = next * 2 + 2;",
+            "char* next = (char*) javan_realloc_owned_buffer(",
+            "(unsigned long) next_byte_capacity + 1UL"
         );
     }
 
@@ -7685,6 +7689,38 @@ final class RuntimeFilesTest {
         );
 
         assertThat(stdout).isEqualTo("export-safe\n");
+    }
+
+    @Test
+    void runtimeStringExportConvertsManagedUtf16ToStandardUtf8() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                char* input = (char*) javan_string_value_of_char(0x20ac);
+                char* exported = javan_string_export(input);
+                printf("%02x %02x %02x\\n", (unsigned char) exported[0], (unsigned char) exported[1], (unsigned char) exported[2]);
+                javan_free(exported);
+                return 0;
+            }
+            """,
+            "112"
+        );
+
+        assertThat(stdout).isEqualTo("e2 82 ac\n");
+    }
+
+    @Test
+    void runtimeStringExportRejectsEmbeddedNul() throws Exception {
+        final String stdout = runRuntimePanicProbe(
+            "javan_register_static_roots(0, 0);",
+            "(void) javan_string_export((const char*) javan_string_value_of_char(0));"
+        );
+
+        assertThat(stdout).isEqualTo("native string export does not support U+0000\n");
     }
 
     @Test
