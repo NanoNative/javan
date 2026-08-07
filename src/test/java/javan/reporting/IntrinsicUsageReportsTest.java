@@ -105,6 +105,9 @@ final class IntrinsicUsageReportsTest {
             new IntrinsicCallCount("Double.longBitsToDouble", 0),
             new IntrinsicCallCount("Boolean.parseBoolean", 0),
             new IntrinsicCallCount("Boolean.toString", 0),
+            new IntrinsicCallCount("Byte.toString", 0),
+            new IntrinsicCallCount("Short.toString", 0),
+            new IntrinsicCallCount("Character.toString", 0),
             new IntrinsicCallCount("String.valueOf", 1),
             new IntrinsicCallCount("String.copyValueOf", 0)
         );

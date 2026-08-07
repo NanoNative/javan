@@ -1182,6 +1182,57 @@ final class CliStringBuilderIntegrationTest extends CliIntegrationSupport {
         assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-set-length").toString())).stdout()).isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("4\njava\n");
     }
+
+    @Test
+    void stringBuilderCharApisUseUtf16() throws Exception {
+        final Path project = project("stringbuilder-utf16-char-apis");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder();
+                    builder.append('a');
+                    builder.append((char) 0x03bb);
+                    builder.append('b');
+                    System.out.println(builder.length());
+                    System.out.println((int) builder.charAt(1));
+                    builder.insert(2, (char) 0x03b2);
+                    System.out.println(builder);
+                    builder.deleteCharAt(1);
+                    System.out.println(builder);
+                    builder.setCharAt(1, (char) 0x03bb);
+                    System.out.println(builder);
+                    builder.replace(1, 2, Character.toString((char) 0x03b2));
+                    System.out.println(builder);
+                    builder.setLength(2);
+                    System.out.println(builder);
+                    final StringBuilder left = new StringBuilder();
+                    left.append('a');
+                    left.append((char) 0x03bb);
+                    final StringBuilder equal = new StringBuilder();
+                    equal.append('a');
+                    equal.append((char) 0x03bb);
+                    final StringBuilder greater = new StringBuilder();
+                    greater.append('a');
+                    greater.append((char) 0x03b2);
+                    System.out.println(left.compareTo(equal));
+                    System.out.println(left.compareTo(greater) > 0);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-utf16-char-apis").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("3\n955\naλβb\naβb\naλb\naβb\naβ\n0\ntrue\n");
+    }
+
     @Test
     void stringBuilderAppendFloatBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("stringbuilder-append-float");

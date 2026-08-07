@@ -4318,4 +4318,13 @@ final class JdkCallSupportTest {
         assertThatThrownBy(() -> JdkCallSupport.platformThrowableParents().clear())
             .isInstanceOf(UnsupportedOperationException.class);
     }
+
+    @Test
+    void smallPrimitiveStaticToStringCallsAreSupported() {
+        assertThat(List.of(
+            JdkCallSupport.isSupported(new MethodRef("java/lang/Byte", "toString", "(B)Ljava/lang/String;")),
+            JdkCallSupport.isSupported(new MethodRef("java/lang/Short", "toString", "(S)Ljava/lang/String;")),
+            JdkCallSupport.isSupported(new MethodRef("java/lang/Character", "toString", "(C)Ljava/lang/String;"))
+        )).containsExactly(true, true, true);
+    }
 }

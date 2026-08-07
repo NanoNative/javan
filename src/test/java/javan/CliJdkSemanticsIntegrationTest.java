@@ -11444,4 +11444,77 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
             .isEqualTo(jvmOutput);
     }
 
+    @Test
+    void stringCharApisUseJavaUtf16() throws Exception {
+        final Path project = project("string-char-apis-utf16");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String value = new String(new char[]{'a', (char) 0x03bb, 'b'});
+                    System.out.println(value.length());
+                    System.out.println((int) value.charAt(1));
+                    System.out.println(value.indexOf((char) 0x03bb));
+                    System.out.println(value.lastIndexOf((char) 0x03bb));
+                    System.out.println(value.substring(1, 2));
+                    System.out.println(value.replace((char) 0x03bb, (char) 0x03b2));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/utf8-backed-string-char-apis").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("3\n955\n1\n1\nλ\naβb\n");
+    }
+
+    @Test
+    void byteShortCharacterToStringIntrinsicsBuildAndMatchJvmOutput() throws Exception {
+        final Path project = project("small-primitive-to-string-intrinsics");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Byte.toString((byte) 12));
+                    System.out.println(Byte.toString((byte) -128));
+                    System.out.println(Short.toString((short) 32000));
+                    System.out.println(Short.toString((short) -32768));
+                    System.out.println(Character.toString('j'));
+                    System.out.println(Character.toString((char) 0x03bb));
+                    System.out.println(Byte.toString(value()).equals("-7"));
+                    System.out.println(Short.toString(shortValue()).length());
+                    System.out.println(Character.toString(charValue()).length());
+                }
+
+                private static byte value() {
+                    return (byte) -7;
+                }
+
+                private static short shortValue() {
+                    return (short) -99;
+                }
+
+                private static char charValue() {
+                    return 'A';
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/small-primitive-to-string-intrinsics").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("12\n-128\n32000\n-32768\nj\nλ\ntrue\n3\n1\n");
+    }
 }

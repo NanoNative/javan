@@ -83,7 +83,9 @@ final class RuntimeSourcePlatformSection {
         static void javan_stringbuilder_append_bytes(javan_string_builder* builder, const char* value) {
             const char* source = value == NULL ? "null" : value;
             unsigned long length = strlen(source);
-            if (length > (unsigned long) INT_MAX || builder->length > INT_MAX - (int) length) {
+            int java_length = javan_string_length(source);
+            if (length > (unsigned long) INT_MAX || builder->length > INT_MAX - (int) length
+                || builder->java_length > INT_MAX - java_length) {
                 javan_panic("string builder length overflow");
             }
             void* source_root = (void*) source;
@@ -95,17 +97,21 @@ final class RuntimeSourcePlatformSection {
             javan_stringbuilder_ensure_capacity(builder, builder->length + (int) length);
             memcpy(builder->values + builder->length, (const char*) source_root, length);
             builder->length += (int) length;
+            builder->java_length += java_length;
             builder->values[builder->length] = '\\0';
             javan_root_frame_pop(javan_builder_append_roots);
         }
 
         static void javan_stringbuilder_insert_bytes(javan_string_builder* builder, int index, const char* value) {
-            if (index < 0 || index > builder->length) {
+            if (index < 0 || index > builder->java_length) {
                 javan_panic("string builder insert index out of bounds");
             }
+            int byte_index = javan_utf8_offset_for_utf16_index(builder->values, index, 1);
             const char* source = value == NULL ? "null" : value;
             unsigned long length = strlen(source);
-            if (length > (unsigned long) INT_MAX || builder->length > INT_MAX - (int) length) {
+            int java_insert_length = javan_string_length(source);
+            if (length > (unsigned long) INT_MAX || builder->length > INT_MAX - (int) length
+                || builder->java_length > INT_MAX - java_insert_length) {
                 javan_panic("string builder length overflow");
             }
             void* source_root = (void*) source;
@@ -117,12 +123,13 @@ final class RuntimeSourcePlatformSection {
             int insert_length = (int) length;
             javan_stringbuilder_ensure_capacity(builder, builder->length + insert_length);
             memmove(
-                builder->values + index + insert_length,
-                builder->values + index,
-                (unsigned long) (builder->length - index + 1)
+                builder->values + byte_index + insert_length,
+                builder->values + byte_index,
+                (unsigned long) (builder->length - byte_index + 1)
             );
-            memcpy(builder->values + index, (const char*) source_root, length);
+            memcpy(builder->values + byte_index, (const char*) source_root, length);
             builder->length += insert_length;
+            builder->java_length += java_insert_length;
             javan_root_frame_pop(javan_builder_insert_roots);
         }
 
@@ -131,7 +138,7 @@ final class RuntimeSourcePlatformSection {
             builder->magic = JAVAN_STRING_BUILDER_MAGIC;
             builder->length = 0;
             builder->capacity = 16;
-            builder->reserved = 0;
+            builder->java_length = 0;
             builder->values = NULL;
             javan_update_runtime_allocation_kind((void*) builder, JAVAN_RUNTIME_KIND_STRING_BUILDER);
             void** javan_builder_owner_roots[] = {
@@ -249,10 +256,8 @@ final class RuntimeSourcePlatformSection {
 
         void* javan_stringbuilder_append_char(void* builder_value, int value) {
             javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
-            char buffer[2];
-            buffer[0] = (char) value;
-            buffer[1] = '\\0';
-            javan_stringbuilder_append_bytes(builder, buffer);
+            void* text = javan_string_value_of_char(value);
+            javan_stringbuilder_append_bytes(builder, (const char*) text);
             return builder;
         }
 
@@ -296,7 +301,7 @@ final class RuntimeSourcePlatformSection {
         }
 
         int javan_stringbuilder_length(void* builder_value) {
-            return javan_stringbuilder_checked(builder_value)->length;
+            return javan_stringbuilder_checked(builder_value)->java_length;
         }
 
         int javan_stringbuilder_is_empty(void* builder_value) {
@@ -305,10 +310,10 @@ final class RuntimeSourcePlatformSection {
 
         int javan_stringbuilder_char_at(void* builder_value, int index) {
             javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
-            if (index < 0 || index >= builder->length) {
+            if (index < 0 || index >= builder->java_length) {
                 javan_panic("string builder index out of bounds");
             }
-            return (unsigned char) builder->values[index];
+            return javan_string_char_at(builder->values, index);
         }
 
         int javan_char_sequence_length(void* value) {
@@ -401,12 +406,12 @@ final class RuntimeSourcePlatformSection {
         int javan_stringbuilder_compare_to(void* builder_value, void* other_value) {
             javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
             javan_string_builder* other = javan_stringbuilder_checked(other_value);
-            int left_length = builder->length;
-            int right_length = other->length;
+            int left_length = builder->java_length;
+            int right_length = other->java_length;
             int shared = left_length < right_length ? left_length : right_length;
             for (int index = 0; index < shared; index++) {
-                int left = (unsigned char) builder->values[index];
-                int right = (unsigned char) other->values[index];
+                int left = javan_string_char_at(builder->values, index);
+                int right = javan_string_char_at(other->values, index);
                 if (left != right) {
                     return left - right;
                 }
@@ -416,36 +421,42 @@ final class RuntimeSourcePlatformSection {
 
         void* javan_stringbuilder_delete(void* builder_value, int start, int end) {
             javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
-            if (start < 0 || start > builder->length) {
+            if (start < 0 || start > builder->java_length) {
                 javan_panic("string builder delete range out of bounds");
             }
             if (end < start) {
                 javan_panic("string builder delete start greater than end");
             }
-            int effective_end = end > builder->length ? builder->length : end;
+            int effective_end = end > builder->java_length ? builder->java_length : end;
             if (effective_end == start) {
                 return builder_value;
             }
+            int start_offset = javan_utf8_offset_for_utf16_index(builder->values, start, 1);
+            int end_offset = javan_utf8_offset_for_utf16_index(builder->values, effective_end, 1);
             memmove(
-                builder->values + start,
-                builder->values + effective_end,
-                (unsigned long) (builder->length - effective_end + 1)
+                builder->values + start_offset,
+                builder->values + end_offset,
+                (unsigned long) (builder->length - end_offset + 1)
             );
-            builder->length -= effective_end - start;
+            builder->length -= end_offset - start_offset;
+            builder->java_length -= effective_end - start;
             return builder_value;
         }
 
         void* javan_stringbuilder_delete_char_at(void* builder_value, int index) {
             javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
-            if (index < 0 || index >= builder->length) {
+            if (index < 0 || index >= builder->java_length) {
                 javan_panic("string builder delete char index out of bounds");
             }
+            int start_offset = javan_utf8_offset_for_utf16_index(builder->values, index, 0);
+            int end_offset = javan_utf8_offset_for_utf16_index(builder->values, index + 1, 1);
             memmove(
-                builder->values + index,
-                builder->values + index + 1,
-                (unsigned long) (builder->length - index)
+                builder->values + start_offset,
+                builder->values + end_offset,
+                (unsigned long) (builder->length - end_offset + 1)
             );
-            builder->length -= 1;
+            builder->length -= end_offset - start_offset;
+            builder->java_length -= 1;
             return builder_value;
         }
 
@@ -509,22 +520,20 @@ final class RuntimeSourcePlatformSection {
 
         void* javan_stringbuilder_insert_char(void* builder_value, int index, int value) {
             javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
-            char buffer[2];
-            buffer[0] = (char) value;
-            buffer[1] = '\\0';
-            javan_stringbuilder_insert_bytes(builder, index, buffer);
+            void* text = javan_string_value_of_char(value);
+            javan_stringbuilder_insert_bytes(builder, index, (const char*) text);
             return builder_value;
         }
 
         void* javan_stringbuilder_replace_string(void* builder_value, int start, int end, void* value) {
             javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
-            if (start < 0 || start > builder->length) {
+            if (start < 0 || start > builder->java_length) {
                 javan_panic("string builder replace range out of bounds");
             }
             if (end < start) {
                 javan_panic("string builder replace start greater than end");
             }
-            int effective_end = end > builder->length ? builder->length : end;
+            int effective_end = end > builder->java_length ? builder->java_length : end;
             javan_stringbuilder_delete(builder_value, start, effective_end);
             javan_stringbuilder_insert_string(builder_value, start, value);
             return builder_value;
@@ -538,6 +547,20 @@ final class RuntimeSourcePlatformSection {
                 builder->values[right] = swap;
             }
             return builder_value;
+        }
+
+        void javan_stringbuilder_set_length(void* builder_value, int length) {
+            if (length < 0) {
+                javan_panic("negative string builder length");
+            }
+            javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
+            if (length > builder->java_length) {
+                javan_panic("native String profile does not support U+0000");
+            }
+            int byte_length = javan_utf8_offset_for_utf16_index(builder->values, length, 1);
+            builder->length = byte_length;
+            builder->java_length = length;
+            builder->values[byte_length] = '\\0';
         }
 
         void javan_stringbuilder_ensure_capacity_public(void* builder_value, int minimum_capacity) {
@@ -582,28 +605,11 @@ final class RuntimeSourcePlatformSection {
 
         void javan_stringbuilder_set_char_at(void* builder_value, int index, int value) {
             javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
-            if (index < 0 || index >= builder->length) {
+            if (index < 0 || index >= builder->java_length) {
                 javan_panic("string builder set char index out of bounds");
             }
-            builder->values[index] = (char) value;
-        }
-
-        void javan_stringbuilder_set_length(void* builder_value, int length) {
-            if (length < 0) {
-                javan_panic("negative string builder length");
-            }
-            javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
-            void** javan_builder_set_length_roots[] = {
-                (void**) &builder
-            };
-            javan_root_frame_push(javan_builder_set_length_roots, 1);
-            javan_stringbuilder_ensure_capacity(builder, length);
-            if (length > builder->length) {
-                memset(builder->values + builder->length, 0, (unsigned long) (length - builder->length));
-            }
-            builder->length = length;
-            builder->values[length] = '\\0';
-            javan_root_frame_pop(javan_builder_set_length_roots);
+            javan_stringbuilder_delete_char_at(builder_value, index);
+            javan_stringbuilder_insert_char(builder_value, index, value);
         }
 
         int javan_stringbuilder_capacity(void* builder_value) {

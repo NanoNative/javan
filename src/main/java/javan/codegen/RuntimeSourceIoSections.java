@@ -1048,9 +1048,11 @@ final class RuntimeSourceIoSections {
         }
 
         void* javan_string_value_of_char(int value) {
-            char buffer[2];
-            buffer[0] = (char) value;
-            buffer[1] = '\\0';
+            unsigned short ch = (unsigned short) value;
+            (void) javan_utf8_length_from_utf16(&ch, 0, 1);
+            char buffer[4];
+            char* out = javan_utf8_write_from_utf16(buffer, &ch, 0, 1);
+            *out = '\\0';
             return javan_string_copy(buffer);
         }
 

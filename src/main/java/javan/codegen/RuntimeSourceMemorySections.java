@@ -138,7 +138,7 @@ final class RuntimeSourceMemorySections {
             int magic;
             int length;
             int capacity;
-            int reserved;
+            int java_length;
             char* values;
         } javan_string_builder;
 
@@ -1673,7 +1673,7 @@ final class RuntimeSourceMemorySections {
                 javan_validate_owned_runtime_buffer_reference((void*) map->values);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_STRING_BUILDER) {
                 javan_string_builder* builder = (javan_string_builder*) node->value;
-                if (builder->magic != JAVAN_STRING_BUILDER_MAGIC || builder->length < 0 || builder->capacity < 0 || builder->length > builder->capacity) {
+                if (builder->magic != JAVAN_STRING_BUILDER_MAGIC || builder->length < 0 || builder->java_length < 0 || builder->capacity < 0 || builder->length > builder->capacity) {
                     javan_panic("invalid runtime string builder metadata");
                 }
                 if (builder->values != NULL && (builder->capacity < 0 || builder->length > builder->capacity)) {
@@ -2498,6 +2498,7 @@ final class RuntimeSourceMemorySections {
                     builder->values = NULL;
                     builder->capacity = 0;
                     builder->length = 0;
+                    builder->java_length = 0;
                 }
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_PROCESS_RESULT) {
                 javan_process_result* result = (javan_process_result*) node->value;
@@ -8373,11 +8374,130 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        static unsigned int javan_utf8_next_code_point(const unsigned char** cursor);
+        static char* javan_utf8_write_from_utf16(char* out, const unsigned short* values, int offset, int count);
+
+        static int javan_utf16_width(unsigned int code_point) {
+            return code_point > 0xFFFFU ? 2 : 1;
+        }
+
+        static int javan_string_ascii_length(const char* value) {
+            if (value == NULL) {
+                javan_panic("null string");
+            }
+            const unsigned char* current = (const unsigned char*) value;
+            while (*current != 0U) {
+                if ((*current & 0x80U) != 0U) {
+                    return -1;
+                }
+                current++;
+            }
+            return (int) (current - (const unsigned char*) value);
+        }
+
+        static int javan_utf16_length_from_utf8(const char* value) {
+            if (value == NULL) {
+                javan_panic("null string");
+            }
+            int ascii_length = javan_string_ascii_length(value);
+            if (ascii_length >= 0) {
+                return ascii_length;
+            }
+            int length = 0;
+            const unsigned char* current = (const unsigned char*) value;
+            while (*current != 0U) {
+                unsigned int code_point = javan_utf8_next_code_point(&current);
+                length += javan_utf16_width(code_point);
+            }
+            return length;
+        }
+
+        static int javan_utf8_offset_for_utf16_index(const char* value, int index, int allow_end) {
+            if (value == NULL) {
+                javan_panic("null string");
+            }
+            if (index < 0) {
+                javan_panic("string index out of bounds");
+            }
+            int ascii_length = javan_string_ascii_length(value);
+            if (ascii_length >= 0) {
+                if (index < ascii_length || (allow_end != 0 && index == ascii_length)) {
+                    return index;
+                }
+                javan_panic("string index out of bounds");
+            }
+            const unsigned char* start = (const unsigned char*) value;
+            const unsigned char* current = start;
+            int utf16_index = 0;
+            while (*current != 0U) {
+                const unsigned char* before = current;
+                unsigned int code_point = javan_utf8_next_code_point(&current);
+                int width = javan_utf16_width(code_point);
+                if (utf16_index == index) {
+                    return (int) (before - start);
+                }
+                if (index > utf16_index && index < utf16_index + width) {
+                    javan_panic("UTF-16 surrogate boundary requires the UTF-16 string model");
+                }
+                utf16_index += width;
+            }
+            if (allow_end != 0 && utf16_index == index) {
+                return (int) (current - start);
+            }
+            javan_panic("string index out of bounds");
+            return 0;
+        }
+
+        static int javan_utf16_char_at_utf8(const char* value, int index) {
+            if (value == NULL) {
+                javan_panic("null string");
+            }
+            if (index < 0) {
+                javan_panic("string index out of bounds");
+            }
+            int ascii_length = javan_string_ascii_length(value);
+            if (ascii_length >= 0) {
+                if (index < ascii_length) {
+                    return (unsigned char) value[index];
+                }
+                javan_panic("string index out of bounds");
+            }
+            const unsigned char* current = (const unsigned char*) value;
+            int utf16_index = 0;
+            while (*current != 0U) {
+                unsigned int code_point = javan_utf8_next_code_point(&current);
+                if (code_point <= 0xFFFFU) {
+                    if (utf16_index == index) {
+                        return (int) code_point;
+                    }
+                    utf16_index++;
+                } else if (code_point <= 0x10FFFFU) {
+                    unsigned int adjusted = code_point - 0x10000U;
+                    if (utf16_index == index) {
+                        return (int) (0xD800U + (adjusted >> 10));
+                    }
+                    if (utf16_index + 1 == index) {
+                        return (int) (0xDC00U + (adjusted & 0x3FFU));
+                    }
+                    utf16_index += 2;
+                } else {
+                    javan_panic("invalid UTF-8 string");
+                }
+            }
+            javan_panic("string index out of bounds");
+            return 0;
+        }
+
+        static char* javan_utf8_write_char(char* out, int value) {
+            unsigned short ch = (unsigned short) value;
+            return javan_utf8_write_from_utf16(out, &ch, 0, 1);
+        }
+
         int javan_string_length(const char* value) {
             if (value == NULL) {
                 javan_panic("null string");
             }
-            return (int) strlen(value);
+            return javan_utf16_length_from_utf8(value);
         }
 
         int javan_string_hash_code(const char* value) {
@@ -8509,11 +8629,18 @@ final class RuntimeSourceMemorySections {
         }
 
         int javan_string_char_at(const char* value, int index) {
-            int length = javan_string_length(value);
+            int length = javan_string_ascii_length(value);
+            if (length >= 0) {
+                if (index < 0 || index >= length) {
+                    javan_panic("string index out of bounds");
+                }
+                return (unsigned char) value[index];
+            }
+            length = javan_utf16_length_from_utf8(value);
             if (index < 0 || index >= length) {
                 javan_panic("string index out of bounds");
             }
-            return (unsigned char) value[index];
+            return javan_utf16_char_at_utf8(value, index);
         }
 
         int javan_string_index_of_char(const char* value, int ch) {
@@ -8526,10 +8653,30 @@ final class RuntimeSourceMemorySections {
             if (start >= length) {
                 return -1;
             }
-            for (int index = start; index < length; index++) {
-                if (((unsigned char) value[index]) == (unsigned int) (ch & 0xff)) {
-                    return index;
+            const unsigned char* current = (const unsigned char*) value
+                + javan_utf8_offset_for_utf16_index(value, start, 1);
+            int utf16_index = start;
+            while (*current != 0U) {
+                unsigned int code_point = javan_utf8_next_code_point(&current);
+                if (ch <= 0xFFFF) {
+                    if (code_point == (unsigned int) ch) {
+                        return utf16_index;
+                    }
+                    if (code_point > 0xFFFFU) {
+                        unsigned int adjusted = code_point - 0x10000U;
+                        unsigned int high = 0xD800U + (adjusted >> 10);
+                        unsigned int low = 0xDC00U + (adjusted & 0x3FFU);
+                        if ((unsigned int) ch == high) {
+                            return utf16_index;
+                        }
+                        if ((unsigned int) ch == low) {
+                            return utf16_index + 1;
+                        }
+                    }
+                } else if (code_point == (unsigned int) ch) {
+                    return utf16_index;
                 }
+                utf16_index += javan_utf16_width(code_point);
             }
             return -1;
         }
@@ -8577,12 +8724,31 @@ final class RuntimeSourceMemorySections {
                 return -1;
             }
             int start = from_index >= length ? length - 1 : from_index;
-            for (int index = start; index >= 0; index--) {
-                if (((unsigned char) value[index]) == (unsigned int) (ch & 0xff)) {
-                    return index;
+            int result = -1;
+            const unsigned char* current = (const unsigned char*) value;
+            int utf16_index = 0;
+            while (*current != 0U && utf16_index <= start) {
+                unsigned int code_point = javan_utf8_next_code_point(&current);
+                if (ch <= 0xFFFF) {
+                    if (code_point == (unsigned int) ch) {
+                        result = utf16_index;
+                    } else if (code_point > 0xFFFFU) {
+                        unsigned int adjusted = code_point - 0x10000U;
+                        unsigned int high = 0xD800U + (adjusted >> 10);
+                        unsigned int low = 0xDC00U + (adjusted & 0x3FFU);
+                        if ((unsigned int) ch == high && utf16_index <= start) {
+                            result = utf16_index;
+                        }
+                        if ((unsigned int) ch == low && utf16_index + 1 <= start) {
+                            result = utf16_index + 1;
+                        }
+                    }
+                } else if (code_point == (unsigned int) ch && utf16_index <= start) {
+                    result = utf16_index;
                 }
+                utf16_index += javan_utf16_width(code_point);
             }
-            return -1;
+            return result;
         }
 
         int javan_string_last_index_of_string(const char* value, const char* needle) {
@@ -8683,14 +8849,24 @@ final class RuntimeSourceMemorySections {
                 (void**) &source_root
             };
             javan_root_frame_push(javan_string_replace_roots, 1);
-            char* result = javan_string_alloc(length + 1);
-            unsigned char old_value = (unsigned char) (old_ch & 0xff);
-            unsigned char new_value = (unsigned char) (new_ch & 0xff);
-            for (unsigned long index = 0; index < length; index++) {
-                unsigned char ch = (unsigned char) ((const char*) source_root)[index];
-                result[index] = (char) (ch == old_value ? new_value : ch);
+            char* result = javan_string_alloc(length * 3UL + 1UL);
+            char* out = result;
+            const unsigned char* current = (const unsigned char*) source_root;
+            while (*current != 0U) {
+                const unsigned char* before = current;
+                unsigned int code_point = javan_utf8_next_code_point(&current);
+                if (code_point <= 0xFFFFU && code_point == (unsigned int) old_ch) {
+                    out = javan_utf8_write_char(out, new_ch);
+                } else if (code_point > 0xFFFFU) {
+                    unsigned long width = (unsigned long) (current - before);
+                    memcpy(out, before, width);
+                    out += width;
+                } else {
+                    unsigned short ch = (unsigned short) code_point;
+                    out = javan_utf8_write_from_utf16(out, &ch, 0, 1);
+                }
             }
-            result[length] = '\\0';
+            *out = '\\0';
             javan_root_frame_pop(javan_string_replace_roots);
             return result;
         }
@@ -8992,7 +9168,9 @@ final class RuntimeSourceMemorySections {
             if (begin < 0 || end < begin || end > length) {
                 javan_panic("string index out of bounds");
             }
-            int result_length = end - begin;
+            int begin_offset = javan_utf8_offset_for_utf16_index(value, begin, 1);
+            int end_offset = javan_utf8_offset_for_utf16_index(value, end, 1);
+            int result_length = end_offset - begin_offset;
             void* source_root = (void*) value;
             void** javan_string_substring_roots[] = {
                 (void**) &source_root
@@ -9000,7 +9178,7 @@ final class RuntimeSourceMemorySections {
             javan_root_frame_push(javan_string_substring_roots, 1);
             char* result = javan_string_alloc((unsigned long) result_length + 1);
             if (result_length > 0) {
-                memcpy(result, ((const char*) source_root) + begin, (unsigned long) result_length);
+                memcpy(result, ((const char*) source_root) + begin_offset, (unsigned long) result_length);
             }
             result[result_length] = '\\0';
             javan_root_frame_pop(javan_string_substring_roots);
