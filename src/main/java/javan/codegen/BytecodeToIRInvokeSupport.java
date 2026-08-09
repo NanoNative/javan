@@ -2780,6 +2780,10 @@ final class BytecodeToIRInvokeSupport {
         final MethodRef methodRef,
         final List<StackValue> stack
     ) {
+        if ("toString".equals(methodRef.name()) && "(B)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_string_value_of_int", List.of(popInt(classFile, method, stack)))));
+            return true;
+        }
         if ("valueOf".equals(methodRef.name()) && "(B)Ljava/lang/Byte;".equals(methodRef.descriptor())) {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_byte_value_of", List.of(popInt(classFile, method, stack)))));
             return true;
@@ -2793,6 +2797,10 @@ final class BytecodeToIRInvokeSupport {
         final MethodRef methodRef,
         final List<StackValue> stack
     ) {
+        if ("toString".equals(methodRef.name()) && "(S)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_string_value_of_int", List.of(popInt(classFile, method, stack)))));
+            return true;
+        }
         if ("valueOf".equals(methodRef.name()) && "(S)Ljava/lang/Short;".equals(methodRef.descriptor())) {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_short_value_of", List.of(popInt(classFile, method, stack)))));
             return true;
@@ -2806,6 +2814,10 @@ final class BytecodeToIRInvokeSupport {
         final MethodRef methodRef,
         final List<StackValue> stack
     ) {
+        if ("toString".equals(methodRef.name()) && "(C)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_string_value_of_char", List.of(popInt(classFile, method, stack)))));
+            return true;
+        }
         if ("valueOf".equals(methodRef.name()) && "(C)Ljava/lang/Character;".equals(methodRef.descriptor())) {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_character_value_of", List.of(popInt(classFile, method, stack)))));
             return true;
