@@ -19,6 +19,7 @@ jobs:
   validate-dispatch-ref:
     name: Validate
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     permissions: {}
     steps:
       - name: "🛡️ Branch [${{ github.ref_name }}]"
@@ -42,7 +43,6 @@ jobs:
       ref: ${{ github.sha }}
       prepare_publication: true
       bootstrap_generation: 3
-      package_timeout_minutes: 360
     secrets: inherit
 
   publish-central:
@@ -84,6 +84,7 @@ jobs:
       - publish-github-packages
     if: ${{ always() && !cancelled() && needs.build.result == 'success' && needs.publish-github-packages.result == 'success' }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     permissions:
       actions: read
       contents: write

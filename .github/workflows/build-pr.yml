@@ -32,5 +32,4 @@ jobs:
     with:
       ref: ${{ inputs.ref || github.sha }}
       bootstrap_generation: 2
-      package_timeout_minutes: 360
     secrets: inherit

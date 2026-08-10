@@ -19,10 +19,6 @@ on:
         required: false
         default: 3
         type: number
-      package_timeout_minutes:
-        required: false
-        default: 90
-        type: number
     outputs:
       resolved_version:
         description: Version used for publication artifacts
@@ -49,11 +45,6 @@ on:
         description: Native compiler bootstrap generation
         required: false
         default: 3
-        type: number
-      package_timeout_minutes:
-        description: Native package job timeout
-        required: false
-        default: 90
         type: number
 
 permissions: {}
@@ -96,7 +87,7 @@ jobs:
   verify-core:
     name: core_linux_x64
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 60
     permissions:
       contents: read
 
@@ -160,7 +151,7 @@ jobs:
   cli:
     name: ${{ matrix.label }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 60
     permissions:
       contents: read
     strategy:
@@ -403,7 +394,7 @@ jobs:
       version: ${{ needs.build-info.outputs.resolved_version }}
       bootstrap_generation: ${{ inputs.bootstrap_generation }}
       package_scope: ${{ inputs.prepare_publication && startsWith(matrix.target, 'linux-') && 'full' || 'bootstrap' }}
-      timeout_minutes: ${{ inputs.package_timeout_minutes }}
+      timeout_minutes: 60
     secrets: inherit
 
   platform-smoke:

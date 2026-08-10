@@ -28,7 +28,7 @@ jobs:
   publish:
     name: Publish
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 60
     steps:
       - name: "🧮 Plan [${{ github.event.release.tag_name || inputs.tag }}]"
         id: plan
