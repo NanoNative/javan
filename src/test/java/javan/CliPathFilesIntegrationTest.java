@@ -237,6 +237,39 @@ final class CliPathFilesIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void filesReadAndWriteStringPreserveUtf16CodeUnits() throws Exception {
+        final Path project = project("files-utf16-string");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.nio.file.Files;
+            import java.nio.file.Path;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final String value = new String(new char[]{'A', '\\u20ac', '\\0', 'B', '\\ud83d', '\\ude00'});
+                    Files.writeString(Path.of("message.txt"), value);
+                    final String loaded = Files.readString(Path.of("message.txt"));
+                    System.out.println(loaded.length());
+                    for (int index = 0; index < loaded.length(); index++) {
+                        System.out.println((int) loaded.charAt(index));
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        Files.deleteIfExists(project.resolve("message.txt"));
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/files-utf16-string").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void filesReadAllBytesBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("files-read-all-bytes");
         Files.createDirectories(project.resolve("data"));

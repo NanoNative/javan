@@ -60,6 +60,8 @@ final class CliStringGetBytesUtf8IntegrationTest extends CliIntegrationSupport {
                         printBytes("\\ud800");
                     } else if ("runtime-nul".equals(scenario)) {
                         printBytes(new String(new char[] {'A', '\\u0000', 'B'}));
+                    } else if ("runtime-supplementary".equals(scenario)) {
+                        printBytes(new String(new char[] {'\\uD83D', '\\uDE00'}));
                     } else if ("lone-low-surrogate".equals(scenario)) {
                         printBytes(new String(new char[] {'\\uDC00'}));
                     } else if ("consecutive-high-surrogates".equals(scenario)) {
@@ -189,10 +191,13 @@ final class CliStringGetBytesUtf8IntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void runtimeCreatedEmbeddedNulFailsBeforeEncoding() {
-        assertThat(nativeRun("runtime-nul")).matches(result -> result.exitCode() != 0
-            && result.stdout().isEmpty()
-            && result.stderr().contains("native String profile does not support U+0000"));
+    void runtimeCreatedEmbeddedNulEncodingMatchesJvm() {
+        assertThat(nativeRun("runtime-nul")).isEqualTo(jvmRun("runtime-nul"));
+    }
+
+    @Test
+    void runtimeCreatedSupplementaryEncodingMatchesJvm() {
+        assertThat(nativeRun("runtime-supplementary")).isEqualTo(jvmRun("runtime-supplementary"));
     }
 
     @Test

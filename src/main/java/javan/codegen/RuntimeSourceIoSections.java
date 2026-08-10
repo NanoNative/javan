@@ -773,13 +773,25 @@ final class RuntimeSourceIoSections {
                 fclose(file);
                 javan_panic("readString failed");
             }
-            char* result = javan_string_alloc((unsigned long) length + 1);
-            if (length > 0 && fread(result, 1, (unsigned long) length, file) != (unsigned long) length) {
+            if (length > INT_MAX) {
                 javan_native_resource_pop(&file_resource);
                 fclose(file);
                 javan_panic("readString failed");
             }
-            result[length] = '\\0';
+            char* bytes = (char*) javan_alloc((unsigned long) (length == 0 ? 1 : length));
+            if (length > 0 && fread(bytes, 1, (unsigned long) length, file) != (unsigned long) length) {
+                javan_native_resource_pop(&file_resource);
+                fclose(file);
+                javan_panic("readString failed");
+            }
+            void* bytes_root = bytes;
+            void** roots[] = {
+                (void**) &bytes_root
+            };
+            javan_root_frame_push(roots, 1);
+            void* result = javan_string_from_utf8_bytes((const char*) bytes_root, (int) length);
+            javan_root_frame_pop(roots);
+            javan_free(bytes);
             javan_native_resource_pop(&file_resource);
             fclose(file);
             return result;
@@ -795,8 +807,7 @@ final class RuntimeSourceIoSections {
             }
             javan_native_resource_frame file_resource;
             javan_native_resource_push(&file_resource, file, javan_native_file_cleanup);
-            unsigned long length = strlen(text);
-            if (length > 0 && fwrite(text, 1, length, file) != length) {
+            if (javan_write_string_utf8(file, text) == 0) {
                 javan_native_resource_pop(&file_resource);
                 fclose(file);
                 javan_panic("writeString failed");
@@ -1048,10 +1059,11 @@ final class RuntimeSourceIoSections {
         }
 
         void* javan_string_value_of_char(int value) {
-            char buffer[2];
-            buffer[0] = (char) value;
-            buffer[1] = '\\0';
-            return javan_string_copy(buffer);
+            int length = javan_modified_utf8_char_length(value);
+            char* result = javan_string_alloc((unsigned long) length + 1UL);
+            char* end = javan_modified_utf8_write_char(result, value);
+            *end = '\\0';
+            return result;
         }
 
         void* javan_string_concat(const char* recipe, int argc, const char** values) {
@@ -1109,14 +1121,80 @@ final class RuntimeSourceIoSections {
 
         char* javan_string_export(const char* value) {
             const char* source = value == NULL ? "" : value;
-            unsigned long length = strlen(source);
+            const unsigned char* cursor = (const unsigned char*) source;
+            unsigned long length = 0;
+            while (*cursor != 0U) {
+                if (cursor[0] == 0xC0U && cursor[1] == 0x80U) {
+                    javan_panic("native string export does not support U+0000");
+                }
+                if (cursor[0] == 0xEDU
+                    && cursor[1] >= 0xA0U && cursor[1] <= 0xAFU
+                    && (cursor[2] & 0xC0U) == 0x80U) {
+                    cursor += 3;
+                    if (cursor[0] == 0xEDU
+                        && cursor[1] >= 0xB0U && cursor[1] <= 0xBFU
+                        && (cursor[2] & 0xC0U) == 0x80U) {
+                        length += 4UL;
+                        cursor += 3;
+                    } else {
+                        length++;
+                    }
+                    continue;
+                }
+                if (cursor[0] == 0xEDU
+                    && cursor[1] >= 0xB0U && cursor[1] <= 0xBFU
+                    && (cursor[2] & 0xC0U) == 0x80U) {
+                    length++;
+                    cursor += 3;
+                    continue;
+                }
+                length++;
+                cursor++;
+            }
             void* source_root = (void*) source;
             void** javan_string_export_roots[] = {
                 (void**) &source_root
             };
             javan_root_frame_push(javan_string_export_roots, 1);
             char* result = (char*) javan_export_alloc(length + 1);
-            memcpy(result, (const char*) source_root, length + 1);
+            char* output = result;
+            cursor = (const unsigned char*) source_root;
+            while (*cursor != 0U) {
+                if (cursor[0] == 0xEDU
+                    && cursor[1] >= 0xA0U && cursor[1] <= 0xAFU
+                    && (cursor[2] & 0xC0U) == 0x80U) {
+                    unsigned int high = ((unsigned int) (cursor[0] & 0x0FU) << 12)
+                        | ((unsigned int) (cursor[1] & 0x3FU) << 6)
+                        | (unsigned int) (cursor[2] & 0x3FU);
+                    cursor += 3;
+                    if (cursor[0] == 0xEDU
+                        && cursor[1] >= 0xB0U && cursor[1] <= 0xBFU
+                        && (cursor[2] & 0xC0U) == 0x80U) {
+                        unsigned int low = ((unsigned int) (cursor[0] & 0x0FU) << 12)
+                            | ((unsigned int) (cursor[1] & 0x3FU) << 6)
+                            | (unsigned int) (cursor[2] & 0x3FU);
+                        unsigned int code_point = 0x10000U + ((high - 0xD800U) << 10) + (low - 0xDC00U);
+                        *output++ = (char) (0xF0U | (code_point >> 18));
+                        *output++ = (char) (0x80U | ((code_point >> 12) & 0x3FU));
+                        *output++ = (char) (0x80U | ((code_point >> 6) & 0x3FU));
+                        *output++ = (char) (0x80U | (code_point & 0x3FU));
+                        cursor += 3;
+                    } else {
+                        *output++ = '?';
+                    }
+                    continue;
+                }
+                if (cursor[0] == 0xEDU
+                    && cursor[1] >= 0xB0U && cursor[1] <= 0xBFU
+                    && (cursor[2] & 0xC0U) == 0x80U) {
+                    *output++ = '?';
+                    cursor += 3;
+                    continue;
+                }
+                *output++ = (char) *cursor;
+                cursor++;
+            }
+            *output = '\\0';
             javan_root_frame_pop(javan_string_export_roots);
             return result;
         }
