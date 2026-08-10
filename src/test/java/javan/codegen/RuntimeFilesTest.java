@@ -7256,8 +7256,10 @@ final class RuntimeFilesTest {
             "javan_validate_runtime_managed_reference((void*) request->headers);",
             "javan_validate_runtime_managed_reference(publisher->value);",
             "builder->byte_capacity < 0",
+            "builder->byte_length < 0",
             "builder->length > builder->capacity",
-            "(unsigned long) strlen(builder->values) > (unsigned long) builder->byte_capacity",
+            "builder->byte_length > builder->byte_capacity",
+            "builder->values[builder->byte_length] != '\\0'",
             "static void* javan_realloc_tracked(void* value, unsigned long size, int validate_after)",
             "static void* javan_realloc_owned_buffer(void* value, unsigned long size)",
             "static void javan_free_owned_runtime_buffer(void* value)",
@@ -9964,7 +9966,7 @@ final class RuntimeFilesTest {
             "javan_register_static_roots(0, 0);",
             """
             const char value[] = {(char) 0xc0, (char) 0x80, 0};
-            (void) javan_string_is_blank(value);
+            (void) javan_string_is_blank((const char*) javan_string_from(value));
             """
         );
 
