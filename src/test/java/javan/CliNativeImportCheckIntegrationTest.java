@@ -1,5 +1,7 @@
 package javan;
 
+import javan.testing.TestSuite.NativeTest;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
@@ -7,6 +9,7 @@ import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@NativeTest
 final class CliNativeImportCheckIntegrationTest extends CliIntegrationSupport {
     @Test
     void configuredStaticNativeWithSupportedAbiPassesCheck() throws Exception {

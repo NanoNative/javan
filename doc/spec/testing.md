@@ -1,11 +1,13 @@
 # Testing Policy
 
-`mvn verify` enforces:
+Coverage targets are:
 
 - line coverage >= 95%
 - branch coverage >= 90%
 
-The enforced JaCoCo gate is not a whole-repository quality number yet. It is scoped to
+These are direction targets, not merge blockers yet. CI publishes the JaCoCo reports and
+adds a warning when the current soft target is missed; `mvn verify` does not fail on a
+coverage percentage. The report is scoped to
 deterministic compiler-core behavior that runs inside the Maven test JVM plus explicitly
 instrumented child JVMs that execute `javan.Main`:
 
@@ -23,8 +25,62 @@ instrumented child JVMs that execute `javan.Main`:
 
 The Maven build writes one `target/jacoco-surefire-<fork>.exec` file per reusable Surefire
 process, instruments child `java ... javan.Main` runs into `target/jacoco-child/*.exec`,
-merges all of them into `target/jacoco-merged.exec`, and runs report/check from that merged
+merges all of them into `target/jacoco-merged.exec`, and runs the report from that merged
 file.
+
+## Verification Vocabulary
+
+| Term | Question it answers | Values |
+| --- | --- | --- |
+| Suite | Which related tests run? | `core` (untagged default), `native`, `packaging`, `external` |
+| Depth | How much runs locally? | `quick`, `standard`, `full` |
+| Proof | What native evidence does CI collect? | `smoke`, `acceptance`, `sanitizer`, `package` |
+| Portability | Which core subset repeats on another host? | `platform`, `windows` |
+| Target | Which operating system and architecture run it? | `linux_x64`, `linux_arm64`, `mac_x64`, `mac_arm64`, `win_x64`, `win_arm64` |
+
+A depth selects suites. CI then runs additional proofs on its configured targets. These are separate
+dimensions: `quick` is not a suite, and `smoke` is not a depth.
+
+## Local Verification
+
+Use the smallest depth that covers the current change. Every command uses the normal Maven
+lifecycle and writes its JaCoCo report to `target/site/jacoco/index.html`; only the full command
+measures every Java-test suite.
+
+| Depth | Command | Includes | Use it for |
+| --- | --- | --- | --- |
+| Quick | `./mvnw -Pquick verify` | Compiler/core tests; excludes native, packaging, and external suites | Normal edit/compile feedback |
+| Standard | `./mvnw -Pstandard verify` | Core plus native CLI behavior; excludes packaging and external probes | Before pushing an ordinary compiler/runtime change |
+| Full | `./mvnw clean verify` | Every test suite from a clean build | Release, packaging, workflow, or broad cross-cutting changes |
+
+For a failing-first regression, run the narrow test while editing, then run the appropriate
+depth above:
+
+```sh
+./mvnw -Dtest='ClassName#methodName' test
+```
+
+CLI integration classes declare exactly one documented execution suite:
+
+- `@NativeTest` generates, compiles, and executes native C through the JavaN CLI.
+- `@PackagingTest` builds and verifies distributable or self-hosted packages.
+- `@ExternalTest` uses external probe artifacts, toolchains, or services.
+- `@PlatformTest` repeats portable JVM-only behavior on every enabled OS and architecture.
+- `@WindowsCompatibilityProof` temporarily selects portable runtime checks that CI repeats with a
+  Windows toolchain while support is incomplete. It is not a Windows-only test category and should
+  disappear once the complete relevant suite runs on every supported Windows target.
+
+Ordinary JVM-only tests need no annotation; they belong to the default `core` suite. Portability
+annotations select focused repeats without removing those tests from normal local Maven depths.
+
+These annotations are composed JUnit tags defined in `javan.testing.TestSuite`. Maven can also
+run a phase directly, for example `./mvnw -Dgroups=native test`,
+`./mvnw -Dgroups=platform test`, or `./mvnw -Dgroups=windows-compatibility test`. CI discovers and distributes
+native tests across six workers automatically. Each enabled Windows runtime matrix row uses the same
+tagged Maven phase, and JUnit runs its methods concurrently. Contributors do not maintain class or
+method selectors in workflow YAML. `worker_index` identifies one native worker, while `worker_count`
+states how many workers share that phase. Adding a CLI integration class without exactly one suite
+fails the workflow policy test, and any literal test selector in a workflow fails policy verification.
 
 ## Generated Compatibility Status
 
@@ -35,21 +91,57 @@ it cannot silently rewrite versioned matrix keys. The lifecycle always synchroni
 - `doc/status/support-matrix.md`
 - `doc/status/support-matrix.json`
 
-The lifecycle also synchronizes `doc/status/jdk-compatibility.md` when Maven runs in the
-reference environment recorded in `pom.xml`: Eclipse Temurin 25.0.1 on Linux x64. If any
+The lifecycle also synchronizes `doc/status/jdk-compatibility.md` when Maven runs on the
+canonical Linux x64 platform. The report records the Java feature contract (`JDK25`), not a
+vendor, patch, or host stamp that would churn whenever the toolchain image is refreshed. If any
 tracked status file in scope was stale, verification writes it and fails once with the
 changed paths and an instruction to review them and rerun `mvn verify`. The repeat run must
 pass.
 
 Every JDK 25 run still generates its active environment report under `target/.javan/` and
-`target/classes/doc/status/`. A non-reference vendor or patch leaves the tracked JDK snapshot
-unchanged, avoiding machine-dependent churn. The dedicated `verify-compatibility-status` CI
-job provisions and requires the exact reference environment before running the same Maven
-lifecycle. Metadata drift fails closed instead of silently skipping the JDK snapshot. There
+`target/classes/doc/status/`. A non-canonical platform leaves the tracked JDK snapshot unchanged,
+avoiding machine-dependent churn. The dedicated `verify-compatibility-status` CI
+job provisions the project Java on the canonical Linux x64 platform before running the same
+Maven lifecycle. Platform drift fails closed instead of silently skipping the JDK snapshot. There
 is no separate render, copy, or comparison command for contributors to remember.
 
+## CI Execution
+
+Pull requests and `main` pushes are thin entry workflows over the reusable
+`.github/workflows/build-common.yml` build. The common build keeps one source of truth for
+the verification commands while allowing release orchestration to remain separate.
+
+The CI work is divided by independent proof rather than running the longest native checks
+serially:
+
+- six automatically discovered native CLI workers plus dedicated packaging and external suites run
+  with `max-parallel: 8`
+- native acceptance, sanitizer, and package/self-host proofs run as separate jobs for both
+  Linux x64 and Linux arm64
+- annotation-selected compiler/platform contract smoke runs on Linux and macOS for x64 and arm64,
+  plus Windows x64; the Windows arm64 row remains explicit and disabled until Temurin 25 is available
+- verified native packages run on Linux x64 and macOS arm64; Linux arm64 joins publication builds,
+  macOS x64 remains disabled as the historical slower architecture lane, and Windows package rows
+  remain explicit and disabled
+
+Every operating-system/architecture row remains in the matrix with an explicit `enabled`
+flag. If a preview runner is unreliable, or a secondary architecture is disproportionately
+slower without adding distinct evidence, change that flag to `false`; do not delete the row.
+The disabled row then remains visible as an intentional CI policy decision.
+
+Manual releases reuse this common build and its uploaded package/publication artifacts.
+External actions are pinned to immutable commit SHAs with readable version comments; moving
+major tags are not accepted by the workflow policy tests.
+
+Native packaging tests reuse one self-hosted Javan bootstrap when several primitive-literal
+programs need the same compiler. Each program still has its own labeled output assertion;
+only the repeated compiler bootstrap is removed. On the implementation host, the complete
+`CliPackagingIntegrationTest` suite fell from `116.49s` on fresh `main` to `80.18s` with
+the same 21 tests passing; remote CI timings remain the acceptance evidence for runner gains.
+
 JUnit parallel execution is enabled by default through `src/test/resources/junit-platform.properties`.
-Tests run concurrently unless they opt into `@Execution(SAME_THREAD)`, `@Isolated`, or a
+This keeps the policy visible to Maven, IDEs, and other JUnit Platform launchers. Tests run
+concurrently unless they opt into `@Execution(SAME_THREAD)`, `@Isolated`, or a
 `@ResourceLock`. Any test that mutates global JVM state such as `System` properties, shared
 project output, locale, timezone, or process-wide caches must stay serial until that shared
 state is removed or guarded by a narrow resource lock. Maven uses two reusable Surefire
@@ -66,38 +158,15 @@ inside each suite and gains bounded concurrency only through the two isolated Su
 processes.
 
 The following area still needs direct public-entrypoint tests, more targeted child-JVM
-coverage, or non-JaCoCo native/runtime evidence before it can join the numeric gate:
+coverage, or non-JaCoCo native/runtime evidence before the coverage targets can become a
+meaningful merge gate:
 
 - `javan/codegen/BytecodeToIR*`
 
-Current state after the latest verified run:
-
-- `javan/build/**` is back inside the hard JaCoCo gate.
-- `mvn -q clean verify` now passes with only `javan/codegen/BytecodeToIR*` excluded.
-- The merged gate with only `javan/codegen/BytecodeToIR*` excluded currently sits at
-  `96.9285%` line / `90.2731%` branch.
-- `javan/codegen/BytecodeToIR` itself is still too low for the hard gate:
-  `92.9645%` line / `81.5075%` branch after the latest class metadata, field, array,
-  checkcast, `iinc`, branch-selection, switch, collection, optional, StringBuilder,
-  file/path, boxed-wrapper, `System`, `Arrays`, `List`, `Optional`, primitive string-concat,
-  stdout-overload, object-backed PrintStream, interface dispatch, process-substitution, and
-  diagnostic lowering tests, arithmetic/compare opcode coverage, `makeConcat` object/array
-  descriptor coverage, Optional instance-helper coverage, concrete `HashMap` helper coverage,
-  PrintStream receiver-branch coverage, boolean/float/double instance-field coverage, and
-  unsupported PrintStream/field descriptor diagnostics, unsupported collection and empty-stack
-  diagnostics, array and generated-object clone variant coverage, StringBuilder lowering coverage, exact unsupported JDK
-  branch diagnostics, print-stream object coercion, static-field lookup diagnostics, wrong-kind call
-  argument and return stack diagnostics, primitive empty-return stack diagnostics, shared call-result
-  lowering, complete multi-target interface dispatch return-type coverage, PrintStream receiver
-  stack diagnostics, JDK object-value stack diagnostics, String instance-helper lowering,
-  Path `isAbsolute`/`toAbsolutePath`/`resolve(Path)` lowering, File separator-char lowering,
-  `Files.exists` lowering, `List.of` fixed-arity lowering, `Map.copyOf` lowering,
-  ProcessRunner missing-result diagnostics, unsupported static-field write descriptor diagnostics,
-  plus dead-code cleanup.
-
-Next gate: remove the remaining `BytecodeToIR*` exclusion only after `mvn clean verify`
-passes with merged coverage and the same thresholds. Native binaries remain covered by acceptance,
-sanitizer, leak/soak, and counter-backed runtime heap gates, not by JaCoCo.
+CI currently reports coverage without failing the build. The next gate is to make the 95% line
+and 90% branch targets blocking only after the full measured scope reaches them without broad
+package exclusions. Native binaries remain covered by acceptance, sanitizer, leak/soak, and
+counter-backed runtime heap gates, not by JaCoCo.
 
 ## Test Shape
 

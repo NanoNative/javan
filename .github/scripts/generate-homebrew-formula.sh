@@ -14,9 +14,8 @@ if [ -z "$VERSION" ]; then
   exit 1
 fi
 
-VERSION=${VERSION#v}
-if ! printf '%s\n' "$VERSION" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' >/dev/null 2>&1; then
-  printf '%s\n' "Homebrew formula version must be a numeric triplet such as 2026.7.16: $VERSION" >&2
+if ! printf '%s\n' "$VERSION" | grep -E '^[0-9]{4}\.([1-9]|1[0-2])\.([1-9]|[12][0-9]|3[01])$' >/dev/null 2>&1; then
+  printf '%s\n' "Homebrew formula version must use YYYY.M.D without leading zeroes: $VERSION" >&2
   exit 1
 fi
 
@@ -25,7 +24,7 @@ if [ -z "$REPOSITORY" ]; then
   exit 1
 fi
 
-TAG=v$VERSION
+TAG=$VERSION
 
 checksum_for() {
   archive_name=$1

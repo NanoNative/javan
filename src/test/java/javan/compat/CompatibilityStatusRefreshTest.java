@@ -93,7 +93,7 @@ final class CompatibilityStatusRefreshTest {
         assertThat(result.changedFiles()).isEmpty();
         assertThat(output.toString(StandardCharsets.UTF_8)).contains(
             "Compatibility status documents are current.",
-            "Tracked JDK compatibility remains pinned to the reference JDK."
+            "Tracked JDK compatibility remains owned by the canonical platform."
         );
         assertThat(Files.readString(fixture.root().resolve("doc/status/jdk-compatibility.md"))).isEqualTo("old jdk\n");
         CompatibilityStatusRefresh.failWhenStatusWasStale(result);
@@ -129,12 +129,7 @@ final class CompatibilityStatusRefreshTest {
         assertThatThrownBy(() -> CompatibilityStatusRefresh.main(new String[]{
             root.toString(),
             root.resolve("target/classes").toString(),
-            Integer.toString(actualFeature + 1),
-            System.getProperty("java.vendor"),
-            System.getProperty("java.version"),
-            System.getProperty("os.name"),
-            System.getProperty("os.arch"),
-            "false"
+            Integer.toString(actualFeature + 1)
         }))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining(
@@ -153,12 +148,7 @@ final class CompatibilityStatusRefreshTest {
         assertThatThrownBy(() -> CompatibilityStatusRefresh.main(new String[]{
             tempDir.toString(),
             "target/classes",
-            "not-a-feature",
-            "vendor",
-            "version",
-            "os",
-            "arch",
-            "false"
+            "not-a-feature"
         }))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessage("Invalid required JDK feature: not-a-feature");
@@ -166,58 +156,18 @@ final class CompatibilityStatusRefreshTest {
         assertThatThrownBy(() -> CompatibilityStatusRefresh.main(new String[]{
             tempDir.toString(),
             "target/classes",
-            "999999999999999999999999999",
-            "vendor",
-            "version",
-            "os",
-            "arch",
-            "false"
+            "999999999999999999999999999"
         }))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessage("Invalid required JDK feature: 999999999999999999999999999");
 
-        assertThatThrownBy(() -> CompatibilityStatusRefresh.main(new String[]{
-            tempDir.toString(),
-            "target/classes",
-            Integer.toString(Runtime.version().feature()),
-            "vendor",
-            "version",
-            "os",
-            "arch",
-            "sometimes"
-        }))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessage("Reference JDK requirement must be true or false: sometimes");
     }
 
     @Test
-    void mainFailsClosedForEveryStrictReferenceEnvironmentMismatch() {
-        final String vendor = System.getProperty("java.vendor");
-        final String version = System.getProperty("java.version");
-        final String osName = System.getProperty("os.name");
-        final String osArch = System.getProperty("os.arch");
-
-        assertStrictReferenceMismatch("other-vendor", version, osName, osArch);
-        assertStrictReferenceMismatch(vendor, "other-version", osName, osArch);
-        assertStrictReferenceMismatch(vendor, version, "other-os", osArch);
-        assertStrictReferenceMismatch(vendor, version, osName, "other-arch");
-    }
-
-    private void assertStrictReferenceMismatch(
-        final String vendor,
-        final String version,
-        final String osName,
-        final String osArch
-    ) {
-        assertThatThrownBy(() -> CompatibilityStatusRefresh.main(
-            lifecycleArgs(tempDir, "target/classes", vendor, version, osName, osArch, true)
-        ))
-            .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining(
-                "Reference compatibility status requires",
-                "but Maven is running",
-                "Refusing to skip the tracked JDK snapshot."
-            );
+    void canonicalPlatformIsLinuxAmd64Only() {
+        assertThat(CompatibilityStatusRefresh.isCanonicalPlatform("Linux", "amd64")).isTrue();
+        assertThat(CompatibilityStatusRefresh.isCanonicalPlatform("Linux", "aarch64")).isFalse();
+        assertThat(CompatibilityStatusRefresh.isCanonicalPlatform("Mac OS X", "amd64")).isFalse();
     }
 
     @Test
@@ -227,9 +177,7 @@ final class CompatibilityStatusRefreshTest {
 
         assertThatThrownBy(() -> CompatibilityStatusRefresh.main(lifecycleArgs(
             root,
-            "target/classes",
-            System.getProperty("java.vendor"),
-            System.getProperty("java.version")
+            "target/classes"
         )))
             .isInstanceOf(IOException.class)
             .hasMessage("Missing Maven project descriptor: pom.xml");
@@ -244,9 +192,7 @@ final class CompatibilityStatusRefreshTest {
 
         assertThatThrownBy(() -> CompatibilityStatusRefresh.main(lifecycleArgs(
             root,
-            "target/classes",
-            System.getProperty("java.vendor"),
-            "other-version"
+            "target/classes"
         )))
             .isInstanceOf(IOException.class)
             .hasMessageContaining("Missing compiled Javan entrypoint", "target/classes/javan/Main.class");
@@ -261,9 +207,7 @@ final class CompatibilityStatusRefreshTest {
 
         assertThatThrownBy(() -> CompatibilityStatusRefresh.main(lifecycleArgs(
             root,
-            classes.toString(),
-            "other-vendor",
-            System.getProperty("java.version")
+            classes.toString()
         )))
             .isInstanceOf(IOException.class)
             .hasMessage(
@@ -291,9 +235,7 @@ final class CompatibilityStatusRefreshTest {
         assertThatThrownBy(() -> withJavaHome(fakeHome, () -> {
             CompatibilityStatusRefresh.main(lifecycleArgs(
                 root,
-                "target/classes",
-                System.getProperty("java.vendor"),
-                System.getProperty("java.version")
+                "target/classes"
             ));
             return true;
         }))
@@ -311,14 +253,10 @@ final class CompatibilityStatusRefreshTest {
         Files.writeString(root.resolve("pom.xml"), "<project/>\n");
         compileClass(classes, "javan.Main");
         writeSyntheticJmod(fakeHome);
-        final String[] args = lifecycleArgs(
-            root,
-            "target/classes",
-            System.getProperty("java.vendor"),
-            System.getProperty("java.version"),
+        final String[] args = lifecycleArgs(root, "target/classes");
+        final boolean canonicalPlatform = CompatibilityStatusRefresh.isCanonicalPlatform(
             System.getProperty("os.name"),
-            System.getProperty("os.arch"),
-            true
+            System.getProperty("os.arch")
         );
 
         assertThatThrownBy(() -> withJavaHome(fakeHome, () -> {
@@ -330,7 +268,8 @@ final class CompatibilityStatusRefreshTest {
 
         assertThat(root.resolve("doc/status/support-matrix.md")).isRegularFile();
         assertThat(root.resolve("doc/status/support-matrix.json")).isRegularFile();
-        assertThat(root.resolve("doc/status/jdk-compatibility.md")).isRegularFile();
+        assertThat(Files.isRegularFile(root.resolve("doc/status/jdk-compatibility.md")))
+            .isEqualTo(canonicalPlatform);
         assertThat(root.resolve("target/.javan/reports/compatibility-summary.json")).isRegularFile();
 
         assertThat(withJavaHome(fakeHome, () -> {
@@ -447,39 +386,12 @@ final class CompatibilityStatusRefreshTest {
 
     private static String[] lifecycleArgs(
         final Path root,
-        final String classes,
-        final String vendor,
-        final String version
-    ) {
-        return lifecycleArgs(
-            root,
-            classes,
-            vendor,
-            version,
-            System.getProperty("os.name"),
-            System.getProperty("os.arch"),
-            false
-        );
-    }
-
-    private static String[] lifecycleArgs(
-        final Path root,
-        final String classes,
-        final String vendor,
-        final String version,
-        final String osName,
-        final String osArch,
-        final boolean requireReferenceJdk
+        final String classes
     ) {
         return new String[]{
             root.toString(),
             classes,
-            Integer.toString(Runtime.version().feature()),
-            vendor,
-            version,
-            osName,
-            osArch,
-            Boolean.toString(requireReferenceJdk)
+            Integer.toString(Runtime.version().feature())
         };
     }
 

@@ -213,7 +213,8 @@ public final class Strings2 {
      */
     public static boolean isRuntimeAsciiStringConstant(final String value) {
         Objects.requireNonNull(value, "value");
-        for (int index = 0; index < value.length(); index++) {
+        final int length = value.length();
+        for (int index = 0; index < length; index++) {
             final char current = value.charAt(index);
             if (current == '\0' || current > 0x7F) {
                 return false;

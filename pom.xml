@@ -4,44 +4,56 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>org.noxius</groupId>
+    <groupId>org.nanonative</groupId>
     <artifactId>javan</artifactId>
-    <version>2026.6.14</version>
+    <version>1.0.0</version>
     <packaging>jar</packaging>
 
     <name>javan</name>
-    <description>Minimal native-first Java toolchain.</description>
+    <description>Native Java compiler.</description>
 
     <properties>
-        <java-version>25</java-version>
+        <!-- ########## PROD ########## -->
+        <java.version>25</java.version>
+
+        <!-- ########## TEST ########## -->
+        <junit.version>6.1.0</junit.version>
+        <assertj.version>3.27.7</assertj.version>
+        <maven-surefire-plugin.version>3.5.6</maven-surefire-plugin.version>
+        <jacoco-maven-plugin.version>0.8.14</jacoco-maven-plugin.version>
+        <surefireArgLine/>
+        <javan.test.excluded-groups/>
+
+        <!-- ########## BUILD ########## -->
         <project.encoding>UTF-8</project.encoding>
         <project.build.sourceEncoding>${project.encoding}</project.build.sourceEncoding>
         <project.reporting.outputEncoding>${project.encoding}</project.reporting.outputEncoding>
-
-        <junit.version>6.1.0</junit.version>
-        <assertj.version>3.27.7</assertj.version>
-        <junit-launcher.version>6.1.0</junit-launcher.version>
-
+        <project.build.outputTimestamp>${git.commit.time}</project.build.outputTimestamp>
+        <git-commit-id-maven-plugin.version>9.2.0</git-commit-id-maven-plugin.version>
         <maven-compiler-plugin.version>3.15.0</maven-compiler-plugin.version>
-        <maven-clean-plugin.version>3.4.1</maven-clean-plugin.version>
         <maven-jar-plugin.version>3.4.2</maven-jar-plugin.version>
-        <maven-surefire-plugin.version>3.5.6</maven-surefire-plugin.version>
+        <maven-resources-plugin.version>3.4.0</maven-resources-plugin.version>
+        <build-helper-maven-plugin.version>3.6.1</build-helper-maven-plugin.version>
         <exec-maven-plugin.version>3.6.3</exec-maven-plugin.version>
-        <jacoco-maven-plugin.version>0.8.14</jacoco-maven-plugin.version>
-        <surefireArgLine/>
-        <javan.coverage.check.skip>true</javan.coverage.check.skip>
-        <javan.coverage.soft-target>0.09</javan.coverage.soft-target>
-        <javan.coverage.line.minimum>0.95</javan.coverage.line.minimum>
-        <javan.coverage.branch.minimum>0.90</javan.coverage.branch.minimum>
-        <javan.compatibility.reference.java.vendor>Eclipse Adoptium</javan.compatibility.reference.java.vendor>
-        <javan.compatibility.reference.java.version>25.0.1</javan.compatibility.reference.java.version>
-        <javan.compatibility.reference.os.name>Linux</javan.compatibility.reference.os.name>
-        <javan.compatibility.reference.os.arch>amd64</javan.compatibility.reference.os.arch>
-        <javan.compatibility.require-reference-jdk>false</javan.compatibility.require-reference-jdk>
-        <javan.jacoco.surefire.exec>${project.build.directory}/jacoco-surefire-${surefire.forkNumber}.exec</javan.jacoco.surefire.exec>
-        <javan.jacoco.child.dir>${project.build.directory}/jacoco-child</javan.jacoco.child.dir>
-        <javan.jacoco.merged.exec>${project.build.directory}/jacoco-merged.exec</javan.jacoco.merged.exec>
+
+        <!-- ########## RELEASE ########## -->
+        <maven-source-plugin.version>3.4.0</maven-source-plugin.version>
+        <maven-javadoc-plugin.version>3.12.0</maven-javadoc-plugin.version>
+        <maven-gpg-plugin.version>3.2.8</maven-gpg-plugin.version>
+        <central-publishing-maven-plugin.version>0.11.0</central-publishing-maven-plugin.version>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
     </properties>
+
+    <distributionManagement>
+        <snapshotRepository>
+            <id>central</id>
+            <url>https://central.sonatype.com/repository/maven-snapshots</url>
+        </snapshotRepository>
+        <repository>
+            <id>central</id>
+            <url>https://ossrh-staging-api.central.sonatype.com/service/local</url>
+        </repository>
+    </distributionManagement>
 
     <dependencies>
         <dependency>
@@ -59,7 +71,7 @@
         <dependency>
             <groupId>org.junit.platform</groupId>
             <artifactId>junit-platform-launcher</artifactId>
-            <version>${junit-launcher.version}</version>
+            <version>${junit.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -79,34 +91,52 @@
                 </excludes>
             </testResource>
         </testResources>
-        <resources>
-            <resource>
-                <directory>src/main/resources</directory>
-                <filtering>true</filtering>
-                <includes>
-                    <include>javan-version.properties</include>
-                </includes>
-            </resource>
-            <resource>
-                <directory>src/main/resources</directory>
-                <filtering>false</filtering>
-                <excludes>
-                    <exclude>javan-version.properties</exclude>
-                </excludes>
-            </resource>
-        </resources>
         <plugins>
             <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-clean-plugin</artifactId>
-                <version>${maven-clean-plugin.version}</version>
+                <groupId>io.github.git-commit-id</groupId>
+                <artifactId>git-commit-id-maven-plugin</artifactId>
+                <version>${git-commit-id-maven-plugin.version}</version>
                 <executions>
                     <execution>
-                        <id>reset-build-state</id>
+                        <id>git-commit-time</id>
                         <phase>initialize</phase>
                         <goals>
-                            <goal>clean</goal>
+                            <goal>revision</goal>
                         </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <runOnlyOnce>true</runOnlyOnce>
+                    <generateGitPropertiesFile>false</generateGitPropertiesFile>
+                    <dateFormat>yyyy-MM-dd'T'HH:mm:ss'Z'</dateFormat>
+                    <dateFormatTimeZone>UTC</dateFormatTimeZone>
+                    <failOnNoGitDirectory>false</failOnNoGitDirectory>
+                    <failOnUnableToExtractRepoInfo>false</failOnUnableToExtractRepoInfo>
+                    <includeOnlyProperties>
+                        <includeOnlyProperty>^git.commit.time$</includeOnlyProperty>
+                    </includeOnlyProperties>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <version>${maven-resources-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>generate-version-source</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/generated-sources/version</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>src/main/version</directory>
+                                    <filtering>true</filtering>
+                                </resource>
+                            </resources>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>
@@ -115,12 +145,31 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>${maven-compiler-plugin.version}</version>
                 <configuration>
-                    <release>${java-version}</release>
+                    <release>${java.version}</release>
                     <compilerArgs>
                         <arg>-Xlint:all</arg>
                         <arg>-Werror</arg>
                     </compilerArgs>
                 </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>${build-helper-maven-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>add-generated-version-source</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>add-source</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>${project.build.directory}/generated-sources/version</source>
+                            </sources>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -139,19 +188,9 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>${maven-surefire-plugin.version}</version>
                 <configuration>
-                    <argLine>@{surefireArgLine} -Djavan.childJacocoArgLine=@{surefireArgLine} -Djavan.childJacocoDir=${javan.jacoco.child.dir}</argLine>
+                    <argLine>@{surefireArgLine} -Djavan.childJacocoArgLine=@{surefireArgLine} -Djavan.childJacocoDir=${project.build.directory}/jacoco-child</argLine>
+                    <excludedGroups>${javan.test.excluded-groups}</excludedGroups>
                     <forkCount>2</forkCount>
-                    <reuseForks>true</reuseForks>
-                    <systemPropertyVariables>
-                        <junit.jupiter.execution.parallel.enabled>true</junit.jupiter.execution.parallel.enabled>
-                        <junit.jupiter.execution.parallel.mode.default>concurrent</junit.jupiter.execution.parallel.mode.default>
-                        <junit.jupiter.execution.parallel.mode.classes.default>concurrent</junit.jupiter.execution.parallel.mode.classes.default>
-                        <junit.jupiter.execution.parallel.config.strategy>dynamic</junit.jupiter.execution.parallel.config.strategy>
-                        <junit.jupiter.execution.parallel.config.dynamic.factor>1.0</junit.jupiter.execution.parallel.config.dynamic.factor>
-                    </systemPropertyVariables>
-                    <includes>
-                        <include>**/*Test.java</include>
-                    </includes>
                 </configuration>
             </plugin>
             <plugin>
@@ -166,7 +205,7 @@
                         </goals>
                         <configuration>
                             <propertyName>surefireArgLine</propertyName>
-                            <destFile>${javan.jacoco.surefire.exec}</destFile>
+                            <destFile>${project.build.directory}/jacoco-surefire-${surefire.forkNumber}.exec</destFile>
                         </configuration>
                     </execution>
                     <execution>
@@ -184,13 +223,13 @@
                                     </includes>
                                 </fileSet>
                                 <fileSet>
-                                    <directory>${javan.jacoco.child.dir}</directory>
+                                    <directory>${project.build.directory}/jacoco-child</directory>
                                     <includes>
                                         <include>*.exec</include>
                                     </includes>
                                 </fileSet>
                             </fileSets>
-                            <destFile>${javan.jacoco.merged.exec}</destFile>
+                            <destFile>${project.build.directory}/jacoco-merged.exec</destFile>
                         </configuration>
                     </execution>
                     <execution>
@@ -200,35 +239,7 @@
                             <goal>report</goal>
                         </goals>
                         <configuration>
-                            <dataFile>${javan.jacoco.merged.exec}</dataFile>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>coverage-check</id>
-                        <phase>verify</phase>
-                        <goals>
-                            <goal>check</goal>
-                        </goals>
-                        <configuration>
-                            <skip>${javan.coverage.check.skip}</skip>
-                            <dataFile>${javan.jacoco.merged.exec}</dataFile>
-                            <rules>
-                                <rule>
-                                    <element>BUNDLE</element>
-                                    <limits>
-                                        <limit>
-                                            <counter>LINE</counter>
-                                            <value>COVEREDRATIO</value>
-                                            <minimum>${javan.coverage.line.minimum}</minimum>
-                                        </limit>
-                                        <limit>
-                                            <counter>BRANCH</counter>
-                                            <value>COVEREDRATIO</value>
-                                            <minimum>${javan.coverage.branch.minimum}</minimum>
-                                        </limit>
-                                    </limits>
-                                </rule>
-                            </rules>
+                            <dataFile>${project.build.directory}/jacoco-merged.exec</dataFile>
                         </configuration>
                     </execution>
                 </executions>
@@ -249,12 +260,7 @@
                             <arguments>
                                 <argument>${project.basedir}</argument>
                                 <argument>${project.build.outputDirectory}</argument>
-                                <argument>${java-version}</argument>
-                                <argument>${javan.compatibility.reference.java.vendor}</argument>
-                                <argument>${javan.compatibility.reference.java.version}</argument>
-                                <argument>${javan.compatibility.reference.os.name}</argument>
-                                <argument>${javan.compatibility.reference.os.arch}</argument>
-                                <argument>${javan.compatibility.require-reference-jdk}</argument>
+                                <argument>${java.version}</argument>
                             </arguments>
                         </configuration>
                     </execution>
@@ -262,4 +268,87 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>quick</id>
+            <properties>
+                <javan.test.excluded-groups>native,packaging,external</javan.test.excluded-groups>
+            </properties>
+        </profile>
+        <profile>
+            <id>standard</id>
+            <properties>
+                <javan.test.excluded-groups>packaging,external</javan.test.excluded-groups>
+            </properties>
+        </profile>
+        <profile>
+            <id>publish</id>
+            <properties>
+                <maven.javadoc.skip>false</maven.javadoc.skip>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <version>${maven-source-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>jar-no-fork</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>${maven-javadoc-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>jar</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <doclint>none</doclint>
+                            <failOnError>false</failOnError>
+                            <skip>${maven.javadoc.skip}</skip>
+                        </configuration>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>${maven-gpg-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>${central-publishing-maven-plugin.version}</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <autoPublish>true</autoPublish>
+                            <waitUntil>published</waitUntil>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

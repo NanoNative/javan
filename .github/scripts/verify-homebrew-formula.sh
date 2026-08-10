@@ -14,8 +14,7 @@ if [ -z "$VERSION" ] || [ -z "$REPOSITORY" ]; then
   exit 1
 fi
 
-VERSION=${VERSION#v}
-TAG=v$VERSION
+TAG=$VERSION
 
 if [ ! -f "$FORMULA" ]; then
   printf '%s\n' "Missing Homebrew formula: $FORMULA" >&2

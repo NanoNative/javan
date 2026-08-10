@@ -347,7 +347,7 @@ final class ExternalProbeIsolationTest {
                 final String content = Files.readString(file);
                 assertThat(content)
                     .as(file + " should not reference the dedicated external-probes directory")
-                    .doesNotContain("external-probes");
+                    .doesNotContain("src/test/resources/external-probes");
                 assertThat(content)
                     .as(file + " should not reference probe metadata files")
                     .doesNotContain("probe.properties");

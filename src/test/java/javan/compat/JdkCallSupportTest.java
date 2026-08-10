@@ -3,6 +3,7 @@ package javan.compat;
 import javan.classfile.ClassFile;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
+import javan.testing.TestSuite.PlatformTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 
@@ -16,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 
 @Execution(CONCURRENT)
+@PlatformTest
 final class JdkCallSupportTest {
     @Test
     void boundedOptionalOrElseThrowSupplierHasExactSupportAndRuntimeModule() {

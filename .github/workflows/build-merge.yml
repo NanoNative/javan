@@ -1,0 +1,54 @@
+name: Snapshot
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: build-main-${{ github.ref || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-common.yml
+    with:
+      ref: ${{ github.sha }}
+      prepare_publication: true
+      snapshot: true
+      bootstrap_generation: 3
+    secrets: inherit
+
+  publish-central:
+    name: Central
+    needs:
+      - verify
+    if: ${{ false }}
+    uses: ./.github/workflows/publish-central.yml
+    with:
+      run_id: ${{ github.run_id }}
+      dry_run: false
+      build_output_timestamp: ${{ needs.verify.outputs.build_output_timestamp }}
+    secrets: inherit
+
+  publish-github-packages:
+    name: Packages
+    needs:
+      - verify
+    if: ${{ always() && !cancelled() && needs.verify.result == 'success' }}
+    permissions:
+      actions: read
+      contents: read
+      deployments: write
+      packages: write
+    uses: ./.github/workflows/publish-github-packages.yml
+    with:
+      run_id: ${{ github.run_id }}
+      dry_run: false
+    secrets: inherit

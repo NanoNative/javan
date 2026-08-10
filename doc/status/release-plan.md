@@ -20,18 +20,17 @@ If they disagree, repair the disagreement before widening implementation.
 
 ## Frozen first-release contract
 
-- Published native packages: Linux x64 and Linux aarch64.
-- Required local host gate: macOS aarch64, using the same package-backed verification
+- Published native packages: Linux x64, Linux aarch64, and macOS aarch64.
+- Required macOS host gate: macOS aarch64, using the same package-backed verification
   script as the release matrix.
 - Required CI runtime smoke: Windows current-thread and worker-thread lanes.
-- macOS package publication and remote macOS runners are deferred until their runner and
-  package gate is reliable; no macOS artifact is claimed by the first release.
+- The slower macOS x64 package row remains disabled until its timing is acceptable.
 - Unsupported reachable shapes must fail clearly before native code generation.
 - Generated apps, native libraries, and bindings must finish sanitizer and ownership
   probes with zero final live heap/root residue.
 - External projects are compatibility probes only and do not define compiler support rows.
-- Pushes to `main` run the Linux package workflow as a dry run; publication remains an
-  explicit manual dispatch requiring `BOT_TOKEN`.
+- Pushes to `main` publish the verified Maven snapshot to GitHub Packages. Final GitHub
+  publication remains an explicit manual dispatch using the repository `GITHUB_TOKEN`.
 
 ## Current scoreboard
 

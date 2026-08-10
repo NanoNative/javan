@@ -1,5 +1,7 @@
 package javan;
 
+import javan.testing.TestSuite.NativeTest;
+
 import javan.cli.Cli;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -16,6 +18,7 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 
 @Execution(SAME_THREAD)
 @ResourceLock("native-cli-heavy")
+@NativeTest
 final class CliCompatIntegrationTest {
     @TempDir
     private Path tempDir;

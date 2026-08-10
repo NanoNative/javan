@@ -1,5 +1,7 @@
 package javan;
 
+import javan.testing.TestSuite.NativeTest;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ResourceAccessMode;
@@ -23,6 +25,7 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @Execution(SAME_THREAD)
 @ResourceLock("native-cli-heavy")
 @ResourceLock(value = Resources.SYSTEM_PROPERTIES, mode = ResourceAccessMode.READ)
+@NativeTest
 final class CliPop2IntegrationTest extends CliIntegrationSupport {
     private static final ClassDesc PAIR_CLASS = ClassDesc.of("dep.Pop2Pair");
     private static final ClassDesc INT = ClassDesc.ofDescriptor("I");

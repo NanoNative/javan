@@ -2070,16 +2070,18 @@ public final class StaticVerifier {
             return false;
         }
         if (opcode == 184) {
-            return owner.method(target.name(), target.descriptor())
-                .filter(candidate -> candidate.isStatic() && candidate.code().isPresent())
-                .isPresent();
+            final Optional<MethodInfo> candidate = owner.method(target.name(), target.descriptor());
+            return candidate.isPresent()
+                && candidate.orElseThrow().isStatic()
+                && candidate.orElseThrow().code().isPresent();
         }
         if (opcode == 182) {
+            final Optional<MethodInfo> candidate = owner.method(target.name(), target.descriptor());
             return owner.isFinal()
                 && !owner.isInterface()
-                && owner.method(target.name(), target.descriptor())
-                    .filter(candidate -> !candidate.isStatic() && candidate.code().isPresent())
-                    .isPresent();
+                && candidate.isPresent()
+                && !candidate.orElseThrow().isStatic()
+                && candidate.orElseThrow().code().isPresent();
         }
         if (opcode != 185 || !owner.isInterface()) {
             return false;
@@ -2089,10 +2091,11 @@ public final class StaticVerifier {
             if (candidate.isInterface() || !candidate.interfaces().contains(target.owner())) {
                 continue;
             }
+            final Optional<MethodInfo> implementation = candidate.method(target.name(), target.descriptor());
             if (!candidate.application()
-                || candidate.method(target.name(), target.descriptor())
-                    .filter(implementation -> !implementation.isStatic() && implementation.code().isPresent())
-                    .isEmpty()) {
+                || implementation.isEmpty()
+                || implementation.orElseThrow().isStatic()
+                || implementation.orElseThrow().code().isEmpty()) {
                 return false;
             }
             targets++;
@@ -2293,10 +2296,18 @@ public final class StaticVerifier {
             return Optional.empty();
         }
         final List<IrType> types = new ArrayList<>();
-        instruction.intValue().ifPresent(value -> types.add(IrType.INT));
-        instruction.longValue().ifPresent(value -> types.add(IrType.LONG));
-        instruction.floatValue().ifPresent(value -> types.add(IrType.FLOAT));
-        instruction.doubleValue().ifPresent(value -> types.add(IrType.DOUBLE));
+        if (instruction.intValue().isPresent()) {
+            types.add(IrType.INT);
+        }
+        if (instruction.longValue().isPresent()) {
+            types.add(IrType.LONG);
+        }
+        if (instruction.floatValue().isPresent()) {
+            types.add(IrType.FLOAT);
+        }
+        if (instruction.doubleValue().isPresent()) {
+            types.add(IrType.DOUBLE);
+        }
         if (instruction.stringValue().isPresent()
             && Strings2.isRuntimeAsciiStringConstant(instruction.stringValue().orElseThrow())) {
             types.add(IrType.OBJECT);
@@ -2770,7 +2781,8 @@ public final class StaticVerifier {
             return true;
         }
         if (opcode == 186) {
-            return instruction.dynamicRef().filter(StaticVerifier::supportedStringConcat).isPresent();
+            return instruction.dynamicRef().isPresent()
+                && supportedStringConcat(instruction.dynamicRef().orElseThrow());
         }
         if (instruction.methodRef().isEmpty()) {
             return false;
@@ -5565,33 +5577,49 @@ public final class StaticVerifier {
     }
 
     private static boolean supportedStringConcatParameters(final String descriptor) {
-        int index = 1;
-        while (index < descriptor.length() && descriptor.charAt(index) != ')') {
-            final char type = descriptor.charAt(index);
-            if ("BCDFIJSZ".indexOf(type) >= 0) {
-                index++;
-            } else if (type == 'L') {
-                final int end = descriptor.indexOf(';', index);
-                if (end < 0) {
-                    return false;
-                }
-                index = end + 1;
-            } else if (type == '[') {
-                index = skipArrayDescriptor(descriptor, index);
-                if (index < 0) {
-                    return false;
-                }
-            } else {
-                return false;
-            }
+        if (!descriptor.startsWith("(")) {
+            return false;
         }
+        return supportedStringConcatParameters(descriptor, 1);
+    }
+
+    private static boolean supportedStringConcatParameters(final String descriptor, final int index) {
         if (index >= descriptor.length()) {
             return false;
         }
-        if (descriptor.charAt(index) != ')') {
+        if (descriptor.charAt(index) == ')') {
+            return true;
+        }
+        final int next = supportedStringConcatParameterEnd(descriptor, index);
+        if (next < 0) {
             return false;
         }
-        return true;
+        return supportedStringConcatParameters(descriptor, next);
+    }
+
+    private static int supportedStringConcatParameterEnd(final String descriptor, final int index) {
+        final char type = descriptor.charAt(index);
+        if ("BCDFIJSZ".indexOf(type) >= 0) {
+            return index + 1;
+        }
+        if (type == 'L') {
+            final int end = descriptor.indexOf(';', index);
+            return end < 0 ? -1 : end + 1;
+        }
+        if (type != '[') {
+            return -1;
+        }
+        return supportedStringConcatArrayEnd(descriptor, index + 1);
+    }
+
+    private static int supportedStringConcatArrayEnd(final String descriptor, final int index) {
+        if (index >= descriptor.length()) {
+            return -1;
+        }
+        if (descriptor.charAt(index) == '[') {
+            return supportedStringConcatArrayEnd(descriptor, index + 1);
+        }
+        return supportedStringConcatParameterEnd(descriptor, index);
     }
 
     private static boolean ignoredUnreachableRecordObjectMethod(
@@ -5763,19 +5791,47 @@ public final class StaticVerifier {
         final Instruction instruction,
         final int reachable
     ) {
-        final String reason =
+        final String support =
             "Only StringConcatFactory string concatenation, exact record ObjectMethods equals/hashCode, exact LambdaMetafactory Function/Predicate shapes, "
                 + "the exact Supplier subset (zero-argument reference-return invocation directly lowered to admitted application-static "
                 + "implementations or final implementation-owner bound instance targets, plus application static/instance-target "
                 + "materialization with reference-only captures and reference "
                 + "returns), the current "
                 + "Consumer/BiConsumer object-capture materialization slice, and the current custom-SAM materialization subset are implemented.";
+        final String reason = invokedynamicReason(instruction, support);
         final String fix =
             "Keep invokedynamic limited to supported javac string concatenation, exact supported record equals/hashCode, or the admitted LambdaMetafactory subset.";
         if (reachable == 1) {
             return error(classFile, method, "JAVAN030", "unsupported reachable bytecode", instruction.mnemonic(), reason, fix);
         }
         return warning(classFile, method, "JAVAN130", "unsupported bytecode in unreachable code", instruction.mnemonic(), reason, fix);
+    }
+
+    private static String invokedynamicReason(final Instruction instruction, final String support) {
+        if (instruction.dynamicRef().isEmpty()) {
+            return support;
+        }
+        final DynamicRef ref = instruction.dynamicRef().orElseThrow();
+        final StringBuilder reason = new StringBuilder(support)
+            .append(" Observed bootstrap: ")
+            .append(ref.bootstrapOwner())
+            .append('.')
+            .append(ref.bootstrapName())
+            .append(ref.descriptor())
+            .append(", arguments=")
+            .append(ref.bootstrapArguments().size());
+        if (isStringConcatWithConstants(ref) && !ref.bootstrapArguments().isEmpty()) {
+            reason.append(", recipeLength=")
+                .append(ref.bootstrapArguments().getFirst().length())
+                .append(", constantPlaceholder=")
+                .append(ref.bootstrapArguments().getFirst().indexOf(2) >= 0);
+        }
+        return reason.append('.').toString();
+    }
+
+    private static boolean isStringConcatWithConstants(final DynamicRef ref) {
+        return "java/lang/invoke/StringConcatFactory".equals(ref.bootstrapOwner())
+            && "makeConcatWithConstants".equals(ref.bootstrapName());
     }
 
     private static Diagnostic recordComponentDiagnostic(
