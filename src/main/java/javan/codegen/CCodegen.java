@@ -3674,7 +3674,8 @@ public final class CCodegen {
 
     private static String escapeCString(final String value) {
         final StringBuilder result = new StringBuilder();
-        for (int index = 0; index < value.length(); index++) {
+        final int valueLength = value.length();
+        for (int index = 0; index < valueLength; index++) {
             final char current = value.charAt(index);
             if (current <= 0x7F) {
                 appendEscapedCByte(result, current);
@@ -3682,7 +3683,7 @@ public final class CCodegen {
                 appendEscapedCByte(result, 0xC0 | (current >> 6));
                 appendEscapedCByte(result, 0x80 | (current & 0x3F));
             } else if (isHighSurrogate(current)
-                && index + 1 < value.length()
+                && index + 1 < valueLength
                 && isLowSurrogate(value.charAt(index + 1))) {
                 final char low = value.charAt(++index);
                 final int codePoint = 0x10000 + ((current - 0xD800) << 10) + (low - 0xDC00);
@@ -3702,13 +3703,14 @@ public final class CCodegen {
     private static String emitCStringLiteral(final String value) {
         final int maxChunkLength = 120;
         final String escaped = escapeCString(value);
-        final StringBuilder result = new StringBuilder(escaped.length() + 16);
-        StringBuilder chunk = new StringBuilder(Math.min(escaped.length(), maxChunkLength));
-        for (int index = 0; index < escaped.length();) {
-            final int tokenLength = escapedCStringTokenLength(escaped, index);
+        final int escapedLength = escaped.length();
+        final StringBuilder result = new StringBuilder(escapedLength + 16);
+        StringBuilder chunk = new StringBuilder(Math.min(escapedLength, maxChunkLength));
+        for (int index = 0; index < escapedLength;) {
+            final int tokenLength = escapedCStringTokenLength(escaped, escapedLength, index);
             if (!chunk.isEmpty() && chunk.length() + tokenLength > maxChunkLength) {
                 appendCStringChunk(result, chunk);
-                chunk = new StringBuilder(Math.min(escaped.length() - index, maxChunkLength));
+                chunk = new StringBuilder(Math.min(escapedLength - index, maxChunkLength));
             }
             for (int offset = 0; offset < tokenLength; offset++) {
                 chunk.append(escaped.charAt(index + offset));
@@ -3719,11 +3721,11 @@ public final class CCodegen {
         return result.toString();
     }
 
-    private static int escapedCStringTokenLength(final String escaped, final int index) {
+    private static int escapedCStringTokenLength(final String escaped, final int escapedLength, final int index) {
         if (escaped.charAt(index) != '\\') {
             return 1;
         }
-        if (index + 1 < escaped.length()) {
+        if (index + 1 < escapedLength) {
             final char next = escaped.charAt(index + 1);
             if (next >= '0' && next <= '7') {
                 return 4;

@@ -1755,10 +1755,11 @@ public final class JdkCallSupport {
      * @return true for a supported platform throwable {@code (String, Throwable)} constructor
      */
     public static boolean isPlatformThrowableCauseConstructor(final MethodRef methodRef) {
-        if (!isPlatformThrowable(methodRef.owner()) || !"<init>".equals(methodRef.name())) {
+        if (!"<init>".equals(methodRef.name())
+            || !"(Ljava/lang/String;Ljava/lang/Throwable;)V".equals(methodRef.descriptor())) {
             return false;
         }
-        return "(Ljava/lang/String;Ljava/lang/Throwable;)V".equals(methodRef.descriptor());
+        return isPlatformThrowable(methodRef.owner());
     }
 
     /**

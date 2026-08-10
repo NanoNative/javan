@@ -983,8 +983,9 @@ public final class ReportSummarizer {
     private static long countLinePrefix(final String value, final String prefix) {
         long count = 0L;
         int lineStart = 0;
-        for (int index = 0; index <= value.length(); index++) {
-            if (index == value.length() || value.charAt(index) == '\n') {
+        final int length = value.length();
+        for (int index = 0; index <= length; index++) {
+            if (index == length || value.charAt(index) == '\n') {
                 if (startsWith(value, lineStart, index, prefix)) {
                     count++;
                 }
@@ -996,8 +997,9 @@ public final class ReportSummarizer {
 
     private static Optional<String> prefixedLine(final String value, final String prefix) {
         int lineStart = 0;
-        for (int index = 0; index <= value.length(); index++) {
-            if (index == value.length() || value.charAt(index) == '\n') {
+        final int length = value.length();
+        for (int index = 0; index <= length; index++) {
+            if (index == length || value.charAt(index) == '\n') {
                 if (startsWith(value, lineStart, index, prefix)) {
                     return Optional.of(Strings2.slice(value, lineStart + prefix.length(), trimCarriageReturn(value, index)));
                 }
@@ -1011,8 +1013,9 @@ public final class ReportSummarizer {
         long count = 0L;
         boolean reachable = false;
         int lineStart = 0;
-        for (int index = 0; index <= value.length(); index++) {
-            if (index == value.length() || value.charAt(index) == '\n') {
+        final int length = value.length();
+        for (int index = 0; index <= length; index++) {
+            if (index == length || value.charAt(index) == '\n') {
                 if (startsWith(value, lineStart, index, "reachable:")) {
                     reachable = true;
                 } else if (reachable && startsWith(value, lineStart, index, "  ")) {
@@ -1025,10 +1028,11 @@ public final class ReportSummarizer {
     }
 
     private static boolean startsWith(final String value, final int start, final int end, final String prefix) {
-        if (end - start < prefix.length()) {
+        final int length = prefix.length();
+        if (end - start < length) {
             return false;
         }
-        for (int index = 0; index < prefix.length(); index++) {
+        for (int index = 0; index < length; index++) {
             if (value.charAt(start + index) != prefix.charAt(index)) {
                 return false;
             }
