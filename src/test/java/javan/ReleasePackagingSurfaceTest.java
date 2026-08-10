@@ -54,7 +54,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     void homebrewFormulaGenerationRendersPinnedLinuxUrlsAndChecksums() throws Exception {
         final Path releaseDir = tempDir.resolve("release");
         Files.createDirectories(releaseDir);
-        final String version = "2026.07.16";
+        final String version = "2026.7.16";
         writeReleaseArtifact(releaseDir, "javan-" + version + "-linux-x64.tar.gz", "linux-x64");
         writeReleaseArtifact(releaseDir, "javan-" + version + "-linux-aarch64.tar.gz", "linux-aarch64");
         final Path formula = releaseDir.resolve("javan.rb");
@@ -88,7 +88,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     void homebrewFormulaGenerationFailsWhenChecksumIsMissing() throws Exception {
         final Path releaseDir = tempDir.resolve("release");
         Files.createDirectories(releaseDir);
-        final String version = "2026.07.16";
+        final String version = "2026.7.16";
         Files.writeString(releaseDir.resolve("javan-" + version + "-linux-x64.tar.gz"), "linux-x64", StandardCharsets.UTF_8);
 
         final ProcessResult run = process(
@@ -104,10 +104,29 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     }
 
     @Test
+    void homebrewFormulaGenerationRejectsLeadingZeroVersionIdentifiers() throws Exception {
+        final ProcessResult run = process(
+            REPO_ROOT,
+            List.of(
+                "sh",
+                REPO_ROOT.resolve(".github/scripts/generate-homebrew-formula.sh").toString(),
+                "2026.07.16",
+                "NanoNative/javan"
+            ),
+            Duration.ofSeconds(20),
+            Map.of("JAVAN_RELEASE_DIR", tempDir.toString())
+        );
+
+        assertThat(run.exitCode()).isEqualTo(1);
+        assertThat(run.stdout()).isEmpty();
+        assertThat(run.stderr()).contains("without leading zeroes");
+    }
+
+    @Test
     void homebrewFormulaVerificationChecksGeneratedFormulaAgainstReleaseChecksums() throws Exception {
         final Path releaseDir = tempDir.resolve("release");
         Files.createDirectories(releaseDir);
-        final String version = "2026.07.16";
+        final String version = "2026.7.16";
         writeReleaseArtifact(releaseDir, "javan-" + version + "-linux-x64.tar.gz", "linux-x64");
         writeReleaseArtifact(releaseDir, "javan-" + version + "-linux-aarch64.tar.gz", "linux-aarch64");
         final Path formula = releaseDir.resolve("javan.rb");
@@ -189,15 +208,16 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     }
 
     @Test
-    void ciWorkflowReportsCoverageWithoutTargetOrGate() throws Exception {
+    void ciWorkflowLeavesCoverageToMavenWithoutPartialSummaryOrGate() throws Exception {
         final String ciWorkflow = Files.readString(BUILD_COMMON);
 
         assertThat(ciWorkflow)
-            .contains("- name: \"📊 Coverage")
             .doesNotContain(
                 "JAVAN_COVERAGE_SOFT_TARGET",
                 "Soft target:",
                 "::warning::JaCoCo",
+                "GITHUB_STEP_SUMMARY",
+                "- name: \"📊 Coverage",
                 "Upload coverage artifact",
                 "minimum>0.09</minimum>"
             );
@@ -281,7 +301,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     }
 
     @Test
-    void releaseWorkflowDownloadsReleasePackagesBeforePublishingMetadata() throws Exception {
+    void releaseWorkflowDownloadsPackagesBeforePublishingAtVerifiedCommit() throws Exception {
         final String releaseWorkflow = Files.readString(RELEASE_WORKFLOW);
 
         assertThat(releaseWorkflow)
@@ -289,7 +309,9 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             .contains("actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7")
             .contains("pattern: javan-*")
             .contains("merge-multiple: true")
-            .contains("- name: \"🏷️ Metadata");
+            .contains("- name: \"🚀 Publish")
+            .contains("TARGET_SHA: ${{ needs.build.outputs.commit_sha }}")
+            .doesNotContain("git push", "git tag", "BOT_TOKEN");
     }
 
     @Test

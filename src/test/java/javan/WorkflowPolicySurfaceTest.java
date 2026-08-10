@@ -16,6 +16,7 @@ final class WorkflowPolicySurfaceTest {
     private static final Path NATIVE_PROOF = Path.of(".github/workflows/native-proof.yml");
     private static final Path PLATFORM_PROOF = Path.of(".github/workflows/platform-proof.yml");
     private static final Path RELEASE_WORKFLOW = Path.of(".github/workflows/release.yml");
+    private static final Path MAINTENANCE_WORKFLOW = Path.of(".github/workflows/maintenance.yml");
     private static final Path CONTAINER_IMAGES_WORKFLOW = Path.of(".github/workflows/container-images.yml");
     private static final Path PUBLISH_CENTRAL = Path.of(".github/workflows/publish-central.yml");
     private static final Path DEPENDABOT = Path.of(".github/dependabot.yml");
@@ -60,18 +61,18 @@ final class WorkflowPolicySurfaceTest {
     }
 
     @Test
-    void commonBuildReportsCoverageWithoutTargetsOrArtifacts() throws Exception {
+    void commonBuildGeneratesCoverageWithoutWorkflowSummariesOrArtifacts() throws Exception {
         assertThat(Files.readString(BUILD_COMMON))
             .contains("name: core_linux_x64")
             .contains("name: ${{ matrix.label }}")
             .contains("-Dexec.skip=true -Pquick verify")
             .contains("-Dgroups='${{ matrix.suite }}'")
             .contains("-Dtest='${{ steps.tests.outputs.test_selector }}' verify")
-            .contains("name: \"📊 Coverage")
-            .contains("JaCoCo {counter_type.lower()} coverage: {covered}/{total} = {ratio:.2%}")
             .doesNotContain(
                 "JAVAN_COVERAGE_SOFT_TARGET",
                 "Soft target:",
+                "GITHUB_STEP_SUMMARY",
+                "name: \"📊 Coverage",
                 "Upload coverage artifact",
                 "jacoco-core-linux-x64",
                 "jacoco-cli-integration-${{ matrix.worker_index }}"
@@ -188,11 +189,11 @@ final class WorkflowPolicySurfaceTest {
     }
 
     @Test
-    void mainWorkflowSkipsReleaseMetadataPushesBeforeCommonBuild() throws Exception {
+    void mainWorkflowPublishesSnapshotWithoutReleaseMetadataCommits() throws Exception {
         assertThat(Files.readString(BUILD_MERGE))
-            .contains("github.event_name != 'push'")
-            .contains("chore: release ")
-            .contains("chore: prepare binary release repo");
+            .contains("uses: ./.github/workflows/publish-github-packages.yml")
+            .contains("snapshot: true")
+            .doesNotContain("chore: release ", "git tag", "gh release create");
     }
 
     @Test
@@ -254,13 +255,24 @@ final class WorkflowPolicySurfaceTest {
             .contains("if [ \"$GITHUB_REF_NAME\" != \"main\" ]")
             .contains("uses: ./.github/workflows/build-common.yml")
             .contains("prepare_publication: true")
-            .contains("format('v{0}', needs.build.outputs.resolved_version)")
+            .contains("gh release create \"$RELEASE_VERSION\"")
+            .contains("--target \"$TARGET_SHA\"")
             .doesNotContain("release_strategy:", "build_version:", "inputs.tag", "plan:");
         assertThat(Files.readString(BUILD_COMMON))
             .contains("name: build-workspace")
             .contains("prepare-publication:")
-            .contains("version=$(date -u +%Y.%m.%d)")
+            .contains("version=$(date -u '+%Y.%m.%d' | sed -E 's/\\.0+([0-9])/\\.\\1/g')")
             .doesNotContain("publication_version", "release_strategy", "build_version");
+    }
+
+    @Test
+    void weeklyWrapperMaintenanceUsesSharedWorkflowWithoutRepositoryPat() throws Exception {
+        assertThat(Files.readString(MAINTENANCE_WORKFLOW))
+            .contains("cron: '0 6 * * 0'")
+            .contains("YunaBraska/YunaBraska/.github/workflows/wc_java_update_maven_wrapper.yml@3e5a0251657d2971bf7f106c6573110296cf9c51 # main")
+            .contains("contents: write", "pull-requests: write", "actions: write")
+            .contains("github.event_name == 'workflow_dispatch' && inputs.dry_run || false")
+            .doesNotContain("PAT", "BOT_TOKEN", "CI_TOKEN", "secrets:");
     }
 
     @Test

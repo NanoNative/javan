@@ -7,11 +7,11 @@ repository.
 
 - Core repo lives at `javan-project/javan`.
 - The default branch is `main`.
-- Main artifacts use UTC date snapshots (`YYYY.MM.DD-SNAPSHOT`); releases use final
-  `YYYY.MM.DD` artifacts and `vYYYY.MM.DD` tags.
+- Main artifacts use UTC date snapshots (`YYYY.M.D-SNAPSHOT`); releases use final
+  `YYYY.M.D` artifacts and tags without leading zeroes.
 - Local release gate is `.github/scripts/verify-release.sh`.
 - Release package smoke extracts the archive, verifies SHA-256, runs `bin/javan --version`,
-  and requires the UTC date version format `YYYY.MM.DD`.
+  and requires the UTC date version format `YYYY.M.D`.
 - CI and release workflows exist for Linux and macOS host-native builds.
 - Post-release image workflow builds Wolfi, distroless, and scratch Linux container
   images for `linux/amd64` and `linux/arm64` from published release assets.

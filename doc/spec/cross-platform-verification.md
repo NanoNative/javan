@@ -80,10 +80,10 @@ entrypoints on each required target.
 | linux-x64 | `ubuntu-24.04` | `mvn verify`, acceptance, host `--target`, sanitizer suite with self-host proof |
 | linux-aarch64 | `ubuntu-24.04-arm` | `mvn verify`, acceptance, host `--target`, sanitizer suite with self-host proof |
 | macos-x64 | `macos-15-intel` | disabled package row; historically slower architecture lane |
-| macos-aarch64 | `macos-15` | disabled package row; local first self-rebuild exceeded 29 minutes |
+| macos-aarch64 | `macos-15` | enabled host-native package and platform proof |
 
-Linux rows are required. macOS and Windows package targets remain explicit `enabled: false`
-rows until their timing or native runtime blockers are resolved.
+Linux rows are required. macOS ARM64 is enabled; macOS x64 and Windows package targets remain
+explicit `enabled: false` rows until their timing or native runtime blockers are resolved.
 
 ## Container Matrix
 

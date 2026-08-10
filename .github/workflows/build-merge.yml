@@ -15,7 +15,6 @@ concurrency:
 jobs:
   verify:
     name: Verify
-    if: "${{ github.event_name != 'push' || !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}"
     permissions:
       contents: read
     uses: ./.github/workflows/build-common.yml
@@ -37,4 +36,20 @@ jobs:
       run_id: ${{ github.run_id }}
       dry_run: false
       build_output_timestamp: ${{ needs.verify.outputs.build_output_timestamp }}
+    secrets: inherit
+
+  publish-github-packages:
+    name: Packages
+    needs:
+      - verify
+    if: ${{ always() && !cancelled() && needs.verify.result == 'success' }}
+    permissions:
+      actions: read
+      contents: read
+      deployments: write
+      packages: write
+    uses: ./.github/workflows/publish-github-packages.yml
+    with:
+      run_id: ${{ github.run_id }}
+      dry_run: false
     secrets: inherit

@@ -59,8 +59,8 @@ if [ ! -f "$ROOT/VERSION" ]; then
 fi
 
 VERSION=$(cat "$ROOT/VERSION")
-if ! printf '%s\n' "$VERSION" | grep -Eq '^[0-9]{4}[.][0-9]{2}[.][0-9]{2}(-SNAPSHOT)?$'; then
-  printf '%s\n' "Package version must use YYYY.MM.DD or YYYY.MM.DD-SNAPSHOT: $VERSION" >&2
+if ! printf '%s\n' "$VERSION" | grep -Eq '^[0-9]{4}[.]([1-9]|1[0-2])[.]([1-9]|[12][0-9]|3[01])(-SNAPSHOT)?$'; then
+  printf '%s\n' "Package version must use YYYY.M.D or YYYY.M.D-SNAPSHOT without leading zeroes: $VERSION" >&2
   exit 1
 fi
 

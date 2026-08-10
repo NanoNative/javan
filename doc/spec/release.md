@@ -29,7 +29,8 @@ The gate runs:
 
 Maven owns versioning. Local builds keep the POM default `1.0.0` and need no source edit. CI
 resolves the UTC date once, then runs Maven `versions:set` inside its disposable checkout before
-building. Main builds use `YYYY.MM.DD-SNAPSHOT`; manual releases use `YYYY.MM.DD`. The changed
+building. Main builds use `YYYY.M.D-SNAPSHOT`; manual releases use `YYYY.M.D`. Month and day
+have no leading zeroes, matching the shared Java workflows and SemVer numeric identifiers. The changed
 POM exists only in that workflow workspace: CI does not commit or push the version change.
 Maven filters the resulting `project.version` into the generated `javan.cli.Version` source.
 `versions:set` is resolved only when CI invokes it, so the Versions plugin is not part of the
@@ -46,25 +47,35 @@ still verify Javan, but cannot rewrite that snapshot with platform-dependent JDK
 
 | Trigger | Behavior |
 | --- | --- |
-| push to `main` | resolves the current UTC date as `YYYY.MM.DD-SNAPSHOT`, runs the common verification graph, and uploads verified native artifacts plus the Maven workspace at that version; Maven Central upload remains hard-disabled |
-| manual dispatch | uses the current UTC date as `YYYY.MM.DD` and automatically creates tag `vYYYY.MM.DD` after verification |
-| manual dispatch with `dry_run=true` | builds and verifies packages without committing, tagging, or publishing |
+| push to `main` | resolves the current UTC date as `YYYY.M.D-SNAPSHOT`, runs the common verification graph, uploads verified native artifacts, and publishes the Maven snapshot to GitHub Packages; Maven Central remains hard-disabled |
+| manual dispatch | uses the current UTC date as `YYYY.M.D` and automatically creates the matching tag and GitHub release after verification |
+| manual dispatch with `dry_run=true` | behaves identically on GitHub; the input is reserved for future Maven Central and Homebrew publication |
 
-The `main` push path deliberately creates only workflow artifacts. Actual publication is an
-explicit non-dry manual dispatch from `main`; non-dry dispatches from other branches fail
-before the shared build starts.
+The `main` push path publishes only the Maven snapshot to GitHub Packages. It does not create
+a Git tag or GitHub Release. Final publication is an explicit manual dispatch from `main`;
+dispatches from other branches fail before the shared build starts.
 
 There is no version or tag input. The common workflow resolves the date once and passes it to
-every artifact job. For example, a build on 31 July 2026 uses version `2026.07.31` and release
-tag `v2026.07.31`.
+every artifact job. For example, a build on 31 July 2026 uses version and release tag
+`2026.7.31`.
 
-Non-dry-run publishing requires the repository `BOT_TOKEN` secret. The release workflow
-must create the GitHub release with that bot token so GitHub emits the follow-up
-`release.published` event used by image publication.
+Snapshot and final Maven artifacts publish through the same GitHub Packages workflow using the
+repository `GITHUB_TOKEN`. Final releases create the tag directly at the verified commit and
+upload the native archives with that token. The release workflow then directly invokes container
+publication because events created with `GITHUB_TOKEN` do not start another workflow. The release
+does not commit version or changelog changes to `main`.
 
-Container images are published by the separate `Container Images` workflow after a
-GitHub release exists. That workflow downloads the released Linux archives and can be
-replayed manually with the release tag.
+Container images are published by the reusable `Container Images` workflow after a GitHub
+release exists. It downloads the released Linux archives and can also be replayed manually with
+the release tag. Its `release.published` trigger remains available for releases created outside
+the automated release workflow.
+
+The weekly `Maintenance` workflow uses the shared Maven Wrapper updater with the repository
+`GITHUB_TOKEN`; JavaN needs no PAT. It opens a maintenance pull request and runs the normal PR
+verification. Organization-wide merging of green maintenance PRs and weekly release dispatch
+belongs in one NanoNative automation repository, where a single organization token can be held.
+Coverage remains a Maven lifecycle output in `target/site/jacoco`; workflows neither upload
+partial JaCoCo artifacts nor print partial job summaries.
 
 ## CI Matrix
 
@@ -92,12 +103,12 @@ Native artifact rows:
 | `linux-x64` | `ubuntu-24.04` | In progress; enabled pending remote evidence |
 | `linux-aarch64` | `ubuntu-24.04-arm` | In progress; enabled pending remote evidence |
 | `macos-x64` | `macos-15-intel` | Blocked; slower architecture row retained with `enabled: false` |
-| `macos-aarch64` | `macos-15` | Blocked; local first self-rebuild exceeded 29 minutes and projected beyond the 45-minute job budget; row retained with `enabled: false` |
+| `macos-aarch64` | `macos-15` | Enabled; verified host-native package and platform proof |
 | `windows-x64` | `windows-2025` | Blocked; row retained with `enabled: false` |
 | `windows-aarch64` | `windows-11-arm` | Blocked; row retained with `enabled: false` |
 
-macOS package rows remain disabled because their self-host cost is disproportionate to the
-current Linux gate. Windows package rows remain disabled until native linker, process
+The slower macOS x64 package row remains disabled; macOS ARM64 is enabled. Windows package
+rows remain disabled until native linker, process
 execution, and `.exe` package proof work on the matching host. The separate six-row
 platform-contract matrix stays enabled because it does not claim native package support.
 

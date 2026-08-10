@@ -83,7 +83,7 @@ jobs:
           SNAPSHOT: ${{ inputs.snapshot }}
         run: |
           set -eu
-          version=$(date -u +%Y.%m.%d)
+          version=$(date -u '+%Y.%m.%d' | sed -E 's/\.0+([0-9])/\.\1/g')
           if [ "$SNAPSHOT" = "true" ]; then
             version=$version-SNAPSHOT
           fi
@@ -95,7 +95,6 @@ jobs:
 
   verify-core:
     name: core_linux_x64
-    if: "${{ github.event_name != 'push' || !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}"
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
@@ -156,64 +155,10 @@ jobs:
           sh .github/scripts/install-external-probe-artifacts.sh "$MAVEN_REPO_LOCAL"
 
       - name: "🧪 Core"
-        run: |
-          status=0
-          ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -Dexec.skip=true -Pquick verify || status=$?
-
-          if find target -maxdepth 1 -type f -name 'jacoco-surefire-*.exec' -print -quit | grep -q . \
-            || [ -d target/jacoco-child ]; then
-            ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -DskipTests jacoco:merge@merge-coverage jacoco:report@report || true
-          fi
-
-          if [ "$status" -ne 0 ]; then
-            python3 -c $'import pathlib\nimport xml.etree.ElementTree as ET\n\nreport = pathlib.Path("target/site/jacoco/jacoco.xml")\nif not report.exists():\n    print("JaCoCo report missing after failed verify.")\nelse:\n    root = ET.parse(report).getroot()\n    bundle = {counter.attrib["type"]: counter.attrib for counter in root.findall("counter")}\n    for counter_type in ("BRANCH", "LINE"):\n        counter = bundle.get(counter_type)\n        if counter is None:\n            continue\n        missed = int(counter["missed"])\n        covered = int(counter["covered"])\n        total = missed + covered\n        ratio = covered / total if total else 1.0\n        print(f"JaCoCo {counter_type.lower()} bundle ratio: {covered}/{total} = {ratio:.6%}")'
-            exit "$status"
-          fi
-
-      - name: "📊 Coverage [core]"
-        if: always()
-        run: |
-          python3 - <<'PY'
-          import os
-          import pathlib
-          import xml.etree.ElementTree as ET
-
-          report = pathlib.Path("target/site/jacoco/jacoco.xml")
-          summary_path = pathlib.Path(os.environ["GITHUB_STEP_SUMMARY"])
-          if not report.exists():
-              print("JaCoCo report missing; coverage summary skipped.")
-              summary_path.write_text(
-                  "# Coverage\n\nJaCoCo report missing. Coverage summary skipped.\n",
-                  encoding="utf-8"
-              )
-              raise SystemExit(0)
-
-          root = ET.parse(report).getroot()
-          counters = {counter.attrib["type"]: counter.attrib for counter in root.findall("counter")}
-          summary_lines = [
-              "# Coverage",
-              "",
-              "| Counter | Covered | Total | Ratio |",
-              "| --- | ---: | ---: | ---: |",
-          ]
-          for counter_type in ("LINE", "BRANCH"):
-              counter = counters.get(counter_type)
-              if counter is None:
-                  continue
-              missed = int(counter["missed"])
-              covered = int(counter["covered"])
-              total = missed + covered
-              ratio = covered / total if total else 1.0
-              print(f"JaCoCo {counter_type.lower()} coverage: {covered}/{total} = {ratio:.2%}")
-              summary_lines.append(
-                  f"| {counter_type.lower()} | {covered} | {total} | {ratio:.2%} |"
-              )
-          summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
-          PY
+        run: ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -Dexec.skip=true -Pquick verify
 
   cli:
     name: ${{ matrix.label }}
-    if: "${{ github.event_name != 'push' || !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}"
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
@@ -299,62 +244,10 @@ jobs:
           printf 'test_selector=%s\n' "$selector" | tee -a "$GITHUB_OUTPUT"
 
       - name: "🧪 Test [${{ matrix.suite }}_${{ matrix.worker_index }}]"
-        run: |
-          status=0
-          ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -Dexec.skip=true \
-            -Dgroups='${{ matrix.suite }}' \
-            -Dtest='${{ steps.tests.outputs.test_selector }}' verify || status=$?
-
-          if find target -maxdepth 1 -type f -name 'jacoco-surefire-*.exec' -print -quit | grep -q . \
-            || [ -d target/jacoco-child ]; then
-            ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -DskipTests jacoco:merge@merge-coverage jacoco:report@report || true
-          fi
-
-          if [ "$status" -ne 0 ]; then
-            python3 -c $'import pathlib\nimport xml.etree.ElementTree as ET\n\nreport = pathlib.Path("target/site/jacoco/jacoco.xml")\nif not report.exists():\n    print("JaCoCo report missing after failed verify.")\nelse:\n    root = ET.parse(report).getroot()\n    bundle = {counter.attrib["type"]: counter.attrib for counter in root.findall("counter")}\n    for counter_type in ("BRANCH", "LINE"):\n        counter = bundle.get(counter_type)\n        if counter is None:\n            continue\n        missed = int(counter["missed"])\n        covered = int(counter["covered"])\n        total = missed + covered\n        ratio = covered / total if total else 1.0\n        print(f"JaCoCo {counter_type.lower()} bundle ratio: {covered}/{total} = {ratio:.6%}")'
-            exit "$status"
-          fi
-
-      - name: "📊 Coverage [${{ matrix.suite }}_${{ matrix.worker_index }}]"
-        if: always()
-        run: |
-          python3 - <<'PY'
-          import os
-          import pathlib
-          import xml.etree.ElementTree as ET
-
-          report = pathlib.Path("target/site/jacoco/jacoco.xml")
-          summary_path = pathlib.Path(os.environ["GITHUB_STEP_SUMMARY"])
-          if not report.exists():
-              print("JaCoCo report missing; coverage summary skipped.")
-              summary_path.write_text(
-                  "# Coverage\n\nJaCoCo report missing. Coverage summary skipped.\n",
-                  encoding="utf-8"
-              )
-              raise SystemExit(0)
-
-          root = ET.parse(report).getroot()
-          counters = {counter.attrib["type"]: counter.attrib for counter in root.findall("counter")}
-          summary_lines = [
-              "# Coverage",
-              "",
-              "| Counter | Covered | Total | Ratio |",
-              "| --- | ---: | ---: | ---: |",
-          ]
-          for counter_type in ("LINE", "BRANCH"):
-              counter = counters.get(counter_type)
-              if counter is None:
-                  continue
-              missed = int(counter["missed"])
-              covered = int(counter["covered"])
-              total = missed + covered
-              ratio = covered / total if total else 1.0
-              print(f"JaCoCo {counter_type.lower()} coverage: {covered}/{total} = {ratio:.2%}")
-              summary_lines.append(
-                  f"| {counter_type.lower()} | {covered} | {total} | {ratio:.2%} |"
-              )
-          summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
-          PY
+        run: >-
+          ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -Dexec.skip=true
+          -Dgroups='${{ matrix.suite }}'
+          -Dtest='${{ steps.tests.outputs.test_selector }}' verify
 
   native-acceptance:
     name: ${{ matrix.label }}
@@ -558,7 +451,6 @@ jobs:
 
   windows-runtime-smoke:
     name: ${{ matrix.label }}
-    if: "${{ github.event_name != 'push' || !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}"
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     permissions:
