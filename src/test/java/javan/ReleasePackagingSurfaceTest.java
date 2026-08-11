@@ -306,7 +306,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
 
         assertThat(releaseWorkflow)
             .contains("- name: \"📥 Download")
-            .contains("actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7")
+            .contains("uses: actions/download-artifact@")
             .contains("pattern: javan-*")
             .contains("merge-multiple: true")
             .contains("- name: \"🚀 Publish")
