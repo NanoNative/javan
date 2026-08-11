@@ -30,6 +30,10 @@ jobs:
     needs:
       - verify
     if: ${{ false }}
+    permissions:
+      actions: read
+      contents: read
+      deployments: write
     uses: ./.github/workflows/publish-central.yml
     with:
       run_id: ${{ github.run_id }}

@@ -316,9 +316,18 @@ final class CiParallelWorkflowSurfaceTest {
             .contains("-Dproject.build.outputTimestamp=\"$BUILD_OUTPUT_TIMESTAMP\"")
             .contains("-DskipTests deploy");
         assertThat(Files.readString(BUILD_MERGE))
-            .contains("publish-central:")
-            .contains("if: ${{ false }}")
-            .contains("uses: ./.github/workflows/publish-central.yml");
+            .contains("""
+                  publish-central:
+                    name: Central
+                    needs:
+                      - verify
+                    if: ${{ false }}
+                    permissions:
+                      actions: read
+                      contents: read
+                      deployments: write
+                    uses: ./.github/workflows/publish-central.yml
+                """);
         assertThat(Files.readString(RELEASE))
             .contains("central:")
             .contains("if: ${{ false }}")
