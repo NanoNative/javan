@@ -41,6 +41,9 @@ final class IntrinsicUsageReportsTest {
                 instruction("java/util/Arrays", "copyOf", "([II)[I"),
                 instruction("java/lang/Integer", "toString", "(I)Ljava/lang/String;"),
                 instruction("java/lang/Long", "toString", "(J)Ljava/lang/String;"),
+                instruction("java/lang/Byte", "toString", "(B)Ljava/lang/String;"),
+                instruction("java/lang/Short", "toString", "(S)Ljava/lang/String;"),
+                instruction("java/lang/Character", "toString", "(C)Ljava/lang/String;"),
                 instruction("java/io/PrintStream", "println", "(I)V"),
                 instruction("java/lang/Thread", "currentThread", "()Ljava/lang/Thread;"),
                 instruction("java/util/List", "of", "()Ljava/util/List;"),
@@ -105,6 +108,9 @@ final class IntrinsicUsageReportsTest {
             new IntrinsicCallCount("Double.longBitsToDouble", 0),
             new IntrinsicCallCount("Boolean.parseBoolean", 0),
             new IntrinsicCallCount("Boolean.toString", 0),
+            new IntrinsicCallCount("Byte.toString", 1),
+            new IntrinsicCallCount("Short.toString", 1),
+            new IntrinsicCallCount("Character.toString", 1),
             new IntrinsicCallCount("String.valueOf", 1),
             new IntrinsicCallCount("String.copyValueOf", 0)
         );
@@ -117,7 +123,7 @@ final class IntrinsicUsageReportsTest {
         assertThat(report.runtimeCallSiteCount()).isEqualTo(4);
         assertThat(report.supportedDirectJdkCalls()).isEmpty();
         assertThat(report.supportedDirectJdkCallSiteCount()).isZero();
-        assertThat(report.supportedJdkCallSiteCount()).isEqualTo(13);
+        assertThat(report.supportedJdkCallSiteCount()).isEqualTo(16);
         assertThat(report.unsupportedJdkCallCandidateCount()).isZero();
         assertThat(report.unsupportedJdkCallCandidates()).isEmpty();
         assertThat(Files.readString(tempDir.resolve("reports/intrinsics.json")))
@@ -131,25 +137,31 @@ final class IntrinsicUsageReportsTest {
                 "{\"name\": \"Arrays.copyOf\", \"count\": 1}",
                 "{\"name\": \"Integer.toString\", \"count\": 1}",
                 "{\"name\": \"Character.isWhitespace\", \"count\": 0}",
+                "{\"name\": \"Byte.toString\", \"count\": 1}",
+                "{\"name\": \"Short.toString\", \"count\": 1}",
+                "{\"name\": \"Character.toString\", \"count\": 1}",
                 "{\"name\": \"String.valueOf\", \"count\": 1}",
-                "\"intrinsicCallSiteCount\": 9",
+                "\"intrinsicCallSiteCount\": 12",
                 "{\"name\": \"List.getFirst\", \"count\": 1}",
                 "{\"name\": \"List.of\", \"count\": 1}",
                 "{\"name\": \"PrintStream.println\", \"count\": 1}",
                 "{\"name\": \"Thread.currentThread\", \"count\": 1}",
                 "\"runtimeCallSiteCount\": 4",
                 "\"supportedDirectJdkCallSiteCount\": 0",
-                "\"supportedJdkCallSiteCount\": 13",
+                "\"supportedJdkCallSiteCount\": 16",
                 "\"unsupportedJdkCallCandidateCount\": 0"
             );
         assertThat(Files.readString(tempDir.resolve("reports/intrinsics.md")))
             .contains(
-                "Supported reachable JDK call sites: `13`",
+                "Supported reachable JDK call sites: `16`",
                 "Runtime-registry reachable call sites: `4`",
                 "Supported-direct reachable call sites: `0`",
                 "| `System.nanoTime` | 2 |",
                 "| `System.arraycopy` | 1 |",
                 "| `Character.isWhitespace` | 0 |",
+                "| `Byte.toString` | 1 |",
+                "| `Short.toString` | 1 |",
+                "| `Character.toString` | 1 |",
                 "| `String.valueOf` | 1 |",
                 "| `List.getFirst` | 1 |",
                 "| `List.of` | 1 |",
