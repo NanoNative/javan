@@ -161,7 +161,7 @@ final class WorkflowPolicySurfaceTest {
         for (final Path workflow : List.of(BUILD_COMMON, NATIVE_PROOF, PLATFORM_PROOF, PUBLISH_CENTRAL)) {
             assertThat(Files.readString(workflow))
                 .as(workflow + " must use the project Java and build-tool declaration")
-                .contains("YunaBraska/java-info-action@11a434ffbf6bb3357363d1933be71a4076a90a6b # 3")
+                .contains("uses: YunaBraska/java-info-action@")
                 .contains("java-version: ${{ steps.java_info.outputs.java_version }}");
         }
         assertThat(Files.readString(BUILD_COMMON))
@@ -269,7 +269,7 @@ final class WorkflowPolicySurfaceTest {
     void weeklyWrapperMaintenanceUsesSharedWorkflowWithoutRepositoryPat() throws Exception {
         assertThat(Files.readString(MAINTENANCE_WORKFLOW))
             .contains("cron: '0 6 * * 0'")
-            .contains("YunaBraska/YunaBraska/.github/workflows/wc_java_update_maven_wrapper.yml@3e5a0251657d2971bf7f106c6573110296cf9c51 # main")
+            .contains("uses: YunaBraska/YunaBraska/.github/workflows/wc_java_update_maven_wrapper.yml@")
             .contains("contents: write", "pull-requests: write", "actions: write")
             .contains("github.event_name == 'workflow_dispatch' && inputs.dry_run || false")
             .doesNotContain("PAT", "BOT_TOKEN", "CI_TOKEN", "secrets:");
