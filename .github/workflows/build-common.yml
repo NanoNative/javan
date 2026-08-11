@@ -349,9 +349,11 @@ jobs:
       max-parallel: 6
       matrix:
         include:
+          # Full whole-Javan sanitizer coverage runs in sanitizer_selfhost_linux_x64.
+          # This lane proves the packaged compiler with version and tiny-project probes.
           - target: linux-x64
             os: ubuntu-24.04
-            sanitizer-scope: ${{ inputs.prepare_publication && 'full' || 'platform-smoke' }}
+            sanitizer-scope: platform-smoke
             label: package_linux_x64
             enabled: true
           - target: linux-aarch64
