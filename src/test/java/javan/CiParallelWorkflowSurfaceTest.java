@@ -85,7 +85,14 @@ final class CiParallelWorkflowSurfaceTest {
             .contains("timeout_minutes: 60")
             .doesNotContain("package_timeout_minutes:")
             .contains("package_scope: ${{ inputs.prepare_publication && startsWith(matrix.target, 'linux-') && 'full' || 'bootstrap' }}")
-            .contains("sanitizer-scope: ${{ inputs.prepare_publication && 'full' || 'platform-smoke' }}")
+            .contains("""
+                  - target: linux-x64
+                    os: ubuntu-24.04
+                    sanitizer-scope: platform-smoke
+                    label: package_linux_x64
+                    enabled: true
+                """.indent(8))
+            .doesNotContain("sanitizer-scope: ${{ inputs.prepare_publication && 'full' || 'platform-smoke' }}")
             .contains("enabled: ${{ inputs.prepare_publication }}");
         assertThat(Files.readString(Path.of(".github/workflows/native-proof.yml")))
             .contains("JAVAN_BOOTSTRAP_GENERATION: ${{ inputs.bootstrap_generation }}")
