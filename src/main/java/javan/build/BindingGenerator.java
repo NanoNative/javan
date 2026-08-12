@@ -321,6 +321,9 @@ public final class BindingGenerator {
         rust.append("}").append(System.lineSeparator()).append(System.lineSeparator());
         appendRustResultStruct(rust);
         appendRustErrorHelpers(rust);
+        rust.append("#[cfg(target_os = \"linux\")]").append(System.lineSeparator());
+        rust.append("#[link(name = \"m\")]").append(System.lineSeparator());
+        rust.append("unsafe extern \"C\" {}").append(System.lineSeparator()).append(System.lineSeparator());
         rust.append("#[link(name = \"").append(libraryName).append("\")]").append(System.lineSeparator());
         rust.append("unsafe extern \"C\" {").append(System.lineSeparator());
         rust.append("    pub fn javan_free(value: *mut c_void);").append(System.lineSeparator());
@@ -398,6 +401,7 @@ public final class BindingGenerator {
         go.append("/*").append(System.lineSeparator());
         go.append("#cgo CFLAGS: -I../c").append(System.lineSeparator());
         go.append("#cgo LDFLAGS: -L../.. -l").append(libraryName).append(System.lineSeparator());
+        go.append("#cgo linux LDFLAGS: -lm").append(System.lineSeparator());
         go.append("#include \"").append(libraryName).append(".h\"").append(System.lineSeparator());
         go.append("*/").append(System.lineSeparator());
         go.append("import \"C\"").append(System.lineSeparator());
@@ -436,6 +440,7 @@ public final class BindingGenerator {
         go.append("/*").append(System.lineSeparator());
         go.append("#cgo CFLAGS: -I.").append(System.lineSeparator());
         go.append("#cgo LDFLAGS: -L. -l").append(libraryName).append(System.lineSeparator());
+        go.append("#cgo linux LDFLAGS: -lm").append(System.lineSeparator());
         go.append("#include \"").append(libraryName).append(".h\"").append(System.lineSeparator());
         go.append("*/").append(System.lineSeparator());
         go.append("import \"C\"").append(System.lineSeparator());

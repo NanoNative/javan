@@ -1178,6 +1178,7 @@ final class BuildSurfaceTest {
         new BindingGenerator().generate(output, "demo", exports, List.of(BindingLanguage.RUST, BindingLanguage.GO, BindingLanguage.PYTHON));
 
         assertThat(Files.readString(output.resolve("dist/bindings/rust/lib.rs"))).contains(
+            "#[cfg(target_os = \"linux\")]\n#[link(name = \"m\")]",
             "pub fn javan_export_keep_long_float_double(arg0: i64, arg1: f32, arg2: f64) -> JavanByteArray;",
             "pub fn javan_export_ratio_float() -> f32;",
             "pub fn javan_export_total_double() -> f64;",
@@ -1190,6 +1191,7 @@ final class BuildSurfaceTest {
             "pub unsafe fn try_javan_export_touch_void() -> Result<(), JavanError>"
         );
         assertThat(Files.readString(output.resolve("dist/bindings/go/demo.go"))).contains(
+            "#cgo linux LDFLAGS: -lm",
             "import \"unsafe\"",
             "func JavanFree(value unsafe.Pointer) {",
             "func JavanFreeByteArray(value JavanByteArray) {",
