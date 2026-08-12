@@ -20,6 +20,7 @@ public enum Command {
     REPORT,
     CLEAN,
     DOCTOR,
+    JDK,
     TOOLCHAIN;
 
     /**

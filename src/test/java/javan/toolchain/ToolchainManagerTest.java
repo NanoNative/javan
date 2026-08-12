@@ -27,6 +27,21 @@ final class ToolchainManagerTest {
     }
 
     @Test
+    void jdkDoctorReportsTheManagedInstallFallbackPolicy() {
+        final Path home = tempDir.resolve("home");
+        final ToolchainManager manager = new ToolchainManager(home, missingProbe());
+
+        final String report = manager.jdkDoctor();
+
+        assertThat(report).contains(
+            "Managed JDK install policy",
+            "order: machine, user, temporary",
+            "user install: " + home.toAbsolutePath().normalize().resolve("jdks"),
+            "temporary install:"
+        );
+    }
+
+    @Test
     void doctorReportsJavaHome() {
         final ToolchainManager manager = new ToolchainManager(tempDir.resolve("home"), missingProbe());
 

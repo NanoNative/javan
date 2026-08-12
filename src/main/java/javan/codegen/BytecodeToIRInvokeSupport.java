@@ -9,7 +9,6 @@ import javan.classfile.Instruction;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
 import javan.compat.JdkCallSupport;
-import javan.compat.JavanNativeSubstitutions;
 import javan.ir.IrDispatch;
 import javan.ir.IrExpression;
 import javan.ir.IrInstruction;
@@ -475,6 +474,9 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if (lowerObjectClone(classes, classFile, method, methodRef, stack)) {
+            return;
+        }
+        if (lowerJavanFiles2CreateDirectoriesIfPossible(classFile, method, methodRef, stack)) {
             return;
         }
         if (lowerJavanProcessRunnerRun(classes, classFile, method, methodRef, instructions, stack, localDeclarations)) {
@@ -1697,7 +1699,9 @@ final class BytecodeToIRInvokeSupport {
         final List<StackValue> stack,
         final Map<Integer, IrLocal> localDeclarations
     ) {
-        if (!JavanNativeSubstitutions.isSubstitutedCall(methodRef)) {
+        if (!"javan/util/ProcessRunner".equals(methodRef.owner())
+            || !"run".equals(methodRef.name())
+            || !"(Ljava/nio/file/Path;Ljava/util/List;)Ljavan/util/ProcessRunner$Result;".equals(methodRef.descriptor())) {
             return false;
         }
         if (!classes.containsKey("javan/util/ProcessRunner$Result")) {
@@ -1741,6 +1745,22 @@ final class BytecodeToIRInvokeSupport {
             IrExpression.objectCall("javan_process_result_stderr", List.of(nativeResult))
         ));
         stack.add(StackValue.objectExpression(result));
+        return true;
+    }
+
+    static boolean lowerJavanFiles2CreateDirectoriesIfPossible(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final MethodRef methodRef,
+        final List<StackValue> stack
+    ) {
+        if (!"javan/util/Files2".equals(methodRef.owner())
+            || !"createDirectoriesIfPossible".equals(methodRef.name())
+            || !"(Ljava/nio/file/Path;)Z".equals(methodRef.descriptor())) {
+            return false;
+        }
+        final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
+        stack.add(StackValue.intExpression(IrExpression.intCall("javan_files_create_directories_if_possible", arguments)));
         return true;
     }
 
@@ -2030,6 +2050,9 @@ final class BytecodeToIRInvokeSupport {
             pendingExceptionHandlerStacks,
             sourceLines
         )) {
+            return;
+        }
+        if (lowerJavanFiles2CreateDirectoriesIfPossible(classFile, method, methodRef, stack)) {
             return;
         }
         if (lowerJdkCollectionStaticCall(classFile, method, methodRef, stack)) {

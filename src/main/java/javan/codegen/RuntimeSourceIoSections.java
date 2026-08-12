@@ -713,40 +713,83 @@ final class RuntimeSourceIoSections {
             return (void*) target_path;
         }
 
-        static void javan_mkdir_if_needed(const char* path) {
+        static int javan_mkdir_if_needed(const char* path) {
             if (path[0] == '\\0') {
-                return;
+                return 1;
             }
             #if defined(_WIN32)
             if (mkdir(path) == 0) {
             #else
             if (mkdir(path, 0777) == 0) {
             #endif
-                return;
+                return 1;
             }
             if (errno == EEXIST) {
                 struct stat info;
                 if (stat(path, &info) == 0 && S_ISDIR(info.st_mode)) {
-                    return;
+                    return 1;
                 }
             }
-            javan_panic("createDirectories failed");
+            return 0;
+        }
+
+        static char* javan_directory_creation_start(char* path) {
+            #if defined(_WIN32)
+            if (((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z'))
+                && path[1] == ':' && (path[2] == '/' || path[2] == '\\\\')) {
+                return path + 3;
+            }
+            #endif
+            return path + 1;
+        }
+
+        static int javan_directory_separator(char value) {
+            #if defined(_WIN32)
+            return value == '/' || value == '\\\\';
+            #else
+            return value == '/';
+            #endif
+        }
+
+        static int javan_mkdirs_if_possible(const char* path) {
+            char* copy = (char*) javan_string_copy(path);
+            char* start = javan_directory_creation_start(copy);
+            for (char* cursor = start; *cursor != '\\0'; cursor++) {
+                if (javan_directory_separator(*cursor)) {
+                    const char separator = *cursor;
+                    *cursor = '\\0';
+                    if (!javan_mkdir_if_needed(copy)) {
+                        *cursor = separator;
+                        javan_free(copy);
+                        return 0;
+                    }
+                    *cursor = separator;
+                }
+            }
+            const int created = javan_mkdir_if_needed(copy);
+            javan_free(copy);
+            return created;
         }
 
         void* javan_files_create_directories(void* path_value, void* attributes) {
             javan_empty_options_checked(attributes);
             const char* path = javan_path_checked(path_value);
-            char* copy = (char*) javan_string_copy(path);
-            for (char* cursor = copy + 1; *cursor != '\\0'; cursor++) {
-                if (*cursor == '/') {
-                    *cursor = '\\0';
-                    javan_mkdir_if_needed(copy);
-                    *cursor = '/';
-                }
+            if (!javan_mkdirs_if_possible(path)) {
+                javan_panic("createDirectories failed");
             }
-            javan_mkdir_if_needed(copy);
-            javan_free(copy);
             return path_value;
+        }
+
+        int javan_files_create_directories_if_possible(void* path_value) {
+            const char* path = javan_path_checked(path_value);
+            if (!javan_mkdirs_if_possible(path)) {
+                return 0;
+            }
+            #if defined(_WIN32)
+            return _access(path, 2) == 0;
+            #else
+            return access(path, W_OK) == 0;
+            #endif
         }
 
         void* javan_files_read_string(void* path_value) {

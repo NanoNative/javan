@@ -977,8 +977,8 @@ Status: deferred behind the binary-first distribution. See
 [binary-first-distribution.md](binary-first-distribution.md) and
 [toolchain-distribution-roadmap.md](toolchain-distribution-roadmap.md).
 
-Keep `javan doctor` and read-only toolchain inspection, but do not make SDK wrapping the
-first-release path.
+Keep `javan doctor`, read-only toolchain inspection, and the transparent `javan javac`
+facade as companion tooling, but do not make JDK-shaped SDK wrapping a first-release gate.
 
 The distribution should first be a standalone binary that consumes normal Java build
 outputs. Maven, Gradle, Homebrew, and IDE support should be thin integrations around that

@@ -1182,6 +1182,16 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void nativeSubstitutionsClassifyDirectoryPreparationAsFilesystem() {
+        assertThat(javan.compat.JavanNativeSubstitutions.runtimeModules(new MethodRef(
+            "javan/util/Files2",
+            "createDirectoriesIfPossible",
+            "(Ljava/nio/file/Path;)Z"
+        )))
+            .containsExactly("filesystem");
+    }
+
+    @Test
     void jdkCallSupportRejectsUnknownCollectionCall() {
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/Collection", "stream", "()Ljava/util/stream/Stream;"))).isFalse();
     }

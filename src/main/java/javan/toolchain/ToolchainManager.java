@@ -2,12 +2,15 @@ package javan.toolchain;
 
 import javan.util.ProcessRunner;
 import javan.util.Strings2;
+import javan.toolchain.facade.JdkFacadeGenerator;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -72,6 +75,32 @@ public final class ToolchainManager {
     }
 
     /**
+     * Returns the JDK-specific doctor report, including managed-store fallback policy.
+     *
+     * <p>This report is read-only. Writable directory creation happens only during a future
+     * verified managed-JDK installation.</p>
+     *
+     * @return human-readable JDK report
+     */
+    public String jdkDoctor() {
+        final StringBuilder report = new StringBuilder(doctor());
+        report.append(System.lineSeparator()).append("Managed JDK install policy").append(System.lineSeparator());
+        report.append("  order: machine, user, temporary").append(System.lineSeparator());
+        for (final ManagedJdkStore.Location location : new ManagedJdkStore(javanHome).locations()) {
+            report.append("  ").append(location.scope()).append(" install: ")
+                .append(location.installRoot()).append(System.lineSeparator());
+            report.append("  ").append(location.scope()).append(" cache:   ")
+                .append(location.downloadCache());
+            if (!location.persistent()) {
+                report.append(" (ephemeral)");
+            }
+            report.append(System.lineSeparator());
+        }
+        report.setLength(report.length() - System.lineSeparator().length());
+        return report.toString();
+    }
+
+    /**
      * Returns globally installed toolchains.
      *
      * @return deterministic human-readable toolchain list
@@ -88,6 +117,55 @@ public final class ToolchainManager {
                 .append(indentInstalledReport(listRenderer.render(entries)));
         }
         return report.toString();
+    }
+
+    /**
+     * Resolves and renders the selected local JDK without downloading anything.
+     *
+     * @param explicitHome explicitly requested JDK home when present
+     * @return deterministic human-readable JDK resolution report
+     * @throws IOException when managed toolchain metadata cannot be read
+     */
+    public String resolveJdk(final Optional<Path> explicitHome) throws IOException {
+        return renderResolution(resolveLocalJdk(explicitHome));
+    }
+
+    /**
+     * Resolves local JDK candidates without downloading or mutating anything.
+     *
+     * @param explicitHome explicitly requested JDK home when present
+     * @return ordered resolution result
+     * @throws IOException when managed toolchain metadata cannot be read
+     */
+    public JdkResolver.Resolution resolveLocalJdk(final Optional<Path> explicitHome) throws IOException {
+        Objects.requireNonNull(explicitHome, "explicitHome");
+        final String osName = System.getProperty("os.name", "");
+        final Map<String, String> environment = toolchainEnvironment();
+        final JdkResolver resolver = new JdkResolver(
+            environment,
+            currentJavaHome(),
+            commandProbe.find("javac").path(),
+            installedToolchains(),
+            osName,
+            new JdkLocationDiscovery(environment, userHome(), osName).homes()
+        );
+        return resolver.resolve(explicitHome);
+    }
+
+    /**
+     * Creates a JDK-shaped facade over the selected local backend JDK.
+     *
+     * @param output generated facade home
+     * @return generated facade metadata
+     * @throws IOException when no JDK is resolvable or output cannot be created
+     * @throws InterruptedException when interrupted while linking the facade
+     */
+    public JdkFacadeGenerator.Result createJdkFacade(final Path output) throws IOException, InterruptedException {
+        final JdkResolver.Resolution resolution = resolveLocalJdk(Optional.empty());
+        if (resolution.selected().isEmpty()) {
+            throw new IOException("No usable local JDK found; run javan jdk resolve");
+        }
+        return new JdkFacadeGenerator().generate(output, resolution.selected().orElseThrow());
     }
 
     /**
@@ -174,6 +252,91 @@ public final class ToolchainManager {
             return "missing";
         }
         return value;
+    }
+
+    private static Optional<Path> currentJavaHome() {
+        final String value = System.getProperty("java.home");
+        if (Strings2.isBlank(value)) {
+            return Optional.empty();
+        }
+        return Optional.of(Path.of(value));
+    }
+
+    private static Path userHome() {
+        return Path.of(System.getProperty("user.home", ""));
+    }
+
+    private static Map<String, String> toolchainEnvironment() {
+        final Map<String, String> result = new HashMap<>();
+        addEnvironmentValue(result, "JAVA_HOME");
+        addEnvironmentValue(result, "JDK_HOME");
+        addEnvironmentValue(result, "ProgramFiles");
+        addEnvironmentValue(result, "ProgramW6432");
+        addEnvironmentValue(result, "ProgramFiles(x86)");
+        return result;
+    }
+
+    private static void addEnvironmentValue(final Map<String, String> target, final String name) {
+        final String value = System.getenv(name);
+        if (!Strings2.isBlank(value)) {
+            target.put(name, value);
+        }
+    }
+
+    private static String renderResolution(final JdkResolver.Resolution resolution) {
+        final StringBuilder report = new StringBuilder();
+        report.append("JDK resolution").append(System.lineSeparator());
+        if (resolution.selected().isEmpty()) {
+            report.append("  selected: none").append(System.lineSeparator());
+        } else {
+            final JdkResolver.Candidate selected = resolution.selected().orElseThrow();
+            report.append("  selected: ").append(selected.origin()).append(System.lineSeparator());
+            report.append("  home:     ").append(selected.home()).append(System.lineSeparator());
+            report.append("  java:     ").append(selected.javaExecutable()).append(System.lineSeparator());
+            report.append("  javac:    ").append(selected.javacExecutable()).append(System.lineSeparator());
+        }
+        appendCandidates(report, resolution);
+        return report.toString();
+    }
+
+    private static void appendCandidates(final StringBuilder report, final JdkResolver.Resolution resolution) {
+        if (resolution.candidates().isEmpty()) {
+            report.append("  candidates: none");
+            return;
+        }
+        report.append("  candidates:").append(System.lineSeparator());
+        for (final JdkResolver.Candidate candidate : resolution.candidates()) {
+            report.append("    ").append(candidateStatus(candidate, resolution.selected())).append("  ")
+                .append(candidate.origin()).append("  ").append(candidate.home())
+                .append("  (").append(candidate.reason()).append(')').append(System.lineSeparator());
+        }
+        report.setLength(report.length() - System.lineSeparator().length());
+    }
+
+    private static String candidateStatus(
+        final JdkResolver.Candidate candidate,
+        final Optional<JdkResolver.Candidate> selected
+    ) {
+        if (isSelected(candidate, selected)) {
+            return "selected";
+        }
+        if (candidate.usable()) {
+            return "available";
+        }
+        return "rejected";
+    }
+
+    private static boolean isSelected(
+        final JdkResolver.Candidate candidate,
+        final Optional<JdkResolver.Candidate> selected
+    ) {
+        if (selected.isEmpty()) {
+            return false;
+        }
+        final JdkResolver.Candidate value = selected.orElseThrow();
+        return candidate.origin().equals(value.origin())
+            && candidate.home().equals(value.home())
+            && candidate.javacExecutable().equals(value.javacExecutable());
     }
 
     private static ToolStatus firstAvailable(final CommandProbe probe, final List<String> executables) {

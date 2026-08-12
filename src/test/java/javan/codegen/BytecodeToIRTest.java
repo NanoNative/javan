@@ -16536,6 +16536,29 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersFiles2DirectoryPreparationToNativeBooleanCall() {
+        final MethodInfo main = method(
+            0x0008,
+            "main",
+            "(Ljava/nio/file/Path;)Z",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeStatic(1, new MethodRef("javan/util/Files2", "createDirectoriesIfPossible", "(Ljava/nio/file/Path;)Z")),
+            plain(2, 172, "ireturn")
+        );
+
+        final IrFunction function = lowerMain(main);
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_files_create_directories_if_possible",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
     void rejectsProcessRunnerRunWhenResultClassIsMissing() {
         final MethodInfo main = method(
             0x0008,

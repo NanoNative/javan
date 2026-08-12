@@ -2,6 +2,7 @@ package javan;
 
 import javan.cli.Cli;
 import javan.cli.Version;
+import javan.toolchain.ToolchainManager;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
@@ -22,6 +23,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 
@@ -73,6 +75,34 @@ final class CliCommandIntegrationTest {
     }
 
     @Test
+    void helpListsJdkResolveCommand() {
+        final CliRun run = run(tempDir, "--help");
+
+        assertThat(run.stdout()).contains("javan jdk resolve");
+    }
+
+    @Test
+    void helpListsJdkFacadeCommand() {
+        final CliRun run = run(tempDir, "--help");
+
+        assertThat(run.stdout()).contains("javan jdk facade <directory>");
+    }
+
+    @Test
+    void jdkFacadeCreatesALinkedSdkLayoutForTheSelectedLocalJdk() {
+        assumeFalse(System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win"));
+        final Path facade = tempDir.resolve("javan-jdk");
+
+        final CliRun run = run(tempDir, "jdk", "facade", facade.getFileName().toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stdout()).contains("JDK facade", facade.toString());
+        assertThat(facade.resolve("release")).isRegularFile();
+        assertThat(facade.resolve("bin/javac")).isExecutable();
+        assertThat(facade.resolve("lib")).isSymbolicLink();
+    }
+
+    @Test
     void helpMentionsJavacWrapper() {
         final CliRun run = run(tempDir, "--help");
 
@@ -80,19 +110,74 @@ final class CliCommandIntegrationTest {
     }
 
     @Test
-    void javacVersionDelegatesToJavac() {
-        final ProcessResult javac = process(tempDir, List.of(CliTestHarness.currentJavacCommand(), "-version"));
+    void javacVersionDelegatesToJavac() throws Exception {
+        final String javacExecutable = new ToolchainManager()
+            .resolveLocalJdk(java.util.Optional.empty())
+            .selected()
+            .orElseThrow()
+            .javacExecutable()
+            .toString();
+        final ProcessResult javac = process(tempDir, List.of(javacExecutable, "-version"));
 
         final CliRun run = run(tempDir, "javac", "-version");
 
         assertThat(run.exitCode()).isEqualTo(javac.exitCode());
-        assertThat(run.stdout()).isEqualTo(javac.stdout());
+        assertThat(run.stdout()).startsWith(javac.stdout());
+        assertThat(run.stdout()).contains("Javan facade " + Version.number(), "Backend:", "Javac:");
         assertThat(run.stderr()).isEqualTo(javac.stderr());
+        assertThat(tempDir.resolve(".javan")).doesNotExist();
+    }
+
+    @Test
+    void javacHelpAppendsTheImplementedJavanExtensionSection() throws Exception {
+        final String javacExecutable = new ToolchainManager()
+            .resolveLocalJdk(java.util.Optional.empty())
+            .selected()
+            .orElseThrow()
+            .javacExecutable()
+            .toString();
+        final ProcessResult javac = process(tempDir, List.of(javacExecutable, "--help"));
+
+        final CliRun run = run(tempDir, "javac", "--help");
+
+        assertThat(run.exitCode()).isEqualTo(javac.exitCode());
+        assertThat(run.stdout()).startsWith(javac.stdout());
+        assertThat(run.stdout()).contains("Javan extensions", "--jn-help", "--jn-end");
+        assertThat(run.stderr()).isEqualTo(javac.stderr());
+        assertThat(tempDir.resolve(".javan")).doesNotExist();
+    }
+
+    @Test
+    void javacJavanHelpDoesNotInvokeTheBackendCompiler() {
+        final CliRun run = run(tempDir, "javac", "--jn-help");
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stdout()).contains("Javan extensions", "--jn-version", "--jn-build", "javan check");
+        assertThat(run.stderr()).isEmpty();
+    }
+
+    @Test
+    void javacJavanVersionReportsFacadeAndBackendIdentity() {
+        final CliRun run = run(tempDir, "javac", "--jn-version");
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stdout()).contains("Javan facade " + Version.number(), "Backend:", "Javac:");
+        assertThat(run.stderr()).isEmpty();
+    }
+
+    @Test
+    void javacRejectsAnUnknownJavanExtensionBeforeInvokingTheBackendCompiler() {
+        final CliRun run = run(tempDir, "javac", "--jn-future");
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stdout()).isEmpty();
+        assertThat(run.stderr()).contains("Unsupported Javan compiler option: --jn-future");
     }
 
     @Test
     void javacReleaseCompilesSourceIntoCurrentDirectory() throws Exception {
         final Path source = tempDir.resolve("JavacWrapperSmoke.java");
+        final Path classes = tempDir.resolve("classes");
         Files.writeString(source, """
             public final class JavacWrapperSmoke {
                 private JavacWrapperSmoke() {
@@ -100,10 +185,126 @@ final class CliCommandIntegrationTest {
             }
             """);
 
-        final CliRun run = run(tempDir, "javac", "--release", "25", source.getFileName().toString());
+        final CliRun run = run(
+            tempDir,
+            "javac",
+            "--release",
+            "25",
+            "-d",
+            classes.toString(),
+            source.getFileName().toString()
+        );
 
         assertThat(run.exitCode()).isZero();
-        assertThat(tempDir.resolve("JavacWrapperSmoke.class")).exists();
+        assertThat(classes.resolve("JavacWrapperSmoke.class")).exists();
+        assertThat(tempDir.resolve(".javan/reports/report.json")).exists();
+        assertThat(Files.readString(tempDir.resolve(".javan/reports/javac-invocation.json")))
+            .contains("\"analysis\": \"completed\"");
+        assertThat(run.stdout()).contains("Javan report:");
+    }
+
+    @Test
+    void javacWithoutOutputDirectoryWritesAnUnavailableInvocationReport() throws Exception {
+        final Path source = tempDir.resolve("JavacWrapperNoOutput.java");
+        Files.writeString(source, "public final class JavacWrapperNoOutput { }\n");
+
+        final CliRun run = run(tempDir, "javac", source.getFileName().toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(tempDir.resolve("JavacWrapperNoOutput.class")).exists();
+        assertThat(Files.readString(tempDir.resolve(".javan/reports/javac-invocation.json")))
+            .contains("\"analysis\": \"unavailable\"", "fresh class output cannot be proven");
+    }
+
+    @Test
+    void javacOffSkipsEveryJavanReport() throws Exception {
+        final Path source = tempDir.resolve("JavacWrapperOff.java");
+        final Path classes = tempDir.resolve("classes");
+        Files.writeString(source, "public final class JavacWrapperOff { }\n");
+
+        final CliRun run = run(tempDir, "javac", "--jn-off", "-d", classes.toString(), source.getFileName().toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(classes.resolve("JavacWrapperOff.class")).exists();
+        assertThat(tempDir.resolve(".javan")).doesNotExist();
+    }
+
+    @Test
+    void javacBuildCreatesAndRunsANativeAppFromTheFreshClassOutput() throws Exception {
+        final Path source = tempDir.resolve("FacadeNativeMain.java");
+        final Path classes = tempDir.resolve("classes");
+        Files.writeString(source, """
+            package com.acme;
+
+            public final class FacadeNativeMain {
+                public static void main(final String[] args) {
+                    System.out.println("facade-native");
+                }
+            }
+            """);
+
+        final CliRun compile = run(
+            tempDir,
+            "javac",
+            "--jn-build",
+            "--jn-main",
+            "com.acme.FacadeNativeMain",
+            "--jn-out",
+            "facade-native",
+            "-d",
+            classes.toString(),
+            source.getFileName().toString()
+        );
+        final Path binary = tempDir.resolve(".javan/bin/facade-native");
+
+        assertThat(compile.exitCode()).isZero();
+        assertThat(binary).isExecutable();
+        assertThat(Files.readString(tempDir.resolve(".javan/reports/javac-invocation.json")))
+            .contains("\"analysis\": \"built\"");
+        assertThat(process(binary.getParent(), List.of(binary.toString())).stdout()).isEqualTo("facade-native\n");
+    }
+
+    @Test
+    void javacStrictFailsOnlyAfterSuccessfulJavaCompilationAndCanEmitJsonlDiagnostics() throws Exception {
+        final Path source = tempDir.resolve("FacadeStrictMain.java");
+        final Path classes = tempDir.resolve("classes");
+        Files.writeString(source, """
+            public final class FacadeStrictMain {
+                public static void main(final String[] args) throws Exception {
+                    Class.forName("com.acme.OptionalPlugin");
+                }
+            }
+            """);
+
+        final CliRun run = run(
+            tempDir,
+            "javac",
+            "--jn-strict",
+            "--jn-diag",
+            "jsonl",
+            "-d",
+            classes.toString(),
+            source.getFileName().toString()
+        );
+
+        assertThat(classes.resolve("FacadeStrictMain.class")).exists();
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains("{\"schemaVersion\":1,\"severity\":\"error\"", "\"code\":\"JAVAN031\"");
+        assertThat(Files.readString(tempDir.resolve(".javan/reports/javac-invocation.json")))
+            .contains("\"analysis\": \"completed\"");
+    }
+
+    @Test
+    void failedJavacWritesAnInvocationReportWithoutInspectingClasses() throws Exception {
+        final Path source = tempDir.resolve("JavacWrapperBroken.java");
+        final Path classes = tempDir.resolve("classes");
+        Files.writeString(source, "public final class JavacWrapperBroken { Missing value; }\n");
+
+        final CliRun run = run(tempDir, "javac", "-d", classes.toString(), source.getFileName().toString());
+
+        assertThat(run.exitCode()).isNotZero();
+        assertThat(Files.readString(tempDir.resolve(".javan/reports/javac-invocation.json")))
+            .contains("\"analysis\": \"not-run\"", "javac failed; Javan did not inspect class output");
     }
 
     @Test
@@ -230,6 +431,30 @@ final class CliCommandIntegrationTest {
 
         assertThat(run.exitCode()).isZero();
         assertThat(run.stdout()).contains("Toolchain");
+    }
+
+    @Test
+    void jdkResolveReportsTheSelectedLocalJdk() {
+        final CliRun run = run(tempDir, "jdk", "resolve");
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stderr()).isEmpty();
+        assertThat(run.stdout()).contains("JDK resolution", "selected:", "java:", "javac:");
+    }
+
+    @Test
+    void jdkResolveSelectsAnExplicitUsableJdkHome() throws Exception {
+        final Path home = Files.createDirectories(tempDir.resolve("explicit-jdk"));
+        final Path bin = Files.createDirectories(home.resolve("bin"));
+        Files.createFile(home.resolve("release"));
+        assertThat(Files.createFile(bin.resolve("java")).toFile().setExecutable(true)).isTrue();
+        assertThat(Files.createFile(bin.resolve("javac")).toFile().setExecutable(true)).isTrue();
+
+        final CliRun run = run(tempDir, "jdk", "resolve", home.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stderr()).isEmpty();
+        assertThat(run.stdout()).contains("selected: explicit", "home:     " + home.toAbsolutePath().normalize());
     }
 
     @Test
