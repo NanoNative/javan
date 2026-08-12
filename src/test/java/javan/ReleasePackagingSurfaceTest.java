@@ -10,6 +10,7 @@ import java.time.Duration;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -364,13 +365,14 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             .contains("javan_timing_record package_self_check")
             .contains("javan_timing_run package_jar")
             .contains("javan_timing_run package_native")
-            .contains("javan_timing_record package_sanitizer")
+            .contains("javan_timing_run package_sanitizer")
             .contains("javan_timing_write_reports")
             .contains("javan-$PACKAGE_TARGET-timings.json")
             .contains("javan-$PACKAGE_TARGET-timings.md");
         assertThat(Files.readString(Path.of(".github/scripts/sanitizer-self-host-smoke.sh")))
             .contains("javan_timing_record sanitizer_compile");
         assertThat(workflow)
+            .contains("if: ${{ always() && inputs.proof == 'package-self-host' }}")
             .contains("name: timings-${{ inputs.target }}-gen${{ inputs.bootstrap_generation }}")
             .contains("retention-days: 7")
             .contains("dist/release/javan-${{ inputs.target }}-timings.json")
@@ -391,7 +393,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             : > "$JAVAN_TIMING_LOG"
             javan_timing_run bootstrap_jvm true
             javan_timing_run bootstrap_gen2 true
-            javan_timing_write_reports linux-x64 2 bootstrap "$3" "$4"
+            javan_timing_write_reports linux-x64 2 bootstrap "$3" "$4" pass 0
             """);
 
         final ProcessResult run = process(
@@ -412,15 +414,69 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         assertThat(run.stdout()).contains("Timing: bootstrap_jvm=", "Timing: bootstrap_gen2=");
         assertThat(Files.readString(json))
             .contains("\"target\": \"linux-x64\"")
+            .contains("\"schemaVersion\": 1")
             .contains("\"bootstrapGeneration\": 2")
             .contains("\"proofScope\": \"bootstrap\"")
-            .containsPattern("\\{\\\"name\\\": \\\"bootstrap_jvm\\\", \\\"seconds\\\": \\d+}")
-            .containsPattern("\\{\\\"name\\\": \\\"bootstrap_gen2\\\", \\\"seconds\\\": \\d+}")
+            .contains("\"status\": \"pass\"")
+            .contains("\"exitCode\": 0")
+            .containsPattern("\\{\\\"name\\\": \\\"bootstrap_jvm\\\", \\\"seconds\\\": \\d+, \\\"status\\\": \\\"pass\\\", \\\"countedInTotal\\\": true}")
+            .containsPattern("\\{\\\"name\\\": \\\"bootstrap_gen2\\\", \\\"seconds\\\": \\d+, \\\"status\\\": \\\"pass\\\", \\\"countedInTotal\\\": true}")
             .containsPattern("\\\"totalSeconds\\\": \\d+");
         assertThat(Files.readString(markdown))
-            .containsPattern("\\| `bootstrap_jvm` \\| \\d+ \\|")
-            .containsPattern("\\| `bootstrap_gen2` \\| \\d+ \\|")
-            .containsPattern("\\| \\*\\*Total measured\\*\\* \\| \\*\\*\\d+\\*\\* \\|");
+            .containsPattern("\\| `bootstrap_jvm` \\| \\d+ \\| pass \\| true \\|")
+            .containsPattern("\\| `bootstrap_gen2` \\| \\d+ \\| pass \\| true \\|")
+            .containsPattern("\\| \\*\\*Total measured\\*\\* \\| \\*\\*\\d+\\*\\* \\| \\*\\*pass\\*\\* \\| \\|");
+    }
+
+    @Test
+    void timingReporterPreservesFailureAndDoesNotDoubleCountNestedPhases() throws Exception {
+        final Path runner = tempDir.resolve("timing-failure-test.sh");
+        final Path log = tempDir.resolve("timings.tsv");
+        final Path json = tempDir.resolve("timings.json");
+        final Path markdown = tempDir.resolve("timings.md");
+        Files.writeString(runner, """
+            set -eu
+            . "$1"
+            JAVAN_TIMING_LOG=$2
+            export JAVAN_TIMING_LOG
+            printf 'package_sanitizer\\t5\\tpass\\ttrue\\n' > "$JAVAN_TIMING_LOG"
+            printf 'sanitizer_compile\\t3\\tpass\\tfalse\\n' >> "$JAVAN_TIMING_LOG"
+            set +e
+            javan_timing_run failed_phase sh -c 'exit 7'
+            code=$?
+            set -e
+            javan_timing_write_reports linux-x64 3 full "$3" "$4" fail "$code"
+            exit "$code"
+            """);
+
+        final ProcessResult run = process(
+            REPO_ROOT,
+            List.of(
+                "sh",
+                runner.toString(),
+                REPO_ROOT.resolve(".github/scripts/timing-report.sh").toString(),
+                log.toString(),
+                json.toString(),
+                markdown.toString()
+            ),
+            Duration.ofSeconds(20),
+            Map.of()
+        );
+
+        assertThat(run.exitCode()).isEqualTo(7);
+        final String jsonContent = Files.readString(json);
+        assertThat(jsonContent)
+            .contains("\"status\": \"fail\"")
+            .contains("\"exitCode\": 7")
+            .contains("{\"name\": \"sanitizer_compile\", \"seconds\": 3, \"status\": \"pass\", \"countedInTotal\": false}")
+            .containsPattern("\\{\\\"name\\\": \\\"failed_phase\\\", \\\"seconds\\\": \\d+, \\\"status\\\": \\\"fail\\\", \\\"countedInTotal\\\": true}");
+        final var failedSeconds = Pattern.compile("\\\"name\\\": \\\"failed_phase\\\", \\\"seconds\\\": (\\d+)")
+            .matcher(jsonContent);
+        final var totalSeconds = Pattern.compile("\\\"totalSeconds\\\": (\\d+)").matcher(jsonContent);
+        assertThat(failedSeconds.find()).isTrue();
+        assertThat(totalSeconds.find()).isTrue();
+        assertThat(Long.parseLong(totalSeconds.group(1)))
+            .isEqualTo(5L + Long.parseLong(failedSeconds.group(1)));
     }
 
     @Test

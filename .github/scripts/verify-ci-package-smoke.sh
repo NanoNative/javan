@@ -53,19 +53,41 @@ assert_json_number_at_least() {
 
 TMP=${TMPDIR:-/tmp}/javan-ci-package-$$
 mkdir -p "$TMP"
-trap 'rm -rf "$TMP"' EXIT HUP INT TERM
 JAVAN_TIMING_LOG=$TMP/package-timings.tsv
 export JAVAN_TIMING_LOG
 : > "$JAVAN_TIMING_LOG"
+TIMING_JSON=dist/release/javan-$PACKAGE_TARGET-timings.json
+TIMING_MARKDOWN=dist/release/javan-$PACKAGE_TARGET-timings.md
+
+finish() {
+  code=$?
+  trap - EXIT HUP INT TERM
+  status=pass
+  if [ "$code" -ne 0 ]; then
+    status=fail
+  fi
+  javan_timing_write_reports \
+    "$PACKAGE_TARGET" "$BOOTSTRAP_GENERATION" "$PACKAGE_PROOF_SCOPE" \
+    "$TIMING_JSON" "$TIMING_MARKDOWN" "$status" "$code" || true
+  rm -rf "$TMP"
+  exit "$code"
+}
+trap finish EXIT
+trap 'exit 130' HUP INT TERM
 
 JAVAN_BUILD_REUSE_TARGET=true scripts/build.sh
 started=$(javan_timing_now)
-ARCHIVE=$(.github/scripts/package-release.sh "${JAVAN_VERSION:-}")
-javan_timing_record package_archive "$started"
+if ARCHIVE=$(.github/scripts/package-release.sh "${JAVAN_VERSION:-}"); then
+  archive_status=pass
+else
+  archive_code=$?
+  archive_status=fail
+fi
+javan_timing_record package_archive "$started" "$archive_status" true
+if [ "$archive_status" = "fail" ]; then
+  exit "$archive_code"
+fi
 javan_timing_run package_verify .github/scripts/verify-package.sh "$ARCHIVE"
-
-TIMING_JSON=dist/release/javan-$PACKAGE_TARGET-timings.json
-TIMING_MARKDOWN=dist/release/javan-$PACKAGE_TARGET-timings.md
 
 tar -xzf "$ARCHIVE" -C "$TMP"
 PACKAGE_ROOT=$TMP/$(basename "$ARCHIVE" .tar.gz)
@@ -106,9 +128,6 @@ assert_contains "$REPORT" '"reachableMethods":'
 javan_timing_record package_self_check "$self_check_started"
 
 if [ "$PACKAGE_PROOF_SCOPE" = "bootstrap" ]; then
-  javan_timing_write_reports \
-    "$PACKAGE_TARGET" "$BOOTSTRAP_GENERATION" "$PACKAGE_PROOF_SCOPE" \
-    "$TIMING_JSON" "$TIMING_MARKDOWN"
   printf '%s\n' "Verified CI bootstrap package with $PACKAGE_BIN"
   exit 0
 fi
@@ -149,13 +168,14 @@ case "$PACKAGE_SANITIZER_SCOPE" in
     ;;
 esac
 
-sanitizer_started=$(javan_timing_now)
-JAVAN_BIN=$PACKAGE_BIN \
-JAVAN_SANITIZER_REQUIRED=true \
-JAVAN_SELF_HOST_PROBE_SCOPE=$SELF_HOST_PROBE_SCOPE \
-JAVAN_SELF_HOST_REUSE_GENERATED=true \
-  sh .github/scripts/sanitizer-self-host-smoke.sh
-javan_timing_record package_sanitizer "$sanitizer_started"
+run_package_sanitizer() {
+  JAVAN_BIN=$PACKAGE_BIN \
+  JAVAN_SANITIZER_REQUIRED=true \
+  JAVAN_SELF_HOST_PROBE_SCOPE=$SELF_HOST_PROBE_SCOPE \
+  JAVAN_SELF_HOST_REUSE_GENERATED=true \
+    sh .github/scripts/sanitizer-self-host-smoke.sh
+}
+javan_timing_run package_sanitizer run_package_sanitizer
 SANITIZER_PROOF=target/.javan/reports/sanitizer-proof.json
 if [ ! -f "$SANITIZER_PROOF" ]; then
   printf '%s\n' "Missing package-backed self-host sanitizer proof: $SANITIZER_PROOF" >&2
@@ -186,7 +206,4 @@ assert_contains "$REPORT" '"failureSignatures": "false"'
 assert_json_number_at_least "$REPORT" actualTotalAllocations 1
 assert_json_number_at_least "$REPORT" actualGcCollections 1
 
-javan_timing_write_reports \
-  "$PACKAGE_TARGET" "$BOOTSTRAP_GENERATION" "$PACKAGE_PROOF_SCOPE" \
-  "$TIMING_JSON" "$TIMING_MARKDOWN"
 printf '%s\n' "Verified CI package smoke with $PACKAGE_BIN"

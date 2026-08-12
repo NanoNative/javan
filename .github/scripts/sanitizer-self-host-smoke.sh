@@ -513,7 +513,11 @@ sanitizer_compile_started=$(javan_timing_now)
   -o "$TMP/javan-self-host-sanitizer-probe" \
   >"$TMP/cc.out" 2>"$TMP/cc.err"
 compile_code=$?
-javan_timing_record sanitizer_compile "$sanitizer_compile_started"
+compile_status=pass
+if [ "$compile_code" -ne 0 ]; then
+  compile_status=fail
+fi
+javan_timing_record sanitizer_compile "$sanitizer_compile_started" "$compile_status" false
 set -e
 
 if [ "$compile_code" -ne 0 ]; then
