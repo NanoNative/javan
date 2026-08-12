@@ -21,6 +21,11 @@ final class JavanNativeSubstitutionsTest {
     }
 
     @Test
+    void isSubstitutedCallAcceptsDirectoryPreparation() {
+        assertThat(JavanNativeSubstitutions.isSubstitutedCall(files2DirectoryPreparationRef())).isTrue();
+    }
+
+    @Test
     void isSubstitutedCallRejectsDifferentOwner() {
         assertThat(JavanNativeSubstitutions.isSubstitutedCall(new MethodRef(
             "java/lang/ProcessBuilder",
@@ -56,6 +61,14 @@ final class JavanNativeSubstitutionsTest {
     }
 
     @Test
+    void isSubstitutedFallbackMethodAcceptsDirectoryPreparation() {
+        assertThat(JavanNativeSubstitutions.isSubstitutedFallbackMethod(
+            "javan/util/Files2",
+            new MethodInfo(0, "createDirectoriesIfPossible", "(Ljava/nio/file/Path;)Z", Optional.empty())
+        )).isTrue();
+    }
+
+    @Test
     void isSubstitutedFallbackMethodRejectsDifferentOwner() {
         assertThat(JavanNativeSubstitutions.isSubstitutedFallbackMethod(
             "javan/util/OtherRunner",
@@ -80,14 +93,19 @@ final class JavanNativeSubstitutionsTest {
     }
 
     @Test
-    void reportLinesDescribeProcessRunnerNativeLowering() {
+    void reportLinesDescribeEveryNativeLowering() {
         assertThat(JavanNativeSubstitutions.reportLines()).containsExactly(
-            "javan/util/ProcessRunner.run(Ljava/nio/file/Path;Ljava/util/List;)Ljavan/util/ProcessRunner$Result; -> javan_process_run"
+            "javan/util/ProcessRunner.run(Ljava/nio/file/Path;Ljava/util/List;)Ljavan/util/ProcessRunner$Result; -> javan_process_run",
+            "javan/util/Files2.createDirectoriesIfPossible(Ljava/nio/file/Path;)Z -> javan_files_create_directories_if_possible"
         );
     }
 
     private static MethodRef processRunnerRunRef() {
         return new MethodRef("javan/util/ProcessRunner", "run", PROCESS_RUNNER_DESCRIPTOR);
+    }
+
+    private static MethodRef files2DirectoryPreparationRef() {
+        return new MethodRef("javan/util/Files2", "createDirectoriesIfPossible", "(Ljava/nio/file/Path;)Z");
     }
 
     private static MethodInfo processRunnerRunMethod() {

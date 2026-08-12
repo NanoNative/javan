@@ -38,6 +38,25 @@ public final class Files2 {
     }
 
     /**
+     * Creates a directory tree and reports failure without leaking a platform-specific exception.
+     *
+     * <p>This is intentionally narrower than {@link Files#createDirectories(Path, java.nio.file.attribute.FileAttribute[])}:
+     * callers use it only for optional storage fallbacks where a failed location must not prevent
+     * trying the next one.</p>
+     *
+     * @param directory directory tree to create
+     * @return true when the directory exists after the attempt and is writable by this process
+     */
+    public static boolean createDirectoriesIfPossible(final Path directory) {
+        try {
+            Files.createDirectories(directory);
+            return Files.isWritable(directory);
+        } catch (final IOException | SecurityException exception) {
+            return false;
+        }
+    }
+
+    /**
      * Reads UTF-8 text or returns an empty string when the file does not exist.
      *
      * @param path source file

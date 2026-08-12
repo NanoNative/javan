@@ -28,6 +28,21 @@ final class Files2Test {
     }
 
     @Test
+    void createDirectoriesIfPossibleCreatesAMissingDirectoryTree() {
+        final Path directory = tempDir.resolve("managed/jdks/temurin");
+
+        assertThat(Files2.createDirectoriesIfPossible(directory)).isTrue();
+        assertThat(directory).isDirectory();
+    }
+
+    @Test
+    void createDirectoriesIfPossibleReturnsFalseWhenAFileBlocksTheTree() throws Exception {
+        final Path file = Files.createFile(tempDir.resolve("blocked"));
+
+        assertThat(Files2.createDirectoriesIfPossible(file.resolve("child"))).isFalse();
+    }
+
+    @Test
     void findClassFilesReturnsEmptyForMissingRoot() throws Exception {
         assertThat(Files2.findClassFiles(tempDir.resolve("missing"))).isEmpty();
     }

@@ -1,0 +1,423 @@
+package javan.toolchain.facade;
+
+import javan.toolchain.CurrentJdkTools;
+import javan.util.ProcessRunner;
+
+import java.io.IOException;
+import java.io.PrintStream;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+
+/**
+ * Delegates the Javan javac facade to a selected real javac executable.
+ */
+public final class JavacWrapper {
+    private final ProcessRunner processRunner;
+
+    /**
+     * Creates a javac facade backed by a process runner.
+     *
+     * @param processRunner process runner used to invoke javac
+     */
+    public JavacWrapper(final ProcessRunner processRunner) {
+        this.processRunner = Objects.requireNonNull(processRunner, "processRunner");
+    }
+
+    /**
+     * Creates a javac facade using the default process runner.
+     */
+    public JavacWrapper() {
+        this(new ProcessRunner());
+    }
+
+    /**
+     * Runs the current JDK javac executable in the requested working directory.
+     *
+     * @param cwd current working directory
+     * @param out stdout destination
+     * @param err stderr destination
+     * @param args javac arguments
+     * @return javac exit code
+     * @throws IOException when javac cannot be started or output cannot be copied
+     * @throws InterruptedException when interrupted while waiting for javac
+     */
+    public int run(final Path cwd, final PrintStream out, final PrintStream err, final List<String> args)
+        throws IOException, InterruptedException {
+        return run(cwd, out, err, Path.of(CurrentJdkTools.javac()), args);
+    }
+
+    /**
+     * Runs a selected javac executable in the requested working directory.
+     *
+     * @param cwd current working directory
+     * @param out stdout destination
+     * @param err stderr destination
+     * @param javacExecutable selected real javac executable
+     * @param args javac arguments
+     * @return javac exit code
+     * @throws IOException when javac cannot be started or output cannot be copied
+     * @throws InterruptedException when interrupted while waiting for javac
+     */
+    public int run(
+        final Path cwd,
+        final PrintStream out,
+        final PrintStream err,
+        final Path javacExecutable,
+        final List<String> args
+    ) throws IOException, InterruptedException {
+        Objects.requireNonNull(cwd, "cwd");
+        Objects.requireNonNull(out, "out");
+        Objects.requireNonNull(err, "err");
+        Objects.requireNonNull(javacExecutable, "javacExecutable");
+        Objects.requireNonNull(args, "args");
+        final ProcessRunner.Result result = invoke(cwd, javacExecutable, args);
+        out.print(result.stdout());
+        err.print(result.stderr());
+        return result.exitCode();
+    }
+
+    /**
+     * Invokes a selected javac executable without writing its captured output.
+     *
+     * @param cwd current working directory
+     * @param javacExecutable selected real javac executable
+     * @param args javac arguments
+     * @return captured javac result
+     * @throws IOException when javac cannot be started
+     * @throws InterruptedException when interrupted while waiting for javac
+     */
+    public ProcessRunner.Result invoke(final Path cwd, final Path javacExecutable, final List<String> args)
+        throws IOException, InterruptedException {
+        Objects.requireNonNull(cwd, "cwd");
+        Objects.requireNonNull(javacExecutable, "javacExecutable");
+        Objects.requireNonNull(args, "args");
+        final List<String> command = new ArrayList<>();
+        command.add(javacExecutable.toAbsolutePath().normalize().toString());
+        command.addAll(args);
+        return processRunner.run(cwd, command);
+    }
+
+    /**
+     * Parses Javan-owned facade arguments while preserving every backend argument.
+     *
+     * @param args raw javac facade arguments
+     * @return parse result
+     */
+    public static FacadeArguments parseFacadeArguments(final List<String> args) {
+        Objects.requireNonNull(args, "args");
+        final List<String> javacArgs = new ArrayList<>();
+        boolean javanHelp = false;
+        boolean javanVersion = false;
+        FacadeMode mode = FacadeMode.REPORT;
+        boolean passthrough = false;
+        Optional<String> classOutput = Optional.empty();
+        Optional<String> classpath = Optional.empty();
+        Optional<String> mainClass = Optional.empty();
+        Optional<String> outputName = Optional.empty();
+        final List<String> targets = new ArrayList<>();
+        Optional<String> diagnosticFormat = Optional.empty();
+        for (int index = 0; index < args.size(); index++) {
+            final String arg = Objects.requireNonNull(args.get(index), "arg");
+            if (passthrough) {
+                javacArgs.add(arg);
+                continue;
+            }
+            if ("--jn-end".equals(arg) || "-jn-end".equals(arg)) {
+                passthrough = true;
+                continue;
+            }
+            if ("--jn-help".equals(arg) || "-jn-help".equals(arg)) {
+                javanHelp = true;
+                continue;
+            }
+            if ("--jn-version".equals(arg) || "-jn-version".equals(arg)) {
+                javanVersion = true;
+                continue;
+            }
+            if ("--jn-off".equals(arg) || "-jn-off".equals(arg)) {
+                final Optional<String> conflict = modeConflict(mode, FacadeMode.OFF);
+                if (conflict.isPresent()) {
+                    return FacadeArguments.failure(conflict.orElseThrow());
+                }
+                mode = FacadeMode.OFF;
+                continue;
+            }
+            if ("--jn-warn".equals(arg) || "-jn-warn".equals(arg)) {
+                final Optional<String> conflict = modeConflict(mode, FacadeMode.WARN);
+                if (conflict.isPresent()) {
+                    return FacadeArguments.failure(conflict.orElseThrow());
+                }
+                mode = FacadeMode.WARN;
+                continue;
+            }
+            if ("--jn-strict".equals(arg) || "-jn-strict".equals(arg)) {
+                final Optional<String> conflict = modeConflict(mode, FacadeMode.STRICT);
+                if (conflict.isPresent()) {
+                    return FacadeArguments.failure(conflict.orElseThrow());
+                }
+                mode = FacadeMode.STRICT;
+                continue;
+            }
+            if ("--jn-build".equals(arg) || "-jn-build".equals(arg)) {
+                final Optional<String> conflict = modeConflict(mode, FacadeMode.BUILD);
+                if (conflict.isPresent()) {
+                    return FacadeArguments.failure(conflict.orElseThrow());
+                }
+                mode = FacadeMode.BUILD;
+                continue;
+            }
+            if ("--jn-main".equals(arg) || "-jn-main".equals(arg)) {
+                final Optional<String> value = nextValue(args, index);
+                if (value.isEmpty()) {
+                    return FacadeArguments.failure("Missing value for " + arg);
+                }
+                mainClass = value;
+                index++;
+                continue;
+            }
+            if ("--jn-out".equals(arg) || "-jn-out".equals(arg)) {
+                final Optional<String> value = nextValue(args, index);
+                if (value.isEmpty()) {
+                    return FacadeArguments.failure("Missing value for " + arg);
+                }
+                outputName = value;
+                index++;
+                continue;
+            }
+            if ("--jn-target".equals(arg) || "-jn-target".equals(arg)) {
+                final Optional<String> value = nextValue(args, index);
+                if (value.isEmpty()) {
+                    return FacadeArguments.failure("Missing value for " + arg);
+                }
+                targets.add(value.orElseThrow());
+                index++;
+                continue;
+            }
+            if ("--jn-diag".equals(arg) || "-jn-diag".equals(arg)) {
+                final Optional<String> value = nextValue(args, index);
+                if (value.isEmpty()) {
+                    return FacadeArguments.failure("Missing value for " + arg);
+                }
+                if (!diagnosticFormat(value.orElseThrow())) {
+                    return FacadeArguments.failure("Unsupported Javan diagnostic format: " + value.orElseThrow());
+                }
+                diagnosticFormat = value;
+                index++;
+                continue;
+            }
+            if (arg.startsWith("--jn-") || arg.startsWith("-jn-")) {
+                return FacadeArguments.failure("Unsupported Javan compiler option: " + arg);
+            }
+            javacArgs.add(arg);
+            if ("-d".equals(arg)) {
+                final Optional<String> value = nextValue(args, index);
+                if (value.isPresent()) {
+                    final String output = value.orElseThrow();
+                    javacArgs.add(output);
+                    classOutput = Optional.of(output);
+                    index++;
+                }
+                continue;
+            }
+            if (classpathOption(arg)) {
+                final Optional<String> value = nextValue(args, index);
+                if (value.isPresent()) {
+                    final String valueText = value.orElseThrow();
+                    javacArgs.add(valueText);
+                    classpath = Optional.of(valueText);
+                    index++;
+                }
+                continue;
+            }
+            if (arg.startsWith("--class-path=")) {
+                classpath = Optional.of(arg.substring("--class-path=".length()));
+            }
+        }
+        return FacadeArguments.success(
+            List.copyOf(javacArgs),
+            javanHelp,
+            javanVersion,
+            mode,
+            classOutput,
+            classpath,
+            mainClass,
+            outputName,
+            List.copyOf(targets),
+            diagnosticFormat
+        );
+    }
+
+    /**
+     * Returns the currently implemented Javan facade help section.
+     *
+     * @return human-readable extension help
+     */
+    public static String facadeHelp() {
+        return """
+
+            Javan extensions
+              --jn-help, -jn-help       show this Javan section without invoking javac
+              --jn-version, -jn-version show Javan and selected-backend identity
+              --jn-off, -jn-off         disable Javan analysis and reports for this compile
+              --jn-warn, -jn-warn       print Javan findings without changing javac success
+              --jn-strict, -jn-strict   fail after successful javac when Javan finds blockers
+              --jn-build, -jn-build     build a native app from fresh -d class output
+              --jn-main, -jn-main <C>   native application main class
+              --jn-out, -jn-out <name>  native output name below .javan/bin
+              --jn-target, -jn-target <os/arch>
+                                      host target assertion for native build
+              --jn-diag, -jn-diag <auto|compiler|pretty|jsonl>
+                                      finding presentation for warn, strict, and build
+              --jn-end, -jn-end         pass all following arguments to javac unchanged
+
+            Javan writes an invocation report after successful or failed javac runs by default.
+            Full native compatibility analysis requires javac -d <classes> output.
+            `--jn-build` requires javac -d <classes>; it never recompiles Java source.
+            Use `javan check` for an explicit report-only run outside compilation.
+            """;
+    }
+
+    private static boolean classpathOption(final String arg) {
+        return "-cp".equals(arg) || "-classpath".equals(arg) || "--class-path".equals(arg);
+    }
+
+    private static Optional<String> nextValue(final List<String> args, final int index) {
+        if (index + 1 >= args.size()) {
+            return Optional.empty();
+        }
+        return Optional.of(Objects.requireNonNull(args.get(index + 1), "arg"));
+    }
+
+    private static Optional<String> modeConflict(final FacadeMode current, final FacadeMode requested) {
+        if (current == FacadeMode.REPORT || current == requested) {
+            return Optional.empty();
+        }
+        return Optional.of("Conflicting Javan compiler modes: " + modeName(current) + " and " + modeName(requested));
+    }
+
+    private static String modeName(final FacadeMode mode) {
+        if (mode == FacadeMode.OFF) {
+            return "--jn-off";
+        }
+        if (mode == FacadeMode.WARN) {
+            return "--jn-warn";
+        }
+        if (mode == FacadeMode.STRICT) {
+            return "--jn-strict";
+        }
+        if (mode == FacadeMode.BUILD) {
+            return "--jn-build";
+        }
+        return "--jn-report";
+    }
+
+    private static boolean diagnosticFormat(final String value) {
+        return "auto".equals(value)
+            || "compiler".equals(value)
+            || "pretty".equals(value)
+            || "jsonl".equals(value);
+    }
+
+    /**
+     * Parsed facade argument result.
+     *
+     * @param pass whether parsing succeeded
+     * @param javacArgs preserved backend arguments
+     * @param javanHelp whether Javan-only help was requested
+     * @param javanVersion whether Javan-only version information was requested
+     * @param mode selected post-compile mode
+     * @param classOutput javac class-output value when {@code -d} is present
+     * @param classpath javac classpath value when present
+     * @param mainClass explicit native application main class
+     * @param outputName explicit native output name
+     * @param targets requested native targets
+     * @param diagnosticFormat selected finding presentation when present
+     * @param error deterministic parse error when parsing failed
+     */
+    public record FacadeArguments(
+        boolean pass,
+        List<String> javacArgs,
+        boolean javanHelp,
+        boolean javanVersion,
+        FacadeMode mode,
+        Optional<String> classOutput,
+        Optional<String> classpath,
+        Optional<String> mainClass,
+        Optional<String> outputName,
+        List<String> targets,
+        Optional<String> diagnosticFormat,
+        String error
+    ) {
+        /**
+         * Creates an immutable parse result.
+         */
+        public FacadeArguments {
+            javacArgs = List.copyOf(Objects.requireNonNull(javacArgs, "javacArgs"));
+            mode = Objects.requireNonNull(mode, "mode");
+            classOutput = Objects.requireNonNull(classOutput, "classOutput");
+            classpath = Objects.requireNonNull(classpath, "classpath");
+            mainClass = Objects.requireNonNull(mainClass, "mainClass");
+            outputName = Objects.requireNonNull(outputName, "outputName");
+            targets = List.copyOf(Objects.requireNonNull(targets, "targets"));
+            diagnosticFormat = Objects.requireNonNull(diagnosticFormat, "diagnosticFormat");
+            error = Objects.requireNonNull(error, "error");
+        }
+
+        /**
+         * Returns whether post-compile Javan behavior is enabled.
+         *
+         * @return true unless {@code --jn-off} was selected
+         */
+        public boolean analysisEnabled() {
+            return mode != FacadeMode.OFF;
+        }
+
+        private static FacadeArguments success(
+            final List<String> javacArgs,
+            final boolean javanHelp,
+            final boolean javanVersion,
+            final FacadeMode mode,
+            final Optional<String> classOutput,
+            final Optional<String> classpath,
+            final Optional<String> mainClass,
+            final Optional<String> outputName,
+            final List<String> targets,
+            final Optional<String> diagnosticFormat
+        ) {
+            return new FacadeArguments(
+                true,
+                javacArgs,
+                javanHelp,
+                javanVersion,
+                mode,
+                classOutput,
+                classpath,
+                mainClass,
+                outputName,
+                targets,
+                diagnosticFormat,
+                ""
+            );
+        }
+
+        private static FacadeArguments failure(final String error) {
+            return new FacadeArguments(
+                false,
+                List.of(),
+                false,
+                false,
+                FacadeMode.OFF,
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                List.of(),
+                Optional.empty(),
+                error
+            );
+        }
+    }
+}

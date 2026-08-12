@@ -10126,6 +10126,34 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void runtimeDirectoryPreparationReportsSuccessAndPermissionStyleFailureWithoutPanicking() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                FILE* blocker = fopen("blocked", "wb");
+                if (blocker == NULL) {
+                    return 1;
+                }
+                fclose(blocker);
+                printf(
+                    "%d:%d\\n",
+                    javan_files_create_directories_if_possible((void*) "managed/jdks/temurin"),
+                    javan_files_create_directories_if_possible((void*) "blocked/child")
+                );
+                return 0;
+            }
+            """,
+            "512"
+        );
+
+        assertThat(stdout).isEqualTo("1:0\n");
+        assertThat(tempDir.resolve("managed/jdks/temurin")).isDirectory();
+    }
+
+    @Test
     void runtimeCollectsLongLivedAllocationSoakToZeroLiveHeap() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """

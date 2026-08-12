@@ -17,8 +17,16 @@ public final class JavanNativeSubstitutions {
         "run",
         PROCESS_RUNNER_RUN_DESCRIPTOR
     );
+    private static final String FILES2_OWNER = "javan/util/Files2";
+    private static final String FILES2_CREATE_DIRECTORIES_IF_POSSIBLE_DESCRIPTOR = "(Ljava/nio/file/Path;)Z";
+    private static final MethodRef FILES2_CREATE_DIRECTORIES_IF_POSSIBLE = new MethodRef(
+        FILES2_OWNER,
+        "createDirectoriesIfPossible",
+        FILES2_CREATE_DIRECTORIES_IF_POSSIBLE_DESCRIPTOR
+    );
     private static final List<String> REPORT_LINES = List.of(
-        PROCESS_RUNNER_RUN.display() + " -> javan_process_run"
+        PROCESS_RUNNER_RUN.display() + " -> javan_process_run",
+        FILES2_CREATE_DIRECTORIES_IF_POSSIBLE.display() + " -> javan_files_create_directories_if_possible"
     );
 
     private JavanNativeSubstitutions() {
@@ -31,9 +39,7 @@ public final class JavanNativeSubstitutions {
      * @return true for exact substituted calls
      */
     public static boolean isSubstitutedCall(final MethodRef methodRef) {
-        return PROCESS_RUNNER_RUN.owner().equals(methodRef.owner())
-            && PROCESS_RUNNER_RUN.name().equals(methodRef.name())
-            && PROCESS_RUNNER_RUN.descriptor().equals(methodRef.descriptor());
+        return matches(PROCESS_RUNNER_RUN, methodRef) || matches(FILES2_CREATE_DIRECTORIES_IF_POSSIBLE, methodRef);
     }
 
     /**
@@ -44,6 +50,9 @@ public final class JavanNativeSubstitutions {
      */
     public static List<String> runtimeModules(final MethodRef methodRef) {
         if (isSubstitutedCall(methodRef)) {
+            if (matches(FILES2_CREATE_DIRECTORIES_IF_POSSIBLE, methodRef)) {
+                return List.of("filesystem");
+            }
             return List.of("process");
         }
         return List.of();
@@ -57,9 +66,7 @@ public final class JavanNativeSubstitutions {
      * @return true for exact substituted fallback methods
      */
     public static boolean isSubstitutedFallbackMethod(final String owner, final MethodInfo method) {
-        return PROCESS_RUNNER_RUN.owner().equals(owner)
-            && PROCESS_RUNNER_RUN.name().equals(method.name())
-            && PROCESS_RUNNER_RUN.descriptor().equals(method.descriptor());
+        return matches(PROCESS_RUNNER_RUN, owner, method) || matches(FILES2_CREATE_DIRECTORIES_IF_POSSIBLE, owner, method);
     }
 
     /**
@@ -69,5 +76,17 @@ public final class JavanNativeSubstitutions {
      */
     public static List<String> reportLines() {
         return REPORT_LINES;
+    }
+
+    private static boolean matches(final MethodRef expected, final MethodRef actual) {
+        return expected.owner().equals(actual.owner())
+            && expected.name().equals(actual.name())
+            && expected.descriptor().equals(actual.descriptor());
+    }
+
+    private static boolean matches(final MethodRef expected, final String owner, final MethodInfo method) {
+        return expected.owner().equals(owner)
+            && expected.name().equals(method.name())
+            && expected.descriptor().equals(method.descriptor());
     }
 }
