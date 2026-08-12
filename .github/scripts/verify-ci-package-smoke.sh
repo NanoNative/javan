@@ -53,7 +53,8 @@ assert_json_number_at_least() {
 
 TMP=${TMPDIR:-/tmp}/javan-ci-package-$$
 mkdir -p "$TMP"
-JAVAN_TIMING_LOG=$TMP/package-timings.tsv
+mkdir -p target
+JAVAN_TIMING_LOG=target/javan-$PACKAGE_TARGET-timings.tsv
 export JAVAN_TIMING_LOG
 : > "$JAVAN_TIMING_LOG"
 TIMING_JSON=dist/release/javan-$PACKAGE_TARGET-timings.json

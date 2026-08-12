@@ -194,5 +194,6 @@ jobs:
           retention-days: 7
           if-no-files-found: error
           path: |
+            target/javan-${{ inputs.target }}-timings.tsv
             dist/release/javan-${{ inputs.target }}-timings.json
             dist/release/javan-${{ inputs.target }}-timings.md

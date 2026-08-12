@@ -368,6 +368,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             .contains("javan_timing_run package_native")
             .contains("javan_timing_run package_sanitizer")
             .contains("javan_timing_write_reports")
+            .contains("target/javan-$PACKAGE_TARGET-timings.tsv")
             .contains("javan-$PACKAGE_TARGET-timings.json")
             .contains("javan-$PACKAGE_TARGET-timings.md");
         assertThat(Files.readString(Path.of(".github/scripts/sanitizer-self-host-smoke.sh")))
@@ -376,6 +377,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             .contains("if: ${{ always() && inputs.proof == 'package-self-host' }}")
             .contains("name: timings-${{ inputs.target }}-gen${{ inputs.bootstrap_generation }}")
             .contains("retention-days: 7")
+            .contains("target/javan-${{ inputs.target }}-timings.tsv")
             .contains("dist/release/javan-${{ inputs.target }}-timings.json")
             .contains("dist/release/javan-${{ inputs.target }}-timings.md");
     }
