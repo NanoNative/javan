@@ -41,9 +41,15 @@ final class NativeLinkerTest {
     }
 
     @Test
-    void nonWindowsHostDoesNotAddWinsockLibraryDuringLink() {
+    void macHostDoesNotAddPlatformLibrariesDuringLink() {
         assertThat(NativeLinker.platformLinkFlagsForOs("Mac OS X"))
             .isEmpty();
+    }
+
+    @Test
+    void linuxHostAddsMathLibraryDuringLink() {
+        assertThat(NativeLinker.platformLinkFlagsForOs("Linux"))
+            .containsExactly("-lm");
     }
 
     @Test
@@ -266,6 +272,7 @@ final class NativeLinkerTest {
                 secondSearchPath.toString(),
                 "-lalpha",
                 "-lbeta",
+                "-lm",
                 "-o",
                 output.toString()
             )
@@ -479,6 +486,7 @@ final class NativeLinkerTest {
                 "-L",
                 searchPath.toString(),
                 "-lmath",
+                "-lm",
                 "-o",
                 output.toString()
             )

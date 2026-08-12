@@ -30,6 +30,19 @@ final class BytecodeToIRMathSupport {
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final SourceLineIndex sourceLines
     ) {
+        if ("atan2".equals(methodRef.name()) && "(DD)D".equals(methodRef.descriptor())) {
+            final IrExpression x = popDouble(classFile, method, stack);
+            final IrExpression y = popDouble(classFile, method, stack);
+            final String yLocal = newDoubleLocal(localDeclarations);
+            instructions.add(IrInstruction.assignDouble(yLocal, y));
+            final String xLocal = newDoubleLocal(localDeclarations);
+            instructions.add(IrInstruction.assignDouble(xLocal, x));
+            stack.add(StackValue.doubleExpression(IrExpression.doubleCall(
+                "atan2",
+                List.of(IrExpression.doubleLocal(yLocal), IrExpression.doubleLocal(xLocal))
+            )));
+            return true;
+        }
         if (lowerPureMathIntrinsic(classFile, method, methodRef, stack)) {
             return true;
         }
@@ -932,5 +945,12 @@ final class BytecodeToIRMathSupport {
             return true;
         }
         return false;
+    }
+
+    private static String newDoubleLocal(final Map<Integer, IrLocal> localDeclarations) {
+        final int localIndex = localDeclarations.size();
+        final String localName = "double" + localIndex;
+        localDeclarations.put(Integer.MIN_VALUE + localIndex, new IrLocal(IrType.DOUBLE, localName));
+        return localName;
     }
 }

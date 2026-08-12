@@ -468,6 +468,7 @@ public final class CompatibilityReports {
             pass("operand-chained-call-receiver-temporary-root"),
             pass("jdk-intrinsics-math-abs-min-max"),
             pass("jdk-intrinsics-math-round"),
+            pass("jdk-intrinsics-math-atan2"),
             pass("jdk-intrinsics-math-exact"),
             pass("jdk-intrinsics-objects-require-non-null"),
             pass("jdk-intrinsics-system-time"),

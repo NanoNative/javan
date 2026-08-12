@@ -95,6 +95,7 @@ public final class JdkCallSupport {
         intrinsic("Math.round", "java/lang/Math", "round", "(F)I", "(D)J"),
         intrinsic("Math.floor", "java/lang/Math", "floor", "(D)D"),
         intrinsic("Math.ceil", "java/lang/Math", "ceil", "(D)D"),
+        intrinsic("Math.atan2", "java/lang/Math", "atan2", "(DD)D"),
         intrinsic("Math.min", "java/lang/Math", "min", "(II)I", "(JJ)J", "(FF)F", "(DD)D"),
         intrinsic("Math.max", "java/lang/Math", "max", "(II)I", "(JJ)J", "(FF)F", "(DD)D"),
         intrinsic("Math.addExact", "java/lang/Math", "addExact", "(II)I", "(JJ)J"),

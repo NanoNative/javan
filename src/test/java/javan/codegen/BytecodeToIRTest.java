@@ -21483,6 +21483,30 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersMathAtan2DoubleWithLeftToRightOperandCapture() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(DD)D",
+            4,
+            4,
+            plain(0, 38, "dload_0"),
+            plain(1, 40, "dload_2"),
+            invokeStatic(2, new MethodRef("java/lang/Math", "atan2", "(DD)D")),
+            plain(3, 175, "dreturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignDouble("double0", IrExpression.doubleLocal("arg0")),
+            IrInstruction.assignDouble("double1", IrExpression.doubleLocal("arg1")),
+            IrInstruction.returnDouble(IrExpression.doubleCall(
+                "atan2",
+                List.of(IrExpression.doubleLocal("double0"), IrExpression.doubleLocal("double1"))
+            ))
+        );
+    }
+
+    @Test
     void lowersMathToIntExactToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

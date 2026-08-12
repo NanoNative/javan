@@ -95,6 +95,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void mathAtan2DoubleIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Math",
+            "atan2",
+            "(DD)D"
+        ))).isTrue();
+    }
+
+    @Test
     void mathCeilWrongDescriptorIsNotSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/Math",

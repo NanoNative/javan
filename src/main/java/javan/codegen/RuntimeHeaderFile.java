@@ -10,6 +10,7 @@ final class RuntimeHeaderFile {
         #ifndef JAVAN_RUNTIME_H
         #define JAVAN_RUNTIME_H
 
+        #include <math.h>
         #include <setjmp.h>
         #include <stdint.h>
 

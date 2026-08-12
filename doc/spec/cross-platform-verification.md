@@ -67,6 +67,10 @@ binary64 implementation is integer-mask based, and the local macOS static C cons
 uses `cc caller.c lib<name>.a -o caller` without it. Linux and Windows rows have not
 been run for this change.
 
+Static-library consumers that reach `Math.atan2(double, double)` must link the host
+math library on Linux (`-lm`). Generated Rust and Go bindings declare that Linux-only
+dependency; direct C consumers remain responsible for their linker command.
+
 CI proves required host-native target rows. Docker proves extra Linux/container behavior.
 Neither replaces the local host gate.
 

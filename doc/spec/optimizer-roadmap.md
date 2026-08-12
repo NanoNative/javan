@@ -82,6 +82,7 @@ Intrinsic status:
 | --- | --- |
 | `Objects.requireNonNull(Object)` | implemented |
 | `Math.abs/min/max` for `int` and `long` | implemented |
+| `Math.atan2(double, double)` | implemented through the host math library |
 | `System.arraycopy` | implemented |
 | `Arrays.copyOf` for supported primitive/object arrays | implemented |
 | `String.equals` | implemented |
