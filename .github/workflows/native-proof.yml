@@ -185,3 +185,14 @@ jobs:
           path: |
             dist/release/javan-*-${{ inputs.target }}.tar.gz
             dist/release/javan-*-${{ inputs.target }}.tar.gz.sha256
+
+      - name: "⏱️ Timings [gen${{ inputs.bootstrap_generation }}_${{ inputs.target }}]"
+        if: inputs.proof == 'package-self-host'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: timings-${{ inputs.target }}-gen${{ inputs.bootstrap_generation }}
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            dist/release/javan-${{ inputs.target }}-timings.json
+            dist/release/javan-${{ inputs.target }}-timings.md

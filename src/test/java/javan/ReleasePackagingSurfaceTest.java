@@ -348,7 +348,79 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             .contains("javan-bootstrap-rebuilt")
             .contains("javan-bootstrap-verified")
             .contains("if [ \"$GENERATION\" = \"3\" ]; then")
+            .contains("javan_timing_run bootstrap_jvm")
+            .contains("javan_timing_run bootstrap_gen2")
+            .contains("javan_timing_run bootstrap_gen3")
             .contains("cp \"$BUILT\" \"$OUTPUT\"");
+    }
+
+    @Test
+    void packageProofPublishesComparableNativeTimingReports() throws Exception {
+        final String script = Files.readString(VERIFY_CI_PACKAGE_SMOKE);
+        final String workflow = Files.readString(NATIVE_PROOF);
+
+        assertThat(script)
+            .contains("javan_timing_run package_verify")
+            .contains("javan_timing_record package_self_check")
+            .contains("javan_timing_run package_jar")
+            .contains("javan_timing_run package_native")
+            .contains("javan_timing_record package_sanitizer")
+            .contains("javan_timing_write_reports")
+            .contains("javan-$PACKAGE_TARGET-timings.json")
+            .contains("javan-$PACKAGE_TARGET-timings.md");
+        assertThat(Files.readString(Path.of(".github/scripts/sanitizer-self-host-smoke.sh")))
+            .contains("javan_timing_record sanitizer_compile");
+        assertThat(workflow)
+            .contains("name: timings-${{ inputs.target }}-gen${{ inputs.bootstrap_generation }}")
+            .contains("retention-days: 7")
+            .contains("dist/release/javan-${{ inputs.target }}-timings.json")
+            .contains("dist/release/javan-${{ inputs.target }}-timings.md");
+    }
+
+    @Test
+    void timingReporterWritesMachineAndHumanReadablePhaseComparisons() throws Exception {
+        final Path runner = tempDir.resolve("timing-report-test.sh");
+        final Path log = tempDir.resolve("timings.tsv");
+        final Path json = tempDir.resolve("timings.json");
+        final Path markdown = tempDir.resolve("timings.md");
+        Files.writeString(runner, """
+            set -eu
+            . "$1"
+            JAVAN_TIMING_LOG=$2
+            export JAVAN_TIMING_LOG
+            : > "$JAVAN_TIMING_LOG"
+            javan_timing_run bootstrap_jvm true
+            javan_timing_run bootstrap_gen2 true
+            javan_timing_write_reports linux-x64 2 bootstrap "$3" "$4"
+            """);
+
+        final ProcessResult run = process(
+            REPO_ROOT,
+            List.of(
+                "sh",
+                runner.toString(),
+                REPO_ROOT.resolve(".github/scripts/timing-report.sh").toString(),
+                log.toString(),
+                json.toString(),
+                markdown.toString()
+            ),
+            Duration.ofSeconds(20),
+            Map.of()
+        );
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stdout()).contains("Timing: bootstrap_jvm=", "Timing: bootstrap_gen2=");
+        assertThat(Files.readString(json))
+            .contains("\"target\": \"linux-x64\"")
+            .contains("\"bootstrapGeneration\": 2")
+            .contains("\"proofScope\": \"bootstrap\"")
+            .containsPattern("\\{\\\"name\\\": \\\"bootstrap_jvm\\\", \\\"seconds\\\": \\d+}")
+            .containsPattern("\\{\\\"name\\\": \\\"bootstrap_gen2\\\", \\\"seconds\\\": \\d+}")
+            .containsPattern("\\\"totalSeconds\\\": \\d+");
+        assertThat(Files.readString(markdown))
+            .containsPattern("\\| `bootstrap_jvm` \\| \\d+ \\|")
+            .containsPattern("\\| `bootstrap_gen2` \\| \\d+ \\|")
+            .containsPattern("\\| \\*\\*Total measured\\*\\* \\| \\*\\*\\d+\\*\\* \\|");
     }
 
     @Test
