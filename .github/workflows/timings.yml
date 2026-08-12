@@ -1,0 +1,36 @@
+name: Timings
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  compare:
+    name: ${{ matrix.label }}
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        include:
+          - { generation: 2, target: linux-x64, runner: ubuntu-24.04, label: gen2_linux_x64 }
+          - { generation: 3, target: linux-x64, runner: ubuntu-24.04, label: gen3_linux_x64 }
+          - { generation: 2, target: linux-aarch64, runner: ubuntu-24.04-arm, label: gen2_linux_arm64 }
+          - { generation: 3, target: linux-aarch64, runner: ubuntu-24.04-arm, label: gen3_linux_arm64 }
+          - { generation: 2, target: macos-aarch64, runner: macos-15, label: gen2_mac_arm64 }
+          - { generation: 3, target: macos-aarch64, runner: macos-15, label: gen3_mac_arm64 }
+    permissions:
+      contents: read
+    uses: ./.github/workflows/native-proof.yml
+    with:
+      ref: ${{ github.sha }}
+      runner: ${{ matrix.runner }}
+      target: ${{ matrix.target }}
+      label: ${{ matrix.label }}
+      sanitizer_scope: platform-smoke
+      proof: package-self-host
+      version: 1.0.0
+      bootstrap_generation: ${{ matrix.generation }}
+      package_scope: bootstrap
+      timeout_minutes: 60
+    secrets: inherit

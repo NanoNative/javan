@@ -19,6 +19,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     private static final Path BUILD_PR = Path.of(".github/workflows/build-pr.yml");
     private static final Path BUILD_MERGE = Path.of(".github/workflows/build-merge.yml");
     private static final Path NATIVE_PROOF = Path.of(".github/workflows/native-proof.yml");
+    private static final Path TIMINGS_WORKFLOW = Path.of(".github/workflows/timings.yml");
     private static final Path RELEASE_WORKFLOW = Path.of(".github/workflows/release.yml");
     private static final Path CONTAINER_WORKFLOW = Path.of(".github/workflows/container-images.yml");
     private static final Path VERIFY_RELEASE = Path.of(".github/scripts/verify-release.sh");
@@ -477,6 +478,23 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         assertThat(totalSeconds.find()).isTrue();
         assertThat(Long.parseLong(totalSeconds.group(1)))
             .isEqualTo(5L + Long.parseLong(failedSeconds.group(1)));
+    }
+
+    @Test
+    void timingWorkflowComparesBothGenerationsOnEveryNativePackageRunner() throws Exception {
+        assertThat(Files.readString(TIMINGS_WORKFLOW))
+            .contains("workflow_dispatch:")
+            .contains("fail-fast: false")
+            .contains("max-parallel: 6")
+            .contains("generation: 2, target: linux-x64, runner: ubuntu-24.04")
+            .contains("generation: 3, target: linux-x64, runner: ubuntu-24.04")
+            .contains("generation: 2, target: linux-aarch64, runner: ubuntu-24.04-arm")
+            .contains("generation: 3, target: linux-aarch64, runner: ubuntu-24.04-arm")
+            .contains("generation: 2, target: macos-aarch64, runner: macos-15")
+            .contains("generation: 3, target: macos-aarch64, runner: macos-15")
+            .contains("uses: ./.github/workflows/native-proof.yml")
+            .contains("package_scope: bootstrap")
+            .contains("bootstrap_generation: ${{ matrix.generation }}");
     }
 
     @Test
