@@ -90,8 +90,9 @@ proof on every supported OS/ARCH target.
 Before claiming managed Java memory, Javan still needs:
 
 - complete operand/call-temporary coverage for all eval-order and hostile safe-point paths
-- a complete mutator/collector protocol for opaque runtime-helper object returns and
-  runtime-container mutation beyond the scoped generated-return and supported-atomic handoffs
+- a complete mutator/collector protocol for opaque runtime-helper object returns beyond
+  primitive string conversion/concatenation and for runtime-container mutation beyond the
+  scoped generated-return and supported-atomic handoffs
 - full string object model for UTF-16 semantics, literals, borrowed argv/env values, and
   ABI input ownership
 - cycle-safe mark traversal for every Java heap shape, not only generated object graphs
@@ -221,7 +222,8 @@ Current gates:
 - `unjoinedWorkersCompleteBeforeProcessExitUnderGcPressureAndMatchJvmOutput` runs a quick
   unjoined worker beside an allocating worker under the same hostile GC settings. The generated
   main drain keeps the selected worker rooted across completion while the peer continues
-  allocating, and the native process matches the JVM's observable completion.
+  allocating. Primitive string conversion and concatenation publish through caller-owned rooted
+  result slots, and the native process matches the JVM's observable completion.
 - `operand-call-temporary-roots` native-profile project runs with
   `JAVAN_GC_SAFEPOINT_INTERVAL=1` and verifies nested object call arguments, field-store
   operands, array-store operands, return operands, and allocation churn against JVM output.

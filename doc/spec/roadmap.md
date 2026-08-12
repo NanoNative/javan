@@ -349,7 +349,8 @@ Open gates:
 - hostile-point GC collection stress across every supported allocation shape
 - general concurrent local/field/static/runtime-container pointer publication beyond the
   generated paths and supported atomic operations
-- caller-owned result-slot conversion for concurrent opaque runtime-helper object returns
+- caller-owned result-slot conversion for concurrent opaque runtime-helper object returns beyond
+  the supported primitive string conversion and concatenation helpers
 - atomic admission for concurrent starts of the same `Thread` object
 - full Java `String` object model and UTF-16 ownership
 - exception semantics beyond direct same-method platform catch routing

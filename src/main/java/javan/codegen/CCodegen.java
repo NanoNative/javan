@@ -2322,6 +2322,24 @@ public final class CCodegen {
                 ));
                 return temporary;
             }
+            if (expression.kind() == javan.ir.IrExpression.Kind.STRING_CONCAT) {
+                final String arguments = stringArguments(expression.arguments());
+                final String temporary = "javan_expr_tmp_" + temporaries.size();
+                temporaries.add(new Temporary(expression.type(), temporary));
+                assignments.add(new Assignment(
+                    "javan_string_concat_into((void**) &"
+                        + temporary
+                        + ", "
+                        + emitCStringLiteral(expression.value())
+                        + ", "
+                        + expression.arguments().size()
+                        + ", (const char*[]){"
+                        + arguments
+                        + "});",
+                    false
+                ));
+                return temporary;
+            }
             final String raw = rawExpression(expression);
             if (!needsTemporary(expression)) {
                 return raw;
@@ -3812,6 +3830,7 @@ public final class CCodegen {
         }
         return GENERATED_OBJECT_CLONE_SYMBOL.equals(expression.value())
             || isArrayCopyIntoCall(expression.value())
+            || isStringResultIntoCall(expression.value())
             || isThreadResultIntoCall(expression.value());
     }
 
@@ -3833,6 +3852,18 @@ public final class CCodegen {
                 "javan_arrays_copy_of_byte",
                 "javan_arrays_copy_of_short",
                 "javan_arrays_copy_of_char" -> true;
+            default -> false;
+        };
+    }
+
+    private static boolean isStringResultIntoCall(final String symbol) {
+        return switch (symbol) {
+            case "javan_string_value_of_int",
+                "javan_string_value_of_long",
+                "javan_string_value_of_float",
+                "javan_string_value_of_double",
+                "javan_string_value_of_bool",
+                "javan_string_value_of_char" -> true;
             default -> false;
         };
     }

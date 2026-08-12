@@ -1066,6 +1066,60 @@ final class RuntimeSourceIoSections {
             return result;
         }
 
+        void javan_string_value_of_int_into(void** result, int value) {
+            if (result == NULL) {
+                javan_panic("invalid String result");
+            }
+            javan_runtime_lock_enter();
+            *result = javan_string_value_of_int(value);
+            javan_runtime_lock_leave();
+        }
+
+        void javan_string_value_of_long_into(void** result, long long value) {
+            if (result == NULL) {
+                javan_panic("invalid String result");
+            }
+            javan_runtime_lock_enter();
+            *result = javan_string_value_of_long(value);
+            javan_runtime_lock_leave();
+        }
+
+        void javan_string_value_of_float_into(void** result, float value) {
+            if (result == NULL) {
+                javan_panic("invalid String result");
+            }
+            javan_runtime_lock_enter();
+            *result = javan_string_value_of_float(value);
+            javan_runtime_lock_leave();
+        }
+
+        void javan_string_value_of_double_into(void** result, double value) {
+            if (result == NULL) {
+                javan_panic("invalid String result");
+            }
+            javan_runtime_lock_enter();
+            *result = javan_string_value_of_double(value);
+            javan_runtime_lock_leave();
+        }
+
+        void javan_string_value_of_bool_into(void** result, int value) {
+            if (result == NULL) {
+                javan_panic("invalid String result");
+            }
+            javan_runtime_lock_enter();
+            *result = javan_string_value_of_bool(value);
+            javan_runtime_lock_leave();
+        }
+
+        void javan_string_value_of_char_into(void** result, int value) {
+            if (result == NULL) {
+                javan_panic("invalid String result");
+            }
+            javan_runtime_lock_enter();
+            *result = javan_string_value_of_char(value);
+            javan_runtime_lock_leave();
+        }
+
         void* javan_string_concat(const char* recipe, int argc, const char** values) {
             if (recipe == NULL || argc < 0 || values == NULL) {
                 javan_panic("invalid string concat");
@@ -1117,6 +1171,15 @@ final class RuntimeSourceIoSections {
                 javan_root_frame_pop(javan_concat_roots);
             }
             return result;
+        }
+
+        void javan_string_concat_into(void** result, const char* recipe, int argc, const char** values) {
+            if (result == NULL) {
+                javan_panic("invalid String result");
+            }
+            javan_runtime_lock_enter();
+            *result = javan_string_concat(recipe, argc, values);
+            javan_runtime_lock_leave();
         }
 
         char* javan_string_export(const char* value) {
