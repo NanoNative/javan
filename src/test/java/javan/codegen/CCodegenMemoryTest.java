@@ -1390,7 +1390,7 @@ final class CCodegenMemoryTest {
         assertThat(generated).contains(
             "javan_panic((const char*) ((void*) 0));",
             "javan_root_frame_push(javan_expr_roots, 1);",
-            "javan_expr_tmp_0 = javan_string_concat(\"\\001-\\001\", 2, (const char*[]){(const char*) (void*) \"left\", (const char*) (void*) \"right\"});",
+            "javan_string_concat_into((void**) &javan_expr_tmp_0, \"\\001-\\001\", 2, (const char*[]){(const char*) (void*) \"left\", (const char*) (void*) \"right\"});",
             "javan_panic((const char*) javan_expr_tmp_0);",
             "javan_panic((const char*) (2 > 1));",
             "int javan_expr_tmp_0 = 0;",
@@ -1588,16 +1588,49 @@ final class CCodegenMemoryTest {
             "javan_root_frame_push(javan_expr_roots, 3);",
             "make_symbol((void**) &javan_expr_tmp_0);",
             "make_symbol((void**) &javan_expr_tmp_1);",
-            "javan_expr_tmp_2 = javan_string_concat(\"\\001:\\001\", 2, (const char*[]){(const char*) javan_expr_tmp_0, (const char*) javan_expr_tmp_1});",
+            "javan_string_concat_into((void**) &javan_expr_tmp_2, \"\\001:\\001\", 2, (const char*[]){(const char*) javan_expr_tmp_0, (const char*) javan_expr_tmp_1});",
             "javan_panic((const char*) javan_expr_tmp_2);",
             "javan_root_frame_pop(javan_expr_roots);"
         );
         assertThat(generated.indexOf("make_symbol((void**) &javan_expr_tmp_0);"))
             .isLessThan(generated.indexOf("make_symbol((void**) &javan_expr_tmp_1);"));
         assertThat(generated.indexOf("make_symbol((void**) &javan_expr_tmp_1);"))
-            .isLessThan(generated.indexOf("javan_expr_tmp_2 = javan_string_concat"));
-        assertThat(generated.indexOf("javan_expr_tmp_2 = javan_string_concat"))
+            .isLessThan(generated.indexOf("javan_string_concat_into((void**) &javan_expr_tmp_2"));
+        assertThat(generated.indexOf("javan_string_concat_into((void**) &javan_expr_tmp_2"))
             .isLessThan(generated.indexOf("javan_panic((const char*) javan_expr_tmp_2);"));
+    }
+
+    @Test
+    void publishesStringConcatAndPrimitivePartsThroughCallerOwnedRootedSlots() throws Exception {
+        final IrProgram program = new IrProgram(
+            List.of(nodeClass()),
+            List.of(mainWithInstruction(IrInstruction.panic(IrExpression.stringConcat(
+                "\u0001\u0001\u0001\u0001\u0001\u0001",
+                List.of(
+                    IrExpression.objectCall("javan_string_value_of_int", List.of(IrExpression.intLiteral(7))),
+                    IrExpression.objectCall("javan_string_value_of_long", List.of(IrExpression.longLiteral(8L))),
+                    IrExpression.objectCall("javan_string_value_of_float", List.of(IrExpression.floatLiteral(1.5f))),
+                    IrExpression.objectCall("javan_string_value_of_double", List.of(IrExpression.doubleLiteral(2.5))),
+                    IrExpression.objectCall("javan_string_value_of_bool", List.of(IrExpression.intLiteral(1))),
+                    IrExpression.objectCall("javan_string_value_of_char", List.of(IrExpression.intLiteral(65)))
+                )
+            )))),
+            "main_symbol"
+        );
+
+        final String generated = Files.readString(new CCodegen().generate(program, tempDir));
+
+        assertThat(generated).contains(
+            "javan_root_frame_push(javan_expr_roots, 7);",
+            "javan_string_value_of_int_into((void**) &javan_expr_tmp_0, 7);",
+            "javan_string_value_of_long_into((void**) &javan_expr_tmp_1, 8LL);",
+            "javan_string_value_of_float_into((void**) &javan_expr_tmp_2, 1.5);",
+            "javan_string_value_of_double_into((void**) &javan_expr_tmp_3, 2.5);",
+            "javan_string_value_of_bool_into((void**) &javan_expr_tmp_4, 1);",
+            "javan_string_value_of_char_into((void**) &javan_expr_tmp_5, 65);",
+            "javan_string_concat_into((void**) &javan_expr_tmp_6, \"\\001\\001\\001\\001\\001\\001\", 6, ",
+            "javan_panic((const char*) javan_expr_tmp_6);"
+        );
     }
 
     @Test
