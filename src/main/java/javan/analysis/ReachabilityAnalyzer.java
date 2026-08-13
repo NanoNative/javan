@@ -17,6 +17,7 @@ import javan.compat.JavanNativeSubstitutions;
 import javan.verify.Diagnostic;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -372,8 +373,7 @@ public final class ReachabilityAnalyzer {
 
     private static final class MethodRefFactsCache {
         private final Map<String, ClassFile> classes;
-        private final List<String> owners = new ArrayList<>();
-        private final List<List<MethodRefFacts>> ownerBuckets = new ArrayList<>();
+        private final Map<String, List<MethodRefFacts>> ownerBuckets = new HashMap<>();
 
         private MethodRefFactsCache(final Map<String, ClassFile> classes) {
             this.classes = classes;
@@ -405,18 +405,12 @@ public final class ReachabilityAnalyzer {
                 return existing;
             }
             final List<MethodRefFacts> bucket = new ArrayList<>();
-            owners.add(owner);
-            ownerBuckets.add(bucket);
+            ownerBuckets.put(owner, bucket);
             return bucket;
         }
 
         private List<MethodRefFacts> existingOwnerBucket(final String owner) {
-            for (int index = 0; index < owners.size(); index++) {
-                if (owners.get(index).equals(owner)) {
-                    return ownerBuckets.get(index);
-                }
-            }
-            return null;
+            return ownerBuckets.get(owner);
         }
     }
 
@@ -2432,8 +2426,7 @@ public final class ReachabilityAnalyzer {
 
     private static final class CallEdgeTracker {
         private final List<CallEdge> edges = new ArrayList<>();
-        private final List<String> owners = new ArrayList<>();
-        private final List<List<CallerBucket>> ownerBuckets = new ArrayList<>();
+        private final Map<String, List<CallerBucket>> ownerBuckets = new HashMap<>();
 
         private void add(final EntryPoint caller, final EntryPoint callee, final CallEdge.Kind kind) {
             final List<CallEdge> bucket = bucket(caller);
@@ -2464,14 +2457,12 @@ public final class ReachabilityAnalyzer {
         }
 
         private List<CallerBucket> ownerBucket(final String owner) {
-            for (int index = 0; index < owners.size(); index++) {
-                if (owners.get(index).equals(owner)) {
-                    return ownerBuckets.get(index);
-                }
+            final List<CallerBucket> existing = ownerBuckets.get(owner);
+            if (existing != null) {
+                return existing;
             }
             final List<CallerBucket> bucket = new ArrayList<>();
-            owners.add(owner);
-            ownerBuckets.add(bucket);
+            ownerBuckets.put(owner, bucket);
             return bucket;
         }
     }
@@ -2489,8 +2480,7 @@ public final class ReachabilityAnalyzer {
     }
 
     private static final class EntryPointPool {
-        private final List<String> owners = new ArrayList<>();
-        private final List<List<EntryPoint>> buckets = new ArrayList<>();
+        private final Map<String, List<EntryPoint>> buckets = new HashMap<>();
 
         private EntryPoint entry(final String className, final String methodName, final String descriptor) {
             final List<EntryPoint> ownerBucket = ownerBucket(className);
@@ -2505,21 +2495,18 @@ public final class ReachabilityAnalyzer {
         }
 
         private List<EntryPoint> ownerBucket(final String owner) {
-            for (int index = 0; index < owners.size(); index++) {
-                if (owners.get(index).equals(owner)) {
-                    return buckets.get(index);
-                }
+            final List<EntryPoint> existing = buckets.get(owner);
+            if (existing != null) {
+                return existing;
             }
             final List<EntryPoint> bucket = new ArrayList<>();
-            owners.add(owner);
-            buckets.add(bucket);
+            buckets.put(owner, bucket);
             return bucket;
         }
     }
 
     private static final class EntryPointMembership {
-        private final List<String> owners = new ArrayList<>();
-        private final List<List<EntryPoint>> buckets = new ArrayList<>();
+        private final Map<String, List<EntryPoint>> buckets = new HashMap<>();
 
         private boolean add(final EntryPoint entryPoint) {
             final List<EntryPoint> ownerBucket = ownerBucket(entryPoint.className());
@@ -2551,18 +2538,12 @@ public final class ReachabilityAnalyzer {
                 return existing;
             }
             final List<EntryPoint> bucket = new ArrayList<>();
-            owners.add(owner);
-            buckets.add(bucket);
+            buckets.put(owner, bucket);
             return bucket;
         }
 
         private List<EntryPoint> existingOwnerBucket(final String owner) {
-            for (int index = 0; index < owners.size(); index++) {
-                if (owners.get(index).equals(owner)) {
-                    return buckets.get(index);
-                }
-            }
-            return null;
+            return buckets.get(owner);
         }
     }
 
