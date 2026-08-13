@@ -12,8 +12,8 @@ mutable external services, or whatever tool version wandered into `PATH` this mo
 This policy covers:
 
 - required local macOS native smoke
-- CI-based Linux package verification, with macOS package rows retained but disabled after
-  disproportionate self-host timing
+- CI-based Linux and macOS ARM64 package verification; slower host/generation comparisons
+  remain available through the manual timing workflow
 - Docker-based Linux x64 and Linux aarch64 verification where available
 - future Windows verification
 - JDK matrix checks
@@ -73,6 +73,14 @@ dependency; direct C consumers remain responsible for their linker command.
 
 CI proves required host-native target rows. Docker proves extra Linux/container behavior.
 Neither replaces the local host gate.
+
+## Native Self-Host Timing
+
+Run the manual `Timings` workflow when changing reachability, verification, code generation,
+the native runtime, or packaging. It runs bootstrap generations 2 and 3 with the same package
+proof on Linux x64, Linux ARM64, and macOS ARM64. Each lane retains its phase report for seven
+days, and the final `Summary` job shows one Gen2/Gen3 comparison table. Timings are diagnostic;
+they do not replace correctness, sanitizer, or fixed-point gates.
 
 ## CI Host-Native Matrix
 

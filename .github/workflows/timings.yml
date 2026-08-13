@@ -6,8 +6,22 @@ on:
 permissions: {}
 
 jobs:
+  prepare:
+    name: Prepare
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: "🏷️ Version [date]"
+        id: version
+        shell: sh
+        run: |
+          version=$(date -u +'%Y.%-m.%-d')
+          printf 'version=%s\n' "$version" | tee -a "$GITHUB_OUTPUT"
+
   compare:
     name: ${{ matrix.label }}
+    needs: prepare
     strategy:
       fail-fast: false
       max-parallel: 6
@@ -29,8 +43,44 @@ jobs:
       label: ${{ matrix.label }}
       sanitizer_scope: platform-smoke
       proof: package-self-host
-      version: 1.0.0
+      version: ${{ needs.prepare.outputs.version }}
       bootstrap_generation: ${{ matrix.generation }}
       package_scope: bootstrap
+      upload_package: false
       timeout_minutes: 60
     secrets: inherit
+
+  summary:
+    name: Summary
+    needs: compare
+    if: needs.compare.result == 'success'
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+    steps:
+      - name: "📥 Download [timings]"
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: timings-*
+          path: timings
+
+      - name: "⏱️ Compare [gen2_gen3]"
+        shell: sh
+        run: |
+          set -eu
+          {
+            printf '# Native self-host comparison\n\n'
+            printf '| Target | Gen2 | Gen3 | Gen3 extra |\n'
+            printf '| --- | ---: | ---: | ---: |\n'
+            for target in linux-x64 linux-aarch64 macos-aarch64; do
+              # shellcheck disable=SC2016
+              gen2=$(jq -r '.totalSeconds' "timings/timings-$target-gen2/dist/release/javan-$target-timings.json")
+              # shellcheck disable=SC2016
+              gen3=$(jq -r '.totalSeconds' "timings/timings-$target-gen3/dist/release/javan-$target-timings.json")
+              extra=$((gen3 - gen2))
+              # shellcheck disable=SC2016
+              percent=$(awk -v extra="$extra" -v gen2="$gen2" 'BEGIN { printf "%.1f", extra * 100 / gen2 }')
+              # shellcheck disable=SC2016
+              printf '| `%s` | %ss | %ss | +%ss (+%s%%) |\n' "$target" "$gen2" "$gen3" "$extra" "$percent"
+            done
+          } | tee -a "$GITHUB_STEP_SUMMARY"

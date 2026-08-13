@@ -374,7 +374,9 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         assertThat(Files.readString(Path.of(".github/scripts/sanitizer-self-host-smoke.sh")))
             .contains("javan_timing_record sanitizer_compile");
         assertThat(workflow)
-            .contains("if: ${{ always() && inputs.proof == 'package-self-host' }}")
+            .contains("upload_package:")
+            .contains("if: inputs.proof == 'package-self-host' && inputs.upload_package")
+            .contains("hashFiles(format('target/javan-{0}-timings.tsv', inputs.target)) != ''")
             .contains("name: timings-${{ inputs.target }}-gen${{ inputs.bootstrap_generation }}")
             .contains("retention-days: 7")
             .contains("target/javan-${{ inputs.target }}-timings.tsv")
@@ -488,6 +490,10 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             .contains("workflow_dispatch:")
             .contains("fail-fast: false")
             .contains("max-parallel: 6")
+            .contains("name: Prepare")
+            .contains("name: \"🏷️ Version [date]\"")
+            .contains("version=$(date -u +'%Y.%-m.%-d')")
+            .contains("tee -a \"$GITHUB_OUTPUT\"")
             .contains("generation: 2, target: linux-x64, runner: ubuntu-24.04")
             .contains("generation: 3, target: linux-x64, runner: ubuntu-24.04")
             .contains("generation: 2, target: linux-aarch64, runner: ubuntu-24.04-arm")
@@ -496,7 +502,14 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             .contains("generation: 3, target: macos-aarch64, runner: macos-15")
             .contains("uses: ./.github/workflows/native-proof.yml")
             .contains("package_scope: bootstrap")
-            .contains("bootstrap_generation: ${{ matrix.generation }}");
+            .contains("upload_package: false")
+            .contains("bootstrap_generation: ${{ matrix.generation }}")
+            .contains("name: Summary")
+            .contains("name: \"📥 Download [timings]\"")
+            .contains("name: \"⏱️ Compare [gen2_gen3]\"")
+            .contains("pattern: timings-*")
+            .contains("# Native self-host comparison")
+            .contains("| Target | Gen2 | Gen3 | Gen3 extra |");
     }
 
     @Test

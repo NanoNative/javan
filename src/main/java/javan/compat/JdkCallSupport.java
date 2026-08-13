@@ -84,7 +84,8 @@ public final class JdkCallSupport {
         java/time/format/DateTimeParseException=java/time/DateTimeException
         java/util/regex/PatternSyntaxException=java/lang/IllegalArgumentException
         """;
-    private static final Map<String, String> PLATFORM_THROWABLE_PARENTS = platformThrowableParentMap();
+    private static final List<PlatformThrowableParent> PLATFORM_THROWABLE_PARENTS = platformThrowableParentsFromHierarchy();
+    private static final Map<String, String> PLATFORM_THROWABLE_PARENT_BY_CHILD = platformThrowableParentMap();
 
     private static final List<SupportedCall> SUPPORTED_CALLS = List.of(
         intrinsic("Objects.requireNonNull", "java/util/Objects", "requireNonNull", "(Ljava/lang/Object;)Ljava/lang/Object;", "(Ljava/lang/Object;Ljava/lang/String;)Ljava/lang/Object;"),
@@ -1798,6 +1799,10 @@ public final class JdkCallSupport {
      * @return immutable child-to-parent edges in stable generation order
      */
     public static List<PlatformThrowableParent> platformThrowableParents() {
+        return PLATFORM_THROWABLE_PARENTS;
+    }
+
+    private static List<PlatformThrowableParent> platformThrowableParentsFromHierarchy() {
         final List<PlatformThrowableParent> result = new ArrayList<>();
         int start = 0;
         while (start < PLATFORM_THROWABLE_HIERARCHY.length()) {
@@ -1888,20 +1893,13 @@ public final class JdkCallSupport {
         if ("java/lang/Throwable".equals(owner)) {
             return "";
         }
-        return PLATFORM_THROWABLE_PARENTS.getOrDefault(owner, "");
+        return PLATFORM_THROWABLE_PARENT_BY_CHILD.getOrDefault(owner, "");
     }
 
     private static Map<String, String> platformThrowableParentMap() {
         final Map<String, String> result = new HashMap<>();
-        int start = 0;
-        while (start < PLATFORM_THROWABLE_HIERARCHY.length()) {
-            final int separator = PLATFORM_THROWABLE_HIERARCHY.indexOf('=', start);
-            final int end = PLATFORM_THROWABLE_HIERARCHY.indexOf('\n', separator + 1);
-            result.put(
-                PLATFORM_THROWABLE_HIERARCHY.substring(start, separator),
-                PLATFORM_THROWABLE_HIERARCHY.substring(separator + 1, end)
-            );
-            start = end + 1;
+        for (final PlatformThrowableParent edge : PLATFORM_THROWABLE_PARENTS) {
+            result.put(edge.type(), edge.parent());
         }
         return Map.copyOf(result);
     }
@@ -2151,8 +2149,7 @@ public final class JdkCallSupport {
     }
 
     private static final class SupportedCallIndex {
-        private final List<String> owners = new java.util.ArrayList<>();
-        private final List<List<MethodBucket>> ownerBuckets = new java.util.ArrayList<>();
+        private final Map<String, List<MethodBucket>> ownerBuckets = new HashMap<>();
 
         private SupportedCallIndex(final List<SupportedCall> calls) {
             for (final SupportedCall call : calls) {
@@ -2191,18 +2188,12 @@ public final class JdkCallSupport {
                 return existing;
             }
             final List<MethodBucket> bucket = new java.util.ArrayList<>();
-            owners.add(owner);
-            ownerBuckets.add(bucket);
+            ownerBuckets.put(owner, bucket);
             return bucket;
         }
 
         private List<MethodBucket> existingOwnerBucket(final String owner) {
-            for (int index = 0; index < owners.size(); index++) {
-                if (owners.get(index).equals(owner)) {
-                    return ownerBuckets.get(index);
-                }
-            }
-            return null;
+            return ownerBuckets.get(owner);
         }
     }
 

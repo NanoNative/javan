@@ -41,6 +41,10 @@ on:
         required: false
         default: full
         type: string
+      upload_package:
+        required: false
+        default: true
+        type: boolean
 
 permissions: {}
 
@@ -176,7 +180,7 @@ jobs:
         run: sh .github/scripts/verify-ci-package-smoke.sh
 
       - name: "📤 Upload [${{ inputs.target }}]"
-        if: inputs.proof == 'package-self-host'
+        if: inputs.proof == 'package-self-host' && inputs.upload_package
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: javan-${{ inputs.target }}
@@ -187,7 +191,7 @@ jobs:
             dist/release/javan-*-${{ inputs.target }}.tar.gz.sha256
 
       - name: "⏱️ Timings [gen${{ inputs.bootstrap_generation }}_${{ inputs.target }}]"
-        if: ${{ always() && inputs.proof == 'package-self-host' }}
+        if: ${{ always() && inputs.proof == 'package-self-host' && hashFiles(format('target/javan-{0}-timings.tsv', inputs.target)) != '' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: timings-${{ inputs.target }}-gen${{ inputs.bootstrap_generation }}
