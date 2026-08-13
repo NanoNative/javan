@@ -232,8 +232,8 @@ Current pull-request and `main` entry workflows delegate to
 3. six CLI integration shards
 4. Linux x64 and arm64 public acceptance proof
 5. Linux x64 and arm64 sanitizer proof with required C/Rust/Go/Python bindings
-6. Linux x64/arm64 extracted self-host package proof with packaged `bin/javan`; disabled
-   macOS and Windows artifact rows remain visible in the same matrix
+6. Linux x64/arm64 and macOS ARM64 extracted self-host package proof with packaged `bin/javan`;
+   disabled macOS x64 and Windows artifact rows remain visible in the same matrix
 7. Java compiler/platform-contract smoke on Linux, macOS, and Windows for x64 and arm64
 8. focused Windows x64 runtime cross-compilation probes
 
