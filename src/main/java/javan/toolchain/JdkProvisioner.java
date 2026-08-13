@@ -12,14 +12,20 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Downloads, verifies, stages, and registers an Eclipse Temurin JDK.
+ * Downloads, verifies, stages, and registers a JDK from a verified provider.
  *
- * <p>The network boundary is deliberately narrow: the official Adoptium asset API supplies a
- * concrete artifact URL and SHA-256 value, {@code curl} is restricted to HTTPS, and the archive
- * is verified locally before extraction. A staging directory is never registered or selected.</p>
+ * <p>Provider metadata is the only vendor-specific seam. The network boundary is deliberately
+ * narrow: a provider catalog supplies a concrete artifact URL and SHA-256 value, {@code curl}
+ * is restricted to HTTPS, and the archive is verified locally before extraction. A staging
+ * directory is never registered or selected.</p>
  */
-public final class TemurinJdkInstaller {
-    private static final String ADOPTIUM_API = "https://api.adoptium.net/v3/assets/latest/";
+public final class JdkProvisioner {
+    private static final Provider TEMURIN = new Provider(
+        "temurin",
+        "Eclipse Adoptium",
+        "https://api.adoptium.net/v3/assets/latest/",
+        "eclipse"
+    );
     private final Path javanHome;
     private final ManagedJdkStore store;
     private final ProcessRunner processRunner;
@@ -27,15 +33,15 @@ public final class TemurinJdkInstaller {
     private final String architecture;
 
     /**
-     * Creates the default Temurin installer for the current host.
+     * Creates the JDK provisioner for the current host.
      *
      * @param javanHome user-global Javan home
      */
-    public TemurinJdkInstaller(final Path javanHome) {
+    public JdkProvisioner(final Path javanHome) {
         this(javanHome, new ManagedJdkStore(javanHome), new ProcessRunner(), System.getProperty("os.name", ""), System.getProperty("os.arch", ""));
     }
 
-    TemurinJdkInstaller(
+    JdkProvisioner(
         final Path javanHome,
         final ManagedJdkStore store,
         final ProcessRunner processRunner,
@@ -50,15 +56,15 @@ public final class TemurinJdkInstaller {
     }
 
     /**
-     * Installs Temurin for a plain feature version or {@code temurin@feature} selector.
+     * Installs a JDK for a plain feature version or {@code provider@feature} selector.
      *
      * @param selector requested Java feature version
      * @return verified installed JDK metadata
      * @throws IOException when the catalog, transfer, checksum, extraction, or publication fails
      * @throws InterruptedException when the process is interrupted
      */
-    public ToolchainMetadata install(final String selector) throws IOException, InterruptedException {
-        final Request request = Request.parse(selector, platform(), architecture());
+    public ToolchainMetadata provision(final String selector) throws IOException, InterruptedException {
+        final Request request = Request.parse(selector, TEMURIN, platform(), architecture());
         final ManagedJdkStore.Location location = store.prepare().orElseThrow(
             () -> new IOException("No writable JDK installation location is available")
         );
@@ -68,7 +74,7 @@ public final class TemurinJdkInstaller {
             download(asset.link(), archive);
         }
         verifyChecksum(archive, asset.checksum());
-        final Path finalHome = location.installRoot().resolve("temurin-" + request.feature() + "-" + request.platform() + "-" + request.architecture());
+        final Path finalHome = location.installRoot().resolve(request.provider().id() + "-" + request.feature() + "-" + request.platform() + "-" + request.architecture());
         final ToolchainMetadata installed = existingOrPublish(request, asset, archive, finalHome);
         register(installed);
         return installed;
@@ -125,19 +131,19 @@ public final class TemurinJdkInstaller {
     }
 
     private Asset asset(final Request request) throws IOException, InterruptedException {
-        final String catalog = ADOPTIUM_API + request.feature() + "/hotspot?architecture=" + request.architecture()
+        final String catalog = request.provider().catalog() + request.feature() + "/hotspot?architecture=" + request.architecture()
             + "&heap_size=normal&image_type=jdk&jvm_impl=hotspot&os=" + request.platform()
-            + "&page=0&page_size=1&project=jdk&release_type=ga&sort_method=DEFAULT&sort_order=DESC&vendor=eclipse";
+            + "&page=0&page_size=1&project=jdk&release_type=ga&sort_method=DEFAULT&sort_order=DESC&vendor=" + request.provider().catalogVendor();
         final ProcessRunner.Result result = processRunner.run(
             javanHome,
             List.of("curl", "-fsSL", "--proto", "=https", "--tlsv1.2", catalog)
         );
-        requireSuccess(result, "read Adoptium catalog");
+        requireSuccess(result, "read " + request.provider().name() + " catalog");
         final String link = jsonValue(result.stdout(), "link");
         final String checksum = jsonValue(result.stdout(), "checksum");
         final String name = jsonValue(result.stdout(), "name");
         if (!isHttps(link) || !isSha256(checksum) || Strings2.isBlank(name)) {
-            throw new IOException("Adoptium catalog returned incomplete or unsafe JDK metadata");
+            throw new IOException(request.provider().name() + " catalog returned incomplete or unsafe JDK metadata");
         }
         return new Asset(link, lowercaseAscii(checksum), name);
     }
@@ -235,13 +241,13 @@ public final class TemurinJdkInstaller {
             throw new IOException("Extracted JDK does not declare JAVA_VERSION: " + home);
         }
         return new ToolchainMetadata(
-            "temurin-" + request.feature() + "-" + request.platform() + "-" + request.architecture(),
+            request.provider().id() + "-" + request.feature() + "-" + request.platform() + "-" + request.architecture(),
             ToolchainKind.JDK,
             version,
             home,
             javaExecutable,
             javac,
-            Optional.of("Eclipse Adoptium"),
+            Optional.of(request.provider().name()),
             Optional.of("sha256:" + asset.checksum())
         );
     }
@@ -254,7 +260,7 @@ public final class TemurinJdkInstaller {
             + "home = \"" + metadata.home() + "\"\n"
             + "java = \"" + metadata.javaExecutable() + "\"\n"
             + "javac = \"" + metadata.javacExecutable() + "\"\n"
-            + "vendor = \"Eclipse Adoptium\"\n"
+            + "vendor = \"" + metadata.vendor().orElseThrow() + "\"\n"
             + "checksum = \"" + metadata.checksum().orElseThrow() + "\"\n";
         Files2.writeString(file, content);
     }
@@ -443,25 +449,30 @@ public final class TemurinJdkInstaller {
         return Objects.requireNonNull(path.getParent(), "path parent").resolve(name);
     }
 
-    private record Request(String feature, String platform, String architecture) {
-        private static Request parse(final String selector, final String platform, final String architecture) {
+    private record Request(Provider provider, String feature, String platform, String architecture) {
+        private static Request parse(
+            final String selector,
+            final Provider defaultProvider,
+            final String platform,
+            final String architecture
+        ) {
             if (Strings2.isBlank(selector)) {
                 throw new IllegalArgumentException("Missing JDK selector; use 25 or temurin@25");
             }
             final String value = Strings2.trimAscii(selector);
             final int separator = value.indexOf('@');
-            final String vendor = separator < 0 ? "temurin" : Strings2.slice(value, 0, separator);
+            final String vendor = separator < 0 ? defaultProvider.id() : Strings2.slice(value, 0, separator);
             final String version = separator < 0 ? value : Strings2.slice(value, separator + 1, value.length());
             if (separator >= 0 && (separator == 0 || separator != value.lastIndexOf('@') || separator == value.length() - 1)) {
                 throw new IllegalArgumentException("Invalid JDK selector: " + value);
             }
-            if (!"temurin".equals(lowercaseAscii(vendor))) {
-                throw new IllegalArgumentException("Automatic JDK download currently supports Temurin only; install " + vendor + " locally first");
-            }
+            final Provider provider = JdkProvisioner.provider(vendor).orElseThrow(() -> new IllegalArgumentException(
+                "No verified JDK download provider for " + vendor + "; install it locally first or select " + defaultProvider.id() + "@" + version
+            ));
             if (!feature(version).equals(version)) {
                 throw new IllegalArgumentException("Automatic JDK download requires a Java feature version: " + version);
             }
-            return new Request(version, platform, architecture);
+            return new Request(provider, version, platform, architecture);
         }
 
         private static String feature(final String value) {
@@ -479,5 +490,21 @@ public final class TemurinJdkInstaller {
     }
 
     private record Asset(String link, String checksum, String name) {
+    }
+
+    private record Provider(String id, String name, String catalog, String catalogVendor) {
+        private Provider {
+            id = Strings2.trimAscii(Objects.requireNonNull(id, "id"));
+            name = Strings2.trimAscii(Objects.requireNonNull(name, "name"));
+            catalog = Strings2.trimAscii(Objects.requireNonNull(catalog, "catalog"));
+            catalogVendor = Strings2.trimAscii(Objects.requireNonNull(catalogVendor, "catalogVendor"));
+        }
+    }
+
+    private static Optional<Provider> provider(final String id) {
+        if (TEMURIN.id().equals(lowercaseAscii(id))) {
+            return Optional.of(TEMURIN);
+        }
+        return Optional.empty();
     }
 }

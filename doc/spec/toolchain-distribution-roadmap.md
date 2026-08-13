@@ -103,8 +103,10 @@ Planned default home layout:
 Global settings should only contain user preferences and default policy. Project results
 and project locks stay inside the project.
 
-`javan install` and `javan jdk use 25` discover an already installed Java 25 JDK first. If
-none is usable, they obtain Eclipse Temurin 25 from the official Adoptium catalog, download
+`javan install` discovers a locally installed JDK matching its default selector first. The
+built-in selector is `25`; users may override it with `default_jdk` in
+`~/.javan/settings.toml`. If no matching local JDK is usable, Javan obtains Temurin for
+the selected feature release from the official Adoptium catalog, downloads
 over HTTPS, verify the catalog SHA-256 before extraction, stage and publish it atomically,
 then register it under the user-global Javan home. Javan never invokes elevation or changes
 an existing vendor JDK. Storage selection attempts the machine-wide location without
@@ -714,7 +716,7 @@ build system has enough jobs; no need to make one test carry furniture.
 
 - implement and prove machine-wide -> user -> temporary storage preparation without elevation
 - expose the read-only placement policy through `javan jdk doctor`
-- retain `javan install` / `javan jdk install` default Temurin 25 download from the official checksummed catalog
+- retain `javan install` / `javan jdk install` download for the configured selector when it has a verified catalog provider
 - retain checksum verification and atomic install directories
 - extend `javan jdk list` with system/managed provenance and selection reasons
 - implement `javan jdk remove`
@@ -782,8 +784,9 @@ build system has enough jobs; no need to make one test carry furniture.
 
 ## Decisions
 
-- Managed installs default to Eclipse Temurin latest LTS; Amazon Corretto follows after the
-  primary provider is proven end-to-end.
+- Managed installs select any local Java 25 JDK first, then use Temurin as the verified
+  download fallback. `default_jdk` may select another locally installed provider/version.
+  Additional download providers require their own verified catalog adapter.
 - A valid local JDK always beats a download. When Javan needs its default JDK, it installs
   verified Temurin 25 without changing existing JDK configuration.
 - The base `javan` executable and generated JDK facade are separate distribution forms but

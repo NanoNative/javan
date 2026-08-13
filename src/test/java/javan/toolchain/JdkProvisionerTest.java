@@ -14,7 +14,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-final class TemurinJdkInstallerTest {
+final class JdkProvisionerTest {
     private static final String CHECKSUM = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     @TempDir
     private Path tempDir;
@@ -22,9 +22,9 @@ final class TemurinJdkInstallerTest {
     @Test
     void downloadsVerifiesStagesPublishesAndRegistersTemurin() throws Exception {
         final Path home = tempDir.resolve("home");
-        final TemurinJdkInstaller installer = installer(home, new ArchiveRunner(CHECKSUM));
+        final JdkProvisioner provisioner = provisioner(home, new ArchiveRunner(CHECKSUM));
 
-        final ToolchainMetadata installed = installer.install("25");
+        final ToolchainMetadata installed = provisioner.provision("25");
 
         assertThat(installed.id()).isEqualTo("temurin-25-linux-x64");
         assertThat(installed.version()).isEqualTo("25.0.1+8");
@@ -39,9 +39,9 @@ final class TemurinJdkInstallerTest {
     @Test
     void neverRegistersAnArchiveWhenItsChecksumDoesNotMatch() {
         final Path home = tempDir.resolve("home");
-        final TemurinJdkInstaller installer = installer(home, new ArchiveRunner("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"));
+        final JdkProvisioner provisioner = provisioner(home, new ArchiveRunner("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"));
 
-        assertThatThrownBy(() -> installer.install("temurin@25"))
+        assertThatThrownBy(() -> provisioner.provision("temurin@25"))
             .isInstanceOf(IOException.class)
             .hasMessageContaining("SHA-256 mismatch");
         assertThat(home.resolve("toolchains")).doesNotExist();
@@ -51,16 +51,16 @@ final class TemurinJdkInstallerTest {
     void rejectsUnimplementedAutomaticVendorsBeforeAnyTransfer() {
         final ArchiveRunner runner = new ArchiveRunner(CHECKSUM);
 
-        assertThatThrownBy(() -> installer(tempDir.resolve("home"), runner).install("corretto@25"))
+        assertThatThrownBy(() -> provisioner(tempDir.resolve("home"), runner).provision("corretto@25"))
             .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("Temurin only");
+            .hasMessageContaining("No verified JDK download provider for corretto");
         assertThat(runner.invocations()).isZero();
     }
 
     @Test
     void expandsMacPackagesWithoutRunningAnElevatedInstaller() throws Exception {
         final Path home = tempDir.resolve("home");
-        final TemurinJdkInstaller installer = new TemurinJdkInstaller(
+        final JdkProvisioner provisioner = new JdkProvisioner(
             home,
             new ManagedJdkStore(home, tempDir.resolve("temporary"), "Mac OS X", Map.of()),
             new ArchiveRunner(CHECKSUM, true),
@@ -68,7 +68,7 @@ final class TemurinJdkInstallerTest {
             "aarch64"
         );
 
-        final ToolchainMetadata installed = installer.install("temurin@25");
+        final ToolchainMetadata installed = provisioner.provision("temurin@25");
 
         assertThat(installed.id()).isEqualTo("temurin-25-mac-aarch64");
         assertThat(installed.home()).isEqualTo(home.resolve("jdks/temurin-25-mac-aarch64/Contents/Home"));
@@ -77,8 +77,8 @@ final class TemurinJdkInstallerTest {
         assertThat(home.resolve("jdks/temurin-25-mac-aarch64.javan-staging")).doesNotExist();
     }
 
-    private TemurinJdkInstaller installer(final Path home, final ProcessRunner runner) {
-        return new TemurinJdkInstaller(
+    private JdkProvisioner provisioner(final Path home, final ProcessRunner runner) {
+        return new JdkProvisioner(
             home,
             new ManagedJdkStore(home, tempDir.resolve("temporary"), "Linux", Map.of()),
             runner,

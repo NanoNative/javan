@@ -25,7 +25,7 @@ public final class ToolchainManager {
     private final ToolchainRegistry registry;
     private final ToolchainListRenderer listRenderer;
     private final JdkInventory jdkInventory;
-    private final TemurinJdkInstaller temurinInstaller;
+    private final JdkProvisioner jdkProvisioner;
 
     /**
      * Creates a toolchain manager.
@@ -56,7 +56,7 @@ public final class ToolchainManager {
         this.registry = new ToolchainRegistry(this.javanHome);
         this.listRenderer = new ToolchainListRenderer();
         this.jdkInventory = new JdkInventory();
-        this.temurinInstaller = new TemurinJdkInstaller(this.javanHome);
+        this.jdkProvisioner = new JdkProvisioner(this.javanHome);
     }
 
     /**
@@ -165,7 +165,7 @@ public final class ToolchainManager {
     }
 
     /**
-     * Installs a stable JDK-shaped facade with JDK 25 as the default backend.
+     * Installs a stable JDK-shaped facade with the configured default backend.
      *
      * @param launcher packaged native Javan executable
      * @return installed facade paths
@@ -173,7 +173,7 @@ public final class ToolchainManager {
      * @throws InterruptedException when interrupted while publishing the facade
      */
     public JavanInstallation.Installation installJavan(final Path launcher) throws IOException, InterruptedException {
-        return new JavanInstallation(javanHome).install(launcher, selectedJdk("25"));
+        return new JavanInstallation(javanHome).install(launcher, selectedJdk(settings().defaultJdkSelector()));
     }
 
     /**
@@ -236,7 +236,7 @@ public final class ToolchainManager {
         List<JdkInventory.Entry> entries = jdkInventory.inspect(resolveLocalJdk(Optional.empty()));
         Optional<JdkInventory.Entry> selected = jdkInventory.select(entries, selector);
         if (selected.isEmpty()) {
-            temurinInstaller.install(selector);
+            jdkProvisioner.provision(selector);
             entries = jdkInventory.inspect(resolveLocalJdk(Optional.empty()));
             selected = jdkInventory.select(entries, selector);
         }
