@@ -212,7 +212,6 @@ final class BuildInvokerPlainTest {
             List.of(),
             Optional.empty(),
             BuildKind.APP,
-            "APP",
             List.of(),
             Profile.CORE,
             List.of(),

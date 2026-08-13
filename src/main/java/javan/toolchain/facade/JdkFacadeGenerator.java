@@ -22,23 +22,7 @@ import java.util.Objects;
  *
  */
 public final class JdkFacadeGenerator {
-    private final ProcessRunner processRunner;
-
-    /**
-     * Creates a facade generator using the default process runner.
-     */
-    public JdkFacadeGenerator() {
-        this(new ProcessRunner());
-    }
-
-    /**
-     * Creates a facade generator using the supplied process runner.
-     *
-     * @param processRunner command runner for link, rename, and permission operations
-     */
-    public JdkFacadeGenerator(final ProcessRunner processRunner) {
-        this.processRunner = Objects.requireNonNull(processRunner, "processRunner");
-    }
+    private final ProcessRunner processRunner = new ProcessRunner();
 
     /**
      * Creates an unopened JDK-shaped facade directory.

@@ -26,6 +26,12 @@ public enum BuildKind {
         if ("LIB".equals(normalized)) {
             return Optional.of(LIBRARY);
         }
+        if ("STATIC_LIB".equals(normalized)) {
+            return Optional.of(STATICLIB);
+        }
+        if ("SHARED_LIB".equals(normalized)) {
+            return Optional.of(SHAREDLIB);
+        }
         for (final BuildKind kind : values()) {
             if (kind.name().equals(normalized)) {
                 return Optional.of(kind);

@@ -386,6 +386,41 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     }
 
     @Test
+    void sanitizerScriptsShareOneStrictAsanConfiguration() throws Exception {
+        final Path helper = REPO_ROOT.resolve(".github/scripts/sanitizer-common.sh");
+        final Path runner = tempDir.resolve("sanitizer-common-test.sh");
+        Files.writeString(runner, """
+            set -eu
+            . "$1"
+            ASAN_OPTIONS=
+            configure_asan_options false smoke
+            printf '%s\n' "$ASAN_OPTIONS"
+            ASAN_OPTIONS=detect_leaks=0
+            configure_asan_options true required-smoke
+            """);
+
+        final ProcessResult run = process(
+            REPO_ROOT,
+            List.of("sh", runner.toString(), helper.toString()),
+            Duration.ofSeconds(20),
+            Map.of()
+        );
+
+        assertThat(run.exitCode()).isEqualTo(1);
+        assertThat(run.stdout()).contains("detect_leaks=1:halt_on_error=1");
+        assertThat(run.stderr()).contains("required-smoke cannot inherit ASAN_OPTIONS with detect_leaks=0");
+        for (final String script : List.of(
+            "sanitizer-smoke.sh",
+            "sanitizer-self-host-smoke.sh",
+            "sanitizer-library-smoke.sh"
+        )) {
+            assertThat(Files.readString(REPO_ROOT.resolve(".github/scripts").resolve(script)))
+                .contains("sanitizer-common.sh")
+                .doesNotContain("json_escape()", "configure_asan_options()");
+        }
+    }
+
+    @Test
     void timingReporterWritesMachineAndHumanReadablePhaseComparisons() throws Exception {
         final Path runner = tempDir.resolve("timing-report-test.sh");
         final Path log = tempDir.resolve("timings.tsv");

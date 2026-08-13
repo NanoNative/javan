@@ -32,7 +32,7 @@ final class JdkProvisionerTest {
         assertThat(installed.javaExecutable()).isExecutable();
         assertThat(installed.javacExecutable()).isExecutable();
         assertThat(installed.checksum()).contains("sha256:" + CHECKSUM);
-        assertThat(new ToolchainRegistry(home).installed()).containsExactly(installed);
+        assertThat(manager(home).installedToolchains()).containsExactly(installed);
         assertThat(home.resolve("jdks/temurin-25-linux-x64.javan-staging")).doesNotExist();
     }
 
@@ -85,6 +85,10 @@ final class JdkProvisionerTest {
             "Linux",
             "x86_64"
         );
+    }
+
+    private static ToolchainManager manager(final Path home) {
+        return new ToolchainManager(home, executable -> new ToolchainManager.ToolStatus(executable));
     }
 
     private static final class ArchiveRunner extends ProcessRunner {

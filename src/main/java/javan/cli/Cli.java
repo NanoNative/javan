@@ -5,8 +5,6 @@ import javan.toolchain.JavanExecutable;
 import javan.toolchain.JavanInstallation;
 import javan.toolchain.JdkResolver;
 import javan.toolchain.ToolchainManager;
-import javan.toolchain.facade.FacadeMode;
-import javan.toolchain.facade.JavacInvocationReport;
 import javan.toolchain.facade.JavacWrapper;
 import javan.util.Files2;
 import javan.util.ProcessRunner;
@@ -26,7 +24,6 @@ import java.util.Optional;
 public final class Cli {
     private final Javan javan = new Javan();
     private final JavacWrapper javacWrapper = new JavacWrapper();
-    private final JavacInvocationReport javacInvocationReport = new JavacInvocationReport();
     private final ToolchainManager toolchainManager = new ToolchainManager();
     private final ProcessRunner processRunner = new ProcessRunner();
 
@@ -41,7 +38,7 @@ public final class Cli {
      */
     public int run(final Path cwd, final PrintStream out, final PrintStream err, final String... args) {
         try {
-            return runUnchecked(cwd, out, err, args);
+            return runParsed(cwd, out, err, Options.parse(facadeArguments(args)));
         } catch (final DiagnosticException exception) {
             err.println(exception.diagnostic().format());
             return 2;
@@ -77,23 +74,6 @@ public final class Cli {
             return 2;
         }
         return runParsed(cwd, out, err, parsed.options());
-    }
-
-    /**
-     * Runs the command line interface without broad catch handlers.
-     *
-     * @param cwd current working directory
-     * @param out stdout
-     * @param err stderr
-     * @param args command line arguments
-     * @return process exit code
-     * @throws IOException when command IO fails
-     * @throws InterruptedException when interrupted
-     */
-    public int runUnchecked(final Path cwd, final PrintStream out, final PrintStream err, final String... args)
-        throws IOException, InterruptedException {
-        final Options options = Options.parse(facadeArguments(args));
-        return runParsed(cwd, out, err, options);
     }
 
     private int runParsed(final Path cwd, final PrintStream out, final PrintStream err, final Options options)
@@ -466,7 +446,7 @@ public final class Cli {
             );
             return 0;
         }
-        if (facade.mode() == FacadeMode.BUILD) {
+        if (facade.mode() == JavacWrapper.FacadeMode.BUILD) {
             return buildJavacOutput(cwd, facade, classes, out, err);
         }
         final Javan.CheckResult check = javan.check(cwd, analysisOptions(classes, facade), out);
@@ -482,10 +462,10 @@ public final class Cli {
             err,
             Optional.of(check.layout().outputDirectory())
         );
-        if (facade.mode() == FacadeMode.WARN || facade.mode() == FacadeMode.STRICT) {
+        if (facade.mode() == JavacWrapper.FacadeMode.WARN || facade.mode() == JavacWrapper.FacadeMode.STRICT) {
             writeFacadeDiagnostics(check.diagnostics(), facade, out, err);
         }
-        if (facade.mode() == FacadeMode.STRICT) {
+        if (facade.mode() == JavacWrapper.FacadeMode.STRICT) {
             return diagnosticExitCode(check.diagnostics());
         }
         return 0;
@@ -651,9 +631,9 @@ public final class Cli {
         final Path reportsHome = outputDirectory.isPresent()
             ? outputDirectory.orElseThrow()
             : reportOutputDirectory(cwd, facade, classOutput);
-        final Path report = javacInvocationReport.write(
+        final Path report = JavacWrapper.writeReport(
             reportsHome,
-            new JavacInvocationReport.Outcome(javacExitCode, analysis, reason, classOutput, diagnostics)
+            new JavacWrapper.InvocationOutcome(javacExitCode, analysis, reason, classOutput, diagnostics)
         );
         out.println("Javan report: " + report);
     }

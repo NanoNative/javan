@@ -30,17 +30,6 @@ public final class JdkFacadeStore {
     }
 
     /**
-     * Creates a facade store with supplied infrastructure.
-     *
-     * @param root facade store root
-     * @param generator JDK facade generator
-     * @param processRunner process runner for atomic link replacement
-     */
-    public JdkFacadeStore(final Path root, final JdkFacadeGenerator generator, final ProcessRunner processRunner) {
-        this(root, generator, processRunner, System.getProperty("os.name", ""));
-    }
-
-    /**
      * Creates a facade store with supplied infrastructure and operating-system identity.
      *
      * @param root facade store root

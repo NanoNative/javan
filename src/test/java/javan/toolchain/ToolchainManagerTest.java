@@ -322,18 +322,6 @@ final class ToolchainManagerTest {
     }
 
     @Test
-    void indentInstalledReportHandlesCrLfAndSkipsBlankLines() {
-        final String indented = ToolchainManager.indentInstalledReportForTesting("Toolchains\r\n\r\nentry\r\n");
-
-        assertThat(indented).isEqualTo("    entry");
-    }
-
-    @Test
-    void indentInstalledReportReturnsEmptyWhenNothingCanBeIndented() {
-        assertThat(ToolchainManager.indentInstalledReportForTesting("Toolchains")).isEmpty();
-    }
-
-    @Test
     void normalizedProbePathUsesEmptyStringWhenInputIsNull() {
         assertThat(ToolchainManager.normalizedProbePathForTesting(null)).isEmpty();
     }
@@ -466,36 +454,6 @@ final class ToolchainManagerTest {
         assertThat(manager.settingsPath()).isEqualTo(home.resolve("settings.toml").toAbsolutePath().normalize());
         assertThat(manager.toolchainsPath()).isEqualTo(home.resolve("toolchains").toAbsolutePath().normalize());
         assertThat(manager.settings()).isEqualTo(new JavanSettings(Optional.of("temurin-25"), Optional.of("25"), true));
-    }
-
-    @Test
-    void installedToolchainReportRendersSortedInstalledEntries() throws Exception {
-        final Path home = tempDir.resolve("home");
-        writeToolchain(home, "zulu-25", "25");
-        writeToolchain(home, "temurin-21", "21");
-        final ToolchainManager manager = new ToolchainManager(home, missingProbe());
-
-        assertThat(manager.installedToolchainReport()).isEqualTo("""
-            Toolchains
-              temurin-21 | jdk | 21 | %s
-              zulu-25 | jdk | 25 | %s""".formatted(
-            home.resolve("toolchains/temurin-21/bin/javac").toAbsolutePath().normalize(),
-            home.resolve("toolchains/zulu-25/bin/javac").toAbsolutePath().normalize()
-        ));
-    }
-
-    @Test
-    void processRunnerConstructorRejectsNullProcessRunner() {
-        assertThatThrownBy(() -> new ToolchainManager((javan.util.ProcessRunner) null))
-            .isInstanceOf(NullPointerException.class)
-            .hasMessage("processRunner");
-    }
-
-    @Test
-    void processRunnerConstructorAcceptsNonNullProcessRunner() {
-        final ToolchainManager manager = new ToolchainManager(new javan.util.ProcessRunner());
-
-        assertThat(manager.javanHome()).isNotNull();
     }
 
     private static ToolchainManager.CommandProbe missingProbe() {

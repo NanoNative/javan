@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -206,13 +207,23 @@ final class CiParallelWorkflowSurfaceTest {
             .contains("windows-*) set -- \"$@\" mingw-w64 ;;")
             .contains("install -y --fix-missing \"$@\"");
 
-        final var invocations = Files.readAllLines(Path.of(".github/scripts/sanitizer-suite.sh")).stream()
-            .filter(line -> line.contains("sh .github/scripts/sanitizer-"))
-            .toList();
-        assertThat(invocations).hasSize(78);
-        assertThat(invocations.stream().filter(line -> line.contains("src/test/resources/projects/")).distinct())
-            .hasSize(77);
-        assertThat(invocations.stream().filter(line -> line.contains("sanitizer-self-host-smoke.sh")))
+        final var lines = Files.readAllLines(Path.of(".github/scripts/sanitizer-suite.sh"));
+        final var projects = new ArrayList<Path>();
+        for (final String line : lines) {
+            final String command = line.strip();
+            if (command.matches("run_(smoke|heap_smoke|gc_smoke|stress_smoke|failure|allocation_failure|gc_failure) .*")) {
+                final String project = command.substring(command.lastIndexOf(' ') + 1);
+                if (project.matches("[a-z0-9][a-z0-9-]*")) {
+                    projects.add(Path.of("src/test/resources/projects/native-profile", project));
+                }
+            } else if (command.contains("sh .github/scripts/sanitizer-")
+                && command.contains("src/test/resources/projects/")
+                && !command.contains("$")) {
+                projects.add(Path.of(command.substring(command.lastIndexOf(' ') + 1)));
+            }
+        }
+        assertThat(projects).hasSize(77).doesNotHaveDuplicates().allMatch(Files::isDirectory);
+        assertThat(lines.stream().filter(line -> line.contains("sanitizer-self-host-smoke.sh")))
             .hasSize(1);
     }
 

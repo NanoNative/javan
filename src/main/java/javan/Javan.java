@@ -164,7 +164,7 @@ public final class Javan {
             return new CheckResult(layout, classes, mainClass, callGraph, nativeInterop, diagnostics, exports);
         }
         out.println("Checking static Java profile...");
-        printText(out, "  build kind:        ", Strings2.toAsciiLowerCase(options.buildKindName()));
+        printText(out, "  build kind:        ", Strings2.toAsciiLowerCase(options.buildKind().name()));
         printText(out, "  profile:           ", options.profile().cliName());
         if (options.libraryBuild()) {
             printInt(out, "  exported methods:  ", exports.size());
@@ -664,7 +664,7 @@ public final class Javan {
         final Path output,
         final NativeInteropConfig nativeInterop
     ) throws IOException, InterruptedException {
-        if ("STATIC".equals(Options.formatName(format))) {
+        if (format == LibraryFormat.STATIC) {
             return nativeLinker.linkStaticLibrary(
                 root,
                 libraryC,
@@ -674,7 +674,7 @@ public final class Javan {
                 nativeInterop.externalSymbols()
             );
         }
-        if ("SHARED".equals(Options.formatName(format))) {
+        if (format == LibraryFormat.SHARED) {
             return nativeLinker.linkSharedLibrary(
                 root,
                 libraryC,
@@ -688,10 +688,10 @@ public final class Javan {
     }
 
     private static Path libraryArtifactPath(final LibraryFormat format, final Path outputDirectory, final String outputName) {
-        if ("STATIC".equals(Options.formatName(format))) {
+        if (format == LibraryFormat.STATIC) {
             return outputDirectory.resolve("dist").resolve(concat("lib", outputName, ".a"));
         }
-        if ("SHARED".equals(Options.formatName(format))) {
+        if (format == LibraryFormat.SHARED) {
             return outputDirectory.resolve("dist").resolve(sharedLibraryName(outputName));
         }
         throw new IllegalStateException("Unsupported library format");

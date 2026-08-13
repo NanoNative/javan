@@ -17,6 +17,38 @@ runs_scope() {
   [ "$SANITIZER_SCOPE" = "full" ] || [ "$SANITIZER_SCOPE" = "$1" ]
 }
 
+run_smoke() {
+  sh .github/scripts/sanitizer-smoke.sh "src/test/resources/projects/native-profile/$1"
+}
+
+run_heap_smoke() (
+  JAVAN_HEAP_LIMIT_BYTES=$1 run_smoke "$2"
+)
+
+run_gc_smoke() (
+  JAVAN_HEAP_LIMIT_BYTES=$1 JAVAN_GC_STRESS=1 JAVAN_GC_SAFEPOINT_INTERVAL=1 run_smoke "$2"
+)
+
+run_stress_smoke() (
+  JAVAN_HEAP_LIMIT_BYTES=$1 JAVAN_GC_STRESS=1 run_smoke "$2"
+)
+
+run_failure() (
+  JAVAN_SANITIZER_COMPARE_JVM=false \
+  JAVAN_SANITIZER_EXPECTED_EXIT=$1 \
+  JAVAN_SANITIZER_EXPECTED_STDERR_CONTAINS=$2 \
+    run_smoke "$3"
+)
+
+run_allocation_failure() (
+  JAVAN_MAX_ALLOCATION_BYTES=$1 run_failure 1 "out of memory" "$2"
+)
+
+run_gc_failure() (
+  JAVAN_HEAP_LIMIT_BYTES=$1 JAVAN_GC_STRESS=1 JAVAN_GC_SAFEPOINT_INTERVAL=1 \
+    run_failure 1 "$2" "$3"
+)
+
 JAVAN_GC_STRESS=${JAVAN_GC_STRESS:-64}
 JAVAN_GC_SAFEPOINT_INTERVAL=${JAVAN_GC_SAFEPOINT_INTERVAL:-1}
 export JAVAN_GC_STRESS
@@ -232,348 +264,99 @@ assert_json_number_at_least "$SELF_HOST_REPORT" actualGcCollections 1
 fi
 
 if runs_scope gc_roots; then
-sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/static-root-inventory
-JAVAN_HEAP_LIMIT_BYTES=4096 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/string-static-root
-sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/root-frame-stack
-sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/gc-generated-object-graph
-JAVAN_HEAP_LIMIT_BYTES=3072 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/object-registry-gc
-sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/protected-object-return
-sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/operand-call-temporary-roots
-sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/large-arrays
-
-JAVAN_HEAP_LIMIT_BYTES=8192 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/primitive-array-gc
+  run_smoke static-root-inventory
+  run_heap_smoke 4096 string-static-root
+  run_smoke root-frame-stack
+  run_smoke gc-generated-object-graph
+  run_heap_smoke 3072 object-registry-gc
+  run_smoke protected-object-return
+  run_smoke operand-call-temporary-roots
+  run_smoke large-arrays
+  run_heap_smoke 8192 primitive-array-gc
 fi
 
 if runs_scope gc_values; then
-JAVAN_HEAP_LIMIT_BYTES=4096 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/boxed-integer-gc
-
-JAVAN_HEAP_LIMIT_BYTES=4096 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/boxed-boolean-gc
-
-JAVAN_HEAP_LIMIT_BYTES=8192 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-filetime-gc
-
-JAVAN_HEAP_LIMIT_BYTES=8192 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-duration-millis-gc
-
-JAVAN_HEAP_LIMIT_BYTES=8192 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-duration-seconds-gc
-
-JAVAN_HEAP_LIMIT_BYTES=8192 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/boxed-long-gc
-
-JAVAN_HEAP_LIMIT_BYTES=4096 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/boxed-float-gc
-
-JAVAN_HEAP_LIMIT_BYTES=8192 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/boxed-double-gc
-
-JAVAN_HEAP_LIMIT_BYTES=6000 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/local-root-liveness-gc
-
-JAVAN_HEAP_LIMIT_BYTES=6000 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/cfg-local-root-liveness-gc
+  run_gc_smoke 4096 boxed-integer-gc
+  run_gc_smoke 4096 boxed-boolean-gc
+  run_gc_smoke 8192 runtime-filetime-gc
+  run_gc_smoke 8192 runtime-duration-millis-gc
+  run_gc_smoke 8192 runtime-duration-seconds-gc
+  run_gc_smoke 8192 boxed-long-gc
+  run_gc_smoke 4096 boxed-float-gc
+  run_gc_smoke 8192 boxed-double-gc
+  run_gc_smoke 6000 local-root-liveness-gc
+  run_gc_smoke 6000 cfg-local-root-liveness-gc
 fi
 
 if runs_scope runtime_containers; then
-JAVAN_HEAP_LIMIT_BYTES=4096 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/string-growth-limit
-
-JAVAN_HEAP_LIMIT_BYTES=4096 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-container-live-roots
-
-JAVAN_HEAP_LIMIT_BYTES=8192 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-list-reclaim
-
-JAVAN_HEAP_LIMIT_BYTES=12288 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-map-reclaim
-
-JAVAN_HEAP_LIMIT_BYTES=8192 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-map-realloc-gc
-
-JAVAN_HEAP_LIMIT_BYTES=4096 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-optional-reclaim
-
-JAVAN_HEAP_LIMIT_BYTES=8192 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-iterator-reclaim
-
-JAVAN_HEAP_LIMIT_BYTES=8192 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-stringbuilder-reclaim
-
-JAVAN_HEAP_LIMIT_BYTES=8192 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-list-of-array-gc
-
-JAVAN_HEAP_LIMIT_BYTES=4096 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-list-of-varargs-gc
-
-JAVAN_HEAP_LIMIT_BYTES=8192 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-list-copy-gc
-
-JAVAN_HEAP_LIMIT_BYTES=12288 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-map-copy-gc
-
-JAVAN_HEAP_LIMIT_BYTES=12288 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-map-values-gc
-
-JAVAN_HEAP_LIMIT_BYTES=512 \
-JAVAN_GC_STRESS=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-realloc-growth-fit
+  run_heap_smoke 4096 string-growth-limit
+  run_heap_smoke 4096 runtime-container-live-roots
+  run_heap_smoke 8192 runtime-list-reclaim
+  run_heap_smoke 12288 runtime-map-reclaim
+  run_gc_smoke 8192 runtime-map-realloc-gc
+  run_heap_smoke 4096 runtime-optional-reclaim
+  run_heap_smoke 8192 runtime-iterator-reclaim
+  run_heap_smoke 8192 runtime-stringbuilder-reclaim
+  run_heap_smoke 8192 runtime-list-of-array-gc
+  run_gc_smoke 4096 runtime-list-of-varargs-gc
+  run_heap_smoke 8192 runtime-list-copy-gc
+  run_heap_smoke 12288 runtime-map-copy-gc
+  run_heap_smoke 12288 runtime-map-values-gc
+  run_stress_smoke 512 runtime-realloc-growth-fit
 fi
 
 if runs_scope temporary_roots; then
-JAVAN_HEAP_LIMIT_BYTES=4096 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/operand-call-receiver-temporary-root
-
-JAVAN_HEAP_LIMIT_BYTES=4096 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/operand-array-load-temporary-root
-
-JAVAN_HEAP_LIMIT_BYTES=4096 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/operand-object-compare-temporary-root
-
-JAVAN_HEAP_LIMIT_BYTES=4096 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/operand-field-load-temporary-root
-
-JAVAN_HEAP_LIMIT_BYTES=4096 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/operand-chained-field-load-temporary-root
-
-JAVAN_HEAP_LIMIT_BYTES=4096 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/operand-chained-call-receiver-temporary-root
-
-JAVAN_HEAP_LIMIT_BYTES=4096 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-string-temporary-root
-
-JAVAN_HEAP_LIMIT_BYTES=4096 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-string-substring-source-root
-
-JAVAN_HEAP_LIMIT_BYTES=4096 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-string-replace-source-root
-
-JAVAN_HEAP_LIMIT_BYTES=4096 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-string-from-chars-source-root
-
-JAVAN_HEAP_LIMIT_BYTES=4096 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-string-char-array-copy-gc
-
-JAVAN_HEAP_LIMIT_BYTES=4096 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-stringbuilder-append-source-root
-
-JAVAN_HEAP_LIMIT_BYTES=16384 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-nested-container-reclaim
-
-JAVAN_HEAP_LIMIT_BYTES=4096 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-directory-stream-source-root
+  run_gc_smoke 4096 operand-call-receiver-temporary-root
+  run_gc_smoke 4096 operand-array-load-temporary-root
+  run_gc_smoke 4096 operand-object-compare-temporary-root
+  run_gc_smoke 4096 operand-field-load-temporary-root
+  run_gc_smoke 4096 operand-chained-field-load-temporary-root
+  run_gc_smoke 4096 operand-chained-call-receiver-temporary-root
+  run_gc_smoke 4096 runtime-string-temporary-root
+  run_gc_smoke 4096 runtime-string-substring-source-root
+  run_gc_smoke 4096 runtime-string-replace-source-root
+  run_gc_smoke 4096 runtime-string-from-chars-source-root
+  run_gc_smoke 4096 runtime-string-char-array-copy-gc
+  run_gc_smoke 4096 runtime-stringbuilder-append-source-root
+  run_gc_smoke 16384 runtime-nested-container-reclaim
+  run_gc_smoke 4096 runtime-directory-stream-source-root
 fi
 
 if runs_scope failure_limits; then
-JAVAN_MAX_ALLOCATION_BYTES=24 \
-JAVAN_SANITIZER_COMPARE_JVM=false \
-JAVAN_SANITIZER_EXPECTED_EXIT=1 \
-JAVAN_SANITIZER_EXPECTED_STDERR_CONTAINS="out of memory" \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-directory-stream-result-allocation-limit-panic
+  run_allocation_failure 24 runtime-directory-stream-result-allocation-limit-panic
 fi
 
 if runs_scope failure_exceptions; then
-JAVAN_HEAP_LIMIT_BYTES=4096 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/exception-catch-heap-pressure
-
-JAVAN_HEAP_LIMIT_BYTES=4096 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/typed-catch-specific-miss
-
-JAVAN_HEAP_LIMIT_BYTES=4096 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/typed-catch-runtime-superclass
-
-JAVAN_HEAP_LIMIT_BYTES=4096 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/typed-catch-io-superclass
-
-JAVAN_HEAP_LIMIT_BYTES=4096 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/typed-catch-util-runtime-superclass
-
-JAVAN_HEAP_LIMIT_BYTES=4096 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/typed-catch-error-not-exception
-
-JAVAN_HEAP_LIMIT_BYTES=4096 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/exception-default-message-null
-
-JAVAN_HEAP_LIMIT_BYTES=4096 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/allocation-path-gc
-
-JAVAN_SANITIZER_COMPARE_JVM=false \
-JAVAN_SANITIZER_EXPECTED_EXIT=1 \
-JAVAN_SANITIZER_EXPECTED_STDERR_CONTAINS=boom \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/exception-panic
-
-JAVAN_SANITIZER_COMPARE_JVM=false \
-JAVAN_SANITIZER_EXPECTED_EXIT=1 \
-JAVAN_SANITIZER_EXPECTED_STDERR_CONTAINS="javan panic" \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/exception-default-panic
-
-JAVAN_HEAP_LIMIT_BYTES=4096 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-JAVAN_SANITIZER_COMPARE_JVM=false \
-JAVAN_SANITIZER_EXPECTED_EXIT=1 \
-JAVAN_SANITIZER_EXPECTED_STDERR_CONTAINS="left-right" \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/panic-string-concat-temporary-root
-
-JAVAN_SANITIZER_COMPARE_JVM=false \
-JAVAN_SANITIZER_EXPECTED_EXIT=1 \
-JAVAN_SANITIZER_EXPECTED_STDERR_CONTAINS="negative array length" \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/negative-array-length
+  run_gc_smoke 4096 exception-catch-heap-pressure
+  run_gc_smoke 4096 typed-catch-specific-miss
+  run_gc_smoke 4096 typed-catch-runtime-superclass
+  run_gc_smoke 4096 typed-catch-io-superclass
+  run_gc_smoke 4096 typed-catch-util-runtime-superclass
+  run_gc_smoke 4096 typed-catch-error-not-exception
+  run_gc_smoke 4096 exception-default-message-null
+  run_heap_smoke 4096 allocation-path-gc
+  run_failure 1 boom exception-panic
+  run_failure 1 "javan panic" exception-default-panic
+  run_gc_failure 4096 left-right panic-string-concat-temporary-root
+  run_failure 1 "negative array length" negative-array-length
 fi
 
 if runs_scope failure_limits; then
-JAVAN_MAX_ALLOCATION_BYTES=64 \
-JAVAN_SANITIZER_COMPARE_JVM=false \
-JAVAN_SANITIZER_EXPECTED_EXIT=1 \
-JAVAN_SANITIZER_EXPECTED_STDERR_CONTAINS="out of memory" \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/allocation-limit-panic
-
-JAVAN_MAX_ALLOCATION_BYTES=64 \
-JAVAN_SANITIZER_COMPARE_JVM=false \
-JAVAN_SANITIZER_EXPECTED_EXIT=1 \
-JAVAN_SANITIZER_EXPECTED_STDERR_CONTAINS="out of memory" \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/string-allocation-limit-panic
-
-JAVAN_MAX_ALLOCATION_BYTES=64 \
-JAVAN_SANITIZER_COMPARE_JVM=false \
-JAVAN_SANITIZER_EXPECTED_EXIT=1 \
-JAVAN_SANITIZER_EXPECTED_STDERR_CONTAINS="out of memory" \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/exception-catch-allocation-limit-panic
-
-JAVAN_MAX_ALLOCATION_BYTES=48 \
-JAVAN_SANITIZER_COMPARE_JVM=false \
-JAVAN_SANITIZER_EXPECTED_EXIT=1 \
-JAVAN_SANITIZER_EXPECTED_STDERR_CONTAINS="out of memory" \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-list-allocation-limit-panic
-
-JAVAN_MAX_ALLOCATION_BYTES=96 \
-JAVAN_SANITIZER_COMPARE_JVM=false \
-JAVAN_SANITIZER_EXPECTED_EXIT=1 \
-JAVAN_SANITIZER_EXPECTED_STDERR_CONTAINS="out of memory" \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-map-allocation-limit-panic
-
-JAVAN_MAX_ALLOCATION_BYTES=128 \
-JAVAN_SANITIZER_COMPARE_JVM=false \
-JAVAN_SANITIZER_EXPECTED_EXIT=1 \
-JAVAN_SANITIZER_EXPECTED_STDERR_CONTAINS="out of memory" \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-path-allocation-limit-panic
-
-JAVAN_MAX_ALLOCATION_BYTES=1024 \
-JAVAN_SANITIZER_COMPARE_JVM=false \
-JAVAN_SANITIZER_EXPECTED_EXIT=1 \
-JAVAN_SANITIZER_EXPECTED_STDERR_CONTAINS="out of memory" \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-read-string-allocation-limit-panic
-
-JAVAN_MAX_ALLOCATION_BYTES=512 \
-JAVAN_SANITIZER_COMPARE_JVM=false \
-JAVAN_SANITIZER_EXPECTED_EXIT=1 \
-JAVAN_SANITIZER_EXPECTED_STDERR_CONTAINS="out of memory" \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-read-all-bytes-allocation-limit-panic
-
-JAVAN_MAX_ALLOCATION_BYTES=256 \
-JAVAN_SANITIZER_COMPARE_JVM=false \
-JAVAN_SANITIZER_EXPECTED_EXIT=1 \
-JAVAN_SANITIZER_EXPECTED_STDERR_CONTAINS="out of memory" \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-directory-stream-child-allocation-limit-panic
-
-JAVAN_MAX_ALLOCATION_BYTES=512 \
-JAVAN_SANITIZER_COMPARE_JVM=false \
-JAVAN_SANITIZER_EXPECTED_EXIT=1 \
-JAVAN_SANITIZER_EXPECTED_STDERR_CONTAINS="out of memory" \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-process-run-output-allocation-limit-panic
-
-JAVAN_SANITIZER_COMPARE_JVM=false \
-JAVAN_SANITIZER_EXPECTED_EXIT=1 \
-JAVAN_SANITIZER_EXPECTED_STDERR_CONTAINS="string builder length overflow" \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-stringbuilder-setlength-overflow-panic
-
-JAVAN_MAX_ALLOCATION_BYTES=128 \
-JAVAN_SANITIZER_COMPARE_JVM=false \
-JAVAN_SANITIZER_EXPECTED_EXIT=1 \
-JAVAN_SANITIZER_EXPECTED_STDERR_CONTAINS="out of memory" \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/array-copy-allocation-limit-panic
-
-JAVAN_HEAP_LIMIT_BYTES=2048 \
-JAVAN_GC_STRESS=1 \
-JAVAN_GC_SAFEPOINT_INTERVAL=1 \
-JAVAN_SANITIZER_COMPARE_JVM=false \
-JAVAN_SANITIZER_EXPECTED_EXIT=1 \
-JAVAN_SANITIZER_EXPECTED_STDERR_CONTAINS="out of memory" \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/heap-limit-live-root-panic
+  run_allocation_failure 64 allocation-limit-panic
+  run_allocation_failure 64 string-allocation-limit-panic
+  run_allocation_failure 64 exception-catch-allocation-limit-panic
+  run_allocation_failure 48 runtime-list-allocation-limit-panic
+  run_allocation_failure 96 runtime-map-allocation-limit-panic
+  run_allocation_failure 128 runtime-path-allocation-limit-panic
+  run_allocation_failure 1024 runtime-read-string-allocation-limit-panic
+  run_allocation_failure 512 runtime-read-all-bytes-allocation-limit-panic
+  run_allocation_failure 256 runtime-directory-stream-child-allocation-limit-panic
+  run_allocation_failure 512 runtime-process-run-output-allocation-limit-panic
+  run_failure 1 "string builder length overflow" runtime-stringbuilder-setlength-overflow-panic
+  run_allocation_failure 128 array-copy-allocation-limit-panic
+  run_gc_failure 2048 "out of memory" heap-limit-live-root-panic
 fi
 
 if runs_scope failure_exceptions; then
-JAVAN_SANITIZER_COMPARE_JVM=false \
-JAVAN_SANITIZER_EXPECTED_EXIT=7 \
-  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/system-exit
+  run_failure 7 "" system-exit
 fi
