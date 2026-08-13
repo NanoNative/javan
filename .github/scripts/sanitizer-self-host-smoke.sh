@@ -2,6 +2,7 @@
 set -eu
 
 ROOT=$(CDPATH= cd "$(dirname "$0")/../.." && pwd)
+. "$ROOT/.github/scripts/timing-report.sh"
 TMP=${TMPDIR:-/tmp}/javan-self-host-sanitizer-$$
 CC=${CC:-cc}
 SANITIZER_FLAGS=${SANITIZER_FLAGS:-"-fsanitize=address,undefined -fno-omit-frame-pointer"}
@@ -504,6 +505,7 @@ EOF
 
 set +e
 # shellcheck disable=SC2086
+sanitizer_compile_started=$(javan_timing_now)
 "$CC" $SANITIZER_FLAGS \
   -I "$GENERATED" \
   "$TMP/self-host-counter-wrapper.c" \
@@ -511,6 +513,11 @@ set +e
   -o "$TMP/javan-self-host-sanitizer-probe" \
   >"$TMP/cc.out" 2>"$TMP/cc.err"
 compile_code=$?
+compile_status=pass
+if [ "$compile_code" -ne 0 ]; then
+  compile_status=fail
+fi
+javan_timing_record sanitizer_compile "$sanitizer_compile_started" "$compile_status" false
 set -e
 
 if [ "$compile_code" -ne 0 ]; then

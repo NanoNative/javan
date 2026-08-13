@@ -26,6 +26,7 @@ import javan.ir.IrType;
 import javan.util.Strings2;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -180,8 +181,7 @@ public final class StaticVerifier {
     }
 
     private static final class ReachableEntries {
-        private final List<String> owners = new ArrayList<>();
-        private final List<List<EntryPoint>> ownerBuckets = new ArrayList<>();
+        private final Map<String, List<EntryPoint>> ownerBuckets = new HashMap<>();
 
         private ReachableEntries(final List<EntryPoint> entries) {
             for (final EntryPoint entry : entries) {
@@ -212,25 +212,18 @@ public final class StaticVerifier {
                 return existing;
             }
             final List<EntryPoint> bucket = new ArrayList<>();
-            owners.add(owner);
-            ownerBuckets.add(bucket);
+            ownerBuckets.put(owner, bucket);
             return bucket;
         }
 
         private List<EntryPoint> existingOwnerBucket(final String owner) {
-            for (int index = 0; index < owners.size(); index++) {
-                if (owners.get(index).equals(owner)) {
-                    return ownerBuckets.get(index);
-                }
-            }
-            return null;
+            return ownerBuckets.get(owner);
         }
     }
 
     private static final class MethodRefFactsCache {
         private final Map<String, ClassFile> classes;
-        private final List<String> owners = new ArrayList<>();
-        private final List<List<MethodRefFacts>> ownerBuckets = new ArrayList<>();
+        private final Map<String, List<MethodRefFacts>> ownerBuckets = new HashMap<>();
 
         private MethodRefFactsCache(final Map<String, ClassFile> classes) {
             this.classes = classes;
@@ -261,18 +254,12 @@ public final class StaticVerifier {
                 return existing;
             }
             final List<MethodRefFacts> bucket = new ArrayList<>();
-            owners.add(owner);
-            ownerBuckets.add(bucket);
+            ownerBuckets.put(owner, bucket);
             return bucket;
         }
 
         private List<MethodRefFacts> existingOwnerBucket(final String owner) {
-            for (int index = 0; index < owners.size(); index++) {
-                if (owners.get(index).equals(owner)) {
-                    return ownerBuckets.get(index);
-                }
-            }
-            return null;
+            return ownerBuckets.get(owner);
         }
     }
 

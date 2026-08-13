@@ -3,6 +3,7 @@ set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT"
+. .github/scripts/timing-report.sh
 
 OUTPUT=${1:-dist/javan}
 VERSION=$(./mvnw -q help:evaluate -Dexpression=project.version -DforceStdout | tail -n 1)
@@ -34,17 +35,17 @@ if [ "$REUSE_TARGET" != "true" ] && [ ! -f "$JAR" ]; then
   printf '%s\n' "No packaged javan jar found in target/." >&2
   exit 1
 fi
-java -cp target/classes javan.Main build target/classes \
+javan_timing_run bootstrap_jvm java -cp target/classes javan.Main build target/classes \
   --main javan.Main \
   --output javan-bootstrap-from-jvm
 
 mkdir -p "$(dirname -- "$OUTPUT")"
-target/.javan/bin/javan-bootstrap-from-jvm build target/classes \
+javan_timing_run bootstrap_gen2 target/.javan/bin/javan-bootstrap-from-jvm build target/classes \
   --main javan.Main \
   --output javan-bootstrap-rebuilt
 BUILT=target/.javan/bin/javan-bootstrap-rebuilt
 if [ "$GENERATION" = "3" ]; then
-  target/.javan/bin/javan-bootstrap-rebuilt build target/classes \
+  javan_timing_run bootstrap_gen3 target/.javan/bin/javan-bootstrap-rebuilt build target/classes \
     --main javan.Main \
     --output javan-bootstrap-verified
   BUILT=target/.javan/bin/javan-bootstrap-verified

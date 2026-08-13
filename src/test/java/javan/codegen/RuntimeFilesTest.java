@@ -10225,6 +10225,34 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void stringLengthFastPathPreservesModifiedUtf8AndUtf16Lengths() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                const char modified_nul[] = {(char) 0xc0, (char) 0x80, 0};
+                const char ascii_then_bmp[] = {'A', (char) 0xe2, (char) 0x82, (char) 0xac, 0};
+                const char ascii_then_supplementary[] = {
+                    'A', (char) 0xf0, (char) 0x9f, (char) 0x9a, (char) 0x80, 0
+                };
+                printf("%d:%d:%d:%d:%d\\n",
+                    javan_string_length(""),
+                    javan_string_length("plain"),
+                    javan_string_length(modified_nul),
+                    javan_string_length(ascii_then_bmp),
+                    javan_string_length(ascii_then_supplementary));
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("0:5:1:2:3\n");
+    }
+
+    @Test
     void stringIsBlankRejectsNullReceiver() throws Exception {
         final String stdout = runRuntimePanicProbe(
             "javan_register_static_roots(0, 0);",

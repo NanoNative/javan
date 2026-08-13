@@ -3,8 +3,11 @@ set -eu
 
 ROOT=$(CDPATH= cd "$(dirname "$0")/../.." && pwd)
 cd "$ROOT"
+. .github/scripts/timing-report.sh
 PACKAGE_SANITIZER_SCOPE=${JAVAN_PACKAGE_SANITIZER_SCOPE:-full}
 PACKAGE_PROOF_SCOPE=${JAVAN_PACKAGE_PROOF_SCOPE:-full}
+PACKAGE_TARGET=${JAVAN_PACKAGE_TARGET:-host}
+BOOTSTRAP_GENERATION=${JAVAN_BOOTSTRAP_GENERATION:-3}
 case "$PACKAGE_PROOF_SCOPE" in
   bootstrap|full) ;;
   *)
@@ -48,13 +51,44 @@ assert_json_number_at_least() {
   fi
 }
 
-JAVAN_BUILD_REUSE_TARGET=true scripts/build.sh
-ARCHIVE=$(.github/scripts/package-release.sh "${JAVAN_VERSION:-}")
-.github/scripts/verify-package.sh "$ARCHIVE"
-
 TMP=${TMPDIR:-/tmp}/javan-ci-package-$$
 mkdir -p "$TMP"
-trap 'rm -rf "$TMP"' EXIT HUP INT TERM
+mkdir -p target
+JAVAN_TIMING_LOG=target/javan-$PACKAGE_TARGET-timings.tsv
+export JAVAN_TIMING_LOG
+: > "$JAVAN_TIMING_LOG"
+TIMING_JSON=dist/release/javan-$PACKAGE_TARGET-timings.json
+TIMING_MARKDOWN=dist/release/javan-$PACKAGE_TARGET-timings.md
+
+finish() {
+  code=$?
+  trap - EXIT HUP INT TERM
+  status=pass
+  if [ "$code" -ne 0 ]; then
+    status=fail
+  fi
+  javan_timing_write_reports \
+    "$PACKAGE_TARGET" "$BOOTSTRAP_GENERATION" "$PACKAGE_PROOF_SCOPE" \
+    "$TIMING_JSON" "$TIMING_MARKDOWN" "$status" "$code" || true
+  rm -rf "$TMP"
+  exit "$code"
+}
+trap finish EXIT
+trap 'exit 130' HUP INT TERM
+
+JAVAN_BUILD_REUSE_TARGET=true scripts/build.sh
+started=$(javan_timing_now)
+if ARCHIVE=$(.github/scripts/package-release.sh "${JAVAN_VERSION:-}"); then
+  archive_status=pass
+else
+  archive_code=$?
+  archive_status=fail
+fi
+javan_timing_record package_archive "$started" "$archive_status" true
+if [ "$archive_status" = "fail" ]; then
+  exit "$archive_code"
+fi
+javan_timing_run package_verify .github/scripts/verify-package.sh "$ARCHIVE"
 
 tar -xzf "$ARCHIVE" -C "$TMP"
 PACKAGE_ROOT=$TMP/$(basename "$ARCHIVE" .tar.gz)
@@ -63,6 +97,7 @@ PACKAGE_VERSION=$(cat "$PACKAGE_ROOT/VERSION")
 
 "$PACKAGE_BIN" doctor >/dev/null
 "$PACKAGE_BIN" --version >/dev/null
+self_check_started=$(javan_timing_now)
 rm -rf target/.javan
 "$PACKAGE_BIN" check target/classes --main javan.Main >/dev/null
 "$PACKAGE_BIN" report target >/dev/null
@@ -91,13 +126,15 @@ assert_contains "$REPORT" '"errors": 0'
 assert_contains "$REPORT" '"warnings": 0'
 assert_contains "$REPORT" '"name": "reachability"'
 assert_contains "$REPORT" '"reachableMethods":'
+javan_timing_record package_self_check "$self_check_started"
 
 if [ "$PACKAGE_PROOF_SCOPE" = "bootstrap" ]; then
   printf '%s\n' "Verified CI bootstrap package with $PACKAGE_BIN"
   exit 0
 fi
 
-"$PACKAGE_BIN" build target/classes --main javan.Main --jar --output javan-package-selfhost-jar >/dev/null
+javan_timing_run package_jar \
+  "$PACKAGE_BIN" build target/classes --main javan.Main --jar --output javan-package-selfhost-jar >/dev/null
 SELFHOST_JAR=$ROOT/target/.javan/dist/javan-package-selfhost-jar.jar
 if [ ! -f "$SELFHOST_JAR" ]; then
   printf '%s\n' "Missing package-built self-host jar: $SELFHOST_JAR" >&2
@@ -111,7 +148,8 @@ mkdir -p "$SELFHOST_JAR_EXTRACT"
 (cd "$SELFHOST_JAR_EXTRACT" && jar xf "$SELFHOST_JAR" META-INF/MANIFEST.MF)
 assert_contains "$SELFHOST_JAR_EXTRACT/META-INF/MANIFEST.MF" "Main-Class: javan.Main"
 
-"$PACKAGE_BIN" build target/classes --main javan.Main --output javan-package-selfhost-smoke >/dev/null
+javan_timing_run package_native \
+  "$PACKAGE_BIN" build target/classes --main javan.Main --output javan-package-selfhost-smoke >/dev/null
 SELFHOST_BIN=target/.javan/bin/javan-package-selfhost-smoke
 if [ ! -x "$SELFHOST_BIN" ]; then
   printf '%s\n' "Missing package-built self-host smoke binary: $SELFHOST_BIN" >&2
@@ -131,11 +169,14 @@ case "$PACKAGE_SANITIZER_SCOPE" in
     ;;
 esac
 
-JAVAN_BIN=$PACKAGE_BIN \
-JAVAN_SANITIZER_REQUIRED=true \
-JAVAN_SELF_HOST_PROBE_SCOPE=$SELF_HOST_PROBE_SCOPE \
-JAVAN_SELF_HOST_REUSE_GENERATED=true \
-  sh .github/scripts/sanitizer-self-host-smoke.sh
+run_package_sanitizer() {
+  JAVAN_BIN=$PACKAGE_BIN \
+  JAVAN_SANITIZER_REQUIRED=true \
+  JAVAN_SELF_HOST_PROBE_SCOPE=$SELF_HOST_PROBE_SCOPE \
+  JAVAN_SELF_HOST_REUSE_GENERATED=true \
+    sh .github/scripts/sanitizer-self-host-smoke.sh
+}
+javan_timing_run package_sanitizer run_package_sanitizer
 SANITIZER_PROOF=target/.javan/reports/sanitizer-proof.json
 if [ ! -f "$SANITIZER_PROOF" ]; then
   printf '%s\n' "Missing package-backed self-host sanitizer proof: $SANITIZER_PROOF" >&2

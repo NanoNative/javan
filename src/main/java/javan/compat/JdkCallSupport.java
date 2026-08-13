@@ -4,6 +4,7 @@ import javan.classfile.ClassFile;
 import javan.classfile.MethodRef;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -83,7 +84,6 @@ public final class JdkCallSupport {
         java/time/format/DateTimeParseException=java/time/DateTimeException
         java/util/regex/PatternSyntaxException=java/lang/IllegalArgumentException
         """;
-
     private static final List<SupportedCall> SUPPORTED_CALLS = List.of(
         intrinsic("Objects.requireNonNull", "java/util/Objects", "requireNonNull", "(Ljava/lang/Object;)Ljava/lang/Object;", "(Ljava/lang/Object;Ljava/lang/String;)Ljava/lang/Object;"),
         intrinsic("Objects.requireNonNullElse", "java/util/Objects", "requireNonNullElse", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
@@ -2160,8 +2160,7 @@ public final class JdkCallSupport {
     }
 
     private static final class SupportedCallIndex {
-        private final List<String> owners = new java.util.ArrayList<>();
-        private final List<List<MethodBucket>> ownerBuckets = new java.util.ArrayList<>();
+        private final Map<String, List<MethodBucket>> ownerBuckets = new HashMap<>();
 
         private SupportedCallIndex(final List<SupportedCall> calls) {
             for (final SupportedCall call : calls) {
@@ -2200,18 +2199,12 @@ public final class JdkCallSupport {
                 return existing;
             }
             final List<MethodBucket> bucket = new java.util.ArrayList<>();
-            owners.add(owner);
-            ownerBuckets.add(bucket);
+            ownerBuckets.put(owner, bucket);
             return bucket;
         }
 
         private List<MethodBucket> existingOwnerBucket(final String owner) {
-            for (int index = 0; index < owners.size(); index++) {
-                if (owners.get(index).equals(owner)) {
-                    return ownerBuckets.get(index);
-                }
-            }
-            return null;
+            return ownerBuckets.get(owner);
         }
     }
 

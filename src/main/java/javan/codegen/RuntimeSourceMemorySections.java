@@ -8577,8 +8577,16 @@ final class RuntimeSourceMemorySections {
             if (value == NULL) {
                 javan_panic("null string");
             }
+            const unsigned char* start = (const unsigned char*) value;
             const unsigned char* current = (const unsigned char*) value;
-            int length = 0;
+            while (*current != 0U && (*current & 0x80U) == 0U) {
+                current++;
+            }
+            size_t ascii_length = (size_t) (current - start);
+            if (ascii_length > (size_t) INT_MAX) {
+                javan_panic("string length overflow");
+            }
+            int length = (int) ascii_length;
             while (*current != 0U) {
                 unsigned int code_point = javan_utf8_next_code_point(&current, 1);
                 if (length > INT_MAX - (code_point > 0xFFFFU ? 2 : 1)) {
