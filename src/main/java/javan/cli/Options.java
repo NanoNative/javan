@@ -22,7 +22,6 @@ import java.util.Optional;
  * @param classpathEntries explicit classpath entries
  * @param outputName explicit output binary name
  * @param buildKind native artifact kind
- * @param buildKindName canonical native artifact kind name
  * @param libraryFormats requested native library formats
  * @param profile selected static profile
  * @param exports native library export declarations
@@ -39,7 +38,6 @@ public record Options(
     List<Path> classpathEntries,
     Optional<String> outputName,
     BuildKind buildKind,
-    String buildKindName,
     List<LibraryFormat> libraryFormats,
     Profile profile,
     List<String> exports,
@@ -91,7 +89,6 @@ public record Options(
                 List.of(),
                 Optional.empty(),
                 BuildKind.APP,
-                "APP",
                 List.of(),
                 Profile.CORE,
                 List.of(),
@@ -105,7 +102,6 @@ public record Options(
         Optional<String> mainClass = Optional.empty();
         Optional<String> outputName = Optional.empty();
         BuildKind buildKind = BuildKind.APP;
-        String buildKindName = "APP";
         final List<LibraryFormat> libraryFormats = new ArrayList<>();
         Profile profile = Profile.CORE;
         boolean release = false;
@@ -152,18 +148,15 @@ public record Options(
                 if (!value.pass()) {
                     return ParseResult.failure(value.error());
                 }
-                final BuildKindResult parsed = parseBuildKindResult(value.value());
-                if (!parsed.pass()) {
-                    return ParseResult.failure(parsed.error());
+                final Optional<BuildKind> parsed = BuildKind.parse(value.value());
+                if (parsed.isEmpty()) {
+                    return ParseResult.failure("Unsupported build kind: " + value.value());
                 }
-                buildKindName = parsed.name();
-                buildKind = parsed.kind();
+                buildKind = parsed.orElseThrow();
             } else if ("--jar".equals(arg)) {
                 buildKind = BuildKind.JAR;
-                buildKindName = "JAR";
             } else if ("--library".equals(arg) || "--lib".equals(arg)) {
                 buildKind = BuildKind.LIBRARY;
-                buildKindName = "LIBRARY";
             } else if ("--format".equals(arg)) {
                 final ValueResult value = requiredValueResult(args, ++index, arg);
                 if (!value.pass()) {
@@ -217,7 +210,7 @@ public record Options(
             }
         }
 
-        final FormatResult resolvedFormats = libraryFormatsResult(buildKindName, libraryFormats);
+        final FormatResult resolvedFormats = libraryFormatsResult(buildKind, libraryFormats);
         if (!resolvedFormats.pass()) {
             return ParseResult.failure(resolvedFormats.error());
         }
@@ -229,7 +222,6 @@ public record Options(
             List.copyOf(classpathEntries),
             outputName,
             buildKind,
-            buildKindName,
             resolvedFormats.formats(),
             profile,
             List.copyOf(exports),
@@ -249,7 +241,6 @@ public record Options(
             List.of(),
             Optional.empty(),
             BuildKind.APP,
-            "APP",
             List.of(),
             Profile.CORE,
             List.of(),
@@ -269,7 +260,6 @@ public record Options(
             List.of(),
             Optional.empty(),
             BuildKind.APP,
-            "APP",
             List.of(),
             Profile.CORE,
             List.of(),
@@ -321,55 +311,6 @@ public record Options(
         return BindingResult.success(entries);
     }
 
-    private static BuildKindResult parseBuildKindResult(final String value) {
-        final String name = canonicalBuildKindNameResult(value);
-        if ("APP".equals(name)) {
-            return BuildKindResult.success(BuildKind.APP, name);
-        }
-        if ("JAR".equals(name)) {
-            return BuildKindResult.success(BuildKind.JAR, name);
-        }
-        if ("LIBRARY".equals(name)) {
-            return BuildKindResult.success(BuildKind.LIBRARY, name);
-        }
-        if ("STATICLIB".equals(name)) {
-            return BuildKindResult.success(BuildKind.STATICLIB, name);
-        }
-        if ("SHAREDLIB".equals(name)) {
-            return BuildKindResult.success(BuildKind.SHAREDLIB, name);
-        }
-        return BuildKindResult.failure("Unsupported build kind: " + value);
-    }
-
-    private static String canonicalBuildKindNameResult(final String value) {
-        final String normalized = Strings2.replaceChar(Strings2.toAsciiUpperCase(value), '-', '_');
-        if ("LIB".equals(normalized)) {
-            return "LIBRARY";
-        }
-        if ("STATIC_LIB".equals(normalized)) {
-            return "STATICLIB";
-        }
-        if ("SHARED_LIB".equals(normalized)) {
-            return "SHAREDLIB";
-        }
-        if ("APP".equals(normalized)) {
-            return normalized;
-        }
-        if ("JAR".equals(normalized)) {
-            return normalized;
-        }
-        if ("LIBRARY".equals(normalized)) {
-            return normalized;
-        }
-        if ("STATICLIB".equals(normalized)) {
-            return normalized;
-        }
-        if ("SHAREDLIB".equals(normalized)) {
-            return normalized;
-        }
-        return "";
-    }
-
     private static List<BindingLanguage> distinctBindings(final List<BindingLanguage> bindings) {
         final List<BindingLanguage> distinct = new ArrayList<>();
         for (final BindingLanguage binding : bindings) {
@@ -380,29 +321,29 @@ public record Options(
         return List.copyOf(distinct);
     }
 
-    private static FormatResult libraryFormatsResult(final String buildKindName, final List<LibraryFormat> requested) {
-        if (!requested.isEmpty() && !libraryBuildName(buildKindName)) {
+    private static FormatResult libraryFormatsResult(final BuildKind buildKind, final List<LibraryFormat> requested) {
+        if (!requested.isEmpty() && !buildKind.library()) {
             return FormatResult.failure("--format requires --library or a library --kind");
         }
         if (!requested.isEmpty()) {
-            if ("STATICLIB".equals(buildKindName) && !exactlyOne(requested, "STATIC")) {
+            if (buildKind == BuildKind.STATICLIB && !exactlyOne(requested, LibraryFormat.STATIC)) {
                 return FormatResult.failure("--kind staticlib only supports --format static");
             }
-            if ("SHAREDLIB".equals(buildKindName) && !exactlyOne(requested, "SHARED")) {
+            if (buildKind == BuildKind.SHAREDLIB && !exactlyOne(requested, LibraryFormat.SHARED)) {
                 return FormatResult.failure("--kind sharedlib only supports --format shared");
             }
             return FormatResult.success(requested);
         }
-        if ("STATICLIB".equals(buildKindName)) {
+        if (buildKind == BuildKind.STATICLIB) {
             return FormatResult.success(List.of(LibraryFormat.STATIC));
         }
-        if ("SHAREDLIB".equals(buildKindName)) {
+        if (buildKind == BuildKind.SHAREDLIB) {
             return FormatResult.success(List.of(LibraryFormat.SHARED));
         }
-        if ("LIBRARY".equals(buildKindName)) {
+        if (buildKind == BuildKind.LIBRARY) {
             return FormatResult.success(List.of(LibraryFormat.STATIC, LibraryFormat.SHARED));
         }
-        if ("APP".equals(buildKindName) || "JAR".equals(buildKindName)) {
+        if (buildKind == BuildKind.APP || buildKind == BuildKind.JAR) {
             return FormatResult.success(List.of());
         }
         return FormatResult.failure("Unsupported build kind");
@@ -443,24 +384,11 @@ public record Options(
         return false;
     }
 
-    private static boolean libraryBuildName(final String buildKindName) {
-        if ("LIBRARY".equals(buildKindName)) {
-            return true;
-        }
-        if ("STATICLIB".equals(buildKindName)) {
-            return true;
-        }
-        if ("SHAREDLIB".equals(buildKindName)) {
-            return true;
-        }
-        return false;
-    }
-
-    private static boolean exactlyOne(final List<LibraryFormat> formats, final String expected) {
+    private static boolean exactlyOne(final List<LibraryFormat> formats, final LibraryFormat expected) {
         if (formats.size() != 1) {
             return false;
         }
-        return expected.equals(formatName(formats.getFirst()));
+        return expected == formats.getFirst();
     }
 
     /**
@@ -469,7 +397,7 @@ public record Options(
      * @return true for app builds
      */
     public boolean appBuild() {
-        return "APP".equals(buildKindName);
+        return buildKind == BuildKind.APP;
     }
 
     /**
@@ -478,7 +406,7 @@ public record Options(
      * @return true for jar builds
      */
     public boolean jarBuild() {
-        return "JAR".equals(buildKindName);
+        return buildKind == BuildKind.JAR;
     }
 
     /**
@@ -487,7 +415,7 @@ public record Options(
      * @return true for library builds
      */
     public boolean libraryBuild() {
-        return libraryBuildName(buildKindName);
+        return buildKind.library();
     }
 
     /**
@@ -496,17 +424,7 @@ public record Options(
      * @return true for combined library builds
      */
     public boolean combinedLibraryBuild() {
-        return "LIBRARY".equals(buildKindName);
-    }
-
-    /**
-     * Returns a stable name for a library format.
-     *
-     * @param format format enum
-     * @return stable format name
-     */
-    public static String formatName(final LibraryFormat format) {
-        return format.name();
+        return buildKind == BuildKind.LIBRARY;
     }
 
     /**
@@ -527,16 +445,6 @@ public record Options(
     }
 
     private record ValueResult(boolean pass, String value, String error) {
-    }
-
-    private record BuildKindResult(boolean pass, BuildKind kind, String name, String error) {
-        private static BuildKindResult success(final BuildKind kind, final String name) {
-            return new BuildKindResult(true, kind, name, "");
-        }
-
-        private static BuildKindResult failure(final String error) {
-            return new BuildKindResult(false, BuildKind.APP, "", error);
-        }
     }
 
     private record FormatResult(boolean pass, List<LibraryFormat> formats, String error) {

@@ -2,7 +2,9 @@
 
 ## Scope
 
-- status, counts, and honest target coverage: [`../status/roadmap-progress.md`](../status/roadmap-progress.md)
+- current support accounting: [`../status/support-matrix.md`](../status/support-matrix.md) and
+  [`../status/jdk-compatibility.md`](../status/jdk-compatibility.md)
+- release gates: [release.md](release.md)
 - cross-platform verification policy: [cross-platform-verification.md](cross-platform-verification.md)
 - examples and acceptance projects: [examples-and-test-projects.md](examples-and-test-projects.md)
 - sibling-product tracks such as Studio, UI, plugins, Homebrew, and IDE integrations stay
@@ -974,8 +976,8 @@ Production acceptance:
 ## 0.4 Bundled Toolchains
 
 Status: deferred behind the binary-first distribution. See
-[binary-first-distribution.md](binary-first-distribution.md) and
-[toolchain-distribution-roadmap.md](toolchain-distribution-roadmap.md).
+[binary-first-distribution.md](binary-first-distribution.md). Current JDK resolution,
+installation, and facade behavior is documented in [toolchains.md](toolchains.md).
 
 Keep `javan doctor`, read-only toolchain inspection, and the transparent `javan javac`
 facade as companion tooling, but do not make JDK-shaped SDK wrapping a first-release gate.

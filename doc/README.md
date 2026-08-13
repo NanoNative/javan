@@ -13,15 +13,12 @@ Core entrypoints:
 
 - [README.md](../README.md): public front door, quick start, supported outputs, and high
   signal status snapshot
-- [status/roadmap-progress.md](status/roadmap-progress.md): implementation progress by
-  roadmap item, coverage snapshot, and honest target view
-- [status/release-plan.md](status/release-plan.md): shipping gates and slice-selection
-  contract for the first boring native release
 - [status/support-matrix.md](status/support-matrix.md): named support ledger used for
   release accounting
 - [status/jdk-compatibility.md](status/jdk-compatibility.md): automatically verified
   reference-JDK inventory summary
 - [spec/roadmap.md](spec/roadmap.md): core-repo roadmap
+- [spec/toolchains.md](spec/toolchains.md): JDK resolution, installation, and facade contract
 - [spec/native-abi.md](spec/native-abi.md): native library ABI, ownership, and error
   contracts
 - [spec/release.md](spec/release.md): release gates and verification policy

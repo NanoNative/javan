@@ -66,7 +66,7 @@ default_jdk = "25"
 
 Javan never changes shell profiles, `PATH`, `JAVA_HOME`, or the vendor JDK automatically.
 The detailed behavior and currently unsupported integration proof are documented in the
-[JDK wrapper contract](doc/spec/toolchain-distribution-roadmap.md#jdk-wrapper-model).
+[JDK facade contract](doc/spec/toolchains.md#installed-facade).
 
 ## Commands And Outputs
 
@@ -101,11 +101,11 @@ Current visible gaps:
   remain incomplete.
 - Remote release validation across Linux/macOS target rows is still not complete.
 
-For the honest progress view, use:
+For current support and release state, use:
 
-- [doc/status/roadmap-progress.md](doc/status/roadmap-progress.md)
 - [doc/status/support-matrix.md](doc/status/support-matrix.md)
 - [doc/status/jdk-compatibility.md](doc/status/jdk-compatibility.md)
+- [doc/spec/release.md](doc/spec/release.md)
 
 ## Showcase
 
@@ -116,7 +116,7 @@ For the honest progress view, use:
 
 - Documentation index: [doc/README.md](doc/README.md)
 - Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
-- Roadmap and status: [doc/status/roadmap-progress.md](doc/status/roadmap-progress.md), [doc/status/support-matrix.md](doc/status/support-matrix.md), [doc/status/jdk-compatibility.md](doc/status/jdk-compatibility.md)
+- Roadmap and status: [doc/spec/roadmap.md](doc/spec/roadmap.md), [doc/status/support-matrix.md](doc/status/support-matrix.md), [doc/status/jdk-compatibility.md](doc/status/jdk-compatibility.md)
 - Native library ABI: [doc/spec/native-abi.md](doc/spec/native-abi.md)
 - Release and verification: [doc/spec/release.md](doc/spec/release.md), [doc/spec/cross-platform-verification.md](doc/spec/cross-platform-verification.md)
 - Runtime and packaging specs: [doc/spec/runtime-feature-selection.md](doc/spec/runtime-feature-selection.md), [doc/spec/container-images.md](doc/spec/container-images.md)

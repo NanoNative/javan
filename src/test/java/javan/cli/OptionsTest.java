@@ -327,7 +327,6 @@ final class OptionsTest {
         assertThat(result.options().classpathEntries()).containsExactly(Path.of("libs/a.jar"), Path.of("libs/b.jar"));
         assertThat(result.options().outputName()).contains("demo-bin");
         assertThat(result.options().buildKind()).isEqualTo(BuildKind.LIBRARY);
-        assertThat(result.options().buildKindName()).isEqualTo("LIBRARY");
         assertThat(result.options().libraryFormats()).containsExactly(LibraryFormat.STATIC, LibraryFormat.SHARED);
         assertThat(result.options().exports()).containsExactly("com.acme.Math.add(int,int):int");
         assertThat(result.options().bindings()).containsExactly(BindingLanguage.C, BindingLanguage.RUST);

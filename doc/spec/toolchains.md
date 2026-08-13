@@ -1,67 +1,105 @@
 # Toolchains
 
-## Current Behavior
+Javan uses real local tools. It does not replace `javac`, ship fake JDK classes, or
+silently change `PATH` or `JAVA_HOME`.
 
-`javan` currently uses local tools:
+## Mental Model
 
-- `javac` for plain Java compilation
-- Maven or Maven wrapper for Maven projects
-- Gradle or Gradle wrapper for Gradle projects
-- `cc`, `clang`, or `gcc` for C linking
-- Javan's own bytecode -> IR -> C/native path for native output
+```text
+source -> real javac -> .class files -> Javan analysis -> C -> host C compiler
+```
 
-Read-only toolchain inspection is available now:
+The installed JDK facade changes the entrypoint, not this pipeline:
+
+```text
+IDE / Maven / shell -> Javan JDK facade -> selected real JDK
+                                      \-> Javan reports or native build
+```
+
+Normal Java behavior stays owned by the selected JDK. Javan only intercepts its documented
+management commands and `javac` extensions.
+
+## Commands
 
 ```sh
+javan install
 javan doctor
-javan toolchain doctor
-javan toolchain list
+javan jdk list
+javan jdk install
+javan jdk use 25
+javan jdk use temurin@25
+javan jdk doctor
+javan jdk resolve [jdk-home]
 ```
 
-The first wrapper command is also available:
+- `install` copies the Javan launcher and creates a stable JDK-shaped facade.
+- `list` shows discovered and managed JDKs with their selection state.
+- `use` switches the facade to a matching local or managed JDK.
+- `resolve` explains which JDK wins and why.
+- `doctor` reports Java, `javac`, C compiler, settings, and installation paths.
+
+Resolution is local-first: explicit input, configured selection, environment/current JDK,
+`PATH`, known platform JDK locations, managed JDKs, then an explicit managed install. A
+candidate needs a usable `javac`; directory names alone are not trusted as version evidence.
+
+## Installed Facade
+
+`javan install` creates:
+
+- one stable public JDK home for IDEs, build tools, and `JAVA_HOME`
+- immutable facades for discovered backend JDKs
+- one switchable `current` facade
+
+The facade reuses the selected JDK layout. Only `java`, `javac`, and `javan` are Javan
+launchers; other vendor tools remain direct backend tools. Unix uses links and native
+launchers. Windows uses native executables and junctions. Existing non-Javan paths are not
+overwritten.
+
+Run `javan install` to print the selected public JDK home, then configure that path in the
+IDE or build tool. Switching with `java jdk use ...` keeps the public path stable.
+
+## Javac Facade
+
+Ordinary arguments are passed to the selected real `javac` unchanged. Javan consumes only
+the reserved `--jn-*` namespace:
+
+| Option | Behavior |
+| --- | --- |
+| `--jn-off` | Disable Javan analysis and reports for this compile. |
+| `--jn-warn` | Print native findings without changing successful `javac` status. |
+| `--jn-strict` | Return `2` after successful compilation when native blockers exist. |
+| `--jn-build` | Build a native app from the fresh `-d` output. |
+| `--jn-main <class>` | Select the native main class. |
+| `--jn-out <name>` | Select the native output name. |
+| `--jn-target <os/arch>` | Assert the current host target. |
+| `--jn-diag <format>` | Select `auto`, `compiler`, `pretty`, or `jsonl` diagnostics. |
+| `--jn-end` | Pass every following argument directly to `javac`. |
+
+The compact `-jn-*` spellings are equivalent. Reporting is the default. Native building is
+always explicit.
+
+Javan reuses `javac` facts instead of introducing duplicate options:
+
+- `-d` is the class directory analyzed after compilation.
+- `-cp`, `-classpath`, and `--class-path` are dependency inputs.
+- `--release` remains the Java API/language target.
+
+Example:
 
 ```sh
-javan javac [javac args...]
+javac --release 25 -d target/classes --class-path libs/acme.jar \
+  --jn-build --jn-main com.acme.Main --jn-out acme \
+  src/main/java/com/acme/Main.java
 ```
 
-It delegates to the host `javac` and preserves the compiler exit code, stdout, and stderr.
+A failed compile is never analyzed. A successful compile without `-d` gets an invocation
+report but no guessed class directory. Reports are written below `.javan/reports/`.
 
-`doctor` reports the resolved `~/.javan` home, `java.home`, `java.version`, `javac`,
-native C compiler, and global settings status. `toolchain list` reads
-`~/.javan/toolchains/<id>/toolchain.toml` when present and never installs or mutates
-global state.
+## Boundaries
 
-## Gradle And Java 25
-
-Gradle must be new enough to run on the active Java runtime. The official Gradle
-compatibility matrix lists Java 25 support for running Gradle starting at Gradle 9.1.0:
-
-https://docs.gradle.org/current/userguide/compatibility.html
-
-If a machine has an older system Gradle and Java 25, use a project wrapper:
-
-```sh
-./gradlew wrapper --gradle-version=9.1.0
-```
-
-`javan` prefers `./gradlew` over `gradle`, so a compatible wrapper is the cleanest path.
-
-## Production Direction
-
-The production distribution is binary-first. `javan` should work beside the user's
-current JDK, Maven, Gradle, and IDE, then add plugins and installer support around the
-same executable. See [binary-first-distribution.md](binary-first-distribution.md).
-
-Near-term commands:
-
-- `javan toolchain doctor` (implemented as a read-only alias)
-- `javan toolchain list` (implemented as read-only local inventory)
-- Maven and Gradle plugins invoking the installed/downloaded `javan` binary
-- Homebrew formula for the binary archive
-- IDE report consumption from stable JSON/Markdown reports
-- optional `javan toolchain install jdk` only when local Java tools cannot run
-- deterministic project selection stored in `.javan/toolchain.lock.json`
-- user-global installs and settings under `~/.javan`
-
-Bundling should be optional and explicit. Silent global toolchain mutation is how build
-systems learn to bite.
+- The current native backend builds for the host target; cross-linking is rejected.
+- A `PATH` compiler without a verified JDK home can compile but cannot back a JDK facade.
+- Managed downloads require an explicit install path and verified metadata/checksum.
+- Maven, Gradle, and IDE integrations are optional consumers of the same CLI and reports.
+- LLVM, Cranelift, additional JDK providers, plugins, and direct dependency management are
+  future roadmap work, not hidden partial implementations.

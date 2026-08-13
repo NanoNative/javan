@@ -30,7 +30,6 @@ final class ExternalProbeIsolationTest {
     private static final Path SUPPORT_MATRIX = DOC_STATUS.resolve("support-matrix.md");
     private static final Path SUPPORT_MATRIX_JSON = DOC_STATUS.resolve("support-matrix.json");
     private static final Path JDK_COMPATIBILITY = DOC_STATUS.resolve("jdk-compatibility.md");
-    private static final Path ROADMAP_PROGRESS = DOC_STATUS.resolve("roadmap-progress.md");
 
     @TempDir
     private Path tempDir;
@@ -148,7 +147,6 @@ final class ExternalProbeIsolationTest {
         assertTextExcludesExternalProbeIdentities(Files.readString(SUPPORT_MATRIX), SUPPORT_MATRIX);
         assertTextExcludesExternalProbeIdentities(Files.readString(SUPPORT_MATRIX_JSON), SUPPORT_MATRIX_JSON);
         assertTextExcludesExternalProbeIdentities(Files.readString(JDK_COMPATIBILITY), JDK_COMPATIBILITY);
-        assertTextExcludesExternalProbeIdentities(Files.readString(ROADMAP_PROGRESS), ROADMAP_PROGRESS);
     }
 
     @Test
@@ -156,7 +154,6 @@ final class ExternalProbeIsolationTest {
         assertTextExcludesExternalProbeProjectLabels(Files.readString(SUPPORT_MATRIX), SUPPORT_MATRIX);
         assertTextExcludesExternalProbeProjectLabels(Files.readString(SUPPORT_MATRIX_JSON), SUPPORT_MATRIX_JSON);
         assertTextExcludesExternalProbeProjectLabels(Files.readString(JDK_COMPATIBILITY), JDK_COMPATIBILITY);
-        assertTextExcludesExternalProbeProjectLabels(Files.readString(ROADMAP_PROGRESS), ROADMAP_PROGRESS);
     }
 
     @Test
@@ -170,16 +167,6 @@ final class ExternalProbeIsolationTest {
                     .doesNotContain(forbiddenFragment);
             }
         }
-    }
-
-    @Test
-    void milestoneHistoryStaysIndependentOfExternalProbeIdentities() throws Exception {
-        final String roadmap = Files.readString(ROADMAP_PROGRESS);
-        final int start = roadmap.indexOf("## Recent Milestones");
-        final int end = roadmap.indexOf("## Honest Targets Today");
-        assertThat(start).isNotNegative();
-        assertThat(end).isGreaterThan(start);
-        assertTextExcludesExternalProbeIdentities(roadmap.substring(start, end), ROADMAP_PROGRESS);
     }
 
     @Test

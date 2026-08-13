@@ -25,3 +25,5 @@ The root README remains the public front door, not the full internal encyclopedi
 - new docs must choose a purpose up front instead of landing in a flat pile
 - status files can evolve quickly without being mistaken for stable API/spec contracts
 - architecture rationale is easier to find than scattered roadmap prose
+- Git history and pull requests own milestone history; maintained docs describe current
+  behavior and future work instead of repeating a changelog
