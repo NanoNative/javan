@@ -2,6 +2,7 @@
 set -eu
 
 ROOT=$(CDPATH= cd "$(dirname "$0")/../.." && pwd)
+. "$ROOT/.github/scripts/sanitizer-common.sh"
 TMP=${TMPDIR:-/tmp}/javan-sanitizer-$$
 PROJECT=${1:-src/test/resources/projects/native-profile/memory-soak}
 FULL_PROJECT=$ROOT/$PROJECT
@@ -16,46 +17,11 @@ COUNTER_CHECK=${JAVAN_SANITIZER_COUNTER_CHECK:-false}
 mkdir -p "$TMP"
 trap 'rm -rf "$TMP"' EXIT HUP INT TERM
 
-json_escape() {
-  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
-}
-
-json_string() {
-  printf '"%s"' "$(json_escape "$1")"
-}
-
-json_number_or_null() {
-  if [ -n "$1" ]; then
-    printf '%s' "$1"
-  else
-    printf '%s' "null"
-  fi
-}
-
 proof_counter() {
   if [ -f "${PROOF_COUNTERS:-}" ]; then
     sed -n "s/^$1=//p" "$PROOF_COUNTERS" | head -n 1
   fi
   return 0
-}
-
-configure_asan_options() {
-  case "${ASAN_OPTIONS:-}" in
-    *detect_leaks=0*)
-      if [ "$SANITIZER_REQUIRED" = "true" ]; then
-        printf '%s\n' "required sanitizer run cannot inherit ASAN_OPTIONS with detect_leaks=0" >&2
-        exit 1
-      fi
-      ;;
-  esac
-  if [ -n "${ASAN_OPTIONS:-}" ]; then
-    case "$ASAN_OPTIONS" in
-      *detect_leaks=*) ;;
-      *) ASAN_OPTIONS=detect_leaks=1:$ASAN_OPTIONS ;;
-    esac
-  else
-    ASAN_OPTIONS=detect_leaks=1:halt_on_error=1
-  fi
 }
 
 write_sanitizer_proof() {
@@ -142,7 +108,7 @@ This report is written by the sanitizer smoke script after successful validation
 EOF
 }
 
-configure_asan_options
+configure_asan_options "$SANITIZER_REQUIRED" "required sanitizer run"
 
 if [ -n "${JAVAN_BIN:-}" ]; then
   if [ ! -x "$JAVAN_BIN" ]; then

@@ -3,6 +3,7 @@ set -eu
 
 ROOT=$(CDPATH= cd "$(dirname "$0")/../.." && pwd)
 . "$ROOT/.github/scripts/timing-report.sh"
+. "$ROOT/.github/scripts/sanitizer-common.sh"
 TMP=${TMPDIR:-/tmp}/javan-self-host-sanitizer-$$
 CC=${CC:-cc}
 SANITIZER_FLAGS=${SANITIZER_FLAGS:-"-fsanitize=address,undefined -fno-omit-frame-pointer"}
@@ -16,22 +17,6 @@ REPORTS=$ROOT/$TARGET_PROJECT/.javan/reports
 
 mkdir -p "$TMP"
 trap 'rm -rf "$TMP"' EXIT HUP INT TERM
-
-json_escape() {
-  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
-}
-
-json_string() {
-  printf '"%s"' "$(json_escape "$1")"
-}
-
-json_number_or_null() {
-  if [ -n "$1" ]; then
-    printf '%s' "$1"
-  else
-    printf '%s' "null"
-  fi
-}
 
 counter_value() {
   file=$1
@@ -101,25 +86,6 @@ assert_at_least() {
   if [ -n "$minimum" ] && [ "$actual" -lt "$minimum" ]; then
     printf '%s\n' "self-host sanitizer counter check failed: $label $actual < $minimum" >&2
     exit 1
-  fi
-}
-
-configure_asan_options() {
-  case "${ASAN_OPTIONS:-}" in
-    *detect_leaks=0*)
-      if [ "$SANITIZER_REQUIRED" = "true" ]; then
-        printf '%s\n' "required self-host sanitizer run cannot inherit ASAN_OPTIONS with detect_leaks=0" >&2
-        exit 1
-      fi
-      ;;
-  esac
-  if [ -n "${ASAN_OPTIONS:-}" ]; then
-    case "$ASAN_OPTIONS" in
-      *detect_leaks=*) ;;
-      *) ASAN_OPTIONS=detect_leaks=1:$ASAN_OPTIONS ;;
-    esac
-  else
-    ASAN_OPTIONS=detect_leaks=1:halt_on_error=1
   fi
 }
 
@@ -363,7 +329,7 @@ run_all_leaks_probes() {
   run_leaks_probe tiny-build build "$TINY_PROJECT" --output selfhost-tiny
 }
 
-configure_asan_options
+configure_asan_options "$SANITIZER_REQUIRED" "required self-host sanitizer run"
 
 JAVAN=$(resolve_javan_bin)
 cd "$ROOT"
