@@ -84,9 +84,6 @@ public final class JdkCallSupport {
         java/time/format/DateTimeParseException=java/time/DateTimeException
         java/util/regex/PatternSyntaxException=java/lang/IllegalArgumentException
         """;
-    private static final List<PlatformThrowableParent> PLATFORM_THROWABLE_PARENTS = platformThrowableParentsFromHierarchy();
-    private static final Map<String, String> PLATFORM_THROWABLE_PARENT_BY_CHILD = platformThrowableParentMap();
-
     private static final List<SupportedCall> SUPPORTED_CALLS = List.of(
         intrinsic("Objects.requireNonNull", "java/util/Objects", "requireNonNull", "(Ljava/lang/Object;)Ljava/lang/Object;", "(Ljava/lang/Object;Ljava/lang/String;)Ljava/lang/Object;"),
         intrinsic("Objects.requireNonNullElse", "java/util/Objects", "requireNonNullElse", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
@@ -1799,10 +1796,6 @@ public final class JdkCallSupport {
      * @return immutable child-to-parent edges in stable generation order
      */
     public static List<PlatformThrowableParent> platformThrowableParents() {
-        return PLATFORM_THROWABLE_PARENTS;
-    }
-
-    private static List<PlatformThrowableParent> platformThrowableParentsFromHierarchy() {
         final List<PlatformThrowableParent> result = new ArrayList<>();
         int start = 0;
         while (start < PLATFORM_THROWABLE_HIERARCHY.length()) {
@@ -1893,15 +1886,33 @@ public final class JdkCallSupport {
         if ("java/lang/Throwable".equals(owner)) {
             return "";
         }
-        return PLATFORM_THROWABLE_PARENT_BY_CHILD.getOrDefault(owner, "");
+        int start = 0;
+        while (start < PLATFORM_THROWABLE_HIERARCHY.length()) {
+            final int separator = PLATFORM_THROWABLE_HIERARCHY.indexOf('=', start);
+            final int end = PLATFORM_THROWABLE_HIERARCHY.indexOf('\n', separator + 1);
+            if (asciiSliceEquals(owner, PLATFORM_THROWABLE_HIERARCHY, start, separator)) {
+                return PLATFORM_THROWABLE_HIERARCHY.substring(separator + 1, end);
+            }
+            start = end + 1;
+        }
+        return "";
     }
 
-    private static Map<String, String> platformThrowableParentMap() {
-        final Map<String, String> result = new HashMap<>();
-        for (final PlatformThrowableParent edge : PLATFORM_THROWABLE_PARENTS) {
-            result.put(edge.type(), edge.parent());
+    private static boolean asciiSliceEquals(
+        final String value,
+        final String source,
+        final int start,
+        final int end
+    ) {
+        if (value.length() != end - start) {
+            return false;
         }
-        return Map.copyOf(result);
+        for (int index = 0; index < value.length(); index++) {
+            if (value.charAt(index) != source.charAt(start + index)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static List<String> systemRuntimeModules(final String name) {
