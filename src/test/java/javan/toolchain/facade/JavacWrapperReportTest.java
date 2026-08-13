@@ -9,16 +9,16 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-final class JavacInvocationReportTest {
+final class JavacWrapperReportTest {
     @TempDir
     private Path tempDir;
 
     @Test
     void writesJsonAndMarkdownForAnIncompleteAnalysis() throws Exception {
         final Path classes = tempDir.resolve("classes");
-        final Path report = new JavacInvocationReport().write(
+        final Path report = JavacWrapper.writeReport(
             tempDir.resolve(".javan"),
-            new JavacInvocationReport.Outcome(0, "unavailable", "missing -d", Optional.of(classes), 0)
+            new JavacWrapper.InvocationOutcome(0, "unavailable", "missing -d", Optional.of(classes), 0)
         );
 
         assertThat(report).exists();

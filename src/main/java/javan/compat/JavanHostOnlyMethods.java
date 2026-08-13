@@ -26,11 +26,6 @@ public final class JavanHostOnlyMethods {
             "(Ljava/util/Properties;)Ljava/lang/String;"
         ),
         new MethodRef(
-            "javan/toolchain/ToolchainMetadataException",
-            "<init>",
-            "(Ljava/lang/String;Ljava/lang/Throwable;)V"
-        ),
-        new MethodRef(
             "javan/cli/Cli",
             "run",
             "(Ljava/nio/file/Path;Ljava/io/PrintStream;Ljava/io/PrintStream;[Ljava/lang/String;)I"

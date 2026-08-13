@@ -83,7 +83,7 @@ final class ToolchainFoundationTest {
 
     @Test
     void missingSettingsFileUsesDefaults() throws Exception {
-        final JavanSettings settings = new SettingsTomlReader().read(tempDir);
+        final JavanSettings settings = JavanSettings.read(tempDir);
 
         assertThat(settings).isEqualTo(JavanSettings.defaults());
         assertThat(settings.defaultJdkSelector()).isEqualTo("25");
@@ -98,7 +98,7 @@ final class ToolchainFoundationTest {
             auto_install = true
             """);
 
-        final JavanSettings settings = new SettingsTomlReader().read(tempDir);
+        final JavanSettings settings = JavanSettings.read(tempDir);
 
         assertThat(settings).isEqualTo(new JavanSettings(
             Optional.of("temurin-25"),
@@ -112,7 +112,7 @@ final class ToolchainFoundationTest {
     void emptyToolchainsDirectoryListsNoInstalledToolchains() throws Exception {
         Files.createDirectories(tempDir.resolve("toolchains"));
 
-        final List<ToolchainMetadata> installed = new ToolchainRegistry(tempDir).installed();
+        final List<ToolchainMetadata> installed = manager(tempDir).installedToolchains();
 
         assertThat(installed).isEmpty();
     }
@@ -132,7 +132,7 @@ final class ToolchainFoundationTest {
             checksum = "sha256:abc"
             """);
 
-        final List<ToolchainMetadata> installed = new ToolchainRegistry(tempDir).installed();
+        final List<ToolchainMetadata> installed = manager(tempDir).installedToolchains();
 
         assertThat(installed).containsExactly(new ToolchainMetadata(
             "temurin-25",
@@ -152,75 +152,9 @@ final class ToolchainFoundationTest {
         Files.createDirectories(toolchains.resolve("temurin-25"));
         Files.writeString(toolchains.resolve("README.txt"), "note");
 
-        final List<ToolchainMetadata> installed = new ToolchainRegistry(tempDir).installed();
+        final List<ToolchainMetadata> installed = manager(tempDir).installedToolchains();
 
         assertThat(installed).isEmpty();
-    }
-
-    @Test
-    void listRendererSortsToolchainsById() {
-        final ToolchainMetadata beta = metadata("beta", "25");
-        final ToolchainMetadata alpha = metadata("alpha", "21");
-
-        final String rendered = new ToolchainListRenderer().render(List.of(beta, alpha));
-
-        assertThat(rendered).isEqualTo("""
-            Toolchains
-              alpha | jdk | 21 | %s
-              beta | jdk | 25 | %s""".formatted(alpha.javacExecutable(), beta.javacExecutable()));
-    }
-
-    @Test
-    void listRendererSortsTiesByKindVersionAndHome() {
-        final ToolchainMetadata jdk21 = new ToolchainMetadata(
-            "temurin",
-            ToolchainKind.JDK,
-            "21",
-            tempDir.resolve("jdk-21"),
-            tempDir.resolve("jdk-21/bin/java"),
-            tempDir.resolve("jdk-21/bin/javac"),
-            Optional.empty(),
-            Optional.empty()
-        );
-        final ToolchainMetadata jdk25b = new ToolchainMetadata(
-            "temurin",
-            ToolchainKind.JDK,
-            "25",
-            tempDir.resolve("jdk-25-b"),
-            tempDir.resolve("jdk-25-b/bin/java"),
-            tempDir.resolve("jdk-25-b/bin/javac"),
-            Optional.empty(),
-            Optional.empty()
-        );
-        final ToolchainMetadata jdk25a = new ToolchainMetadata(
-            "temurin",
-            ToolchainKind.JDK,
-            "25",
-            tempDir.resolve("jdk-25-a"),
-            tempDir.resolve("jdk-25-a/bin/java"),
-            tempDir.resolve("jdk-25-a/bin/javac"),
-            Optional.empty(),
-            Optional.empty()
-        );
-
-        final String rendered = new ToolchainListRenderer().render(List.of(jdk25b, jdk21, jdk25a));
-
-        assertThat(rendered).isEqualTo("""
-            Toolchains
-              temurin | jdk | 21 | %s
-              temurin | jdk | 25 | %s
-              temurin | jdk | 25 | %s""".formatted(
-            jdk21.javacExecutable(),
-            jdk25a.javacExecutable(),
-            jdk25b.javacExecutable()
-        ));
-    }
-
-    @Test
-    void listRendererRejectsNullInput() {
-        assertThatThrownBy(() -> new ToolchainListRenderer().render(null))
-            .isInstanceOf(NullPointerException.class)
-            .hasMessage("toolchains");
     }
 
     @Test
@@ -242,7 +176,7 @@ final class ToolchainFoundationTest {
             home = "."
             """);
 
-        final List<ToolchainMetadata> installed = new ToolchainRegistry(tempDir).installed();
+        final List<ToolchainMetadata> installed = manager(tempDir).installedToolchains();
 
         assertThat(installed).extracting(ToolchainMetadata::id, ToolchainMetadata::version)
             .containsExactly(
@@ -278,7 +212,7 @@ final class ToolchainFoundationTest {
             home = "."
             """);
 
-        final List<ToolchainMetadata> installed = new ToolchainRegistry(tempDir).installed();
+        final List<ToolchainMetadata> installed = manager(tempDir).installedToolchains();
 
         assertThat(installed).extracting(ToolchainMetadata::id, metadata -> metadata.home().getFileName().toString())
             .containsExactly(
@@ -300,5 +234,9 @@ final class ToolchainFoundationTest {
             Optional.empty(),
             Optional.empty()
         );
+    }
+
+    private static ToolchainManager manager(final Path home) {
+        return new ToolchainManager(home, executable -> new ToolchainManager.ToolStatus(executable));
     }
 }

@@ -34,10 +34,6 @@ final class JavanHostOnlyMethodsTest {
             method("property", "(Ljava/util/Properties;)Ljava/lang/String;")
         )).isTrue();
         assertThat(JavanHostOnlyMethods.isHostOnlyMethod(
-            "javan/toolchain/ToolchainMetadataException",
-            method("<init>", "(Ljava/lang/String;Ljava/lang/Throwable;)V")
-        )).isTrue();
-        assertThat(JavanHostOnlyMethods.isHostOnlyMethod(
             "javan/cli/Cli",
             method("run", "(Ljava/nio/file/Path;Ljava/io/PrintStream;Ljava/io/PrintStream;[Ljava/lang/String;)I")
         )).isTrue();

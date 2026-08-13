@@ -4,9 +4,6 @@ import javan.util.ProcessRunner;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -19,21 +16,15 @@ final class JavacWrapperTest {
     @Test
     void delegatesToTheResolvedJavacWithUnchangedArgumentsAndOutput() throws Exception {
         final RecordingProcessRunner runner = new RecordingProcessRunner(new ProcessRunner.Result(17, "out", "err"));
-        final ByteArrayOutputStream stdout = new ByteArrayOutputStream();
-        final ByteArrayOutputStream stderr = new ByteArrayOutputStream();
         final Path javac = tempDir.resolve("jdk/bin/javac");
 
-        final int exitCode = new JavacWrapper(runner).run(
+        final ProcessRunner.Result result = new JavacWrapper(runner).invoke(
             tempDir,
-            new PrintStream(stdout, true, StandardCharsets.UTF_8),
-            new PrintStream(stderr, true, StandardCharsets.UTF_8),
             javac,
             List.of("--release", "25", "Main.java")
         );
 
-        assertThat(exitCode).isEqualTo(17);
-        assertThat(stdout.toString(StandardCharsets.UTF_8)).isEqualTo("out");
-        assertThat(stderr.toString(StandardCharsets.UTF_8)).isEqualTo("err");
+        assertThat(result).isEqualTo(new ProcessRunner.Result(17, "out", "err"));
         assertThat(runner.command()).containsExactly(
             javac.toAbsolutePath().normalize().toString(),
             "--release",
@@ -86,7 +77,7 @@ final class JavacWrapperTest {
         ));
 
         assertThat(parsed.pass()).isTrue();
-        assertThat(parsed.mode()).isEqualTo(FacadeMode.BUILD);
+        assertThat(parsed.mode()).isEqualTo(JavacWrapper.FacadeMode.BUILD);
         assertThat(parsed.mainClass()).contains("com.acme.Main");
         assertThat(parsed.outputName()).contains("acme");
         assertThat(parsed.targets()).containsExactly("darwin/arm64");

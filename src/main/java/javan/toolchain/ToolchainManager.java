@@ -1,11 +1,11 @@
 package javan.toolchain;
 
-import javan.util.ProcessRunner;
 import javan.util.Strings2;
 import javan.toolchain.facade.JdkFacadeGenerator;
 import javan.toolchain.facade.JdkFacadeStore;
 
 import java.io.IOException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -21,9 +21,6 @@ import java.util.Optional;
 public final class ToolchainManager {
     private final Path javanHome;
     private final CommandProbe commandProbe;
-    private final SettingsTomlReader settingsReader;
-    private final ToolchainRegistry registry;
-    private final ToolchainListRenderer listRenderer;
     private final JdkInventory jdkInventory;
     private final JdkProvisioner jdkProvisioner;
 
@@ -35,26 +32,14 @@ public final class ToolchainManager {
     }
 
     /**
-     * Creates a toolchain manager.
-     *
-     * @param processRunner process runner
-     */
-    public ToolchainManager(final ProcessRunner processRunner) {
-        this(defaultJavanHome(), pathCommandProbe(processRunner));
-    }
-
-    /**
      * Creates a deterministic toolchain manager.
      *
      * @param javanHome user-global javan home
      * @param commandProbe command resolver
      */
-    public ToolchainManager(final Path javanHome, final CommandProbe commandProbe) {
+    ToolchainManager(final Path javanHome, final CommandProbe commandProbe) {
         this.javanHome = Objects.requireNonNull(javanHome, "javanHome").toAbsolutePath().normalize();
         this.commandProbe = Objects.requireNonNull(commandProbe, "commandProbe");
-        this.settingsReader = new SettingsTomlReader();
-        this.registry = new ToolchainRegistry(this.javanHome);
-        this.listRenderer = new ToolchainListRenderer();
         this.jdkInventory = new JdkInventory();
         this.jdkProvisioner = new JdkProvisioner(this.javanHome);
     }
@@ -119,7 +104,7 @@ public final class ToolchainManager {
             report.append("  installed: none");
         } else {
             report.append("  installed:").append(System.lineSeparator())
-                .append(indentInstalledReport(listRenderer.render(entries)));
+                .append(indentInstalledReport(renderToolchains(entries)));
         }
         return report.toString();
     }
@@ -314,60 +299,85 @@ public final class ToolchainManager {
         return "rejected";
     }
 
-    /**
-     * Returns the user-global javan home.
-     *
-     * @return home path
-     */
-    public Path javanHome() {
+    Path javanHome() {
         return javanHome;
     }
 
-    /**
-     * Reads global settings.
-     *
-     * @return settings
-     * @throws IOException when settings cannot be read
-     */
-    public JavanSettings settings() throws IOException {
-        return settingsReader.read(javanHome);
+    JavanSettings settings() throws IOException {
+        return JavanSettings.read(javanHome);
     }
 
-    /**
-     * Lists installed toolchain metadata.
-     *
-     * @return installed toolchains
-     * @throws IOException when metadata cannot be read
-     */
-    public List<ToolchainMetadata> installedToolchains() throws IOException {
-        return registry.installed();
+    List<ToolchainMetadata> installedToolchains() throws IOException {
+        final Path toolchains = toolchainsPath();
+        if (!Files.isDirectory(toolchains)) {
+            return List.of();
+        }
+        final List<Path> installs = new ArrayList<>();
+        final DirectoryStream<Path> children = Files.newDirectoryStream(toolchains);
+        for (final Path child : children) {
+            if (Files.isDirectory(child)) {
+                insertPath(installs, child);
+            }
+        }
+        children.close();
+        final List<ToolchainMetadata> installed = new ArrayList<>();
+        for (final Path install : installs) {
+            final Optional<ToolchainMetadata> metadata = ToolchainMetadata.read(install.resolve("toolchain.toml"));
+            if (metadata.isPresent()) {
+                insertMetadata(installed, metadata.orElseThrow());
+            }
+        }
+        return List.copyOf(installed);
     }
 
-    /**
-     * Renders installed toolchain metadata.
-     *
-     * @return deterministic list
-     * @throws IOException when metadata cannot be read
-     */
-    public String installedToolchainReport() throws IOException {
-        return listRenderer.render(installedToolchains());
+    private static void insertPath(final List<Path> paths, final Path path) {
+        int index = 0;
+        while (index < paths.size()
+            && Strings2.compareAscii(paths.get(index).getFileName().toString(), path.getFileName().toString()) <= 0) {
+            index++;
+        }
+        paths.add(index, path);
     }
 
-    /**
-     * Returns the global settings path.
-     *
-     * @return settings file path
-     */
-    public Path settingsPath() {
+    private static void insertMetadata(final List<ToolchainMetadata> values, final ToolchainMetadata metadata) {
+        int index = 0;
+        while (index < values.size() && compareMetadata(values.get(index), metadata) <= 0) {
+            index++;
+        }
+        values.add(index, metadata);
+    }
+
+    private static int compareMetadata(final ToolchainMetadata left, final ToolchainMetadata right) {
+        int result = Strings2.compareAscii(left.id(), right.id());
+        if (result == 0) {
+            result = Strings2.compareAscii(left.kind().value(), right.kind().value());
+        }
+        if (result == 0) {
+            result = Strings2.compareAscii(left.version(), right.version());
+        }
+        return result == 0 ? Strings2.compareAscii(left.home().toString(), right.home().toString()) : result;
+    }
+
+    private static String renderToolchains(final List<ToolchainMetadata> toolchains) {
+        final StringBuilder report = new StringBuilder("Toolchains").append(System.lineSeparator());
+        if (toolchains.isEmpty()) {
+            return report.append("  (none)").toString();
+        }
+        for (final ToolchainMetadata metadata : toolchains) {
+            report.append("  ")
+                .append(metadata.id()).append(" | ")
+                .append(metadata.kind().value()).append(" | ")
+                .append(metadata.version()).append(" | ")
+                .append(metadata.javacExecutable()).append(System.lineSeparator());
+        }
+        return Strings2.stripTrailingAscii(report.toString());
+    }
+
+    Path settingsPath() {
         return javanHome.resolve("settings.toml");
     }
 
-    /**
-     * Returns the global toolchain install root.
-     *
-     * @return toolchains directory
-     */
-    public Path toolchainsPath() {
+    Path toolchainsPath() {
         return javanHome.resolve("toolchains");
     }
 
@@ -530,10 +540,6 @@ public final class ToolchainManager {
         return result.toString();
     }
 
-    static String indentInstalledReportForTesting(final String report) {
-        return indentInstalledReport(report);
-    }
-
     private static Path defaultJavanHome() {
         return JavanHome.resolve();
     }
@@ -543,11 +549,6 @@ public final class ToolchainManager {
             return List.of("gcc", "clang", "cc");
         }
         return List.of("cc", "clang", "gcc");
-    }
-
-    private static CommandProbe pathCommandProbe(final ProcessRunner processRunner) {
-        Objects.requireNonNull(processRunner, "processRunner");
-        return new PathCommandProbe(System.getenv("PATH"));
     }
 
     static Optional<Path> resolveExecutableOnPath(
@@ -588,7 +589,7 @@ public final class ToolchainManager {
      * Resolves executable availability.
      */
     @FunctionalInterface
-    public interface CommandProbe {
+    interface CommandProbe {
         /**
          * Finds a command.
          *
@@ -604,7 +605,7 @@ public final class ToolchainManager {
      * @param name requested command name
      * @param path resolved executable path
      */
-    public record ToolStatus(String name, Optional<Path> path) {
+    record ToolStatus(String name, Optional<Path> path) {
         /**
          * Creates a status.
          */

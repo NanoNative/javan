@@ -1,10 +1,9 @@
 package javan.toolchain.facade;
 
-import javan.toolchain.CurrentJdkTools;
 import javan.util.ProcessRunner;
 
 import java.io.IOException;
-import java.io.PrintStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,6 +14,7 @@ import java.util.Optional;
  * Delegates the Javan javac facade to a selected real javac executable.
  */
 public final class JavacWrapper {
+    private static final String HEX = "0123456789abcdef";
     private final ProcessRunner processRunner;
 
     /**
@@ -22,7 +22,7 @@ public final class JavacWrapper {
      *
      * @param processRunner process runner used to invoke javac
      */
-    public JavacWrapper(final ProcessRunner processRunner) {
+    JavacWrapper(final ProcessRunner processRunner) {
         this.processRunner = Objects.requireNonNull(processRunner, "processRunner");
     }
 
@@ -31,52 +31,6 @@ public final class JavacWrapper {
      */
     public JavacWrapper() {
         this(new ProcessRunner());
-    }
-
-    /**
-     * Runs the current JDK javac executable in the requested working directory.
-     *
-     * @param cwd current working directory
-     * @param out stdout destination
-     * @param err stderr destination
-     * @param args javac arguments
-     * @return javac exit code
-     * @throws IOException when javac cannot be started or output cannot be copied
-     * @throws InterruptedException when interrupted while waiting for javac
-     */
-    public int run(final Path cwd, final PrintStream out, final PrintStream err, final List<String> args)
-        throws IOException, InterruptedException {
-        return run(cwd, out, err, Path.of(CurrentJdkTools.javac()), args);
-    }
-
-    /**
-     * Runs a selected javac executable in the requested working directory.
-     *
-     * @param cwd current working directory
-     * @param out stdout destination
-     * @param err stderr destination
-     * @param javacExecutable selected real javac executable
-     * @param args javac arguments
-     * @return javac exit code
-     * @throws IOException when javac cannot be started or output cannot be copied
-     * @throws InterruptedException when interrupted while waiting for javac
-     */
-    public int run(
-        final Path cwd,
-        final PrintStream out,
-        final PrintStream err,
-        final Path javacExecutable,
-        final List<String> args
-    ) throws IOException, InterruptedException {
-        Objects.requireNonNull(cwd, "cwd");
-        Objects.requireNonNull(out, "out");
-        Objects.requireNonNull(err, "err");
-        Objects.requireNonNull(javacExecutable, "javacExecutable");
-        Objects.requireNonNull(args, "args");
-        final ProcessRunner.Result result = invoke(cwd, javacExecutable, args);
-        out.print(result.stdout());
-        err.print(result.stderr());
-        return result.exitCode();
     }
 
     /**
@@ -280,6 +234,73 @@ public final class JavacWrapper {
             """;
     }
 
+    /**
+     * Writes the immutable outcome of one facade invocation.
+     *
+     * @param outputDirectory Javan output directory, normally {@code .javan}
+     * @param outcome invocation outcome
+     * @return JSON report path
+     * @throws IOException when the report cannot be written
+     */
+    public static Path writeReport(final Path outputDirectory, final InvocationOutcome outcome) throws IOException {
+        Objects.requireNonNull(outputDirectory, "outputDirectory");
+        Objects.requireNonNull(outcome, "outcome");
+        final Path reports = outputDirectory.toAbsolutePath().normalize().resolve("reports");
+        Files.createDirectories(reports);
+        final Path json = reports.resolve("javac-invocation.json");
+        Files.writeString(json, invocationJson(outcome));
+        Files.writeString(reports.resolve("javac-invocation.md"), invocationMarkdown(outcome));
+        return json;
+    }
+
+    private static String invocationJson(final InvocationOutcome outcome) {
+        final String classOutput = outcome.classOutput().isPresent()
+            ? "\"" + json(outcome.classOutput().orElseThrow().toString()) + "\""
+            : "null";
+        return "{\n"
+            + "  \"schemaVersion\": 1,\n"
+            + "  \"javacExitCode\": " + outcome.javacExitCode() + ",\n"
+            + "  \"analysis\": \"" + json(outcome.analysis()) + "\",\n"
+            + "  \"reason\": \"" + json(outcome.reason()) + "\",\n"
+            + "  \"classOutput\": " + classOutput + ",\n"
+            + "  \"diagnostics\": " + outcome.diagnosticCount() + "\n"
+            + "}\n";
+    }
+
+    private static String invocationMarkdown(final InvocationOutcome outcome) {
+        final String classOutput = outcome.classOutput().isPresent()
+            ? outcome.classOutput().orElseThrow().toString()
+            : "not available";
+        return "# Javan Javac Invocation\n\n"
+            + "- javac exit code: " + outcome.javacExitCode() + '\n'
+            + "- native analysis: " + outcome.analysis() + '\n'
+            + "- reason: " + outcome.reason() + '\n'
+            + "- class output: " + classOutput + '\n'
+            + "- diagnostics: " + outcome.diagnosticCount() + '\n';
+    }
+
+    private static String json(final String value) {
+        final StringBuilder result = new StringBuilder();
+        for (int index = 0; index < value.length(); index++) {
+            final char character = value.charAt(index);
+            if (character == '\\' || character == '"') {
+                result.append('\\');
+            }
+            if (character == '\n') {
+                result.append("\\n");
+            } else if (character == '\r') {
+                result.append("\\r");
+            } else if (character == '\t') {
+                result.append("\\t");
+            } else if (character < ' ') {
+                result.append("\\u00").append(HEX.charAt((character >>> 4) & 0x0f)).append(HEX.charAt(character & 0x0f));
+            } else {
+                result.append(character);
+            }
+        }
+        return result.toString();
+    }
+
     private static boolean classpathOption(final String arg) {
         return "-cp".equals(arg) || "-classpath".equals(arg) || "--class-path".equals(arg);
     }
@@ -418,6 +439,45 @@ public final class JavacWrapper {
                 Optional.empty(),
                 error
             );
+        }
+    }
+
+    /** Selected post-compile facade behavior. */
+    public enum FacadeMode {
+        REPORT,
+        OFF,
+        WARN,
+        STRICT,
+        BUILD
+    }
+
+    /**
+     * One complete facade invocation outcome.
+     *
+     * @param javacExitCode real javac exit code
+     * @param analysis native analysis state
+     * @param reason concise state explanation
+     * @param classOutput class-output directory when known
+     * @param diagnosticCount diagnostics written by completed analysis
+     */
+    public record InvocationOutcome(
+        int javacExitCode,
+        String analysis,
+        String reason,
+        Optional<Path> classOutput,
+        int diagnosticCount
+    ) {
+        /** Creates an immutable invocation outcome. */
+        public InvocationOutcome {
+            analysis = Objects.requireNonNull(analysis, "analysis");
+            reason = Objects.requireNonNull(reason, "reason");
+            classOutput = Objects.requireNonNull(classOutput, "classOutput");
+            if (classOutput.isPresent()) {
+                classOutput = Optional.of(classOutput.orElseThrow().toAbsolutePath().normalize());
+            }
+            if (diagnosticCount < 0) {
+                throw new IllegalArgumentException("diagnosticCount");
+            }
         }
     }
 }

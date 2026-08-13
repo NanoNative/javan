@@ -96,7 +96,7 @@ final class ToolchainParsingTest {
 
     @Test
     void settingsReaderPrefersPrimaryKeysAndParsesFalseBoolean() {
-        final JavanSettings settings = new SettingsTomlReader().parse("""
+        final JavanSettings settings = JavanSettings.parse("""
             default_toolchain = "temurin-25"
             default_jdk = "25"
             auto_install = false
@@ -111,7 +111,7 @@ final class ToolchainParsingTest {
 
     @Test
     void settingsReaderRejectsInvalidBoolean() {
-        assertThatThrownBy(() -> new SettingsTomlReader().parse("auto_install = maybe\n"))
+        assertThatThrownBy(() -> JavanSettings.parse("auto_install = maybe\n"))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessage("Expected boolean for auto_install: maybe");
     }
@@ -160,12 +160,12 @@ final class ToolchainParsingTest {
 
     @Test
     void toolchainMetadataReaderReturnsEmptyForMissingFile() throws Exception {
-        assertThat(new ToolchainMetadataReader().read(tempDir.resolve("missing.toml"))).isEmpty();
+        assertThat(ToolchainMetadata.read(tempDir.resolve("missing.toml"))).isEmpty();
     }
 
     @Test
     void toolchainMetadataReaderRejectsUnknownKind() {
-        assertThatThrownBy(() -> new ToolchainMetadataReader().parse(tempDir.resolve("toolchain.toml"), """
+        assertThatThrownBy(() -> ToolchainMetadata.parse(tempDir.resolve("toolchain.toml"), """
             id = "temurin-25"
             kind = "runtime"
             version = "25"
@@ -176,7 +176,7 @@ final class ToolchainParsingTest {
 
     @Test
     void toolchainMetadataReaderRejectsMissingRequiredField() {
-        assertThatThrownBy(() -> new ToolchainMetadataReader().parse(tempDir.resolve("toolchain.toml"), """
+        assertThatThrownBy(() -> ToolchainMetadata.parse(tempDir.resolve("toolchain.toml"), """
             kind = "jdk"
             version = "25"
             """))
@@ -188,7 +188,7 @@ final class ToolchainParsingTest {
     void toolchainMetadataReaderKeepsAbsoluteHome() {
         final Path absoluteHome = tempDir.resolve("jdk-home").toAbsolutePath().normalize();
 
-        final ToolchainMetadata metadata = new ToolchainMetadataReader().parse(tempDir.resolve("toolchain.toml"), """
+        final ToolchainMetadata metadata = ToolchainMetadata.parse(tempDir.resolve("toolchain.toml"), """
             id = "temurin-25"
             kind = "jdk"
             version = "25"
@@ -199,25 +199,16 @@ final class ToolchainParsingTest {
     }
 
     @Test
-    void toolchainListRendererRendersEmptyList() {
-        assertThat(new ToolchainListRenderer().render(List.of())).isEqualTo("Toolchains\n  (none)");
-    }
-
-    @Test
     void toolchainRegistryIgnoresNonDirectoriesAndMissingMetadata() throws Exception {
         final Path home = tempDir.resolve("home");
         final Path toolchains = home.resolve("toolchains");
         Files.createDirectories(toolchains.resolve("zulu-25"));
         Files.writeString(toolchains.resolve("README.txt"), "ignore");
 
-        assertThat(new ToolchainRegistry(home).installed()).isEmpty();
+        assertThat(manager(home).installedToolchains()).isEmpty();
     }
 
-    @Test
-    void toolchainMetadataExceptionKeepsMessageAndCause() {
-        final IllegalArgumentException cause = new IllegalArgumentException("broken");
-        final ToolchainMetadataException exception = new ToolchainMetadataException("invalid metadata", cause);
-
-        assertThat(exception).hasMessage("invalid metadata").hasCause(cause);
+    private static ToolchainManager manager(final Path home) {
+        return new ToolchainManager(home, executable -> new ToolchainManager.ToolStatus(executable));
     }
 }

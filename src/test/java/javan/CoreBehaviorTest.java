@@ -5582,50 +5582,6 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void staticVerifierIgnoresUnreachableHostOnlyToolchainMetadataCauseConstructor() {
-        final ClassFile exception = classWithMethods(
-            "javan/toolchain/ToolchainMetadataException",
-            "java/lang/RuntimeException",
-            0,
-            List.of(),
-            methodInfo("<init>", "(Ljava/lang/String;Ljava/lang/Throwable;)V", instruction(
-                0,
-                183,
-                "invokespecial",
-                new MethodRef("java/lang/RuntimeException", "<init>", "(Ljava/lang/String;Ljava/lang/Throwable;)V")
-            ))
-        );
-
-        final List<Diagnostic> diagnostics = new StaticVerifier().verify(Map.of(exception.name(), exception), List.of());
-
-        assertThat(diagnostics).isEmpty();
-    }
-
-    @Test
-    void staticVerifierRejectsReachableHostOnlyToolchainMetadataCauseConstructor() {
-        final String descriptor = "(Ljava/lang/String;Ljava/lang/Throwable;)V";
-        final ClassFile exception = classWithMethods(
-            "javan/toolchain/ToolchainMetadataException",
-            "java/lang/RuntimeException",
-            0,
-            List.of(),
-            methodInfo("<init>", descriptor, instruction(
-                0,
-                183,
-                "invokespecial",
-                new MethodRef("java/lang/RuntimeException", "<init>", "(Ljava/lang/String;Ljava/lang/Throwable;)V")
-            ))
-        );
-
-        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
-            Map.of(exception.name(), exception),
-            List.of(new EntryPoint(exception.name(), "<init>", descriptor))
-        );
-
-        assertThat(diagnostics).extracting(Diagnostic::code).contains("JAVAN031");
-    }
-
-    @Test
     void staticVerifierIgnoresUnreachableHostOnlyCliRunFacade() {
         final String descriptor = "(Ljava/nio/file/Path;Ljava/io/PrintStream;Ljava/io/PrintStream;[Ljava/lang/String;)I";
         final ClassFile cli = classWithMethods(
