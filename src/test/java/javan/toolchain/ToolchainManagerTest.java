@@ -42,6 +42,24 @@ final class ToolchainManagerTest {
     }
 
     @Test
+    void jdkListRescansTheCurrentJdkAndUseSwitchesTheCurrentFacade() throws Exception {
+        final Path home = tempDir.resolve("home");
+        final ToolchainManager manager = new ToolchainManager(home, missingProbe());
+        final String feature = Integer.toString(Runtime.version().feature());
+
+        final String list = manager.listJdks();
+        final String selected = manager.useJdk(feature);
+        final String active = manager.listJdks();
+
+        assertThat(list).contains("JDKs", "discovered:");
+        assertThat(selected).contains("JDK selected", "facade:");
+        assertThat(active).contains("active");
+        assertThat(home.resolve("facades/current")).isSymbolicLink();
+        assertThat(home.resolve("facades/current/bin/java")).isExecutable();
+        assertThat(home.resolve("facades/current/bin/javac")).isExecutable();
+    }
+
+    @Test
     void doctorReportsJavaHome() {
         final ToolchainManager manager = new ToolchainManager(tempDir.resolve("home"), missingProbe());
 

@@ -81,7 +81,8 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             .contains("javan-" + version + "-linux-aarch64.tar.gz")
             .doesNotContain("macos-aarch64")
             .contains("assert_match version.to_s, shell_output(\"#{bin}/javan --version\")")
-            .contains("assert_match \"javan home:\", shell_output(\"#{bin}/javan doctor\")");
+            .contains("assert_match \"javan home:\", shell_output(\"#{bin}/javan doctor\")")
+            .doesNotContain("javan install");
     }
 
     @Test

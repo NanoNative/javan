@@ -85,10 +85,10 @@ final class CliCommandIntegrationTest {
     }
 
     @Test
-    void helpListsJdkFacadeCommand() {
+    void helpDoesNotAdvertiseLowLevelJdkFacadePlumbing() {
         final CliRun run = run(tempDir, "--help");
 
-        assertThat(run.stdout()).contains("javan jdk facade <directory>");
+        assertThat(run.stdout()).doesNotContain("javan jdk facade <directory>");
     }
 
     @Test
@@ -106,10 +106,10 @@ final class CliCommandIntegrationTest {
     }
 
     @Test
-    void helpMentionsJavacWrapper() {
+    void helpDoesNotAdvertiseTheLegacyJavacEntryPoint() {
         final CliRun run = run(tempDir, "--help");
 
-        assertThat(run.stdout()).contains("javan javac [javac args...]");
+        assertThat(run.stdout()).doesNotContain("javan javac [javac args...]");
     }
 
     @Test

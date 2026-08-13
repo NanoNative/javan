@@ -3,6 +3,7 @@ package javan.toolchain;
 import javan.util.ProcessRunner;
 import javan.util.Strings2;
 import javan.toolchain.facade.JdkFacadeGenerator;
+import javan.toolchain.facade.JdkFacadeStore;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -23,6 +24,8 @@ public final class ToolchainManager {
     private final SettingsTomlReader settingsReader;
     private final ToolchainRegistry registry;
     private final ToolchainListRenderer listRenderer;
+    private final JdkInventory jdkInventory;
+    private final TemurinJdkInstaller temurinInstaller;
 
     /**
      * Creates a toolchain manager.
@@ -52,6 +55,8 @@ public final class ToolchainManager {
         this.settingsReader = new SettingsTomlReader();
         this.registry = new ToolchainRegistry(this.javanHome);
         this.listRenderer = new ToolchainListRenderer();
+        this.jdkInventory = new JdkInventory();
+        this.temurinInstaller = new TemurinJdkInstaller(this.javanHome);
     }
 
     /**
@@ -131,6 +136,47 @@ public final class ToolchainManager {
     }
 
     /**
+     * Rescans every known local JDK location and renders the complete JDK inventory.
+     *
+     * @return discovered JDKs and active facade state
+     * @throws IOException when managed toolchain metadata cannot be read
+     */
+    public String listJdks() throws IOException {
+        final List<JdkInventory.Entry> entries = jdkInventory.inspect(resolveLocalJdk(Optional.empty()));
+        return renderJdkInventory(entries, activeFacadeBackend());
+    }
+
+    /**
+     * Selects an already installed JDK and switches the stable current facade link.
+     *
+     * @param selector feature version such as {@code 25}, or vendor/version such as {@code corretto@25}
+     * @return selected JDK and switched facade path
+     * @throws IOException when the selected facade cannot be created
+     * @throws InterruptedException when interrupted while switching the facade link
+     */
+    public String useJdk(final String selector) throws IOException, InterruptedException {
+        final JdkInventory.Entry entry = selectedJdk(selector);
+        final JdkFacadeStore.Activation activation = new JdkFacadeStore(facadeRoot()).activate(entry);
+        return "JDK selected" + System.lineSeparator()
+            + "  vendor:  " + entry.vendor() + System.lineSeparator()
+            + "  version: " + entry.version() + System.lineSeparator()
+            + "  backend: " + entry.candidate().home() + System.lineSeparator()
+            + "  facade:  " + activation.current();
+    }
+
+    /**
+     * Installs a stable JDK-shaped facade with JDK 25 as the default backend.
+     *
+     * @param launcher packaged native Javan executable
+     * @return installed facade paths
+     * @throws IOException when installation or JDK discovery fails
+     * @throws InterruptedException when interrupted while publishing the facade
+     */
+    public JavanInstallation.Installation installJavan(final Path launcher) throws IOException, InterruptedException {
+        return new JavanInstallation(javanHome).install(launcher, selectedJdk("25"));
+    }
+
+    /**
      * Resolves local JDK candidates without downloading or mutating anything.
      *
      * @param explicitHome explicitly requested JDK home when present
@@ -166,6 +212,106 @@ public final class ToolchainManager {
             throw new IOException("No usable local JDK found; run javan jdk resolve");
         }
         return new JdkFacadeGenerator().generate(output, resolution.selected().orElseThrow());
+    }
+
+    private Path facadeRoot() throws IOException {
+        final String facadeRoot = System.getenv("JAVAN_FACADE_ROOT");
+        if (!Strings2.isBlank(facadeRoot)) {
+            return Path.of(facadeRoot).toAbsolutePath().normalize();
+        }
+        final Optional<Path> executable = JavanExecutable.resolve();
+        if (executable.isPresent()) {
+            final Path parent = executable.orElseThrow().getParent();
+            if (parent != null && parent.getParent() != null) {
+                final Optional<Path> installedRoot = facadeMetadataValue(parent.getParent().resolve("javan-backend.txt"), "facadeRoot=");
+                if (installedRoot.isPresent()) {
+                    return installedRoot.orElseThrow();
+                }
+            }
+        }
+        return javanHome.resolve("facades");
+    }
+
+    private JdkInventory.Entry selectedJdk(final String selector) throws IOException, InterruptedException {
+        List<JdkInventory.Entry> entries = jdkInventory.inspect(resolveLocalJdk(Optional.empty()));
+        Optional<JdkInventory.Entry> selected = jdkInventory.select(entries, selector);
+        if (selected.isEmpty()) {
+            temurinInstaller.install(selector);
+            entries = jdkInventory.inspect(resolveLocalJdk(Optional.empty()));
+            selected = jdkInventory.select(entries, selector);
+        }
+        if (selected.isEmpty()) {
+            throw new IOException("Verified JDK installation completed but no usable JDK matches " + selector);
+        }
+        return selected.orElseThrow();
+    }
+
+    private Optional<Path> activeFacadeBackend() throws IOException {
+        final Path metadata = facadeRoot().resolve("current/javan-backend.txt");
+        if (!Files.isRegularFile(metadata)) {
+            return Optional.empty();
+        }
+        final String content = Files.readString(metadata);
+        final String prefix = "backendHome=";
+        int start = 0;
+        for (int index = 0; index <= content.length(); index++) {
+            if (index == content.length() || content.charAt(index) == '\n') {
+                final String line = Strings2.slice(content, start, index);
+                if (line.startsWith(prefix)) {
+                    return Optional.of(Path.of(Strings2.slice(line, prefix.length(), line.length())).toAbsolutePath().normalize());
+                }
+                start = index + 1;
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<Path> facadeMetadataValue(final Path metadata, final String prefix) throws IOException {
+        if (!Files.isRegularFile(metadata)) {
+            return Optional.empty();
+        }
+        final String content = Files.readString(metadata);
+        int start = 0;
+        for (int index = 0; index <= content.length(); index++) {
+            if (index == content.length() || content.charAt(index) == '\n') {
+                final String line = Strings2.slice(content, start, index);
+                if (line.startsWith(prefix)) {
+                    return Optional.of(Path.of(Strings2.slice(line, prefix.length(), line.length())).toAbsolutePath().normalize());
+                }
+                start = index + 1;
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static String renderJdkInventory(final List<JdkInventory.Entry> entries, final Optional<Path> activeBackend) {
+        final StringBuilder report = new StringBuilder("JDKs").append(System.lineSeparator());
+        if (entries.isEmpty()) {
+            return report.append("  discovered: none").toString();
+        }
+        report.append("  discovered:").append(System.lineSeparator());
+        for (final JdkInventory.Entry entry : entries) {
+            report.append("    ")
+                .append(activeBackend.filter(path -> path.equals(entry.candidate().home())).isPresent() ? "active" : status(entry))
+                .append("  ")
+                .append(entry.vendor()).append(" ").append(entry.version())
+                .append(" (Java ").append(entry.featureVersion()).append(")")
+                .append("  ").append(entry.candidate().origin())
+                .append("  ").append(entry.candidate().home())
+                .append(System.lineSeparator());
+        }
+        report.setLength(report.length() - System.lineSeparator().length());
+        return report.toString();
+    }
+
+    private static String status(final JdkInventory.Entry entry) {
+        if (entry.facadeReady()) {
+            return "available";
+        }
+        if (entry.candidate().usable()) {
+            return "delegatable";
+        }
+        return "rejected";
     }
 
     /**

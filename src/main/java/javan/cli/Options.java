@@ -75,6 +75,12 @@ public record Options(
         if ("--version".equals(args[0]) || "-V".equals(args[0])) {
             return ParseResult.success(empty(Command.VERSION));
         }
+        if ("--jn-facade-java".equals(args[0])) {
+            return ParseResult.success(facade(Command.FACADE_JAVA, args));
+        }
+        if ("--jn-facade-javac".equals(args[0])) {
+            return ParseResult.success(facade(Command.FACADE_JAVAC, args));
+        }
         final Command command = Command.parse(args[0]).orElse(Command.HELP);
         if (command == Command.JAVAC) {
             return ParseResult.success(new Options(
@@ -251,6 +257,26 @@ public record Options(
             false,
             Optional.empty(),
             List.of()
+        );
+    }
+
+    private static Options facade(final Command command, final String[] args) {
+        return new Options(
+            command,
+            Optional.empty(),
+            Optional.empty(),
+            List.of(),
+            List.of(),
+            Optional.empty(),
+            BuildKind.APP,
+            "APP",
+            List.of(),
+            Profile.CORE,
+            List.of(),
+            List.of(),
+            false,
+            Optional.empty(),
+            List.of(java.util.Arrays.copyOfRange(args, 1, args.length))
         );
     }
 

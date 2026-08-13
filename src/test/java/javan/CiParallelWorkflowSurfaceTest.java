@@ -157,7 +157,7 @@ final class CiParallelWorkflowSurfaceTest {
             .map(method -> method.getName()))
             .containsExactlyInAnyOrder(
                 "writeEmitsPlatformRecursiveRuntimeLockForSharedHeapState",
-                "writeMarksWindowsProcessExecutionUnsupportedUntilPorted",
+                "writeProvidesNativeWindowsProcessExecution",
                 "generatedRuntimeCrossCompilesToWindowsPeWhenMinGwIsAvailable",
                 "generatedRuntimeExecutesBasicWindowsProbeWhenHostCompilerIsAvailable",
                 "runtimeHostThreadGetsDistinctCurrentThreadAndDetachesCleanly",

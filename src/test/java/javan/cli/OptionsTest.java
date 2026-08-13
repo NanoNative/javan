@@ -49,6 +49,15 @@ final class OptionsTest {
     }
 
     @Test
+    void parseResultPreservesInternalJavaFacadeArgumentsWithoutTreatingThemAsPublicOptions() {
+        final Options.ParseResult result = Options.parseResult(new String[]{"--jn-facade-java", "jdk", "list"});
+
+        assertThat(result.pass()).isTrue();
+        assertThat(result.options().command()).isEqualTo(Command.FACADE_JAVA);
+        assertThat(result.options().passthroughArgs()).containsExactly("jdk", "list");
+    }
+
+    @Test
     void parseResultRejectsMissingClassesValue() {
         final Options.ParseResult result = Options.parseResult(new String[]{"check", "--classes"});
 

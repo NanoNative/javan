@@ -154,6 +154,7 @@ final class RuntimeHeaderFile {
         void* javan_system_getenv(const char* name);
         void* javan_system_get_property(const char* key);
         void* javan_system_get_property_or_default(const char* key, const char* fallback);
+        void javan_runtime_set_executable_path(const char* argv0);
         void javan_system_arraycopy(void* source, int source_position, void* target, int target_position, int length);
         void javan_system_exit(int status);
         int javan_file_separator_char(void);
