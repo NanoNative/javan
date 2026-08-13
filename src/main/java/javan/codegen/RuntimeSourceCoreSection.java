@@ -79,6 +79,7 @@ final class RuntimeSourceCoreSection {
         static JAVAN_THREAD_LOCAL int javan_last_error_set = 0;
         static JAVAN_THREAD_LOCAL jmp_buf* javan_panic_target = NULL;
         static JAVAN_THREAD_LOCAL JavanSourceContext* javan_source_context_top = NULL;
+        static char javan_runtime_executable_path[4096];
 
         static void javan_sleep_micros(unsigned long micros) {
             if (micros == 0UL) {
@@ -131,6 +132,49 @@ final class RuntimeSourceCoreSection {
             }
             memcpy(target, value, length);
             target[length] = '\\0';
+        }
+
+        void javan_runtime_set_executable_path(const char* argv0) {
+            if (argv0 == NULL || argv0[0] == '\\0') {
+                javan_runtime_executable_path[0] = '\\0';
+                return;
+            }
+        #if defined(_WIN32)
+            DWORD length = GetModuleFileNameA(NULL, javan_runtime_executable_path, (DWORD) sizeof(javan_runtime_executable_path));
+            if (length == 0 || length >= sizeof(javan_runtime_executable_path)) {
+                javan_copy_error_field(javan_runtime_executable_path, sizeof(javan_runtime_executable_path), argv0);
+            }
+        #else
+            if (argv0[0] == '/') {
+                javan_copy_error_field(javan_runtime_executable_path, sizeof(javan_runtime_executable_path), argv0);
+                return;
+            }
+            if (strchr(argv0, '/') != NULL) {
+                char current[4096];
+                if (getcwd(current, sizeof(current)) != NULL) {
+                    snprintf(javan_runtime_executable_path, sizeof(javan_runtime_executable_path), "%s/%s", current, argv0);
+                    return;
+                }
+            }
+            const char* path = getenv("PATH");
+            if (path != NULL) {
+                const char* start = path;
+                while (start != NULL) {
+                    const char* end = strchr(start, ':');
+                    unsigned long length = end == NULL ? strlen(start) : (unsigned long) (end - start);
+                    if (length > 0 && length + strlen(argv0) + 2 < sizeof(javan_runtime_executable_path)) {
+                        memcpy(javan_runtime_executable_path, start, length);
+                        javan_runtime_executable_path[length] = '/';
+                        strcpy(javan_runtime_executable_path + length + 1, argv0);
+                        if (access(javan_runtime_executable_path, X_OK) == 0) {
+                            return;
+                        }
+                    }
+                    start = end == NULL ? NULL : end + 1;
+                }
+            }
+            javan_copy_error_field(javan_runtime_executable_path, sizeof(javan_runtime_executable_path), argv0);
+        #endif
         }
 
         static const char* javan_last_error_field(const char* value) {
@@ -1433,6 +1477,9 @@ final class RuntimeSourceCoreSection {
             }
             if (strcmp(key, "java.version") == 0) {
                 return "native";
+            }
+            if (strcmp(key, "javan.executable") == 0) {
+                return javan_runtime_executable_path[0] == '\\0' ? NULL : javan_runtime_executable_path;
             }
             return NULL;
         }

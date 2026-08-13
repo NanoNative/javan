@@ -1,6 +1,8 @@
 package javan.cli;
 
 import javan.Javan;
+import javan.toolchain.JavanExecutable;
+import javan.toolchain.JavanInstallation;
 import javan.toolchain.JdkResolver;
 import javan.toolchain.ToolchainManager;
 import javan.toolchain.facade.FacadeMode;
@@ -8,6 +10,7 @@ import javan.toolchain.facade.JavacInvocationReport;
 import javan.toolchain.facade.JavacWrapper;
 import javan.util.Files2;
 import javan.util.ProcessRunner;
+import javan.util.Strings2;
 import javan.verify.Diagnostic;
 import javan.verify.DiagnosticException;
 
@@ -25,6 +28,7 @@ public final class Cli {
     private final JavacWrapper javacWrapper = new JavacWrapper();
     private final JavacInvocationReport javacInvocationReport = new JavacInvocationReport();
     private final ToolchainManager toolchainManager = new ToolchainManager();
+    private final ProcessRunner processRunner = new ProcessRunner();
 
     /**
      * Runs the command line interface.
@@ -67,7 +71,7 @@ public final class Cli {
      */
     public int runProcess(final Path cwd, final PrintStream out, final PrintStream err, final String... args)
         throws IOException, InterruptedException {
-        final Options.ParseResult parsed = Options.parseResult(args);
+        final Options.ParseResult parsed = Options.parseResult(facadeArguments(args));
         if (!parsed.pass()) {
             err.println("error[JAVAN900]: " + parsed.error());
             return 2;
@@ -88,7 +92,7 @@ public final class Cli {
      */
     public int runUnchecked(final Path cwd, final PrintStream out, final PrintStream err, final String... args)
         throws IOException, InterruptedException {
-        final Options options = Options.parse(args);
+        final Options options = Options.parse(facadeArguments(args));
         return runParsed(cwd, out, err, options);
     }
 
@@ -101,6 +105,13 @@ public final class Cli {
         }
         if (command == Command.VERSION) {
             out.println(Version.full());
+            return 0;
+        }
+        if (command == Command.INSTALL) {
+            if (!options.passthroughArgs().isEmpty() || options.target().isPresent()) {
+                throw new IllegalArgumentException("javan install does not accept arguments");
+            }
+            out.println(install());
             return 0;
         }
         if (command == Command.INSPECT) {
@@ -122,6 +133,12 @@ public final class Cli {
         }
         if (command == Command.JAVAC) {
             return javac(cwd, out, err, options);
+        }
+        if (command == Command.FACADE_JAVAC) {
+            return javac(cwd, out, err, options, facadeBackendHome());
+        }
+        if (command == Command.FACADE_JAVA) {
+            return facadeJava(cwd, out, err, options);
         }
         if (command == Command.COMPAT) {
             return javan.compat(cwd, options, out).pass() ? 0 : 2;
@@ -154,6 +171,7 @@ public final class Cli {
 
             Usage:
               javan --version
+              javan install
               javan inspect [path]
               javan check [path] [--main com.acme.Main]
               javan test [path]
@@ -161,15 +179,15 @@ public final class Cli {
               javan build [path] --jar
               javan build [path] --library --export com.acme.Math.add --bindings c,rust,go,python
               javan run [path] [--main com.acme.Main] [-- args...]
-              javan javac [javac args...]
               javan compat [path] [--main com.acme.Main]
               javan report [path]
               javan clean [path]
               javan doctor
               javan jdk list
+              javan jdk install
+              javan jdk use <25|vendor@25>
               javan jdk doctor
               javan jdk resolve [jdk-home]
-              javan jdk facade <directory>
               javan toolchain list
               javan toolchain doctor
 
@@ -213,12 +231,22 @@ public final class Cli {
 
     private String jdk(final Path cwd, final Options options) throws IOException, InterruptedException {
         if (options.target().isEmpty()) {
-            throw new IllegalArgumentException("Missing JDK command: list, doctor, resolve, or facade");
+            throw new IllegalArgumentException("Missing JDK command: list, install, use, doctor, resolve, or facade");
         }
         final String subcommand = options.target().orElseThrow().toString();
         if ("list".equals(subcommand)) {
             requireNoJdkArguments(options, subcommand);
-            return toolchainManager.listToolchains();
+            return toolchainManager.listJdks();
+        }
+        if ("use".equals(subcommand)) {
+            if (options.passthroughArgs().size() != 1) {
+                throw new IllegalArgumentException("Expected one JDK selector for use, for example: 25 or temurin@25");
+            }
+            return toolchainManager.useJdk(options.passthroughArgs().getFirst());
+        }
+        if ("install".equals(subcommand)) {
+            requireNoJdkArguments(options, subcommand);
+            return install();
         }
         if ("doctor".equals(subcommand)) {
             requireNoJdkArguments(options, subcommand);
@@ -235,6 +263,16 @@ public final class Cli {
 
     private int javac(final Path cwd, final PrintStream out, final PrintStream err, final Options options)
         throws IOException, InterruptedException {
+        return javac(cwd, out, err, options, Optional.empty());
+    }
+
+    private int javac(
+        final Path cwd,
+        final PrintStream out,
+        final PrintStream err,
+        final Options options,
+        final Optional<Path> facadeBackend
+    ) throws IOException, InterruptedException {
         final JavacWrapper.FacadeArguments facade = JavacWrapper.parseFacadeArguments(options.passthroughArgs());
         if (!facade.pass()) {
             err.println("error[JAVAN900]: " + facade.error());
@@ -244,9 +282,7 @@ public final class Cli {
             out.print(JavacWrapper.facadeHelp());
             return 0;
         }
-        final java.util.Optional<JdkResolver.Candidate> selected = toolchainManager
-            .resolveLocalJdk(java.util.Optional.empty())
-            .selected();
+        final java.util.Optional<JdkResolver.Candidate> selected = selectedJdk(facadeBackend);
         if (facade.javanVersion()) {
             writeFacadeVersion(out, selected);
             return 0;
@@ -286,6 +322,113 @@ public final class Cli {
             return analyzeJavacOutput(cwd, facade, out, err);
         }
         return result.exitCode();
+    }
+
+    private int facadeJava(final Path cwd, final PrintStream out, final PrintStream err, final Options options)
+        throws IOException, InterruptedException {
+        if (!options.passthroughArgs().isEmpty() && "jdk".equals(options.passthroughArgs().getFirst())) {
+            final String[] args = new String[options.passthroughArgs().size()];
+            for (int index = 0; index < args.length; index++) {
+                args[index] = options.passthroughArgs().get(index);
+            }
+            final Options jdkOptions = Options.parse(args);
+            out.println(jdk(cwd, jdkOptions));
+            return 0;
+        }
+        final Optional<JdkResolver.Candidate> selected = selectedJdk(facadeBackendHome());
+        if (selected.isEmpty()) {
+            err.println("error[JAVAN900]: Facade backend JDK is unavailable");
+            return 2;
+        }
+        final java.util.ArrayList<String> command = new java.util.ArrayList<>();
+        command.add(selected.orElseThrow().javaExecutable().toString());
+        command.addAll(options.passthroughArgs());
+        final ProcessRunner.Result result = processRunner.run(cwd, command);
+        out.print(result.stdout());
+        err.print(result.stderr());
+        if (requestsBackendHelp(options.passthroughArgs())) {
+            writeJavaFacadeHelp(out);
+        }
+        if (requestsBackendVersion(options.passthroughArgs())) {
+            writeJavaFacadeVersion(out, selected);
+        }
+        return result.exitCode();
+    }
+
+    private Optional<JdkResolver.Candidate> selectedJdk(final Optional<Path> facadeBackend) throws IOException {
+        final JdkResolver.Resolution resolution = toolchainManager.resolveLocalJdk(facadeBackend);
+        if (facadeBackend.isEmpty()) {
+            return resolution.selected();
+        }
+        for (final JdkResolver.Candidate candidate : resolution.candidates()) {
+            if ("explicit".equals(candidate.origin()) && candidate.usable()) {
+                return Optional.of(candidate);
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<Path> facadeBackendHome() throws IOException {
+        final String value = System.getenv("JAVAN_FACADE_BACKEND");
+        if (value != null && !value.isBlank()) {
+            return Optional.of(Path.of(value));
+        }
+        final Optional<Path> executable = JavanExecutable.resolve();
+        if (executable.isEmpty()) {
+            return Optional.empty();
+        }
+        final Path parent = executable.orElseThrow().getParent();
+        if (parent == null || parent.getParent() == null) {
+            return Optional.empty();
+        }
+        return facadeMetadataValue(parent.getParent().resolve("javan-backend.txt"), "backendHome=");
+    }
+
+    private static String[] facadeArguments(final String[] args) throws IOException {
+        if (args.length > 0 && ("--jn-facade-java".equals(args[0]) || "--jn-facade-javac".equals(args[0]))) {
+            return args;
+        }
+        final Optional<Path> executable = JavanExecutable.resolve();
+        if (executable.isEmpty()) {
+            return args;
+        }
+        final Path file = executable.orElseThrow().getFileName();
+        final Path parent = executable.orElseThrow().getParent();
+        if (file == null || parent == null || parent.getParent() == null) {
+            return args;
+        }
+        final String name = file.toString();
+        final boolean javaFacade = "java".equals(name) || "java.exe".equals(name);
+        final boolean javacFacade = "javac".equals(name) || "javac.exe".equals(name);
+        if ((!javaFacade && !javacFacade)
+            || facadeMetadataValue(parent.getParent().resolve("javan-backend.txt"), "facadeRoot=").isEmpty()) {
+            return args;
+        }
+        final String command = javaFacade ? "--jn-facade-java" : "--jn-facade-javac";
+        final String[] result = new String[args.length + 1];
+        result[0] = command;
+        for (int index = 0; index < args.length; index++) {
+            result[index + 1] = args[index];
+        }
+        return result;
+    }
+
+    private static Optional<Path> facadeMetadataValue(final Path metadata, final String prefix) throws IOException {
+        if (!java.nio.file.Files.isRegularFile(metadata)) {
+            return Optional.empty();
+        }
+        final String content = java.nio.file.Files.readString(metadata);
+        int start = 0;
+        for (int index = 0; index <= content.length(); index++) {
+            if (index == content.length() || content.charAt(index) == '\n') {
+                final String line = Strings2.slice(content, start, index);
+                if (line.startsWith(prefix)) {
+                    return Optional.of(Path.of(Strings2.slice(line, prefix.length(), line.length())).toAbsolutePath().normalize());
+                }
+                start = index + 1;
+            }
+        }
+        return Optional.empty();
     }
 
     private int analyzeJavacOutput(
@@ -563,6 +706,23 @@ public final class Cli {
         out.println("Javac:   " + backend.javacExecutable());
     }
 
+    private static void writeJavaFacadeHelp(final PrintStream out) {
+        out.println();
+        out.println("Javan:");
+        out.println("  java jdk list");
+        out.println("  java jdk use <25|vendor@25>");
+        out.println("  java jdk doctor");
+    }
+
+    private static void writeJavaFacadeVersion(final PrintStream out, final java.util.Optional<JdkResolver.Candidate> selected) {
+        out.println();
+        out.println("Javan facade " + Version.number());
+        if (selected.isPresent()) {
+            out.println("Backend: " + selected.orElseThrow().home());
+        }
+        out.println("Management: java jdk list | java jdk use <25|vendor@25>");
+    }
+
     private static void requireNoJdkArguments(final Options options, final String subcommand) {
         if (!options.passthroughArgs().isEmpty()) {
             throw new IllegalArgumentException("Unexpected JDK " + subcommand + " arguments: " + joinArgs(options.passthroughArgs()));
@@ -586,6 +746,20 @@ public final class Cli {
         final Path output = resolveFromCwd(cwd, options.passthroughArgs().getFirst());
         final javan.toolchain.facade.JdkFacadeGenerator.Result facade = toolchainManager.createJdkFacade(output);
         return "JDK facade\n  home:    " + facade.home() + "\n  backend: " + facade.backendHome();
+    }
+
+    private String install() throws IOException, InterruptedException {
+        final JavanInstallation.Installation installation = toolchainManager.installJavan(JavanExecutable.require());
+        return "Javan installed" + System.lineSeparator()
+            + "  scope:    " + installation.location().scope() + System.lineSeparator()
+            + "  jdk home: " + installation.location().publicHome() + System.lineSeparator()
+            + "  backend:  " + installation.backend() + System.lineSeparator()
+            + "  launcher: " + installation.location().publicHome().resolve("bin").resolve(facadeExecutableName()) + System.lineSeparator()
+            + "  commands: java jdk list | java jdk use 25";
+    }
+
+    private static String facadeExecutableName() {
+        return Strings2.toAsciiLowerCase(System.getProperty("os.name", "")).contains("win") ? "javan.exe" : "javan";
     }
 
     private static String joinArgs(final java.util.List<String> values) {

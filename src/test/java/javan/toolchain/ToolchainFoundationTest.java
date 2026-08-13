@@ -86,6 +86,7 @@ final class ToolchainFoundationTest {
         final JavanSettings settings = new SettingsTomlReader().read(tempDir);
 
         assertThat(settings).isEqualTo(JavanSettings.defaults());
+        assertThat(settings.defaultJdkSelector()).isEqualTo("25");
     }
 
     @Test
@@ -104,6 +105,7 @@ final class ToolchainFoundationTest {
             Optional.of("25"),
             true
         ));
+        assertThat(settings.defaultJdkSelector()).isEqualTo("25");
     }
 
     @Test

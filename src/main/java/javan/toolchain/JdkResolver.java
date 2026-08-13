@@ -2,6 +2,7 @@ package javan.toolchain;
 
 import javan.util.Strings2;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -72,7 +73,7 @@ public final class JdkResolver {
      * @param explicitHome explicit JDK home requested by the user
      * @return selected JDK and every candidate that was evaluated
      */
-    public Resolution resolve(final Optional<Path> explicitHome) {
+    public Resolution resolve(final Optional<Path> explicitHome) throws IOException {
         Objects.requireNonNull(explicitHome, "explicitHome");
         final List<Candidate> candidates = new ArrayList<>();
         if (explicitHome.isPresent()) {
@@ -98,7 +99,7 @@ public final class JdkResolver {
         return new Resolution(firstUsable(candidates), List.copyOf(candidates));
     }
 
-    private void addEnvironmentHome(final List<Candidate> candidates, final String name) {
+    private void addEnvironmentHome(final List<Candidate> candidates, final String name) throws IOException {
         final Optional<Path> home = environmentHome(name);
         if (home.isPresent()) {
             candidates.add(fromHome(name, home.orElseThrow()));
@@ -113,7 +114,7 @@ public final class JdkResolver {
         return Optional.of(normalize(Path.of(value)));
     }
 
-    private Candidate fromHome(final String origin, final Path home) {
+    private Candidate fromHome(final String origin, final Path home) throws IOException {
         return candidate(
             origin,
             home,
@@ -123,7 +124,7 @@ public final class JdkResolver {
         );
     }
 
-    private Optional<Candidate> fromPathJavac(final Path javac) {
+    private Optional<Candidate> fromPathJavac(final Path javac) throws IOException {
         final Path bin = javac.getParent();
         if (bin == null || bin.getParent() == null) {
             return Optional.empty();
@@ -132,7 +133,7 @@ public final class JdkResolver {
         return Optional.of(candidate("PATH", home, executable(home, "java"), javac, false));
     }
 
-    private Candidate fromManaged(final ToolchainMetadata toolchain) {
+    private Candidate fromManaged(final ToolchainMetadata toolchain) throws IOException {
         return candidate(
             "managed:" + toolchain.id(),
             toolchain.home(),
@@ -148,10 +149,15 @@ public final class JdkResolver {
         final Path javaExecutable,
         final Path javacExecutable,
         final boolean requiresJdkHome
-    ) {
-        final Path normalizedHome = normalize(home);
-        final Path normalizedJava = normalize(javaExecutable);
-        final Path normalizedJavac = normalize(javacExecutable);
+    ) throws IOException {
+        final Path suppliedHome = normalize(home);
+        final Path normalizedHome = facadeBackendHome(suppliedHome);
+        final Path normalizedJava = suppliedHome.equals(normalizedHome)
+            ? normalize(javaExecutable)
+            : executable(normalizedHome, "java");
+        final Path normalizedJavac = suppliedHome.equals(normalizedHome)
+            ? normalize(javacExecutable)
+            : executable(normalizedHome, "javac");
         final String javacReason = unavailableReason(normalizedJavac, "javac");
         if (!javacReason.isEmpty()) {
             return new Candidate(origin, normalizedHome, normalizedJava, normalizedJavac, false, javacReason);
@@ -178,6 +184,29 @@ public final class JdkResolver {
 
     private static boolean isJdkHome(final Path home) {
         return Files.isRegularFile(home.resolve("release"));
+    }
+
+    private static Path facadeBackendHome(final Path home) throws IOException {
+        final Path metadata = home.resolve("javan-backend.txt");
+        if (!Files.isRegularFile(metadata)) {
+            return home;
+        }
+        final String content = Files.readString(metadata);
+        final String prefix = "backendHome=";
+        int start = 0;
+        for (int index = 0; index <= content.length(); index++) {
+            if (index == content.length() || content.charAt(index) == '\n') {
+                final String line = Strings2.slice(content, start, index);
+                if (line.startsWith(prefix)) {
+                    final Path backend = normalize(Path.of(Strings2.slice(line, prefix.length(), line.length())));
+                    if (!backend.equals(home)) {
+                        return backend;
+                    }
+                }
+                start = index + 1;
+            }
+        }
+        return home;
     }
 
     private static String unavailableReason(final Path executable, final String name) {

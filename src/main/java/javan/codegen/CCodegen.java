@@ -1168,6 +1168,7 @@ public final class CCodegen {
         final boolean entry = appEntry(emitMain, function, program);
         if (entry) {
             c.append("int main(int argc, char** argv) {").append(System.lineSeparator());
+            c.append("    javan_runtime_set_executable_path(argc > 0 ? argv[0] : NULL);").append(System.lineSeparator());
             c.append("    javan_runtime_validate_floating_layout();").append(System.lineSeparator());
             c.append("    javan_runtime_profile_consume_args(&argc, &argv);").append(System.lineSeparator());
             c.append("    (void) argc;").append(System.lineSeparator());

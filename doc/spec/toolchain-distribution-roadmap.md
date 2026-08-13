@@ -1,19 +1,19 @@
 # Toolchain Distribution Roadmap
 
 Status: roadmap only. The first release direction is binary-first; see
-[binary-first-distribution.md](binary-first-distribution.md). The javac facade is the
-primary zero-integration path: Maven, Gradle, and IDE support may use it, but are never
-required for it to work.
+[binary-first-distribution.md](binary-first-distribution.md). The JDK-shaped delegating
+facade is the primary zero-integration path: Maven, Gradle, and IDE support may use it,
+but are never required for it to work.
 
 ## Goal
 
-Make `javan` integrate cleanly with existing JDKs without pretending to be a replacement
-JDK.
+Make `javan` present a JDK-shaped facade over an existing JDK without replacing or mutating
+that original JDK.
 
 The production distribution should install a standalone `javan` binary, add native-build
 awareness around normal Java outputs, and remain transparent to IDEs and existing Java
-build tools. Users should be able to install `javan`, select its JDK facade as a normal JDK
-or invoke its compiler wrapper directly, and get:
+build tools. Users should be able to install `javan`, select its JDK facade as a normal JDK,
+and get:
 
 - normal Java compilation through a real `javac`
 - deterministic native-build checks and reports
@@ -28,9 +28,9 @@ Progress is reported by release evidence, never by command names or rejected API
 | Measure | Current value | Meaning |
 | --- | ---: | --- |
 | Current local-resolution slice | 13/13 scenarios (100.0%) | Explicit, environment, current-JDK, PATH, managed-metadata, invalid-home, macOS-launcher, Windows-executable, and four known-root platform-discovery scenarios have focused proof. |
-| Current managed-JDK storage-policy slice | 7/7 scenarios (100.0%) | Machine-wide, user-home, temporary-cache, all-failed, macOS, Windows, and public doctor-report placement policy have focused proof. No JDK archive is downloaded or installed yet. |
+| Current managed-JDK download slice | 11/11 scenarios (100.0%) | Machine, user, and temporary storage policy; official Temurin 25 catalog selection; HTTPS-only archive retrieval; SHA-256 verification; staged extraction; atomic publish; toolchain registration; and non-elevated macOS `.pkg` expansion have focused proof. |
 | Current javac-facade slice | 16/16 scenarios (100.0%) | Backend delegation, argument partitioning, `--jn-off`, `--jn-warn`, `--jn-strict`, `--jn-build`, help/version, complete analysis, unavailable analysis, failed compilation, native app output, and invocation-report proof have focused coverage. |
-| Current Unix JDK-facade slice | 2/2 scenarios (100.0%) | `javan jdk facade <directory>` creates a linked Unix JDK layout and the public CLI exposes it. Windows intentionally rejects this command until Javan has a real `javac.exe` launcher. |
+| Current facade-install slice | 18/18 focused scenarios (100.0%) | `javan install` copies the native launcher, creates a stable JDK home, and publishes a switchable whole-layout facade without changing the original JDK. `java jdk list`, `java jdk use 25`, and `java jdk use temurin@25` work through that facade. macOS public facades carry refreshed JDK bundle metadata and native launchers, verified locally through `java_home -V`. Installed facades use native `java`, `javac`, and `javan` launchers; Windows uses junctions, not batch-file impersonation. |
 | Roadmap phases release-complete | 0/8 (0.0%) | No phase has all required cross-platform, package-backed, release evidence. |
 | Roadmap phases initiated | 4/8 (50.0%) | Local resolution, managed-store policy, transparent `javan javac` selection, and the initial `--jn-*` parser have production code; this is not a claim that any phase is release-complete. |
 
@@ -63,14 +63,13 @@ that prevents the next phase from being called complete.
 Initial deliverables:
 
 - `javan` standalone executable
+- `javan install` creating a stable, JDK-shaped facade at the first writable standard location
 - optional platform-specific archive with helper launchers
 - checksummed release manifest
 - installation metadata under the user's home `.javan` directory
 
 Optional later deliverables:
 
-- `javan-jdk` wrapper layout that an IDE can select as an SDK, only if binary reports and
-  plugins are not enough
 - bundled original JDK distribution where licensing permits
 - Homebrew formula and bottles
 - Maven plugin
@@ -104,12 +103,21 @@ Planned default home layout:
 Global settings should only contain user preferences and default policy. Project results
 and project locks stay inside the project.
 
-Current `javan` never downloads or installs a JDK. The managed-store policy is implemented
-and visible through `javan jdk doctor`, but it does not create directories until a future
-verified installer calls it. That installer must first attempt the platform machine-wide
-location without elevation, then fall back to the user-global Javan home, then to an
-explicitly ephemeral temporary cache. `JAVAN_HOME` or `-Djavan.home` changes the user-store
-root; it does not silently redirect a machine-wide install.
+`javan install` discovers a locally installed JDK matching its default selector first. The
+built-in selector is `25`; users may override it with `default_jdk` in
+`~/.javan/settings.toml`. If no matching local JDK is usable, Javan obtains Temurin for
+the selected feature release from the official Adoptium catalog, downloads
+over HTTPS, verify the catalog SHA-256 before extraction, stage and publish it atomically,
+then register it under the user-global Javan home. Javan never invokes elevation or changes
+an existing vendor JDK. Storage selection attempts the machine-wide location without
+elevation, then the user-global Javan home, then an explicitly ephemeral temporary cache.
+`JAVAN_HOME` or `-Djavan.home` changes the user-store root; it does not silently redirect a
+machine-wide install.
+
+On macOS, Adoptium currently distributes JDKs as signed `.pkg` archives. Javan expands the
+verified package into its own selected store with `pkgutil --expand-full`; it never runs the
+elevated system installer. The extracted `Contents/Home` is then verified and registered like
+the tar/zip layouts used on other platforms.
 
 ## Managed JDK Placement
 
@@ -123,8 +131,8 @@ row. It must never invoke `sudo`, request elevation, or leave a partial installa
 | User | `~/.javan/jdks` | `~/.javan/jdks` | `~/.javan/jdks` | `~/.javan/cache/downloads` | Persistent |
 | Temporary | `<java.io.tmpdir>/javan/jdks` | `<java.io.tmpdir>/javan/jdks` | `<java.io.tmpdir>/javan/jdks` | `<java.io.tmpdir>/javan/cache/downloads` | Ephemeral; may be cleaned by the OS |
 
-The future installer must download to the selected cache only after resolving a signed,
-checksummed catalog entry. It must verify the archive before extraction, extract to a staging
+The installer downloads to the selected cache only after resolving an official,
+checksummed catalog entry. It verifies the archive before extraction, extracts to a staging
 directory under the selected install root, atomically publish the final JDK directory, then
 register a small `toolchains/<toolchain-id>/toolchain.toml` record below the user-global
 Javan home. A temporary installation is never a durable default and must be reported as such.
@@ -189,9 +197,10 @@ strictly namespaced because it must not steal current or future `javac` options.
 Planned direct commands:
 
 ```sh
-javan jdk install temurin@lts
-javan jdk install corretto@25
-javan jdk use temurin@lts
+javan install
+javan jdk install
+javan jdk use 25
+javan jdk use temurin@25
 javan jdk list
 javan jdk resolve
 javan doctor
@@ -299,9 +308,9 @@ builds an app from the declared output without recompiling Java sources. `--jn-m
 control. `--jn-reports` and `--jn-stacktrace` remain intentionally unsupported rather than
 silently ignored.
 
-`javac --version` and `java --version` from the facade print the underlying selected JDK's
-normal version output, not a Javan version banner. `javan --version` reports Javan itself;
-`javan jdk resolve` reports the selected backend and why it won.
+`javan --version` reports Javan itself; `javan jdk resolve` reports the selected backend
+and why it won. The generated facade preserves normal backend output first, then appends a
+small deterministic Javan section for `--help` and `--version`.
 
 ### Help And Version Contract
 
@@ -311,24 +320,27 @@ Compatibility comes before branding. These commands must remain distinct:
 | --- | --- |
 | `javan --help` | Javan CLI command help. |
 | `javan --version` | Javan version only. |
-| `javan javac --help` and facade `javac --help` | Backend `javac` help followed by a compact Javan extensions section. |
-| `javan javac --version` | Backend `javac` version followed by Javan facade version, selected backend path, and resolution source. |
-| facade `javac --version` | Exact backend `javac` version only. |
-| facade `java --version` | Exact backend `java` version only. |
+| facade `javac --help` | Backend `javac` help followed by a compact Javan extensions section. |
+| facade `javac --version` | Backend `javac` version followed by Javan facade version, selected backend path, and resolution source. |
+| facade `java --help` | Backend `java` help followed by `java jdk list`, `java jdk use <25\|vendor@25>`, and `java jdk doctor`. |
+| facade `java --version` | Backend `java` version followed by a compact Javan facade and management section. |
 
 The Javan extensions section appears after backend help and documents the defaults, command
-examples, report location, and the exact `--jn-*` options. Plain `javac --version` from
-the generated facade remains backend-only because version output is commonly parsed. The
-direct `javan javac --version` is a human-facing diagnostic command and may add Javan
-context after the backend version. Javan-specific options are implemented only with their
-real behavior; until then they fail as unsupported rather than being silently ignored.
+examples, report location, and the exact `--jn-*` options. The legacy `javan javac` command
+remains compatible but is intentionally not advertised; the installed facade is the public
+entrypoint. Javan-specific options are implemented only with their real behavior; until then
+they fail as unsupported rather than being silently ignored.
 
-On Unix, `javan jdk facade <directory>` creates a normal-looking `bin/javac`, `bin/java`,
-and `release` file, and links the original JDK's `lib`, `jmods`, `include`, and `conf`.
-The `javac` launcher delegates through `JAVAN_BIN` or `javan` on `PATH`; `java` delegates
-directly to the backend. Windows rejects facade generation rather than pretending a `.cmd`
-file is a `javac.exe` SDK launcher. This layout is not claimed compatible until shell,
-Maven, Gradle, and IntelliJ fixtures pass on macOS, Linux, and Windows.
+`javan install` creates one public JDK home and one private facade store. The public home
+always targets the store's `current` facade, so `java jdk use 25` changes the active JDK
+without changing `JAVA_HOME` or touching the vendor JDK. The facade links every JDK-root
+entry and every `bin` entry except `java` and `javac`; vendor-specific tools, including
+`javaw`, therefore remain direct backend tools without a Javan-maintained file list. On Unix,
+`java`, `javac`, and `javan` are native Javan launcher copies. On Windows, `java.exe`,
+`javac.exe`, and `javan.exe` are native Javan executables and the switchable directories are
+junctions, not `.cmd` files. The installer attempts machine, user, then temporary locations without
+elevation; it does not alter shell profiles, PATH, `JAVA_HOME`, or an existing JDK. Maven,
+Gradle, and IntelliJ end-to-end fixture proof remains open.
 
 ## Toolchain Resolution
 
@@ -704,18 +716,20 @@ build system has enough jobs; no need to make one test carry furniture.
 
 - implement and prove machine-wide -> user -> temporary storage preparation without elevation
 - expose the read-only placement policy through `javan jdk doctor`
-- implement `javan jdk install temurin@lts` with a signed/checksummed catalog
-- implement checksum verification and atomic install directories
+- retain `javan install` / `javan jdk install` download for the configured selector when it has a verified catalog provider
+- retain checksum verification and atomic install directories
 - extend `javan jdk list` with system/managed provenance and selection reasons
-- implement `javan jdk remove` and `javan jdk use`
+- implement `javan jdk remove`
 - implement no-network lock replay
 
-### Phase 3: Transparent Javac Facade
+### Phase 3: Transparent JDK Facade
 
 - implement `javan javac` and the `--jn-*` / `-jn-*` parser
 - stream original compiler output without reordering or rewriting it
 - prove ordinary Java compilation behaves exactly like the selected original JDK
-- make facade `javac --version` and `java --version` show the backend JDK version
+- make facade `java` and `javac` use Javan launchers on every supported platform while leaving backend `javaw` direct
+- dynamically preserve each selected JDK's whole layout while switching only the stable facade link
+- prove `java jdk list` and `java jdk use 25` through a packaged facade
 - keep a public compile-once -> native-build proof for `--jn-build`, including strict failure
   after successful javac compilation
 
@@ -735,7 +749,7 @@ build system has enough jobs; no need to make one test carry furniture.
 
 ### Phase 6: JDK-Shaped Facade
 
-- retain the Unix linked facade and implement an actual Windows `javac.exe` launcher or junction layout
+- retain the Unix linked facade and native Windows `java.exe` / `javac.exe` launcher plus junction layout
 - prove shell, Maven, Gradle, and IntelliJ use it without proprietary integration
 - retain the backend JDK's standard `java`, `javac`, and standard-library behavior
 
@@ -770,10 +784,11 @@ build system has enough jobs; no need to make one test carry furniture.
 
 ## Decisions
 
-- Managed installs default to Eclipse Temurin latest LTS; Amazon Corretto follows after the
-  primary provider is proven end-to-end.
-- A valid local JDK always beats a download. Interactive installs prompt; non-interactive
-  installs require an explicit `always` policy or command.
+- Managed installs select any local Java 25 JDK first, then use Temurin as the verified
+  download fallback. `default_jdk` may select another locally installed provider/version.
+  Additional download providers require their own verified catalog adapter.
+- A valid local JDK always beats a download. When Javan needs its default JDK, it installs
+  verified Temurin 25 without changing existing JDK configuration.
 - The base `javan` executable and generated JDK facade are separate distribution forms but
   share one resolver, compiler wrapper, report format, and native pipeline.
 - Homebrew manages Javan only. JDKs remain existing local installations or Javan-managed

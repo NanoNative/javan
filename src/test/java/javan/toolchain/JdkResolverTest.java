@@ -165,7 +165,26 @@ final class JdkResolverTest {
     }
 
     @Test
-    void missingCandidatesReturnAnEmptyResolution() {
+    void facadeHomeIsUnwrappedToItsRecordedBackendBeforeSelection() throws Exception {
+        final Path backend = jdk("backend");
+        final Path facade = jdk("facade");
+        Files.writeString(facade.resolve("javan-backend.txt"), "backendHome=" + backend + "\n");
+
+        final JdkResolver.Resolution resolution = resolver(
+            Map.of("JAVA_HOME", facade.toString()),
+            Optional.empty(),
+            Optional.empty(),
+            List.of()
+        ).resolve(Optional.empty());
+
+        assertThat(resolution.selected()).isPresent();
+        assertThat(resolution.selected().orElseThrow().home()).isEqualTo(backend);
+        assertThat(resolution.selected().orElseThrow().javaExecutable()).isEqualTo(backend.resolve("bin/java"));
+        assertThat(resolution.selected().orElseThrow().javacExecutable()).isEqualTo(backend.resolve("bin/javac"));
+    }
+
+    @Test
+    void missingCandidatesReturnAnEmptyResolution() throws Exception {
         final JdkResolver.Resolution resolution = resolver(
             Map.of(),
             Optional.empty(),

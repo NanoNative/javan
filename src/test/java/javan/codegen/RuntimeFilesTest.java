@@ -3255,13 +3255,21 @@ final class RuntimeFilesTest {
 
     @Test
     @WindowsCompatibilityProof
-    void writeMarksWindowsProcessExecutionUnsupportedUntilPorted() throws Exception {
+    void writeProvidesNativeWindowsProcessExecution() throws Exception {
         final Path runtime = new RuntimeFiles().write(tempDir);
 
         assertThat(Files.readString(runtime)).contains(
             "static void javan_sleep_micros(unsigned long micros) {",
             "Sleep(millis);",
-            "return javan_process_result_new(127, \"\", \"process execution unsupported on Windows\");"
+            "CreateProcessA(",
+            "WaitForSingleObject(process.hProcess, wait_timeout)",
+            "TerminateProcess(process.hProcess, 124)",
+            "javan_windows_command_line",
+            "GetModuleFileNameA(NULL, javan_runtime_executable_path",
+            "char stdout_path[MAX_PATH + 1] = {0};",
+            "char stderr_path[MAX_PATH + 1] = {0};",
+            "if (stdout_path[0] != '\\0') {",
+            "process wait failed"
         );
     }
 

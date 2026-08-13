@@ -13070,13 +13070,206 @@ final class RuntimeSourceMemorySections {
             javan_root_frame_pop(javan_process_result_roots);
             return result;
         }
+        """;
+
+    private static final String SOURCE_COLLECTIONS_PROCESS = """
+
+        #if defined(_WIN32)
+        static char* javan_windows_command_line(javan_object_list* command) {
+            unsigned long capacity = 2;
+            for (int index = 0; index < command->length; index++) {
+                const char* value = command->values[index] == NULL ? "" : (const char*) command->values[index];
+                unsigned long length = strlen(value);
+                if (length > (ULONG_MAX - capacity - 3) / 2) {
+                    return NULL;
+                }
+                capacity += length * 2 + 3;
+            }
+            char* result = (char*) javan_alloc(capacity);
+            char* write = result;
+            for (int index = 0; index < command->length; index++) {
+                const char* value = command->values[index] == NULL ? "" : (const char*) command->values[index];
+                if (index > 0) {
+                    *write++ = ' ';
+                }
+                *write++ = '"';
+                unsigned long slashes = 0;
+                for (unsigned long position = 0; value[position] != '\\0'; position++) {
+                    char character = value[position];
+                    if (character == '\\\\') {
+                        slashes++;
+                        continue;
+                    }
+                    if (character == '"') {
+                        for (unsigned long escaped = 0; escaped < slashes * 2 + 1; escaped++) {
+                            *write++ = '\\\\';
+                        }
+                        *write++ = '"';
+                        slashes = 0;
+                        continue;
+                    }
+                    for (unsigned long plain = 0; plain < slashes; plain++) {
+                        *write++ = '\\\\';
+                    }
+                    slashes = 0;
+                    *write++ = character;
+                }
+                for (unsigned long escaped = 0; escaped < slashes * 2; escaped++) {
+                    *write++ = '\\\\';
+                }
+                *write++ = '"';
+            }
+            *write = '\\0';
+            return result;
+        }
+
+        static char* javan_windows_process_file_text(const char* path) {
+            FILE* file = fopen(path, "rb");
+            if (file == NULL) {
+                return (char*) javan_string_copy("");
+            }
+            char* result = javan_file_to_string(file);
+            fclose(file);
+            return result;
+        }
+
+        static javan_process_result* javan_windows_process_run(void* cwd, void* command_value, long long timeout_millis) {
+            javan_object_list* command = javan_list_checked(command_value);
+            if (command->length <= 0) {
+                return javan_process_result_new(127, "", "empty command");
+            }
+            void* cwd_root = cwd;
+            void* command_root = command_value;
+            void** roots[] = {
+                (void**) &cwd_root,
+                (void**) &command_root
+            };
+            javan_root_frame_push(roots, 2);
+            char* command_line = javan_windows_command_line(command);
+            if (command_line == NULL) {
+                javan_root_frame_pop(roots);
+                return javan_process_result_new(127, "", "process command is too large");
+            }
+
+            char temporary_directory[MAX_PATH + 1];
+            char stdout_path[MAX_PATH + 1] = {0};
+            char stderr_path[MAX_PATH + 1] = {0};
+            DWORD temporary_length = GetTempPathA(MAX_PATH, temporary_directory);
+            if (temporary_length == 0 || temporary_length >= MAX_PATH
+                || GetTempFileNameA(temporary_directory, "jvo", 0, stdout_path) == 0
+                || GetTempFileNameA(temporary_directory, "jve", 0, stderr_path) == 0) {
+                javan_free(command_line);
+                javan_root_frame_pop(roots);
+                return javan_process_result_new(127, "", "process output capture failed");
+            }
+            SECURITY_ATTRIBUTES attributes;
+            attributes.nLength = sizeof(attributes);
+            attributes.lpSecurityDescriptor = NULL;
+            attributes.bInheritHandle = TRUE;
+            HANDLE stdout_handle = CreateFileA(
+                stdout_path,
+                GENERIC_WRITE,
+                FILE_SHARE_READ | FILE_SHARE_WRITE,
+                &attributes,
+                CREATE_ALWAYS,
+                FILE_ATTRIBUTE_TEMPORARY,
+                NULL
+            );
+            HANDLE stderr_handle = CreateFileA(
+                stderr_path,
+                GENERIC_WRITE,
+                FILE_SHARE_READ | FILE_SHARE_WRITE,
+                &attributes,
+                CREATE_ALWAYS,
+                FILE_ATTRIBUTE_TEMPORARY,
+                NULL
+            );
+            if (stdout_handle == INVALID_HANDLE_VALUE || stderr_handle == INVALID_HANDLE_VALUE) {
+                if (stdout_handle != INVALID_HANDLE_VALUE) {
+                    CloseHandle(stdout_handle);
+                }
+                if (stderr_handle != INVALID_HANDLE_VALUE) {
+                    CloseHandle(stderr_handle);
+                }
+                if (stdout_path[0] != '\\0') {
+                    DeleteFileA(stdout_path);
+                }
+                if (stderr_path[0] != '\\0') {
+                    DeleteFileA(stderr_path);
+                }
+                javan_free(command_line);
+                javan_root_frame_pop(roots);
+                return javan_process_result_new(127, "", "process output capture failed");
+            }
+            STARTUPINFOA startup;
+            PROCESS_INFORMATION process;
+            memset(&startup, 0, sizeof(startup));
+            memset(&process, 0, sizeof(process));
+            startup.cb = sizeof(startup);
+            startup.dwFlags = STARTF_USESTDHANDLES;
+            startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+            startup.hStdOutput = stdout_handle;
+            startup.hStdError = stderr_handle;
+            BOOL started = CreateProcessA(
+                NULL,
+                command_line,
+                NULL,
+                NULL,
+                TRUE,
+                0,
+                NULL,
+                cwd_root == NULL ? NULL : (const char*) cwd_root,
+                &startup,
+                &process
+            );
+            javan_free(command_line);
+            javan_root_frame_pop(roots);
+            CloseHandle(stdout_handle);
+            CloseHandle(stderr_handle);
+            if (started == 0) {
+                DeleteFileA(stdout_path);
+                DeleteFileA(stderr_path);
+                return javan_process_result_new(127, "", "process start failed");
+            }
+            long long timeout = timeout_millis <= 0 ? 300000LL : timeout_millis;
+            DWORD wait_timeout = timeout > (long long) INFINITE - 1 ? INFINITE - 1 : (DWORD) timeout;
+            DWORD waited = WaitForSingleObject(process.hProcess, wait_timeout);
+            int timed_out = waited == WAIT_TIMEOUT;
+            int wait_failed = waited != WAIT_OBJECT_0 && timed_out == 0;
+            if (timed_out != 0 || wait_failed != 0) {
+                TerminateProcess(process.hProcess, 124);
+                WaitForSingleObject(process.hProcess, INFINITE);
+            }
+            DWORD status = 127;
+            if (GetExitCodeProcess(process.hProcess, &status) == 0) {
+                status = 127;
+            }
+            CloseHandle(process.hThread);
+            CloseHandle(process.hProcess);
+            char* stdout_text = javan_windows_process_file_text(stdout_path);
+            void** stdout_roots[] = {
+                (void**) &stdout_text
+            };
+            javan_root_frame_push(stdout_roots, 1);
+            char* stderr_text = javan_windows_process_file_text(stderr_path);
+            javan_root_frame_pop(stdout_roots);
+            DeleteFileA(stdout_path);
+            DeleteFileA(stderr_path);
+            int exit_code = status > INT_MAX ? 127 : (int) status;
+            javan_process_result* result = timed_out != 0
+                ? javan_process_result_new(124, stdout_text, "Timed out")
+                : wait_failed != 0
+                    ? javan_process_result_new(127, stdout_text, "process wait failed")
+                    : javan_process_result_new(exit_code, stdout_text, stderr_text);
+            javan_free(stdout_text);
+            javan_free(stderr_text);
+            return result;
+        }
+        #endif
 
         void* javan_process_run(void* cwd, void* command_value, long long timeout_millis) {
             #if defined(_WIN32)
-            (void) cwd;
-            (void) command_value;
-            (void) timeout_millis;
-            return javan_process_result_new(127, "", "process execution unsupported on Windows");
+            return javan_windows_process_run(cwd, command_value, timeout_millis);
             #else
             javan_object_list* command = javan_list_checked(command_value);
             if (command->length <= 0) {
@@ -13529,6 +13722,7 @@ final class RuntimeSourceMemorySections {
         result = result + SOURCE_RECORD_SHAPES;
         result = result + SOURCE_COLLECTIONS_HEAD_CONTINUED;
         result = result + SOURCE_COLLECTIONS_TAIL;
+        result = result + SOURCE_COLLECTIONS_PROCESS;
         result = result + SOURCE_C_ABI_OBJECT_HANDLES;
         return result;
     }

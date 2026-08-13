@@ -88,7 +88,9 @@ public class ProcessRunner {
      * @throws InterruptedException when interrupted while waiting
      */
     public boolean commandExists(final String executable) throws IOException, InterruptedException {
-        final Result result = run(Path.of("").toAbsolutePath(), List.of(posixShell(), "-c", "command -v " + executable));
+        final Result result = isWindows()
+            ? run(Path.of("").toAbsolutePath(), List.of("where", executable))
+            : run(Path.of("").toAbsolutePath(), List.of(posixShell(), "-c", "command -v " + executable));
         if (result.exitCode() == 0) {
             return true;
         }
@@ -96,6 +98,10 @@ public class ProcessRunner {
             return true;
         }
         return false;
+    }
+
+    private static boolean isWindows() {
+        return Strings2.toAsciiLowerCase(System.getProperty("os.name", "")).contains("win");
     }
 
     /**

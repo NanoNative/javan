@@ -15,6 +15,7 @@ public record JavanSettings(
     Optional<String> defaultJdk,
     boolean autoInstall
 ) {
+    public static final String DEFAULT_JDK = "25";
     /**
      * Creates validated settings.
      */
@@ -29,6 +30,15 @@ public record JavanSettings(
      * @return default settings
      */
     public static JavanSettings defaults() {
-        return new JavanSettings(Optional.empty(), Optional.empty(), false);
+        return new JavanSettings(Optional.empty(), Optional.of(DEFAULT_JDK), false);
+    }
+
+    /**
+     * Returns the configured default JDK selector.
+     *
+     * @return provider/version selector used by {@code javan install}
+     */
+    public String defaultJdkSelector() {
+        return defaultJdk.orElse(DEFAULT_JDK);
     }
 }

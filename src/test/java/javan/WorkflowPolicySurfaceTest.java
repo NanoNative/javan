@@ -282,6 +282,7 @@ final class WorkflowPolicySurfaceTest {
             .contains("junit.jupiter.execution.parallel.mode.default = concurrent")
             .contains("junit.jupiter.execution.parallel.mode.classes.default = concurrent")
             .contains("junit.jupiter.execution.parallel.config.strategy = dynamic")
+            .contains("junit.jupiter.execution.parallel.config.executor-service = FORK_JOIN_POOL")
             .contains("junit.jupiter.execution.parallel.config.dynamic.factor = 1.0");
     }
 

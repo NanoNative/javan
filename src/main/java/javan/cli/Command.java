@@ -10,6 +10,7 @@ import java.util.Optional;
 public enum Command {
     HELP,
     VERSION,
+    INSTALL,
     INSPECT,
     CHECK,
     TEST,
@@ -21,7 +22,9 @@ public enum Command {
     CLEAN,
     DOCTOR,
     JDK,
-    TOOLCHAIN;
+    TOOLCHAIN,
+    FACADE_JAVA,
+    FACADE_JAVAC;
 
     /**
      * Parses a command name.

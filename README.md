@@ -37,6 +37,37 @@ javan build . --jar
 javan build . --library --export com.acme.Math.add --bindings c,rust,go,python
 ```
 
+## Use Javan As A JDK
+
+`javan install` creates a JDK-shaped facade over a real JDK. It does not replace or
+modify the original JDK. The command prints the exact `jdk home` path to select in an IDE,
+set as `JAVA_HOME` for a shell, or place before other JDK `bin` directories on `PATH`.
+
+```sh
+javan install
+
+# Replace <javan-jdk-home> with the printed `jdk home` path.
+<javan-jdk-home>/bin/java --version
+<javan-jdk-home>/bin/javac -d target/classes src/main/java/com/acme/Main.java
+<javan-jdk-home>/bin/java jdk list
+<javan-jdk-home>/bin/java jdk use 25
+<javan-jdk-home>/bin/java jdk use temurin@25
+```
+
+The facade delegates ordinary `java` and `javac` work to the selected original JDK. It
+adds Javan reporting to `javac` compilation, while every other JDK tool, such as `jar`,
+`javadoc`, and `javaw`, remains the original vendor tool. Javan first uses a matching local
+JDK. Its built-in default is Java `25`, with verified Temurin used only when no local JDK 25
+exists. Users may optionally choose a default selector in `~/.javan/settings.toml`:
+
+```toml
+default_jdk = "25"
+```
+
+Javan never changes shell profiles, `PATH`, `JAVA_HOME`, or the vendor JDK automatically.
+The detailed behavior and currently unsupported integration proof are documented in the
+[JDK wrapper contract](doc/spec/toolchain-distribution-roadmap.md#jdk-wrapper-model).
+
 ## Commands And Outputs
 
 | Command | What it does | Main output |
