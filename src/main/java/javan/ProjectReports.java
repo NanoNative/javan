@@ -898,10 +898,11 @@ public final class ProjectReports {
 
     private static List<Integer> sortedIndexes(final List<String> keys) {
         final List<Integer> indexes = new ArrayList<>();
+        final List<Integer> scratch = new ArrayList<>();
         for (int index = 0; index < keys.size(); index++) {
             indexes.add(index);
+            scratch.add(0);
         }
-        final List<Integer> scratch = new ArrayList<>(indexes);
         sortIndexes(indexes, scratch, keys, 0, indexes.size());
         return List.copyOf(indexes);
     }
@@ -924,16 +925,24 @@ public final class ProjectReports {
         int target = from;
         while (left < middle && right < to) {
             if (Strings2.compareAscii(keys.get(indexes.get(left)), keys.get(indexes.get(right))) <= 0) {
-                scratch.set(target++, indexes.get(left++));
+                scratch.set(target, indexes.get(left));
+                target++;
+                left++;
             } else {
-                scratch.set(target++, indexes.get(right++));
+                scratch.set(target, indexes.get(right));
+                target++;
+                right++;
             }
         }
         while (left < middle) {
-            scratch.set(target++, indexes.get(left++));
+            scratch.set(target, indexes.get(left));
+            target++;
+            left++;
         }
         while (right < to) {
-            scratch.set(target++, indexes.get(right++));
+            scratch.set(target, indexes.get(right));
+            target++;
+            right++;
         }
         for (int index = from; index < to; index++) {
             indexes.set(index, scratch.get(index));
