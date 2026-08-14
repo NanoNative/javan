@@ -1,6 +1,7 @@
 package javan;
 
 import javan.analysis.CallGraph;
+import javan.analysis.CallEdge;
 import javan.analysis.EntryPoint;
 import javan.detect.BuildTool;
 import javan.detect.InputKind;
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -51,21 +53,129 @@ final class ProjectReportsTest {
     }
 
     @Test
-    void writeReachabilitySortsReachableMethods() throws Exception {
+    void writeReachabilityWritesDeterministicMachineReadableAndVisualCallGraph() throws Exception {
         final ProjectLayout layout = layout(List.of());
+        final EntryPoint main = new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V");
+        final EntryPoint alpha = new EntryPoint("com/acme/Alpha", "call", "()V");
+        final EntryPoint zed = new EntryPoint("com/acme/Zed", "call", "()V");
         final CallGraph graph = new CallGraph(
-            new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"),
+            main,
+            List.of(main, zed, alpha),
+            List.of(),
             List.of(
-                new EntryPoint("com/acme/Zed", "call", "()V"),
-                new EntryPoint("com/acme/Alpha", "call", "()V")
-            ),
-            List.of()
+                new CallEdge(alpha, zed, CallEdge.Kind.CLASS_INITIALIZER),
+                new CallEdge(main, alpha, CallEdge.Kind.CALL),
+                new CallEdge(zed, main, CallEdge.Kind.CALL)
+            )
         );
 
         new ProjectReports().writeReachability(layout, graph);
 
         final String report = Files.readString(layout.outputDirectory().resolve("reports/reachability.txt"));
         assertThat(report.indexOf("com/acme/Alpha.call()V")).isLessThan(report.indexOf("com/acme/Zed.call()V"));
+        assertThat(Files.readString(layout.outputDirectory().resolve("reports/call-graph.json")))
+            .contains(
+                "\"schemaVersion\": 1",
+                "\"completeness\": \"closed-world-proven\"",
+                "\"entryPoint\": \"com/acme/Main.main([Ljava/lang/String;)V\"",
+                "\"entryPointLabel\": \"Main.main(String[])\"",
+                "\"reachableMethods\": 3",
+                "\"edgeCount\": 3",
+                "\"kind\": \"call\"",
+                "\"label\": \"calls\"",
+                "\"kind\": \"class-initializer\""
+            );
+        assertThat(Files.readString(layout.outputDirectory().resolve("reports/call-graph.md")))
+            .contains(
+                "# Call Graph",
+                "- reachable methods: `3`",
+                "- edges: `3`",
+                "[open the call flow in a browser](call-flow.html)",
+                "[Graphviz DOT](call-graph.dot)",
+                "`Main.main(String[])` calls `Alpha.call()`",
+                "unresolved or dynamic targets remain diagnostics"
+            );
+        assertThat(Files.readString(layout.outputDirectory().resolve("reports/call-flow.html")))
+            .contains(
+                "<title>Javan Call Flow</title>",
+                "Static Java call flow",
+                "Main",
+                "main(String[])",
+                "class initialization",
+                "Javan proved 3 reachable methods and 3 connections",
+                "class=\"edge initialize\"",
+                "M 942 63 C 998 119 90 119 34 63"
+            )
+            .doesNotContain("com/acme/Main.main([Ljava/lang/String;)V", "<script", "http://", "https://");
+        assertThat(Files.readString(layout.outputDirectory().resolve("reports/call-graph.dot")))
+            .contains(
+                "digraph javan_call_graph",
+                "\"com/acme/Main.main([Ljava/lang/String;)V\" -> \"com/acme/Alpha.call()V\"",
+                "label=\"Main.main(String[])\"",
+                "label=\"initializes\"",
+                "style=dashed"
+            );
+    }
+
+    @Test
+    void writeReachabilityMarksAnEmptyGraphNotAnalyzed() throws Exception {
+        final ProjectLayout layout = layout(List.of());
+
+        new ProjectReports().writeReachability(layout, new CallGraph(new EntryPoint("", "", ""), List.of(), List.of()));
+
+        assertThat(Files.readString(layout.outputDirectory().resolve("reports/call-graph.json")))
+            .contains("\"completeness\": \"not-analyzed\"", "No reachable code was analyzed");
+        assertThat(Files.readString(layout.outputDirectory().resolve("reports/call-graph.md")))
+            .contains("- entry point: `not available`");
+        assertThat(Files.readString(layout.outputDirectory().resolve("reports/call-flow.html")))
+            .contains("No visual flow is available", "valid application entry point");
+    }
+
+    @Test
+    void writeDiagnosticsRefreshesEveryCallGraphOutputFromTheFinalFindingSet() throws Exception {
+        final ProjectLayout layout = layout(List.of());
+        final EntryPoint main = new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V");
+        final EntryPoint helper = new EntryPoint("com/acme/Main", "helper", "()V");
+        final CallGraph graph = new CallGraph(main, List.of(main, helper), List.of(), List.of(new CallEdge(main, helper)));
+        final List<Diagnostic> diagnostics = List.of(
+            Diagnostic.error("JAVAN001", "unsupported main call", "com/acme/Main", "main([Ljava/lang/String;)V", "call", "unsupported", "replace it"),
+            Diagnostic.warning("JAVAN101", "helper needs review", "com/acme/Main", "helper()V", "call", "risk", "review it"),
+            Diagnostic.error("JAVAN002", "not reachable from this graph", "com/acme/Other", "other()V", "call", "unsupported", "replace it")
+        );
+
+        final ProjectReports reports = new ProjectReports();
+        reports.writeReachability(layout, graph);
+        reports.writeDiagnostics(layout, diagnostics, Map.of(), graph);
+
+        assertThat(Files.readString(layout.outputDirectory().resolve("reports/call-graph.json")))
+            .contains(
+                "\"diagnostics\": 3",
+                "\"errors\": 2",
+                "\"warnings\": 1",
+                "\"methodsWithFindings\": 2",
+                "\"diagnosticsOutsideFlow\": 1",
+                "\"codes\": [\"JAVAN001\"]",
+                "\"codes\": [\"JAVAN101\"]"
+            );
+        assertThat(Files.readString(layout.outputDirectory().resolve("reports/call-graph.md")))
+            .contains(
+                "## Static Findings",
+                "- errors: `2`",
+                "- warnings: `1`",
+                "`Main.main(String[])`: error `[JAVAN001]` unsupported main call",
+                "### Outside Current Flow",
+                "error `[JAVAN002]` not reachable from this graph"
+            );
+        assertThat(Files.readString(layout.outputDirectory().resolve("reports/call-flow.html")))
+            .contains(
+                "class=\"node entry error\"",
+                "class=\"node warning\"",
+                "[JAVAN001]",
+                "Outside current flow - error",
+                "Open all diagnostic details"
+            );
+        assertThat(Files.readString(layout.outputDirectory().resolve("reports/call-graph.dot")))
+            .contains("fillcolor=\"#fef2f2\"", "fillcolor=\"#fffbeb\"", "JAVAN001", "JAVAN101");
     }
 
     @Test

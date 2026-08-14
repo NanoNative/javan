@@ -68,8 +68,8 @@ final class ReportSummarizerTest {
 
         final ReportSummarizer.Summary summary = new ReportSummarizer().write(tempDir);
 
-        assertThat(summary.markdown()).contains("Known report families: `0` present, `0` partial, `19` absent.");
-        assertThat(summary.json()).contains("\"presentFamilyCount\": 0", "\"partialFamilyCount\": 0", "\"absentFamilyCount\": 19");
+        assertThat(summary.markdown()).contains("Known report families: `0` present, `0` partial, `20` absent.");
+        assertThat(summary.json()).contains("\"presentFamilyCount\": 0", "\"partialFamilyCount\": 0", "\"absentFamilyCount\": 20");
     }
 
     @Test
@@ -410,6 +410,39 @@ final class ReportSummarizerTest {
 
         assertThat(summary.markdown()).contains("reachableMethods: `1`");
         assertThat(summary.markdown()).doesNotContain("entry:");
+    }
+
+    @Test
+    void writeSummarizesCallGraphMetrics() throws Exception {
+        final Path reports = reportsDirectory();
+        Files.writeString(reports.resolve("call-graph.json"), """
+            {
+              "completeness": "closed-world-proven",
+              "entryPoint": "com/acme/Main.main([Ljava/lang/String;)V",
+              "reachableMethods": 3,
+              "edgeCount": 2,
+              "diagnostics": 3,
+              "errors": 2,
+              "warnings": 1,
+              "methodsWithFindings": 2,
+              "diagnosticsOutsideFlow": 1
+            }
+            """);
+
+        final ReportSummarizer.Summary summary = new ReportSummarizer().write(tempDir);
+
+        assertThat(summary.markdown()).contains(
+            "| `call-graph` | partial | `call-graph.json` (",
+            "completeness: `closed-world-proven`",
+            "entryPoint: `com/acme/Main.main([Ljava/lang/String;)V`",
+            "reachableMethods: `3`",
+            "edgeCount: `2`",
+            "diagnostics: `3`",
+            "errors: `2`",
+            "warnings: `1`",
+            "methodsWithFindings: `2`",
+            "diagnosticsOutsideFlow: `1`"
+        );
     }
 
     @Test

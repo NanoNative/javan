@@ -81,6 +81,21 @@ The detailed behavior and currently unsupported integration proof are documented
 | `javan report [path]` | Refreshes and prints the unified report view. | `.javan/reports/report.*` |
 | `javan doctor` | Checks visible Java and native toolchain commands. | stdout |
 
+## Call Graphs
+
+Every reachability-backed `check`, native `build`, and `compat` run writes a deterministic,
+analyzer-proven static call graph under `.javan/reports/`:
+
+- `call-graph.json`: stable machine-readable nodes, edges, and exact per-method finding counts for IDEs and tools
+- `call-graph.md`: concise human summary, finding list, and scope statement
+- `call-flow.html`: self-contained visual flow that opens in a browser; no installation or network access required; errors are red and warnings amber
+- `call-graph.dot`: optional Graphviz export for environments that already have Graphviz
+
+The graph contains only closed-world method edges that Javan proved reachable. Dynamic or
+unresolved behavior is never guessed as an edge; it remains explicit in diagnostics. A finding
+colors a node only when its class, method, and descriptor exactly match a reachable method.
+Every other finding remains visible as outside the current flow instead of being guessed onto a node.
+
 ## Support Snapshot
 
 Current supported output shapes:

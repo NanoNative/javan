@@ -153,7 +153,6 @@ public final class Javan {
         }
         final DeduplicationPlanner.Plan deduplicationPlan = deduplicationPlanner.writePlan(layout.outputDirectory(), classes, callGraph);
         diagnostics.addAll(runtimeFeatureSelection.write(layout.root(), layout.outputDirectory(), deduplicationPlan).diagnostics());
-        reports.writeReachability(layout, callGraph);
         dependencyReports.write(layout, classes, callGraph);
         reports.writeDiagnostics(layout, diagnostics, classes, callGraph);
         intrinsicUsageReports.write(layout.outputDirectory(), classes, callGraph);
@@ -405,7 +404,6 @@ public final class Javan {
         final CallGraph callGraph = reachabilityAnalyzer.analyze(classes, mainClass);
         final List<Diagnostic> diagnostics = new ArrayList<>(callGraph.diagnostics());
         diagnostics.addAll(staticVerifier.verify(classes, callGraph.reachableMethods()));
-        reports.writeReachability(layout, callGraph);
         dependencyReports.write(layout, classes, callGraph);
         reports.writeDiagnostics(layout, diagnostics, classes, callGraph);
         final List<ClassMetadata> projectMetadata = classMetadataScanner.scanLayout(layout);
