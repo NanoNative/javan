@@ -477,17 +477,18 @@ public final class BytecodeControlFlow {
         int words = 0;
         int index = 1;
         while (index < descriptor.length() && descriptor.charAt(index) != ')') {
-            boolean array = false;
-            while (index < descriptor.length() && descriptor.charAt(index) == '[') {
-                array = true;
-                index++;
+            if (descriptor.charAt(index) == '[') {
+                while (descriptor.charAt(index) == '[') index++;
+                index = descriptor.charAt(index) == 'L' ? descriptor.indexOf(';', index) + 1 : index + 1;
+                words++;
+                continue;
             }
             final char value = descriptor.charAt(index);
             if (value == 'L') {
                 index = descriptor.indexOf(';', index) + 1;
                 words++;
             } else {
-                words += !array && (value == 'J' || value == 'D') ? 2 : 1;
+                words += value == 'J' || value == 'D' ? 2 : 1;
                 index++;
             }
         }
