@@ -23,6 +23,7 @@ public final class ReportSummarizer {
         new ReportSpec("virtual-threads", List.of("virtual-threads.json", "virtual-threads.md")),
         new ReportSpec("runtime-profiling", List.of("runtime-profiling.json", "runtime-profiling.md")),
         new ReportSpec("reachability", List.of("reachability.txt")),
+        new ReportSpec("call-graph", List.of("call-graph.json", "call-graph.md", "call-flow.html", "call-graph.dot")),
         new ReportSpec("exceptions", List.of("exceptions.json", "exceptions.md", "debug-map.json")),
         new ReportSpec("intrinsics", List.of("intrinsics.json", "intrinsics.md")),
         new ReportSpec("optimizations", List.of("optimizations.json", "optimizations.md")),
@@ -120,6 +121,9 @@ public final class ReportSummarizer {
         if ("reachability".equals(name)) {
             return reachabilityMetrics(read(reportsDirectory.resolve("reachability.txt")));
         }
+        if ("call-graph".equals(name)) {
+            return callGraphMetrics(read(reportsDirectory.resolve("call-graph.json")));
+        }
         if ("exceptions".equals(name)) {
             return exceptionMetrics(read(reportsDirectory.resolve("exceptions.json")), read(reportsDirectory.resolve("debug-map.json")));
         }
@@ -211,6 +215,24 @@ public final class ReportSummarizer {
             result.add(Metric.text("entry", entry.orElseThrow()));
         }
         result.add(Metric.number("reachableMethods", reachableMethodCount(value)));
+        return List.copyOf(result);
+    }
+
+    private static List<Metric> callGraphMetrics(final Optional<String> report) {
+        if (report.isEmpty()) {
+            return List.of();
+        }
+        final String value = report.orElseThrow();
+        final List<Metric> result = new ArrayList<>();
+        addText(result, value, "completeness");
+        addText(result, value, "entryPoint");
+        addNumber(result, value, "reachableMethods");
+        addNumber(result, value, "edgeCount");
+        addNumber(result, value, "diagnostics");
+        addNumber(result, value, "errors");
+        addNumber(result, value, "warnings");
+        addNumber(result, value, "methodsWithFindings");
+        addNumber(result, value, "diagnosticsOutsideFlow");
         return List.copyOf(result);
     }
 

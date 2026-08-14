@@ -378,6 +378,84 @@ final class CliCommandIntegrationTest {
     }
 
     @Test
+    void checkWritesAVisualizableCallGraphAndUnifiedSummary() throws Exception {
+        final Path project = project("call-graph-report");
+        final Path source = project.resolve("src/main/java/com/acme/Main.java");
+        Files.createDirectories(source.getParent());
+        Files.writeString(source, """
+            package com.acme;
+            public final class Main {
+                public static void main(final String[] args) {
+                    helper();
+                }
+                static void helper() {
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        final Path reports = project.resolve(".javan/reports");
+        assertThat(Files.readString(reports.resolve("call-graph.json")))
+            .contains(
+                "\"entryPoint\": \"com/acme/Main.main([Ljava/lang/String;)V\"",
+                "\"caller\": \"com/acme/Main.main([Ljava/lang/String;)V\"",
+                "\"callee\": \"com/acme/Main.helper()V\"",
+                "\"kind\": \"call\""
+            );
+        assertThat(Files.readString(reports.resolve("call-graph.dot")))
+            .contains("digraph javan_call_graph", "com/acme/Main.main([Ljava/lang/String;)V");
+        assertThat(Files.readString(reports.resolve("call-flow.html")))
+            .contains("Call flow", "Main", "main(String[])")
+            .doesNotContain("com/acme/Main.main([Ljava/lang/String;)V");
+        assertThat(Files.readString(reports.resolve("report.json")))
+            .contains("\"name\": \"call-graph\"", "\"edgeCount\": 1");
+    }
+
+    @Test
+    void checkSynchronizesVerifierFindingsWithEveryCallGraphOutput() throws Exception {
+        final Path project = project("call-graph-findings");
+        final Path source = project.resolve("src/main/java/com/acme/Main.java");
+        Files.createDirectories(source.getParent());
+        Files.writeString(source, """
+            package com.acme;
+
+            import java.util.Locale;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Object value = "not-a-locale";
+                    System.out.println("JAVAN".toLowerCase((Locale) value));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isNotZero();
+        final Path reports = project.resolve(".javan/reports");
+        assertThat(Files.readString(reports.resolve("call-graph.json")))
+            .contains(
+                "\"diagnostics\": 1",
+                "\"errors\": 1",
+                "\"methodsWithFindings\": 1",
+                "\"codes\": [\"JAVAN045\"]"
+            );
+        assertThat(Files.readString(reports.resolve("call-graph.md")))
+            .contains("## Static Findings", "error `[JAVAN045]` unsupported checkcast target");
+        assertThat(Files.readString(reports.resolve("call-flow.html")))
+            .contains("class=\"node entry error\"", "[JAVAN045]", "unsupported checkcast target");
+        assertThat(Files.readString(reports.resolve("call-graph.dot")))
+            .contains("fillcolor=\"#fef2f2\"", "JAVAN045");
+        assertThat(Files.readString(reports.resolve("report.json")))
+            .contains("\"name\": \"call-graph\"", "\"methodsWithFindings\": 1");
+    }
+
+    @Test
     void reportMarksMissingFamiliesAbsent() throws Exception {
         final Path project = project("report-missing");
         final Path reports = project.resolve(".javan/reports");
