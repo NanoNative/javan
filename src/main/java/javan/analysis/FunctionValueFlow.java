@@ -475,10 +475,10 @@ public final class FunctionValueFlow {
                 }
                 return controlFlow.successors(index);
             }
-            if (opcode == 167) {
+            if (opcode == 167 || opcode == 200) {
                 return controlFlow.successors(index);
             }
-            if (opcode == 168 || opcode == 169 || opcode == 196 || opcode == 200 || opcode == 201) {
+            if (opcode == 168 || opcode == 169 || opcode == 196 || opcode == 201) {
                 state.reject();
                 return List.of();
             }

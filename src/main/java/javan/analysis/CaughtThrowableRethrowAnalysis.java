@@ -134,7 +134,7 @@ public final class CaughtThrowableRethrowAnalysis {
                 }
                 continue;
             }
-            if (opcode == 167) {
+            if (opcode == 167 || opcode == 200) {
                 final List<Integer> successors = controlFlow.graph().successors(state.instructionIndex());
                 if (successors.size() != 1 || !enqueueState(
                     pending,
@@ -144,7 +144,7 @@ public final class CaughtThrowableRethrowAnalysis {
                 }
                 continue;
             }
-            if (opcode >= 168 && opcode <= 177 || opcode >= 198 && opcode <= 201) {
+            if (opcode >= 168 && opcode <= 177 || opcode == 198 || opcode == 199 || opcode == 201) {
                 return Optional.empty();
             }
             if (!enqueueState(pending, nextState(state, state.instructionIndex() + 1, 0))) {

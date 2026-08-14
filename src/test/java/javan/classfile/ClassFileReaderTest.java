@@ -1,5 +1,6 @@
 package javan.classfile;
 
+import javan.analysis.BytecodeControlFlow;
 import javan.compat.ClassMetadata;
 import javan.compat.ClassMetadataReader;
 import javan.compat.MemberMetadata;
@@ -25,6 +26,104 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 @PlatformTest
 final class ClassFileReaderTest {
     private static final Path SOURCE = Path.of("Modified.class");
+
+    @Test
+    void normalizesLegacySubroutinesBeforeAnalysis() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(legacySubroutineClassfile(), SOURCE);
+        final MethodInfo method = classFile.method("value", "()I").orElseThrow();
+
+        assertThat(method.code().orElseThrow().instructions())
+            .extracting(Instruction::mnemonic)
+            .doesNotContain("jsr", "jsr_w", "ret")
+            .contains("aconst_null", "goto_w");
+        final BytecodeControlFlow.Result controlFlow = BytecodeControlFlow.analyze(method);
+        assertThat(controlFlow.valid()).withFailMessage(controlFlow.issues().toString()).isTrue();
+    }
+
+    @Test
+    void clonesLegacySubroutineForEveryCallSite() throws Exception {
+        final byte[] code = new byte[]{
+            3, 59,
+            (byte) 168, 0, 11,
+            (byte) 168, 0, 8,
+            26, (byte) 172,
+            0, 0, 0,
+            76,
+            (byte) 132, 0, 1,
+            (byte) 169, 1
+        };
+
+        final MethodInfo method = new ClassFileReader()
+            .read(legacySubroutineClassfile(code, 1, 2), SOURCE)
+            .method("value", "()I").orElseThrow();
+
+        assertThat(method.code().orElseThrow().instructions())
+            .filteredOn(instruction -> "iinc".equals(instruction.mnemonic()))
+            .hasSize(2);
+        assertThat(BytecodeControlFlow.analyze(method).valid()).isTrue();
+    }
+
+    @Test
+    void normalizesNestedLegacySubroutinesAndWideRet() throws Exception {
+        final byte[] code = new byte[]{
+            3, 59,
+            (byte) 168, 0, 6,
+            26, (byte) 172,
+            0,
+            76,
+            (byte) 168, 0, 8,
+            (byte) 132, 0, 1,
+            (byte) 169, 1,
+            77,
+            (byte) 132, 0, 1,
+            (byte) 196, (byte) 169, 0, 2
+        };
+
+        final MethodInfo method = new ClassFileReader()
+            .read(legacySubroutineClassfile(code, 1, 3), SOURCE)
+            .method("value", "()I").orElseThrow();
+
+        assertThat(method.code().orElseThrow().instructions())
+            .extracting(Instruction::mnemonic)
+            .doesNotContain("jsr", "jsr_w", "ret", "wide");
+        assertThat(BytecodeControlFlow.analyze(method).valid()).isTrue();
+    }
+
+    @Test
+    void preservesBranchesAndExceptionHandlersInsideLegacySubroutines() throws Exception {
+        final byte[] code = new byte[]{
+            (byte) 168, 0, 6,
+            (byte) 177,
+            0, 0,
+            75,
+            3,
+            (byte) 153, 0, 6,
+            1,
+            (byte) 191,
+            76,
+            (byte) 169, 0
+        };
+
+        final MethodInfo method = new ClassFileReader()
+            .read(legacySubroutineClassfile(code, 1, 2, new int[]{11, 13, 13, 0}), SOURCE)
+            .method("value", "()I").orElseThrow();
+
+        assertThat(method.code().orElseThrow().exceptionTable()).isNotEmpty();
+        assertThat(method.code().orElseThrow().instructions())
+            .extracting(Instruction::mnemonic)
+            .contains("ifne", "goto_w")
+            .doesNotContain("jsr", "ret");
+        final BytecodeControlFlow.Result controlFlow = BytecodeControlFlow.analyze(method);
+        assertThat(controlFlow.valid()).withFailMessage(controlFlow.issues().toString()).isTrue();
+    }
+
+    @Test
+    void rejectsRetOutsideLegacySubroutine() {
+        assertThatThrownBy(() -> new ClassFileReader().read(
+            legacySubroutineClassfile(new byte[]{(byte) 169, 0}, 0, 1), SOURCE
+        )).isInstanceOf(IOException.class)
+            .hasMessage("Invalid legacy jsr/ret bytecode: ret outside a legacy subroutine at 0");
+    }
 
     @TempDir
     private Path tempDir;
@@ -660,6 +759,72 @@ final class ClassFileReaderTest {
 
     private static byte[] minimalClassfile(final String className) {
         return minimalClassfile(className, constructorCode());
+    }
+
+    private static byte[] legacySubroutineClassfile() {
+        final byte[] code = new byte[]{
+            4, 59,
+            (byte) 201, 0, 0, 0, 8,
+            26, (byte) 172,
+            0,
+            76,
+            (byte) 132, 0, 1,
+            (byte) 169, 1
+        };
+        return legacySubroutineClassfile(code, 1, 2);
+    }
+
+    private static byte[] legacySubroutineClassfile(
+        final byte[] code,
+        final int maxStack,
+        final int maxLocals
+    ) {
+        return legacySubroutineClassfile(code, maxStack, maxLocals, new int[0]);
+    }
+
+    private static byte[] legacySubroutineClassfile(
+        final byte[] code,
+        final int maxStack,
+        final int maxLocals,
+        final int[] handler
+    ) {
+        final int handlerCount = handler.length == 0 ? 0 : 1;
+        return new Bytes()
+            .u4(0xCAFEBABEL)
+            .u2(0)
+            .u2(49)
+            .u2(8)
+            .utf8("legacy/Subroutine")
+            .classInfo(1)
+            .utf8("java/lang/Object")
+            .classInfo(3)
+            .utf8("value")
+            .utf8("()I")
+            .utf8("Code")
+            .u2(0x0021)
+            .u2(2)
+            .u2(4)
+            .u2(0)
+            .u2(0)
+            .u2(1)
+            .u2(0x0009)
+            .u2(5)
+            .u2(6)
+            .u2(1)
+            .u2(7)
+            .u4(12L + code.length + handlerCount * 8L)
+            .u2(maxStack)
+            .u2(maxLocals)
+            .u4(code.length)
+            .bytes(code)
+            .u2(handlerCount)
+            .optionalU2(handler, 0)
+            .optionalU2(handler, 1)
+            .optionalU2(handler, 2)
+            .optionalU2(handler, 3)
+            .u2(0)
+            .u2(0)
+            .toByteArray();
     }
 
     private static byte[] minimalClassfile(final String className, final byte[] methodCode) {
@@ -1507,6 +1672,10 @@ final class ClassFileReaderTest {
 
         private Bytes u2(final int value) {
             return u1(value >>> 8).u1(value);
+        }
+
+        private Bytes optionalU2(final int[] values, final int index) {
+            return index < values.length ? u2(values[index]) : this;
         }
 
         private Bytes u4(final long value) {
