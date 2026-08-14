@@ -24,6 +24,7 @@ public final class ReportSummarizer {
         new ReportSpec("runtime-profiling", List.of("runtime-profiling.json", "runtime-profiling.md")),
         new ReportSpec("reachability", List.of("reachability.txt")),
         new ReportSpec("call-graph", List.of("call-graph.json", "call-graph.md", "call-flow.html", "call-graph.dot")),
+        new ReportSpec("control-flow", List.of("control-flow.json", "control-flow.md")),
         new ReportSpec("exceptions", List.of("exceptions.json", "exceptions.md", "debug-map.json")),
         new ReportSpec("intrinsics", List.of("intrinsics.json", "intrinsics.md")),
         new ReportSpec("optimizations", List.of("optimizations.json", "optimizations.md")),
@@ -123,6 +124,9 @@ public final class ReportSummarizer {
         }
         if ("call-graph".equals(name)) {
             return callGraphMetrics(read(reportsDirectory.resolve("call-graph.json")));
+        }
+        if ("control-flow".equals(name)) {
+            return controlFlowMetrics(read(reportsDirectory.resolve("control-flow.json")));
         }
         if ("exceptions".equals(name)) {
             return exceptionMetrics(read(reportsDirectory.resolve("exceptions.json")), read(reportsDirectory.resolve("debug-map.json")));
@@ -233,6 +237,20 @@ public final class ReportSummarizer {
         addNumber(result, value, "warnings");
         addNumber(result, value, "methodsWithFindings");
         addNumber(result, value, "diagnosticsOutsideFlow");
+        return List.copyOf(result);
+    }
+
+    private static List<Metric> controlFlowMetrics(final Optional<String> report) {
+        if (report.isEmpty()) {
+            return List.of();
+        }
+        final String value = report.orElseThrow();
+        final List<Metric> result = new ArrayList<>();
+        addText(result, value, "status");
+        addNumber(result, value, "methods");
+        addNumber(result, value, "blocks");
+        addNumber(result, value, "edges");
+        addNumber(result, value, "issues");
         return List.copyOf(result);
     }
 

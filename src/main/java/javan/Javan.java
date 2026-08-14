@@ -33,6 +33,7 @@ import javan.detect.ProjectDetector;
 import javan.detect.ProjectLayout;
 import javan.ir.IrProgram;
 import javan.optimizer.OptimizationReports;
+import javan.reporting.ControlFlowReports;
 import javan.reporting.DependencyReports;
 import javan.reporting.ExceptionReports;
 import javan.reporting.IntrinsicUsageReports;
@@ -84,6 +85,7 @@ public final class Javan {
     private final CompatibilityReports compatibilityReports = new CompatibilityReports();
     private final OptimizationReports optimizationReports = new OptimizationReports();
     private final DependencyReports dependencyReports = new DependencyReports();
+    private final ControlFlowReports controlFlowReports = new ControlFlowReports();
     private final ExceptionReports exceptionReports = new ExceptionReports();
     private final IntrinsicUsageReports intrinsicUsageReports = new IntrinsicUsageReports();
     private final RuntimeContractReports runtimeContractReports = new RuntimeContractReports();
@@ -146,6 +148,7 @@ public final class Javan {
         }
         final List<Diagnostic> diagnostics = new ArrayList<>(mainDetection.diagnostics());
         diagnostics.addAll(callGraph.diagnostics());
+        diagnostics.addAll(controlFlowReports.write(layout.outputDirectory(), classes, callGraph.reachableMethods()));
         if (mainDetection.pass()) {
             diagnostics.addAll(staticVerifier.verify(classes, callGraph.reachableMethods(), nativeEntryPoints));
         } else {

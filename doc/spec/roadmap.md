@@ -28,12 +28,12 @@ normally choose the safe path itself.
 
 ## Compiler Analysis
 
-Javan currently has entrypoint-rooted reachability, class-hierarchy dispatch, and CFG-aware
-GC-root liveness. These analyses work but do not yet share one semantic fact model.
+Javan currently has entrypoint-rooted reachability, class-hierarchy dispatch, a canonical
+bytecode CFG, and CFG-aware GC-root liveness. The remaining analyses do not yet share one
+semantic fact model.
 
 | Priority | Analysis | Smallest useful scope | Acceptance gate |
 | --- | --- | --- | --- |
-| P0 | Canonical bytecode CFG | One basic-block graph for normal edges, branches, switches, stack merges, and supported exception edges. | Invalid targets and incompatible merges fail deterministically; supported programs keep parity; a stable report lists blocks and edges. |
 | P0 | Class-initialization graph | JVM trigger ordering for `new`, static field access, static calls, inheritance, interfaces, re-entry, and supported cycles. | Native/JVM initialization order matches; unsupported cycles fail before C generation. |
 | P1 | Instantiated-type analysis | Intersect virtual/interface targets with reachable allocated, lambda, substituted, and runtime-created types. | Uninstantiated targets disappear without losing any constructible receiver. |
 | P1 | Bounded receiver/callable provenance | Track exact types and small type sets through locals and direct arguments/returns; unknown remains explicit. | Local, cast, merged, stored, passed, and returned callback fixtures resolve or fall back conservatively. |
