@@ -2,7 +2,10 @@ package javan.analysis;
 
 import javan.classfile.ClassFile;
 import javan.classfile.CodeAttribute;
+import javan.classfile.FieldRef;
+import javan.classfile.Instruction;
 import javan.classfile.MethodInfo;
+import javan.classfile.MethodRef;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
@@ -48,6 +51,19 @@ final class ClassInitializationOrderTest {
         assertThat(ClassInitializationOrder.order(classes, childDefault.name())).containsExactly(childDefault.name());
     }
 
+    @Test
+    void findsActiveUseOwners() {
+        assertThat(ClassInitializationOrder.activeUseOwner(instruction(178, null, new FieldRef("com/acme/State", "value", "I"), null)))
+            .contains("com/acme/State");
+        assertThat(ClassInitializationOrder.activeUseOwner(instruction(179, null, new FieldRef("com/acme/State", "value", "I"), null)))
+            .contains("com/acme/State");
+        assertThat(ClassInitializationOrder.activeUseOwner(instruction(184, new MethodRef("com/acme/State", "run", "()V"), null, null)))
+            .contains("com/acme/State");
+        assertThat(ClassInitializationOrder.activeUseOwner(instruction(187, null, null, "com/acme/State")))
+            .contains("com/acme/State");
+        assertThat(ClassInitializationOrder.activeUseOwner(instruction(182, null, null, null))).isEmpty();
+    }
+
     private static ClassFile type(
         final String name,
         final String superName,
@@ -60,5 +76,26 @@ final class ClassInitializationOrderTest {
 
     private static MethodInfo defaultMethod() {
         return new MethodInfo(0x0001, "touch", "()V", Optional.of(new CodeAttribute(0, 1, new byte[0], 0, List.of())));
+    }
+
+    private static Instruction instruction(
+        final int opcode,
+        final MethodRef methodRef,
+        final FieldRef fieldRef,
+        final String className
+    ) {
+        return new Instruction(
+            0,
+            opcode,
+            "test",
+            new byte[0],
+            Optional.ofNullable(methodRef),
+            Optional.ofNullable(fieldRef),
+            Optional.ofNullable(className),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty()
+        );
     }
 }

@@ -602,6 +602,7 @@ final class BytecodeToIRControlFlowSupport {
                 }
                 mergedInstructions.add(IrInstruction.branchIf(targetLabel, condition));
             } else {
+                appendClassInitialization(classes, current, mergedInstructions);
                 lowerInstruction(
                     classes,
                     classFile,
@@ -753,6 +754,7 @@ final class BytecodeToIRControlFlowSupport {
             if (isControlTransfer(blockInstruction.opcode())) {
                 throw unsupportedBranchValueMerge(classFile, method, blockInstruction);
             }
+            appendClassInitialization(classes, blockInstruction, blockInstructions);
             lowerInstruction(
                 classes,
                 classFile,

@@ -762,17 +762,12 @@ public final class BytecodeToIR {
         }
     }
 
-    private static boolean appendClassInitialization(
+    static boolean appendClassInitialization(
         final Map<String, ClassFile> classes,
         final Instruction instruction,
         final List<IrInstruction> instructions
     ) {
-        final Optional<String> target = switch (instruction.opcode()) {
-            case 178, 179 -> instruction.fieldRef().map(FieldRef::owner);
-            case 184 -> instruction.methodRef().map(MethodRef::owner);
-            case 187 -> instruction.className();
-            default -> Optional.empty();
-        };
+        final Optional<String> target = ClassInitializationOrder.activeUseOwner(instruction);
         if (target.isEmpty() || !classes.containsKey(target.orElseThrow())) {
             return false;
         }

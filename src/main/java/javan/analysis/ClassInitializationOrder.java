@@ -1,12 +1,14 @@
 package javan.analysis;
 
 import javan.classfile.ClassFile;
+import javan.classfile.Instruction;
 import javan.classfile.MethodInfo;
 
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -54,6 +56,25 @@ public final class ClassInitializationOrder {
             appendDefaultInterfaceOrder(classes, interfaceName, initializedInterfaces, result);
         }
         return List.copyOf(result);
+    }
+
+    /**
+     * Returns the class actively used by an instruction, when the instruction triggers JVM initialization.
+     *
+     * @param instruction decoded JVM instruction
+     * @return referenced class owner for {@code getstatic}, {@code putstatic}, {@code invokestatic}, or {@code new}
+     */
+    public static Optional<String> activeUseOwner(final Instruction instruction) {
+        return switch (instruction.opcode()) {
+            case 178, 179 -> instruction.fieldRef().isEmpty()
+                ? Optional.empty()
+                : Optional.of(instruction.fieldRef().orElseThrow().owner());
+            case 184 -> instruction.methodRef().isEmpty()
+                ? Optional.empty()
+                : Optional.of(instruction.methodRef().orElseThrow().owner());
+            case 187 -> instruction.className();
+            default -> Optional.empty();
+        };
     }
 
     private static void appendClassOrder(

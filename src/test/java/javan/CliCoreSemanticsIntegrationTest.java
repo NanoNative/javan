@@ -154,6 +154,44 @@ final class CliCoreSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void conditionalStaticEnumAccessInitializesBeforeSelection() throws Exception {
+        final Path project = project("conditional-static-enum-initialization");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final State selected = chooseFirst() ? State.FIRST : State.SECOND;
+                    System.out.println(selected == State.FIRST);
+                }
+
+                private static boolean chooseFirst() {
+                    return true;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.State", """
+            package com.acme;
+
+            enum State {
+                FIRST,
+                SECOND
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/conditional-static-enum-initialization").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n");
+    }
+
+    @Test
     void classInitializerRunsBeforeStaticCallsAndConstruction() throws Exception {
         final Path project = project("class-initializer-active-use");
         writeJava(project, "com.acme.Main", """

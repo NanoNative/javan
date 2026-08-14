@@ -1871,12 +1871,7 @@ public final class StaticVerifier {
         final Instruction instruction,
         final String catchType
     ) {
-        final Optional<String> owner = switch (instruction.opcode()) {
-            case 178, 179 -> instruction.fieldRef().map(FieldRef::owner);
-            case 184 -> instruction.methodRef().map(MethodRef::owner);
-            case 187 -> instruction.className();
-            default -> Optional.empty();
-        };
+        final Optional<String> owner = ClassInitializationOrder.activeUseOwner(instruction);
         if (owner.isEmpty() || !classes.containsKey(owner.orElseThrow())) {
             return false;
         }
