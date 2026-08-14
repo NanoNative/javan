@@ -957,6 +957,7 @@ public final class ReachabilityAnalyzer {
         }
         if (instruction.opcode() == 185) {
             final Optional<EntryPoint> defaultTarget = hasInstantiatedReceiver(classes, target.owner(), instantiatedTypes)
+                || containsOwner(materializedLambdaMethods, target.owner())
                 ? defaultInterfaceTarget(classes, target, entryPoints)
                 : Optional.empty();
             if (defaultTarget.isPresent()) {
@@ -1204,6 +1205,15 @@ public final class ReachabilityAnalyzer {
     private static boolean containsMethodRef(final List<MethodRef> values, final MethodRef target) {
         for (final MethodRef value : values) {
             if (value.equals(target)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean containsOwner(final List<MethodRef> values, final String owner) {
+        for (final MethodRef value : values) {
+            if (value.owner().equals(owner)) {
                 return true;
             }
         }

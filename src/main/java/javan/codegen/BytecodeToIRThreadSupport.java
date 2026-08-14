@@ -701,6 +701,18 @@ final class BytecodeToIRThreadSupport {
         return defaultInterfaceTarget(classes, methodRef);
     }
 
+    private static boolean hasMaterializedReceiver(
+        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final String interfaceOwner
+    ) {
+        for (final MethodRef methodRef : materializedLambdaMethods.keySet()) {
+            if (methodRef.owner().equals(interfaceOwner)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     static List<EntryPoint> allRunnableThreadTargets(final Map<String, ClassFile> classes) {
         final List<EntryPoint> result = new ArrayList<>();
         for (final ClassFile candidate : classes.values()) {
@@ -1455,7 +1467,10 @@ final class BytecodeToIRThreadSupport {
         final MethodDescriptor descriptor = MethodDescriptor.parse(methodRef.descriptor());
         final List<IrExpression> arguments = new ArrayList<>(popArguments(classFile, method, stack, descriptor));
         final IrExpression receiver = popObject(classFile, method, stack);
-        final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, methodRef, instantiatedTypes);
+        Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, methodRef, instantiatedTypes);
+        if (defaultTarget.isEmpty() && hasMaterializedReceiver(materializedLambdaMethods, methodRef.owner())) {
+            defaultTarget = defaultInterfaceTarget(classes, methodRef);
+        }
         final boolean materializedFunctionReceiver = isFunctionApply(methodRef)
             && functionValueFlow.isMaterializedFunction(
                 classFile.name(),
