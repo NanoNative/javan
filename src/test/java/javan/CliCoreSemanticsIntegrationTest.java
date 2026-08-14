@@ -307,6 +307,45 @@ final class CliCoreSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void enumClassInitializationIsLazyAndPrecedesTheFirstConstantUse() throws Exception {
+        final Path project = project("enum-class-initialization");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("before");
+                    final Class<?> ignored = Color.class;
+                    System.out.println("after-literal");
+                    System.out.println(Color.RED);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Color", """
+            package com.acme;
+
+            enum Color {
+                RED;
+
+                static {
+                    System.out.println("color-init");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(jvmOutput).isEqualTo("before\nafter-literal\ncolor-init\nRED\n");
+        assertThat(process(project, List.of(project.resolve(".javan/bin/enum-class-initialization").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
     void classInitializationHandlesReentryCycles() throws Exception {
         final Path project = project("class-initialization-cycle");
         writeJava(project, "com.acme.Main", """

@@ -10353,7 +10353,11 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
             public enum Color {
                 RED,
                 BLUE,
-                GREEN
+                GREEN;
+
+                static {
+                    System.out.println("color-init");
+                }
             }
             """);
         writeJava(project, "com.acme.EnumLookupSupport", """
@@ -10399,7 +10403,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/exact-catch-null-enum-lookup").toString())).stdout()).isEqualTo(jvmOutput);
-        assertThat(jvmOutput).isEqualTo("RED\nnull\nBLUE\nnull\nnull\n");
+        assertThat(jvmOutput).isEqualTo("color-init\nRED\nnull\nBLUE\nnull\nnull\n");
     }
 
     @Test
