@@ -2,6 +2,8 @@ package javan.codegen;
 
 import javan.analysis.CallGraph;
 import javan.analysis.EntryPoint;
+import javan.analysis.FunctionValueFlow;
+import javan.analysis.InstantiatedTypeAnalysis;
 import javan.classfile.BootstrapArgument;
 import javan.classfile.ClassFile;
 import javan.classfile.CodeAttribute;
@@ -44,6 +46,90 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 final class BytecodeToIRTest {
     @TempDir
     private Path tempDir;
+
+    @Test
+    void interfaceTargetsUseExactReceiverProvenanceBeforeGlobalConstructionFacts() {
+        final ClassFile function = interfaceType(
+            "java/util/function/Function",
+            "apply",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        );
+        final ClassFile first = implementationType(
+            "com/acme/First",
+            function.name(),
+            "apply",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        );
+        final ClassFile second = implementationType(
+            "com/acme/Second",
+            function.name(),
+            "apply",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        );
+        final ClassFile unused = implementationType(
+            "com/acme/Unused",
+            function.name(),
+            "apply",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        );
+        final Map<String, ClassFile> classes = Map.of(
+            function.name(), function,
+            first.name(), first,
+            second.name(), second,
+            unused.name(), unused
+        );
+        final InstantiatedTypeAnalysis.Result instantiated = new InstantiatedTypeAnalysis.Result(
+            List.of(
+                new InstantiatedTypeAnalysis.Fact(first.name(), List.of(InstantiatedTypeAnalysis.Origin.ALLOCATION)),
+                new InstantiatedTypeAnalysis.Fact(second.name(), List.of(InstantiatedTypeAnalysis.Origin.ALLOCATION)),
+                new InstantiatedTypeAnalysis.Fact(unused.name(), List.of(InstantiatedTypeAnalysis.Origin.ALLOCATION))
+            ),
+            true
+        );
+
+        assertThat(BytecodeToIR.interfaceTargets(
+            classes,
+            new MethodRef(function.name(), "apply", "(Ljava/lang/Object;)Ljava/lang/Object;"),
+            instantiated,
+            new FunctionValueFlow.Provenance(List.of(first.name(), second.name()), false)
+        )).extracting(EntryPoint::className).containsExactly(first.name(), second.name());
+    }
+
+    @Test
+    void unknownReceiverProvenanceFallsBackToGlobalConstructionFacts() {
+        final ClassFile function = interfaceType(
+            "java/util/function/Function",
+            "apply",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        );
+        final ClassFile first = implementationType(
+            "com/acme/First",
+            function.name(),
+            "apply",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        );
+        final ClassFile second = implementationType(
+            "com/acme/Second",
+            function.name(),
+            "apply",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        );
+        final Map<String, ClassFile> classes = Map.of(function.name(), function, first.name(), first, second.name(), second);
+        final InstantiatedTypeAnalysis.Result instantiated = new InstantiatedTypeAnalysis.Result(
+            List.of(
+                new InstantiatedTypeAnalysis.Fact(first.name(), List.of(InstantiatedTypeAnalysis.Origin.ALLOCATION)),
+                new InstantiatedTypeAnalysis.Fact(second.name(), List.of(InstantiatedTypeAnalysis.Origin.ALLOCATION))
+            ),
+            true
+        );
+
+        assertThat(BytecodeToIR.interfaceTargets(
+            classes,
+            new MethodRef(function.name(), "apply", "(Ljava/lang/Object;)Ljava/lang/Object;"),
+            instantiated,
+            FunctionValueFlow.Provenance.unavailable()
+        )).extracting(EntryPoint::className).containsExactly(first.name(), second.name());
+    }
 
     @Test
     void fiveArgumentCompatibilityConstructorDerivesEnumClassFromConstants() {

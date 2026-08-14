@@ -154,6 +154,7 @@ public final class Javan {
         final List<Diagnostic> diagnostics = new ArrayList<>(mainDetection.diagnostics());
         diagnostics.addAll(callGraph.diagnostics());
         instantiatedTypeReports.write(layout.outputDirectory(), callGraph.instantiatedTypes());
+        instantiatedTypeReports.writeProvenance(layout.outputDirectory(), callGraph.functionValueFlow());
         diagnostics.addAll(controlFlowReports.write(layout.outputDirectory(), classes, callGraph.reachableMethods()));
         final ClassInitializationGraph.Result classInitialization = classInitializationReports.write(
             layout.outputDirectory(),

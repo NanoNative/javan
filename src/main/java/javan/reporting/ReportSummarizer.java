@@ -26,6 +26,7 @@ public final class ReportSummarizer {
         new ReportSpec("call-graph", List.of("call-graph.json", "call-graph.md", "call-flow.html", "call-graph.dot")),
         new ReportSpec("control-flow", List.of("control-flow.json", "control-flow.md")),
         new ReportSpec("instantiated-types", List.of("instantiated-types.json", "instantiated-types.md")),
+        new ReportSpec("receiver-provenance", List.of("receiver-provenance.json", "receiver-provenance.md")),
         new ReportSpec("class-initialization", List.of("class-initialization.json", "class-initialization.md")),
         new ReportSpec("exceptions", List.of("exceptions.json", "exceptions.md", "debug-map.json")),
         new ReportSpec("intrinsics", List.of("intrinsics.json", "intrinsics.md")),
@@ -132,6 +133,9 @@ public final class ReportSummarizer {
         }
         if ("instantiated-types".equals(name)) {
             return instantiatedTypeMetrics(read(reportsDirectory.resolve("instantiated-types.json")));
+        }
+        if ("receiver-provenance".equals(name)) {
+            return receiverProvenanceMetrics(read(reportsDirectory.resolve("receiver-provenance.json")));
         }
         if ("class-initialization".equals(name)) {
             return classInitializationMetrics(read(reportsDirectory.resolve("class-initialization.json")));
@@ -284,6 +288,19 @@ public final class ReportSummarizer {
         addText(result, value, "strategy");
         addBoolean(result, value, "complete");
         addNumber(result, value, "types");
+        return List.copyOf(result);
+    }
+
+    private static List<Metric> receiverProvenanceMetrics(final Optional<String> report) {
+        if (report.isEmpty()) {
+            return List.of();
+        }
+        final String value = report.orElseThrow();
+        final List<Metric> result = new ArrayList<>();
+        addText(result, value, "strategy");
+        addBoolean(result, value, "complete");
+        addNumber(result, value, "maxExactTypes");
+        addNumber(result, value, "sites");
         return List.copyOf(result);
     }
 

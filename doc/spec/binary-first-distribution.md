@@ -118,6 +118,11 @@ Unknown external receivers remain conservative. The resulting receiver types and
 to `.javan/reports/instantiated-types.json` and `.javan/reports/instantiated-types.md`, and the C
 backend consumes the same facts as reachability.
 
+Direct `Function.apply` and `Supplier.get` calls refine that global receiver set with exact types
+tracked through locals, casts, final fields, direct arguments, returns, and control-flow merges. Sets
+of up to four types are written to `.javan/reports/receiver-provenance.json` and its Markdown summary.
+Unknown or larger sets automatically fall back to the global instantiated receiver set.
+
 The IDE plugin should render reports. It must not infer native support from source code
 or JDK inventory by itself.
 

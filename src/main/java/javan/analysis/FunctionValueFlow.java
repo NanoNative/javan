@@ -10,6 +10,7 @@ import javan.classfile.Instruction;
 import javan.classfile.LambdaMetafactoryCall;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
+import javan.util.Strings2;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -20,13 +21,15 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-/**
- * Conservatively proves which reachable callback uses receive materialized lambdas.
- */
+/** Conservatively tracks reachable callback origins and bounded concrete receiver types. */
 public final class FunctionValueFlow {
+    private static final int MAX_EXACT_TYPES = 4;
     private static final int MATERIALIZED = 1;
     private static final int CONCRETE = 2;
     private static final int UNSAFE = 4;
+    private static final Fact NONE_FACT = new Fact(0, List.of(), false);
+    private static final Fact MATERIALIZED_FACT = new Fact(MATERIALIZED, List.of(), false);
+    private static final Fact UNSAFE_FACT = new Fact(UNSAFE, List.of(), true);
     private static final int ACC_FINAL = 0x0010;
     private static final int ACC_PRIVATE = 0x0002;
     private static final String FUNCTION_DESCRIPTOR = "Ljava/util/function/Function;";
@@ -43,6 +46,11 @@ public final class FunctionValueFlow {
     );
 
     private FunctionValueFlow() {
+    }
+
+    /** @return maximum exact receiver types retained at one use site */
+    public static int maxExactTypes() {
+        return MAX_EXACT_TYPES;
     }
 
     /**
@@ -69,15 +77,49 @@ public final class FunctionValueFlow {
     }
 
     /**
+     * Bounded concrete receiver evidence at one callback use.
+     *
+     * @param types sorted exact JVM receiver types
+     * @param unknown whether dispatch must conservatively ignore the exact set
+     */
+    public record Provenance(List<String> types, boolean unknown) {
+        private static final Provenance UNAVAILABLE = new Provenance(List.of(), true);
+
+        public Provenance {
+            final List<String> ordered = new ArrayList<>();
+            for (final String type : types) {
+                int index = 0;
+                while (index < ordered.size() && Strings2.compareAscii(ordered.get(index), type) < 0) {
+                    index++;
+                }
+                if (index >= ordered.size() || !ordered.get(index).equals(type)) {
+                    ordered.add(index, type);
+                }
+            }
+            unknown = unknown || ordered.size() > MAX_EXACT_TYPES;
+            types = unknown ? List.of() : List.copyOf(ordered);
+        }
+
+        /** @return explicit unknown provenance */
+        public static Provenance unavailable() {
+            return UNAVAILABLE;
+        }
+    }
+
+    /**
      * Immutable whole-program callback-flow result.
      *
      * @param functionKinds Function value classification by exact use site
      * @param supplierKinds Supplier value classification by exact use site
+     * @param functionProvenance exact Function receiver evidence by use site
+     * @param supplierProvenance exact Supplier receiver evidence by use site
      * @param complete whether whole-program callback-flow analysis was available
      */
     public record Result(
         Map<Site, ValueKind> functionKinds,
         Map<Site, ValueKind> supplierKinds,
+        Map<Site, Provenance> functionProvenance,
+        Map<Site, Provenance> supplierProvenance,
         boolean complete
     ) {
         /**
@@ -86,7 +128,7 @@ public final class FunctionValueFlow {
          * @param functionKinds Function value classification by exact use site
          */
         public Result(final Map<Site, ValueKind> functionKinds) {
-            this(functionKinds, Map.of(), true);
+            this(functionKinds, Map.of(), Map.of(), Map.of(), true);
         }
 
         /**
@@ -96,12 +138,29 @@ public final class FunctionValueFlow {
          * @param complete whether whole-program callback-flow analysis was available
          */
         public Result(final Map<Site, ValueKind> functionKinds, final boolean complete) {
-            this(functionKinds, Map.of(), complete);
+            this(functionKinds, Map.of(), Map.of(), Map.of(), complete);
+        }
+
+        /**
+         * Creates a result without exact receiver evidence.
+         *
+         * @param functionKinds Function value classification by exact use site
+         * @param supplierKinds Supplier value classification by exact use site
+         * @param complete whether whole-program callback-flow analysis was available
+         */
+        public Result(
+            final Map<Site, ValueKind> functionKinds,
+            final Map<Site, ValueKind> supplierKinds,
+            final boolean complete
+        ) {
+            this(functionKinds, supplierKinds, Map.of(), Map.of(), complete);
         }
 
         public Result {
             functionKinds = Map.copyOf(functionKinds);
             supplierKinds = Map.copyOf(supplierKinds);
+            functionProvenance = Map.copyOf(functionProvenance);
+            supplierProvenance = Map.copyOf(supplierProvenance);
         }
 
         /**
@@ -110,7 +169,7 @@ public final class FunctionValueFlow {
          * @return unavailable result
          */
         public static Result unavailable() {
-            return new Result(Map.of(), Map.of(), false);
+            return new Result(Map.of(), Map.of(), Map.of(), Map.of(), false);
         }
 
         /**
@@ -172,6 +231,48 @@ public final class FunctionValueFlow {
                 ValueKind.UNKNOWN
             );
         }
+
+        /**
+         * Returns bounded Function receiver evidence for an exact use instruction.
+         *
+         * @param className JVM owner
+         * @param methodName JVM method name
+         * @param descriptor JVM method descriptor
+         * @param offset bytecode offset
+         * @return exact types or explicit unknown provenance
+         */
+        public Provenance functionProvenance(
+            final String className,
+            final String methodName,
+            final String descriptor,
+            final int offset
+        ) {
+            return functionProvenance.getOrDefault(
+                new Site(className, methodName, descriptor, offset),
+                Provenance.unavailable()
+            );
+        }
+
+        /**
+         * Returns bounded Supplier receiver evidence for an exact use instruction.
+         *
+         * @param className JVM owner
+         * @param methodName JVM method name
+         * @param descriptor JVM method descriptor
+         * @param offset bytecode offset
+         * @return exact types or explicit unknown provenance
+         */
+        public Provenance supplierProvenance(
+            final String className,
+            final String methodName,
+            final String descriptor,
+            final int offset
+        ) {
+            return supplierProvenance.getOrDefault(
+                new Site(className, methodName, descriptor, offset),
+                Provenance.unavailable()
+            );
+        }
     }
 
     /**
@@ -201,17 +302,23 @@ public final class FunctionValueFlow {
         final List<EntryPoint> reachableMethods,
         final List<EntryPoint> declaredExternalLeaves
     ) {
-        final Map<Site, ValueKind> functionKinds = containsTrackedUse(
+        final FlowResult function = containsTrackedUse(
             classes,
             reachableMethods,
             CallbackKind.FUNCTION
-        ) ? new Engine(classes, reachableMethods, declaredExternalLeaves, CallbackKind.FUNCTION).analyze() : Map.of();
-        final Map<Site, ValueKind> supplierKinds = containsTrackedUse(
+        ) ? new Engine(classes, reachableMethods, declaredExternalLeaves, CallbackKind.FUNCTION).analyze() : FlowResult.empty();
+        final FlowResult supplier = containsTrackedUse(
             classes,
             reachableMethods,
             CallbackKind.SUPPLIER
-        ) ? new Engine(classes, reachableMethods, declaredExternalLeaves, CallbackKind.SUPPLIER).analyze() : Map.of();
-        return new Result(functionKinds, supplierKinds, true);
+        ) ? new Engine(classes, reachableMethods, declaredExternalLeaves, CallbackKind.SUPPLIER).analyze() : FlowResult.empty();
+        return new Result(
+            function.kinds(),
+            supplier.kinds(),
+            function.provenance(),
+            supplier.provenance(),
+            true
+        );
     }
 
     private static boolean containsTrackedUse(
@@ -247,11 +354,11 @@ public final class FunctionValueFlow {
         private final Set<EntryPoint> reachableSet;
         private final Set<EntryPoint> declaredExternalLeaves;
         private final CallbackKind callbackKind;
-        private final Map<EntryPoint, int[]> parameterFacts = new LinkedHashMap<>();
-        private final Map<EntryPoint, Integer> returnFacts = new LinkedHashMap<>();
+        private final Map<EntryPoint, Fact[]> parameterFacts = new LinkedHashMap<>();
+        private final Map<EntryPoint, Fact> returnFacts = new LinkedHashMap<>();
         private final Set<FieldRef> finalCallbackFields = new LinkedHashSet<>();
-        private final Map<FieldRef, Integer> fieldFacts = new LinkedHashMap<>();
-        private final Map<Site, Integer> callbackFacts = new LinkedHashMap<>();
+        private final Map<FieldRef, Fact> fieldFacts = new LinkedHashMap<>();
+        private final Map<Site, Fact> callbackFacts = new LinkedHashMap<>();
         private final Map<String, Boolean> callbackTypeCache = new HashMap<>();
         private boolean changed;
 
@@ -269,18 +376,20 @@ public final class FunctionValueFlow {
             initializeFacts();
         }
 
-        private Map<Site, ValueKind> analyze() {
+        private FlowResult analyze() {
             do {
                 changed = false;
                 for (final EntryPoint entryPoint : reachableMethods) {
                     simulate(entryPoint);
                 }
             } while (changed);
-            final Map<Site, ValueKind> result = new LinkedHashMap<>();
-            for (final Map.Entry<Site, Integer> entry : callbackFacts.entrySet()) {
-                result.put(entry.getKey(), kind(entry.getValue().intValue()));
+            final Map<Site, ValueKind> kinds = new LinkedHashMap<>();
+            final Map<Site, Provenance> provenance = new LinkedHashMap<>();
+            for (final Map.Entry<Site, Fact> entry : callbackFacts.entrySet()) {
+                kinds.put(entry.getKey(), kind(entry.getValue()));
+                provenance.put(entry.getKey(), entry.getValue().provenance());
             }
-            return Map.copyOf(result);
+            return new FlowResult(Map.copyOf(kinds), Map.copyOf(provenance));
         }
 
         private void initializeFacts() {
@@ -289,17 +398,17 @@ public final class FunctionValueFlow {
                 if (method == null || method.code().isEmpty()) {
                     continue;
                 }
-                final int[] locals = new int[method.code().orElseThrow().maxLocals()];
+                final Fact[] locals = facts(method.code().orElseThrow().maxLocals());
                 if (!method.isStatic() && locals.length > 0) {
                     locals[0] = isClosedWorldConcreteCallbackClass(entryPoint.className())
-                        ? CONCRETE
-                        : UNSAFE;
+                        ? Fact.concrete(entryPoint.className())
+                        : Fact.unsafe();
                 }
                 if (method.isPublicStaticMain()) {
-                    markReferenceParameters(method, locals, UNSAFE);
+                    markReferenceParameters(method, locals, Fact.unsafe());
                 }
                 parameterFacts.put(entryPoint, locals);
-                returnFacts.put(entryPoint, Integer.valueOf(0));
+                returnFacts.put(entryPoint, Fact.none());
             }
             for (final ClassFile classFile : classes.values()) {
                 for (final FieldInfo field : classFile.fields()) {
@@ -338,16 +447,16 @@ public final class FunctionValueFlow {
             for (final javan.classfile.CodeException handler : code.exceptionTable()) {
                 final Integer handlerIndex = indexes.get(Integer.valueOf(handler.handlerPc()));
                 if (handlerIndex != null) {
-                    final int[] locals = new int[code.maxLocals()];
+                    final Fact[] locals = facts(code.maxLocals());
                     for (int local = 0; local < locals.length; local++) {
-                        locals[local] = UNSAFE;
+                        locals[local] = Fact.unsafe();
                     }
                     enqueue(
                         states,
                         pending,
                         queued,
                         handlerIndex.intValue(),
-                        new State(locals, List.of(new Slot(UNSAFE, 1)), status)
+                        new State(locals, List.of(new Slot(Fact.unsafe(), 1)), status)
                     );
                 } else {
                     status.reject();
@@ -393,7 +502,10 @@ public final class FunctionValueFlow {
             final int maxLocals,
             final FlowStatus status
         ) {
-            final int[] source = parameterFacts.getOrDefault(entryPoint, new int[maxLocals]);
+            Fact[] source = parameterFacts.get(entryPoint);
+            if (source == null) {
+                source = facts(maxLocals);
+            }
             return new State(java.util.Arrays.copyOf(source, maxLocals), List.of(), status);
         }
 
@@ -411,7 +523,7 @@ public final class FunctionValueFlow {
                 return next(index, bytecode);
             }
             if (opcode >= 1 && opcode <= 20) {
-                state.stack().add(new Slot(UNSAFE, opcode == 9 || opcode == 10 || opcode == 14
+                state.stack().add(new Slot(Fact.unsafe(), opcode == 9 || opcode == 10 || opcode == 14
                     || opcode == 15 || opcode == 20 ? 2 : 1));
                 return next(index, bytecode);
             }
@@ -422,7 +534,7 @@ public final class FunctionValueFlow {
             if (opcode >= 46 && opcode <= 53) {
                 pop(state);
                 pop(state);
-                state.stack().add(new Slot(UNSAFE, opcode == 47 || opcode == 49 ? 2 : 1));
+                state.stack().add(new Slot(Fact.unsafe(), opcode == 47 || opcode == 49 ? 2 : 1));
                 return next(index, bytecode);
             }
             if (opcode >= 54 && opcode <= 78) {
@@ -443,29 +555,29 @@ public final class FunctionValueFlow {
                 pop(state);
                 pop(state);
                 final int kind = (opcode - 96) % 4;
-                state.stack().add(new Slot(UNSAFE, kind == 1 || kind == 3 ? 2 : 1));
+                state.stack().add(new Slot(Fact.unsafe(), kind == 1 || kind == 3 ? 2 : 1));
                 return next(index, bytecode);
             }
             if (opcode >= 116 && opcode <= 119) {
                 final Slot value = pop(state);
-                state.stack().add(new Slot(UNSAFE, value.width()));
+                state.stack().add(new Slot(Fact.unsafe(), value.width()));
                 return next(index, bytecode);
             }
             if (opcode >= 120 && opcode <= 131) {
                 pop(state);
                 pop(state);
-                state.stack().add(new Slot(UNSAFE, opcode % 2 == 1 ? 2 : 1));
+                state.stack().add(new Slot(Fact.unsafe(), opcode % 2 == 1 ? 2 : 1));
                 return next(index, bytecode);
             }
             if (opcode >= 133 && opcode <= 147) {
                 pop(state);
-                state.stack().add(new Slot(UNSAFE, conversionWidth(opcode)));
+                state.stack().add(new Slot(Fact.unsafe(), conversionWidth(opcode)));
                 return next(index, bytecode);
             }
             if (opcode >= 148 && opcode <= 152) {
                 pop(state);
                 pop(state);
-                state.stack().add(new Slot(UNSAFE, 1));
+                state.stack().add(new Slot(Fact.unsafe(), 1));
                 return next(index, bytecode);
             }
             if (opcode >= 153 && opcode <= 166) {
@@ -515,19 +627,21 @@ public final class FunctionValueFlow {
                 }
                 final String className = instruction.className().orElseThrow();
                 state.stack().add(new Slot(
-                    isClosedWorldConcreteCallbackClass(className) ? CONCRETE : UNSAFE,
+                    isClosedWorldConcreteCallbackClass(className)
+                        ? Fact.concrete(className)
+                        : Fact.unsafe(),
                     1
                 ));
                 return next(index, bytecode);
             }
             if (opcode == 188 || opcode == 189) {
                 pop(state);
-                state.stack().add(new Slot(UNSAFE, 1));
+                state.stack().add(new Slot(Fact.unsafe(), 1));
                 return next(index, bytecode);
             }
             if (opcode == 190) {
                 pop(state);
-                state.stack().add(new Slot(UNSAFE, 1));
+                state.stack().add(new Slot(Fact.unsafe(), 1));
                 return next(index, bytecode);
             }
             if (opcode == 191) {
@@ -535,11 +649,18 @@ public final class FunctionValueFlow {
                 return List.of();
             }
             if (opcode == 192) {
+                if (instruction.className().isPresent()) {
+                    final Slot value = pop(state);
+                    state.stack().add(new Slot(
+                        narrow(value.fact(), instruction.className().orElseThrow()),
+                        value.width()
+                    ));
+                }
                 return next(index, bytecode);
             }
             if (opcode == 193) {
                 pop(state);
-                state.stack().add(new Slot(UNSAFE, 1));
+                state.stack().add(new Slot(Fact.unsafe(), 1));
                 return next(index, bytecode);
             }
             if (opcode == 194 || opcode == 195) {
@@ -551,7 +672,7 @@ public final class FunctionValueFlow {
                 for (int count = 0; count < dimensions; count++) {
                     pop(state);
                 }
-                state.stack().add(new Slot(UNSAFE, 1));
+                state.stack().add(new Slot(Fact.unsafe(), 1));
                 return next(index, bytecode);
             }
             if (opcode == 198 || opcode == 199) {
@@ -599,12 +720,12 @@ public final class FunctionValueFlow {
 
         private Slot fieldValue(final FieldRef field, final ValueType type) {
             if (!type.reference() || !finalCallbackFields.contains(field)) {
-                return new Slot(UNSAFE, type.width());
+                return new Slot(Fact.unsafe(), type.width());
             }
-            return new Slot(fieldFacts.getOrDefault(field, Integer.valueOf(0)).intValue(), 1);
+            return new Slot(fieldFacts.getOrDefault(field, Fact.none()), 1);
         }
 
-        private void addFieldFact(final FieldRef field, final int fact) {
+        private void addFieldFact(final FieldRef field, final Fact fact) {
             if (finalCallbackFields.contains(field)) {
                 addFact(fieldFacts, field, fact);
             }
@@ -627,10 +748,10 @@ public final class FunctionValueFlow {
             }
             final Descriptor descriptor = resolvedDescriptor.orElseThrow();
             final List<Slot> arguments = popArguments(state, descriptor.parameters().size());
-            final Slot receiver = instruction.opcode() == 184 ? new Slot(UNSAFE, 1) : pop(state);
+            final Slot receiver = instruction.opcode() == 184 ? new Slot(Fact.unsafe(), 1) : pop(state);
             if (instruction.opcode() == 185 && directUse(callbackKind).equals(methodRef)) {
                 addCallbackFact(site(caller, instruction), receiver.fact());
-                pushReturn(state, descriptor.result(), UNSAFE);
+                pushReturn(state, descriptor.result(), Fact.unsafe());
                 return;
             }
             if (isIndirectUse(callbackKind, methodRef) && !arguments.isEmpty()) {
@@ -646,11 +767,11 @@ public final class FunctionValueFlow {
                 pushReturn(
                     state,
                     descriptor.result(),
-                    returnFacts.getOrDefault(target.orElseThrow(), Integer.valueOf(0)).intValue()
+                    returnFacts.getOrDefault(target.orElseThrow(), Fact.none())
                 );
                 return;
             }
-            pushReturn(state, descriptor.result(), UNSAFE);
+            pushReturn(state, descriptor.result(), Fact.unsafe());
         }
 
         private void dynamic(
@@ -673,13 +794,17 @@ public final class FunctionValueFlow {
             final List<Slot> captures = popArguments(state, descriptor.parameters().size());
             final Optional<LambdaMetafactoryCall> lambda = LambdaMetafactoryCall.resolve(dynamicRef);
             if (lambda.isEmpty()) {
-                pushReturn(state, descriptor.result(), UNSAFE);
+                pushReturn(state, descriptor.result(), Fact.unsafe());
                 return;
             }
             final LambdaMetafactoryCall resolved = lambda.orElseThrow();
             contributeLambdaInvocation(resolved, captures, state);
             final boolean materialized = isMaterializedCallback(resolved, method, instruction);
-            pushReturn(state, descriptor.result(), materialized ? MATERIALIZED : UNSAFE);
+            pushReturn(
+                state,
+                descriptor.result(),
+                materialized ? Fact.materialized() : Fact.unsafe()
+            );
         }
 
         private boolean isMaterializedCallback(
@@ -750,7 +875,7 @@ public final class FunctionValueFlow {
                 return;
             }
             final Descriptor descriptor = resolvedDescriptor.orElseThrow();
-            final int[] contributions = new int[method.code().orElseThrow().maxLocals()];
+            final Fact[] contributions = facts(method.code().orElseThrow().maxLocals());
             int local = method.isStatic() ? 0 : 1;
             int captureIndex = 0;
             if (!method.isStatic() && !captures.isEmpty()) {
@@ -762,14 +887,14 @@ public final class FunctionValueFlow {
                 captureIndex = 1;
             }
             for (final ValueType parameter : descriptor.parameters()) {
-                final int fact = captureIndex < captures.size()
+                final Fact fact = captureIndex < captures.size()
                     ? captures.get(captureIndex).fact()
-                    : UNSAFE;
+                    : Fact.unsafe();
                 if (local < 0 || local >= contributions.length) {
                     state.reject();
                     return;
                 }
-                contributions[local] |= fact;
+                contributions[local] = contributions[local].merge(fact);
                 local += parameter.width();
                 captureIndex++;
             }
@@ -821,7 +946,7 @@ public final class FunctionValueFlow {
                 return;
             }
             final Descriptor descriptor = resolvedDescriptor.orElseThrow();
-            final int[] contributions = new int[targetMethod.code().orElseThrow().maxLocals()];
+            final Fact[] contributions = facts(targetMethod.code().orElseThrow().maxLocals());
             int local = 0;
             if (!targetMethod.isStatic()) {
                 if (contributions.length == 0) {
@@ -836,7 +961,7 @@ public final class FunctionValueFlow {
                     state.reject();
                     return;
                 }
-                contributions[local] |= arguments.get(index).fact();
+                contributions[local] = contributions[local].merge(arguments.get(index).fact());
                 local += descriptor.parameters().get(index).width();
             }
             addParameterFacts(target, contributions);
@@ -849,13 +974,13 @@ public final class FunctionValueFlow {
                 && method.isStatic();
         }
 
-        private void addParameterFacts(final EntryPoint target, final int[] contribution) {
-            final int[] current = parameterFacts.get(target);
+        private void addParameterFacts(final EntryPoint target, final Fact[] contribution) {
+            final Fact[] current = parameterFacts.get(target);
             if (current == null) {
                 return;
             }
             for (int index = 0; index < current.length && index < contribution.length; index++) {
-                final int merged = current[index] | contribution[index];
+                final Fact merged = current[index].merge(contribution[index]);
                 if (merged != current[index]) {
                     current[index] = merged;
                     changed = true;
@@ -863,26 +988,26 @@ public final class FunctionValueFlow {
             }
         }
 
-        private void addReturnFact(final EntryPoint entryPoint, final int fact) {
+        private void addReturnFact(final EntryPoint entryPoint, final Fact fact) {
             addFact(returnFacts, entryPoint, fact);
         }
 
-        private void addCallbackFact(final Site site, final int fact) {
+        private void addCallbackFact(final Site site, final Fact fact) {
             addFact(callbackFacts, site, fact);
         }
 
-        private <K> void addFact(final Map<K, Integer> facts, final K key, final int fact) {
-            final int current = facts.getOrDefault(key, Integer.valueOf(0)).intValue();
-            final int merged = current | fact;
+        private <K> void addFact(final Map<K, Fact> facts, final K key, final Fact fact) {
+            final Fact current = facts.getOrDefault(key, Fact.none());
+            final Fact merged = current.merge(fact);
             if (merged != current) {
-                facts.put(key, Integer.valueOf(merged));
+                facts.put(key, merged);
                 changed = true;
             }
         }
 
         private void markUnsafe(final EntryPoint entryPoint, final MethodInfo method) {
             if (referenceResult(method.descriptor())) {
-                addReturnFact(entryPoint, UNSAFE);
+                addReturnFact(entryPoint, Fact.unsafe());
             }
             if (method.code().isEmpty()) {
                 return;
@@ -890,11 +1015,11 @@ public final class FunctionValueFlow {
             for (final Instruction instruction : method.code().orElseThrow().instructions()) {
                 if (instruction.fieldRef().isPresent()
                     && (instruction.opcode() == 179 || instruction.opcode() == 181)) {
-                    addFieldFact(instruction.fieldRef().orElseThrow(), UNSAFE);
+                    addFieldFact(instruction.fieldRef().orElseThrow(), Fact.unsafe());
                 }
                 if (instruction.methodRef().isPresent()
                     && isTrackedUse(callbackKind, instruction.methodRef().orElseThrow())) {
-                    addCallbackFact(site(entryPoint, instruction), UNSAFE);
+                    addCallbackFact(site(entryPoint, instruction), Fact.unsafe());
                 }
                 if (instruction.methodRef().isPresent()) {
                     for (final EntryPoint target : unsafeCallTargets(
@@ -946,17 +1071,17 @@ public final class FunctionValueFlow {
         }
 
         private void markParametersUnsafe(final EntryPoint target) {
-            final int[] current = parameterFacts.get(target);
+            final Fact[] current = parameterFacts.get(target);
             final Optional<MethodInfo> resolvedMethod = method(target);
             if (current == null || resolvedMethod.isEmpty()) {
                 return;
             }
-            final int[] contribution = new int[current.length];
+            final Fact[] contribution = facts(current.length);
             final MethodInfo method = resolvedMethod.orElseThrow();
             final Optional<Descriptor> resolvedDescriptor = methodDescriptor(method.descriptor());
             if (resolvedDescriptor.isEmpty()) {
                 for (int local = 0; local < contribution.length; local++) {
-                    contribution[local] = UNSAFE;
+                    contribution[local] = Fact.unsafe();
                 }
                 addParameterFacts(target, contribution);
                 return;
@@ -966,19 +1091,19 @@ public final class FunctionValueFlow {
                 if (contribution.length == 0) {
                     return;
                 }
-                contribution[0] = UNSAFE;
+                contribution[0] = Fact.unsafe();
                 local = 1;
             }
             for (final ValueType parameter : resolvedDescriptor.orElseThrow().parameters()) {
                 if (local < 0 || local >= contribution.length) {
                     for (int index = 0; index < contribution.length; index++) {
-                        contribution[index] = UNSAFE;
+                        contribution[index] = Fact.unsafe();
                     }
                     addParameterFacts(target, contribution);
                     return;
                 }
                 if (parameter.reference()) {
-                    contribution[local] = UNSAFE;
+                    contribution[local] = Fact.unsafe();
                 }
                 local += parameter.width();
             }
@@ -1009,6 +1134,21 @@ public final class FunctionValueFlow {
                 pending.addAll(classFile.interfaces());
             }
             return false;
+        }
+
+        private Fact narrow(final Fact fact, final String target) {
+            if (fact.unknown() || fact.types().isEmpty()) {
+                return fact;
+            }
+            final List<String> types = new ArrayList<>();
+            for (final String type : fact.types()) {
+                if (isAssignableTo(type, target)) {
+                    types.add(type);
+                }
+            }
+            return types.isEmpty()
+                ? new Fact(fact.kinds(), List.of(), true)
+                : new Fact(fact.kinds(), List.copyOf(types), false);
         }
 
         private Optional<MethodInfo> method(final EntryPoint entryPoint) {
@@ -1105,7 +1245,7 @@ public final class FunctionValueFlow {
         final boolean reference = opcode == 25 || opcode >= 42;
         final int width = opcode == 22 || opcode == 24 || opcode >= 30 && opcode <= 33
             || opcode >= 38 && opcode <= 41 ? 2 : 1;
-        state.stack().add(new Slot(reference ? localFact(state, local) : UNSAFE, width));
+        state.stack().add(new Slot(reference ? localFact(state, local) : Fact.unsafe(), width));
     }
 
     private static void storeLocal(final State state, final Instruction instruction) {
@@ -1122,13 +1262,13 @@ public final class FunctionValueFlow {
             state.reject();
             return;
         }
-        state.locals()[local] = opcode == 58 || opcode >= 75 ? value.fact() : UNSAFE;
+        state.locals()[local] = opcode == 58 || opcode >= 75 ? value.fact() : Fact.unsafe();
     }
 
-    private static int localFact(final State state, final int local) {
+    private static Fact localFact(final State state, final int local) {
         if (local < 0 || local >= state.locals().length) {
             state.reject();
-            return UNSAFE;
+            return Fact.unsafe();
         }
         return state.locals()[local];
     }
@@ -1216,7 +1356,7 @@ public final class FunctionValueFlow {
     private static Slot pop(final State state) {
         if (state.stack().isEmpty()) {
             state.reject();
-            return new Slot(UNSAFE, 1);
+            return new Slot(Fact.unsafe(), 1);
         }
         return state.stack().removeLast();
     }
@@ -1232,10 +1372,10 @@ public final class FunctionValueFlow {
     private static void pushReturn(
         final State state,
         final ValueType result,
-        final int fact
+        final Fact fact
     ) {
         if (result.width() > 0) {
-            state.stack().add(new Slot(result.reference() ? fact : UNSAFE, result.width()));
+            state.stack().add(new Slot(result.reference() ? fact : Fact.unsafe(), result.width()));
         }
     }
 
@@ -1336,8 +1476,8 @@ public final class FunctionValueFlow {
         );
     }
 
-    private static ValueKind kind(final int fact) {
-        return switch (fact) {
+    private static ValueKind kind(final Fact fact) {
+        return switch (fact.kinds()) {
             case 0 -> ValueKind.UNKNOWN;
             case MATERIALIZED -> ValueKind.MATERIALIZED;
             case CONCRETE -> ValueKind.CONCRETE;
@@ -1347,10 +1487,18 @@ public final class FunctionValueFlow {
         };
     }
 
+    private static Fact[] facts(final int size) {
+        final Fact[] result = new Fact[size];
+        for (int index = 0; index < result.length; index++) {
+            result[index] = Fact.none();
+        }
+        return result;
+    }
+
     private static void markReferenceParameters(
         final MethodInfo method,
-        final int[] locals,
-        final int fact
+        final Fact[] locals,
+        final Fact fact
     ) {
         final Optional<Descriptor> resolvedDescriptor = methodDescriptor(method.descriptor());
         if (resolvedDescriptor.isEmpty()) {
@@ -1364,7 +1512,7 @@ public final class FunctionValueFlow {
         for (final ValueType parameter : descriptor.parameters()) {
             if (parameter.reference()) {
                 if (local >= 0 && local < locals.length) {
-                    locals[local] |= fact;
+                    locals[local] = locals[local].merge(fact);
                 }
             }
             local += parameter.width();
@@ -1480,7 +1628,80 @@ public final class FunctionValueFlow {
     private record ParsedType(ValueType type, int nextIndex) {
     }
 
-    private record Slot(int fact, int width) {
+    private record FlowResult(Map<Site, ValueKind> kinds, Map<Site, Provenance> provenance) {
+        private static FlowResult empty() {
+            return new FlowResult(Map.of(), Map.of());
+        }
+    }
+
+    private record Fact(int kinds, List<String> types, boolean unknown) {
+        private Fact {
+            types = List.copyOf(types);
+        }
+
+        private static Fact none() {
+            return NONE_FACT;
+        }
+
+        private static Fact materialized() {
+            return MATERIALIZED_FACT;
+        }
+
+        private static Fact concrete(final String type) {
+            return new Fact(CONCRETE, List.of(type), false);
+        }
+
+        private static Fact unsafe() {
+            return UNSAFE_FACT;
+        }
+
+        private Fact merge(final Fact other) {
+            if (kinds == 0 && types.isEmpty() && !unknown) {
+                return other;
+            }
+            if (other.kinds == 0 && other.types.isEmpty() && !other.unknown) {
+                return this;
+            }
+            final int mergedKinds = kinds | other.kinds;
+            if (unknown || other.unknown) {
+                if (mergedKinds == kinds && unknown && types.isEmpty()) {
+                    return this;
+                }
+                return new Fact(mergedKinds, List.of(), true);
+            }
+            if (other.types.isEmpty()) {
+                return mergedKinds == kinds ? this : new Fact(mergedKinds, types, false);
+            }
+            if (types.isEmpty()) {
+                return mergedKinds == other.kinds ? other : new Fact(mergedKinds, other.types, false);
+            }
+            final List<String> mergedTypes = new ArrayList<>(types);
+            boolean typesChanged = false;
+            for (final String type : other.types) {
+                int index = 0;
+                while (index < mergedTypes.size()
+                    && Strings2.compareAscii(mergedTypes.get(index), type) < 0) {
+                    index++;
+                }
+                if (index >= mergedTypes.size() || !mergedTypes.get(index).equals(type)) {
+                    mergedTypes.add(index, type);
+                    typesChanged = true;
+                    if (mergedTypes.size() > MAX_EXACT_TYPES) {
+                        return new Fact(mergedKinds, List.of(), true);
+                    }
+                }
+            }
+            return mergedKinds == kinds && !typesChanged
+                ? this
+                : new Fact(mergedKinds, List.copyOf(mergedTypes), false);
+        }
+
+        private Provenance provenance() {
+            return new Provenance(types, unknown || kinds == 0);
+        }
+    }
+
+    private record Slot(Fact fact, int width) {
     }
 
     private enum CallbackKind {
@@ -1501,12 +1722,12 @@ public final class FunctionValueFlow {
     }
 
     private static final class State {
-        private final int[] locals;
+        private final Fact[] locals;
         private final List<Slot> stack;
         private final FlowStatus status;
 
         private State(
-            final int[] locals,
+            final Fact[] locals,
             final List<Slot> stack,
             final FlowStatus status
         ) {
@@ -1515,7 +1736,7 @@ public final class FunctionValueFlow {
             this.status = status;
         }
 
-        private int[] locals() {
+        private Fact[] locals() {
             return locals;
         }
 
@@ -1542,7 +1763,7 @@ public final class FunctionValueFlow {
             }
             boolean changed = false;
             for (int index = 0; index < locals.length; index++) {
-                final int merged = locals[index] | incoming.locals[index];
+                final Fact merged = locals[index].merge(incoming.locals[index]);
                 if (merged != locals[index]) {
                     locals[index] = merged;
                     changed = true;
@@ -1555,7 +1776,7 @@ public final class FunctionValueFlow {
                     reject();
                     return false;
                 }
-                final int merged = current.fact() | other.fact();
+                final Fact merged = current.fact().merge(other.fact());
                 if (merged != current.fact()) {
                     stack.set(index, new Slot(merged, current.width()));
                     changed = true;

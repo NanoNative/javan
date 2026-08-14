@@ -1465,7 +1465,28 @@ final class BytecodeToIRThreadSupport {
             );
             return;
         }
-        final List<EntryPoint> targets = interfaceTargets(classes, methodRef, instantiatedTypes);
+        FunctionValueFlow.Provenance provenance = FunctionValueFlow.Provenance.unavailable();
+        if (isFunctionApply(methodRef)) {
+            provenance = functionValueFlow.functionProvenance(
+                classFile.name(),
+                method.name(),
+                method.descriptor(),
+                instruction.offset()
+            );
+        } else if (isSupplierGet(methodRef)) {
+            provenance = functionValueFlow.supplierProvenance(
+                classFile.name(),
+                method.name(),
+                method.descriptor(),
+                instruction.offset()
+            );
+        }
+        final List<EntryPoint> targets = interfaceTargets(
+            classes,
+            methodRef,
+            instantiatedTypes,
+            provenance
+        );
         final MethodDescriptor descriptor = MethodDescriptor.parse(methodRef.descriptor());
         final List<IrExpression> arguments = new ArrayList<>(popArguments(classFile, method, stack, descriptor));
         final IrExpression receiver = popObject(classFile, method, stack);
@@ -1526,7 +1547,19 @@ final class BytecodeToIRThreadSupport {
         }
         if (targets.size() > 1) {
             arguments.addFirst(receiver);
-            final String dispatchSymbol = dispatchSymbol(methodRef);
+            String dispatchSymbol = dispatchSymbol(methodRef);
+            if (!provenance.unknown() && !provenance.types().isEmpty()) {
+                dispatchSymbol = new StringBuilder(dispatchSymbol)
+                    .append('_')
+                    .append(sanitize(classFile.name()))
+                    .append('_')
+                    .append(sanitize(method.name()))
+                    .append('_')
+                    .append(sanitize(method.descriptor()))
+                    .append('_')
+                    .append(instruction.offset())
+                    .toString();
+            }
             dispatches.putIfAbsent(dispatchSymbol, dispatch(classes, dispatchSymbol, descriptor, targets));
             appendCallResult(instructions, stack, localDeclarations, descriptor.returnType(), dispatchSymbol, arguments);
             return;

@@ -3636,8 +3636,22 @@ public final class BytecodeToIR {
         final MethodRef methodRef,
         final InstantiatedTypeAnalysis.Result instantiatedTypes
     ) {
+        return interfaceTargets(
+            classes,
+            methodRef,
+            instantiatedTypes,
+            FunctionValueFlow.Provenance.unavailable()
+        );
+    }
+
+    static List<EntryPoint> interfaceTargets(
+        final Map<String, ClassFile> classes,
+        final MethodRef methodRef,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
+        final FunctionValueFlow.Provenance provenance
+    ) {
         final List<EntryPoint> result = new ArrayList<>();
-        final List<ClassFile> candidates = dispatchCandidates(classes, instantiatedTypes);
+        final List<ClassFile> candidates = dispatchCandidates(classes, instantiatedTypes, provenance);
         for (final ClassFile candidate : candidates) {
             if (!candidate.isInterface()
                 && isAssignableTo(classes, candidate.name(), methodRef.owner())
@@ -3682,6 +3696,28 @@ public final class BytecodeToIR {
         final Map<String, ClassFile> classes,
         final InstantiatedTypeAnalysis.Result instantiatedTypes
     ) {
+        return dispatchCandidates(
+            classes,
+            instantiatedTypes,
+            FunctionValueFlow.Provenance.unavailable()
+        );
+    }
+
+    private static List<ClassFile> dispatchCandidates(
+        final Map<String, ClassFile> classes,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
+        final FunctionValueFlow.Provenance provenance
+    ) {
+        if (!provenance.unknown() && !provenance.types().isEmpty()) {
+            final List<ClassFile> exact = new ArrayList<>(provenance.types().size());
+            for (final String type : provenance.types()) {
+                final ClassFile candidate = classes.get(type);
+                if (candidate != null) {
+                    exact.add(candidate);
+                }
+            }
+            return List.copyOf(exact);
+        }
         if (!instantiatedTypes.complete()) {
             return List.copyOf(classes.values());
         }

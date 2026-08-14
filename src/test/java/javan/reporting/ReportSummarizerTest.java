@@ -114,6 +114,30 @@ final class ReportSummarizerTest {
     }
 
     @Test
+    void writeSummarizesReceiverProvenanceMetrics() throws Exception {
+        final Path reports = reportsDirectory();
+        Files.writeString(reports.resolve("receiver-provenance.json"), """
+            {
+              "strategy": "bounded-callback-value-flow",
+              "complete": true,
+              "maxExactTypes": 4,
+              "sites": 3
+            }
+            """);
+        Files.writeString(reports.resolve("receiver-provenance.md"), "# Receiver Provenance\n");
+
+        final ReportSummarizer.Summary summary = new ReportSummarizer().write(tempDir);
+
+        assertThat(summary.markdown()).contains(
+            "| `receiver-provenance` | present |",
+            "strategy: `bounded-callback-value-flow`",
+            "complete: `true`",
+            "maxExactTypes: `4`",
+            "sites: `3`"
+        );
+    }
+
+    @Test
     void writeSummarizesInstantiatedTypeMetrics() throws Exception {
         final Path reports = reportsDirectory();
         Files.writeString(reports.resolve("instantiated-types.json"), """
