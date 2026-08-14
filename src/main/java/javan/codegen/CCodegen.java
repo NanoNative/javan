@@ -611,6 +611,7 @@ public final class CCodegen {
                 continue;
             }
             c.append("        case ").append(typeIds.get(classInfo.jvmName()).intValue()).append(":").append(System.lineSeparator());
+            emitClassInitialization(program, classInfo.jvmName(), c);
             for (final String constant : classInfo.enumConstants()) {
                 c.append("            if (javan_string_equals((const char*) printable, ")
                     .append(emitCStringLiteral(constant))
@@ -632,6 +633,7 @@ public final class CCodegen {
                 continue;
             }
             c.append("        case ").append(typeIds.get(classInfo.jvmName()).intValue()).append(":").append(System.lineSeparator());
+            emitClassInitialization(program, classInfo.jvmName(), c);
             c.append("            switch (ordinal) {").append(System.lineSeparator());
             for (int index = 0; index < classInfo.enumConstants().size(); index++) {
                 final String constant = classInfo.enumConstants().get(index);
@@ -1196,7 +1198,6 @@ public final class CCodegen {
             c.append("    javan_register_enum_ordinal_resolver(javan_generated_enum_ordinal);")
                 .append(System.lineSeparator());
             emitRecordReferenceObjectMethodResolverRegistration(program, c);
-            emitEnumConstantInitializers(program, c);
             if (program.classInitializationDependencies().containsKey(function.owner())) {
                 c.append("    ").append(classInitializationSymbol(function.owner())).append("();")
                     .append(System.lineSeparator());
@@ -1291,7 +1292,6 @@ public final class CCodegen {
         c.append("    javan_register_enum_ordinal_resolver(javan_generated_enum_ordinal);")
             .append(System.lineSeparator());
         emitRecordReferenceObjectMethodResolverRegistration(program, c);
-        emitEnumConstantInitializers(program, c);
         c.append("    javan_gc_safe_point();").append(System.lineSeparator());
         c.append("    javan_library_initialized = 1;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
@@ -3575,8 +3575,12 @@ public final class CCodegen {
         final NativeWrapperSymbols nativeWrapperSymbols,
         final StringBuilder c
     ) {
-        for (final Map.Entry<String, List<String>> entry : program.classInitializationDependencies().entrySet()) {
-            final String owner = entry.getKey();
+        for (final IrClass classInfo : program.classes()) {
+            final List<String> dependencies = program.classInitializationDependencies().get(classInfo.jvmName());
+            if (dependencies == null) {
+                continue;
+            }
+            final String owner = classInfo.jvmName();
             final String symbol = classInitializationSymbol(owner);
             c.append("static int ").append(symbol).append("_state = 0;").append(System.lineSeparator());
             c.append("static void* ").append(symbol).append("_owner = NULL;").append(System.lineSeparator());
@@ -3586,9 +3590,10 @@ public final class CCodegen {
                 .append(System.lineSeparator());
             c.append("        return;").append(System.lineSeparator());
             c.append("    }").append(System.lineSeparator());
-            for (final String dependency : entry.getValue()) {
+            for (final String dependency : dependencies) {
                 c.append("    ").append(classInitializationSymbol(dependency)).append("();").append(System.lineSeparator());
             }
+            emitEnumConstantInitializers(classInfo, c);
             final String initializer = classInitializerFunction(program, owner);
             if (!initializer.isEmpty()) {
                 c.append("    ").append(nativeWrapperSymbols.resolve(initializer)).append("();").append(System.lineSeparator());
@@ -3609,19 +3614,25 @@ public final class CCodegen {
         return "";
     }
 
-    private static void emitEnumConstantInitializers(final IrProgram program, final StringBuilder c) {
-        for (final IrClass classInfo : program.classes()) {
-            if (classInfo.enumConstants().isEmpty()) {
-                continue;
-            }
-            for (final String constant : classInfo.enumConstants()) {
-                c.append("    ")
-                    .append(staticFieldSymbol(classInfo.jvmName(), constant))
-                    .append(" = javan_string_from(\"")
-                    .append(escapeCString(constant))
-                    .append("\");")
-                    .append(System.lineSeparator());
-            }
+    private static void emitClassInitialization(
+        final IrProgram program,
+        final String owner,
+        final StringBuilder c
+    ) {
+        if (program.classInitializationDependencies().containsKey(owner)) {
+            c.append("            ").append(classInitializationSymbol(owner)).append("();")
+                .append(System.lineSeparator());
+        }
+    }
+
+    private static void emitEnumConstantInitializers(final IrClass classInfo, final StringBuilder c) {
+        for (final String constant : classInfo.enumConstants()) {
+            c.append("    ")
+                .append(staticFieldSymbol(classInfo.jvmName(), constant))
+                .append(" = javan_string_from(\"")
+                .append(escapeCString(constant))
+                .append("\");")
+                .append(System.lineSeparator());
         }
     }
 

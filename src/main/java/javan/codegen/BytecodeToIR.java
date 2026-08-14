@@ -508,6 +508,7 @@ public final class BytecodeToIR {
         final Map<Integer, StackValue> pendingExceptionHandlerStacks = new HashMap<>();
         final CodeAttribute code = method.code().orElseThrow();
         final List<Instruction> bytecode = code.instructions();
+        final int enumBootstrapEndOffset = enumBootstrapEndOffset(classFile, method, bytecode);
         final int lastMaterializingDuplicateOffset = lastMaterializingDuplicateOffset(bytecode);
         final List<Integer> ignoredHandlerOffsets = ignoredEnumSwitchMapHandlerOffsets(classes, classFile, method, code);
         final List<Integer> handlerOffsets = exceptionHandlerOffsets(code);
@@ -517,6 +518,9 @@ public final class BytecodeToIR {
         BytecodeToIRMetadataSupport.bindParameters(method, descriptor, parameters, locals);
         for (int index = 0; index < bytecode.size(); index++) {
             final Instruction instruction = bytecode.get(index);
+            if (instruction.offset() <= enumBootstrapEndOffset) {
+                continue;
+            }
             final StackValue pendingException = containsInt(handlerOffsets, instruction.offset())
                 ? pendingExceptionHandlerStacks.get(instruction.offset())
                 : null;
@@ -655,6 +659,29 @@ public final class BytecodeToIR {
             List.copyOf(localDeclarations.values()),
             List.copyOf(instructions)
         );
+    }
+
+    private static int enumBootstrapEndOffset(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final List<Instruction> bytecode
+    ) {
+        if (!classFile.isEnum() || !"<clinit>".equals(method.name()) || !"()V".equals(method.descriptor())) {
+            return -1;
+        }
+        final String valuesDescriptor = "[L" + classFile.name() + ";";
+        for (final Instruction instruction : bytecode) {
+            if (instruction.opcode() != 179 || instruction.fieldRef().isEmpty()) {
+                continue;
+            }
+            final FieldRef field = instruction.fieldRef().orElseThrow();
+            if (classFile.name().equals(field.owner())
+                && "$VALUES".equals(field.name())
+                && valuesDescriptor.equals(field.descriptor())) {
+                return instruction.offset();
+            }
+        }
+        return -1;
     }
 
     private static void initializeClass(

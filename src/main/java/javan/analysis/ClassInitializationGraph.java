@@ -233,7 +233,7 @@ public final class ClassInitializationGraph {
             return false;
         }
         final ClassFile classFile = classes.get(owner);
-        return classFile != null && !classFile.isEnum();
+        return classFile != null;
     }
 
     private static Optional<String> triggerTarget(

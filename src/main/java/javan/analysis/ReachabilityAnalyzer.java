@@ -14,6 +14,7 @@ import javan.compat.ExactMethodSupport;
 import javan.compat.JdkCallSupport;
 import javan.compat.NetworkApiSupport;
 import javan.compat.JavanNativeSubstitutions;
+import javan.util.Strings2;
 import javan.verify.Diagnostic;
 
 import java.util.ArrayList;
@@ -134,6 +135,10 @@ public final class ReachabilityAnalyzer {
                 }
                 final Optional<CodeAttribute> code = method.orElseThrow().code();
                 if (code.isPresent()) {
+                    if (ExactMethodSupport.isExactCatchNullEnumLookupMethod(classes.get(current.className()), method.orElseThrow())) {
+                        enqueueEnumInitializers(classes, work, workSet, current, callEdges, entryPoints);
+                        continue;
+                    }
                     if (ExactMethodSupport.isExactLoweredMethod(classes.get(current.className()), method.orElseThrow())) {
                         continue;
                     }
@@ -1570,6 +1575,29 @@ public final class ReachabilityAnalyzer {
             final EntryPoint callee = entryPoints.entry(initializerOwner, classInitializer.name(), classInitializer.descriptor());
             enqueue(work, workSet, callee);
             addEdge(callEdges, current, callee, CallEdge.Kind.CLASS_INITIALIZER);
+        }
+    }
+
+    private static void enqueueEnumInitializers(
+        final Map<String, ClassFile> classes,
+        final List<EntryPoint> work,
+        final EntryPointMembership workSet,
+        final EntryPoint current,
+        final CallEdgeTracker callEdges,
+        final EntryPointPool entryPoints
+    ) {
+        final List<String> owners = new ArrayList<>();
+        for (final ClassFile classFile : classes.values()) {
+            if (classFile.isEnum()) {
+                int index = 0;
+                while (index < owners.size() && Strings2.compareAscii(owners.get(index), classFile.name()) < 0) {
+                    index++;
+                }
+                owners.add(index, classFile.name());
+            }
+        }
+        for (final String owner : owners) {
+            enqueueClassInitializer(classes, owner, work, workSet, current, callEdges, entryPoints);
         }
     }
 
