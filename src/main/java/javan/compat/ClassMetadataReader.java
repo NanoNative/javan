@@ -214,11 +214,18 @@ public final class ClassMetadataReader {
                 opcode,
                 BytecodeSupport.mnemonic(opcode),
                 Math.max(0, length - 1),
-                BytecodeSupport.classify(opcode)
+                support(bytecode, offset, opcode)
             ));
             offset += length;
         }
         return List.copyOf(result);
+    }
+
+    private static BytecodeSupport.Status support(final byte[] bytecode, final int offset, final int opcode) {
+        if (opcode == 196 && offset + 1 < bytecode.length && unsigned(bytecode[offset + 1]) == 169) {
+            return BytecodeSupport.Status.NATIVE_SUPPORTED;
+        }
+        return BytecodeSupport.classify(opcode);
     }
 
     private static int instructionLength(final byte[] bytecode, final int offset) throws IOException {

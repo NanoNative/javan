@@ -33,6 +33,10 @@ public final class CaughtThrowableRethrowAnalysis {
         final CodeException handler
     ) {
         final List<Instruction> instructions = code.instructions();
+        final BytecodeControlFlow.Result controlFlow = BytecodeControlFlow.analyze(code);
+        if (!controlFlow.structurallyValid()) {
+            return Optional.empty();
+        }
         final int handlerIndex = instructionIndex(instructions, handler.handlerPc());
         if (handlerIndex < 0) {
             return Optional.empty();
@@ -115,33 +119,32 @@ public final class CaughtThrowableRethrowAnalysis {
                 continue;
             }
             if (conditionalBranch(opcode)) {
-                if (!enqueueOffset(pending, instructions, state, branchTarget(instruction), 0)) {
-                    return Optional.empty();
-                }
-                if (!enqueueState(pending, nextState(state, state.instructionIndex() + 1, 0))) {
-                    return Optional.empty();
+                for (final int successor : controlFlow.graph().successors(state.instructionIndex())) {
+                    if (!enqueueState(pending, nextState(state, successor, 0))) {
+                        return Optional.empty();
+                    }
                 }
                 continue;
             }
             if (opcode == 170 || opcode == 171) {
-                if (!enqueueSwitchTargets(pending, instructions, state, instruction)) {
-                    return Optional.empty();
+                for (final int successor : controlFlow.graph().successors(state.instructionIndex())) {
+                    if (!enqueueState(pending, nextState(state, successor, 0))) {
+                        return Optional.empty();
+                    }
                 }
                 continue;
             }
-            if (opcode == 167) {
-                if (!enqueueOffset(
+            if (opcode == 167 || opcode == 200) {
+                final List<Integer> successors = controlFlow.graph().successors(state.instructionIndex());
+                if (successors.size() != 1 || !enqueueState(
                     pending,
-                    instructions,
-                    state,
-                    branchTarget(instruction),
-                    state.throwableStackCopies()
+                    nextState(state, successors.getFirst(), state.throwableStackCopies())
                 )) {
                     return Optional.empty();
                 }
                 continue;
             }
-            if (opcode >= 168 && opcode <= 177 || opcode >= 198 && opcode <= 201) {
+            if (opcode >= 168 && opcode <= 177 || opcode == 198 || opcode == 199 || opcode == 201) {
                 return Optional.empty();
             }
             if (!enqueueState(pending, nextState(state, state.instructionIndex() + 1, 0))) {
@@ -174,103 +177,8 @@ public final class CaughtThrowableRethrowAnalysis {
         return true;
     }
 
-    private static boolean enqueueOffset(
-        final List<AnalysisState> pending,
-        final List<Instruction> instructions,
-        final AnalysisState state,
-        final int offset,
-        final int throwableStackCopies
-    ) {
-        final int index = instructionIndex(instructions, offset);
-        if (index < 0) {
-            return false;
-        }
-        return enqueueState(pending, nextState(state, index, throwableStackCopies));
-    }
-
-    private static boolean enqueueSwitchTargets(
-        final List<AnalysisState> pending,
-        final List<Instruction> instructions,
-        final AnalysisState state,
-        final Instruction instruction
-    ) {
-        final byte[] operands = instruction.operands();
-        final int padding = switchPadding(instruction.offset());
-        if (!enqueueOffset(
-            pending,
-            instructions,
-            state,
-            instruction.offset() + int32(operands, padding),
-            0
-        )) {
-            return false;
-        }
-        if (instruction.opcode() == 170) {
-            final int low = int32(operands, padding + 4);
-            final int high = int32(operands, padding + 8);
-            final long entries = (long) high - low + 1;
-            if (entries < 0 || entries > MAX_ANALYSIS_STATES - pending.size()) {
-                return false;
-            }
-            int operandOffset = padding + 12;
-            for (long index = 0; index < entries; index++) {
-                if (!enqueueOffset(
-                    pending,
-                    instructions,
-                    state,
-                    instruction.offset() + int32(operands, operandOffset),
-                    0
-                )) {
-                    return false;
-                }
-                operandOffset += 4;
-            }
-            return true;
-        }
-
-        final int pairs = int32(operands, padding + 4);
-        if (pairs < 0 || pairs > MAX_ANALYSIS_STATES - pending.size()) {
-            return false;
-        }
-        int operandOffset = padding + 8;
-        for (int index = 0; index < pairs; index++) {
-            if (!enqueueOffset(
-                pending,
-                instructions,
-                state,
-                instruction.offset() + int32(operands, operandOffset + 4),
-                0
-            )) {
-                return false;
-            }
-            operandOffset += 8;
-        }
-        return true;
-    }
-
     private static boolean conditionalBranch(final int opcode) {
         return opcode >= 153 && opcode <= 166 || opcode == 198 || opcode == 199;
-    }
-
-    private static int branchTarget(final Instruction instruction) {
-        final byte[] operands = instruction.operands();
-        final int relative = (short) ((unsigned(operands[0]) << 8) | unsigned(operands[1]));
-        return instruction.offset() + relative;
-    }
-
-    private static int switchPadding(final int offset) {
-        int cursor = offset + 1;
-        while (cursor % 4 != 0) {
-            cursor++;
-        }
-        return cursor - offset - 1;
-    }
-
-    private static int int32(final byte[] operands, final int offset) {
-        return (unsigned(operands[offset]) << 24)
-            | (unsigned(operands[offset + 1]) << 16)
-            | (unsigned(operands[offset + 2]) << 8)
-            | unsigned(operands[offset + 3]);
     }
 
     private static int instructionIndex(final List<Instruction> instructions, final int offset) {

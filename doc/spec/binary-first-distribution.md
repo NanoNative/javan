@@ -100,6 +100,11 @@ Every build/check writes stable reports by default:
 - JSON for CI, build plugins, and IDEs
 - a compiler-diagnostic text stream compatible with tools that parse `javac` warnings
 
+The canonical bytecode graph is available as `.javan/reports/control-flow.json` with exact
+blocks and typed edges, plus a concise `.javan/reports/control-flow.md` summary.
+Legacy `jsr`, `jsr_w`, and `ret` subroutines are inlined at class-file ingress, so every
+analysis and backend receives the same ordinary branch graph.
+
 The IDE plugin should render reports. It must not infer native support from source code
 or JDK inventory by itself.
 

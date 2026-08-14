@@ -324,6 +324,11 @@ public final class FunctionValueFlow {
             if (bytecode.isEmpty()) {
                 return;
             }
+            final BytecodeControlFlow.Result controlFlow = BytecodeControlFlow.analyze(method);
+            if (!controlFlow.valid()) {
+                markUnsafe(entryPoint, method);
+                return;
+            }
             final Map<Integer, Integer> indexes = instructionIndexes(bytecode);
             final State[] states = new State[bytecode.size()];
             final List<Integer> pending = new ArrayList<>();
@@ -366,7 +371,7 @@ public final class FunctionValueFlow {
                     instruction,
                     index,
                     bytecode,
-                    indexes,
+                    controlFlow.graph(),
                     state
                 );
                 if (!status.supported()) {
@@ -398,7 +403,7 @@ public final class FunctionValueFlow {
             final Instruction instruction,
             final int index,
             final List<Instruction> bytecode,
-            final Map<Integer, Integer> indexes,
+            final BytecodeControlFlow.Graph controlFlow,
             final State state
         ) {
             final int opcode = instruction.opcode();
@@ -468,19 +473,18 @@ public final class FunctionValueFlow {
                 if (opcode >= 159) {
                     pop(state);
                 }
-                return branchSuccessors(index, bytecode, indexes, instruction, state);
+                return controlFlow.successors(index);
             }
-            if (opcode == 167) {
-                final int target = targetIndex(indexes, branchTarget(instruction, state), state);
-                return state.supported() ? List.of(Integer.valueOf(target)) : List.of();
+            if (opcode == 167 || opcode == 200) {
+                return controlFlow.successors(index);
             }
-            if (opcode == 168 || opcode == 169 || opcode == 196 || opcode == 200 || opcode == 201) {
+            if (opcode == 168 || opcode == 169 || opcode == 196 || opcode == 201) {
                 state.reject();
                 return List.of();
             }
             if (opcode == 170 || opcode == 171) {
                 pop(state);
-                return switchSuccessors(indexes, instruction, state);
+                return controlFlow.successors(index);
             }
             if (opcode >= 172 && opcode <= 176) {
                 final Slot value = pop(state);
@@ -552,7 +556,7 @@ public final class FunctionValueFlow {
             }
             if (opcode == 198 || opcode == 199) {
                 pop(state);
-                return branchSuccessors(index, bytecode, indexes, instruction, state);
+                return controlFlow.successors(index);
             }
             state.reject();
             return List.of();
@@ -1239,137 +1243,12 @@ public final class FunctionValueFlow {
         return index + 1 < bytecode.size() ? List.of(Integer.valueOf(index + 1)) : List.of();
     }
 
-    private static List<Integer> branchSuccessors(
-        final int index,
-        final List<Instruction> bytecode,
-        final Map<Integer, Integer> indexes,
-        final Instruction instruction,
-        final State state
-    ) {
-        final List<Integer> result = new ArrayList<>();
-        final int target = targetIndex(indexes, branchTarget(instruction, state), state);
-        if (!state.supported()) {
-            return List.of();
-        }
-        result.add(Integer.valueOf(target));
-        if (index + 1 < bytecode.size()) {
-            result.add(Integer.valueOf(index + 1));
-        }
-        return List.copyOf(result);
-    }
-
-    private static List<Integer> switchSuccessors(
-        final Map<Integer, Integer> indexes,
-        final Instruction instruction,
-        final State state
-    ) {
-        final Set<Integer> result = new LinkedHashSet<>();
-        final byte[] operands = instruction.operands();
-        final int padding = switchPadding(instruction.offset());
-        final int defaultTarget = targetIndex(
-            indexes,
-            instruction.offset() + int32(operands, padding, state),
-            state
-        );
-        if (!state.supported()) {
-            return List.of();
-        }
-        result.add(Integer.valueOf(defaultTarget));
-        if (instruction.opcode() == 170) {
-            final int low = int32(operands, padding + 4, state);
-            final int high = int32(operands, padding + 8, state);
-            int cursor = padding + 12;
-            final long count = (long) high - low + 1L;
-            if (!state.supported() || count < 0L || count > (operands.length - cursor) / 4L) {
-                state.reject();
-                return List.of();
-            }
-            for (long value = 0L; value < count; value++) {
-                final int target = targetIndex(
-                    indexes,
-                    instruction.offset() + int32(operands, cursor, state),
-                    state
-                );
-                if (!state.supported()) {
-                    return List.of();
-                }
-                result.add(Integer.valueOf(target));
-                cursor += 4;
-            }
-        } else {
-            final int pairs = int32(operands, padding + 4, state);
-            int cursor = padding + 8;
-            if (!state.supported() || pairs < 0 || pairs > (operands.length - cursor) / 8) {
-                state.reject();
-                return List.of();
-            }
-            for (int index = 0; index < pairs; index++) {
-                final int target = targetIndex(
-                    indexes,
-                    instruction.offset() + int32(operands, cursor + 4, state),
-                    state
-                );
-                if (!state.supported()) {
-                    return List.of();
-                }
-                result.add(Integer.valueOf(target));
-                cursor += 8;
-            }
-        }
-        return List.copyOf(result);
-    }
-
     private static Map<Integer, Integer> instructionIndexes(final List<Instruction> bytecode) {
         final Map<Integer, Integer> result = new HashMap<>();
         for (int index = 0; index < bytecode.size(); index++) {
             result.put(Integer.valueOf(bytecode.get(index).offset()), Integer.valueOf(index));
         }
         return result;
-    }
-
-    private static int targetIndex(
-        final Map<Integer, Integer> indexes,
-        final int offset,
-        final State state
-    ) {
-        if (!state.supported()) {
-            return -1;
-        }
-        final Integer result = indexes.get(Integer.valueOf(offset));
-        if (result == null) {
-            state.reject();
-            return -1;
-        }
-        return result.intValue();
-    }
-
-    private static int branchTarget(final Instruction instruction, final State state) {
-        final byte[] operands = instruction.operands();
-        if (operands.length < 2) {
-            state.reject();
-            return -1;
-        }
-        final int relative = (short) ((unsigned(operands[0]) << 8) | unsigned(operands[1]));
-        return instruction.offset() + relative;
-    }
-
-    private static int switchPadding(final int offset) {
-        int cursor = offset + 1;
-        while (cursor % 4 != 0) {
-            cursor++;
-        }
-        return cursor - offset - 1;
-    }
-
-    private static int int32(final byte[] values, final int offset, final State state) {
-        if (offset < 0 || offset + 3 >= values.length) {
-            state.reject();
-            return 0;
-        }
-        return (unsigned(values[offset]) << 24)
-            | (unsigned(values[offset + 1]) << 16)
-            | (unsigned(values[offset + 2]) << 8)
-            | unsigned(values[offset + 3]);
     }
 
     private static int conversionWidth(final int opcode) {

@@ -64,6 +64,17 @@ final class ClassMetadataReaderTest {
     }
 
     @Test
+    void reportsWideRetAsSupportedLegacyBytecode() throws Exception {
+        final ClassMetadata metadata = new ClassMetadataReader().read(
+            minimalClassfile("sample/WideRet", new byte[]{(byte) 196, (byte) 169, 0, 0}),
+            SOURCE
+        );
+
+        assertThat(metadata.constructors().getFirst().instructions().getFirst().support())
+            .isEqualTo(BytecodeSupport.Status.NATIVE_SUPPORTED);
+    }
+
+    @Test
     void readRejectsInvalidTableSwitchInstruction() {
         assertThatThrownBy(() -> new ClassMetadataReader().read(minimalClassfile("sample/TableSwitch", new byte[]{(byte) 170}), SOURCE))
             .isInstanceOf(IOException.class)

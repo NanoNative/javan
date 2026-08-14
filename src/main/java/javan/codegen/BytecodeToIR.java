@@ -1351,6 +1351,9 @@ public final class BytecodeToIR {
             case 167:
                 instructions.add(IrInstruction.jump(label(branchTarget(instruction))));
                 break;
+            case 200:
+                instructions.add(IrInstruction.jump(label(wideBranchTarget(instruction))));
+                break;
             case 170:
                 BytecodeToIRControlFlowSupport.tableSwitch(classFile, method, instruction, instructions, stack, localDeclarations);
                 break;
@@ -2823,6 +2826,9 @@ public final class BytecodeToIR {
         if (opcode == 199) {
             return true;
         }
+        if (opcode == 200) {
+            return true;
+        }
         return false;
     }
 
@@ -3018,7 +3024,14 @@ public final class BytecodeToIR {
     }
 
     static int branchTarget(final Instruction instruction) {
+        if (instruction.opcode() == 200) {
+            return wideBranchTarget(instruction);
+        }
         return instruction.offset() + signedShort(instruction.operands());
+    }
+
+    static int wideBranchTarget(final Instruction instruction) {
+        return instruction.offset() + int32(instruction.operands(), 0);
     }
 
     static String label(final int offset) {

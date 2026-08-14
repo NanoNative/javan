@@ -371,7 +371,7 @@ public final class ClassFileReader {
                 continue;
             }
             final CodeAttribute code = method.code().orElseThrow();
-            result.add(new MethodInfo(method.accessFlags(), method.name(), method.descriptor(), Optional.of(new CodeAttribute(
+            final CodeAttribute resolved = new CodeAttribute(
                 code.maxStack(),
                 code.maxLocals(),
                 code.bytecode(),
@@ -379,7 +379,13 @@ public final class ClassFileReader {
                 code.exceptionTable(),
                 code.lineNumbers(),
                 decode(code.bytecode(), constantPool, bootstrapMethods)
-            ))));
+            );
+            result.add(new MethodInfo(
+                method.accessFlags(),
+                method.name(),
+                method.descriptor(),
+                Optional.of(LegacySubroutineNormalizer.normalize(resolved))
+            ));
         }
         return List.copyOf(result);
     }

@@ -334,7 +334,7 @@ final class CoreBehaviorTest {
         assertThat(BytecodeSupport.mnemonic(-1)).isEqualTo("opcode_-1");
         assertThat(BytecodeSupport.knownOpcodes()).contains(0, 201).doesNotContain(255);
         assertThat(BytecodeSupport.nativeSupportedOpcodes())
-            .contains(47, 48, 49, 80, 81, 82, 126, 146, 165, 166, 170, 171, 186, 188, 190)
+            .contains(47, 48, 49, 80, 81, 82, 126, 146, 165, 166, 168, 169, 170, 171, 186, 188, 190, 200, 201)
             .doesNotContain(197);
         assertThat(BytecodeSupport.knownOpcodes()).containsExactlyElementsOf(BytecodeSupport.knownOpcodes());
     }
@@ -6803,7 +6803,7 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void staticVerifierRejectsCatchAllWithWideGoto() {
+    void staticVerifierAcceptsCatchAllWithWideGoto() {
         final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
             classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
             instruction(1, 89, "dup"),
@@ -6816,7 +6816,7 @@ final class CoreBehaviorTest {
             instruction(10, 191, "athrow")
         ), new CodeException(0, 5, 5, Optional.empty()));
 
-        assertThat(diagnostics).extracting(Diagnostic::code).containsExactly("JAVAN014", "JAVAN030");
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test
