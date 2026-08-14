@@ -602,9 +602,15 @@ public final class ProjectReports {
             return List.of(owner, "initialization");
         }
         if ("<init>".equals(entryPoint.methodName())) {
-            return List.of("new " + owner, "(" + parameterLabels(entryPoint.descriptor()) + ")");
+            return List.of(
+                new StringBuilder("new ").append(owner).toString(),
+                new StringBuilder("(").append(parameterLabels(entryPoint.descriptor())).append(')').toString()
+            );
         }
-        return List.of(owner, entryPoint.methodName() + "(" + parameterLabels(entryPoint.descriptor()) + ")");
+        return List.of(
+            owner,
+            new StringBuilder(entryPoint.methodName()).append('(').append(parameterLabels(entryPoint.descriptor())).append(')').toString()
+        );
     }
 
     private static FlowLayout flowLayout(
@@ -619,7 +625,13 @@ public final class ProjectReports {
         }
         for (final CallEdge edge : edges) {
             if (methodsById.containsKey(edge.caller().display()) && methodsById.containsKey(edge.callee().display())) {
-                callsByMethod.computeIfAbsent(edge.caller().display(), ignored -> new ArrayList<>()).add(edge.callee());
+                final String caller = edge.caller().display();
+                List<EntryPoint> callees = callsByMethod.get(caller);
+                if (callees == null) {
+                    callees = new ArrayList<>();
+                    callsByMethod.put(caller, callees);
+                }
+                callees.add(edge.callee());
             }
         }
         final Map<String, Integer> layers = new HashMap<>();
@@ -689,9 +701,11 @@ public final class ProjectReports {
         if (methods.isEmpty()) {
             return "No application entry point was available for static analysis.";
         }
-        return "Javan proved " + methods.size() + " reachable method" + pluralSuffix(methods.size())
-            + " and " + edges.size() + " connection" + pluralSuffix(edges.size())
-            + " starting at " + methodLabel(entryPoint) + ".";
+        return new StringBuilder("Javan proved ")
+            .append(methods.size()).append(" reachable method").append(pluralSuffix(methods.size()))
+            .append(" and ").append(edges.size()).append(" connection").append(pluralSuffix(edges.size()))
+            .append(" starting at ").append(methodLabel(entryPoint)).append('.')
+            .toString();
     }
 
     private static String pluralSuffix(final int count) {
@@ -789,21 +803,25 @@ public final class ProjectReports {
     }
 
     private static List<EntryPoint> sortedMethods(final List<EntryPoint> entries) {
-        final List<EntryPoint> result = new ArrayList<>();
-        result.addAll(entries);
-        result.sort((left, right) -> Strings2.compareAscii(left.display(), right.display()));
-        return List.copyOf(result);
+        final List<String> keys = new ArrayList<>();
+        for (final EntryPoint entry : entries) {
+            keys.add(entry.display());
+        }
+        return reorder(entries, sortedIndexes(keys));
     }
 
     private static List<CallEdge> sortedEdges(final List<CallEdge> edges) {
-        final List<CallEdge> result = new ArrayList<>();
-        result.addAll(edges);
-        result.sort((left, right) -> Strings2.compareAscii(edgeKey(left), edgeKey(right)));
-        return List.copyOf(result);
+        final List<String> keys = new ArrayList<>();
+        for (final CallEdge edge : edges) {
+            keys.add(edgeKey(edge));
+        }
+        return reorder(edges, sortedIndexes(keys));
     }
 
     private static String edgeKey(final CallEdge edge) {
-        return edge.caller().display() + '\u0000' + edgeKind(edge.kind()) + '\u0000' + edge.callee().display();
+        return new StringBuilder(edge.caller().display())
+            .append('\u0000').append(edgeKind(edge.kind())).append('\u0000').append(edge.callee().display())
+            .toString();
     }
 
     private static String edgeKind(final CallEdge.Kind kind) {
@@ -828,7 +846,7 @@ public final class ProjectReports {
     ) {
         final Map<String, List<Diagnostic>> byMethod = new HashMap<>();
         for (final EntryPoint method : methods) {
-            byMethod.put(methodKey(method.className(), method.methodName() + method.descriptor()), new ArrayList<>());
+            byMethod.put(methodKey(method.className(), methodSignature(method)), new ArrayList<>());
         }
         final List<Diagnostic> outsideFlow = new ArrayList<>();
         int errors = 0;
@@ -859,18 +877,74 @@ public final class ProjectReports {
         if (Strings2.isBlank(className) || Strings2.isBlank(methodName)) {
             return "";
         }
-        return className + '\u0000' + methodName;
+        return new StringBuilder(className).append('\u0000').append(methodName).toString();
     }
 
     private static List<Diagnostic> sortedDiagnostics(final List<Diagnostic> diagnostics) {
-        final List<Diagnostic> result = new ArrayList<>(diagnostics);
-        result.sort((left, right) -> Strings2.compareAscii(diagnosticKey(left), diagnosticKey(right)));
+        final List<String> keys = new ArrayList<>();
+        for (final Diagnostic diagnostic : diagnostics) {
+            keys.add(diagnosticKey(diagnostic));
+        }
+        return reorder(diagnostics, sortedIndexes(keys));
+    }
+
+    private static <T> List<T> reorder(final List<T> values, final List<Integer> indexes) {
+        final List<T> result = new ArrayList<>();
+        for (final int index : indexes) {
+            result.add(values.get(index));
+        }
         return List.copyOf(result);
     }
 
+    private static List<Integer> sortedIndexes(final List<String> keys) {
+        final List<Integer> indexes = new ArrayList<>();
+        for (int index = 0; index < keys.size(); index++) {
+            indexes.add(index);
+        }
+        final List<Integer> scratch = new ArrayList<>(indexes);
+        sortIndexes(indexes, scratch, keys, 0, indexes.size());
+        return List.copyOf(indexes);
+    }
+
+    private static void sortIndexes(
+        final List<Integer> indexes,
+        final List<Integer> scratch,
+        final List<String> keys,
+        final int from,
+        final int to
+    ) {
+        if (to - from < 2) {
+            return;
+        }
+        final int middle = from + (to - from) / 2;
+        sortIndexes(indexes, scratch, keys, from, middle);
+        sortIndexes(indexes, scratch, keys, middle, to);
+        int left = from;
+        int right = middle;
+        int target = from;
+        while (left < middle && right < to) {
+            if (Strings2.compareAscii(keys.get(indexes.get(left)), keys.get(indexes.get(right))) <= 0) {
+                scratch.set(target++, indexes.get(left++));
+            } else {
+                scratch.set(target++, indexes.get(right++));
+            }
+        }
+        while (left < middle) {
+            scratch.set(target++, indexes.get(left++));
+        }
+        while (right < to) {
+            scratch.set(target++, indexes.get(right++));
+        }
+        for (int index = from; index < to; index++) {
+            indexes.set(index, scratch.get(index));
+        }
+    }
+
     private static String diagnosticKey(final Diagnostic diagnostic) {
-        return nonBlank(diagnostic.code()) + '\u0000' + nonBlank(diagnostic.className()) + '\u0000'
-            + nonBlank(diagnostic.methodName()) + '\u0000' + nonBlank(diagnostic.message());
+        return new StringBuilder(nonBlank(diagnostic.code()))
+            .append('\u0000').append(nonBlank(diagnostic.className())).append('\u0000')
+            .append(nonBlank(diagnostic.methodName())).append('\u0000').append(nonBlank(diagnostic.message()))
+            .toString();
     }
 
     private static String nonBlank(final String value) {
@@ -883,9 +957,10 @@ public final class ProjectReports {
             codes.add(nonBlank(finding.code()));
         }
         final long errors = errorCount(findings);
-        return "{\"errors\": " + errors
-            + ", \"warnings\": " + (findings.size() - errors)
-            + ", \"codes\": " + jsonList(codes) + "}";
+        return new StringBuilder("{\"errors\": ")
+            .append(errors).append(", \"warnings\": ").append(findings.size() - errors)
+            .append(", \"codes\": ").append(jsonList(codes)).append('}')
+            .toString();
     }
 
     private static void appendFindingsMarkdown(
@@ -950,8 +1025,12 @@ public final class ProjectReports {
         }
 
         private List<Diagnostic> forMethod(final EntryPoint method) {
-            return byMethod.getOrDefault(methodKey(method.className(), method.methodName() + method.descriptor()), List.of());
+            return byMethod.getOrDefault(methodKey(method.className(), methodSignature(method)), List.of());
         }
+    }
+
+    private static String methodSignature(final EntryPoint method) {
+        return new StringBuilder(method.methodName()).append(method.descriptor()).toString();
     }
 
     private static String methodLabel(final EntryPoint entryPoint) {
@@ -960,12 +1039,12 @@ public final class ProjectReports {
         }
         final String owner = shortTypeName(entryPoint.className());
         if ("<clinit>".equals(entryPoint.methodName())) {
-            return owner + " initialization";
+            return new StringBuilder(owner).append(" initialization").toString();
         }
         final String name = "<init>".equals(entryPoint.methodName())
-            ? "new " + owner
-            : owner + "." + entryPoint.methodName();
-        return name + "(" + parameterLabels(entryPoint.descriptor()) + ")";
+            ? new StringBuilder("new ").append(owner).toString()
+            : new StringBuilder(owner).append('.').append(entryPoint.methodName()).toString();
+        return new StringBuilder(name).append('(').append(parameterLabels(entryPoint.descriptor())).append(')').toString();
     }
 
     private static String parameterLabels(final String descriptor) {
