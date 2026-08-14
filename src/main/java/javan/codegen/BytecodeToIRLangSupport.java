@@ -1,6 +1,7 @@
 package javan.codegen;
 
 import javan.analysis.FunctionValueFlow;
+import javan.analysis.InstantiatedTypeAnalysis;
 import javan.classfile.ClassFile;
 import javan.classfile.Instruction;
 import javan.classfile.MethodInfo;
@@ -41,7 +42,8 @@ final class BytecodeToIRLangSupport {
         final List<StackValue> stack,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
-        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods
+        final Map<String, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes
     ) {
         if ("requireNonNull".equals(methodRef.name()) && "(Ljava/lang/Object;)Ljava/lang/Object;".equals(methodRef.descriptor())) {
             final IrExpression value = popObject(classFile, method, stack);
@@ -86,6 +88,7 @@ final class BytecodeToIRLangSupport {
                 stack,
                 dispatches,
                 materializedLambdaMethods,
+                instantiatedTypes,
                 localDeclarations,
                 value,
                 supplier
@@ -155,7 +158,8 @@ final class BytecodeToIRLangSupport {
         final List<IrInstruction> instructions,
         final List<StackValue> stack,
         final Map<String, IrDispatch> dispatches,
-        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final Map<Integer, IrLocal> localDeclarations,
         final IrExpression value,
         final IrExpression supplier
@@ -178,6 +182,7 @@ final class BytecodeToIRLangSupport {
             instructions,
             dispatches,
             materializedLambdaMethods,
+            instantiatedTypes,
             supplier,
             resultLocal
         );
@@ -579,8 +584,9 @@ final class BytecodeToIRLangSupport {
         final MethodRef methodRef,
         final List<IrInstruction> instructions,
         final Map<String, IrDispatch> dispatches,
-        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final FunctionValueFlow.Result functionValueFlow,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final List<StackValue> stack,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
@@ -653,6 +659,7 @@ final class BytecodeToIRLangSupport {
                 instructions,
                 dispatches,
                 materializedLambdaMethods,
+                instantiatedTypes,
                 stack,
                 localDeclarations,
                 receiver,
@@ -669,6 +676,7 @@ final class BytecodeToIRLangSupport {
                 instructions,
                 dispatches,
                 materializedLambdaMethods,
+                instantiatedTypes,
                 functionValueFlow.isMaterializedFunction(
                     classFile.name(),
                     method.name(),
@@ -691,6 +699,7 @@ final class BytecodeToIRLangSupport {
                 instructions,
                 dispatches,
                 materializedLambdaMethods,
+                instantiatedTypes,
                 functionValueFlow.isMaterializedFunction(
                     classFile.name(),
                     method.name(),
@@ -713,6 +722,7 @@ final class BytecodeToIRLangSupport {
                 instructions,
                 dispatches,
                 materializedLambdaMethods,
+                instantiatedTypes,
                 localDeclarations,
                 receiver,
                 arguments.getFirst()
@@ -728,6 +738,7 @@ final class BytecodeToIRLangSupport {
                 instructions,
                 dispatches,
                 materializedLambdaMethods,
+                instantiatedTypes,
                 stack,
                 localDeclarations,
                 receiver,
@@ -744,6 +755,7 @@ final class BytecodeToIRLangSupport {
                 instructions,
                 dispatches,
                 materializedLambdaMethods,
+                instantiatedTypes,
                 stack,
                 localDeclarations,
                 receiver,
@@ -1249,7 +1261,8 @@ final class BytecodeToIRLangSupport {
         final Instruction instruction,
         final List<IrInstruction> instructions,
         final Map<String, IrDispatch> dispatches,
-        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final List<StackValue> stack,
         final Map<Integer, IrLocal> localDeclarations,
         final IrExpression receiver,
@@ -1283,6 +1296,7 @@ final class BytecodeToIRLangSupport {
             instructions,
             dispatches,
             materializedLambdaMethods,
+            instantiatedTypes,
             predicate,
             IrExpression.objectLocal(valueLocal),
             predicateLocal
@@ -1309,7 +1323,8 @@ final class BytecodeToIRLangSupport {
         final Instruction instruction,
         final List<IrInstruction> instructions,
         final Map<String, IrDispatch> dispatches,
-        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final List<StackValue> stack,
         final Map<Integer, IrLocal> localDeclarations,
         final IrExpression receiver,
@@ -1335,6 +1350,7 @@ final class BytecodeToIRLangSupport {
             instructions,
             dispatches,
             materializedLambdaMethods,
+            instantiatedTypes,
             supplier,
             resultLocal
         );
@@ -1353,7 +1369,8 @@ final class BytecodeToIRLangSupport {
         final Instruction instruction,
         final List<IrInstruction> instructions,
         final Map<String, IrDispatch> dispatches,
-        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final List<StackValue> stack,
         final Map<Integer, IrLocal> localDeclarations,
         final IrExpression receiver,
@@ -1379,6 +1396,7 @@ final class BytecodeToIRLangSupport {
             instructions,
             dispatches,
             materializedLambdaMethods,
+            instantiatedTypes,
             supplier,
             resultLocal
         );
@@ -1396,7 +1414,8 @@ final class BytecodeToIRLangSupport {
         final Instruction instruction,
         final List<IrInstruction> instructions,
         final Map<String, IrDispatch> dispatches,
-        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final boolean materializedFunction,
         final List<StackValue> stack,
         final Map<Integer, IrLocal> localDeclarations,
@@ -1430,6 +1449,7 @@ final class BytecodeToIRLangSupport {
             instructions,
             dispatches,
             materializedLambdaMethods,
+            instantiatedTypes,
             materializedFunction,
             function,
             IrExpression.objectLocal(valueLocal),
@@ -1448,7 +1468,8 @@ final class BytecodeToIRLangSupport {
         final Instruction instruction,
         final List<IrInstruction> instructions,
         final Map<String, IrDispatch> dispatches,
-        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final Map<Integer, IrLocal> localDeclarations,
         final IrExpression receiver,
         final IrExpression consumer
@@ -1474,6 +1495,7 @@ final class BytecodeToIRLangSupport {
             instructions,
             dispatches,
             materializedLambdaMethods,
+            instantiatedTypes,
             consumer,
             IrExpression.objectLocal(valueLocal)
         );
@@ -1487,7 +1509,8 @@ final class BytecodeToIRLangSupport {
         final Instruction instruction,
         final List<IrInstruction> instructions,
         final Map<String, IrDispatch> dispatches,
-        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final boolean materializedFunction,
         final List<StackValue> stack,
         final Map<Integer, IrLocal> localDeclarations,
@@ -1521,6 +1544,7 @@ final class BytecodeToIRLangSupport {
             instructions,
             dispatches,
             materializedLambdaMethods,
+            instantiatedTypes,
             materializedFunction,
             function,
             IrExpression.objectLocal(valueLocal),

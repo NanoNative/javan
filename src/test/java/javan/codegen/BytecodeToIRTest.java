@@ -3881,7 +3881,7 @@ final class BytecodeToIRTest {
         assertThat(BytecodeToIRDynamicSupport.materializedLambdaMethods(classes, reachable))
             .hasSize(1)
             .containsEntry(
-                new MethodRef("com/acme/ObjectFn", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;"),
+                "com/acme/ObjectFn#apply(Ljava/lang/Object;)Ljava/lang/Object;",
                 BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind.OBJECT
             );
     }
@@ -10515,7 +10515,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void deduplicatesInheritedInterfaceDispatchTargetsThatResolveToSameMethod() {
+    void preservesInheritedReceiverTypesWhileReusingResolvedInterfaceMethod() {
         final MethodInfo main = method(
             0x0008,
             "main",
@@ -10568,7 +10568,16 @@ final class BytecodeToIRTest {
         );
         assertThat(program.dispatches()).singleElement().satisfies(dispatch -> {
             assertThat(dispatch.symbol()).isEqualTo(dispatchSymbol);
-            assertThat(dispatch.targets()).extracting("owner").containsExactly("com/acme/BaseProvider", "com/acme/OtherProvider");
+            assertThat(dispatch.targets()).extracting("owner").containsExactly(
+                "com/acme/BaseProvider",
+                "com/acme/ChildProvider",
+                "com/acme/OtherProvider"
+            );
+            assertThat(dispatch.targets()).extracting("functionSymbol").containsExactly(
+                symbol("com/acme/BaseProvider", "value", "()Ljava/lang/Object;"),
+                symbol("com/acme/BaseProvider", "value", "()Ljava/lang/Object;"),
+                symbol("com/acme/OtherProvider", "value", "()Ljava/lang/Object;")
+            );
         });
     }
 

@@ -3029,7 +3029,12 @@ final class CoreBehaviorTest {
                     "java/lang/Object",
                     0,
                     List.of(),
-                    methodInfo("main", "([Ljava/lang/String;)V", instruction(0, 182, "invokevirtual", new MethodRef("com/acme/Base", "value", "()I")))
+                    methodInfo(
+                        "main",
+                        "([Ljava/lang/String;)V",
+                        classInstruction(0, 187, "new", "com/acme/Child"),
+                        instruction(3, 182, "invokevirtual", new MethodRef("com/acme/Base", "value", "()I"))
+                    )
                 ),
                 "com/acme/Base", classWithMethods("com/acme/Base", "java/lang/Object", 0, List.of(), methodInfo("value", "()I")),
                 "com/acme/Child", classWithMethods("com/acme/Child", "com/acme/Base", 0, List.of())
@@ -3050,7 +3055,12 @@ final class CoreBehaviorTest {
                     "java/lang/Object",
                     0,
                     List.of(),
-                    methodInfo("main", "([Ljava/lang/String;)V", instruction(0, 182, "invokevirtual", new MethodRef("com/acme/Base", "value", "()I")))
+                    methodInfo(
+                        "main",
+                        "([Ljava/lang/String;)V",
+                        classInstruction(0, 187, "new", "com/acme/Leaf"),
+                        instruction(3, 182, "invokevirtual", new MethodRef("com/acme/Base", "value", "()I"))
+                    )
                 ),
                 "com/acme/Base", classWithMethods(
                     "com/acme/Base",
@@ -3084,7 +3094,12 @@ final class CoreBehaviorTest {
                     "java/lang/Object",
                     0,
                     List.of(),
-                    methodInfo("main", "([Ljava/lang/String;)V", instruction(0, 185, "invokeinterface", new MethodRef("com/acme/Handler", "handle", "()V")))
+                    methodInfo(
+                        "main",
+                        "([Ljava/lang/String;)V",
+                        classInstruction(0, 187, "new", "com/acme/HandlerImpl"),
+                        instruction(3, 185, "invokeinterface", new MethodRef("com/acme/Handler", "handle", "()V"))
+                    )
                 ),
                 "com/acme/Handler", classWithMethods(
                     "com/acme/Handler",
@@ -3106,6 +3121,77 @@ final class CoreBehaviorTest {
 
         assertThat(graph.diagnostics()).isEmpty();
         assertThat(graph.reachableMethods()).contains(new EntryPoint("com/acme/HandlerImpl", "handle", "()V"));
+    }
+
+    @Test
+    void reachabilityUsesLeastInstantiatedTypeFixpoint() {
+        final EntryPoint live = new EntryPoint("com/acme/LiveHandler", "handle", "()V");
+        final EntryPoint dead = new EntryPoint("com/acme/DeadHandler", "handle", "()V");
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "main",
+                        "([Ljava/lang/String;)V",
+                        instruction(0, 184, "invokestatic", new MethodRef(
+                            "com/acme/Factory",
+                            "create",
+                            "()Lcom/acme/Handler;"
+                        )),
+                        instruction(3, 185, "invokeinterface", new MethodRef("com/acme/Handler", "handle", "()V"))
+                    )
+                ),
+                "com/acme/Factory", classWithMethods(
+                    "com/acme/Factory",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "create",
+                        "()Lcom/acme/Handler;",
+                        classInstruction(0, 187, "new", "com/acme/LiveHandler"),
+                        instruction(3, 176, "areturn")
+                    )
+                ),
+                "com/acme/Handler", classWithMethods(
+                    "com/acme/Handler",
+                    "java/lang/Object",
+                    0x0200,
+                    List.of(),
+                    new MethodInfo(0x0401, "handle", "()V", Optional.empty())
+                ),
+                "com/acme/LiveHandler", classWithMethods(
+                    "com/acme/LiveHandler",
+                    "java/lang/Object",
+                    0,
+                    List.of("com/acme/Handler"),
+                    methodInfo("handle", "()V")
+                ),
+                "com/acme/DeadHandler", classWithMethods(
+                    "com/acme/DeadHandler",
+                    "java/lang/Object",
+                    0,
+                    List.of("com/acme/Handler"),
+                    methodInfo(
+                        "handle",
+                        "()V",
+                        classInstruction(0, 187, "new", "com/acme/DeadHandler"),
+                        instruction(3, 177, "return")
+                    )
+                )
+            ),
+            List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+        assertThat(graph.reachableMethods()).contains(live).doesNotContain(dead);
+        assertThat(graph.instantiatedTypes().types())
+            .contains("com/acme/LiveHandler")
+            .doesNotContain("com/acme/DeadHandler");
     }
 
     @Test

@@ -12,13 +12,15 @@ import java.util.List;
  * @param diagnostics reachability diagnostics
  * @param callEdges reachable caller-to-callee edges
  * @param functionValueFlow exact Function receiver flow when analyzed
+ * @param instantiatedTypes concrete receiver types proven constructible
  */
 public record CallGraph(
     EntryPoint entryPoint,
     List<EntryPoint> reachableMethods,
     List<Diagnostic> diagnostics,
     List<CallEdge> callEdges,
-    FunctionValueFlow.Result functionValueFlow
+    FunctionValueFlow.Result functionValueFlow,
+    InstantiatedTypeAnalysis.Result instantiatedTypes
 ) {
     /**
      * Backward-compatible constructor for tests and utility call sites that do not care about caller edges yet.
@@ -28,7 +30,14 @@ public record CallGraph(
      * @param diagnostics reachability diagnostics
      */
     public CallGraph(final EntryPoint entryPoint, final List<EntryPoint> reachableMethods, final List<Diagnostic> diagnostics) {
-        this(entryPoint, reachableMethods, diagnostics, List.of(), FunctionValueFlow.Result.unavailable());
+        this(
+            entryPoint,
+            reachableMethods,
+            diagnostics,
+            List.of(),
+            FunctionValueFlow.Result.unavailable(),
+            InstantiatedTypeAnalysis.Result.unavailable()
+        );
     }
 
     /**
@@ -45,6 +54,13 @@ public record CallGraph(
         final List<Diagnostic> diagnostics,
         final List<CallEdge> callEdges
     ) {
-        this(entryPoint, reachableMethods, diagnostics, callEdges, FunctionValueFlow.Result.unavailable());
+        this(
+            entryPoint,
+            reachableMethods,
+            diagnostics,
+            callEdges,
+            FunctionValueFlow.Result.unavailable(),
+            InstantiatedTypeAnalysis.Result.unavailable()
+        );
     }
 }

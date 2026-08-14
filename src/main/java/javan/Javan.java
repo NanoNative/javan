@@ -39,6 +39,7 @@ import javan.reporting.ControlFlowReports;
 import javan.reporting.DependencyReports;
 import javan.reporting.ExceptionReports;
 import javan.reporting.IntrinsicUsageReports;
+import javan.reporting.InstantiatedTypeReports;
 import javan.reporting.ReportSummarizer;
 import javan.reporting.RuntimeContractReports;
 import javan.reporting.RuntimeFootprintReports;
@@ -89,6 +90,7 @@ public final class Javan {
     private final DependencyReports dependencyReports = new DependencyReports();
     private final ControlFlowReports controlFlowReports = new ControlFlowReports();
     private final ClassInitializationReports classInitializationReports = new ClassInitializationReports();
+    private final InstantiatedTypeReports instantiatedTypeReports = new InstantiatedTypeReports();
     private final ExceptionReports exceptionReports = new ExceptionReports();
     private final IntrinsicUsageReports intrinsicUsageReports = new IntrinsicUsageReports();
     private final RuntimeContractReports runtimeContractReports = new RuntimeContractReports();
@@ -151,6 +153,7 @@ public final class Javan {
         }
         final List<Diagnostic> diagnostics = new ArrayList<>(mainDetection.diagnostics());
         diagnostics.addAll(callGraph.diagnostics());
+        instantiatedTypeReports.write(layout.outputDirectory(), callGraph.instantiatedTypes());
         diagnostics.addAll(controlFlowReports.write(layout.outputDirectory(), classes, callGraph.reachableMethods()));
         final ClassInitializationGraph.Result classInitialization = classInitializationReports.write(
             layout.outputDirectory(),

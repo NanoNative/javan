@@ -2,6 +2,7 @@ package javan.codegen;
 
 import javan.analysis.EntryPoint;
 import javan.analysis.FunctionValueFlow;
+import javan.analysis.InstantiatedTypeAnalysis;
 import javan.classfile.ClassFile;
 import javan.classfile.Instruction;
 import javan.classfile.MethodInfo;
@@ -295,8 +296,9 @@ final class BytecodeToIRCollectionSupport {
         final MethodInfo method,
         final Instruction instruction,
         final Map<String, IrDispatch> dispatches,
-        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final FunctionValueFlow.Result functionValueFlow,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final MethodRef methodRef,
         final List<IrInstruction> instructions,
         final List<StackValue> stack,
@@ -338,6 +340,7 @@ final class BytecodeToIRCollectionSupport {
                 method.descriptor(),
                 instruction.offset()
             ),
+            instantiatedTypes,
             methodRef,
             instructions,
             stack,
@@ -929,8 +932,9 @@ final class BytecodeToIRCollectionSupport {
         final MethodInfo method,
         final Instruction instruction,
         final Map<String, IrDispatch> dispatches,
-        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final boolean materializedFunction,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final MethodRef methodRef,
         final List<IrInstruction> instructions,
         final List<StackValue> stack,
@@ -1115,6 +1119,7 @@ final class BytecodeToIRCollectionSupport {
                     instructions,
                     dispatches,
                     materializedLambdaMethods,
+                    instantiatedTypes,
                     localDeclarations,
                     receiver,
                     arguments.getFirst()
@@ -1187,6 +1192,7 @@ final class BytecodeToIRCollectionSupport {
                     instructions,
                     dispatches,
                     materializedLambdaMethods,
+                    instantiatedTypes,
                     localDeclarations,
                     receiver,
                     arguments.getFirst()
@@ -1263,6 +1269,7 @@ final class BytecodeToIRCollectionSupport {
                     instructions,
                     dispatches,
                     materializedLambdaMethods,
+                    instantiatedTypes,
                     localDeclarations,
                     IrExpression.objectCall("javan_list_iterator", List.of(receiver)),
                     arguments.getFirst()
@@ -1292,6 +1299,7 @@ final class BytecodeToIRCollectionSupport {
                     instructions,
                     dispatches,
                     materializedLambdaMethods,
+                    instantiatedTypes,
                     localDeclarations,
                     receiver,
                     arguments.getFirst()
@@ -1387,6 +1395,7 @@ final class BytecodeToIRCollectionSupport {
                     instructions,
                     dispatches,
                     materializedLambdaMethods,
+                    instantiatedTypes,
                     localDeclarations,
                     receiver,
                     arguments.getFirst()
@@ -1402,6 +1411,7 @@ final class BytecodeToIRCollectionSupport {
                     instructions,
                     dispatches,
                     materializedLambdaMethods,
+                    instantiatedTypes,
                     localDeclarations,
                     receiver,
                     arguments.get(0),
@@ -1419,6 +1429,7 @@ final class BytecodeToIRCollectionSupport {
                     instructions,
                     dispatches,
                     materializedLambdaMethods,
+                    instantiatedTypes,
                     localDeclarations,
                     receiver,
                     arguments.get(0),
@@ -1436,6 +1447,7 @@ final class BytecodeToIRCollectionSupport {
                     instructions,
                     dispatches,
                     materializedLambdaMethods,
+                    instantiatedTypes,
                     localDeclarations,
                     receiver,
                     arguments.get(0),
@@ -1454,6 +1466,7 @@ final class BytecodeToIRCollectionSupport {
                     instructions,
                     dispatches,
                     materializedLambdaMethods,
+                    instantiatedTypes,
                     materializedFunction,
                     localDeclarations,
                     receiver,
@@ -1520,7 +1533,8 @@ final class BytecodeToIRCollectionSupport {
         final Instruction instruction,
         final List<IrInstruction> instructions,
         final Map<String, IrDispatch> dispatches,
-        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final Map<Integer, IrLocal> localDeclarations,
         final IrExpression iterator,
         final IrExpression consumer
@@ -1555,6 +1569,7 @@ final class BytecodeToIRCollectionSupport {
             instructions,
             dispatches,
             materializedLambdaMethods,
+            instantiatedTypes,
             consumer,
             IrExpression.objectLocal(valueLocal)
         );
@@ -1569,7 +1584,8 @@ final class BytecodeToIRCollectionSupport {
         final Instruction instruction,
         final List<IrInstruction> instructions,
         final Map<String, IrDispatch> dispatches,
-        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final Map<Integer, IrLocal> localDeclarations,
         final IrExpression collection,
         final IrExpression predicate
@@ -1612,6 +1628,7 @@ final class BytecodeToIRCollectionSupport {
             instructions,
             dispatches,
             materializedLambdaMethods,
+            instantiatedTypes,
             predicate,
             IrExpression.objectLocal(valueLocal),
             predicateLocal
@@ -1637,7 +1654,8 @@ final class BytecodeToIRCollectionSupport {
         final Instruction instruction,
         final List<IrInstruction> instructions,
         final Map<String, IrDispatch> dispatches,
-        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final Map<Integer, IrLocal> localDeclarations,
         final IrExpression map,
         final IrExpression biConsumer
@@ -1685,6 +1703,7 @@ final class BytecodeToIRCollectionSupport {
             instructions,
             dispatches,
             materializedLambdaMethods,
+            instantiatedTypes,
             biConsumer,
             IrExpression.objectLocal(keyLocal),
             IrExpression.objectLocal(valueLocal)
@@ -1700,7 +1719,8 @@ final class BytecodeToIRCollectionSupport {
         final Instruction instruction,
         final List<IrInstruction> instructions,
         final Map<String, IrDispatch> dispatches,
-        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final Map<Integer, IrLocal> localDeclarations,
         final IrExpression map,
         final IrExpression key,
@@ -1733,6 +1753,7 @@ final class BytecodeToIRCollectionSupport {
             instructions,
             dispatches,
             materializedLambdaMethods,
+            instantiatedTypes,
             biFunction,
             key,
             IrExpression.objectLocal(existingLocal),
@@ -1767,7 +1788,8 @@ final class BytecodeToIRCollectionSupport {
         final Instruction instruction,
         final List<IrInstruction> instructions,
         final Map<String, IrDispatch> dispatches,
-        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final Map<Integer, IrLocal> localDeclarations,
         final IrExpression map,
         final IrExpression key,
@@ -1793,6 +1815,7 @@ final class BytecodeToIRCollectionSupport {
             instructions,
             dispatches,
             materializedLambdaMethods,
+            instantiatedTypes,
             biFunction,
             key,
             IrExpression.objectLocal(existingLocal),
@@ -1839,7 +1862,8 @@ final class BytecodeToIRCollectionSupport {
         final Instruction instruction,
         final List<IrInstruction> instructions,
         final Map<String, IrDispatch> dispatches,
-        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final boolean materializedFunction,
         final Map<Integer, IrLocal> localDeclarations,
         final IrExpression map,
@@ -1868,6 +1892,7 @@ final class BytecodeToIRCollectionSupport {
             instructions,
             dispatches,
             materializedLambdaMethods,
+            instantiatedTypes,
             materializedFunction,
             function,
             key,
@@ -1899,7 +1924,8 @@ final class BytecodeToIRCollectionSupport {
         final Instruction instruction,
         final List<IrInstruction> instructions,
         final Map<String, IrDispatch> dispatches,
-        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final Map<Integer, IrLocal> localDeclarations,
         final IrExpression map,
         final IrExpression key,
@@ -1940,6 +1966,7 @@ final class BytecodeToIRCollectionSupport {
             instructions,
             dispatches,
             materializedLambdaMethods,
+            instantiatedTypes,
             biFunction,
             IrExpression.objectLocal(existingLocal),
             IrExpression.objectLocal(valueLocal),
@@ -1974,31 +2001,36 @@ final class BytecodeToIRCollectionSupport {
         final Instruction instruction,
         final List<IrInstruction> instructions,
         final Map<String, IrDispatch> dispatches,
-        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final IrExpression consumer,
         final IrExpression argument
     ) {
         final MethodRef consumerAccept = new MethodRef("java/util/function/Consumer", "accept", "(Ljava/lang/Object;)V");
-        final List<EntryPoint> targets = interfaceTargets(classes, consumerAccept);
+        final List<EntryPoint> targets = interfaceTargets(classes, consumerAccept, instantiatedTypes);
         if (targets.size() > 1) {
             final String dispatchSymbol = dispatchSymbol(consumerAccept);
-            dispatches.putIfAbsent(dispatchSymbol, dispatch(dispatchSymbol, MethodDescriptor.parse(consumerAccept.descriptor()), targets));
+            dispatches.putIfAbsent(dispatchSymbol, dispatch(classes, dispatchSymbol, MethodDescriptor.parse(consumerAccept.descriptor()), targets));
             instructions.add(IrInstruction.callStaticVoid(dispatchSymbol, List.of(consumer, argument)));
             return;
         }
         if (!targets.isEmpty()) {
-            instructions.add(IrInstruction.callStaticVoid(symbol(targets.getFirst()), List.of(consumer, argument)));
+            instructions.add(IrInstruction.callStaticVoid(
+                resolvedDispatchSymbol(classes, consumerAccept, targets.getFirst()),
+                List.of(consumer, argument)
+            ));
             return;
         }
-        final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, consumerAccept);
+        final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, consumerAccept, instantiatedTypes);
         if (defaultTarget.isPresent()) {
             instructions.add(IrInstruction.callStaticVoid(symbol(defaultTarget.orElseThrow()), List.of(consumer, argument)));
             return;
         }
-            if (materializedLambdaMethods.get(consumerAccept) == MaterializedLambdaDispatchKind.VOID) {
-                instructions.add(IrInstruction.callStaticVoid(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL, List.of(consumer, argument)));
-                return;
-            }
+        if (materializedLambdaMethods.get(materializedLambdaMethodKey(consumerAccept))
+            == MaterializedLambdaDispatchKind.VOID) {
+            instructions.add(IrInstruction.callStaticVoid(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL, List.of(consumer, argument)));
+            return;
+        }
         throw unsupported(classFile, method, instruction);
     }
 
@@ -2009,29 +2041,34 @@ final class BytecodeToIRCollectionSupport {
         final Instruction instruction,
         final List<IrInstruction> instructions,
         final Map<String, IrDispatch> dispatches,
-        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final IrExpression biConsumer,
         final IrExpression firstArgument,
         final IrExpression secondArgument
     ) {
         final MethodRef biConsumerAccept = new MethodRef("java/util/function/BiConsumer", "accept", "(Ljava/lang/Object;Ljava/lang/Object;)V");
-        final List<EntryPoint> targets = interfaceTargets(classes, biConsumerAccept);
+        final List<EntryPoint> targets = interfaceTargets(classes, biConsumerAccept, instantiatedTypes);
         if (targets.size() > 1) {
             final String dispatchSymbol = dispatchSymbol(biConsumerAccept);
-            dispatches.putIfAbsent(dispatchSymbol, dispatch(dispatchSymbol, MethodDescriptor.parse(biConsumerAccept.descriptor()), targets));
+            dispatches.putIfAbsent(dispatchSymbol, dispatch(classes, dispatchSymbol, MethodDescriptor.parse(biConsumerAccept.descriptor()), targets));
             instructions.add(IrInstruction.callStaticVoid(dispatchSymbol, List.of(biConsumer, firstArgument, secondArgument)));
             return;
         }
         if (!targets.isEmpty()) {
-            instructions.add(IrInstruction.callStaticVoid(symbol(targets.getFirst()), List.of(biConsumer, firstArgument, secondArgument)));
+            instructions.add(IrInstruction.callStaticVoid(
+                resolvedDispatchSymbol(classes, biConsumerAccept, targets.getFirst()),
+                List.of(biConsumer, firstArgument, secondArgument)
+            ));
             return;
         }
-        final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, biConsumerAccept);
+        final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, biConsumerAccept, instantiatedTypes);
         if (defaultTarget.isPresent()) {
             instructions.add(IrInstruction.callStaticVoid(symbol(defaultTarget.orElseThrow()), List.of(biConsumer, firstArgument, secondArgument)));
             return;
         }
-        if (materializedLambdaMethods.get(biConsumerAccept) == MaterializedLambdaDispatchKind.VOID) {
+        if (materializedLambdaMethods.get(materializedLambdaMethodKey(biConsumerAccept))
+            == MaterializedLambdaDispatchKind.VOID) {
             instructions.add(IrInstruction.callStaticVoid(MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL, List.of(biConsumer, firstArgument, secondArgument)));
             return;
         }
@@ -2045,17 +2082,18 @@ final class BytecodeToIRCollectionSupport {
         final Instruction instruction,
         final List<IrInstruction> instructions,
         final Map<String, IrDispatch> dispatches,
-        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final IrExpression biFunction,
         final IrExpression firstArgument,
         final IrExpression secondArgument,
         final String resultLocal
     ) {
         final MethodRef biFunctionApply = new MethodRef("java/util/function/BiFunction", "apply", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
-        final List<EntryPoint> targets = interfaceTargets(classes, biFunctionApply);
+        final List<EntryPoint> targets = interfaceTargets(classes, biFunctionApply, instantiatedTypes);
         if (targets.size() > 1) {
             final String dispatchSymbol = dispatchSymbol(biFunctionApply);
-            dispatches.putIfAbsent(dispatchSymbol, dispatch(dispatchSymbol, MethodDescriptor.parse(biFunctionApply.descriptor()), targets));
+            dispatches.putIfAbsent(dispatchSymbol, dispatch(classes, dispatchSymbol, MethodDescriptor.parse(biFunctionApply.descriptor()), targets));
             instructions.add(IrInstruction.assignObject(
                 resultLocal,
                 IrExpression.objectCall(dispatchSymbol, List.of(biFunction, firstArgument, secondArgument))
@@ -2065,11 +2103,14 @@ final class BytecodeToIRCollectionSupport {
         if (!targets.isEmpty()) {
             instructions.add(IrInstruction.assignObject(
                 resultLocal,
-                IrExpression.objectCall(symbol(targets.getFirst()), List.of(biFunction, firstArgument, secondArgument))
+                IrExpression.objectCall(
+                    resolvedDispatchSymbol(classes, biFunctionApply, targets.getFirst()),
+                    List.of(biFunction, firstArgument, secondArgument)
+                )
             ));
             return;
         }
-        final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, biFunctionApply);
+        final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, biFunctionApply, instantiatedTypes);
         if (defaultTarget.isPresent()) {
             instructions.add(IrInstruction.assignObject(
                 resultLocal,
@@ -2077,7 +2118,8 @@ final class BytecodeToIRCollectionSupport {
             ));
             return;
         }
-        if (materializedLambdaMethods.get(biFunctionApply) == MaterializedLambdaDispatchKind.OBJECT) {
+        if (materializedLambdaMethods.get(materializedLambdaMethodKey(biFunctionApply))
+            == MaterializedLambdaDispatchKind.OBJECT) {
             instructions.add(IrInstruction.assignObject(
                 resultLocal,
                 IrExpression.objectCall(MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL, List.of(biFunction, firstArgument, secondArgument))
@@ -2094,7 +2136,8 @@ final class BytecodeToIRCollectionSupport {
         final Instruction instruction,
         final List<IrInstruction> instructions,
         final Map<String, IrDispatch> dispatches,
-        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final boolean materializedFunction,
         final IrExpression function,
         final IrExpression argument,
@@ -2102,7 +2145,8 @@ final class BytecodeToIRCollectionSupport {
     ) {
         final MethodRef functionApply = new MethodRef("java/util/function/Function", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;");
         if (materializedFunction) {
-            if (materializedLambdaMethods.get(functionApply) != MaterializedLambdaDispatchKind.OBJECT) {
+            if (materializedLambdaMethods.get(materializedLambdaMethodKey(functionApply))
+                != MaterializedLambdaDispatchKind.OBJECT) {
                 throw unsupported(classFile, method, instruction);
             }
             instructions.add(IrInstruction.assignObject(
@@ -2111,10 +2155,10 @@ final class BytecodeToIRCollectionSupport {
             ));
             return;
         }
-        final List<EntryPoint> targets = interfaceTargets(classes, functionApply);
+        final List<EntryPoint> targets = interfaceTargets(classes, functionApply, instantiatedTypes);
         if (targets.size() > 1) {
             final String dispatchSymbol = dispatchSymbol(functionApply);
-            dispatches.putIfAbsent(dispatchSymbol, dispatch(dispatchSymbol, MethodDescriptor.parse(functionApply.descriptor()), targets));
+            dispatches.putIfAbsent(dispatchSymbol, dispatch(classes, dispatchSymbol, MethodDescriptor.parse(functionApply.descriptor()), targets));
             instructions.add(IrInstruction.assignObject(
                 resultLocal,
                 IrExpression.objectCall(dispatchSymbol, List.of(function, argument))
@@ -2124,11 +2168,14 @@ final class BytecodeToIRCollectionSupport {
         if (!targets.isEmpty()) {
             instructions.add(IrInstruction.assignObject(
                 resultLocal,
-                IrExpression.objectCall(symbol(targets.getFirst()), List.of(function, argument))
+                IrExpression.objectCall(
+                    resolvedDispatchSymbol(classes, functionApply, targets.getFirst()),
+                    List.of(function, argument)
+                )
             ));
             return;
         }
-        final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, functionApply);
+        final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, functionApply, instantiatedTypes);
         if (defaultTarget.isPresent()) {
             instructions.add(IrInstruction.assignObject(
                 resultLocal,
@@ -2146,15 +2193,17 @@ final class BytecodeToIRCollectionSupport {
         final Instruction instruction,
         final List<IrInstruction> instructions,
         final Map<String, IrDispatch> dispatches,
-        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final IrExpression supplier,
         final String resultLocal
     ) {
         final MethodRef supplierGet = new MethodRef("java/util/function/Supplier", "get", "()Ljava/lang/Object;");
-        final List<EntryPoint> targets = interfaceTargets(classes, supplierGet);
-        final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, supplierGet);
+        final List<EntryPoint> targets = interfaceTargets(classes, supplierGet, instantiatedTypes);
+        final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, supplierGet, instantiatedTypes);
         final boolean hasMaterializedTarget =
-            materializedLambdaMethods.get(supplierGet) == MaterializedLambdaDispatchKind.SUPPLIER;
+            materializedLambdaMethods.get(materializedLambdaMethodKey(supplierGet))
+                == MaterializedLambdaDispatchKind.SUPPLIER;
         if (hasMaterializedTarget && (!targets.isEmpty() || defaultTarget.isPresent())) {
             final String materializedLabel =
                 "label_supplier_get_materialized_" + instruction.offset() + "_" + resultLocal;
@@ -2167,7 +2216,7 @@ final class BytecodeToIRCollectionSupport {
                 final String dispatchSymbol = dispatchSymbol(supplierGet);
                 dispatches.putIfAbsent(
                     dispatchSymbol,
-                    dispatch(dispatchSymbol, MethodDescriptor.parse(supplierGet.descriptor()), targets)
+                    dispatch(classes, dispatchSymbol, MethodDescriptor.parse(supplierGet.descriptor()), targets)
                 );
                 instructions.add(IrInstruction.assignObject(
                     resultLocal,
@@ -2190,7 +2239,7 @@ final class BytecodeToIRCollectionSupport {
         }
         if (targets.size() > 1) {
             final String dispatchSymbol = dispatchSymbol(supplierGet);
-            dispatches.putIfAbsent(dispatchSymbol, dispatch(dispatchSymbol, MethodDescriptor.parse(supplierGet.descriptor()), targets));
+            dispatches.putIfAbsent(dispatchSymbol, dispatch(classes, dispatchSymbol, MethodDescriptor.parse(supplierGet.descriptor()), targets));
             instructions.add(IrInstruction.assignObject(
                 resultLocal,
                 IrExpression.objectCall(dispatchSymbol, List.of(supplier))
@@ -2200,7 +2249,7 @@ final class BytecodeToIRCollectionSupport {
         if (!targets.isEmpty()) {
             instructions.add(IrInstruction.assignObject(
                 resultLocal,
-                IrExpression.objectCall(symbol(targets.getFirst()), List.of(supplier))
+                IrExpression.objectCall(resolvedDispatchSymbol(classes, supplierGet, targets.getFirst()), List.of(supplier))
             ));
             return;
         }
@@ -2228,29 +2277,34 @@ final class BytecodeToIRCollectionSupport {
         final Instruction instruction,
         final List<IrInstruction> instructions,
         final Map<String, IrDispatch> dispatches,
-        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final IrExpression predicate,
         final IrExpression argument,
         final String resultLocal
     ) {
         final MethodRef predicateTest = new MethodRef("java/util/function/Predicate", "test", "(Ljava/lang/Object;)Z");
-        final List<EntryPoint> targets = interfaceTargets(classes, predicateTest);
+        final List<EntryPoint> targets = interfaceTargets(classes, predicateTest, instantiatedTypes);
         if (targets.size() > 1) {
             final String dispatchSymbol = dispatchSymbol(predicateTest);
-            dispatches.putIfAbsent(dispatchSymbol, dispatch(dispatchSymbol, MethodDescriptor.parse(predicateTest.descriptor()), targets));
+            dispatches.putIfAbsent(dispatchSymbol, dispatch(classes, dispatchSymbol, MethodDescriptor.parse(predicateTest.descriptor()), targets));
             instructions.add(IrInstruction.assignInt(resultLocal, IrExpression.intCall(dispatchSymbol, List.of(predicate, argument))));
             return;
         }
         if (!targets.isEmpty()) {
-            instructions.add(IrInstruction.assignInt(resultLocal, IrExpression.intCall(symbol(targets.getFirst()), List.of(predicate, argument))));
+            instructions.add(IrInstruction.assignInt(
+                resultLocal,
+                IrExpression.intCall(resolvedDispatchSymbol(classes, predicateTest, targets.getFirst()), List.of(predicate, argument))
+            ));
             return;
         }
-        final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, predicateTest);
+        final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, predicateTest, instantiatedTypes);
         if (defaultTarget.isPresent()) {
             instructions.add(IrInstruction.assignInt(resultLocal, IrExpression.intCall(symbol(defaultTarget.orElseThrow()), List.of(predicate, argument))));
             return;
         }
-        if (materializedLambdaMethods.get(predicateTest) == MaterializedLambdaDispatchKind.BOOLEAN) {
+        if (materializedLambdaMethods.get(materializedLambdaMethodKey(predicateTest))
+            == MaterializedLambdaDispatchKind.BOOLEAN) {
             instructions.add(IrInstruction.assignInt(resultLocal, IrExpression.intCall(MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL, List.of(predicate, argument))));
             return;
         }
