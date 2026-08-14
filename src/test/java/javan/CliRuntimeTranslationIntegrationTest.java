@@ -24,6 +24,93 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @NativeTest
 final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     @Test
+    void boundedFunctionReceiverProvenanceBuildsAndFallsBackConservatively() throws Exception {
+        final Path project = project("bounded-function-receiver-provenance");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Main {
+                private static final Function<String, String> STORED = new Prefix();
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Function<String, String> local = returned();
+                    final Function<String, String> merged = args.length == 0 ? local : new Suffix();
+                    final Function<String, String> wide;
+                    if (args.length == 0) {
+                        wide = new First();
+                    } else if (args.length == 1) {
+                        wide = new Second();
+                    } else if (args.length == 2) {
+                        wide = new Third();
+                    } else if (args.length == 3) {
+                        wide = new Fourth();
+                    } else {
+                        wide = new Fifth();
+                    }
+                    System.out.println(local.apply("local"));
+                    System.out.println(merged.apply("merged"));
+                    System.out.println(wide.apply("wide"));
+                    System.out.println(new Unused() != null);
+                }
+
+                @SuppressWarnings("unchecked")
+                private static Function<String, String> returned() {
+                    return pass((Function<String, String>) (Object) STORED);
+                }
+
+                private static Function<String, String> pass(final Function<String, String> callback) {
+                    return callback;
+                }
+
+                private abstract static class Named implements Function<String, String> {
+                    private final String name;
+
+                    private Named(final String name) {
+                        this.name = name;
+                    }
+
+                    @Override
+                    public final String apply(final String value) {
+                        return name + "-" + value;
+                    }
+                }
+
+                private static final class Prefix extends Named { private Prefix() { super("prefix"); } }
+                private static final class Suffix extends Named { private Suffix() { super("suffix"); } }
+                private static final class First extends Named { private First() { super("first"); } }
+                private static final class Second extends Named { private Second() { super("second"); } }
+                private static final class Third extends Named { private Third() { super("third"); } }
+                private static final class Fourth extends Named { private Fourth() { super("fourth"); } }
+                private static final class Fifth extends Named { private Fifth() { super("fifth"); } }
+                private static final class Unused extends Named { private Unused() { super("unused"); } }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        final String nativeOutput = build.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/bounded-function-receiver-provenance").toString())).stdout()
+            : build.stderr();
+
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        assertThat(nativeOutput).isEqualTo(jvmOutput).isEqualTo("prefix-local\nprefix-merged\nfirst-wide\ntrue\n");
+        assertThat(Files.readString(project.resolve(".javan/reports/receiver-provenance.json")))
+            .contains(
+                "\"maxExactTypes\": 4",
+                "\"unknown\": false, \"types\": [\"com/acme/Main$Prefix\"]",
+                "\"unknown\": false, \"types\": [\"com/acme/Main$Prefix\", \"com/acme/Main$Suffix\"]",
+                "\"unknown\": true, \"types\": []"
+            );
+        assertThat(Files.readString(project.resolve(".javan/reports/instantiated-types.json")))
+            .contains("com/acme/Main$Unused");
+    }
+
+    @Test
     void objectsRequireNonNullIntrinsicBuildsAndChecksNull() throws Exception {
         final Path project = project("objects-require-non-null");
         writeJava(project, "com.acme.Main", """
