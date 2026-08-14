@@ -1830,11 +1830,9 @@ public final class ReachabilityAnalyzer {
         final InstantiatedTypeAnalysis.Result instantiatedTypes
     ) {
         final List<EntryPoint> targets = new ArrayList<>();
-        for (final ClassFile candidate : classes.values()) {
-            if (candidate.isInterface()) {
-                continue;
-            }
-            if (!instantiatedTypes.contains(candidate.name())) {
+        for (final InstantiatedTypeAnalysis.Fact fact : instantiatedTypes.facts()) {
+            final ClassFile candidate = classes.get(fact.type());
+            if (candidate == null || candidate.isInterface()) {
                 continue;
             }
             if (!isAssignableTo(classes, candidate.name(), target.owner())) {
@@ -1874,11 +1872,9 @@ public final class ReachabilityAnalyzer {
     ) {
         final List<EntryPoint> targets = new ArrayList<>();
         final EntryPointMembership targetSet = new EntryPointMembership();
-        for (final ClassFile candidate : classes.values()) {
-            if (candidate.isInterface()) {
-                continue;
-            }
-            if (!instantiatedTypes.contains(candidate.name())) {
+        for (final InstantiatedTypeAnalysis.Fact fact : instantiatedTypes.facts()) {
+            final ClassFile candidate = classes.get(fact.type());
+            if (candidate == null || candidate.isInterface()) {
                 continue;
             }
             if (!isSubtypeOf(classes, candidate.name(), target.owner())) {

@@ -3610,9 +3610,9 @@ public final class BytecodeToIR {
         final InstantiatedTypeAnalysis.Result instantiatedTypes
     ) {
         final List<EntryPoint> result = new ArrayList<>();
-        for (final ClassFile candidate : classes.values()) {
+        final List<ClassFile> candidates = dispatchCandidates(classes, instantiatedTypes);
+        for (final ClassFile candidate : candidates) {
             if (!candidate.isInterface()
-                && (!instantiatedTypes.complete() || instantiatedTypes.contains(candidate.name()))
                 && isAssignableTo(classes, candidate.name(), methodRef.owner())
                 && resolvedVirtualTarget(classes, candidate.name(), methodRef).isPresent()) {
                 result.add(new EntryPoint(candidate.name(), methodRef.name(), methodRef.descriptor()));
@@ -3631,9 +3631,9 @@ public final class BytecodeToIR {
         final InstantiatedTypeAnalysis.Result instantiatedTypes
     ) {
         final List<EntryPoint> result = new ArrayList<>();
-        for (final ClassFile candidate : classes.values()) {
+        final List<ClassFile> candidates = dispatchCandidates(classes, instantiatedTypes);
+        for (final ClassFile candidate : candidates) {
             if (!candidate.isInterface()
-                && (!instantiatedTypes.complete() || instantiatedTypes.contains(candidate.name()))
                 && isSubtypeOf(classes, candidate.name(), methodRef.owner())) {
                 final Optional<EntryPoint> resolved = lowerableResolvedVirtualTarget(classes, candidate.name(), methodRef);
                 if (resolved.isPresent()) {
@@ -3646,6 +3646,23 @@ public final class BytecodeToIR {
                         result.add(entryPoint);
                     }
                 }
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private static List<ClassFile> dispatchCandidates(
+        final Map<String, ClassFile> classes,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes
+    ) {
+        if (!instantiatedTypes.complete()) {
+            return List.copyOf(classes.values());
+        }
+        final List<ClassFile> result = new ArrayList<>(instantiatedTypes.facts().size());
+        for (final InstantiatedTypeAnalysis.Fact fact : instantiatedTypes.facts()) {
+            final ClassFile candidate = classes.get(fact.type());
+            if (candidate != null) {
+                result.add(candidate);
             }
         }
         return List.copyOf(result);

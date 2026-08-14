@@ -55,16 +55,6 @@ public final class InstantiatedTypeAnalysis {
             return new Result(List.of(), false);
         }
 
-        /** @return true when the concrete type is proven constructible */
-        public boolean contains(final String type) {
-            for (final Fact fact : facts) {
-                if (fact.type().equals(type)) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
         /** @return deterministic JVM internal names */
         public List<String> types() {
             final List<String> result = new ArrayList<>(facts.size());
@@ -104,7 +94,7 @@ public final class InstantiatedTypeAnalysis {
                 addExternalTypes(classes, origins, parameterType);
             }
         }
-        for (final EntryPoint entryPoint : sorted(reachableMethods)) {
+        for (final EntryPoint entryPoint : reachableMethods) {
             final ClassFile classFile = classes.get(entryPoint.className());
             if (classFile == null) {
                 continue;
@@ -135,7 +125,7 @@ public final class InstantiatedTypeAnalysis {
         }
         final List<Fact> facts = new ArrayList<>();
         for (final Map.Entry<String, List<Origin>> entry : origins.entrySet()) {
-            final Fact fact = new Fact(entry.getKey(), entry.getValue());
+            final Fact fact = new Fact(entry.getKey(), ordered(entry.getValue()));
             int index = 0;
             while (index < facts.size() && Strings2.compareAscii(facts.get(index).type(), fact.type()) <= 0) {
                 index++;
@@ -276,14 +266,19 @@ public final class InstantiatedTypeAnalysis {
         return end < 0 ? Optional.empty() : Optional.of(descriptor.substring(close + 2, end));
     }
 
-    private static List<EntryPoint> sorted(final List<EntryPoint> methods) {
-        final List<EntryPoint> result = new ArrayList<>();
-        for (final EntryPoint method : methods) {
-            int index = 0;
-            while (index < result.size() && Strings2.compareAscii(result.get(index).display(), method.display()) <= 0) {
-                index++;
-            }
-            result.add(index, method);
+    private static List<Origin> ordered(final List<Origin> origins) {
+        final List<Origin> result = new ArrayList<>(origins.size());
+        if (origins.contains(Origin.ALLOCATION)) {
+            result.add(Origin.ALLOCATION);
+        }
+        if (origins.contains(Origin.ENUM)) {
+            result.add(Origin.ENUM);
+        }
+        if (origins.contains(Origin.EXTERNAL)) {
+            result.add(Origin.EXTERNAL);
+        }
+        if (origins.contains(Origin.SUBSTITUTION)) {
+            result.add(Origin.SUBSTITUTION);
         }
         return List.copyOf(result);
     }
