@@ -50,7 +50,7 @@ final class CliCoreSemanticsIntegrationTest extends CliIntegrationSupport {
 
         final CliRun run = run(tempDir, "build", project.toString());
 
-        assertThat(run.exitCode()).isZero();
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/helper").toString())).stdout()).isEqualTo("helper-output\n");
     }
 
@@ -94,7 +94,7 @@ final class CliCoreSemanticsIntegrationTest extends CliIntegrationSupport {
         final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
 
-        assertThat(run.exitCode()).isZero();
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/static-fields").toString())).stdout()).isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("42\n84\nready\n");
         final String generated = Files.readString(project.resolve(".javan/generated/main.c"));
@@ -105,7 +105,258 @@ final class CliCoreSemanticsIntegrationTest extends CliIntegrationSupport {
         );
         final int mainStart = generated.indexOf("int main");
         assertThat(generated.indexOf("    javan_register_generated_roots();", mainStart))
-            .isLessThan(generated.indexOf("    javan_com_acme_State__clinit____V();", mainStart));
+            .isLessThan(generated.indexOf("    javan_initialize_com_acme_State();", mainStart));
+    }
+
+    @Test
+    void classInitializationIsLazyAndDependencyOrdered() throws Exception {
+        final Path project = project("class-initialization-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                static {
+                    System.out.println("main");
+                }
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    if (args.length > 0) {
+                        Unused.touch();
+                    }
+                    InheritedChild.touch();
+                    System.out.println(Child.value);
+                    new Constructed();
+                    Written.value = 7;
+                    System.out.println(Written.value);
+                    Called.touch();
+                    Called.touch();
+                    EvaluationTarget.value = EvaluationSource.value();
+                    EvaluationCall.accept(EvaluationSource.next());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.InheritedBase", """
+            package com.acme;
+
+            class InheritedBase {
+                static {
+                    System.out.println("inherited-base");
+                }
+
+                static void touch() {
+                    System.out.println("inherited-call");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.InheritedChild", """
+            package com.acme;
+
+            final class InheritedChild extends InheritedBase {
+                static {
+                    System.out.println("wrong-owner");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Defaulted", """
+            package com.acme;
+
+            interface Defaulted {
+                int READY = ready();
+
+                private static int ready() {
+                    System.out.println("interface");
+                    return 1;
+                }
+
+                default int marker() {
+                    return 0;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Parent", """
+            package com.acme;
+
+            class Parent {
+                static {
+                    System.out.println("parent");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Child", """
+            package com.acme;
+
+            final class Child extends Parent implements Defaulted {
+                static int value = initialize();
+
+                private static int initialize() {
+                    System.out.println("child");
+                    return READY;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Constructed", """
+            package com.acme;
+
+            final class Constructed {
+                static {
+                    System.out.println("constructed");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Written", """
+            package com.acme;
+
+            final class Written {
+                static int value;
+
+                static {
+                    System.out.println("written");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Called", """
+            package com.acme;
+
+            final class Called {
+                static {
+                    System.out.println("called-init");
+                }
+
+                static void touch() {
+                    System.out.println("called");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Unused", """
+            package com.acme;
+
+            final class Unused {
+                static {
+                    System.out.println("unused");
+                }
+
+                static void touch() {
+                }
+            }
+            """);
+        writeJava(project, "com.acme.EvaluationSource", """
+            package com.acme;
+
+            final class EvaluationSource {
+                static {
+                    System.out.println("source-init");
+                }
+
+                static int value() {
+                    System.out.println("value");
+                    return 8;
+                }
+
+                static int next() {
+                    System.out.println("next");
+                    return 9;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.EvaluationTarget", """
+            package com.acme;
+
+            final class EvaluationTarget {
+                static int value;
+
+                static {
+                    System.out.println("target-init");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.EvaluationCall", """
+            package com.acme;
+
+            final class EvaluationCall {
+                static {
+                    System.out.println("call-init");
+                }
+
+                static void accept(final int value) {
+                    System.out.println(value);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(jvmOutput).isEqualTo(
+            "main\ninherited-base\ninherited-call\nparent\ninterface\nchild\n1\nconstructed\nwritten\n7\ncalled-init\ncalled\ncalled\n"
+                + "source-init\nvalue\ntarget-init\nnext\ncall-init\n9\n"
+        );
+        assertThat(process(project, List.of(project.resolve(".javan/bin/class-initialization-order").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(Files.readString(project.resolve(".javan/reports/class-initialization.json"))).contains(
+            "\"strategy\": \"lazy-runtime-once\"",
+            "\"kind\": \"getstatic\"",
+            "\"kind\": \"putstatic\"",
+            "\"kind\": \"invokestatic\"",
+            "\"kind\": \"new\"",
+            "\"target\": \"com/acme/Unused\""
+        );
+    }
+
+    @Test
+    void classInitializationHandlesReentryCycles() throws Exception {
+        final Path project = project("class-initialization-cycle");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(First.value);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.First", """
+            package com.acme;
+
+            final class First {
+                static int value = initialize();
+
+                private static int initialize() {
+                    System.out.println("first-start");
+                    final int result = Second.value + 1;
+                    System.out.println("first-end");
+                    return result;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Second", """
+            package com.acme;
+
+            final class Second {
+                static int value = initialize();
+
+                private static int initialize() {
+                    System.out.println("second-start");
+                    final int result = First.value + 1;
+                    System.out.println("second-end");
+                    return result;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(jvmOutput).isEqualTo("first-start\nsecond-start\nsecond-end\nfirst-end\n2\n");
+        assertThat(process(project, List.of(project.resolve(".javan/bin/class-initialization-cycle").toString())).stdout())
+            .isEqualTo(jvmOutput);
     }
 
     @Test

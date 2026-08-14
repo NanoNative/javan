@@ -105,6 +105,12 @@ blocks and typed edges, plus a concise `.javan/reports/control-flow.md` summary.
 Legacy `jsr`, `jsr_w`, and `ret` subroutines are inlined at class-file ingress, so every
 analysis and backend receives the same ordinary branch graph.
 
+Class initialization stays lazy at runtime. `new`, static field access, static calls, main,
+and library exports use one dependency graph with superclass-before-subclass and applicable
+default-interface ordering. Recursive initialization by the same thread observes the JVM
+default state; other threads wait for completion. The exact owners, dependencies, and active-use
+sites are written to `.javan/reports/class-initialization.json`, with a concise Markdown summary.
+
 The IDE plugin should render reports. It must not infer native support from source code
 or JDK inventory by itself.
 

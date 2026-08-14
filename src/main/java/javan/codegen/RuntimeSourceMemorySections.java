@@ -584,6 +584,7 @@ final class RuntimeSourceMemorySections {
         static int javan_thread_root_count_value = 0;
         static int javan_thread_root_capacity_value = 0;
         static JAVAN_THREAD_LOCAL void* javan_current_thread_value = NULL;
+        static JAVAN_THREAD_LOCAL int javan_thread_identity_marker = 0;
         static JAVAN_THREAD_LOCAL const char* javan_utf16_cursor_cache_value = NULL;
         static JAVAN_THREAD_LOCAL const unsigned char* javan_utf16_cursor_cache_position = NULL;
         static JAVAN_THREAD_LOCAL int javan_utf16_cursor_cache_index = 0;
@@ -708,6 +709,32 @@ final class RuntimeSourceMemorySections {
             }
         }
         #endif
+
+        int javan_class_initialization_enter(int* state, void** owner) {
+            void* current = (void*) &javan_thread_identity_marker;
+            for (;;) {
+                javan_runtime_lock_enter();
+                if (*state == 2 || (*state == 1 && *owner == current)) {
+                    javan_runtime_lock_leave();
+                    return 0;
+                }
+                if (*state == 0) {
+                    *state = 1;
+                    *owner = current;
+                    javan_runtime_lock_leave();
+                    return 1;
+                }
+                javan_runtime_lock_leave();
+                javan_thread_yield();
+            }
+        }
+
+        void javan_class_initialization_complete(int* state, void** owner) {
+            javan_runtime_lock_enter();
+            *owner = NULL;
+            *state = 2;
+            javan_runtime_lock_leave();
+        }
 
         static void javan_account_allocation(unsigned long size) {
             javan_total_allocations_value++;

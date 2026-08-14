@@ -1,6 +1,7 @@
 package javan.codegen;
 
 import javan.analysis.CallGraph;
+import javan.analysis.ClassInitializationGraph;
 import javan.analysis.CMethodSymbols;
 import javan.analysis.EntryPoint;
 import javan.analysis.FunctionValueFlow;
@@ -108,6 +109,33 @@ public final class BytecodeToIR {
         final SourceLineIndex sourceLines,
         final NativeInteropConfig nativeInterop
     ) {
+        final List<EntryPoint> reachableMethods = BytecodeToIRMetadataSupport.sortedEntryPoints(callGraph.reachableMethods());
+        return lower(
+            classes,
+            callGraph,
+            sourceLines,
+            nativeInterop,
+            ClassInitializationGraph.analyze(classes, reachableMethods)
+        );
+    }
+
+    /**
+     * Lowers reachable methods using the class-initialization model produced by {@code check}.
+     *
+     * @param classes parsed classes
+     * @param callGraph reachable call graph
+     * @param sourceLines source-line index
+     * @param nativeInterop declared native imports
+     * @param classInitialization checked runtime initialization model
+     * @return lowered IR program
+     */
+    public IrProgram lower(
+        final Map<String, ClassFile> classes,
+        final CallGraph callGraph,
+        final SourceLineIndex sourceLines,
+        final NativeInteropConfig nativeInterop,
+        final ClassInitializationGraph.Result classInitialization
+    ) {
         final List<IrFunction> functions = new ArrayList<>();
         final Map<String, IrDispatch> dispatches = new LinkedHashMap<>();
         final List<EntryPoint> reachableMethods = BytecodeToIRMetadataSupport.sortedEntryPoints(callGraph.reachableMethods());
@@ -147,6 +175,7 @@ public final class BytecodeToIR {
                 materializedLambdaMethods,
                 functionValueFlow,
                 transportedThrowableTypes,
+                classInitialization,
                 sourceLines
             ));
         }
@@ -156,6 +185,7 @@ public final class BytecodeToIR {
             List.copyOf(dispatches.values()),
             symbol(callGraph.entryPoint()),
             List.copyOf(materializedLambdaTargets),
+            classInitialization.dependencies(),
             enumDispatchConstants(classes)
         );
     }
@@ -434,6 +464,7 @@ public final class BytecodeToIR {
         final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final FunctionValueFlow.Result functionValueFlow,
         final Map<String, List<String>> transportedThrowableTypes,
+        final ClassInitializationGraph.Result classInitialization,
         final SourceLineIndex sourceLines
     ) {
         final ClassFile classFile = classes.get(entryPoint.className());
@@ -599,6 +630,7 @@ public final class BytecodeToIR {
                 functionOrNullTargetIds,
                 materializedLambdaMethods,
                 functionValueFlow,
+                classInitialization,
                 sourceLines,
                 lastMaterializingDuplicateOffset
             );
@@ -623,6 +655,46 @@ public final class BytecodeToIR {
             List.copyOf(localDeclarations.values()),
             List.copyOf(instructions)
         );
+    }
+
+    private static void initializeClass(
+        final Map<String, ClassFile> classes,
+        final String currentOwner,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final ClassInitializationGraph.Result classInitialization
+    ) {
+        final String owner = classInitializationOwner(classes, instruction);
+        if (!owner.equals(currentOwner) && classInitialization.initializes(owner)) {
+            instructions.add(IrInstruction.initializeClass(owner));
+        }
+    }
+
+    private static boolean initializesClass(
+        final Map<String, ClassFile> classes,
+        final String currentOwner,
+        final Instruction instruction,
+        final ClassInitializationGraph.Result classInitialization
+    ) {
+        final String owner = classInitializationOwner(classes, instruction);
+        return !owner.equals(currentOwner) && classInitialization.initializes(owner);
+    }
+
+    private static String classInitializationOwner(
+        final Map<String, ClassFile> classes,
+        final Instruction instruction
+    ) {
+        final String owner;
+        if (instruction.opcode() == 178 || instruction.opcode() == 179) {
+            final FieldRef field = instruction.fieldRef().orElseThrow();
+            owner = ClassInitializationGraph.staticFieldOwner(classes, field).orElse(field.owner());
+        } else if (instruction.opcode() == 184) {
+            final MethodRef method = instruction.methodRef().orElseThrow();
+            owner = ClassInitializationGraph.staticMethodOwner(classes, method).orElse(method.owner());
+        } else {
+            owner = instruction.className().orElseThrow();
+        }
+        return owner;
     }
 
     private static StackValue materializePendingHandlerException(
@@ -940,6 +1012,53 @@ public final class BytecodeToIR {
         final Map<String, Integer> functionOrNullTargetIds,
         final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final FunctionValueFlow.Result functionValueFlow,
+        final SourceLineIndex sourceLines,
+        final int lastMaterializingDuplicateOffset
+    ) {
+        lowerInstruction(
+            classes,
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            locals,
+            objectLocalKinds,
+            objectLocalThrowableTypes,
+            objectLocalLambdas,
+            localDeclarations,
+            dispatches,
+            functionOrNullTargetIds,
+            materializedLambdaMethods,
+            functionValueFlow,
+            ClassInitializationGraph.analyze(
+                classes,
+                List.of(new EntryPoint(classFile.name(), method.name(), method.descriptor()))
+            ),
+            sourceLines,
+            lastMaterializingDuplicateOffset
+        );
+    }
+
+    static void lowerInstruction(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final Map<Integer, IrExpression> locals,
+        final Map<Integer, StackKind> objectLocalKinds,
+        final Map<Integer, String> objectLocalThrowableTypes,
+        final Map<Integer, DynamicLambda> objectLocalLambdas,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<String, IrDispatch> dispatches,
+        final Map<String, Integer> functionOrNullTargetIds,
+        final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final FunctionValueFlow.Result functionValueFlow,
+        final ClassInitializationGraph.Result classInitialization,
         final SourceLineIndex sourceLines,
         final int lastMaterializingDuplicateOffset
     ) {
@@ -1365,9 +1484,14 @@ public final class BytecodeToIR {
                 BytecodeToIRControlFlowSupport.branchObjectNull(classFile, method, instruction, instructions, stack);
                 break;
             case 178:
+                initializeClass(classes, classFile.name(), instruction, instructions, classInitialization);
                 BytecodeToIRInvokeSupport.pushField(classes, classFile, method, instruction, stack);
                 break;
             case 179:
+                if (initializesClass(classes, classFile.name(), instruction, classInitialization)) {
+                    snapshotOperandStack(instructions, stack, locals, localDeclarations);
+                    initializeClass(classes, classFile.name(), instruction, instructions, classInitialization);
+                }
                 BytecodeToIRInvokeSupport.assignStaticField(classes, classFile, method, instruction, instructions, stack);
                 break;
             case 18:
@@ -1409,6 +1533,10 @@ public final class BytecodeToIR {
                 );
                 break;
             case 184:
+                if (initializesClass(classes, classFile.name(), instruction, classInitialization)) {
+                    snapshotOperandStack(instructions, stack, locals, localDeclarations);
+                    initializeClass(classes, classFile.name(), instruction, instructions, classInitialization);
+                }
                 BytecodeToIRInvokeSupport.lowerStaticCall(
                     classes,
                     classFile,
@@ -1451,6 +1579,7 @@ public final class BytecodeToIR {
                 );
                 break;
             case 187:
+                initializeClass(classes, classFile.name(), instruction, instructions, classInitialization);
                 BytecodeToIRDynamicSupport.newObject(classes, classFile, method, instruction, instructions, stack, localDeclarations);
                 break;
             case 188:
@@ -3444,7 +3573,11 @@ public final class BytecodeToIR {
     }
 
     static Optional<IrType> staticFieldType(final Map<String, ClassFile> classes, final FieldRef fieldRef) {
-        final ClassFile owner = classes.get(fieldRef.owner());
+        final Optional<String> resolvedOwner = ClassInitializationGraph.staticFieldOwner(classes, fieldRef);
+        if (resolvedOwner.isEmpty()) {
+            return Optional.empty();
+        }
+        final ClassFile owner = classes.get(resolvedOwner.orElseThrow());
         if (owner == null) {
             return Optional.empty();
         }

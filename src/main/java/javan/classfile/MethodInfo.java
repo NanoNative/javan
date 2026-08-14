@@ -12,6 +12,7 @@ import java.util.Optional;
  */
 public record MethodInfo(int accessFlags, String name, String descriptor, Optional<CodeAttribute> code) {
     private static final int ACC_PUBLIC = 0x0001;
+    private static final int ACC_PRIVATE = 0x0002;
     private static final int ACC_SYNCHRONIZED = 0x0020;
     private static final int ACC_STATIC = 0x0008;
     private static final int ACC_NATIVE = 0x0100;
@@ -48,6 +49,15 @@ public record MethodInfo(int accessFlags, String name, String descriptor, Option
             return false;
         }
         return true;
+    }
+
+    /**
+     * Returns true when this method is private to its declaring class or interface.
+     *
+     * @return true when private
+     */
+    public boolean isPrivate() {
+        return (accessFlags & ACC_PRIVATE) != 0;
     }
 
     /**

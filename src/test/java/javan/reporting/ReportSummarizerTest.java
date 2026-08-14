@@ -90,6 +90,30 @@ final class ReportSummarizerTest {
     }
 
     @Test
+    void writeSummarizesClassInitializationMetrics() throws Exception {
+        final Path reports = reportsDirectory();
+        Files.writeString(reports.resolve("class-initialization.json"), """
+            {
+              "strategy": "lazy-runtime-once",
+              "owners": 3,
+              "dependencies": 2,
+              "triggers": 4
+            }
+            """);
+        Files.writeString(reports.resolve("class-initialization.md"), "# Class Initialization\n");
+
+        final ReportSummarizer.Summary summary = new ReportSummarizer().write(tempDir);
+
+        assertThat(summary.markdown()).contains(
+            "| `class-initialization` | present |",
+            "strategy: `lazy-runtime-once`",
+            "owners: `3`",
+            "dependencies: `2`",
+            "triggers: `4`"
+        );
+    }
+
+    @Test
     void writeSummarizesProjectMetrics() throws Exception {
         final Path reports = reportsDirectory();
         Files.writeString(reports.resolve("project.json"), """
