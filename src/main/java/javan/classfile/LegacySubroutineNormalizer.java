@@ -317,10 +317,11 @@ final class LegacySubroutineNormalizer {
 
         private List<CodeException> exceptionHandlers(final int[] offsets) throws IOException {
             final List<CodeException> result = new ArrayList<>();
-            for (int nodeIndex = 0; nodeIndex < nodes.size(); nodeIndex++) {
-                final Node node = nodes.get(nodeIndex);
-                final int sourceOffset = instructions.get(node.originalIndex()).offset();
-                for (final CodeException handler : source.exceptionTable()) {
+            for (final CodeException handler : source.exceptionTable()) {
+                final List<CodeException> ranges = new ArrayList<>();
+                for (int nodeIndex = 0; nodeIndex < nodes.size(); nodeIndex++) {
+                    final Node node = nodes.get(nodeIndex);
+                    final int sourceOffset = instructions.get(node.originalIndex()).offset();
                     if (sourceOffset < handler.startPc() || sourceOffset >= handler.endPc()) {
                         continue;
                     }
@@ -330,8 +331,22 @@ final class LegacySubroutineNormalizer {
                         targetOffset(new Location(node.context().id(), indexAt(handler.handlerPc(), "exception handler")), offsets),
                         handler.catchType()
                     );
-                    if (!result.contains(normalized)) {
-                        result.add(normalized);
+                    if (!ranges.isEmpty()) {
+                        final CodeException previous = ranges.getLast();
+                        if (previous.endPc() == normalized.startPc()
+                            && previous.handlerPc() == normalized.handlerPc()
+                            && sameCatchType(previous.catchType(), normalized.catchType())) {
+                            ranges.set(ranges.size() - 1, new CodeException(
+                                previous.startPc(), normalized.endPc(), previous.handlerPc(), previous.catchType()
+                            ));
+                            continue;
+                        }
+                    }
+                    ranges.add(normalized);
+                }
+                for (final CodeException range : ranges) {
+                    if (!result.contains(range)) {
+                        result.add(range);
                     }
                 }
             }
@@ -571,6 +586,13 @@ final class LegacySubroutineNormalizer {
 
     private static int unsigned(final byte value) {
         return value & 0xFF;
+    }
+
+    private static boolean sameCatchType(final Optional<String> first, final Optional<String> second) {
+        if (first.isEmpty()) {
+            return second.isEmpty();
+        }
+        return second.isPresent() && first.orElseThrow().equals(second.orElseThrow());
     }
 
     private static void addUnique(final List<Integer> values, final int value) {

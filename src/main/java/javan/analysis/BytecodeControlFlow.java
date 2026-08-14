@@ -7,6 +7,7 @@ import javan.classfile.Instruction;
 import javan.classfile.MethodInfo;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -47,7 +48,7 @@ public final class BytecodeControlFlow {
             for (final Map.Entry<Integer, List<Integer>> entry : instructionSuccessors.entrySet()) {
                 successors.put(entry.getKey(), List.copyOf(entry.getValue()));
             }
-            instructionSuccessors = Map.copyOf(successors);
+            instructionSuccessors = Collections.unmodifiableMap(successors);
         }
 
         /** Returns successor instruction indexes for a decoded instruction index. */
@@ -308,6 +309,16 @@ public final class BytecodeControlFlow {
         private List<Block> blocks() {
             final Set<Integer> starts = new LinkedHashSet<>();
             starts.add(Integer.valueOf(0));
+            for (final CodeException handler : code.exceptionTable()) {
+                final Integer start = indexes.get(Integer.valueOf(handler.startPc()));
+                if (start != null) {
+                    starts.add(start);
+                }
+                final Integer end = indexes.get(Integer.valueOf(handler.endPc()));
+                if (end != null) {
+                    starts.add(end);
+                }
+            }
             for (int index = 0; index < instructionEdges.size(); index++) {
                 for (final InstructionEdge edge : instructionEdges.get(index)) {
                     if (edge.kind() != EdgeKind.FALLTHROUGH) {
@@ -389,9 +400,11 @@ public final class BytecodeControlFlow {
             if (opcode == 87) return effect(1, 0);
             if (opcode == 88) return effect(2, 0);
             if (opcode == 89) return effect(1, 2);
-            if (opcode == 90 || opcode == 91) return effect(2, 3);
-            if (opcode == 92 || opcode == 94) return effect(2, 4);
+            if (opcode == 90) return effect(2, 3);
+            if (opcode == 91) return effect(3, 4);
+            if (opcode == 92) return effect(2, 4);
             if (opcode == 93) return effect(3, 5);
+            if (opcode == 94) return effect(4, 6);
             if (opcode == 95) return effect(2, 2);
             if (opcode >= 96 && opcode <= 115) {
                 final int kind = (opcode - 96) % 4;

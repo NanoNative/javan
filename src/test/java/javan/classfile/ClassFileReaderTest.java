@@ -108,7 +108,7 @@ final class ClassFileReaderTest {
             .read(legacySubroutineClassfile(code, 1, 2, new int[]{11, 13, 13, 0}), SOURCE)
             .method("value", "()I").orElseThrow();
 
-        assertThat(method.code().orElseThrow().exceptionTable()).isNotEmpty();
+        assertThat(method.code().orElseThrow().exceptionTable()).hasSize(1);
         assertThat(method.code().orElseThrow().instructions())
             .extracting(Instruction::mnemonic)
             .contains("ifne", "goto_w")

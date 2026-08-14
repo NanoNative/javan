@@ -38,6 +38,8 @@ final class BytecodeControlFlowTest {
         assertThat(result.graph().edges()).extracting(BytecodeControlFlow.Edge::kind)
             .contains(BytecodeControlFlow.EdgeKind.BRANCH, BytecodeControlFlow.EdgeKind.FALLTHROUGH,
                 BytecodeControlFlow.EdgeKind.EXCEPTION);
+        assertThat(result.graph().instructionSuccessors().keySet())
+            .containsExactly(0, 1, 2, 3, 4, 5, 6, 7, 8);
     }
 
     @Test
@@ -93,6 +95,46 @@ final class BytecodeControlFlowTest {
         ), List.of()));
 
         assertThat(result.issues()).containsExactly("stack underflow at 0");
+    }
+
+    @Test
+    void rejectsDeepStackDuplicationWithoutEnoughOperands() {
+        final BytecodeControlFlow.Result dupX2 = BytecodeControlFlow.analyze(method(4, List.of(
+            instruction(0, 3, "iconst_0"),
+            instruction(1, 4, "iconst_1"),
+            instruction(2, 91, "dup_x2"),
+            instruction(3, 177, "return")
+        ), List.of()));
+        final BytecodeControlFlow.Result dup2X2 = BytecodeControlFlow.analyze(method(6, List.of(
+            instruction(0, 3, "iconst_0"),
+            instruction(1, 4, "iconst_1"),
+            instruction(2, 94, "dup2_x2"),
+            instruction(3, 177, "return")
+        ), List.of()));
+
+        assertThat(dupX2.issues()).containsExactly("stack underflow at 2");
+        assertThat(dup2X2.issues()).containsExactly("stack underflow at 2");
+    }
+
+    @Test
+    void splitsBlocksAtExceptionRangeBoundaries() {
+        final BytecodeControlFlow.Result result = BytecodeControlFlow.analyze(method(1, List.of(
+            instruction(0, 0, "nop"),
+            instruction(1, 0, "nop"),
+            instruction(2, 177, "return"),
+            instruction(3, 75, "astore_0"),
+            instruction(4, 177, "return")
+        ), List.of(new CodeException(1, 2, 3, Optional.empty()))));
+
+        assertThat(result.valid()).isTrue();
+        assertThat(result.graph().blocks()).extracting(BytecodeControlFlow.Block::startOffset)
+            .containsExactly(0, 1, 2, 3);
+        assertThat(result.graph().edges()).contains(
+            new BytecodeControlFlow.Edge(1, 3, BytecodeControlFlow.EdgeKind.EXCEPTION)
+        ).doesNotContain(
+            new BytecodeControlFlow.Edge(0, 3, BytecodeControlFlow.EdgeKind.EXCEPTION),
+            new BytecodeControlFlow.Edge(2, 3, BytecodeControlFlow.EdgeKind.EXCEPTION)
+        );
     }
 
     @Test

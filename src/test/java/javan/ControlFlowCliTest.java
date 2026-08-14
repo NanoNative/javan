@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 @PlatformTest
 final class ControlFlowCliTest extends CliIntegrationSupport {
     @Test
-    void buildsAndRunsLegacyJsrRetBytecode() throws Exception {
+    void buildsAndRunsRepeatedNestedAndExceptionalLegacySubroutines() throws Exception {
         final Path classes = tempDir.resolve("legacy-classes");
         final Path classFile = classes.resolve("legacy/Subroutine.class");
         Files.createDirectories(classFile.getParent());
@@ -38,7 +38,10 @@ final class ControlFlowCliTest extends CliIntegrationSupport {
         assertThat(Files.readString(tempDir.resolve(".javan/reports/control-flow.json")))
             .contains("\"status\": \"pass\"", "\"class\": \"legacy/Subroutine\"")
             .doesNotContain("jsr", "ret");
-        assertThat(process(tempDir, java.util.List.of(executable.toString())).exitCode()).isZero();
+        final ProcessResult nativeRun = process(tempDir, java.util.List.of(executable.toString()));
+        assertThat(nativeRun.exitCode()).withFailMessage(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEmpty();
+        assertThat(nativeRun.stderr()).isEmpty();
     }
 
     @Test
@@ -84,7 +87,7 @@ final class ControlFlowCliTest extends CliIntegrationSupport {
             out.writeInt(0xCAFEBABE);
             out.writeShort(0);
             out.writeShort(49);
-            out.writeShort(8);
+            out.writeShort(10);
             utf8(out, "legacy/Subroutine");
             out.writeByte(7);
             out.writeShort(1);
@@ -94,6 +97,9 @@ final class ControlFlowCliTest extends CliIntegrationSupport {
             utf8(out, "main");
             utf8(out, "([Ljava/lang/String;)V");
             utf8(out, "Code");
+            utf8(out, "java/lang/NullPointerException");
+            out.writeByte(7);
+            out.writeShort(8);
             out.writeShort(0x0021);
             out.writeShort(2);
             out.writeShort(4);
@@ -105,13 +111,38 @@ final class ControlFlowCliTest extends CliIntegrationSupport {
             out.writeShort(6);
             out.writeShort(1);
             out.writeShort(7);
-            final byte[] code = new byte[]{(byte) 168, 0, 6, (byte) 177, 0, 0, 76, (byte) 169, 1};
-            out.writeInt(12 + code.length);
-            out.writeShort(1);
+            final byte[] code = new byte[]{
+                3, 60, // count = 0
+                // Call one subroutine twice.
+                (byte) 168, 0, 22,
+                (byte) 168, 0, 19,
+                // Call a subroutine which calls another subroutine.
+                (byte) 168, 0, 22,
+                // Call a subroutine whose explicit throw is caught inside it.
+                (byte) 168, 0, 35,
+                // All paths increment count once; fail natively unless count == 5.
+                27, 8,
+                (byte) 159, 0, 6,
+                1, (byte) 191, 0, (byte) 177, 0,
+                // Repeated subroutine.
+                77, (byte) 132, 1, 1, (byte) 169, 2,
+                // Outer then nested subroutine.
+                77, (byte) 168, 0, 9, (byte) 132, 1, 1, (byte) 169, 2, 0,
+                78, (byte) 132, 1, 1, (byte) 169, 3,
+                // Exceptional subroutine and its handler.
+                77, 1, (byte) 191,
+                58, 4, (byte) 132, 1, 1, (byte) 169, 2
+            };
+            out.writeInt(20 + code.length);
             out.writeShort(2);
+            out.writeShort(5);
             out.writeInt(code.length);
             out.write(code);
-            out.writeShort(0);
+            out.writeShort(1);
+            out.writeShort(47);
+            out.writeShort(49);
+            out.writeShort(49);
+            out.writeShort(9);
             out.writeShort(0);
             out.writeShort(0);
         }
