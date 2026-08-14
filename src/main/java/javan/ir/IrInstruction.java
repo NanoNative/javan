@@ -217,6 +217,16 @@ public record IrInstruction(
     }
 
     /**
+     * Creates a lazy JVM class-initialization trigger.
+     *
+     * @param owner class or interface to initialize
+     * @return IR initialization instruction
+     */
+    public static IrInstruction initializeClass(final String owner) {
+        return new IrInstruction(Op.INITIALIZE_CLASS, Optional.of(owner), Optional.empty());
+    }
+
+    /**
      * Creates an int assignment instruction.
      *
      * @param localName target local name
@@ -750,6 +760,7 @@ public record IrInstruction(
         PRINTLN_ERROR_OBJECT,
         PRINT_OBJECT,
         PRINT_ERROR_OBJECT,
+        INITIALIZE_CLASS,
         CALL_STATIC_VOID,
         ASSIGN_INT,
         ASSIGN_LONG,

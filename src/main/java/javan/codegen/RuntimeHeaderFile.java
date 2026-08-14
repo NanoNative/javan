@@ -217,6 +217,8 @@ final class RuntimeHeaderFile {
         void javan_root_frame_pop(void*** roots);
         void javan_runtime_lock_enter(void);
         void javan_runtime_lock_leave(void);
+        int javan_class_initialization_enter(int* state, void** owner);
+        void javan_class_initialization_complete(int* state, void** owner);
         void javan_register_object(void* value, int type_id);
         void javan_validate_heap_metadata(void);
         void javan_gc_safe_point(void);

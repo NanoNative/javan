@@ -1,8 +1,9 @@
 package javan.codegen;
 
-import javan.analysis.VirtualThreadInvokePatterns;
+import javan.analysis.ClassInitializationGraph;
 import javan.analysis.EntryPoint;
 import javan.analysis.FunctionValueFlow;
+import javan.analysis.VirtualThreadInvokePatterns;
 import javan.classfile.ClassFile;
 import javan.classfile.FieldRef;
 import javan.classfile.Instruction;
@@ -342,12 +343,13 @@ final class BytecodeToIRInvokeSupport {
         if (type.isEmpty()) {
             throw unsupported(classFile, method, instruction);
         }
+        final String owner = ClassInitializationGraph.staticFieldOwner(classes, fieldRef).orElse(fieldRef.owner());
         switch (type.orElseThrow()) {
-            case INT -> stack.add(StackValue.intExpression(IrExpression.intStaticField(fieldRef.owner(), fieldRef.name())));
-            case LONG -> stack.add(StackValue.longExpression(IrExpression.longStaticField(fieldRef.owner(), fieldRef.name())));
-            case FLOAT -> stack.add(StackValue.floatExpression(IrExpression.floatStaticField(fieldRef.owner(), fieldRef.name())));
-            case DOUBLE -> stack.add(StackValue.doubleExpression(IrExpression.doubleStaticField(fieldRef.owner(), fieldRef.name())));
-            case OBJECT -> stack.add(StackValue.objectExpression(IrExpression.objectStaticField(fieldRef.owner(), fieldRef.name())));
+            case INT -> stack.add(StackValue.intExpression(IrExpression.intStaticField(owner, fieldRef.name())));
+            case LONG -> stack.add(StackValue.longExpression(IrExpression.longStaticField(owner, fieldRef.name())));
+            case FLOAT -> stack.add(StackValue.floatExpression(IrExpression.floatStaticField(owner, fieldRef.name())));
+            case DOUBLE -> stack.add(StackValue.doubleExpression(IrExpression.doubleStaticField(owner, fieldRef.name())));
+            case OBJECT -> stack.add(StackValue.objectExpression(IrExpression.objectStaticField(owner, fieldRef.name())));
         }
     }
 
@@ -361,12 +363,13 @@ final class BytecodeToIRInvokeSupport {
     ) {
         final FieldRef fieldRef = instruction.fieldRef().orElseThrow();
         final IrType type = requiredIrType(staticFieldType(classes, fieldRef), classFile, method, instruction);
+        final String owner = ClassInitializationGraph.staticFieldOwner(classes, fieldRef).orElse(fieldRef.owner());
         switch (type) {
-            case INT -> instructions.add(IrInstruction.assignStaticFieldInt(fieldRef.owner(), fieldRef.name(), popInt(classFile, method, stack)));
-            case LONG -> instructions.add(IrInstruction.assignStaticFieldLong(fieldRef.owner(), fieldRef.name(), popLong(classFile, method, stack)));
-            case FLOAT -> instructions.add(IrInstruction.assignStaticFieldFloat(fieldRef.owner(), fieldRef.name(), popFloat(classFile, method, stack)));
-            case DOUBLE -> instructions.add(IrInstruction.assignStaticFieldDouble(fieldRef.owner(), fieldRef.name(), popDouble(classFile, method, stack)));
-            case OBJECT -> instructions.add(IrInstruction.assignStaticFieldObject(fieldRef.owner(), fieldRef.name(), popObject(classFile, method, stack)));
+            case INT -> instructions.add(IrInstruction.assignStaticFieldInt(owner, fieldRef.name(), popInt(classFile, method, stack)));
+            case LONG -> instructions.add(IrInstruction.assignStaticFieldLong(owner, fieldRef.name(), popLong(classFile, method, stack)));
+            case FLOAT -> instructions.add(IrInstruction.assignStaticFieldFloat(owner, fieldRef.name(), popFloat(classFile, method, stack)));
+            case DOUBLE -> instructions.add(IrInstruction.assignStaticFieldDouble(owner, fieldRef.name(), popDouble(classFile, method, stack)));
+            case OBJECT -> instructions.add(IrInstruction.assignStaticFieldObject(owner, fieldRef.name(), popObject(classFile, method, stack)));
             case VOID -> throw new IllegalStateException("void static field is invalid");
         }
     }
@@ -2081,7 +2084,8 @@ final class BytecodeToIRInvokeSupport {
         }
         final MethodDescriptor descriptor = MethodDescriptor.parse(methodRef.descriptor());
         final List<IrExpression> arguments = popArguments(classFile, method, stack, descriptor, instruction);
-        final String symbol = symbol(new EntryPoint(methodRef.owner(), methodRef.name(), methodRef.descriptor()));
+        final String owner = ClassInitializationGraph.staticMethodOwner(classes, methodRef).orElse(methodRef.owner());
+        final String symbol = symbol(new EntryPoint(owner, methodRef.name(), methodRef.descriptor()));
         if (VirtualThreadInvokePatterns.isSupportedBuilderWrapperCall(classes, methodRef)) {
             stack.add(StackValue.virtualThreadBuilder(IrExpression.objectCall(symbol, arguments)));
             return;

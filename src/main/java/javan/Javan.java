@@ -1,6 +1,7 @@
 package javan;
 
 import javan.analysis.CallGraph;
+import javan.analysis.ClassInitializationGraph;
 import javan.analysis.EntryPoint;
 import javan.analysis.ReachabilityAnalyzer;
 import javan.build.BindingGenerator;
@@ -20,19 +21,20 @@ import javan.classfile.ClassFileScanner;
 import javan.cli.Options;
 import javan.codegen.BytecodeToIR;
 import javan.codegen.CCodegen;
+import javan.codegen.NativeLinker;
+import javan.codegen.RuntimeFiles;
+import javan.codegen.SourceLineIndex;
 import javan.compat.ClassMetadata;
 import javan.compat.ClassMetadataScanner;
 import javan.compat.CompatibilityReports;
 import javan.compat.CompatibilityResult;
-import javan.codegen.NativeLinker;
-import javan.codegen.RuntimeFiles;
-import javan.codegen.SourceLineIndex;
 import javan.detect.MainClassDetector;
 import javan.detect.MainClassDetector.MainClassDetection;
 import javan.detect.ProjectDetector;
 import javan.detect.ProjectLayout;
 import javan.ir.IrProgram;
 import javan.optimizer.OptimizationReports;
+import javan.reporting.ClassInitializationReports;
 import javan.reporting.ControlFlowReports;
 import javan.reporting.DependencyReports;
 import javan.reporting.ExceptionReports;
@@ -86,6 +88,7 @@ public final class Javan {
     private final OptimizationReports optimizationReports = new OptimizationReports();
     private final DependencyReports dependencyReports = new DependencyReports();
     private final ControlFlowReports controlFlowReports = new ControlFlowReports();
+    private final ClassInitializationReports classInitializationReports = new ClassInitializationReports();
     private final ExceptionReports exceptionReports = new ExceptionReports();
     private final IntrinsicUsageReports intrinsicUsageReports = new IntrinsicUsageReports();
     private final RuntimeContractReports runtimeContractReports = new RuntimeContractReports();
@@ -149,6 +152,10 @@ public final class Javan {
         final List<Diagnostic> diagnostics = new ArrayList<>(mainDetection.diagnostics());
         diagnostics.addAll(callGraph.diagnostics());
         diagnostics.addAll(controlFlowReports.write(layout.outputDirectory(), classes, callGraph.reachableMethods()));
+        final ClassInitializationGraph.Result classInitialization = classInitializationReports.write(
+            layout.outputDirectory(),
+            ClassInitializationGraph.analyze(classes, callGraph.reachableMethods())
+        );
         if (mainDetection.pass()) {
             diagnostics.addAll(staticVerifier.verify(classes, callGraph.reachableMethods(), nativeEntryPoints));
         } else {
@@ -163,7 +170,7 @@ public final class Javan {
         writeUnifiedReport(layout.outputDirectory());
         final List<Diagnostic> errors = errors(diagnostics);
         if (!errors.isEmpty()) {
-            return new CheckResult(layout, classes, mainClass, callGraph, nativeInterop, diagnostics, exports);
+            return new CheckResult(layout, classes, mainClass, callGraph, classInitialization, nativeInterop, diagnostics, exports);
         }
         out.println("Checking static Java profile...");
         printText(out, "  build kind:        ", Strings2.toAsciiLowerCase(options.buildKind().name()));
@@ -175,7 +182,7 @@ public final class Javan {
         printInt(out, "  reachable methods: ", callGraph.reachableMethods().size());
         printInt(out, "  diagnostics:       ", diagnostics.size());
         printWarnings(diagnostics, out);
-        return new CheckResult(layout, classes, mainClass, callGraph, nativeInterop, diagnostics, exports);
+        return new CheckResult(layout, classes, mainClass, callGraph, classInitialization, nativeInterop, diagnostics, exports);
     }
 
     /**
@@ -222,7 +229,8 @@ public final class Javan {
             check.classes(),
             check.callGraph(),
             SourceLineIndex.from(check.layout()),
-            reachableNativeInterop
+            reachableNativeInterop,
+            check.classInitialization()
         );
         exceptionReports.write(check.layout().outputDirectory(), program);
         final Path artifact;
@@ -724,6 +732,7 @@ public final class Javan {
      * @param classes parsed classes
      * @param mainClass JVM internal main class
      * @param callGraph reachable call graph
+     * @param classInitialization runtime class-initialization trigger graph
      * @param nativeInterop resolved native interop configuration
      * @param diagnostics non-fatal diagnostics
      * @param exports native library exports
@@ -733,6 +742,7 @@ public final class Javan {
         Map<String, ClassFile> classes,
         String mainClass,
         CallGraph callGraph,
+        ClassInitializationGraph.Result classInitialization,
         NativeInteropConfig nativeInterop,
         List<Diagnostic> diagnostics,
         List<ExportedMethod> exports

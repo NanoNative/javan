@@ -34,7 +34,6 @@ semantic fact model.
 
 | Priority | Analysis | Smallest useful scope | Acceptance gate |
 | --- | --- | --- | --- |
-| P0 | Class-initialization graph | JVM trigger ordering for `new`, static field access, static calls, inheritance, interfaces, re-entry, and supported cycles. | Native/JVM initialization order matches; unsupported cycles fail before C generation. |
 | P1 | Instantiated-type analysis | Intersect virtual/interface targets with reachable allocated, lambda, substituted, and runtime-created types. | Uninstantiated targets disappear without losing any constructible receiver. |
 | P1 | Bounded receiver/callable provenance | Track exact types and small type sets through locals and direct arguments/returns; unknown remains explicit. | Local, cast, merged, stored, passed, and returned callback fixtures resolve or fall back conservatively. |
 | P1 | Local value facts | Per-block nullness, constants, integer ranges, exact types, and array/string lengths. | Facts merge deterministically; only proven unreachable code is ignored; removed guards carry proof records. |

@@ -15453,7 +15453,10 @@ final class CoreBehaviorTest {
                 List.of(new IrParameter(IrType.OBJECT, "self")),
                 List.of(new IrDispatchTarget("com/acme/Api", "javan_com_acme_Api_answer__Lcom_acme_Api__I"))
             )),
-            BytecodeToIR.symbol(exportEntry)
+            BytecodeToIR.symbol(exportEntry),
+            List.of(),
+            Map.of("com/acme/Api", List.of()),
+            Map.of()
         );
 
         final String generated = Files.readString(new CCodegen().generateLibrary(
@@ -15471,6 +15474,7 @@ final class CoreBehaviorTest {
             "javan_register_generated_type_descriptors();",
             "javan_register_generated_roots();",
             "javan_gc_safe_point();",
+            "javan_initialize_com_acme_Api();",
             "javan_com_acme_Api__clinit___V();",
             "javan_com_acme_Api_touch___V();"
         );

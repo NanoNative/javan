@@ -480,6 +480,10 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             package com.acme;
 
             public final class Math {
+                static {
+                    System.out.println("math-init");
+                }
+
                 private Math() {
                 }
 
@@ -571,6 +575,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         final Path binary = project.resolve("call-add");
         assertThat(process(project, List.of("cc", caller.toString(), library.toString(), "-o", binary.toString())).exitCode()).isZero();
         assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo("""
+            math-init
             7
             try:1:7
             try-null:0:JAVAN-ABI-NULL-OUT

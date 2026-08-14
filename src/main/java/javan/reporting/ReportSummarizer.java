@@ -25,6 +25,7 @@ public final class ReportSummarizer {
         new ReportSpec("reachability", List.of("reachability.txt")),
         new ReportSpec("call-graph", List.of("call-graph.json", "call-graph.md", "call-flow.html", "call-graph.dot")),
         new ReportSpec("control-flow", List.of("control-flow.json", "control-flow.md")),
+        new ReportSpec("class-initialization", List.of("class-initialization.json", "class-initialization.md")),
         new ReportSpec("exceptions", List.of("exceptions.json", "exceptions.md", "debug-map.json")),
         new ReportSpec("intrinsics", List.of("intrinsics.json", "intrinsics.md")),
         new ReportSpec("optimizations", List.of("optimizations.json", "optimizations.md")),
@@ -127,6 +128,9 @@ public final class ReportSummarizer {
         }
         if ("control-flow".equals(name)) {
             return controlFlowMetrics(read(reportsDirectory.resolve("control-flow.json")));
+        }
+        if ("class-initialization".equals(name)) {
+            return classInitializationMetrics(read(reportsDirectory.resolve("class-initialization.json")));
         }
         if ("exceptions".equals(name)) {
             return exceptionMetrics(read(reportsDirectory.resolve("exceptions.json")), read(reportsDirectory.resolve("debug-map.json")));
@@ -251,6 +255,19 @@ public final class ReportSummarizer {
         addNumber(result, value, "blocks");
         addNumber(result, value, "edges");
         addNumber(result, value, "issues");
+        return List.copyOf(result);
+    }
+
+    private static List<Metric> classInitializationMetrics(final Optional<String> report) {
+        if (report.isEmpty()) {
+            return List.of();
+        }
+        final String value = report.orElseThrow();
+        final List<Metric> result = new ArrayList<>();
+        addText(result, value, "strategy");
+        addNumber(result, value, "owners");
+        addNumber(result, value, "dependencies");
+        addNumber(result, value, "triggers");
         return List.copyOf(result);
     }
 

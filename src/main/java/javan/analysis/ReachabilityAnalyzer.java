@@ -101,6 +101,9 @@ public final class ReachabilityAnalyzer {
         for (final EntryPoint root : roots) {
             workSet.add(root);
         }
+        for (final EntryPoint root : roots) {
+            enqueueClassInitializer(classes, root.className(), work, workSet, root, callEdges, entryPoints);
+        }
         final List<MethodRef> materializedLambdaMethods = new ArrayList<>();
         int workIndex = 0;
 
@@ -1001,7 +1004,8 @@ public final class ReachabilityAnalyzer {
             return;
         }
         if (instruction.opcode() == 184) {
-            final EntryPoint callee = entryPoints.entry(target.owner(), target.name(), target.descriptor());
+            final String owner = ClassInitializationGraph.staticMethodOwner(classes, target).orElse(target.owner());
+            final EntryPoint callee = entryPoints.entry(owner, target.name(), target.descriptor());
             enqueue(work, workSet, callee);
             addEdge(callEdges, current, callee, CallEdge.Kind.CALL);
             return;
@@ -1524,14 +1528,18 @@ public final class ReachabilityAnalyzer {
         if (instruction.opcode() == 178 || instruction.opcode() == 179) {
             final Optional<FieldRef> fieldRef = instruction.fieldRef();
             if (fieldRef.isPresent()) {
-                enqueueClassInitializer(classes, fieldRef.orElseThrow().owner(), work, workSet, current, callEdges, entryPoints);
+                final FieldRef field = fieldRef.orElseThrow();
+                final String owner = ClassInitializationGraph.staticFieldOwner(classes, field).orElse(field.owner());
+                enqueueClassInitializer(classes, owner, work, workSet, current, callEdges, entryPoints);
             }
             return;
         }
         if (instruction.opcode() == 184) {
             final Optional<MethodRef> methodRef = instruction.methodRef();
             if (methodRef.isPresent()) {
-                enqueueClassInitializer(classes, methodRef.orElseThrow().owner(), work, workSet, current, callEdges, entryPoints);
+                final MethodRef method = methodRef.orElseThrow();
+                final String owner = ClassInitializationGraph.staticMethodOwner(classes, method).orElse(method.owner());
+                enqueueClassInitializer(classes, owner, work, workSet, current, callEdges, entryPoints);
             }
             return;
         }
@@ -1552,14 +1560,14 @@ public final class ReachabilityAnalyzer {
         final CallEdgeTracker callEdges,
         final EntryPointPool entryPoints
     ) {
-        final ClassFile classFile = classes.get(owner);
-        if (classFile == null || classFile.isEnum()) {
-            return;
-        }
-        final Optional<MethodInfo> method = classFile.method("<clinit>", "()V");
-        if (method.isPresent()) {
+        for (final String initializerOwner : ClassInitializationGraph.initializerOwners(classes, owner)) {
+            final ClassFile classFile = classes.get(initializerOwner);
+            final Optional<MethodInfo> method = classFile.method("<clinit>", "()V");
+            if (method.isEmpty()) {
+                continue;
+            }
             final MethodInfo classInitializer = method.orElseThrow();
-            final EntryPoint callee = entryPoints.entry(owner, classInitializer.name(), classInitializer.descriptor());
+            final EntryPoint callee = entryPoints.entry(initializerOwner, classInitializer.name(), classInitializer.descriptor());
             enqueue(work, workSet, callee);
             addEdge(callEdges, current, callee, CallEdge.Kind.CLASS_INITIALIZER);
         }
