@@ -3881,7 +3881,7 @@ final class BytecodeToIRTest {
         assertThat(BytecodeToIRDynamicSupport.materializedLambdaMethods(classes, reachable))
             .hasSize(1)
             .containsEntry(
-                new MethodRef("com/acme/ObjectFn", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;"),
+                "com/acme/ObjectFn#apply(Ljava/lang/Object;)Ljava/lang/Object;",
                 BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind.OBJECT
             );
     }

@@ -384,7 +384,7 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
         final Map<String, Integer> functionOrNullTargetIds,
-        final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final FunctionValueFlow.Result functionValueFlow,
         final List<Integer> skippedOffsets,
         final List<Integer> replacementLabelOffsets
@@ -525,7 +525,7 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
         final Map<String, Integer> functionOrNullTargetIds,
-        final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final FunctionValueFlow.Result functionValueFlow,
         final List<Integer> skippedOffsets,
         final Instruction instruction
@@ -679,7 +679,7 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
         final Map<String, Integer> functionOrNullTargetIds,
-        final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final FunctionValueFlow.Result functionValueFlow
     ) {
         return lowerLinearBlock(
@@ -718,7 +718,7 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
         final Map<String, Integer> functionOrNullTargetIds,
-        final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final FunctionValueFlow.Result functionValueFlow,
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final SourceLineIndex sourceLines
@@ -784,7 +784,7 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
         final Map<String, Integer> functionOrNullTargetIds,
-        final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final FunctionValueFlow.Result functionValueFlow,
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final SourceLineIndex sourceLines,

@@ -144,7 +144,7 @@ public final class BytecodeToIR {
             BytecodeToIRDynamicSupport.functionOrNullTargets(classes, reachableMethods);
         final Map<String, Integer> functionOrNullTargetIds =
             BytecodeToIRDynamicSupport.functionOrNullTargetIds(classes, reachableMethods);
-        final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods =
+        final Map<String, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods =
             BytecodeToIRDynamicSupport.materializedLambdaMethods(classes, reachableMethods);
         final FunctionValueFlow.Result functionValueFlow = callGraph.functionValueFlow().complete()
             ? callGraph.functionValueFlow()
@@ -463,7 +463,7 @@ public final class BytecodeToIR {
         final EntryPoint entryPoint,
         final Map<String, IrDispatch> dispatches,
         final Map<String, Integer> functionOrNullTargetIds,
-        final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final FunctionValueFlow.Result functionValueFlow,
         final Map<String, List<String>> transportedThrowableTypes,
         final InstantiatedTypeAnalysis.Result instantiatedTypes,
@@ -1014,7 +1014,7 @@ public final class BytecodeToIR {
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
         final Map<String, Integer> functionOrNullTargetIds,
-        final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final FunctionValueFlow.Result functionValueFlow,
         final SourceLineIndex sourceLines,
         final int lastMaterializingDuplicateOffset
@@ -1061,7 +1061,7 @@ public final class BytecodeToIR {
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
         final Map<String, Integer> functionOrNullTargetIds,
-        final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final FunctionValueFlow.Result functionValueFlow,
         final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final ClassInitializationGraph.Result classInitialization,

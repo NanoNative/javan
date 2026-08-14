@@ -702,11 +702,12 @@ final class BytecodeToIRThreadSupport {
     }
 
     private static boolean hasMaterializedReceiver(
-        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final String interfaceOwner
     ) {
-        for (final MethodRef methodRef : materializedLambdaMethods.keySet()) {
-            if (methodRef.owner().equals(interfaceOwner)) {
+        final String ownerPrefix = interfaceOwner + "#";
+        for (final String methodKey : materializedLambdaMethods.keySet()) {
+            if (methodKey.startsWith(ownerPrefix)) {
                 return true;
             }
         }
@@ -1369,7 +1370,7 @@ final class BytecodeToIRThreadSupport {
         final List<StackValue> stack,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
-        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final FunctionValueFlow.Result functionValueFlow,
         final InstantiatedTypeAnalysis.Result instantiatedTypes
     ) {
@@ -1434,7 +1435,8 @@ final class BytecodeToIRThreadSupport {
             return;
         }
         if (isSupplierGet(methodRef)
-            && materializedLambdaMethods.get(methodRef) == MaterializedLambdaDispatchKind.SUPPLIER) {
+            && materializedLambdaMethods.get(materializedLambdaMethodKey(methodRef))
+                == MaterializedLambdaDispatchKind.SUPPLIER) {
             final IrExpression supplier = popObject(classFile, method, stack);
             final String resultLocal = newObjectLocal(localDeclarations);
             lowerSupplierGetCall(
@@ -1481,7 +1483,7 @@ final class BytecodeToIRThreadSupport {
         final MaterializedLambdaDispatchKind dispatchKind = isFunctionApply(methodRef)
             && !materializedFunctionReceiver
             ? null
-            : materializedLambdaMethods.get(methodRef);
+            : materializedLambdaMethods.get(materializedLambdaMethodKey(methodRef));
         if (materializedFunctionReceiver) {
             if (dispatchKind != MaterializedLambdaDispatchKind.OBJECT) {
                 throw unsupported(classFile, method, instruction);

@@ -256,29 +256,53 @@ final class BytecodeToIRDynamicSupport {
         return Map.copyOf(result);
     }
 
-    static Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods(
+    static Map<String, MaterializedLambdaDispatchKind> materializedLambdaMethods(
         final Map<String, ClassFile> classes,
         final List<EntryPoint> reachableMethods
     ) {
-        final Map<MethodRef, MaterializedLambdaDispatchKind> result = new LinkedHashMap<>();
+        final Map<String, MaterializedLambdaDispatchKind> result = new LinkedHashMap<>();
         final Map<MaterializedLambdaKey, Integer> targetIds = materializedLambdaTargetIds(classes, reachableMethods);
         for (final MaterializedLambdaKey key : targetIds.keySet()) {
             result.put(
-                new MethodRef(key.interfaceOwner(), key.interfaceMethodName(), key.interfaceMethodDescriptor()),
-                "java/util/function/Supplier".equals(key.interfaceOwner())
-                    && "get".equals(key.interfaceMethodName())
-                    && "()Ljava/lang/Object;".equals(key.interfaceMethodDescriptor())
-                    ? MaterializedLambdaDispatchKind.SUPPLIER
-                    : key.voidResult()
-                    ? MaterializedLambdaDispatchKind.VOID
-                    : key.booleanResult()
-                    ? MaterializedLambdaDispatchKind.BOOLEAN
-                    : materializedLambdaSingleLongInput(key)
-                    ? MaterializedLambdaDispatchKind.LONG_OBJECT
-                    : MaterializedLambdaDispatchKind.OBJECT
+                materializedLambdaMethodKey(
+                    key.interfaceOwner(),
+                    key.interfaceMethodName(),
+                    key.interfaceMethodDescriptor()
+                ),
+                materializedLambdaDispatchKind(key)
             );
         }
         return Map.copyOf(result);
+    }
+
+    static String materializedLambdaMethodKey(final MethodRef method) {
+        return materializedLambdaMethodKey(method.owner(), method.name(), method.descriptor());
+    }
+
+    private static String materializedLambdaMethodKey(
+        final String owner,
+        final String name,
+        final String descriptor
+    ) {
+        return owner + "#" + name + descriptor;
+    }
+
+    private static MaterializedLambdaDispatchKind materializedLambdaDispatchKind(final MaterializedLambdaKey key) {
+        if ("java/util/function/Supplier".equals(key.interfaceOwner())
+            && "get".equals(key.interfaceMethodName())
+            && "()Ljava/lang/Object;".equals(key.interfaceMethodDescriptor())) {
+            return MaterializedLambdaDispatchKind.SUPPLIER;
+        }
+        if (key.voidResult()) {
+            return MaterializedLambdaDispatchKind.VOID;
+        }
+        if (key.booleanResult()) {
+            return MaterializedLambdaDispatchKind.BOOLEAN;
+        }
+        if (materializedLambdaSingleLongInput(key)) {
+            return MaterializedLambdaDispatchKind.LONG_OBJECT;
+        }
+        return MaterializedLambdaDispatchKind.OBJECT;
     }
 
     private static boolean materializedLambdaSingleLongInput(final MaterializedLambdaKey key) {
@@ -1043,10 +1067,18 @@ final class BytecodeToIRDynamicSupport {
         final RecordObjectMethodsCall.ReferenceTarget target,
         final boolean hashCode
     ) {
-        final String symbol = hashCode ? RECORD_REFERENCE_HASH_CODE_DISPATCH : RECORD_REFERENCE_EQUALS_DISPATCH;
-        final List<IrParameter> parameters = hashCode
-            ? List.of(new IrParameter(IrType.OBJECT, "self"))
-            : List.of(new IrParameter(IrType.OBJECT, "self"), new IrParameter(IrType.OBJECT, "arg0"));
+        final String symbol;
+        final List<IrParameter> parameters;
+        if (hashCode) {
+            symbol = RECORD_REFERENCE_HASH_CODE_DISPATCH;
+            parameters = List.of(new IrParameter(IrType.OBJECT, "self"));
+        } else {
+            symbol = RECORD_REFERENCE_EQUALS_DISPATCH;
+            parameters = List.of(
+                new IrParameter(IrType.OBJECT, "self"),
+                new IrParameter(IrType.OBJECT, "arg0")
+            );
+        }
         final IrDispatch existing =
             dispatches.getOrDefault(symbol, new IrDispatch(symbol, IrType.INT, parameters, List.of()));
         final List<IrDispatchTarget> targets = new ArrayList<>();
@@ -1056,13 +1088,28 @@ final class BytecodeToIRDynamicSupport {
             }
             targets.add(existingTarget);
         }
-        final String functionSymbol = target.executable()
-            ? BytecodeToIR.symbol(new EntryPoint(
-                target.executableOwner(),
-                hashCode ? "hashCode" : "equals",
-                hashCode ? "()I" : "(Ljava/lang/Object;)Z"
-            ))
-            : hashCode ? "javan_record_reference_identity_hash_code" : "javan_record_reference_identity_equals";
+        final String functionSymbol;
+        if (target.executable()) {
+            if (hashCode) {
+                functionSymbol = BytecodeToIR.symbol(new EntryPoint(
+                    target.executableOwner(),
+                    "hashCode",
+                    "()I"
+                ));
+            } else {
+                functionSymbol = BytecodeToIR.symbol(new EntryPoint(
+                    target.executableOwner(),
+                    "equals",
+                    "(Ljava/lang/Object;)Z"
+                ));
+            }
+        } else {
+            if (hashCode) {
+                functionSymbol = "javan_record_reference_identity_hash_code";
+            } else {
+                functionSymbol = "javan_record_reference_identity_equals";
+            }
+        }
         final IrDispatchTarget added = new IrDispatchTarget(target.owner(), functionSymbol);
         int insertionIndex = 0;
         while (insertionIndex < targets.size()

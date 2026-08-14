@@ -237,8 +237,15 @@ public record RecordObjectMethodsCall(List<RecordObjectMethodsCall.Component> co
         if (receiver.isEnum()) {
             return Optional.of(new ReferenceTarget(receiver.name(), ""));
         }
-        final String methodName = hashCode ? "hashCode" : "equals";
-        final String descriptor = hashCode ? "()I" : "(Ljava/lang/Object;)Z";
+        final String methodName;
+        final String descriptor;
+        if (hashCode) {
+            methodName = "hashCode";
+            descriptor = "()I";
+        } else {
+            methodName = "equals";
+            descriptor = "(Ljava/lang/Object;)Z";
+        }
         String current = receiver.name();
         final Set<String> visited = new HashSet<>();
         while (visited.add(current)) {
@@ -251,9 +258,11 @@ public record RecordObjectMethodsCall(List<RecordObjectMethodsCall.Component> co
             }
             final Optional<MethodInfo> method = currentClass.method(methodName, descriptor);
             if (method.isPresent()) {
-                return !method.orElseThrow().isStatic() && method.orElseThrow().code().isPresent()
-                    ? Optional.of(new ReferenceTarget(receiver.name(), current))
-                    : Optional.empty();
+                final MethodInfo resolved = method.orElseThrow();
+                if (resolved.isStatic() || resolved.code().isEmpty()) {
+                    return Optional.empty();
+                }
+                return Optional.of(new ReferenceTarget(receiver.name(), current));
             }
             current = currentClass.superName();
         }

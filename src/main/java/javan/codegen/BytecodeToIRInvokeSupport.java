@@ -455,7 +455,7 @@ final class BytecodeToIRInvokeSupport {
         final Map<Integer, IrLocal> localDeclarations,
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final Map<String, IrDispatch> dispatches,
-        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final FunctionValueFlow.Result functionValueFlow,
         final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final SourceLineIndex sourceLines
@@ -2042,7 +2042,7 @@ final class BytecodeToIRInvokeSupport {
         final List<StackValue> stack,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
-        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final SourceLineIndex sourceLines
@@ -2227,7 +2227,7 @@ final class BytecodeToIRInvokeSupport {
         final List<StackValue> stack,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
-        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<String, MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final SourceLineIndex sourceLines
