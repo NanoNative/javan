@@ -1681,9 +1681,137 @@ final class CliCoreSemanticsIntegrationTest extends CliIntegrationSupport {
         final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
 
-        assertThat(run.exitCode()).isZero();
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/interface-float-double").toString())).stdout()).isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("1.25\n2.5\n");
+        assertThat(Files.readString(project.resolve(".javan/reports/reachability.txt")))
+            .contains("com/acme/FastMetric.ratio()F", "com/acme/FastMetric.total()D")
+            .doesNotContain("com/acme/SlowMetric.ratio()F", "com/acme/SlowMetric.total()D");
+        assertThat(Files.readString(project.resolve(".javan/reports/instantiated-types.json")))
+            .contains("\"strategy\": \"reachable-construction-fixpoint\"", "\"type\": \"com/acme/FastMetric\"", "\"allocation\"")
+            .doesNotContain("com/acme/SlowMetric");
+    }
+
+    @Test
+    void instantiatedSubclassDispatchesToInheritedInterfaceMethod() throws Exception {
+        final Path project = project("inherited-instantiated-dispatch");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Value value = new Child();
+                    System.out.println(value.value());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Value", """
+            package com.acme;
+
+            public interface Value {
+                int value();
+            }
+            """);
+        writeJava(project, "com.acme.Base", """
+            package com.acme;
+
+            public class Base implements Value {
+                public int value() {
+                    return 7;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Child", """
+            package com.acme;
+
+            public final class Child extends Base {
+            }
+            """);
+        writeJava(project, "com.acme.Dead", """
+            package com.acme;
+
+            public final class Dead implements Value {
+                public int value() {
+                    return 9;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/inherited-instantiated-dispatch").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("7\n");
+        assertThat(Files.readString(project.resolve(".javan/reports/reachability.txt")))
+            .contains("com/acme/Base.value()I")
+            .doesNotContain("com/acme/Dead.value()I");
+        assertThat(Files.readString(project.resolve(".javan/reports/instantiated-types.json")))
+            .contains("\"type\": \"com/acme/Child\"")
+            .doesNotContain("com/acme/Base", "com/acme/Dead");
+    }
+
+    @Test
+    void specializedCollectionCallbackUsesOnlyInstantiatedImplementations() throws Exception {
+        final Path project = project("instantiated-collection-callback");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> values = new ArrayList<>();
+                    values.add("first");
+                    values.add("second");
+                    values.iterator().forEachRemaining(new LiveConsumer());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.LiveConsumer", """
+            package com.acme;
+
+            import java.util.function.Consumer;
+
+            public final class LiveConsumer implements Consumer<String> {
+                public void accept(final String value) {
+                    System.out.println(value);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.DeadConsumer", """
+            package com.acme;
+
+            import java.util.function.Consumer;
+
+            public final class DeadConsumer implements Consumer<String> {
+                public void accept(final String value) {
+                    System.out.println("dead:" + value);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/instantiated-collection-callback").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("first\nsecond\n");
+        assertThat(Files.readString(project.resolve(".javan/reports/reachability.txt")))
+            .contains("com/acme/LiveConsumer.accept(Ljava/lang/Object;)V")
+            .doesNotContain("com/acme/DeadConsumer.accept(Ljava/lang/Object;)V");
+        assertThat(Files.readString(project.resolve(".javan/reports/instantiated-types.json")))
+            .contains("\"type\": \"com/acme/LiveConsumer\"")
+            .doesNotContain("com/acme/DeadConsumer");
     }
 
     @Test

@@ -58,7 +58,16 @@ final class BytecodeToIRDynamicSupport {
     private BytecodeToIRDynamicSupport() {
     }
 
+    static String resolvedDispatchSymbol(
+        final Map<String, ClassFile> classes,
+        final MethodRef methodRef,
+        final EntryPoint receiver
+    ) {
+        return symbol(resolvedVirtualTarget(classes, receiver.className(), methodRef).orElseThrow());
+    }
+
     static void lowerDispatchCall(
+        final Map<String, ClassFile> classes,
         final ClassFile classFile,
         final MethodInfo method,
         final Instruction instruction,
@@ -74,7 +83,7 @@ final class BytecodeToIRDynamicSupport {
         final IrExpression receiver = popObject(classFile, method, stack);
         arguments.addFirst(receiver);
         final String dispatchSymbol = dispatchSymbol(methodRef);
-        dispatches.putIfAbsent(dispatchSymbol, dispatch(dispatchSymbol, descriptor, targets));
+        dispatches.putIfAbsent(dispatchSymbol, virtualDispatch(classes, dispatchSymbol, descriptor, targets));
         appendCallResult(instructions, stack, localDeclarations, descriptor.returnType(), dispatchSymbol, arguments);
     }
 
@@ -142,6 +151,35 @@ final class BytecodeToIRDynamicSupport {
             dispatchTargets.add(new IrDispatchTarget(target.className(), symbol(target)));
         }
         return new IrDispatch(symbol, descriptor.returnType(), List.copyOf(parameters), dispatchTargets);
+    }
+
+    static IrDispatch dispatch(
+        final Map<String, ClassFile> classes,
+        final String symbol,
+        final MethodDescriptor descriptor,
+        final List<EntryPoint> receiverTargets
+    ) {
+        return virtualDispatch(classes, symbol, descriptor, receiverTargets);
+    }
+
+    private static IrDispatch virtualDispatch(
+        final Map<String, ClassFile> classes,
+        final String symbol,
+        final MethodDescriptor descriptor,
+        final List<EntryPoint> receiverTargets
+    ) {
+        final List<IrParameter> parameters = new ArrayList<>();
+        parameters.add(new IrParameter(IrType.OBJECT, "self"));
+        for (int index = 0; index < descriptor.parameterTypes().size(); index++) {
+            parameters.add(new IrParameter(descriptor.parameterTypes().get(index), "arg" + index));
+        }
+        final List<IrDispatchTarget> targets = new ArrayList<>();
+        for (final EntryPoint receiver : sortedEntryPointsByClassName(receiverTargets)) {
+            final MethodRef method = new MethodRef(receiver.className(), receiver.methodName(), receiver.descriptor());
+            final EntryPoint implementation = resolvedVirtualTarget(classes, receiver.className(), method).orElseThrow();
+            targets.add(new IrDispatchTarget(receiver.className(), symbol(implementation)));
+        }
+        return new IrDispatch(symbol, descriptor.returnType(), List.copyOf(parameters), List.copyOf(targets));
     }
 
     static List<EntryPoint> sortedEntryPointsByClassName(final List<EntryPoint> entries) {

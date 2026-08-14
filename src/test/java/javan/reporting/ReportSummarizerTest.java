@@ -114,6 +114,28 @@ final class ReportSummarizerTest {
     }
 
     @Test
+    void writeSummarizesInstantiatedTypeMetrics() throws Exception {
+        final Path reports = reportsDirectory();
+        Files.writeString(reports.resolve("instantiated-types.json"), """
+            {
+              "strategy": "reachable-construction-fixpoint",
+              "complete": true,
+              "types": 2
+            }
+            """);
+        Files.writeString(reports.resolve("instantiated-types.md"), "# Instantiated Types\n");
+
+        final ReportSummarizer.Summary summary = new ReportSummarizer().write(tempDir);
+
+        assertThat(summary.markdown()).contains(
+            "| `instantiated-types` | present |",
+            "strategy: `reachable-construction-fixpoint`",
+            "complete: `true`",
+            "types: `2`"
+        );
+    }
+
+    @Test
     void writeSummarizesProjectMetrics() throws Exception {
         final Path reports = reportsDirectory();
         Files.writeString(reports.resolve("project.json"), """

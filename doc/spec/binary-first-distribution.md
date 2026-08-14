@@ -111,6 +111,13 @@ default-interface ordering. Recursive initialization by the same thread observes
 default state; other threads wait for completion. The exact owners, dependencies, and active-use
 sites are written to `.javan/reports/class-initialization.json`, with a concise Markdown summary.
 
+Virtual and interface dispatch use a reachable-construction fixpoint. Concrete classes enter the
+receiver set through reachable `new` sites, enum bootstraps, native substitutions, or externally
+supplied entry receivers and parameters; materialized lambdas keep their existing exact target path.
+Unknown external receivers remain conservative. The resulting receiver types and their origins are written
+to `.javan/reports/instantiated-types.json` and `.javan/reports/instantiated-types.md`, and the C
+backend consumes the same facts as reachability.
+
 The IDE plugin should render reports. It must not infer native support from source code
 or JDK inventory by itself.
 

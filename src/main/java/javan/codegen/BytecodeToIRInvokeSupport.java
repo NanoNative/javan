@@ -3,6 +3,7 @@ package javan.codegen;
 import javan.analysis.ClassInitializationGraph;
 import javan.analysis.EntryPoint;
 import javan.analysis.FunctionValueFlow;
+import javan.analysis.InstantiatedTypeAnalysis;
 import javan.analysis.VirtualThreadInvokePatterns;
 import javan.classfile.ClassFile;
 import javan.classfile.FieldRef;
@@ -456,6 +457,7 @@ final class BytecodeToIRInvokeSupport {
         final Map<String, IrDispatch> dispatches,
         final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final FunctionValueFlow.Result functionValueFlow,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final SourceLineIndex sourceLines
     ) {
         final MethodRef rawMethodRef = instruction.methodRef().orElseThrow();
@@ -973,6 +975,7 @@ final class BytecodeToIRInvokeSupport {
             dispatches,
             materializedLambdaMethods,
             functionValueFlow,
+            instantiatedTypes,
             stack,
             localDeclarations,
             pendingExceptionHandlerStacks,
@@ -1042,6 +1045,7 @@ final class BytecodeToIRInvokeSupport {
             dispatches,
             materializedLambdaMethods,
             functionValueFlow,
+            instantiatedTypes,
             methodRef,
             instructions,
             stack,
@@ -1064,9 +1068,10 @@ final class BytecodeToIRInvokeSupport {
             lowerInstanceCall(classes, classFile, method, instruction, instructions, stack, localDeclarations);
             return;
         }
-        final List<EntryPoint> targets = virtualTargets(classes, methodRef);
+        final List<EntryPoint> targets = virtualTargets(classes, methodRef, instantiatedTypes);
         if (!targets.isEmpty()) {
             lowerDispatchCall(
+                classes,
                 classFile,
                 method,
                 instruction,
@@ -2038,6 +2043,7 @@ final class BytecodeToIRInvokeSupport {
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
         final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final SourceLineIndex sourceLines
     ) {
@@ -2056,6 +2062,7 @@ final class BytecodeToIRInvokeSupport {
             localDeclarations,
             dispatches,
             materializedLambdaMethods,
+            instantiatedTypes,
             pendingExceptionHandlerStacks,
             sourceLines
         )) {
@@ -2221,6 +2228,7 @@ final class BytecodeToIRInvokeSupport {
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
         final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final SourceLineIndex sourceLines
     ) {
@@ -2251,7 +2259,8 @@ final class BytecodeToIRInvokeSupport {
                 stack,
                 localDeclarations,
                 dispatches,
-                materializedLambdaMethods
+                materializedLambdaMethods,
+                instantiatedTypes
             );
         }
         if ("java/util/Arrays".equals(methodRef.owner())) {

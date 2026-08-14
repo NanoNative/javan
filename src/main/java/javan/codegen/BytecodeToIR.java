@@ -5,6 +5,7 @@ import javan.analysis.ClassInitializationGraph;
 import javan.analysis.CMethodSymbols;
 import javan.analysis.EntryPoint;
 import javan.analysis.FunctionValueFlow;
+import javan.analysis.InstantiatedTypeAnalysis;
 import javan.build.NativeInteropConfig;
 import javan.classfile.ClassFile;
 import javan.classfile.CodeAttribute;
@@ -175,6 +176,7 @@ public final class BytecodeToIR {
                 materializedLambdaMethods,
                 functionValueFlow,
                 transportedThrowableTypes,
+                callGraph.instantiatedTypes(),
                 classInitialization,
                 sourceLines
             ));
@@ -464,6 +466,7 @@ public final class BytecodeToIR {
         final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final FunctionValueFlow.Result functionValueFlow,
         final Map<String, List<String>> transportedThrowableTypes,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final ClassInitializationGraph.Result classInitialization,
         final SourceLineIndex sourceLines
     ) {
@@ -630,6 +633,7 @@ public final class BytecodeToIR {
                 functionOrNullTargetIds,
                 materializedLambdaMethods,
                 functionValueFlow,
+                instantiatedTypes,
                 classInitialization,
                 sourceLines,
                 lastMaterializingDuplicateOffset
@@ -1032,6 +1036,7 @@ public final class BytecodeToIR {
             functionOrNullTargetIds,
             materializedLambdaMethods,
             functionValueFlow,
+            InstantiatedTypeAnalysis.Result.unavailable(),
             ClassInitializationGraph.analyze(
                 classes,
                 List.of(new EntryPoint(classFile.name(), method.name(), method.descriptor()))
@@ -1058,6 +1063,7 @@ public final class BytecodeToIR {
         final Map<String, Integer> functionOrNullTargetIds,
         final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final FunctionValueFlow.Result functionValueFlow,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final ClassInitializationGraph.Result classInitialization,
         final SourceLineIndex sourceLines,
         final int lastMaterializingDuplicateOffset
@@ -1518,6 +1524,7 @@ public final class BytecodeToIR {
                     dispatches,
                     materializedLambdaMethods,
                     functionValueFlow,
+                    instantiatedTypes,
                     sourceLines
                 );
                 break;
@@ -1547,6 +1554,7 @@ public final class BytecodeToIR {
                     localDeclarations,
                     dispatches,
                     materializedLambdaMethods,
+                    instantiatedTypes,
                     pendingExceptionHandlerStacks,
                     sourceLines
                 );
@@ -1562,7 +1570,8 @@ public final class BytecodeToIR {
                     localDeclarations,
                     dispatches,
                     materializedLambdaMethods,
-                    functionValueFlow
+                    functionValueFlow,
+                    instantiatedTypes
                 );
                 break;
             case 186:
@@ -3592,11 +3601,20 @@ public final class BytecodeToIR {
     }
 
     static List<EntryPoint> interfaceTargets(final Map<String, ClassFile> classes, final MethodRef methodRef) {
+        return interfaceTargets(classes, methodRef, InstantiatedTypeAnalysis.Result.unavailable());
+    }
+
+    static List<EntryPoint> interfaceTargets(
+        final Map<String, ClassFile> classes,
+        final MethodRef methodRef,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes
+    ) {
         final List<EntryPoint> result = new ArrayList<>();
         for (final ClassFile candidate : classes.values()) {
             if (!candidate.isInterface()
-                && candidate.interfaces().contains(methodRef.owner())
-                && candidate.method(methodRef.name(), methodRef.descriptor()).isPresent()) {
+                && (!instantiatedTypes.complete() || instantiatedTypes.contains(candidate.name()))
+                && isAssignableTo(classes, candidate.name(), methodRef.owner())
+                && resolvedVirtualTarget(classes, candidate.name(), methodRef).isPresent()) {
                 result.add(new EntryPoint(candidate.name(), methodRef.name(), methodRef.descriptor()));
             }
         }
@@ -3604,12 +3622,26 @@ public final class BytecodeToIR {
     }
 
     static List<EntryPoint> virtualTargets(final Map<String, ClassFile> classes, final MethodRef methodRef) {
+        return virtualTargets(classes, methodRef, InstantiatedTypeAnalysis.Result.unavailable());
+    }
+
+    static List<EntryPoint> virtualTargets(
+        final Map<String, ClassFile> classes,
+        final MethodRef methodRef,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes
+    ) {
         final List<EntryPoint> result = new ArrayList<>();
         for (final ClassFile candidate : classes.values()) {
-            if (!candidate.isInterface() && isSubtypeOf(classes, candidate.name(), methodRef.owner())) {
+            if (!candidate.isInterface()
+                && (!instantiatedTypes.complete() || instantiatedTypes.contains(candidate.name()))
+                && isSubtypeOf(classes, candidate.name(), methodRef.owner())) {
                 final Optional<EntryPoint> resolved = lowerableResolvedVirtualTarget(classes, candidate.name(), methodRef);
                 if (resolved.isPresent()) {
-                    final EntryPoint entryPoint = resolved.orElseThrow();
+                    final EntryPoint entryPoint = new EntryPoint(
+                        candidate.name(),
+                        methodRef.name(),
+                        methodRef.descriptor()
+                    );
                     if (!result.contains(entryPoint)) {
                         result.add(entryPoint);
                     }

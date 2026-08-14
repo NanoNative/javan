@@ -2,6 +2,7 @@ package javan.codegen;
 
 import javan.analysis.EntryPoint;
 import javan.analysis.FunctionValueFlow;
+import javan.analysis.InstantiatedTypeAnalysis;
 import javan.analysis.VirtualThreadInvokePatterns;
 import javan.classfile.ClassFile;
 import javan.classfile.FieldRef;
@@ -680,6 +681,26 @@ final class BytecodeToIRThreadSupport {
         return Optional.of(new EntryPoint(methodRef.owner(), methodRef.name(), methodRef.descriptor()));
     }
 
+    static Optional<EntryPoint> defaultInterfaceTarget(
+        final Map<String, ClassFile> classes,
+        final MethodRef methodRef,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes
+    ) {
+        if (instantiatedTypes.complete()) {
+            boolean receiverAvailable = false;
+            for (final InstantiatedTypeAnalysis.Fact fact : instantiatedTypes.facts()) {
+                if (isAssignableTo(classes, fact.type(), methodRef.owner())) {
+                    receiverAvailable = true;
+                    break;
+                }
+            }
+            if (!receiverAvailable) {
+                return Optional.empty();
+            }
+        }
+        return defaultInterfaceTarget(classes, methodRef);
+    }
+
     static List<EntryPoint> allRunnableThreadTargets(final Map<String, ClassFile> classes) {
         final List<EntryPoint> result = new ArrayList<>();
         for (final ClassFile candidate : classes.values()) {
@@ -1337,7 +1358,8 @@ final class BytecodeToIRThreadSupport {
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
         final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
-        final FunctionValueFlow.Result functionValueFlow
+        final FunctionValueFlow.Result functionValueFlow,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes
     ) {
         final MethodRef methodRef = instruction.methodRef().orElseThrow();
         if (lowerVirtualThreadObservationInterfaceCall(classFile, method, instruction, methodRef, instructions, stack, localDeclarations)) {
@@ -1369,6 +1391,7 @@ final class BytecodeToIRThreadSupport {
             dispatches,
             materializedLambdaMethods,
             functionValueFlow,
+            instantiatedTypes,
             methodRef,
             instructions,
             stack,
@@ -1410,6 +1433,7 @@ final class BytecodeToIRThreadSupport {
                 instructions,
                 dispatches,
                 materializedLambdaMethods,
+                instantiatedTypes,
                 supplier,
                 resultLocal
             );
@@ -1427,11 +1451,11 @@ final class BytecodeToIRThreadSupport {
             );
             return;
         }
-        final List<EntryPoint> targets = interfaceTargets(classes, methodRef);
+        final List<EntryPoint> targets = interfaceTargets(classes, methodRef, instantiatedTypes);
         final MethodDescriptor descriptor = MethodDescriptor.parse(methodRef.descriptor());
         final List<IrExpression> arguments = new ArrayList<>(popArguments(classFile, method, stack, descriptor));
         final IrExpression receiver = popObject(classFile, method, stack);
-        final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, methodRef);
+        final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, methodRef, instantiatedTypes);
         final boolean materializedFunctionReceiver = isFunctionApply(methodRef)
             && functionValueFlow.isMaterializedFunction(
                 classFile.name(),
@@ -1465,6 +1489,7 @@ final class BytecodeToIRThreadSupport {
             && dispatchKind != MaterializedLambdaDispatchKind.SUPPLIER
             && (!targets.isEmpty() || defaultTarget.isPresent())) {
             lowerMixedMaterializedInterfaceCall(
+                classes,
                 classFile,
                 method,
                 instruction,
@@ -1485,14 +1510,19 @@ final class BytecodeToIRThreadSupport {
         if (targets.size() > 1) {
             arguments.addFirst(receiver);
             final String dispatchSymbol = dispatchSymbol(methodRef);
-            dispatches.putIfAbsent(dispatchSymbol, dispatch(dispatchSymbol, descriptor, targets));
+            dispatches.putIfAbsent(dispatchSymbol, dispatch(classes, dispatchSymbol, descriptor, targets));
             appendCallResult(instructions, stack, localDeclarations, descriptor.returnType(), dispatchSymbol, arguments);
             return;
         }
         if (!targets.isEmpty()) {
             final EntryPoint target = targets.getFirst();
+            final EntryPoint implementation = resolvedVirtualTarget(
+                classes,
+                target.className(),
+                methodRef
+            ).orElseThrow();
             arguments.addFirst(receiver);
-            final String symbol = symbol(target);
+            final String symbol = symbol(implementation);
             appendCallResult(instructions, stack, localDeclarations, descriptor.returnType(), symbol, arguments);
             return;
         }
@@ -1566,6 +1596,7 @@ final class BytecodeToIRThreadSupport {
     }
 
     private static void lowerMixedMaterializedInterfaceCall(
+        final Map<String, ClassFile> classes,
         final ClassFile classFile,
         final MethodInfo method,
         final Instruction instruction,
@@ -1606,10 +1637,15 @@ final class BytecodeToIRThreadSupport {
             concreteSymbol = dispatchSymbol(methodRef);
             dispatches.putIfAbsent(
                 concreteSymbol,
-                dispatch(concreteSymbol, descriptor, targets)
+                dispatch(classes, concreteSymbol, descriptor, targets)
             );
         } else if (!targets.isEmpty()) {
-            concreteSymbol = symbol(targets.getFirst());
+            final EntryPoint receiverTarget = targets.getFirst();
+            concreteSymbol = symbol(resolvedVirtualTarget(
+                classes,
+                receiverTarget.className(),
+                methodRef
+            ).orElseThrow());
         } else {
             concreteSymbol = symbol(defaultTarget.orElseThrow());
         }
