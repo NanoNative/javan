@@ -1,6 +1,7 @@
 package javan.verify;
 
 import javan.analysis.CaughtThrowableRethrowAnalysis;
+import javan.analysis.ClassInitializationOrder;
 import javan.analysis.EntryPoint;
 import javan.analysis.GeneratedObjectCloneSupport;
 import javan.analysis.VirtualThreadInvokePatterns;
@@ -1841,9 +1842,18 @@ public final class StaticVerifier {
             if (supportedTransportedJdkThrowableCall(instruction, catchType)) {
                 hasThrowableTransport = 1;
             }
+            final boolean classInitializationTransport = classInitializationTransportsTo(
+                classes,
+                instruction,
+                catchType
+            );
+            if (classInitializationTransport) {
+                hasThrowableTransport = 1;
+            }
             if (!supportedInterruptedWaitProtectedInstruction(instruction)
                 && !supportedGeneratedThrowableCall(classes, instruction)
                 && !supportedTransportedJdkThrowableCall(instruction, catchType)
+                && !classInitializationTransport
                 && !supportedThrowableWrapRangeInstruction(instruction)
                 && !supportedCaughtThrowableCauseConstructor(code, instructions, instructionIndex, instruction)
                 && !supportedProtectedFinallyRethrowInstruction(classes, code, instruction)) {
@@ -1854,6 +1864,40 @@ public final class StaticVerifier {
             return true;
         }
         return false;
+    }
+
+    private static boolean classInitializationTransportsTo(
+        final Map<String, ClassFile> classes,
+        final Instruction instruction,
+        final String catchType
+    ) {
+        final Optional<String> owner = switch (instruction.opcode()) {
+            case 178, 179 -> instruction.fieldRef().map(FieldRef::owner);
+            case 184 -> instruction.methodRef().map(MethodRef::owner);
+            case 187 -> instruction.className();
+            default -> Optional.empty();
+        };
+        if (owner.isEmpty() || !classes.containsKey(owner.orElseThrow())) {
+            return false;
+        }
+        boolean initializerCanFail = false;
+        for (final String className : ClassInitializationOrder.order(classes, owner.orElseThrow())) {
+            final MethodRef initializer = new MethodRef(className, "<clinit>", "()V");
+            for (final String throwableType : escapingPlatformExceptionTypes(classes, initializer, new HashSet<>())) {
+                initializerCanFail = true;
+                final String escapedType = JdkCallSupport.isPlatformThrowableAssignable(
+                    throwableType,
+                    "java/lang/Error"
+                ) ? throwableType : "java/lang/ExceptionInInitializerError";
+                if (JdkCallSupport.isPlatformThrowableAssignable(escapedType, catchType)) {
+                    return true;
+                }
+            }
+        }
+        return initializerCanFail && JdkCallSupport.isPlatformThrowableAssignable(
+            "java/lang/NoClassDefFoundError",
+            catchType
+        );
     }
 
     private static boolean supportsEntryAnchoredStraightLineTypedHandler(

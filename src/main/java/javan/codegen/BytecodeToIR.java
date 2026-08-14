@@ -1,6 +1,7 @@
 package javan.codegen;
 
 import javan.analysis.CallGraph;
+import javan.analysis.ClassInitializationOrder;
 import javan.analysis.CMethodSymbols;
 import javan.analysis.EntryPoint;
 import javan.analysis.FunctionValueFlow;
@@ -537,6 +538,7 @@ public final class BytecodeToIR {
                 replacementLabelOffsets
             )) {
                 appendPendingExceptionTransport(
+                    classes,
                     method,
                     instruction,
                     instructions,
@@ -571,6 +573,7 @@ public final class BytecodeToIR {
                 replacementLabelOffsets
             )) {
                 appendPendingExceptionTransport(
+                    classes,
                     method,
                     instruction,
                     instructions,
@@ -582,6 +585,21 @@ public final class BytecodeToIR {
                 BytecodeToIRControlFlowSupport.annotateNewInstructions(instructions, instructionStart, sourceLocation);
                 continue;
             }
+            final int classInitializationStart = instructions.size();
+            if (appendClassInitialization(classes, instruction, instructions)) {
+                appendPendingExceptionTransport(
+                    classes,
+                    method,
+                    instruction,
+                    instructions,
+                    classInitializationStart,
+                    dispatches,
+                    transportedThrowableTypes,
+                    pendingExceptionHandlerStacks,
+                    "_class_init"
+                );
+            }
+            final int loweringStart = instructions.size();
             lowerInstruction(
                 classes,
                 classFile,
@@ -603,10 +621,11 @@ public final class BytecodeToIR {
                 lastMaterializingDuplicateOffset
             );
             appendPendingExceptionTransport(
+                classes,
                 method,
                 instruction,
                 instructions,
-                instructionStart,
+                loweringStart,
                 dispatches,
                 transportedThrowableTypes,
                 pendingExceptionHandlerStacks
@@ -646,6 +665,7 @@ public final class BytecodeToIR {
     }
 
     private static void appendPendingExceptionTransport(
+        final Map<String, ClassFile> classes,
         final MethodInfo method,
         final Instruction bytecodeInstruction,
         final List<IrInstruction> instructions,
@@ -654,9 +674,34 @@ public final class BytecodeToIR {
         final Map<String, List<String>> transportedThrowableTypes,
         final Map<Integer, StackValue> pendingExceptionHandlerStacks
     ) {
+        appendPendingExceptionTransport(
+            classes,
+            method,
+            bytecodeInstruction,
+            instructions,
+            instructionStart,
+            dispatches,
+            transportedThrowableTypes,
+            pendingExceptionHandlerStacks,
+            ""
+        );
+    }
+
+    private static void appendPendingExceptionTransport(
+        final Map<String, ClassFile> classes,
+        final MethodInfo method,
+        final Instruction bytecodeInstruction,
+        final List<IrInstruction> instructions,
+        final int instructionStart,
+        final Map<String, IrDispatch> dispatches,
+        final Map<String, List<String>> transportedThrowableTypes,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final String labelSuffix
+    ) {
         final Set<String> possibleTypes = new LinkedHashSet<>();
         for (int index = instructionStart; index < instructions.size(); index++) {
             collectTransportedThrowableTypes(
+                classes,
                 instructions.get(index),
                 dispatches,
                 transportedThrowableTypes,
@@ -671,11 +716,13 @@ public final class BytecodeToIR {
             bytecodeInstruction,
             instructions,
             List.copyOf(possibleTypes),
-            pendingExceptionHandlerStacks
+            pendingExceptionHandlerStacks,
+            labelSuffix
         );
     }
 
     private static void collectTransportedThrowableTypes(
+        final Map<String, ClassFile> classes,
         final IrInstruction instruction,
         final Map<String, IrDispatch> dispatches,
         final Map<String, List<String>> transportedThrowableTypes,
@@ -683,6 +730,27 @@ public final class BytecodeToIR {
     ) {
         if (instruction.op() == IrInstruction.Op.CALL_STATIC_VOID && instruction.expression().isEmpty()) {
             addTransportedThrowableTypes(instruction.value().orElseThrow(), dispatches, transportedThrowableTypes, result);
+        }
+        if (instruction.op() == IrInstruction.Op.INITIALIZE_CLASS) {
+            final Set<String> initializerTypes = new LinkedHashSet<>();
+            for (final String className : ClassInitializationOrder.order(classes, instruction.value().orElseThrow())) {
+                addTransportedThrowableTypes(
+                    symbol(new EntryPoint(className, "<clinit>", "()V")),
+                    dispatches,
+                    transportedThrowableTypes,
+                    initializerTypes
+                );
+            }
+            for (final String throwableType : initializerTypes) {
+                if (JdkCallSupport.isPlatformThrowableAssignable(throwableType, "java/lang/Error")) {
+                    result.add(throwableType);
+                } else {
+                    result.add("java/lang/ExceptionInInitializerError");
+                }
+            }
+            if (!initializerTypes.isEmpty()) {
+                result.add("java/lang/NoClassDefFoundError");
+            }
         }
         if (instruction.expression().isPresent()) {
             collectTransportedThrowableTypes(
@@ -692,6 +760,24 @@ public final class BytecodeToIR {
                 result
             );
         }
+    }
+
+    private static boolean appendClassInitialization(
+        final Map<String, ClassFile> classes,
+        final Instruction instruction,
+        final List<IrInstruction> instructions
+    ) {
+        final Optional<String> target = switch (instruction.opcode()) {
+            case 178, 179 -> instruction.fieldRef().map(FieldRef::owner);
+            case 184 -> instruction.methodRef().map(MethodRef::owner);
+            case 187 -> instruction.className();
+            default -> Optional.empty();
+        };
+        if (target.isEmpty() || !classes.containsKey(target.orElseThrow())) {
+            return false;
+        }
+        instructions.add(IrInstruction.initializeClass(target.orElseThrow()));
+        return true;
     }
 
     private static void collectTransportedThrowableTypes(

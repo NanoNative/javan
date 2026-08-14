@@ -117,6 +117,7 @@ public final class CCodegen {
                 c.append(";").append(System.lineSeparator());
             }
         }
+        emitClassInitializationPrototypes(program, c);
         emitImportedNativeSignatures(nativeInterop, nativeWrapperSymbols, c);
         for (final IrDispatch dispatch : program.dispatches()) {
             emitDispatchSignature(dispatch, c);
@@ -150,6 +151,7 @@ public final class CCodegen {
         for (final IrFunction function : program.functions()) {
             emitFunction(program, function, objectResultSymbols, nativeWrapperSymbols, c, true);
         }
+        emitClassInitializationGuards(program, nativeWrapperSymbols, c);
         return Files2.writeString(generatedDirectory.resolve("main.c"), c.toString());
     }
 
@@ -224,6 +226,7 @@ public final class CCodegen {
             emitSignature(function, c, true);
             c.append(";").append(System.lineSeparator());
         }
+        emitClassInitializationPrototypes(program, c);
         emitImportedNativeSignatures(nativeInterop, nativeWrapperSymbols, c);
         for (final IrDispatch dispatch : program.dispatches()) {
             emitDispatchSignature(dispatch, c);
@@ -256,9 +259,10 @@ public final class CCodegen {
         for (final IrFunction function : program.functions()) {
             emitFunction(program, function, objectResultSymbols, nativeWrapperSymbols, c, false);
         }
-        emitLibraryInitializer(program, nativeWrapperSymbols, c);
+        emitClassInitializationGuards(program, nativeWrapperSymbols, c);
+        emitLibraryInitializer(program, c);
         for (final ExportedMethod export : exports) {
-            emitExportWrapper(export, nativeWrapperSymbols, c);
+            emitExportWrapper(program, export, nativeWrapperSymbols, c);
             emitResultWrapper(export, c);
         }
         return Files2.writeString(generatedDirectory.resolve("library.c"), c.toString());
@@ -713,10 +717,10 @@ public final class CCodegen {
         if (!hasUnaryReferenceObjectShape(function)) {
             return false;
         }
-        if (function.instructions().size() != 1) {
+        if (function.emissionInstructions().size() != 1) {
             return false;
         }
-        final IrInstruction instruction = function.instructions().getFirst();
+        final IrInstruction instruction = function.emissionInstructions().getFirst();
         if (instruction.op() != IrInstruction.Op.RETURN_OBJECT || instruction.expression().isEmpty()) {
             return false;
         }
@@ -1183,7 +1187,8 @@ public final class CCodegen {
         }
         final List<String> rootNames = objectRootNames(function);
         final String rootFrameSymbol = rootFrameSymbol(function);
-        final RootLivenessPlan rootLiveness = RootLivenessPlan.forFunction(function);
+        final List<IrInstruction> instructions = function.emissionInstructions();
+        final RootLivenessPlan rootLiveness = RootLivenessPlan.forFunction(function, instructions, rootNames);
         emitRootFramePush(rootFrameSymbol, rootNames, c);
         if (entry) {
             c.append("    javan_register_generated_type_descriptors();").append(System.lineSeparator());
@@ -1191,13 +1196,19 @@ public final class CCodegen {
             c.append("    javan_register_enum_ordinal_resolver(javan_generated_enum_ordinal);")
                 .append(System.lineSeparator());
             emitRecordReferenceObjectMethodResolverRegistration(program, c);
-            emitClassInitializers(program, nativeWrapperSymbols, c);
+            if (hasGeneratedClass(program, function.owner())) {
+                c.append("    ").append(classInitializationSymbol(function.owner())).append("();")
+                    .append(System.lineSeparator());
+                c.append("    if (javan_pending_has() != 0) {").append(System.lineSeparator());
+                c.append("        javan_pending_panic();").append(System.lineSeparator());
+                c.append("    }").append(System.lineSeparator());
+            }
             c.append("    javan_gc_safe_point();").append(System.lineSeparator());
         } else {
             c.append("    javan_gc_safe_point();").append(System.lineSeparator());
         }
-        for (int index = 0; index < function.instructions().size(); index++) {
-            final IrInstruction instruction = function.instructions().get(index);
+        for (int index = 0; index < instructions.size(); index++) {
+            final IrInstruction instruction = instructions.get(index);
             emitInstruction(
                 index,
                 instruction,
@@ -1226,6 +1237,15 @@ public final class CCodegen {
     private static boolean hasDispatch(final IrProgram program, final String symbol) {
         for (final IrDispatch dispatch : program.dispatches()) {
             if (dispatch.symbol().equals(symbol)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasGeneratedClass(final IrProgram program, final String className) {
+        for (final IrClass classInfo : program.classes()) {
+            if (className.equals(classInfo.jvmName())) {
                 return true;
             }
         }
@@ -1268,7 +1288,6 @@ public final class CCodegen {
 
     private static void emitLibraryInitializer(
         final IrProgram program,
-        final NativeWrapperSymbols nativeWrapperSymbols,
         final StringBuilder c
     ) {
         c.append("static int javan_library_initialized = 0;").append(System.lineSeparator());
@@ -1282,13 +1301,13 @@ public final class CCodegen {
         c.append("    javan_register_enum_ordinal_resolver(javan_generated_enum_ordinal);")
             .append(System.lineSeparator());
         emitRecordReferenceObjectMethodResolverRegistration(program, c);
-        emitClassInitializers(program, nativeWrapperSymbols, c);
         c.append("    javan_gc_safe_point();").append(System.lineSeparator());
         c.append("    javan_library_initialized = 1;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
     }
 
     private static void emitExportWrapper(
+        final IrProgram program,
         final ExportedMethod export,
         final NativeWrapperSymbols nativeWrapperSymbols,
         final StringBuilder c
@@ -1302,6 +1321,13 @@ public final class CCodegen {
         emitExportWrapperDefaultReturn(export.returnType(), c);
         c.append("    }").append(System.lineSeparator());
         c.append("    javan_library_init();").append(System.lineSeparator());
+        if (hasGeneratedClass(program, export.entryPoint().className())) {
+            c.append("    ").append(classInitializationSymbol(export.entryPoint().className())).append("();")
+                .append(System.lineSeparator());
+            c.append("    if (javan_pending_has() != 0) {").append(System.lineSeparator());
+            c.append("        javan_pending_panic();").append(System.lineSeparator());
+            c.append("    }").append(System.lineSeparator());
+        }
         final List<Integer> objectArguments = objectExportArgumentIndexes(export);
         final AbiType returnType = export.returnType();
         final boolean objectReturn = returnType == AbiType.STRING
@@ -1608,10 +1634,12 @@ public final class CCodegen {
             this.clearsAfter = clearsAfter;
         }
 
-        static RootLivenessPlan forFunction(final IrFunction function) {
+        static RootLivenessPlan forFunction(
+            final IrFunction function,
+            final List<IrInstruction> instructions,
+            final List<String> roots
+        ) {
             final java.util.Map<Integer, List<String>> clears = new java.util.LinkedHashMap<>();
-            final List<IrInstruction> instructions = function.instructions();
-            final List<String> roots = objectRootNames(function);
             if (roots.isEmpty()) {
                 return new RootLivenessPlan(clears);
             }
@@ -2700,6 +2728,12 @@ public final class CCodegen {
                     c.append("    ").append(nativeWrapperSymbols.resolve(instruction.value().orElseThrow())).append("();").append(System.lineSeparator());
                 }
                 break;
+            case INITIALIZE_CLASS:
+                c.append("    ")
+                    .append(classInitializationSymbol(instruction.value().orElseThrow()))
+                    .append("();")
+                    .append(System.lineSeparator());
+                break;
             case ASSIGN_INT:
             case ASSIGN_LONG:
             case ASSIGN_FLOAT:
@@ -3541,48 +3575,91 @@ public final class CCodegen {
         }
     }
 
-    private static void emitClassInitializers(
-        final IrProgram program,
-        final NativeWrapperSymbols nativeWrapperSymbols,
-        final StringBuilder c
-    ) {
-        emitEnumConstantInitializers(program, c);
-        final List<IrFunction> initializers = new java.util.ArrayList<>();
-        for (final IrFunction function : program.functions()) {
-            if ("<clinit>".equals(function.name())) {
-                insertInitializer(initializers, function);
-            }
-        }
-        for (final IrFunction function : initializers) {
-            c.append("    ")
-                .append(nativeWrapperSymbols.resolve(function.symbol()))
-                .append("();")
+    private static void emitClassInitializationPrototypes(final IrProgram program, final StringBuilder c) {
+        for (final IrClass classInfo : program.classes()) {
+            c.append("static void ")
+                .append(classInitializationSymbol(classInfo.jvmName()))
+                .append("(void);")
                 .append(System.lineSeparator());
         }
     }
 
-    private static void emitEnumConstantInitializers(final IrProgram program, final StringBuilder c) {
+    private static void emitClassInitializationGuards(
+        final IrProgram program,
+        final NativeWrapperSymbols nativeWrapperSymbols,
+        final StringBuilder c
+    ) {
         for (final IrClass classInfo : program.classes()) {
-            if (classInfo.enumConstants().isEmpty()) {
-                continue;
+            final String initializationSymbol = classInitializationSymbol(classInfo.jvmName());
+            final String stateSymbol = initializationSymbol + "_state";
+            c.append("static int ").append(stateSymbol).append(" = 0;").append(System.lineSeparator());
+            c.append("static void ").append(initializationSymbol).append("(void) {").append(System.lineSeparator());
+            c.append("    javan_runtime_lock_enter();").append(System.lineSeparator());
+            c.append("    if (").append(stateSymbol).append(" == 2 || ").append(stateSymbol).append(" == 1) {")
+                .append(System.lineSeparator());
+            c.append("        javan_runtime_lock_leave();").append(System.lineSeparator());
+            c.append("        return;").append(System.lineSeparator());
+            c.append("    }").append(System.lineSeparator());
+            c.append("    if (").append(stateSymbol).append(" == 3) {").append(System.lineSeparator());
+            c.append("        javan_pending_throw(\"java/lang/NoClassDefFoundError\", (void*) javan_string_from(")
+                .append(emitCStringLiteral("Could not initialize class " + displayClassName(classInfo.jvmName())))
+                .append("), ")
+                .append(emitCStringLiteral(displayClassName(classInfo.jvmName())))
+                .append(", \"<clinit>\", \"\", -1, -1, \"\");")
+                .append(System.lineSeparator());
+            c.append("        javan_runtime_lock_leave();").append(System.lineSeparator());
+            c.append("        return;").append(System.lineSeparator());
+            c.append("    }").append(System.lineSeparator());
+            c.append("    ").append(stateSymbol).append(" = 1;").append(System.lineSeparator());
+            for (final String dependency : classInfo.initializationDependencies()) {
+                c.append("    ").append(classInitializationSymbol(dependency)).append("();").append(System.lineSeparator());
+                emitClassInitializationFailureCheck(stateSymbol, c);
             }
-            for (final String constant : classInfo.enumConstants()) {
+            emitEnumConstantInitializers(classInfo, c);
+            final IrFunction initializer = classInitializer(program, classInfo.jvmName());
+            if (initializer != null) {
                 c.append("    ")
-                    .append(staticFieldSymbol(classInfo.jvmName(), constant))
-                    .append(" = javan_string_from(\"")
-                    .append(escapeCString(constant))
-                    .append("\");")
+                    .append(nativeWrapperSymbols.resolve(initializer.symbol()))
+                    .append("();")
                     .append(System.lineSeparator());
             }
+            c.append("    if (javan_pending_has() != 0) {").append(System.lineSeparator());
+            c.append("        javan_pending_wrap_initializer_error();").append(System.lineSeparator());
+            c.append("        ").append(stateSymbol).append(" = 3;").append(System.lineSeparator());
+            c.append("    } else {").append(System.lineSeparator());
+            c.append("        ").append(stateSymbol).append(" = 2;").append(System.lineSeparator());
+            c.append("    }").append(System.lineSeparator());
+            c.append("    javan_runtime_lock_leave();").append(System.lineSeparator());
+            c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
         }
     }
 
-    private static void insertInitializer(final List<IrFunction> initializers, final IrFunction function) {
-        int index = initializers.size();
-        while (index > 0 && Strings2.compareAscii(initializers.get(index - 1).owner(), function.owner()) > 0) {
-            index--;
+    private static void emitClassInitializationFailureCheck(final String stateSymbol, final StringBuilder c) {
+        c.append("    if (javan_pending_has() != 0) {").append(System.lineSeparator());
+        c.append("        ").append(stateSymbol).append(" = 3;").append(System.lineSeparator());
+        c.append("        javan_runtime_lock_leave();").append(System.lineSeparator());
+        c.append("        return;").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+    }
+
+    private static void emitEnumConstantInitializers(final IrClass classInfo, final StringBuilder c) {
+        for (final String constant : classInfo.enumConstants()) {
+            c.append("    ")
+                .append(staticFieldSymbol(classInfo.jvmName(), constant))
+                .append(" = javan_string_from(\"")
+                .append(escapeCString(constant))
+                .append("\");")
+                .append(System.lineSeparator());
         }
-        initializers.add(index, function);
+    }
+
+    private static IrFunction classInitializer(final IrProgram program, final String owner) {
+        for (final IrFunction function : program.functions()) {
+            if (owner.equals(function.owner()) && "<clinit>".equals(function.name())) {
+                return function;
+            }
+        }
+        return null;
     }
 
     private static String[] ownerField(final String value) {
@@ -3595,6 +3672,10 @@ public final class CCodegen {
 
     private static String classSymbol(final String className) {
         return "javan_class_" + sanitize(className);
+    }
+
+    private static String classInitializationSymbol(final String className) {
+        return "javan_class_initialize_" + sanitize(className);
     }
 
     private static String fieldSymbol(final String fieldName) {
@@ -3803,7 +3884,7 @@ public final class CCodegen {
 
     private static boolean usesGeneratedObjectClone(final IrProgram program) {
         for (final IrFunction function : program.functions()) {
-            for (final IrInstruction instruction : function.instructions()) {
+            for (final IrInstruction instruction : function.emissionInstructions()) {
                 if (instruction.expression().isPresent()
                     && usesGeneratedObjectClone(instruction.expression().orElseThrow())) {
                     return true;
@@ -4008,7 +4089,7 @@ public final class CCodegen {
 
     private static boolean usesNonFiniteFloatingLiteral(final IrProgram program) {
         for (final IrFunction function : program.functions()) {
-            for (final IrInstruction instruction : function.instructions()) {
+            for (final IrInstruction instruction : function.emissionInstructions()) {
                 final java.util.Optional<IrExpression> expression = instruction.expression();
                 if (expression.isPresent() && usesNonFiniteFloatingLiteral(expression.get())) {
                     return true;

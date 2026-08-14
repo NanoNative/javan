@@ -118,10 +118,28 @@ final class BytecodeToIRControlFlowSupport {
         final List<String> possibleThrowableTypes,
         final Map<Integer, StackValue> pendingExceptionHandlerStacks
     ) {
+        appendPendingExceptionDispatch(
+            method,
+            instruction,
+            instructions,
+            possibleThrowableTypes,
+            pendingExceptionHandlerStacks,
+            ""
+        );
+    }
+
+    static void appendPendingExceptionDispatch(
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<String> possibleThrowableTypes,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final String labelSuffix
+    ) {
         if (possibleThrowableTypes.isEmpty()) {
             return;
         }
-        final String continueLabel = "label_pending_continue_" + instruction.offset();
+        final String continueLabel = "label_pending_continue_" + instruction.offset() + labelSuffix;
         instructions.add(IrInstruction.branchIf(
             continueLabel,
             IrExpression.intComparison(

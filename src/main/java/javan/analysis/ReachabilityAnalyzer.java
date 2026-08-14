@@ -102,6 +102,9 @@ public final class ReachabilityAnalyzer {
             workSet.add(root);
         }
         final List<MethodRef> materializedLambdaMethods = new ArrayList<>();
+        for (final EntryPoint root : roots) {
+            enqueueClassInitializer(classes, root.className(), work, workSet, root, callEdges, entryPoints);
+        }
         int workIndex = 0;
 
         while (true) {
@@ -1544,6 +1547,20 @@ public final class ReachabilityAnalyzer {
     }
 
     private static void enqueueClassInitializer(
+        final Map<String, ClassFile> classes,
+        final String owner,
+        final List<EntryPoint> work,
+        final EntryPointMembership workSet,
+        final EntryPoint current,
+        final CallEdgeTracker callEdges,
+        final EntryPointPool entryPoints
+    ) {
+        for (final String className : ClassInitializationOrder.order(classes, owner)) {
+            enqueueDirectClassInitializer(classes, className, work, workSet, current, callEdges, entryPoints);
+        }
+    }
+
+    private static void enqueueDirectClassInitializer(
         final Map<String, ClassFile> classes,
         final String owner,
         final List<EntryPoint> work,

@@ -15468,12 +15468,23 @@ final class CoreBehaviorTest {
             "javan_dispatch_com_acme_Api_answer__Lcom_acme_Api__I(void* self) {",
             "void javan_export_com_acme_Api_touch_void(void) {",
             "javan_library_init();",
+            "javan_class_initialize_com_acme_Api();",
             "javan_register_generated_type_descriptors();",
             "javan_register_generated_roots();",
             "javan_gc_safe_point();",
             "javan_com_acme_Api__clinit___V();",
             "javan_com_acme_Api_touch___V();"
         );
+        final int libraryInitializer = generated.indexOf("static void javan_library_init(void) {");
+        final int libraryInitializerEnd = generated.indexOf("}\n\n", libraryInitializer);
+        final int exportWrapper = generated.indexOf("void javan_export_com_acme_Api_touch_void(void) {");
+        final int classInitializer = generated.indexOf("static void javan_class_initialize_com_acme_Api(void) {");
+        assertThat(generated.substring(libraryInitializer, libraryInitializerEnd))
+            .doesNotContain("javan_com_acme_Api__clinit___V();");
+        assertThat(generated.indexOf("javan_library_init();", exportWrapper))
+            .isLessThan(generated.indexOf("javan_class_initialize_com_acme_Api();", exportWrapper));
+        assertThat(generated.indexOf("javan_runtime_lock_enter();", classInitializer))
+            .isLessThan(generated.indexOf("javan_class_initialize_com_acme_Api_state == 2", classInitializer));
     }
 
     @Test

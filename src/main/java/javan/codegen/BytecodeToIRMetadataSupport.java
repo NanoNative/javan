@@ -2,6 +2,7 @@ package javan.codegen;
 
 import javan.analysis.EntryPoint;
 import javan.analysis.GeneratedObjectCloneSupport;
+import javan.analysis.ClassInitializationOrder;
 import javan.classfile.ClassFile;
 import javan.classfile.FieldInfo;
 import javan.classfile.MethodInfo;
@@ -34,7 +35,8 @@ final class BytecodeToIRMetadataSupport {
                 enumConstants(classFile),
                 classFile.isEnum(),
                 GeneratedObjectCloneSupport.status(classes, classFile)
-                    == GeneratedObjectCloneSupport.Status.SUPPORTED
+                    == GeneratedObjectCloneSupport.Status.SUPPORTED,
+                ClassInitializationOrder.dependencies(classes, classFile)
             ));
         }
         return List.copyOf(result);

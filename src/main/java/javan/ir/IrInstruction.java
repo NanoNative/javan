@@ -217,6 +217,16 @@ public record IrInstruction(
     }
 
     /**
+     * Creates a class-initialization barrier for a generated class.
+     *
+     * @param className JVM internal class name
+     * @return IR instruction
+     */
+    public static IrInstruction initializeClass(final String className) {
+        return new IrInstruction(Op.INITIALIZE_CLASS, Optional.of(className), Optional.empty());
+    }
+
+    /**
      * Creates an int assignment instruction.
      *
      * @param localName target local name
@@ -751,6 +761,7 @@ public record IrInstruction(
         PRINT_OBJECT,
         PRINT_ERROR_OBJECT,
         CALL_STATIC_VOID,
+        INITIALIZE_CLASS,
         ASSIGN_INT,
         ASSIGN_LONG,
         ASSIGN_FLOAT,

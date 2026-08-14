@@ -44,6 +44,61 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @NativeTest
 final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
     @Test
+    void classInitializerRunsExactlyOnceAcrossConcurrentThreads() throws Exception {
+        final Path project = project("thread-class-initializer-once");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread first = new Thread(new Task());
+                    final Thread second = new Thread(new Task());
+                    first.start();
+                    second.start();
+                    first.join();
+                    second.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(State.value);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.State", """
+            package com.acme;
+
+            final class State {
+                static int value = initialize();
+
+                private State() {
+                }
+
+                private static int initialize() {
+                    System.out.println("initialized");
+                    return 7;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-class-initializer-once").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("initialized\n7\n7\n");
+    }
+
+    @Test
     void currentThreadInterruptStateBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("current-thread-interrupt-state");
         writeJava(project, "com.acme.Main", """

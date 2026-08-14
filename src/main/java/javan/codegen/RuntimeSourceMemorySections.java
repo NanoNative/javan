@@ -5990,6 +5990,20 @@ final class RuntimeSourceMemorySections {
             return state != NULL && state->pending_throwable_type != NULL;
         }
 
+        void javan_pending_wrap_initializer_error(void) {
+            if (javan_pending_has() == 0
+                || javan_pending_type_assignable_to((void*) "java/lang/Error") != 0) {
+                return;
+            }
+            javan_thread* thread = javan_current_thread_object();
+            javan_runtime_lock_enter();
+            javan_throwable_state* state = thread->throwable_state;
+            if (state != NULL && state->pending_throwable_type != NULL) {
+                state->pending_throwable_type = "java/lang/ExceptionInInitializerError";
+            }
+            javan_runtime_lock_leave();
+        }
+
         int javan_pending_type_is(void* throwable_type) {
             if (throwable_type == NULL || javan_current_thread_value == NULL) {
                 return 0;

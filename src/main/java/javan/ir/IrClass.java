@@ -12,6 +12,7 @@ import java.util.List;
  * @param enumConstants enum constant names in declaration order
  * @param enumClass whether this class is declared as an enum, including empty enums
  * @param cloneable whether instances may be cloned through Object.clone
+ * @param initializationDependencies generated classes that must initialize before this class
  */
 public record IrClass(
     String jvmName,
@@ -20,7 +21,8 @@ public record IrClass(
     List<IrField> staticFields,
     List<String> enumConstants,
     boolean enumClass,
-    boolean cloneable
+    boolean cloneable,
+    List<String> initializationDependencies
 ) {
     /**
      * Creates class metadata without static fields.
@@ -30,7 +32,7 @@ public record IrClass(
      * @param fields lowered field metadata
      */
     public IrClass(final String jvmName, final String symbol, final List<IrField> fields) {
-        this(jvmName, symbol, fields, List.of(), List.of(), false, false);
+        this(jvmName, symbol, fields, List.of(), List.of(), false, false, List.of());
     }
 
     /**
@@ -42,7 +44,7 @@ public record IrClass(
      * @param staticFields lowered static field metadata
      */
     public IrClass(final String jvmName, final String symbol, final List<IrField> fields, final List<IrField> staticFields) {
-        this(jvmName, symbol, fields, staticFields, List.of(), false, false);
+        this(jvmName, symbol, fields, staticFields, List.of(), false, false, List.of());
     }
 
     /**
@@ -61,7 +63,7 @@ public record IrClass(
         final List<IrField> staticFields,
         final List<String> enumConstants
     ) {
-        this(jvmName, symbol, fields, staticFields, enumConstants, !enumConstants.isEmpty(), false);
+        this(jvmName, symbol, fields, staticFields, enumConstants, !enumConstants.isEmpty(), false, List.of());
     }
 
     /**
@@ -82,6 +84,29 @@ public record IrClass(
         final List<String> enumConstants,
         final boolean cloneable
     ) {
-        this(jvmName, symbol, fields, staticFields, enumConstants, !enumConstants.isEmpty(), cloneable);
+        this(jvmName, symbol, fields, staticFields, enumConstants, !enumConstants.isEmpty(), cloneable, List.of());
+    }
+
+    /**
+     * Creates class metadata without initialization dependencies.
+     *
+     * @param jvmName JVM internal class name
+     * @param symbol C struct symbol
+     * @param fields lowered field metadata
+     * @param staticFields lowered static field metadata
+     * @param enumConstants enum constant names in declaration order
+     * @param enumClass whether this class is declared as an enum
+     * @param cloneable whether instances may be cloned through Object.clone
+     */
+    public IrClass(
+        final String jvmName,
+        final String symbol,
+        final List<IrField> fields,
+        final List<IrField> staticFields,
+        final List<String> enumConstants,
+        final boolean enumClass,
+        final boolean cloneable
+    ) {
+        this(jvmName, symbol, fields, staticFields, enumConstants, enumClass, cloneable, List.of());
     }
 }

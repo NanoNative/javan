@@ -877,6 +877,7 @@ final class RuntimeHeaderFile {
             const char* source_line
         );
         int javan_pending_has(void);
+        void javan_pending_wrap_initializer_error(void);
         int javan_pending_type_is(void* throwable_type);
         int javan_pending_type_assignable_to(void* catch_type);
         void* javan_pending_catch(void);

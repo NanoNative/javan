@@ -101,11 +101,449 @@ final class CliCoreSemanticsIntegrationTest extends CliIntegrationSupport {
         assertThat(generated).contains(
             "static void** javan_static_roots[] = {",
             "(void**) &javan_static_com_acme_State_field_label",
-            "javan_register_static_roots(javan_static_roots, 1);"
+            "javan_register_static_roots(javan_static_roots, 1);",
+            "static void javan_class_initialize_com_acme_State(void);"
         );
         final int mainStart = generated.indexOf("int main");
         assertThat(generated.indexOf("    javan_register_generated_roots();", mainStart))
-            .isLessThan(generated.indexOf("    javan_com_acme_State__clinit____V();", mainStart));
+            .isLessThan(generated.indexOf("    javan_class_initialize_com_acme_State();", mainStart));
+    }
+
+    @Test
+    void classInitializerWaitsForAnActiveUse() throws Exception {
+        final Path project = project("class-initializer-lazy");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("before");
+                    if (args.length > 0) {
+                        System.out.println(Lazy.value);
+                    }
+                    System.out.println("after");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Lazy", """
+            package com.acme;
+
+            final class Lazy {
+                static int value = initialize();
+
+                private Lazy() {
+                }
+
+                private static int initialize() {
+                    System.out.println("lazy");
+                    return 7;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/class-initializer-lazy").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("before\nafter\n");
+    }
+
+    @Test
+    void classInitializerRunsBeforeStaticCallsAndConstruction() throws Exception {
+        final Path project = project("class-initializer-active-use");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    Worker.print();
+                    new Constructed().print();
+                    Writable.value = 11;
+                    System.out.println(Writable.value);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Worker", """
+            package com.acme;
+
+            final class Worker {
+                static {
+                    System.out.println("worker-init");
+                }
+
+                private Worker() {
+                }
+
+                static void print() {
+                    System.out.println("worker-call");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Constructed", """
+            package com.acme;
+
+            final class Constructed {
+                static {
+                    System.out.println("constructed-init");
+                }
+
+                Constructed() {
+                }
+
+                void print() {
+                    System.out.println("constructed-call");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Writable", """
+            package com.acme;
+
+            final class Writable {
+                static int value;
+
+                static {
+                    System.out.println("writable-init");
+                }
+
+                private Writable() {
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/class-initializer-active-use").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("worker-init\nworker-call\nconstructed-init\nconstructed-call\nwritable-init\n11\n");
+    }
+
+    @Test
+    void classInitializerOrdersSuperclassAndDefaultInterfaceAndAllowsReentry() throws Exception {
+        final Path project = project("class-initializer-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Child.value);
+                    System.out.println(Reentrant.value);
+                    System.out.println(DirectInterface.value);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Parent", """
+            package com.acme;
+
+            class Parent {
+                static {
+                    System.out.println("parent");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Defaulted", """
+            package com.acme;
+
+            interface Defaulted {
+                int initialized = initialize();
+
+                private static int initialize() {
+                    System.out.println("interface");
+                    return 1;
+                }
+
+                default void touch() {
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Child", """
+            package com.acme;
+
+            final class Child extends Parent implements Defaulted {
+                static int value = initialize();
+
+                private Child() {
+                }
+
+                private static int initialize() {
+                    System.out.println("child");
+                    return 9;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Reentrant", """
+            package com.acme;
+
+            final class Reentrant {
+                static int value = initialize();
+
+                private Reentrant() {
+                }
+
+                private static int initialize() {
+                    System.out.println("reentrant");
+                    return value + 1;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.InterfaceParent", """
+            package com.acme;
+
+            interface InterfaceParent {
+                int initialized = initialize();
+
+                private static int initialize() {
+                    System.out.println("interface-parent");
+                    return 1;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.DirectInterface", """
+            package com.acme;
+
+            interface DirectInterface extends InterfaceParent {
+                int value = initialize();
+
+                private static int initialize() {
+                    System.out.println("direct-interface");
+                    return 1;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/class-initializer-order").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("parent\ninterface\nchild\n9\nreentrant\n1\ndirect-interface\n1\n");
+    }
+
+    @Test
+    void classInitializerAllowsCrossClassCyclesWithJvmFieldValues() throws Exception {
+        final Path project = project("class-initializer-cycle");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(First.value);
+                    System.out.println(Second.value);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.First", """
+            package com.acme;
+
+            final class First {
+                static int value = Second.value + 1;
+
+                private First() {
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Second", """
+            package com.acme;
+
+            final class Second {
+                static int value = First.value + 1;
+
+                private Second() {
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/class-initializer-cycle").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("2\n1\n");
+    }
+
+    @Test
+    void failedClassInitializerIsWrappedAtTheNativeBoundary() throws Exception {
+        final Path project = project("class-initializer-failure");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(State.value);
+                    System.out.println("must-not-run");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.State", """
+            package com.acme;
+
+            final class State {
+                static int value = fail();
+
+                private State() {
+                }
+
+                private static int fail() {
+                    throw new IllegalArgumentException("broken");
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/class-initializer-failure").toString()));
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(nativeRun.exitCode()).isEqualTo(1);
+        assertThat(nativeRun.stdout()).isEmpty();
+        assertThat(nativeRun.stderr()).contains("java/lang/ExceptionInInitializerError");
+        assertThat(Files.readString(project.resolve(".javan/generated/main.c"))).contains(
+            "javan_pending_wrap_initializer_error();",
+            "java/lang/NoClassDefFoundError"
+        );
+    }
+
+    @Test
+    void failedMainClassInitializerPreventsEntryExecution() throws Exception {
+        final Path project = project("main-class-initializer-failure");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                static {
+                    fail();
+                }
+
+                private Main() {
+                }
+
+                private static void fail() {
+                    throw new IllegalArgumentException("broken");
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("must-not-run");
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/main-class-initializer-failure").toString()));
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(nativeRun.exitCode()).isEqualTo(1);
+        assertThat(nativeRun.stdout()).isEmpty();
+        assertThat(nativeRun.stderr()).contains("java/lang/ExceptionInInitializerError");
+    }
+
+    @Test
+    void classInitializerFailureRoutesToExceptionInInitializerErrorCatch() throws Exception {
+        final Path project = project("class-initializer-error-catch");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    try {
+                        System.out.println(State.value);
+                    } catch (final ExceptionInInitializerError expected) {
+                        System.out.println("caught");
+                    }
+                }
+            }
+            """);
+        writeJava(project, "com.acme.State", """
+            package com.acme;
+
+            final class State {
+                static int value = fail();
+
+                private State() {
+                }
+
+                private static int fail() {
+                    throw new IllegalArgumentException("broken");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/class-initializer-error-catch").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("caught\n");
+    }
+
+    @Test
+    void failedClassInitializerRoutesLaterActiveUseToNoClassDefFoundError() throws Exception {
+        final Path project = project("class-initializer-no-class-def");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    try {
+                        System.out.println(State.value);
+                    } catch (final ExceptionInInitializerError expected) {
+                        System.out.println("initialization failed");
+                    }
+                    try {
+                        System.out.println(State.value);
+                    } catch (final NoClassDefFoundError expected) {
+                        System.out.println("class unavailable");
+                    }
+                }
+            }
+            """);
+        writeJava(project, "com.acme.State", """
+            package com.acme;
+
+            final class State {
+                static int value = fail();
+
+                private State() {
+                }
+
+                private static int fail() {
+                    throw new IllegalArgumentException("broken");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/class-initializer-no-class-def").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("initialization failed\nclass unavailable\n");
     }
 
     @Test
