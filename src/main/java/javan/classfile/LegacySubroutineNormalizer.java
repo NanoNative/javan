@@ -524,25 +524,23 @@ final class LegacySubroutineNormalizer {
     }
 
     private static int inverse(final int opcode) {
-        return switch (opcode) {
-            case 153 -> 154;
-            case 154 -> 153;
-            case 155 -> 156;
-            case 156 -> 155;
-            case 157 -> 158;
-            case 158 -> 157;
-            case 159 -> 160;
-            case 160 -> 159;
-            case 161 -> 162;
-            case 162 -> 161;
-            case 163 -> 164;
-            case 164 -> 163;
-            case 165 -> 166;
-            case 166 -> 165;
-            case 198 -> 199;
-            case 199 -> 198;
-            default -> throw new IllegalArgumentException("Not a conditional branch: " + opcode);
-        };
+        if (opcode == 153) return 154;
+        if (opcode == 154) return 153;
+        if (opcode == 155) return 156;
+        if (opcode == 156) return 155;
+        if (opcode == 157) return 158;
+        if (opcode == 158) return 157;
+        if (opcode == 159) return 160;
+        if (opcode == 160) return 159;
+        if (opcode == 161) return 162;
+        if (opcode == 162) return 161;
+        if (opcode == 163) return 164;
+        if (opcode == 164) return 163;
+        if (opcode == 165) return 166;
+        if (opcode == 166) return 165;
+        if (opcode == 198) return 199;
+        if (opcode == 199) return 198;
+        throw new IllegalArgumentException("Not a conditional branch: " + opcode);
     }
 
     private static boolean conditional(final int opcode) {
