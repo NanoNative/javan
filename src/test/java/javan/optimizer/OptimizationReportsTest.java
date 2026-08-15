@@ -5,6 +5,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -42,5 +43,31 @@ final class OptimizationReportsTest {
                 "- specialized methods: `0`",
                 "- skipped candidates: `0`"
             );
+    }
+
+    @Test
+    void writesFactsAndProofs() throws Exception {
+        final OptimizationReports reports = new OptimizationReports();
+        final LocalValueOptimizer.Result result = new LocalValueOptimizer.Result(
+            new javan.ir.IrProgram(List.of(), ""),
+            new OptimizationReport(1, 0, 0, 0, 1, 0, 0),
+            List.of(new LocalValueOptimizer.Proof("example/Main", "run", "()V", 7, "null-check", "receiver is proven non-null")),
+            new LocalValueOptimizer.FactSummary(2, 0, 1, 2, 2, 1, 1)
+        );
+
+        reports.write(tempDir, result);
+
+        assertThat(Files.readString(tempDir.resolve("reports/optimizations.json"))).contains(
+            "\"facts\": {\"nonNullValues\": 2",
+            "\"arrayLengths\": 1",
+            "\"kind\": \"null-check\"",
+            "\"bytecodeOffset\": 7"
+        );
+        assertThat(Files.readString(tempDir.resolve("reports/optimizations.md"))).contains(
+            "## Local facts",
+            "- array lengths: `1`",
+            "## Proofs",
+            "`null-check` example/Main.run()V @ 7: receiver is proven non-null"
+        );
     }
 }

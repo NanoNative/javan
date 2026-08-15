@@ -33,6 +33,7 @@ import javan.detect.MainClassDetector.MainClassDetection;
 import javan.detect.ProjectDetector;
 import javan.detect.ProjectLayout;
 import javan.ir.IrProgram;
+import javan.optimizer.LocalValueOptimizer;
 import javan.optimizer.OptimizationReports;
 import javan.reporting.ClassInitializationReports;
 import javan.reporting.ControlFlowReports;
@@ -86,6 +87,7 @@ public final class Javan {
     private final NativeLinker nativeLinker = new NativeLinker();
     private final ProjectReports reports = new ProjectReports();
     private final CompatibilityReports compatibilityReports = new CompatibilityReports();
+    private final LocalValueOptimizer localValueOptimizer = new LocalValueOptimizer();
     private final OptimizationReports optimizationReports = new OptimizationReports();
     private final DependencyReports dependencyReports = new DependencyReports();
     private final ControlFlowReports controlFlowReports = new ControlFlowReports();
@@ -229,13 +231,16 @@ public final class Javan {
             check.callGraph().reachableMethods()
         );
         final Path generated = check.layout().outputDirectory().resolve("generated");
-        final IrProgram program = bytecodeToIR.lower(
+        final IrProgram lowered = bytecodeToIR.lower(
             check.classes(),
             check.callGraph(),
             SourceLineIndex.from(check.layout()),
             reachableNativeInterop,
             check.classInitialization()
         );
+        final LocalValueOptimizer.Result optimization = localValueOptimizer.optimize(lowered, options.release());
+        optimizationReports.write(check.layout().outputDirectory(), optimization);
+        final IrProgram program = optimization.program();
         exceptionReports.write(check.layout().outputDirectory(), program);
         final Path artifact;
         if (options.appBuild()) {

@@ -123,6 +123,12 @@ tracked through locals, casts, final fields, direct arguments, returns, and cont
 of up to four types are written to `.javan/reports/receiver-provenance.json` and its Markdown summary.
 Unknown or larger sets automatically fall back to the global instantiated receiver set.
 
+Lowered functions also use one conservative local-fact model for nullness, integer constants
+and ranges, exact types, and array/string lengths. Debug builds report proof candidates without
+rewriting code. Release builds consume those same facts to remove proven redundant plain
+`Objects.requireNonNull` guards and dead branch paths. Decisions and source locations are written
+to `.javan/reports/optimizations.json` and its Markdown summary.
+
 The IDE plugin should render reports. It must not infer native support from source code
 or JDK inventory by itself.
 

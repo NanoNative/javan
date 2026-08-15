@@ -409,6 +409,14 @@ public final class ReportSummarizer {
         addNumber(result, value, "deadBranches");
         addNumber(result, value, "specializedMethods");
         addNumber(result, value, "skippedCandidates");
+        addNumber(result, value, "nonNullValues");
+        addNumber(result, value, "nullValues");
+        addNumber(result, value, "integerConstants");
+        addNumber(result, value, "integerRanges");
+        addNumber(result, value, "exactTypes");
+        addNumber(result, value, "arrayLengths");
+        addNumber(result, value, "stringLengths");
+        addArrayCount(result, value, "proofs");
         return List.copyOf(result);
     }
 
