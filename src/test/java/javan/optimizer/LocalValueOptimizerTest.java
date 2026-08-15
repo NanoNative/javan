@@ -80,6 +80,25 @@ final class LocalValueOptimizerTest {
     }
 
     @Test
+    void functionsWithoutOptimizationCandidatesAvoidDataflow() {
+        final IrFunction function = function(
+            List.of(),
+            List.of(new IrLocal(IrType.INT, "value")),
+            List.of(
+                IrInstruction.assignInt("value", IrExpression.intLiteral(7)),
+                IrInstruction.returnInt(IrExpression.intLocal("value"))
+            )
+        );
+        final IrProgram program = new IrProgram(List.of(function), function.symbol());
+
+        final LocalValueOptimizer.Result result = optimizer.optimize(program, false);
+
+        assertThat(result.program()).isSameAs(program);
+        assertThat(result.facts()).isEqualTo(new LocalValueOptimizer.FactSummary(0, 0, 0, 0, 0, 0, 0));
+        assertThat(result.proofs()).isEmpty();
+    }
+
+    @Test
     void branchEdgesRefineParameterNullnessAndRanges() {
         final IrFunction function = function(
             List.of(new IrParameter(IrType.OBJECT, "value"), new IrParameter(IrType.INT, "number")),

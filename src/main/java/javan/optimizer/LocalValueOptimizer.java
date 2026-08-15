@@ -51,7 +51,7 @@ public final class LocalValueOptimizer {
 
     private static FunctionResult analyze(final IrFunction function, final boolean release) {
         final List<IrInstruction> instructions = function.instructions();
-        if (instructions.isEmpty()) {
+        if (instructions.isEmpty() || !hasCandidate(instructions)) {
             return new FunctionResult(function, List.of(), FactSummary.empty(), 0, 0);
         }
         final Map<String, Integer> labels = labels(instructions);
@@ -131,6 +131,15 @@ public final class LocalValueOptimizer {
             removedNullChecks,
             deadBranches
         );
+    }
+
+    private static boolean hasCandidate(final List<IrInstruction> instructions) {
+        for (final IrInstruction instruction : instructions) {
+            if (instruction.op() == IrInstruction.Op.BRANCH_IF || isNullCheck(instruction)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static Map<String, Integer> labels(final List<IrInstruction> instructions) {
@@ -607,7 +616,7 @@ public final class LocalValueOptimizer {
     }
 
     /**
-     * Number of facts available at analyzed instruction entries.
+     * Number of facts available at instruction entries in functions with optimization candidates.
      *
      * @param nonNullValues proven non-null observations
      * @param nullValues proven null observations
