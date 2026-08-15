@@ -86,17 +86,14 @@ public final class EscapeAnalyzer {
         }
         final Map<String, Integer> labels = labels(instructions);
         final State[] incoming = new State[instructions.size()];
-        final List<Integer> work = new ArrayList<>();
+        final int maxVisits = instructions.size() * MAX_VISITS_PER_INSTRUCTION;
+        final int[] work = new int[maxVisits];
         incoming[0] = State.empty(locals, escapes.length);
-        work.add(0);
+        work[0] = 0;
         int cursor = 0;
-        long visits = 0;
-        final long maxVisits = (long) instructions.size() * MAX_VISITS_PER_INSTRUCTION;
-        while (cursor < work.size()) {
-            if (visits++ >= maxVisits) {
-                return false;
-            }
-            final int index = work.get(cursor++);
+        int workSize = 1;
+        while (cursor < workSize) {
+            final int index = work[cursor++];
             final State outgoing = transfer(
                 incoming[index], instructions.get(index), locals, ids.get(index), escapes
             );
@@ -107,7 +104,10 @@ public final class EscapeAnalyzer {
                 }
                 if (!merged.same(incoming[successor])) {
                     incoming[successor] = merged;
-                    work.add(successor);
+                    if (workSize >= maxVisits) {
+                        return false;
+                    }
+                    work[workSize++] = successor;
                 }
             }
         }

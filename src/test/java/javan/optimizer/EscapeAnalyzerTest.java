@@ -57,6 +57,24 @@ final class EscapeAnalyzerTest {
     }
 
     @Test
+    void convergesAcrossLoops() {
+        final IrFunction function = function(
+            local("value"),
+            IrInstruction.assignObject("value", IrExpression.objectAllocation("example/Value")),
+            IrInstruction.label("loop"),
+            IrInstruction.branchIf("done", IrExpression.intLocal("condition")),
+            IrInstruction.jump("loop"),
+            IrInstruction.label("done"),
+            IrInstruction.returnObject(IrExpression.objectLocal("value"))
+        );
+
+        final EscapeAnalyzer.Analysis result = analyzer.analyze(program(function));
+
+        assertThat(result.sites()).extracting(EscapeAnalyzer.AllocationSite::escape)
+            .containsExactly(EscapeAnalyzer.Escape.GLOBAL_ESCAPE);
+    }
+
+    @Test
     void treatsHeapAndStaticStoresAsGlobalEscapes() {
         final IrFunction function = function(
             local("receiver"), local("fieldValue"), local("staticValue"),
