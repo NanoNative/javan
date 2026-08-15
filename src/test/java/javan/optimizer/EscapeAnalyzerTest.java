@@ -1,9 +1,12 @@
 package javan.optimizer;
 
+import javan.ir.IrClass;
 import javan.ir.IrExpression;
+import javan.ir.IrField;
 import javan.ir.IrFunction;
 import javan.ir.IrInstruction;
 import javan.ir.IrLocal;
+import javan.ir.IrParameter;
 import javan.ir.IrProgram;
 import javan.ir.IrType;
 import org.junit.jupiter.api.Test;
@@ -33,6 +36,54 @@ final class EscapeAnalyzerTest {
             EscapeAnalyzer.Escape.ARGUMENT_ESCAPE,
             EscapeAnalyzer.Escape.GLOBAL_ESCAPE
         );
+    }
+
+    @Test
+    void keepsAllocationLocalAcrossExactNonCapturingCall() {
+        final IrFunction callee = new IrFunction(
+            "example/Box", "<init>", "()V", "box_init", IrType.VOID,
+            List.of(new IrParameter(IrType.OBJECT, "self")), List.of(),
+            List.of(IrInstruction.returnVoid())
+        );
+        final IrFunction caller = function(
+            local("value"),
+            IrInstruction.assignObject("value", IrExpression.objectAllocation("example/Box")),
+            IrInstruction.callStaticVoid("box_init", List.of(IrExpression.objectLocal("value"))),
+            IrInstruction.returnVoid()
+        );
+
+        final EscapeAnalyzer.Analysis result = analyzer.analyze(new IrProgram(List.of(callee, caller), "run"));
+
+        assertThat(result.sites()).extracting(EscapeAnalyzer.AllocationSite::escape)
+            .containsExactly(EscapeAnalyzer.Escape.NO_ESCAPE);
+    }
+
+    @Test
+    void followsArgumentCaptureThroughExactCalls() {
+        final IrFunction callee = new IrFunction(
+            "example/Box", "publish", "(Ljava/lang/Object;)Ljava/lang/Object;", "publish", IrType.OBJECT,
+            List.of(new IrParameter(IrType.OBJECT, "value")), List.of(),
+            List.of(IrInstruction.returnObject(IrExpression.objectLocal("value")))
+        );
+        final IrFunction bridge = new IrFunction(
+            "example/Box", "bridge", "(Ljava/lang/Object;)V", "bridge", IrType.VOID,
+            List.of(new IrParameter(IrType.OBJECT, "value")), List.of(),
+            List.of(
+                IrInstruction.callStaticVoid("publish", List.of(IrExpression.objectLocal("value"))),
+                IrInstruction.returnVoid()
+            )
+        );
+        final IrFunction caller = function(
+            local("value"),
+            IrInstruction.assignObject("value", IrExpression.objectAllocation("example/Box")),
+            IrInstruction.callStaticVoid("bridge", List.of(IrExpression.objectLocal("value"))),
+            IrInstruction.returnVoid()
+        );
+
+        final EscapeAnalyzer.Analysis result = analyzer.analyze(new IrProgram(List.of(callee, bridge, caller), "run"));
+
+        assertThat(result.sites()).extracting(EscapeAnalyzer.AllocationSite::escape)
+            .containsExactly(EscapeAnalyzer.Escape.GLOBAL_ESCAPE);
     }
 
     @Test
@@ -174,6 +225,41 @@ final class EscapeAnalyzerTest {
         assertThat(plan.sites()).containsExactly(new EscapeAnalyzer.StackAllocationSite(
             "example/Main", "run", "()Ljava/lang/Object;", 0,
             IrExpression.Kind.INT_ARRAY_ALLOCATION, 4
+        ));
+    }
+
+    @Test
+    void plansOnlyReferenceFreeObjectsForReleaseStackAllocation() {
+        final List<IrField> oversizedFields = java.util.stream.IntStream.range(0, 600)
+            .mapToObj(index -> new IrField(IrType.INT, "value" + index, "field_value_" + index))
+            .toList();
+        final IrFunction function = function(
+            local("plain"), local("referenced"), local("oversized"),
+            IrInstruction.assignObject("plain", IrExpression.objectAllocation("example/Plain")),
+            IrInstruction.assignObject("referenced", IrExpression.objectAllocation("example/Referenced")),
+            IrInstruction.assignObject("oversized", IrExpression.objectAllocation("example/Oversized")),
+            IrInstruction.returnVoid()
+        );
+        final IrProgram program = new IrProgram(
+            List.of(
+                new IrClass("example/Plain", "plain", List.of(new IrField(IrType.INT, "value", "field_value"))),
+                new IrClass(
+                    "example/Referenced", "referenced",
+                    List.of(new IrField(IrType.OBJECT, "value", "field_value"))
+                ),
+                new IrClass("example/Oversized", "oversized", oversizedFields)
+            ),
+            List.of(function),
+            "run"
+        );
+
+        final EscapeAnalyzer.StackAllocationPlan plan = analyzer.planStackAllocations(
+            program, analyzer.analyze(program), true
+        );
+
+        assertThat(plan.sites()).containsExactly(new EscapeAnalyzer.StackAllocationSite(
+            "example/Main", "run", "()Ljava/lang/Object;", 0,
+            IrExpression.Kind.OBJECT_ALLOCATION, 0
         ));
     }
 
