@@ -23,7 +23,8 @@ public final class OptimizationReports {
             outputDirectory,
             OptimizationReport.scaffold(),
             new LocalValueOptimizer.FactSummary(0, 0, 0, 0, 0, 0, 0),
-            List.of()
+            List.of(),
+            new MethodEffectAnalyzer.Analysis(List.of())
         );
     }
 
@@ -32,30 +33,37 @@ public final class OptimizationReports {
      *
      * @param outputDirectory javan output directory
      * @param result optimizer result
+     * @param effects transitive method effects
      * @return report files
      * @throws IOException when writing fails
      */
-    public List<Path> write(final Path outputDirectory, final LocalValueOptimizer.Result result) throws IOException {
-        return write(outputDirectory, result.report(), result.facts(), result.proofs());
+    public List<Path> write(
+        final Path outputDirectory,
+        final LocalValueOptimizer.Result result,
+        final MethodEffectAnalyzer.Analysis effects
+    ) throws IOException {
+        return write(outputDirectory, result.report(), result.facts(), result.proofs(), effects);
     }
 
     private static List<Path> write(
         final Path outputDirectory,
         final OptimizationReport report,
         final LocalValueOptimizer.FactSummary facts,
-        final List<LocalValueOptimizer.Proof> proofs
+        final List<LocalValueOptimizer.Proof> proofs,
+        final MethodEffectAnalyzer.Analysis effects
     ) throws IOException {
         final Path reports = outputDirectory.resolve("reports");
         return List.of(
-            Files2.writeString(reports.resolve("optimizations.json"), json(report, facts, proofs)),
-            Files2.writeString(reports.resolve("optimizations.md"), markdown(report, facts, proofs))
+            Files2.writeString(reports.resolve("optimizations.json"), json(report, facts, proofs, effects)),
+            Files2.writeString(reports.resolve("optimizations.md"), markdown(report, facts, proofs, effects))
         );
     }
 
     private static String json(
         final OptimizationReport report,
         final LocalValueOptimizer.FactSummary facts,
-        final List<LocalValueOptimizer.Proof> proofRecords
+        final List<LocalValueOptimizer.Proof> proofRecords,
+        final MethodEffectAnalyzer.Analysis effects
     ) {
         final StringBuilder proofs = new StringBuilder();
         for (int index = 0; index < proofRecords.size(); index++) {
@@ -85,14 +93,38 @@ public final class OptimizationReports {
             + ", \"exactTypes\": " + facts.exactTypes()
             + ", \"arrayLengths\": " + facts.arrayLengths()
             + ", \"stringLengths\": " + facts.stringLengths() + "},\n"
-            + "  \"proofs\": [\n" + proofs + "\n  ]\n"
+            + "  \"proofs\": [\n" + proofs + "\n  ],\n"
+            + "  \"methodEffects\": [\n" + effectJson(effects) + "\n  ]\n"
             + "}\n";
+    }
+
+    private static String effectJson(final MethodEffectAnalyzer.Analysis analysis) {
+        final StringBuilder result = new StringBuilder();
+        for (int index = 0; index < analysis.methods().size(); index++) {
+            final MethodEffectAnalyzer.MethodEffect method = analysis.methods().get(index);
+            final MethodEffectAnalyzer.Effect effect = method.effect();
+            if (index > 0) {
+                result.append(",\n");
+            }
+            result.append("    {\"owner\": ").append(Json.string(method.owner()))
+                .append(", \"method\": ").append(Json.string(method.name()))
+                .append(", \"descriptor\": ").append(Json.string(method.descriptor()))
+                .append(", \"symbol\": ").append(Json.string(method.symbol()))
+                .append(", \"pure\": ").append(effect.pure())
+                .append(", \"mayThrow\": ").append(effect.mayThrow())
+                .append(", \"allocates\": ").append(effect.allocates())
+                .append(", \"reads\": ").append(effect.reads())
+                .append(", \"writes\": ").append(effect.writes())
+                .append(", \"unknown\": ").append(effect.unknown()).append('}');
+        }
+        return result.toString();
     }
 
     private static String markdown(
         final OptimizationReport report,
         final LocalValueOptimizer.FactSummary facts,
-        final List<LocalValueOptimizer.Proof> proofRecords
+        final List<LocalValueOptimizer.Proof> proofRecords,
+        final MethodEffectAnalyzer.Analysis effects
     ) {
         final StringBuilder proofs = new StringBuilder();
         for (final LocalValueOptimizer.Proof proof : proofRecords) {
@@ -117,6 +149,33 @@ public final class OptimizationReports {
             + "- array lengths: `" + facts.arrayLengths() + "`\n"
             + "- string lengths: `" + facts.stringLengths() + "`\n\n"
             + "## Proofs\n\n"
-            + (proofs.isEmpty() ? "None.\n" : proofs.toString());
+            + (proofs.isEmpty() ? "None.\n" : proofs.toString())
+            + effectMarkdown(effects);
+    }
+
+    private static String effectMarkdown(final MethodEffectAnalyzer.Analysis analysis) {
+        long pure = 0;
+        long throwing = 0;
+        long allocating = 0;
+        long reading = 0;
+        long writing = 0;
+        long unknown = 0;
+        for (final MethodEffectAnalyzer.MethodEffect method : analysis.methods()) {
+            final MethodEffectAnalyzer.Effect effect = method.effect();
+            pure += effect.pure() ? 1 : 0;
+            throwing += effect.mayThrow() ? 1 : 0;
+            allocating += effect.allocates() ? 1 : 0;
+            reading += effect.reads() ? 1 : 0;
+            writing += effect.writes() ? 1 : 0;
+            unknown += effect.unknown() ? 1 : 0;
+        }
+        return "\n## Method effects\n\n"
+            + "- methods: `" + analysis.methods().size() + "`\n"
+            + "- pure: `" + pure + "`\n"
+            + "- may throw: `" + throwing + "`\n"
+            + "- allocates: `" + allocating + "`\n"
+            + "- reads: `" + reading + "`\n"
+            + "- writes: `" + writing + "`\n"
+            + "- unknown: `" + unknown + "`\n";
     }
 }

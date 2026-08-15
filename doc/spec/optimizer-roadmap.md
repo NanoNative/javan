@@ -47,7 +47,13 @@ when the recorded entry facts prove the decision. Every decision is written to
 Facts still planned:
 
 - enum constants
-- mutable object fields paired with method effects
+
+Method effects are implemented as a conservative transitive lattice over lowered functions:
+pure, may-throw, allocates, reads, writes, and unknown. Exact application calls inherit their
+callee effects, including recursive call groups. Current integer and object field facts survive
+only proven non-writing calls; unknown calls, writes, and receiver reassignment invalidate them.
+Other field kinds remain unoptimized rather than guessed. The same optimization report records
+every reachable method effect.
 
 Guard patterns:
 

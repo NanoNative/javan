@@ -34,6 +34,7 @@ import javan.detect.ProjectDetector;
 import javan.detect.ProjectLayout;
 import javan.ir.IrProgram;
 import javan.optimizer.LocalValueOptimizer;
+import javan.optimizer.MethodEffectAnalyzer;
 import javan.optimizer.OptimizationReports;
 import javan.reporting.ClassInitializationReports;
 import javan.reporting.ControlFlowReports;
@@ -88,6 +89,7 @@ public final class Javan {
     private final ProjectReports reports = new ProjectReports();
     private final CompatibilityReports compatibilityReports = new CompatibilityReports();
     private final LocalValueOptimizer localValueOptimizer = new LocalValueOptimizer();
+    private final MethodEffectAnalyzer methodEffectAnalyzer = new MethodEffectAnalyzer();
     private final OptimizationReports optimizationReports = new OptimizationReports();
     private final DependencyReports dependencyReports = new DependencyReports();
     private final ControlFlowReports controlFlowReports = new ControlFlowReports();
@@ -238,8 +240,9 @@ public final class Javan {
             reachableNativeInterop,
             check.classInitialization()
         );
-        final LocalValueOptimizer.Result optimization = localValueOptimizer.optimize(lowered, options.release());
-        optimizationReports.write(check.layout().outputDirectory(), optimization);
+        final MethodEffectAnalyzer.Analysis effects = methodEffectAnalyzer.analyze(lowered);
+        final LocalValueOptimizer.Result optimization = localValueOptimizer.optimize(lowered, options.release(), effects);
+        optimizationReports.write(check.layout().outputDirectory(), optimization, effects);
         final IrProgram program = optimization.program();
         exceptionReports.write(check.layout().outputDirectory(), program);
         final Path artifact;

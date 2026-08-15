@@ -129,6 +129,10 @@ rewriting code. Release builds consume those same facts to remove proven redunda
 `Objects.requireNonNull` guards and dead branch paths. Decisions and source locations are written
 to `.javan/reports/optimizations.json` and its Markdown summary.
 
+That report also records transitive method effects: pure, may-throw, allocates, reads, writes,
+and unknown. The compiler uses them conservatively so non-writing calls preserve mutable field
+facts while writes and unknown calls discard those facts before further optimization.
+
 The IDE plugin should render reports. It must not infer native support from source code
 or JDK inventory by itself.
 

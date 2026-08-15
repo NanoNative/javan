@@ -55,19 +55,36 @@ final class OptimizationReportsTest {
             new LocalValueOptimizer.FactSummary(2, 0, 1, 2, 2, 1, 1)
         );
 
-        reports.write(tempDir, result);
+        reports.write(
+            tempDir,
+            result,
+            new MethodEffectAnalyzer.Analysis(List.of(new MethodEffectAnalyzer.MethodEffect(
+                "example/Main",
+                "run",
+                "()V",
+                "example_Main_run",
+                new MethodEffectAnalyzer.Effect(true, true, false, false, false)
+            )))
+        );
 
         assertThat(Files.readString(tempDir.resolve("reports/optimizations.json"))).contains(
             "\"facts\": {\"nonNullValues\": 2",
             "\"arrayLengths\": 1",
             "\"kind\": \"null-check\"",
-            "\"bytecodeOffset\": 7"
+            "\"bytecodeOffset\": 7",
+            "\"methodEffects\"",
+            "\"pure\": false",
+            "\"mayThrow\": true",
+            "\"allocates\": true"
         );
         assertThat(Files.readString(tempDir.resolve("reports/optimizations.md"))).contains(
             "## Local facts",
             "- array lengths: `1`",
             "## Proofs",
-            "`null-check` example/Main.run()V @ 7: receiver is proven non-null"
+            "`null-check` example/Main.run()V @ 7: receiver is proven non-null",
+            "## Method effects",
+            "- methods: `1`",
+            "- may throw: `1`"
         );
     }
 }
