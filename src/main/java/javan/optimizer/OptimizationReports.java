@@ -23,7 +23,8 @@ public final class OptimizationReports {
             outputDirectory,
             OptimizationReport.scaffold(),
             new LocalValueOptimizer.FactSummary(0, 0, 0, 0, 0, 0, 0),
-            List.of()
+            List.of(),
+            new MethodEffectAnalyzer.Analysis(List.of())
         );
     }
 
@@ -32,30 +33,37 @@ public final class OptimizationReports {
      *
      * @param outputDirectory javan output directory
      * @param result optimizer result
+     * @param effects transitive method effects
      * @return report files
      * @throws IOException when writing fails
      */
-    public List<Path> write(final Path outputDirectory, final LocalValueOptimizer.Result result) throws IOException {
-        return write(outputDirectory, result.report(), result.facts(), result.proofs());
+    public List<Path> write(
+        final Path outputDirectory,
+        final LocalValueOptimizer.Result result,
+        final MethodEffectAnalyzer.Analysis effects
+    ) throws IOException {
+        return write(outputDirectory, result.report(), result.facts(), result.proofs(), effects);
     }
 
     private static List<Path> write(
         final Path outputDirectory,
         final OptimizationReport report,
         final LocalValueOptimizer.FactSummary facts,
-        final List<LocalValueOptimizer.Proof> proofs
+        final List<LocalValueOptimizer.Proof> proofs,
+        final MethodEffectAnalyzer.Analysis effects
     ) throws IOException {
         final Path reports = outputDirectory.resolve("reports");
         return List.of(
-            Files2.writeString(reports.resolve("optimizations.json"), json(report, facts, proofs)),
-            Files2.writeString(reports.resolve("optimizations.md"), markdown(report, facts, proofs))
+            Files2.writeString(reports.resolve("optimizations.json"), json(report, facts, proofs, effects)),
+            Files2.writeString(reports.resolve("optimizations.md"), markdown(report, facts, proofs, effects))
         );
     }
 
     private static String json(
         final OptimizationReport report,
         final LocalValueOptimizer.FactSummary facts,
-        final List<LocalValueOptimizer.Proof> proofRecords
+        final List<LocalValueOptimizer.Proof> proofRecords,
+        final MethodEffectAnalyzer.Analysis effects
     ) {
         final StringBuilder proofs = new StringBuilder();
         for (int index = 0; index < proofRecords.size(); index++) {
@@ -85,14 +93,27 @@ public final class OptimizationReports {
             + ", \"exactTypes\": " + facts.exactTypes()
             + ", \"arrayLengths\": " + facts.arrayLengths()
             + ", \"stringLengths\": " + facts.stringLengths() + "},\n"
-            + "  \"proofs\": [\n" + proofs + "\n  ]\n"
+            + "  \"proofs\": [\n" + proofs + "\n  ],\n"
+            + "  \"methodEffects\": " + effectJson(effects) + "\n"
             + "}\n";
+    }
+
+    private static String effectJson(final MethodEffectAnalyzer.Analysis analysis) {
+        final EffectCounts counts = effectCounts(analysis);
+        return "{\"methodCount\": " + counts.methods()
+            + ", \"pureMethods\": " + counts.pure()
+            + ", \"throwingMethods\": " + counts.throwing()
+            + ", \"allocatingMethods\": " + counts.allocating()
+            + ", \"readingMethods\": " + counts.reading()
+            + ", \"writingMethods\": " + counts.writing()
+            + ", \"unknownMethods\": " + counts.unknown() + "}";
     }
 
     private static String markdown(
         final OptimizationReport report,
         final LocalValueOptimizer.FactSummary facts,
-        final List<LocalValueOptimizer.Proof> proofRecords
+        final List<LocalValueOptimizer.Proof> proofRecords,
+        final MethodEffectAnalyzer.Analysis effects
     ) {
         final StringBuilder proofs = new StringBuilder();
         for (final LocalValueOptimizer.Proof proof : proofRecords) {
@@ -117,6 +138,49 @@ public final class OptimizationReports {
             + "- array lengths: `" + facts.arrayLengths() + "`\n"
             + "- string lengths: `" + facts.stringLengths() + "`\n\n"
             + "## Proofs\n\n"
-            + (proofs.isEmpty() ? "None.\n" : proofs.toString());
+            + (proofs.isEmpty() ? "None.\n" : proofs.toString())
+            + effectMarkdown(effects);
+    }
+
+    private static String effectMarkdown(final MethodEffectAnalyzer.Analysis analysis) {
+        final EffectCounts counts = effectCounts(analysis);
+        return "\n## Method effects\n\n"
+            + "- methods: `" + counts.methods() + "`\n"
+            + "- pure: `" + counts.pure() + "`\n"
+            + "- may throw: `" + counts.throwing() + "`\n"
+            + "- allocates: `" + counts.allocating() + "`\n"
+            + "- reads: `" + counts.reading() + "`\n"
+            + "- writes: `" + counts.writing() + "`\n"
+            + "- unknown: `" + counts.unknown() + "`\n";
+    }
+
+    private static EffectCounts effectCounts(final MethodEffectAnalyzer.Analysis analysis) {
+        long pure = 0;
+        long throwing = 0;
+        long allocating = 0;
+        long reading = 0;
+        long writing = 0;
+        long unknown = 0;
+        for (final MethodEffectAnalyzer.MethodEffect method : analysis.methods()) {
+            final MethodEffectAnalyzer.Effect effect = method.effect();
+            pure += effect.pure() ? 1 : 0;
+            throwing += effect.mayThrow() ? 1 : 0;
+            allocating += effect.allocates() ? 1 : 0;
+            reading += effect.reads() ? 1 : 0;
+            writing += effect.writes() ? 1 : 0;
+            unknown += effect.unknown() ? 1 : 0;
+        }
+        return new EffectCounts(analysis.methods().size(), pure, throwing, allocating, reading, writing, unknown);
+    }
+
+    private record EffectCounts(
+        long methods,
+        long pure,
+        long throwing,
+        long allocating,
+        long reading,
+        long writing,
+        long unknown
+    ) {
     }
 }

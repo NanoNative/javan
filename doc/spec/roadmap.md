@@ -30,11 +30,11 @@ normally choose the safe path itself.
 
 Javan currently has entrypoint-rooted reachability, instantiated-type-bounded class-hierarchy
 dispatch, bounded callback receiver provenance, a canonical bytecode CFG, CFG-aware GC-root
-liveness, and per-block local value facts with proof-backed release rewrites.
+liveness, per-block local value facts with proof-backed release rewrites, and transitive method
+effects for pure, throwing, allocating, reading, writing, and unknown behavior.
 
 | Priority | Analysis | Smallest useful scope | Acceptance gate |
 | --- | --- | --- | --- |
-| P1 | Method effects and throws | Small lattice for pure, may-throw, allocates, reads, writes, and unknown, starting with compiler-owned IR/intrinsics. | Unknown mutation invalidates facts; known-pure calls preserve them; evaluation order and exception parity remain intact. |
 | P2 | Escape classification | Report `NoEscape`, `ArgumentEscape`, and `GlobalEscape` before changing allocation. | Any later stack/arena allocation passes identity, exception, GC-root, sanitizer, and allocation-counter gates. |
 
 Analysis rules:

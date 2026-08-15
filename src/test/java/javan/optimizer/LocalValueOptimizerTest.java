@@ -42,7 +42,7 @@ final class LocalValueOptimizerTest {
             )
         );
 
-        final LocalValueOptimizer.Result result = optimizer.optimize(new IrProgram(List.of(function), function.symbol()), true);
+        final LocalValueOptimizer.Result result = optimize(new IrProgram(List.of(function), function.symbol()), true);
         final List<IrInstruction> instructions = result.program().functions().getFirst().instructions();
 
         assertThat(instructions)
@@ -71,7 +71,7 @@ final class LocalValueOptimizerTest {
         );
         final IrProgram program = new IrProgram(List.of(function), function.symbol());
 
-        final LocalValueOptimizer.Result result = optimizer.optimize(program, false);
+        final LocalValueOptimizer.Result result = optimize(program, false);
 
         assertThat(result.program()).isEqualTo(program);
         assertThat(result.report().redundantNullChecks()).isZero();
@@ -92,7 +92,7 @@ final class LocalValueOptimizerTest {
         );
         final IrProgram program = new IrProgram(List.of(function), function.symbol());
 
-        final LocalValueOptimizer.Result result = optimizer.optimize(program, false);
+        final LocalValueOptimizer.Result result = optimize(program, false);
 
         assertThat(result.program()).isSameAs(program);
         assertThat(result.facts()).isEqualTo(new LocalValueOptimizer.FactSummary(0, 0, 0, 0, 0, 0, 0));
@@ -119,7 +119,7 @@ final class LocalValueOptimizerTest {
         final IrFunction function = function(List.of(), locals, instructions);
         final IrProgram program = new IrProgram(List.of(function), function.symbol());
 
-        final LocalValueOptimizer.Result result = optimizer.optimize(program, true);
+        final LocalValueOptimizer.Result result = optimize(program, true);
 
         assertThat(result.program().functions().getFirst().instructions()).isEqualTo(instructions);
         assertThat(result.report().skippedCandidates()).isEqualTo(1);
@@ -148,7 +148,7 @@ final class LocalValueOptimizerTest {
             )
         );
 
-        final LocalValueOptimizer.Result result = optimizer.optimize(
+        final LocalValueOptimizer.Result result = optimize(
             new IrProgram(List.of(function), function.symbol()),
             true
         );
@@ -184,7 +184,7 @@ final class LocalValueOptimizerTest {
             )
         );
 
-        final LocalValueOptimizer.Result result = optimizer.optimize(new IrProgram(List.of(function), function.symbol()), true);
+        final LocalValueOptimizer.Result result = optimize(new IrProgram(List.of(function), function.symbol()), true);
 
         assertThat(result.report().redundantNullChecks()).isEqualTo(1);
         assertThat(result.report().deadBranches()).isEqualTo(1);
@@ -215,10 +215,91 @@ final class LocalValueOptimizerTest {
             )
         );
 
-        final LocalValueOptimizer.Result result = optimizer.optimize(new IrProgram(List.of(function), function.symbol()), true);
+        final LocalValueOptimizer.Result result = optimize(new IrProgram(List.of(function), function.symbol()), true);
 
         assertThat(result.program().functions().getFirst().instructions())
             .anyMatch(instruction -> instruction.value().filter("maybe"::equals).isPresent());
+    }
+
+    @Test
+    void pureCallsPreserveFieldFactsAndUnknownCallsInvalidateThem() {
+        final IrFunction pure = new IrFunction(
+            "example/Main",
+            "pure",
+            "()V",
+            "example_Main_pure",
+            IrType.VOID,
+            List.of(),
+            List.of(),
+            List.of(IrInstruction.returnVoid())
+        );
+        final IrProgram pureProgram = fieldBranchProgram(pure.symbol(), pure, false);
+        final IrProgram unknownProgram = fieldBranchProgram("external_unknown", pure, false);
+        final IrProgram reassignedProgram = fieldBranchProgram(pure.symbol(), pure, true);
+
+        final LocalValueOptimizer.Result preserved = optimize(pureProgram, true);
+        final LocalValueOptimizer.Result invalidated = optimize(unknownProgram, true);
+        final LocalValueOptimizer.Result reassigned = optimize(reassignedProgram, true);
+
+        assertThat(preserved.report().deadBranches()).isEqualTo(1);
+        assertThat(preserved.program().functions().getFirst().instructions())
+            .noneMatch(instruction -> instruction.op() == IrInstruction.Op.BRANCH_IF);
+        assertThat(invalidated.report().deadBranches()).isZero();
+        assertThat(invalidated.program().functions().getFirst().instructions())
+            .anyMatch(instruction -> instruction.op() == IrInstruction.Op.BRANCH_IF);
+        assertThat(reassigned.report().deadBranches()).isZero();
+        assertThat(reassigned.program().functions().getFirst().instructions())
+            .anyMatch(instruction -> instruction.op() == IrInstruction.Op.BRANCH_IF);
+    }
+
+    private static IrProgram fieldBranchProgram(
+        final String call,
+        final IrFunction pure,
+        final boolean reassignReceiver
+    ) {
+        final List<IrInstruction> instructions = new ArrayList<>(List.of(
+            IrInstruction.assignObject("box", IrExpression.objectAllocation("example/Box")),
+            IrInstruction.assignFieldInt(
+                "example/Box",
+                "number",
+                IrExpression.objectLocal("box"),
+                IrExpression.intLiteral(7)
+            ),
+            IrInstruction.callStaticVoid(call)
+        ));
+        if (reassignReceiver) {
+            instructions.add(IrInstruction.assignObject("box", IrExpression.objectAllocation("example/Box")));
+        }
+        instructions.addAll(List.of(
+            IrInstruction.assignInt("number", IrExpression.intField(
+                "example/Box",
+                "number",
+                IrExpression.objectLocal("box")
+            )),
+            IrInstruction.branchIf("done", IrExpression.intComparison(
+                "==",
+                IrExpression.intLocal("number"),
+                IrExpression.intLiteral(7)
+            )),
+            IrInstruction.returnInt(IrExpression.intLiteral(0)),
+            IrInstruction.label("done"),
+            IrInstruction.returnInt(IrExpression.intLiteral(1))
+        ));
+        final IrFunction caller = new IrFunction(
+            "example/Main",
+            "fieldBranch",
+            "()I",
+            "example_Main_fieldBranch",
+            IrType.INT,
+            List.of(),
+            List.of(new IrLocal(IrType.OBJECT, "box"), new IrLocal(IrType.INT, "number")),
+            List.copyOf(instructions)
+        );
+        return new IrProgram(List.of(caller, pure), caller.symbol());
+    }
+
+    private LocalValueOptimizer.Result optimize(final IrProgram program, final boolean release) {
+        return optimizer.optimize(program, release, new MethodEffectAnalyzer().analyze(program));
     }
 
     private static IrFunction function(

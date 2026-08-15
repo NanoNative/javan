@@ -17,6 +17,7 @@ import java.util.Optional;
  * Analysis tracks only values that influence a candidate and stops conservatively at fixed resource bounds.
  */
 public final class LocalValueOptimizer {
+    private static final String FIELD_SLOT_PREFIX = "@field:";
     private static final long MAX_PROGRAM_STATE_CELLS = 20_000;
     private static final int MAX_VISITS_PER_INSTRUCTION = 8;
     private static final Fact UNKNOWN = new Fact(Nullness.UNKNOWN, null, null, null, null);
@@ -26,9 +27,14 @@ public final class LocalValueOptimizer {
      *
      * @param program lowered program
      * @param release whether proven rewrites may change the program
+     * @param effects transitive method effects used to invalidate mutable facts
      * @return analyzed program, counters, facts, and deterministic proof records
      */
-    public Result optimize(final IrProgram program, final boolean release) {
+    public Result optimize(
+        final IrProgram program,
+        final boolean release,
+        final MethodEffectAnalyzer.Analysis effects
+    ) {
         final List<IrFunction> functions = new ArrayList<>();
         final List<Proof> proofs = new ArrayList<>();
         final MutableSummary summary = new MutableSummary();
@@ -44,7 +50,7 @@ public final class LocalValueOptimizer {
             if (candidate && cost > remainingStateCells) {
                 result = skipped(function);
             } else {
-                result = analyze(function, release, slots);
+                result = analyze(function, release, slots, effects);
                 if (candidate) {
                     remainingStateCells -= Math.min(cost, remainingStateCells);
                 }
@@ -73,7 +79,12 @@ public final class LocalValueOptimizer {
         );
     }
 
-    private static FunctionResult analyze(final IrFunction function, final boolean release, final String[] slots) {
+    private static FunctionResult analyze(
+        final IrFunction function,
+        final boolean release,
+        final String[] slots,
+        final MethodEffectAnalyzer.Analysis effects
+    ) {
         final List<IrInstruction> instructions = function.instructions();
         if (instructions.isEmpty() || !hasCandidate(instructions)) {
             return new FunctionResult(function, List.of(), FactSummary.empty(), 0, 0, 0);
@@ -94,7 +105,7 @@ public final class LocalValueOptimizer {
             final int index = work.get(cursor);
             cursor++;
             final IrInstruction instruction = instructions.get(index);
-            final State outgoing = transfer(incoming[index], instruction);
+            final State outgoing = transfer(incoming[index], instruction, effects);
             if (instruction.op() == IrInstruction.Op.BRANCH_IF) {
                 final Boolean decision = booleanValue(evaluate(instruction.expression().orElseThrow(), outgoing));
                 final int target = labels.get(instruction.value().orElseThrow());
@@ -212,7 +223,7 @@ public final class LocalValueOptimizer {
         final List<String> tracked = new ArrayList<>();
         for (final IrInstruction instruction : function.instructions()) {
             if (instruction.op() == IrInstruction.Op.BRANCH_IF || isNullCheck(instruction)) {
-                collectLocals(instruction.expression().orElseThrow(), tracked);
+                collectSlots(instruction.expression().orElseThrow(), tracked);
             }
         }
         boolean changed;
@@ -222,7 +233,12 @@ public final class LocalValueOptimizer {
                 if ((instruction.op() == IrInstruction.Op.ASSIGN_INT
                     || instruction.op() == IrInstruction.Op.ASSIGN_OBJECT)
                     && tracked.contains(instruction.value().orElseThrow())) {
-                    changed |= collectLocals(instruction.expression().orElseThrow(), tracked);
+                    changed |= collectSlots(instruction.expression().orElseThrow(), tracked);
+                } else if (isFieldWrite(instruction)) {
+                    final String field = fieldAssignmentKey(instruction);
+                    if (field != null && tracked.contains(field)) {
+                        changed |= collectSlots(instruction.expression().orElseThrow(), tracked);
+                    }
                 }
             }
         } while (changed);
@@ -233,16 +249,53 @@ public final class LocalValueOptimizer {
         return slots;
     }
 
-    private static boolean collectLocals(final IrExpression expression, final List<String> locals) {
+    private static boolean collectSlots(final IrExpression expression, final List<String> slots) {
         boolean changed = false;
-        if (expression.kind() == IrExpression.Kind.LOCAL && !locals.contains(expression.value())) {
-            locals.add(expression.value());
+        if (expression.kind() == IrExpression.Kind.LOCAL && !slots.contains(expression.value())) {
+            slots.add(expression.value());
+            changed = true;
+        }
+        final String field = fieldKey(expression);
+        if (field != null && !slots.contains(field)) {
+            slots.add(field);
             changed = true;
         }
         for (final IrExpression argument : expression.arguments()) {
-            changed |= collectLocals(argument, locals);
+            changed |= collectSlots(argument, slots);
         }
         return changed;
+    }
+
+    private static String fieldAssignmentKey(final IrInstruction instruction) {
+        final IrExpression assignment = instruction.expression().orElseThrow();
+        if (assignment.arguments().isEmpty()) {
+            return null;
+        }
+        final IrExpression receiver = assignment.arguments().getFirst();
+        return receiver.kind() == IrExpression.Kind.LOCAL
+            ? fieldKey(receiver.value(), instruction.value().orElseThrow())
+            : null;
+    }
+
+    private static String fieldKey(final IrExpression expression) {
+        if (!isFieldRead(expression) || expression.arguments().isEmpty()) {
+            return null;
+        }
+        final IrExpression receiver = expression.arguments().getFirst();
+        return receiver.kind() == IrExpression.Kind.LOCAL
+            ? fieldKey(receiver.value(), expression.value())
+            : null;
+    }
+
+    private static String fieldKey(final String receiver, final String field) {
+        return FIELD_SLOT_PREFIX + receiver + '#' + field;
+    }
+
+    private static boolean isFieldRead(final IrExpression expression) {
+        return switch (expression.kind()) {
+            case FIELD_INT, FIELD_LONG, FIELD_FLOAT, FIELD_DOUBLE, FIELD_OBJECT -> true;
+            default -> false;
+        };
     }
 
     private static Map<String, Integer> labels(final List<IrInstruction> instructions) {
@@ -283,14 +336,82 @@ public final class LocalValueOptimizer {
         return index + 1 < instructions.size() ? List.of(index + 1) : List.of();
     }
 
-    private static State transfer(final State state, final IrInstruction instruction) {
+    private static State transfer(
+        final State state,
+        final IrInstruction instruction,
+        final MethodEffectAnalyzer.Analysis effects
+    ) {
+        final State afterCalls = invalidateCalls(state, instruction, effects);
+        if (isFieldWrite(instruction)) {
+            final IrExpression assignment = instruction.expression().orElseThrow();
+            final Fact value = evaluate(assignment.arguments().get(assignment.arguments().size() - 1), afterCalls);
+            final String field = fieldAssignmentKey(instruction);
+            final State cleared = afterCalls.clearFields();
+            return field == null ? cleared : cleared.with(field, value);
+        }
+        if (isMemoryWrite(instruction)) {
+            return afterCalls.clearFields();
+        }
         return switch (instruction.op()) {
-            case ASSIGN_INT, ASSIGN_OBJECT -> state.with(
+            case ASSIGN_INT -> afterCalls.with(
                 instruction.value().orElseThrow(),
-                evaluate(instruction.expression().orElseThrow(), state)
+                evaluate(instruction.expression().orElseThrow(), afterCalls)
             );
-            case ASSIGN_LONG, ASSIGN_FLOAT, ASSIGN_DOUBLE -> state.with(instruction.value().orElseThrow(), UNKNOWN);
-            default -> state;
+            case ASSIGN_OBJECT -> afterCalls.clearFields().with(
+                instruction.value().orElseThrow(),
+                evaluate(instruction.expression().orElseThrow(), afterCalls)
+            );
+            case ASSIGN_LONG, ASSIGN_FLOAT, ASSIGN_DOUBLE ->
+                afterCalls.with(instruction.value().orElseThrow(), UNKNOWN);
+            default -> afterCalls;
+        };
+    }
+
+    private static State invalidateCalls(
+        final State state,
+        final IrInstruction instruction,
+        final MethodEffectAnalyzer.Analysis effects
+    ) {
+        if (instruction.op() == IrInstruction.Op.CALL_STATIC_VOID
+            && instruction.expression().isEmpty()
+            && !effects.preservesMemoryFacts(instruction.value().orElseThrow())) {
+            return state.clearFields();
+        }
+        return instruction.expression().isPresent()
+            && hasMutatingCall(instruction.expression().orElseThrow(), effects)
+            ? state.clearFields()
+            : state;
+    }
+
+    private static boolean hasMutatingCall(
+        final IrExpression expression,
+        final MethodEffectAnalyzer.Analysis effects
+    ) {
+        if (expression.kind() == IrExpression.Kind.CALL && !effects.preservesMemoryFacts(expression.value())) {
+            return true;
+        }
+        for (final IrExpression argument : expression.arguments()) {
+            if (hasMutatingCall(argument, effects)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isFieldWrite(final IrInstruction instruction) {
+        return switch (instruction.op()) {
+            case ASSIGN_FIELD_INT, ASSIGN_FIELD_LONG, ASSIGN_FIELD_FLOAT, ASSIGN_FIELD_DOUBLE, ASSIGN_FIELD_OBJECT -> true;
+            default -> false;
+        };
+    }
+
+    private static boolean isMemoryWrite(final IrInstruction instruction) {
+        return switch (instruction.op()) {
+            case ASSIGN_STATIC_FIELD_INT, ASSIGN_STATIC_FIELD_LONG, ASSIGN_STATIC_FIELD_FLOAT,
+                 ASSIGN_STATIC_FIELD_DOUBLE, ASSIGN_STATIC_FIELD_OBJECT,
+                 ASSIGN_ARRAY_OBJECT, ASSIGN_ARRAY_INT, ASSIGN_ARRAY_LONG, ASSIGN_ARRAY_FLOAT,
+                 ASSIGN_ARRAY_DOUBLE, ASSIGN_ARRAY_BYTE, ASSIGN_ARRAY_SHORT, ASSIGN_ARRAY_CHAR -> true;
+            default -> false;
         };
     }
 
@@ -411,6 +532,7 @@ public final class LocalValueOptimizer {
             case SHORT_ARRAY_ALLOCATION -> fact = array(expression, state, "[S");
             case CHAR_ARRAY_ALLOCATION -> fact = array(expression, state, "[C");
             case ARRAY_LENGTH -> fact = integerRange(evaluate(expression.arguments().getFirst(), state).arrayLength());
+            case FIELD_INT, FIELD_OBJECT -> fact = fieldFact(expression, state);
             case INT_BINARY -> fact = integerBinary(expression, state);
             case INT_COMPARE -> fact = comparison(expression, state, false);
             case OBJECT_COMPARE -> fact = comparison(expression, state, true);
@@ -419,6 +541,11 @@ public final class LocalValueOptimizer {
             }
         }
         return fact == null ? UNKNOWN : fact;
+    }
+
+    private static Fact fieldFact(final IrExpression expression, final State state) {
+        final String field = fieldKey(expression);
+        return field == null ? UNKNOWN : state.fact(field);
     }
 
     private static Fact array(final IrExpression expression, final State state, final String type) {
@@ -788,12 +915,30 @@ public final class LocalValueOptimizer {
             if (same(facts[slot], normalized)) {
                 return this;
             }
+            final Fact[] changed = copyFacts();
+            changed[slot] = normalized;
+            return new State(slots, changed);
+        }
+
+        private State clearFields() {
+            Fact[] changed = null;
+            for (int index = 0; index < slots.length; index++) {
+                if (slots[index].startsWith(FIELD_SLOT_PREFIX) && facts[index] != null) {
+                    if (changed == null) {
+                        changed = copyFacts();
+                    }
+                    changed[index] = null;
+                }
+            }
+            return changed == null ? this : new State(slots, changed);
+        }
+
+        private Fact[] copyFacts() {
             final Fact[] changed = new Fact[facts.length];
             for (int index = 0; index < facts.length; index++) {
                 changed[index] = facts[index];
             }
-            changed[slot] = normalized;
-            return new State(slots, changed);
+            return changed;
         }
 
         private int slot(final String name) {
