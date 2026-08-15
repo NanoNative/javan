@@ -23,6 +23,9 @@ public final class EscapeAnalyzer {
     private static final int MAX_VISITS_PER_INSTRUCTION = 8;
     private static final int MAX_STACK_ALLOCATION_BYTES = 4_096;
     private static final int CONSERVATIVE_HEADER_BYTES = 32;
+    private static final int NO_ESCAPE_RANK = 0;
+    private static final int ARGUMENT_ESCAPE_RANK = 1;
+    private static final int GLOBAL_ESCAPE_RANK = 2;
 
     /**
      * Classifies all managed allocations in a lowered program.
@@ -31,7 +34,7 @@ public final class EscapeAnalyzer {
      * @return allocation sites in deterministic function and instruction order
      */
     public Analysis analyze(final IrProgram program) {
-        final Map<String, List<Escape>> parameterEscapes = parameterEscapes(program);
+        final Map<String, int[]> parameterEscapes = parameterEscapes(program);
         final List<AllocationSite> sites = new ArrayList<>();
         for (final IrFunction function : program.functions()) {
             sites.addAll(analyze(function, parameterEscapes));
@@ -39,10 +42,10 @@ public final class EscapeAnalyzer {
         return new Analysis(sites);
     }
 
-    private static Map<String, List<Escape>> parameterEscapes(final IrProgram program) {
+    private static Map<String, int[]> parameterEscapes(final IrProgram program) {
         final List<IrFunction> functions = program.functions();
         final Map<String, Integer> indexes = new HashMap<>();
-        final Map<String, List<Escape>> summaries = new HashMap<>();
+        final Map<String, int[]> summaries = new HashMap<>();
         for (int index = 0; index < functions.size(); index++) {
             final IrFunction function = functions.get(index);
             indexes.put(function.symbol(), index);
@@ -68,8 +71,8 @@ public final class EscapeAnalyzer {
             cursor++;
             queued[index] = false;
             final IrFunction function = functions.get(index);
-            final List<Escape> previous = summaries.get(function.symbol());
-            final List<Escape> next = merge(previous, summarize(function, summaries));
+            final int[] previous = summaries.get(function.symbol());
+            final int[] next = merge(previous, summarize(function, summaries));
             if (!sameEscapes(next, previous)) {
                 summaries.put(function.symbol(), next);
                 for (final int caller : callers.get(index)) {
@@ -108,29 +111,24 @@ public final class EscapeAnalyzer {
         }
     }
 
-    private static List<Escape> emptyParameterEscapes(final IrFunction function) {
-        final List<Escape> result = new ArrayList<>();
-        for (final IrParameter ignored : function.parameters()) {
-            result.add(Escape.NO_ESCAPE);
-        }
-        return List.copyOf(result);
+    private static int[] emptyParameterEscapes(final IrFunction function) {
+        return new int[function.parameters().size()];
     }
 
-    private static List<Escape> merge(final List<Escape> previous, final List<Escape> next) {
-        final List<Escape> result = new ArrayList<>();
-        for (int index = 0; index < previous.size(); index++) {
-            result.add(previous.get(index).ordinal() >= next.get(index).ordinal()
-                ? previous.get(index) : next.get(index));
+    private static int[] merge(final int[] previous, final int[] next) {
+        final int[] result = new int[previous.length];
+        for (int index = 0; index < previous.length; index++) {
+            result[index] = Math.max(previous[index], next[index]);
         }
-        return List.copyOf(result);
+        return result;
     }
 
-    private static boolean sameEscapes(final List<Escape> first, final List<Escape> second) {
-        if (first.size() != second.size()) {
+    private static boolean sameEscapes(final int[] first, final int[] second) {
+        if (first.length != second.length) {
             return false;
         }
-        for (int index = 0; index < first.size(); index++) {
-            if (first.get(index) != second.get(index)) {
+        for (int index = 0; index < first.length; index++) {
+            if (first[index] != second[index]) {
                 return false;
             }
         }
@@ -293,9 +291,9 @@ public final class EscapeAnalyzer {
         return null;
     }
 
-    private static List<Escape> summarize(
+    private static int[] summarize(
         final IrFunction function,
-        final Map<String, List<Escape>> parameterEscapes
+        final Map<String, int[]> parameterEscapes
     ) {
         final Map<String, Integer> parameterIds = new HashMap<>();
         for (final IrParameter parameter : function.parameters()) {
@@ -310,27 +308,27 @@ public final class EscapeAnalyzer {
         for (int index = 0; index < function.instructions().size(); index++) {
             ids.add(List.of());
         }
-        final Escape[] escapes = new Escape[parameterIds.size()];
-        fill(escapes, Escape.NO_ESCAPE);
+        final int[] escapes = new int[parameterIds.size()];
         final Map<String, Integer> locals = objectLocals(function);
         final long words = Math.max(1, (escapes.length + Long.SIZE - 1) / Long.SIZE);
         final long stateCells = (long) function.instructions().size() * Math.max(1, locals.size()) * words;
         if (stateCells > MAX_FUNCTION_STATE_CELLS || !flow(
             function.instructions(), locals, ids, escapes, parameterEscapes, parameterIds
         )) {
-            fill(escapes, Escape.GLOBAL_ESCAPE);
+            fill(escapes, GLOBAL_ESCAPE_RANK);
         }
-        final List<Escape> result = new ArrayList<>();
-        for (final IrParameter parameter : function.parameters()) {
+        final int[] result = new int[function.parameters().size()];
+        for (int index = 0; index < function.parameters().size(); index++) {
+            final IrParameter parameter = function.parameters().get(index);
             final Integer id = parameterIds.get(parameter.name());
-            result.add(id == null ? Escape.NO_ESCAPE : escapes[id]);
+            result[index] = id == null ? NO_ESCAPE_RANK : escapes[id];
         }
-        return List.copyOf(result);
+        return result;
     }
 
     private static List<AllocationSite> analyze(
         final IrFunction function,
-        final Map<String, List<Escape>> parameterEscapes
+        final Map<String, int[]> parameterEscapes
     ) {
         final List<IrInstruction> instructions = function.instructions();
         final List<List<ExpressionId>> ids = new ArrayList<>();
@@ -350,25 +348,30 @@ public final class EscapeAnalyzer {
         final Map<String, Integer> locals = objectLocals(function);
         final long words = Math.max(1, (sites.size() + Long.SIZE - 1) / Long.SIZE);
         final long stateCells = (long) instructions.size() * Math.max(1, locals.size()) * words;
-        final Escape[] escapes = new Escape[sites.size()];
-        fill(escapes, Escape.NO_ESCAPE);
+        final int[] escapes = new int[sites.size()];
         if (stateCells > MAX_FUNCTION_STATE_CELLS || !flow(
             instructions, locals, ids, escapes, parameterEscapes, Map.of()
         )) {
-            fill(escapes, Escape.GLOBAL_ESCAPE);
+            fill(escapes, GLOBAL_ESCAPE_RANK);
         }
         final List<AllocationSite> classified = new ArrayList<>();
         for (int index = 0; index < sites.size(); index++) {
             final AllocationSite site = sites.get(index);
+            Escape classification = Escape.GLOBAL_ESCAPE;
+            if (escapes[index] == NO_ESCAPE_RANK) {
+                classification = Escape.NO_ESCAPE;
+            } else if (escapes[index] == ARGUMENT_ESCAPE_RANK) {
+                classification = Escape.ARGUMENT_ESCAPE;
+            }
             classified.add(new AllocationSite(
                 site.owner(), site.method(), site.descriptor(), site.instructionIndex(), site.bytecodeOffset(),
-                site.kind(), escapes[index]
+                site.kind(), classification
             ));
         }
         return List.copyOf(classified);
     }
 
-    private static void fill(final Escape[] escapes, final Escape value) {
+    private static void fill(final int[] escapes, final int value) {
         for (int index = 0; index < escapes.length; index++) {
             escapes[index] = value;
         }
@@ -378,8 +381,8 @@ public final class EscapeAnalyzer {
         final List<IrInstruction> instructions,
         final Map<String, Integer> locals,
         final List<List<ExpressionId>> ids,
-        final Escape[] escapes,
-        final Map<String, List<Escape>> parameterEscapes,
+        final int[] escapes,
+        final Map<String, int[]> parameterEscapes,
         final Map<String, Integer> initialValues
     ) {
         if (instructions.isEmpty()) {
@@ -421,8 +424,8 @@ public final class EscapeAnalyzer {
         final IrInstruction instruction,
         final Map<String, Integer> locals,
         final List<ExpressionId> ids,
-        final Escape[] escapes,
-        final Map<String, List<Escape>> parameterEscapes
+        final int[] escapes,
+        final Map<String, int[]> parameterEscapes
     ) {
         if (instruction.expression().isEmpty()) {
             return state;
@@ -435,10 +438,10 @@ public final class EscapeAnalyzer {
                 value(expression, state, ids, escapes, parameterEscapes)
             );
             case RETURN_OBJECT, ASSIGN_STATIC_FIELD_OBJECT ->
-                consume(expression, Escape.GLOBAL_ESCAPE, state, ids, escapes, parameterEscapes);
+                consume(expression, GLOBAL_ESCAPE_RANK, state, ids, escapes, parameterEscapes);
             case PRINTLN_OBJECT, PRINTLN_ERROR_OBJECT, PRINT_OBJECT, PRINT_ERROR_OBJECT,
                  PANIC, SET_PENDING, THROW_PENDING ->
-                consume(expression, Escape.ARGUMENT_ESCAPE, state, ids, escapes, parameterEscapes);
+                consume(expression, ARGUMENT_ESCAPE_RANK, state, ids, escapes, parameterEscapes);
             default -> value(expression, state, ids, escapes, parameterEscapes);
         }
         return result;
@@ -448,13 +451,13 @@ public final class EscapeAnalyzer {
         final IrExpression expression,
         final State state,
         final List<ExpressionId> ids,
-        final Escape[] escapes,
-        final Map<String, List<Escape>> parameterEscapes
+        final int[] escapes,
+        final Map<String, int[]> parameterEscapes
     ) {
         if (isAllocation(expression)) {
-            Escape argumentUse = Escape.NO_ESCAPE;
+            int argumentUse = NO_ESCAPE_RANK;
             if (expression.kind() == IrExpression.Kind.STRING_CONCAT) {
-                argumentUse = Escape.ARGUMENT_ESCAPE;
+                argumentUse = ARGUMENT_ESCAPE_RANK;
             }
             for (final IrExpression argument : expression.arguments()) {
                 consume(argument, argumentUse, state, ids, escapes, parameterEscapes);
@@ -472,10 +475,10 @@ public final class EscapeAnalyzer {
             return state.get(expression.value());
         }
         if (expression.kind() == IrExpression.Kind.CALL) {
-            final List<Escape> uses = parameterEscapes.get(expression.value());
+            final int[] uses = parameterEscapes.get(expression.value());
             for (int index = 0; index < expression.arguments().size(); index++) {
-                final Escape use = uses != null && index < uses.size()
-                    ? uses.get(index) : Escape.ARGUMENT_ESCAPE;
+                final int use = uses != null && index < uses.length
+                    ? uses[index] : ARGUMENT_ESCAPE_RANK;
                 consume(expression.arguments().get(index), use, state, ids, escapes, parameterEscapes);
             }
             return empty(escapes.length);
@@ -483,14 +486,14 @@ public final class EscapeAnalyzer {
         if (expression.kind() == IrExpression.Kind.FIELD_ASSIGN_OBJECT) {
             value(expression.arguments().getFirst(), state, ids, escapes, parameterEscapes);
             consume(
-                expression.arguments().getLast(), Escape.GLOBAL_ESCAPE, state, ids, escapes, parameterEscapes
+                expression.arguments().getLast(), GLOBAL_ESCAPE_RANK, state, ids, escapes, parameterEscapes
             );
             return empty(escapes.length);
         }
         if (expression.kind() == IrExpression.Kind.ARRAY_ASSIGN_OBJECT) {
             value(expression.arguments().get(0), state, ids, escapes, parameterEscapes);
             value(expression.arguments().get(1), state, ids, escapes, parameterEscapes);
-            consume(expression.arguments().get(2), Escape.GLOBAL_ESCAPE, state, ids, escapes, parameterEscapes);
+            consume(expression.arguments().get(2), GLOBAL_ESCAPE_RANK, state, ids, escapes, parameterEscapes);
             return empty(escapes.length);
         }
         for (final IrExpression argument : expression.arguments()) {
@@ -501,15 +504,15 @@ public final class EscapeAnalyzer {
 
     private static void consume(
         final IrExpression expression,
-        final Escape escape,
+        final int escape,
         final State state,
         final List<ExpressionId> ids,
-        final Escape[] escapes,
-        final Map<String, List<Escape>> parameterEscapes
+        final int[] escapes,
+        final Map<String, int[]> parameterEscapes
     ) {
         final long[] values = value(expression, state, ids, escapes, parameterEscapes);
         for (int site = 0; site < escapes.length; site++) {
-            if (contains(values, site) && escape.ordinal() > escapes[site].ordinal()) {
+            if (contains(values, site) && escape > escapes[site]) {
                 escapes[site] = escape;
             }
         }

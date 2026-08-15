@@ -287,7 +287,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void nativeBuiltJavanBuildsPlainBooleanLiteralProgram() throws Exception {
+    void nativeBuiltJavanBuildsBooleanAndObjectProgram() throws Exception {
         final Path probeProject = tempDir.resolve("selfhost-plain-boolean");
         final Path probeClasses = probeProject.resolve("classes");
         Files.createDirectories(probeClasses);
@@ -296,6 +296,18 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
 
             public final class Main {
                 private Main() {
+                }
+
+                private static final class Box {
+                    private final int value;
+
+                    private Box(final int value) {
+                        this.value = value;
+                    }
+
+                    private int value() {
+                        return value;
+                    }
                 }
 
                 private static boolean flag(final boolean value) {
@@ -308,6 +320,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static void main(final String[] args) {
                     System.out.println(flag(false));
                     System.out.println(flag(true));
+                    System.out.println(new Box(7).value());
                 }
             }
             """);
@@ -346,7 +359,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         assertThat(probeBinary).isExecutable();
         assertThat(process(tempDir, List.of(probeBinary.toString())).stdout())
             .as("native-built Javan boolean literal output")
-            .isEqualTo("true\nfalse\n");
+            .isEqualTo("true\nfalse\n7\n");
     }
 
     @Test
