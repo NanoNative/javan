@@ -27,30 +27,38 @@ Runtime initialization hooks:
 - `initConsole()` planned
 - `initHeap()` planned
 
-Facts planned for redundant-check elimination:
+Implemented local facts:
 
 - `NonNull(value)`
 - `IsNull(value)`
 - `TypeIs(value, class)`
 - `Range(value, min, max)`
-- `LessThan(value, bound)`
-- `GreaterEqual(value, bound)`
 - `ArrayLength(array, value)`
 - `StringLength(string, range)`
 - `BooleanValue(value, true/false)`
-- `EnumValue(value, enumConstant)`
 - `SameValue(a, b)`
+
+The facts flow through lowered control-flow blocks and merge conservatively. Unknown values
+erase a fact instead of guessing. Debug builds preserve instructions and report candidates;
+release builds remove a plain `Objects.requireNonNull(Object)` guard or fold a branch only
+when the recorded entry facts prove the decision. Every decision is written to
+`optimizations.json` and `optimizations.md` with its method and bytecode offset.
+
+Facts still planned:
+
+- enum constants
+- mutable object fields paired with method effects
 
 Guard patterns:
 
-- `Objects.requireNonNull(x)`
+- `Objects.requireNonNull(x)` implemented for proven non-null local values
 - `if (x == null) throw`
 - `if (x != null)`
 - array index bounds
 - `instanceof`
 - range checks
 - enum switch branches
-- string length checks
+- integer, array-length, and string-length branches implemented when their ranges prove the result
 - pure validation methods later
 
 Safety rules:

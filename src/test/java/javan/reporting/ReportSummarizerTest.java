@@ -591,14 +591,25 @@ final class ReportSummarizerTest {
               "redundantRangeChecks": 4,
               "deadBranches": 5,
               "specializedMethods": 6,
-              "skippedCandidates": 7
+              "skippedCandidates": 7,
+              "facts": {"nonNullValues": 8, "nullValues": 9, "integerConstants": 10, "integerRanges": 11,
+                "exactTypes": 12, "arrayLengths": 13, "stringLengths": 14},
+              "proofs": [{"kind": "branch"}]
             }
             """);
         Files.writeString(reports.resolve("optimizations.md"), "# Optimizations\n");
 
         final ReportSummarizer.Summary summary = new ReportSummarizer().write(tempDir);
 
-        assertThat(summary.markdown()).contains("deadBranches: `5`", "specializedMethods: `6`", "skippedCandidates: `7`");
+        assertThat(summary.markdown()).contains(
+            "deadBranches: `5`",
+            "specializedMethods: `6`",
+            "skippedCandidates: `7`",
+            "nonNullValues: `8`",
+            "integerRanges: `11`",
+            "stringLengths: `14`",
+            "proofs: `1`"
+        );
     }
 
     @Test
