@@ -209,11 +209,14 @@ public final class EscapeAnalyzer {
         final List<AllocationSite> sites
     ) {
         if (isAllocation(expression)) {
+            int bytecodeOffset = -1;
+            if (instruction.sourceLocation().isPresent()) {
+                bytecodeOffset = instruction.sourceLocation().orElseThrow().bytecodeOffset();
+            }
             ids.add(new ExpressionId(expression, sites.size()));
             sites.add(new AllocationSite(
                 function.owner(), function.name(), function.descriptor(), instructionIndex,
-                instruction.sourceLocation().map(location -> location.bytecodeOffset()).orElse(-1),
-                expression.kind(), Escape.NO_ESCAPE
+                bytecodeOffset, expression.kind(), Escape.NO_ESCAPE
             ));
         }
         for (final IrExpression argument : expression.arguments()) {
