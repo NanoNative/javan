@@ -195,6 +195,22 @@ final class RuntimeHeaderFile {
             int object_field_count;
             unsigned long* object_field_offsets;
         } JavanTypeDescriptor;
+        #define JAVAN_ARRAY_KIND_OBJECT 1
+        #define JAVAN_ARRAY_KIND_INT 2
+        #define JAVAN_ARRAY_KIND_LONG 3
+        #define JAVAN_ARRAY_KIND_FLOAT 4
+        #define JAVAN_ARRAY_KIND_DOUBLE 5
+        #define JAVAN_ARRAY_KIND_BYTE 6
+        #define JAVAN_ARRAY_KIND_BOOLEAN 7
+        #define JAVAN_ARRAY_KIND_SHORT 8
+        #define JAVAN_ARRAY_KIND_CHAR 9
+        typedef struct {
+            int length;
+            int element_size;
+            int kind;
+            int reserved;
+            const char* class_name;
+        } JavanArrayHeader;
         struct javan_object_header {
             int _javan_type_id;
             void* _javan_runtime_state;

@@ -25,17 +25,19 @@ public final class OptimizationReports {
             new LocalValueOptimizer.FactSummary(0, 0, 0, 0, 0, 0, 0),
             List.of(),
             new MethodEffectAnalyzer.Analysis(List.of()),
-            new EscapeAnalyzer.Analysis(List.of())
+            new EscapeAnalyzer.Analysis(List.of()),
+            new EscapeAnalyzer.StackAllocationPlan(List.of())
         );
     }
 
     /**
-     * Writes optimizer counters, observed fact counts, and proof records.
+     * Writes optimizer counters, evidence, and the allocation strategy selected from that evidence.
      *
      * @param outputDirectory javan output directory
      * @param result optimizer result
      * @param effects transitive method effects
      * @param escapes managed allocation escape classifications
+     * @param stackAllocations proven release stack allocations
      * @return report files
      * @throws IOException when writing fails
      */
@@ -43,9 +45,18 @@ public final class OptimizationReports {
         final Path outputDirectory,
         final LocalValueOptimizer.Result result,
         final MethodEffectAnalyzer.Analysis effects,
-        final EscapeAnalyzer.Analysis escapes
+        final EscapeAnalyzer.Analysis escapes,
+        final EscapeAnalyzer.StackAllocationPlan stackAllocations
     ) throws IOException {
-        return write(outputDirectory, result.report(), result.facts(), result.proofs(), effects, escapes);
+        return write(
+            outputDirectory,
+            result.report(),
+            result.facts(),
+            result.proofs(),
+            effects,
+            escapes,
+            stackAllocations
+        );
     }
 
     private static List<Path> write(
@@ -54,12 +65,19 @@ public final class OptimizationReports {
         final LocalValueOptimizer.FactSummary facts,
         final List<LocalValueOptimizer.Proof> proofs,
         final MethodEffectAnalyzer.Analysis effects,
-        final EscapeAnalyzer.Analysis escapes
+        final EscapeAnalyzer.Analysis escapes,
+        final EscapeAnalyzer.StackAllocationPlan stackAllocations
     ) throws IOException {
         final Path reports = outputDirectory.resolve("reports");
         return List.of(
-            Files2.writeString(reports.resolve("optimizations.json"), json(report, facts, proofs, effects, escapes)),
-            Files2.writeString(reports.resolve("optimizations.md"), markdown(report, facts, proofs, effects, escapes))
+            Files2.writeString(
+                reports.resolve("optimizations.json"),
+                json(report, facts, proofs, effects, escapes, stackAllocations)
+            ),
+            Files2.writeString(
+                reports.resolve("optimizations.md"),
+                markdown(report, facts, proofs, effects, escapes, stackAllocations)
+            )
         );
     }
 
@@ -68,7 +86,8 @@ public final class OptimizationReports {
         final LocalValueOptimizer.FactSummary facts,
         final List<LocalValueOptimizer.Proof> proofRecords,
         final MethodEffectAnalyzer.Analysis effects,
-        final EscapeAnalyzer.Analysis escapes
+        final EscapeAnalyzer.Analysis escapes,
+        final EscapeAnalyzer.StackAllocationPlan stackAllocations
     ) {
         final StringBuilder proofs = new StringBuilder();
         for (int index = 0; index < proofRecords.size(); index++) {
@@ -100,16 +119,20 @@ public final class OptimizationReports {
             + ", \"stringLengths\": " + facts.stringLengths() + "},\n"
             + "  \"proofs\": [\n" + proofs + "\n  ],\n"
             + "  \"methodEffects\": " + effectJson(effects) + ",\n"
-            + "  \"escapeAnalysis\": " + escapeJson(escapes) + "\n"
+            + "  \"escapeAnalysis\": " + escapeJson(escapes, stackAllocations) + "\n"
             + "}\n";
     }
 
-    private static String escapeJson(final EscapeAnalyzer.Analysis analysis) {
+    private static String escapeJson(
+        final EscapeAnalyzer.Analysis analysis,
+        final EscapeAnalyzer.StackAllocationPlan stackAllocations
+    ) {
         final EscapeCounts counts = escapeCounts(analysis);
         return "{\"allocationSites\": " + counts.sites()
             + ", \"noEscape\": " + counts.noEscape()
             + ", \"argumentEscape\": " + counts.argumentEscape()
-            + ", \"globalEscape\": " + counts.globalEscape() + "}";
+            + ", \"globalEscape\": " + counts.globalEscape()
+            + ", \"stackAllocated\": " + stackAllocations.sites().size() + "}";
     }
 
     private static String effectJson(final MethodEffectAnalyzer.Analysis analysis) {
@@ -128,7 +151,8 @@ public final class OptimizationReports {
         final LocalValueOptimizer.FactSummary facts,
         final List<LocalValueOptimizer.Proof> proofRecords,
         final MethodEffectAnalyzer.Analysis effects,
-        final EscapeAnalyzer.Analysis escapes
+        final EscapeAnalyzer.Analysis escapes,
+        final EscapeAnalyzer.StackAllocationPlan stackAllocations
     ) {
         final StringBuilder proofs = new StringBuilder();
         for (final LocalValueOptimizer.Proof proof : proofRecords) {
@@ -155,7 +179,7 @@ public final class OptimizationReports {
             + "## Proofs\n\n"
             + (proofs.isEmpty() ? "None.\n" : proofs.toString())
             + effectMarkdown(effects)
-            + escapeMarkdown(escapes);
+            + escapeMarkdown(escapes, stackAllocations);
     }
 
     private static String effectMarkdown(final MethodEffectAnalyzer.Analysis analysis) {
@@ -189,13 +213,17 @@ public final class OptimizationReports {
         return new EffectCounts(analysis.methods().size(), pure, throwing, allocating, reading, writing, unknown);
     }
 
-    private static String escapeMarkdown(final EscapeAnalyzer.Analysis analysis) {
+    private static String escapeMarkdown(
+        final EscapeAnalyzer.Analysis analysis,
+        final EscapeAnalyzer.StackAllocationPlan stackAllocations
+    ) {
         final EscapeCounts counts = escapeCounts(analysis);
         return "\n## Escape analysis\n\n"
             + "- allocation sites: `" + counts.sites() + "`\n"
             + "- no escape: `" + counts.noEscape() + "`\n"
             + "- argument escape: `" + counts.argumentEscape() + "`\n"
-            + "- global escape: `" + counts.globalEscape() + "`\n";
+            + "- global escape: `" + counts.globalEscape() + "`\n"
+            + "- stack allocated: `" + stackAllocations.sites().size() + "`\n";
     }
 
     private static EscapeCounts escapeCounts(final EscapeAnalyzer.Analysis analysis) {

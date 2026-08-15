@@ -246,13 +246,16 @@ public final class Javan {
         final LocalValueOptimizer.Result optimization = localValueOptimizer.optimize(lowered, options.release(), effects);
         final IrProgram program = optimization.program();
         final EscapeAnalyzer.Analysis escapes = escapeAnalyzer.analyze(program);
-        optimizationReports.write(check.layout().outputDirectory(), optimization, effects, escapes);
+        final EscapeAnalyzer.StackAllocationPlan stackAllocations = escapeAnalyzer.planStackAllocations(
+            program, escapes, options.release()
+        );
+        optimizationReports.write(check.layout().outputDirectory(), optimization, effects, escapes, stackAllocations);
         exceptionReports.write(check.layout().outputDirectory(), program);
         final Path artifact;
         if (options.appBuild()) {
-            artifact = buildApp(check, program, generated, reachableNativeInterop, options, out);
+            artifact = buildApp(check, program, generated, reachableNativeInterop, stackAllocations, options, out);
         } else {
-            artifact = buildLibrary(check, program, generated, reachableNativeInterop, options, out);
+            artifact = buildLibrary(check, program, generated, reachableNativeInterop, stackAllocations, options, out);
         }
         return BuildResult.success(artifact, check.diagnostics());
     }
@@ -262,12 +265,13 @@ public final class Javan {
         final IrProgram program,
         final Path generated,
         final NativeInteropConfig nativeInterop,
+        final EscapeAnalyzer.StackAllocationPlan stackAllocations,
         final Options options,
         final PrintStream out
     )
         throws IOException, InterruptedException {
         final List<ResourceBundler.ResourceFile> resources = resourceBundler.bundle(check.layout());
-        final Path mainC = cCodegen.generate(program, generated, nativeInterop);
+        final Path mainC = cCodegen.generate(program, generated, nativeInterop, stackAllocations);
         final Path runtimeC = runtimeFiles.write(generated, resources);
         final Path output = check.layout().outputDirectory().resolve("bin").resolve(check.layout().outputName());
         final Path binary = nativeLinker.link(
@@ -299,11 +303,14 @@ public final class Javan {
         final IrProgram program,
         final Path generated,
         final NativeInteropConfig nativeInterop,
+        final EscapeAnalyzer.StackAllocationPlan stackAllocations,
         final Options options,
         final PrintStream out
     ) throws IOException, InterruptedException {
         final List<ResourceBundler.ResourceFile> resources = resourceBundler.bundle(check.layout());
-        final Path libraryC = cCodegen.generateLibrary(program, generated, check.exports(), nativeInterop);
+        final Path libraryC = cCodegen.generateLibrary(
+            program, generated, check.exports(), nativeInterop, stackAllocations
+        );
         final Path runtimeC = runtimeFiles.write(generated, resources);
         final List<Path> artifacts = new ArrayList<>();
         for (final LibraryFormat format : options.libraryFormats()) {

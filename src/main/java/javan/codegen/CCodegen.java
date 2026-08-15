@@ -16,6 +16,7 @@ import javan.ir.IrInstruction;
 import javan.ir.IrProgram;
 import javan.ir.IrSourceLocation;
 import javan.ir.IrType;
+import javan.optimizer.EscapeAnalyzer;
 import javan.util.Files2;
 import javan.util.Strings2;
 
@@ -78,6 +79,31 @@ public final class CCodegen {
         final IrProgram program,
         final Path generatedDirectory,
         final NativeInteropConfig nativeInterop
+    ) throws IOException {
+        return generate(
+            program,
+            generatedDirectory,
+            nativeInterop,
+            new EscapeAnalyzer.StackAllocationPlan(List.of())
+        );
+    }
+
+    /**
+     * Writes the generated C program with declared native imports and proven stack allocations.
+     *
+     * @param program IR program
+     * @param generatedDirectory output directory
+     * @param nativeInterop declared native imports
+     * @param stackAllocations proven release stack allocations
+     * @return generated main C file
+     * @throws IOException when writing fails
+     * @throws IllegalArgumentException when a native import descriptor is unsupported
+     */
+    public Path generate(
+        final IrProgram program,
+        final Path generatedDirectory,
+        final NativeInteropConfig nativeInterop,
+        final EscapeAnalyzer.StackAllocationPlan stackAllocations
     ) throws IOException {
         validateNativeWrapperNamespace(program, nativeInterop);
         validateImportedNativeDescriptors(nativeInterop);
@@ -151,7 +177,7 @@ public final class CCodegen {
             emitDispatch(program, dispatch, c);
         }
         for (final IrFunction function : program.functions()) {
-            emitFunction(program, function, objectResultSymbols, nativeWrapperSymbols, c, true);
+            emitFunction(program, function, objectResultSymbols, nativeWrapperSymbols, stackAllocations, c, true);
         }
         return Files2.writeString(generatedDirectory.resolve("main.c"), c.toString());
     }
@@ -189,6 +215,34 @@ public final class CCodegen {
         final Path generatedDirectory,
         final List<ExportedMethod> exports,
         final NativeInteropConfig nativeInterop
+    ) throws IOException {
+        return generateLibrary(
+            program,
+            generatedDirectory,
+            exports,
+            nativeInterop,
+            new EscapeAnalyzer.StackAllocationPlan(List.of())
+        );
+    }
+
+    /**
+     * Writes generated C for a native library with declared imports and proven stack allocations.
+     *
+     * @param program IR program
+     * @param generatedDirectory output directory
+     * @param exports library exports
+     * @param nativeInterop declared native imports
+     * @param stackAllocations proven release stack allocations
+     * @return generated C file
+     * @throws IOException when writing fails
+     * @throws IllegalArgumentException when a native import descriptor is unsupported
+     */
+    public Path generateLibrary(
+        final IrProgram program,
+        final Path generatedDirectory,
+        final List<ExportedMethod> exports,
+        final NativeInteropConfig nativeInterop,
+        final EscapeAnalyzer.StackAllocationPlan stackAllocations
     ) throws IOException {
         validateNativeWrapperNamespace(program, nativeInterop);
         validateImportedNativeDescriptors(nativeInterop);
@@ -259,7 +313,7 @@ public final class CCodegen {
             emitDispatch(program, dispatch, c);
         }
         for (final IrFunction function : program.functions()) {
-            emitFunction(program, function, objectResultSymbols, nativeWrapperSymbols, c, false);
+            emitFunction(program, function, objectResultSymbols, nativeWrapperSymbols, stackAllocations, c, false);
         }
         emitLibraryInitializer(program, nativeWrapperSymbols, c);
         for (final ExportedMethod export : exports) {
@@ -1169,6 +1223,7 @@ public final class CCodegen {
         final IrFunction function,
         final List<String> objectResultSymbols,
         final NativeWrapperSymbols nativeWrapperSymbols,
+        final EscapeAnalyzer.StackAllocationPlan stackAllocations,
         final StringBuilder c,
         final boolean emitMain
     ) {
@@ -1188,6 +1243,7 @@ public final class CCodegen {
         for (final javan.ir.IrLocal local : function.locals()) {
             c.append("    ").append(local.type().cName()).append(' ').append(local.name()).append(" = 0;").append(System.lineSeparator());
         }
+        emitStackArrayStorage(function, stackAllocations, c);
         final List<String> rootNames = objectRootNames(function);
         final String rootFrameSymbol = rootFrameSymbol(function);
         final RootLivenessPlan rootLiveness = RootLivenessPlan.forFunction(function);
@@ -1217,6 +1273,8 @@ public final class CCodegen {
                 !rootNames.isEmpty(),
                 objectResultSymbols,
                 nativeWrapperSymbols,
+                stackAllocations,
+                function,
                 c
             );
             if (hasStatementSafePoint(instruction)) {
@@ -1240,6 +1298,105 @@ public final class CCodegen {
             }
         }
         return false;
+    }
+
+    private static void emitStackArrayStorage(
+        final IrFunction function,
+        final EscapeAnalyzer.StackAllocationPlan plan,
+        final StringBuilder c
+    ) {
+        for (final EscapeAnalyzer.StackAllocationSite site : plan.sites()) {
+            if (!sameFunction(function, site)) {
+                continue;
+            }
+            final StackArrayLayout layout = stackArrayLayout(site.kind());
+            c.append("    struct { JavanArrayHeader header; ")
+                .append(layout.elementType())
+                .append(" values[")
+                .append(Math.max(1, site.length()))
+                .append("]; } ")
+                .append(stackArraySymbol(site.instructionIndex()))
+                .append(" = {{")
+                .append(site.length())
+                .append(", sizeof(")
+                .append(layout.elementType())
+                .append("), ")
+                .append(layout.runtimeKind())
+                .append(", 0, \"")
+                .append(layout.descriptor())
+                .append("\"}, {0}};")
+                .append(System.lineSeparator());
+        }
+    }
+
+    private static boolean sameFunction(
+        final IrFunction function,
+        final EscapeAnalyzer.StackAllocationSite site
+    ) {
+        return site.owner().equals(function.owner())
+            && site.method().equals(function.name())
+            && site.descriptor().equals(function.descriptor());
+    }
+
+    private static StackArrayLayout stackArrayLayout(final IrExpression.Kind kind) {
+        if (kind == IrExpression.Kind.INT_ARRAY_ALLOCATION) {
+            return new StackArrayLayout("int", "JAVAN_ARRAY_KIND_INT", "[I");
+        }
+        if (kind == IrExpression.Kind.LONG_ARRAY_ALLOCATION) {
+            return new StackArrayLayout("long long", "JAVAN_ARRAY_KIND_LONG", "[J");
+        }
+        if (kind == IrExpression.Kind.FLOAT_ARRAY_ALLOCATION) {
+            return new StackArrayLayout("float", "JAVAN_ARRAY_KIND_FLOAT", "[F");
+        }
+        if (kind == IrExpression.Kind.DOUBLE_ARRAY_ALLOCATION) {
+            return new StackArrayLayout("double", "JAVAN_ARRAY_KIND_DOUBLE", "[D");
+        }
+        if (kind == IrExpression.Kind.BYTE_ARRAY_ALLOCATION) {
+            return new StackArrayLayout("signed char", "JAVAN_ARRAY_KIND_BYTE", "[B");
+        }
+        if (kind == IrExpression.Kind.BOOLEAN_ARRAY_ALLOCATION) {
+            return new StackArrayLayout("signed char", "JAVAN_ARRAY_KIND_BOOLEAN", "[Z");
+        }
+        if (kind == IrExpression.Kind.SHORT_ARRAY_ALLOCATION) {
+            return new StackArrayLayout("short", "JAVAN_ARRAY_KIND_SHORT", "[S");
+        }
+        if (kind == IrExpression.Kind.CHAR_ARRAY_ALLOCATION) {
+            return new StackArrayLayout("unsigned short", "JAVAN_ARRAY_KIND_CHAR", "[C");
+        }
+        throw new IllegalArgumentException("not a primitive array allocation");
+    }
+
+    private record StackArrayLayout(String elementType, String runtimeKind, String descriptor) {
+    }
+
+    private static String stackArraySymbol(final int instructionIndex) {
+        return "javan_stack_array_" + instructionIndex;
+    }
+
+    private static EscapeAnalyzer.StackAllocationSite stackAllocationAt(
+        final IrFunction function,
+        final int instructionIndex,
+        final EscapeAnalyzer.StackAllocationPlan plan
+    ) {
+        for (final EscapeAnalyzer.StackAllocationSite site : plan.sites()) {
+            if (site.instructionIndex() == instructionIndex && sameFunction(function, site)) {
+                return site;
+            }
+        }
+        return null;
+    }
+
+    private static void emitStackArrayAssignment(
+        final StringBuilder c,
+        final String target,
+        final EscapeAnalyzer.StackAllocationSite site
+    ) {
+        c.append("    ")
+            .append(target)
+            .append(" = (void*) &")
+            .append(stackArraySymbol(site.instructionIndex()))
+            .append(";")
+            .append(System.lineSeparator());
     }
 
     private static void emitRecordReferenceObjectMethodResolverRegistration(
@@ -2647,6 +2804,8 @@ public final class CCodegen {
         final boolean hasRootFrame,
         final List<String> objectResultSymbols,
         final NativeWrapperSymbols nativeWrapperSymbols,
+        final EscapeAnalyzer.StackAllocationPlan stackAllocations,
+        final IrFunction function,
         final StringBuilder c
     ) {
         final boolean sourceContext = shouldEmitSourceContext(instruction);
@@ -2734,14 +2893,21 @@ public final class CCodegen {
                 );
                 break;
             case ASSIGN_OBJECT:
-                emitAssignment(
-                    c,
-                    instruction.value().orElseThrow(),
-                    instruction.expression().orElseThrow(),
-                    true,
-                    objectResultSymbols,
-                    nativeWrapperSymbols
+                final EscapeAnalyzer.StackAllocationSite stackSite = stackAllocationAt(
+                    function, index, stackAllocations
                 );
+                if (stackSite == null) {
+                    emitAssignment(
+                        c,
+                        instruction.value().orElseThrow(),
+                        instruction.expression().orElseThrow(),
+                        true,
+                        objectResultSymbols,
+                        nativeWrapperSymbols
+                    );
+                } else {
+                    emitStackArrayAssignment(c, instruction.value().orElseThrow(), stackSite);
+                }
                 break;
             case ASSIGN_FIELD_INT: {
                 final String[] ownerField = ownerField(instruction.value().orElseThrow());

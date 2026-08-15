@@ -58,8 +58,10 @@ deterministic aggregate counts for the reachable method effects without dumping 
 Managed allocation sites are classified conservatively as `NoEscape`, `ArgumentEscape`, or
 `GlobalEscape`. The analysis follows local copies and control-flow merges, treats calls as argument
 escape, and treats returns plus heap/static stores as global escape. Fixed resource bounds fall back
-to `GlobalEscape`. Reports contain aggregate counts only; allocation strategy is unchanged until the
-runtime safety gates for stack or arena allocation are implemented.
+to `GlobalEscape`. Release builds consume this evidence for bounded constant-length primitive arrays
+whose allocation instruction is not inside a control-flow cycle. Those arrays use function stack
+storage within one conservative 4 KiB budget per function; debug builds and all other allocation
+shapes remain managed. Reports include the selected stack-allocation count.
 
 Guard patterns:
 
@@ -87,7 +89,8 @@ Safety rules:
 Release-mode optimization backlog:
 
 - smart dead-code elimination for unreachable classes, methods, fields, constructors, runtime modules, intrinsics, strings, vtables, and dispatch tables
-- stack allocation for proven `NoEscape` sites
+- expand stack allocation beyond bounded constant primitive arrays only when identity, publication,
+  contained-reference rooting, and repeated-site lifetime are proven
 - arena allocation for scoped temporary object graphs
 - devirtualization
 - method specialization

@@ -156,6 +156,76 @@ final class EscapeAnalyzerTest {
             .containsExactly(EscapeAnalyzer.Escape.GLOBAL_ESCAPE);
     }
 
+    @Test
+    void plansBoundedConstantPrimitiveArrayForReleaseStackAllocation() {
+        final IrFunction function = function(
+            local("value"),
+            IrInstruction.assignObject("value", IrExpression.intArrayAllocation(IrExpression.intLiteral(4))),
+            IrInstruction.assignArrayInt(
+                IrExpression.objectLocal("value"), IrExpression.intLiteral(0), IrExpression.intLiteral(7)
+            ),
+            IrInstruction.returnVoid()
+        );
+        final IrProgram program = program(function);
+        final EscapeAnalyzer.Analysis analysis = analyzer.analyze(program);
+
+        final EscapeAnalyzer.StackAllocationPlan plan = analyzer.planStackAllocations(program, analysis, true);
+
+        assertThat(plan.sites()).containsExactly(new EscapeAnalyzer.StackAllocationSite(
+            "example/Main", "run", "()Ljava/lang/Object;", 0,
+            IrExpression.Kind.INT_ARRAY_ALLOCATION, 4
+        ));
+    }
+
+    @Test
+    void keepsStackAllocationDisabledOutsideSafeReleaseShape() {
+        final IrFunction looped = function(
+            local("value"),
+            IrInstruction.label("loop"),
+            IrInstruction.assignObject("value", IrExpression.intArrayAllocation(IrExpression.intLiteral(4))),
+            IrInstruction.branchIf("done", IrExpression.intLiteral(1)),
+            IrInstruction.jump("loop"),
+            IrInstruction.label("done"),
+            IrInstruction.returnVoid()
+        );
+        final IrProgram loopedProgram = program(looped);
+        final EscapeAnalyzer.Analysis loopedAnalysis = analyzer.analyze(loopedProgram);
+
+        assertThat(analyzer.planStackAllocations(loopedProgram, loopedAnalysis, true).sites()).isEmpty();
+        assertThat(analyzer.planStackAllocations(loopedProgram, loopedAnalysis, false).sites()).isEmpty();
+
+        final IrFunction dynamic = function(
+            local("value"),
+            IrInstruction.assignObject("value", IrExpression.intArrayAllocation(IrExpression.intLocal("length"))),
+            IrInstruction.returnVoid()
+        );
+        final IrProgram dynamicProgram = program(dynamic);
+        assertThat(analyzer.planStackAllocations(
+            dynamicProgram, analyzer.analyze(dynamicProgram), true
+        ).sites()).isEmpty();
+
+        final IrFunction oversized = function(
+            local("value"),
+            IrInstruction.assignObject("value", IrExpression.longArrayAllocation(IrExpression.intLiteral(1_000))),
+            IrInstruction.returnVoid()
+        );
+        final IrProgram oversizedProgram = program(oversized);
+        assertThat(analyzer.planStackAllocations(
+            oversizedProgram, analyzer.analyze(oversizedProgram), true
+        ).sites()).isEmpty();
+
+        final IrFunction cumulative = function(
+            local("first"), local("second"),
+            IrInstruction.assignObject("first", IrExpression.intArrayAllocation(IrExpression.intLiteral(600))),
+            IrInstruction.assignObject("second", IrExpression.intArrayAllocation(IrExpression.intLiteral(600))),
+            IrInstruction.returnVoid()
+        );
+        final IrProgram cumulativeProgram = program(cumulative);
+        assertThat(analyzer.planStackAllocations(
+            cumulativeProgram, analyzer.analyze(cumulativeProgram), true
+        ).sites()).hasSize(1);
+    }
+
     private static IrLocal local(final String name) {
         return new IrLocal(IrType.OBJECT, name);
     }

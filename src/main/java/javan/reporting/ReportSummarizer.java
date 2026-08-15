@@ -428,6 +428,7 @@ public final class ReportSummarizer {
         addNumber(result, value, "noEscape");
         addNumber(result, value, "argumentEscape");
         addNumber(result, value, "globalEscape");
+        addNumber(result, value, "stackAllocated");
         return List.copyOf(result);
     }
 

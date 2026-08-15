@@ -19,6 +19,8 @@ import java.util.Map;
 public final class EscapeAnalyzer {
     private static final long MAX_FUNCTION_STATE_CELLS = 20_000;
     private static final int MAX_VISITS_PER_INSTRUCTION = 8;
+    private static final int MAX_STACK_ALLOCATION_BYTES = 4_096;
+    private static final int CONSERVATIVE_ARRAY_HEADER_BYTES = 32;
 
     /**
      * Classifies all managed allocations in a lowered program.
@@ -32,6 +34,129 @@ public final class EscapeAnalyzer {
             sites.addAll(analyze(function));
         }
         return new Analysis(sites);
+    }
+
+    /**
+     * Selects the bounded allocation sites whose lifetime and layout are safe for function stack storage.
+     *
+     * @param program lowered program used by {@code analysis}
+     * @param analysis conservative escape classifications for {@code program}
+     * @param release whether release optimizations are enabled
+     * @return immutable stack-allocation plan; empty for debug builds or unsupported shapes
+     */
+    public StackAllocationPlan planStackAllocations(
+        final IrProgram program,
+        final Analysis analysis,
+        final boolean release
+    ) {
+        if (!release || analysis.sites().isEmpty()) {
+            return new StackAllocationPlan(List.of());
+        }
+        final List<StackAllocationSite> result = new ArrayList<>();
+        for (final IrFunction function : program.functions()) {
+            int remainingStackBytes = MAX_STACK_ALLOCATION_BYTES;
+            for (int index = 0; index < function.instructions().size(); index++) {
+                final IrInstruction instruction = function.instructions().get(index);
+                if (instruction.op() != IrInstruction.Op.ASSIGN_OBJECT || instruction.expression().isEmpty()) {
+                    continue;
+                }
+                final IrExpression expression = instruction.expression().orElseThrow();
+                if (!primitiveArrayAllocation(expression) || expression.arguments().isEmpty()) {
+                    continue;
+                }
+                final IrExpression lengthExpression = expression.arguments().getFirst();
+                if (lengthExpression.kind() != IrExpression.Kind.INT_LITERAL) {
+                    continue;
+                }
+                final int length = Integer.parseInt(lengthExpression.value());
+                final long allocationBytes = stackArrayBytes(expression.kind(), length);
+                if (length < 0 || allocationBytes > remainingStackBytes) {
+                    continue;
+                }
+                if (repeats(function.instructions(), index)) {
+                    continue;
+                }
+                final AllocationSite site = siteAt(analysis, function, index, expression.kind());
+                if (site != null && site.escape() == Escape.NO_ESCAPE) {
+                    result.add(new StackAllocationSite(
+                        function.owner(), function.name(), function.descriptor(), index, expression.kind(), length
+                    ));
+                    remainingStackBytes -= (int) allocationBytes;
+                }
+            }
+        }
+        return new StackAllocationPlan(result);
+    }
+
+    private static boolean repeats(final List<IrInstruction> instructions, final int allocationIndex) {
+        final Map<String, Integer> labels = labels(instructions);
+        final boolean[] visited = new boolean[instructions.size()];
+        final int[] work = new int[instructions.size()];
+        int cursor = 0;
+        int workSize = 0;
+        for (final int successor : successors(allocationIndex, instructions, labels)) {
+            if (successor == allocationIndex) {
+                return true;
+            }
+            if (!visited[successor]) {
+                visited[successor] = true;
+                work[workSize] = successor;
+                workSize++;
+            }
+        }
+        while (cursor < workSize) {
+            final int index = work[cursor];
+            cursor++;
+            for (final int successor : successors(index, instructions, labels)) {
+                if (successor == allocationIndex) {
+                    return true;
+                }
+                if (!visited[successor]) {
+                    visited[successor] = true;
+                    work[workSize] = successor;
+                    workSize++;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean primitiveArrayAllocation(final IrExpression expression) {
+        return switch (expression.kind()) {
+            case INT_ARRAY_ALLOCATION, LONG_ARRAY_ALLOCATION, FLOAT_ARRAY_ALLOCATION,
+                 DOUBLE_ARRAY_ALLOCATION, BYTE_ARRAY_ALLOCATION, BOOLEAN_ARRAY_ALLOCATION,
+                 SHORT_ARRAY_ALLOCATION, CHAR_ARRAY_ALLOCATION -> true;
+            default -> false;
+        };
+    }
+
+    private static long stackArrayBytes(final IrExpression.Kind kind, final int length) {
+        final int elementBytes = switch (kind) {
+            case LONG_ARRAY_ALLOCATION, DOUBLE_ARRAY_ALLOCATION -> 8;
+            case INT_ARRAY_ALLOCATION, FLOAT_ARRAY_ALLOCATION -> 4;
+            case SHORT_ARRAY_ALLOCATION, CHAR_ARRAY_ALLOCATION -> 2;
+            case BYTE_ARRAY_ALLOCATION, BOOLEAN_ARRAY_ALLOCATION -> 1;
+            default -> MAX_STACK_ALLOCATION_BYTES;
+        };
+        return (long) CONSERVATIVE_ARRAY_HEADER_BYTES + ((long) length * elementBytes);
+    }
+
+    private static AllocationSite siteAt(
+        final Analysis analysis,
+        final IrFunction function,
+        final int instructionIndex,
+        final IrExpression.Kind kind
+    ) {
+        for (final AllocationSite site : analysis.sites()) {
+            if (site.owner().equals(function.owner())
+                && site.method().equals(function.name())
+                && site.descriptor().equals(function.descriptor())
+                && site.instructionIndex() == instructionIndex
+                && site.kind() == kind) {
+                return site;
+            }
+        }
+        return null;
     }
 
     private static List<AllocationSite> analyze(final IrFunction function) {
@@ -369,6 +494,37 @@ public final class EscapeAnalyzer {
      */
     public record Analysis(List<AllocationSite> sites) {
         public Analysis {
+            sites = List.copyOf(sites);
+        }
+    }
+
+    /**
+     * A primitive-array allocation selected for function stack storage.
+     *
+     * @param owner JVM internal owner
+     * @param method method name
+     * @param descriptor JVM descriptor
+     * @param instructionIndex lowered instruction index
+     * @param kind primitive-array allocation kind
+     * @param length constant array length
+     */
+    public record StackAllocationSite(
+        String owner,
+        String method,
+        String descriptor,
+        int instructionIndex,
+        IrExpression.Kind kind,
+        int length
+    ) {
+    }
+
+    /**
+     * Immutable release stack-allocation plan.
+     *
+     * @param sites selected sites in deterministic lowered order
+     */
+    public record StackAllocationPlan(List<StackAllocationSite> sites) {
+        public StackAllocationPlan {
             sites = List.copyOf(sites);
         }
     }
