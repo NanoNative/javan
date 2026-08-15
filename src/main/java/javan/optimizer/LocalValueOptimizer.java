@@ -8,15 +8,17 @@ import javan.ir.IrSourceLocation;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 /**
  * Propagates conservative local facts through lowered control flow and applies proven release rewrites.
+ * Analysis tracks only values that influence a candidate and stops conservatively at fixed resource bounds.
  */
 public final class LocalValueOptimizer {
+    private static final long MAX_PROGRAM_STATE_CELLS = 20_000;
+    private static final int MAX_VISITS_PER_INSTRUCTION = 8;
     private static final Fact UNKNOWN = new Fact(Nullness.UNKNOWN, null, null, null, null);
 
     /**
@@ -32,35 +34,63 @@ public final class LocalValueOptimizer {
         final MutableSummary summary = new MutableSummary();
         long removedNullChecks = 0;
         long deadBranches = 0;
+        long skippedCandidates = 0;
+        long remainingStateCells = MAX_PROGRAM_STATE_CELLS;
         for (final IrFunction function : program.functions()) {
-            final FunctionResult result = analyze(function, release);
+            final String[] slots = trackedSlots(function);
+            final boolean candidate = hasCandidate(function.instructions());
+            final long cost = analysisCost(function, slots.length);
+            final FunctionResult result;
+            if (candidate && cost > remainingStateCells) {
+                result = skipped(function);
+            } else {
+                result = analyze(function, release, slots);
+                if (candidate) {
+                    remainingStateCells -= Math.min(cost, remainingStateCells);
+                }
+            }
             functions.add(result.function());
             proofs.addAll(result.proofs());
             summary.add(result.facts());
             removedNullChecks += result.removedNullChecks();
             deadBranches += result.deadBranches();
+            skippedCandidates += result.skippedCandidates();
         }
         final IrProgram optimized = release ? copy(program, functions) : program;
         return new Result(
             optimized,
-            new OptimizationReport(removedNullChecks, 0, 0, 0, deadBranches, 0, release ? 0 : proofs.size()),
+            new OptimizationReport(
+                removedNullChecks,
+                0,
+                0,
+                0,
+                deadBranches,
+                0,
+                skippedCandidates + (release ? 0 : proofs.size())
+            ),
             List.copyOf(proofs),
             summary.freeze()
         );
     }
 
-    private static FunctionResult analyze(final IrFunction function, final boolean release) {
+    private static FunctionResult analyze(final IrFunction function, final boolean release, final String[] slots) {
         final List<IrInstruction> instructions = function.instructions();
         if (instructions.isEmpty() || !hasCandidate(instructions)) {
-            return new FunctionResult(function, List.of(), FactSummary.empty(), 0, 0);
+            return new FunctionResult(function, List.of(), FactSummary.empty(), 0, 0, 0);
         }
         final Map<String, Integer> labels = labels(instructions);
         final State[] incoming = new State[instructions.size()];
         final List<Integer> work = new ArrayList<>();
         int cursor = 0;
-        incoming[0] = State.empty();
+        long visits = 0;
+        final long maxVisits = (long) instructions.size() * MAX_VISITS_PER_INSTRUCTION;
+        incoming[0] = State.empty(slots);
         work.add(0);
         while (cursor < work.size()) {
+            if (visits >= maxVisits) {
+                return skipped(function);
+            }
+            visits++;
             final int index = work.get(cursor);
             cursor++;
             final IrInstruction instruction = instructions.get(index);
@@ -69,14 +99,26 @@ public final class LocalValueOptimizer {
                 final Boolean decision = booleanValue(evaluate(instruction.expression().orElseThrow(), outgoing));
                 final int target = labels.get(instruction.value().orElseThrow());
                 if (decision == null || decision) {
-                    enqueue(incoming, work, target, refine(outgoing, instruction.expression().orElseThrow(), true));
+                    enqueue(
+                        incoming,
+                        work,
+                        target,
+                        refine(outgoing, instruction.expression().orElseThrow(), true),
+                        target <= index
+                    );
                 }
                 if ((decision == null || !decision) && index + 1 < instructions.size()) {
-                    enqueue(incoming, work, index + 1, refine(outgoing, instruction.expression().orElseThrow(), false));
+                    enqueue(
+                        incoming,
+                        work,
+                        index + 1,
+                        refine(outgoing, instruction.expression().orElseThrow(), false),
+                        false
+                    );
                 }
             } else {
                 for (final int successor : successors(index, instructions, labels)) {
-                    enqueue(incoming, work, successor, outgoing);
+                    enqueue(incoming, work, successor, outgoing, successor <= index);
                 }
             }
         }
@@ -129,8 +171,32 @@ public final class LocalValueOptimizer {
             List.copyOf(proofs),
             summarize(incoming),
             removedNullChecks,
-            deadBranches
+            deadBranches,
+            0
         );
+    }
+
+    private static long analysisCost(final IrFunction function, final int slotCount) {
+        return function.instructions().size() * Math.max(1L, slotCount);
+    }
+
+    private static FunctionResult skipped(final IrFunction function) {
+        return new FunctionResult(
+            function,
+            List.of(),
+            FactSummary.empty(),
+            0,
+            0,
+            candidateCount(function.instructions())
+        );
+    }
+
+    private static long candidateCount(final List<IrInstruction> instructions) {
+        long count = 0;
+        for (final IrInstruction instruction : instructions) {
+            count += instruction.op() == IrInstruction.Op.BRANCH_IF || isNullCheck(instruction) ? 1 : 0;
+        }
+        return count;
     }
 
     private static boolean hasCandidate(final List<IrInstruction> instructions) {
@@ -140,6 +206,43 @@ public final class LocalValueOptimizer {
             }
         }
         return false;
+    }
+
+    private static String[] trackedSlots(final IrFunction function) {
+        final List<String> tracked = new ArrayList<>();
+        for (final IrInstruction instruction : function.instructions()) {
+            if (instruction.op() == IrInstruction.Op.BRANCH_IF || isNullCheck(instruction)) {
+                collectLocals(instruction.expression().orElseThrow(), tracked);
+            }
+        }
+        boolean changed;
+        do {
+            changed = false;
+            for (final IrInstruction instruction : function.instructions()) {
+                if ((instruction.op() == IrInstruction.Op.ASSIGN_INT
+                    || instruction.op() == IrInstruction.Op.ASSIGN_OBJECT)
+                    && tracked.contains(instruction.value().orElseThrow())) {
+                    changed |= collectLocals(instruction.expression().orElseThrow(), tracked);
+                }
+            }
+        } while (changed);
+        final String[] slots = new String[tracked.size()];
+        for (int index = 0; index < tracked.size(); index++) {
+            slots[index] = tracked.get(index);
+        }
+        return slots;
+    }
+
+    private static boolean collectLocals(final IrExpression expression, final List<String> locals) {
+        boolean changed = false;
+        if (expression.kind() == IrExpression.Kind.LOCAL && !locals.contains(expression.value())) {
+            locals.add(expression.value());
+            changed = true;
+        }
+        for (final IrExpression argument : expression.arguments()) {
+            changed |= collectLocals(argument, locals);
+        }
+        return changed;
     }
 
     private static Map<String, Integer> labels(final List<IrInstruction> instructions) {
@@ -195,9 +298,10 @@ public final class LocalValueOptimizer {
         final State[] incoming,
         final List<Integer> work,
         final int successor,
-        final State state
+        final State state,
+        final boolean widen
     ) {
-        final State merged = incoming[successor] == null ? state : merge(incoming[successor], state);
+        final State merged = incoming[successor] == null ? state : merge(incoming[successor], state, widen);
         if (!same(incoming[successor], merged)) {
             incoming[successor] = merged;
             work.add(successor);
@@ -420,27 +524,39 @@ public final class LocalValueOptimizer {
         return null;
     }
 
-    private static State merge(final State left, final State right) {
-        final Map<String, Fact> facts = new LinkedHashMap<>();
-        for (final Map.Entry<String, Fact> entry : left.facts().entrySet()) {
-            final Fact other = right.facts().get(entry.getKey());
-            if (other != null) {
-                final Fact merged = merge(entry.getValue(), other);
-                if (!isUnknown(merged)) {
-                    facts.put(entry.getKey(), merged);
-                }
+    private static State merge(final State left, final State right, final boolean widen) {
+        final Fact[] facts = new Fact[left.facts().length];
+        for (int index = 0; index < facts.length; index++) {
+            final Fact leftFact = left.facts()[index];
+            final Fact rightFact = right.facts()[index];
+            if (leftFact != null && rightFact != null) {
+                final Fact merged = merge(leftFact, rightFact, widen);
+                facts[index] = isUnknown(merged) ? null : merged;
             }
         }
-        return new State(facts);
+        return new State(left.slots(), facts);
     }
 
-    private static Fact merge(final Fact left, final Fact right) {
+    private static Fact merge(final Fact left, final Fact right, final boolean widen) {
         return new Fact(
             left.nullness() == right.nullness() ? left.nullness() : Nullness.UNKNOWN,
-            union(left.integerRange(), right.integerRange()),
+            mergeRange(left.integerRange(), right.integerRange(), widen),
             sameText(left.exactType(), right.exactType()) ? left.exactType() : null,
-            union(left.arrayLength(), right.arrayLength()),
-            union(left.stringLength(), right.stringLength())
+            mergeRange(left.arrayLength(), right.arrayLength(), widen),
+            mergeRange(left.stringLength(), right.stringLength(), widen)
+        );
+    }
+
+    private static Range mergeRange(final Range left, final Range right, final boolean widen) {
+        if (!widen) {
+            return union(left, right);
+        }
+        if (left == null || right == null) {
+            return null;
+        }
+        return new Range(
+            right.min() < left.min() ? Integer.MIN_VALUE : left.min(),
+            right.max() > left.max() ? Integer.MAX_VALUE : left.max()
         );
     }
 
@@ -459,11 +575,11 @@ public final class LocalValueOptimizer {
         if (left == right) {
             return true;
         }
-        if (left == null || right == null || left.facts().size() != right.facts().size()) {
+        if (left == null || right == null || left.facts().length != right.facts().length) {
             return false;
         }
-        for (final Map.Entry<String, Fact> entry : left.facts().entrySet()) {
-            if (!same(entry.getValue(), right.facts().get(entry.getKey()))) {
+        for (int index = 0; index < left.facts().length; index++) {
+            if (!same(left.facts()[index], right.facts()[index])) {
                 return false;
             }
         }
@@ -570,8 +686,10 @@ public final class LocalValueOptimizer {
             if (state == null) {
                 continue;
             }
-            for (final Fact fact : state.facts().values()) {
-                summary.observe(fact);
+            for (final Fact fact : state.facts()) {
+                if (fact != null) {
+                    summary.observe(fact);
+                }
             }
         }
         return summary.freeze();
@@ -597,7 +715,7 @@ public final class LocalValueOptimizer {
      * @param program original debug IR or rewritten release IR
      * @param report optimization counters
      * @param proofs deterministic reasons for every available rewrite
-     * @param facts fact observations across reachable instruction entries
+     * @param facts bounded observations for values that can affect an optimization candidate
      */
     public record Result(IrProgram program, OptimizationReport report, List<Proof> proofs, FactSummary facts) {
     }
@@ -645,28 +763,46 @@ public final class LocalValueOptimizer {
         List<Proof> proofs,
         FactSummary facts,
         long removedNullChecks,
-        long deadBranches
+        long deadBranches,
+        long skippedCandidates
     ) {
     }
 
-    private record State(Map<String, Fact> facts) {
-        private static State empty() {
-            return new State(Map.of());
+    private record State(String[] slots, Fact[] facts) {
+        private static State empty(final String[] slots) {
+            return new State(slots, new Fact[slots.length]);
         }
 
         private Fact fact(final String name) {
-            final Fact fact = facts.get(name);
+            final int index = slot(name);
+            final Fact fact = index < 0 ? null : facts[index];
             return fact == null ? UNKNOWN : fact;
         }
 
         private State with(final String name, final Fact fact) {
-            final Map<String, Fact> changed = new LinkedHashMap<>(facts);
-            if (isUnknown(fact)) {
-                changed.remove(name);
-            } else {
-                changed.put(name, fact);
+            final int slot = slot(name);
+            if (slot < 0) {
+                return this;
             }
-            return new State(changed);
+            final Fact normalized = isUnknown(fact) ? null : fact;
+            if (same(facts[slot], normalized)) {
+                return this;
+            }
+            final Fact[] changed = new Fact[facts.length];
+            for (int index = 0; index < facts.length; index++) {
+                changed[index] = facts[index];
+            }
+            changed[slot] = normalized;
+            return new State(slots, changed);
+        }
+
+        private int slot(final String name) {
+            for (int index = 0; index < slots.length; index++) {
+                if (slots[index].equals(name)) {
+                    return index;
+                }
+            }
+            return -1;
         }
     }
 

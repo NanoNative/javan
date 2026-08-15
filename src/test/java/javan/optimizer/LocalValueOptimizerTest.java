@@ -9,6 +9,7 @@ import javan.ir.IrProgram;
 import javan.ir.IrType;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -96,6 +97,65 @@ final class LocalValueOptimizerTest {
         assertThat(result.program()).isSameAs(program);
         assertThat(result.facts()).isEqualTo(new LocalValueOptimizer.FactSummary(0, 0, 0, 0, 0, 0, 0));
         assertThat(result.proofs()).isEmpty();
+    }
+
+    @Test
+    void largeFunctionsAreSkippedConservatively() {
+        final List<IrLocal> locals = new ArrayList<>();
+        for (int index = 0; index < 200; index++) {
+            locals.add(new IrLocal(IrType.INT, "value" + index));
+        }
+        final List<IrInstruction> instructions = new ArrayList<>();
+        instructions.add(IrInstruction.assignInt("value0", IrExpression.intLiteral(1)));
+        for (int index = 1; index < 200; index++) {
+            instructions.add(IrInstruction.assignInt("value" + index, IrExpression.intLocal("value" + (index - 1))));
+        }
+        for (int index = 0; index < 500; index++) {
+            instructions.add(IrInstruction.assignInt("value0", IrExpression.intLiteral(index)));
+        }
+        instructions.add(IrInstruction.branchIf("done", IrExpression.intLocal("value199")));
+        instructions.add(IrInstruction.label("done"));
+        instructions.add(IrInstruction.returnInt(IrExpression.intLocal("value0")));
+        final IrFunction function = function(List.of(), locals, instructions);
+        final IrProgram program = new IrProgram(List.of(function), function.symbol());
+
+        final LocalValueOptimizer.Result result = optimizer.optimize(program, true);
+
+        assertThat(result.program().functions().getFirst().instructions()).isEqualTo(instructions);
+        assertThat(result.report().skippedCandidates()).isEqualTo(1);
+        assertThat(result.proofs()).isEmpty();
+    }
+
+    @Test
+    void loopRangesConvergeWithoutInventingAConstantBranch() {
+        final IrFunction function = function(
+            List.of(),
+            List.of(new IrLocal(IrType.INT, "counter")),
+            List.of(
+                IrInstruction.assignInt("counter", IrExpression.intLiteral(0)),
+                IrInstruction.label("loop"),
+                IrInstruction.assignInt("counter", IrExpression.intBinary(
+                    "+",
+                    IrExpression.intLocal("counter"),
+                    IrExpression.intLiteral(1)
+                )),
+                IrInstruction.branchIf("loop", IrExpression.intComparison(
+                    "<",
+                    IrExpression.intLocal("counter"),
+                    IrExpression.intLiteral(100)
+                )),
+                IrInstruction.returnInt(IrExpression.intLocal("counter"))
+            )
+        );
+
+        final LocalValueOptimizer.Result result = optimizer.optimize(
+            new IrProgram(List.of(function), function.symbol()),
+            true
+        );
+
+        assertThat(result.report().skippedCandidates()).isZero();
+        assertThat(result.program().functions().getFirst().instructions())
+            .anyMatch(instruction -> instruction.op() == IrInstruction.Op.BRANCH_IF);
     }
 
     @Test
