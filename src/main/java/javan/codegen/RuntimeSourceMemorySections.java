@@ -38,15 +38,6 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_HEAP_KIND_OBJECT 2
         #define JAVAN_HEAP_KIND_ARRAY 3
         #define JAVAN_HEAP_KIND_EXPORT 4
-        #define JAVAN_ARRAY_KIND_OBJECT 1
-        #define JAVAN_ARRAY_KIND_INT 2
-        #define JAVAN_ARRAY_KIND_LONG 3
-        #define JAVAN_ARRAY_KIND_FLOAT 4
-        #define JAVAN_ARRAY_KIND_DOUBLE 5
-        #define JAVAN_ARRAY_KIND_BYTE 6
-        #define JAVAN_ARRAY_KIND_BOOLEAN 7
-        #define JAVAN_ARRAY_KIND_SHORT 8
-        #define JAVAN_ARRAY_KIND_CHAR 9
         #define JAVAN_RUNTIME_KIND_NONE 0
         #define JAVAN_RUNTIME_KIND_OBJECT_LIST 1
         #define JAVAN_RUNTIME_KIND_OBJECT_ITERATOR 2
@@ -7240,13 +7231,7 @@ final class RuntimeSourceMemorySections {
             javan_root_frame_pop(javan_wait_for_non_current_threads_roots);
         }
 
-        typedef struct {
-            int length;
-            int element_size;
-            int kind;
-            int reserved;
-            const char* class_name;
-        } javan_array_header;
+        typedef JavanArrayHeader javan_array_header;
 
         typedef struct {
             int length;

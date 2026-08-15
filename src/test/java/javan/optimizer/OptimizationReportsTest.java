@@ -78,7 +78,11 @@ final class OptimizationReportsTest {
                     "example/Main", "run", "()V", 2, 9,
                     javan.ir.IrExpression.Kind.OBJECT_ARRAY_ALLOCATION, EscapeAnalyzer.Escape.GLOBAL_ESCAPE
                 )
-            ))
+            )),
+            new EscapeAnalyzer.StackAllocationPlan(List.of(new EscapeAnalyzer.StackAllocationSite(
+                "example/Main", "run", "()V", 0,
+                javan.ir.IrExpression.Kind.INT_ARRAY_ALLOCATION, 4
+            )))
         );
 
         assertThat(Files.readString(tempDir.resolve("reports/optimizations.json"))).contains(
@@ -94,7 +98,8 @@ final class OptimizationReportsTest {
             "\"allocationSites\": 3",
             "\"noEscape\": 1",
             "\"argumentEscape\": 1",
-            "\"globalEscape\": 1"
+            "\"globalEscape\": 1",
+            "\"stackAllocated\": 1"
         );
         assertThat(Files.readString(tempDir.resolve("reports/optimizations.md"))).contains(
             "## Local facts",
@@ -108,7 +113,8 @@ final class OptimizationReportsTest {
             "- allocation sites: `3`",
             "- no escape: `1`",
             "- argument escape: `1`",
-            "- global escape: `1`"
+            "- global escape: `1`",
+            "- stack allocated: `1`"
         );
     }
 }

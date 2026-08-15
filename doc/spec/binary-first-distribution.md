@@ -134,7 +134,9 @@ and unknown. The compiler uses them conservatively so non-writing calls preserve
 facts while writes and unknown calls discard those facts before further optimization.
 
 The same report counts managed allocations classified as `NoEscape`, `ArgumentEscape`, or
-`GlobalEscape`. Classification is evidence only: generated allocation behavior remains unchanged.
+`GlobalEscape`, plus release sites selected for function stack storage. Selection is currently limited
+to a conservative 4 KiB budget per function for constant-length primitive arrays proven `NoEscape`
+and outside control-flow cycles; every other site keeps managed allocation behavior.
 
 The IDE plugin should render reports. It must not infer native support from source code
 or JDK inventory by itself.

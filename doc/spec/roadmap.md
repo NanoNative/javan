@@ -33,11 +33,13 @@ dispatch, bounded callback receiver provenance, a canonical bytecode CFG, CFG-aw
 liveness, per-block local value facts with proof-backed release rewrites, and transitive method
 effects for pure, throwing, allocating, reading, writing, and unknown behavior. Escape
 classification is **Done**: managed allocation sites are reported as `NoEscape`, `ArgumentEscape`,
-or `GlobalEscape` without changing allocation behavior.
+or `GlobalEscape`. Stack allocation is **Partial**: release builds use at most 4 KiB of function-stack
+storage for constant-length primitive arrays proven `NoEscape` and outside control-flow cycles.
+Objects, dynamic or large arrays, repeated loop sites, debug builds, and arenas remain managed.
 
 | Priority | Analysis | Smallest useful scope | Acceptance gate |
 | --- | --- | --- | --- |
-| P2 | Stack/arena allocation | Consume the implemented escape classifications only for proven `NoEscape` sites. | Identity, exception, GC-root, sanitizer, and allocation-counter gates pass. |
+| P2 | Stack/arena allocation | Expand the implemented primitive-array stack slice; add arenas only with scoped object-graph proof. | Identity, exception, GC-root, sanitizer, and allocation-counter gates pass. |
 
 Analysis rules:
 

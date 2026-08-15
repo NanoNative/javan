@@ -15,6 +15,7 @@ import javan.ir.IrProgram;
 import javan.ir.IrSourceLocation;
 import javan.ir.IrType;
 import javan.ir.IrExpression;
+import javan.optimizer.EscapeAnalyzer;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
@@ -62,6 +63,56 @@ final class CCodegenMemoryTest {
             "javan_root_frame_pop(javan_expr_roots);",
             "javan_gc_safe_point();"
         );
+    }
+
+    @Test
+    void emitsPlannedPrimitiveArrayInFunctionStackStorage() throws Exception {
+        final IrProgram program = new IrProgram(
+            List.of(),
+            List.of(new IrFunction(
+                "com/acme/Main",
+                "main",
+                "([Ljava/lang/String;)V",
+                "main_symbol",
+                IrType.VOID,
+                List.of(),
+                List.of(new IrLocal(IrType.OBJECT, "values")),
+                List.of(
+                    IrInstruction.assignObject(
+                        "values", IrExpression.intArrayAllocation(IrExpression.intLiteral(4))
+                    ),
+                    IrInstruction.assignArrayInt(
+                        IrExpression.objectLocal("values"), IrExpression.intLiteral(0), IrExpression.intLiteral(7)
+                    ),
+                    IrInstruction.printlnInt(IrExpression.intArrayLoad(
+                        IrExpression.objectLocal("values"), IrExpression.intLiteral(0)
+                    )),
+                    IrInstruction.returnVoid()
+                )
+            )),
+            "main_symbol"
+        );
+        final EscapeAnalyzer analyzer = new EscapeAnalyzer();
+        final EscapeAnalyzer.StackAllocationPlan plan = analyzer.planStackAllocations(
+            program, analyzer.analyze(program), true
+        );
+
+        final String generated = Files.readString(new CCodegen().generate(
+            program, tempDir, javan.build.NativeInteropConfig.empty(), plan
+        ));
+        final String debugGenerated = Files.readString(new CCodegen().generate(
+            program, tempDir.resolve("debug")
+        ));
+
+        assertThat(generated).contains(
+            "struct { JavanArrayHeader header; int values[4]; } javan_stack_array_0 "
+                + "= {{4, sizeof(int), JAVAN_ARRAY_KIND_INT, 0, \"[I\"}, {0}};",
+            "values = (void*) &javan_stack_array_0;",
+            "javan_int_array_set(values, 0, 7);",
+            "javan_println_int(javan_int_array_get(values, 0));"
+        );
+        assertThat(generated).doesNotContain("values = javan_int_array_new(4);");
+        assertThat(debugGenerated).contains("javan_expr_tmp_0 = javan_int_array_new(4);");
     }
 
     @Test
