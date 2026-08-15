@@ -93,6 +93,13 @@ final class CiParallelWorkflowSurfaceTest {
                     label: package_linux_x64
                     enabled: true
                 """.indent(8))
+            .contains("""
+                  - target: linux-aarch64
+                    os: ubuntu-24.04-arm
+                    sanitizer-scope: platform-smoke
+                    label: package_linux_arm64
+                    enabled: true
+                """.indent(8))
             .doesNotContain("sanitizer-scope: ${{ inputs.prepare_publication && 'full' || 'platform-smoke' }}")
             .contains("enabled: ${{ inputs.prepare_publication }}");
         assertThat(Files.readString(Path.of(".github/workflows/native-proof.yml")))
