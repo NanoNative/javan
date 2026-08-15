@@ -173,7 +173,7 @@ final class CliEscapeClassificationIntegrationTest extends CliIntegrationSupport
     }
 
     @Test
-    void releaseStackObjectPreservesIdentityFieldsAndHeapFallback() throws Exception {
+    void releaseStackObjectPreservesIdentityAndManagedFields() throws Exception {
         final Path project = project("stack-object-allocation");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -193,11 +193,17 @@ final class CliEscapeClassificationIntegrationTest extends CliIntegrationSupport
                     System.out.println(first.sum() + second.sum());
                     System.out.println(after - before);
 
+                    Child child = new Child(42);
                     long referenceBefore = allocations();
-                    RefBox reference = new RefBox("value");
+                    RefBox reference = new RefBox(child);
+                    child = null;
                     long referenceAfter = allocations();
-                    System.out.println(reference.value() == null);
+                    System.out.println(reference.value().value());
                     System.out.println(referenceAfter - referenceBefore);
+                    reference.value(new Child(84));
+                    System.out.println(reference.value().value());
+                    reference.value(null);
+                    System.out.println(reference.value() == null);
                 }
             }
             """);
@@ -222,13 +228,32 @@ final class CliEscapeClassificationIntegrationTest extends CliIntegrationSupport
             package com.acme;
 
             final class RefBox {
-                private final Object value;
+                private Child value;
 
-                RefBox(final Object value) {
+                RefBox(final Child value) {
                     this.value = value;
                 }
 
-                Object value() {
+                Child value() {
+                    return value;
+                }
+
+                void value(final Child value) {
+                    this.value = value;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Child", """
+            package com.acme;
+
+            final class Child {
+                private final int value;
+
+                Child(final int value) {
+                    this.value = value;
+                }
+
+                int value() {
                     return value;
                 }
             }
@@ -253,12 +278,13 @@ final class CliEscapeClassificationIntegrationTest extends CliIntegrationSupport
             defaultProcessTimeout(),
             Map.of("JAVAN_GC_STRESS", "1", "JAVAN_GC_SAFEPOINT_INTERVAL", "1")
         );
-        assertThat(result.stdout()).isEqualTo("false\n34\n0\nfalse\n1\n");
+        assertThat(result.stdout()).isEqualTo("false\n34\n0\n42\n0\n84\ntrue\n");
         assertThat(Files.readString(project.resolve(".javan/reports/optimizations.json")))
-            .contains("\"stackAllocated\": 2");
+            .contains("\"stackAllocated\": 3");
         assertThat(Files.readString(project.resolve(".javan/generated/main.c"))).contains(
             "javan_stack_object_",
-            "javan_new_com_acme_RefBox()"
+            "(void**) &javan_stack_object_",
+            ".field_value"
         );
     }
 
@@ -285,13 +311,13 @@ final class CliEscapeClassificationIntegrationTest extends CliIntegrationSupport
             package com.acme;
 
             final class FailingBox {
-                private int value;
+                private Object value;
 
                 FailingBox(final boolean fail) {
+                    value = new int[] {1};
                     if (fail) {
                         throw new IllegalArgumentException("boom");
                     }
-                    value = 1;
                 }
             }
             """);

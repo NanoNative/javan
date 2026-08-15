@@ -225,7 +225,7 @@ public final class EscapeAnalyzer {
     private static StackShape stackShape(final IrProgram program, final IrExpression expression) {
         if (expression.kind() == IrExpression.Kind.OBJECT_ALLOCATION) {
             for (final IrClass classInfo : program.classes()) {
-                if (classInfo.jvmName().equals(expression.value()) && referenceFree(classInfo)) {
+                if (classInfo.jvmName().equals(expression.value())) {
                     return new StackShape(stackObjectBytes(classInfo), 0);
                 }
             }
@@ -243,15 +243,6 @@ public final class EscapeAnalyzer {
             return null;
         }
         return new StackShape(stackArrayBytes(expression.kind(), length), length);
-    }
-
-    private static boolean referenceFree(final IrClass classInfo) {
-        for (final IrField field : classInfo.fields()) {
-            if (field.type() == IrType.OBJECT) {
-                return false;
-            }
-        }
-        return true;
     }
 
     private static long stackObjectBytes(final IrClass classInfo) {

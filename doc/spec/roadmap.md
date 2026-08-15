@@ -35,12 +35,13 @@ effects for pure, throwing, allocating, reading, writing, and unknown behavior. 
 classification is **Done**: managed allocation sites are reported as `NoEscape`, `ArgumentEscape`,
 or `GlobalEscape`, including transitive capture through exact application calls. Stack allocation is
 **Partial**: release builds use at most 4 KiB of function-stack storage for constant primitive arrays
-and reference-free application objects proven `NoEscape` outside control-flow cycles. Objects with
-managed-reference fields, dynamic or large arrays, repeated loop sites, debug builds, and arenas remain managed.
+and application objects proven `NoEscape` outside control-flow cycles. Managed-reference fields and
+runtime state remain explicit GC roots. Dynamic or large arrays, repeated loop sites, debug builds,
+and arenas remain managed.
 
 | Priority | Analysis | Smallest useful scope | Acceptance gate |
 | --- | --- | --- | --- |
-| P2 | Stack/arena allocation | Expand the bounded stack slice to contained references or repeated sites; add arenas only with scoped object-graph proof. | Identity, exception, GC-root, sanitizer, and allocation-counter gates pass. |
+| P2 | Stack/arena allocation | Prove repeated-site lifetimes; add arenas only with scoped object-graph proof. | Identity, exception, GC-root, sanitizer, and allocation-counter gates pass. |
 
 Analysis rules:
 
