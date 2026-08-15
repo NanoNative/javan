@@ -133,6 +133,9 @@ That report also records transitive method effects: pure, may-throw, allocates, 
 and unknown. The compiler uses them conservatively so non-writing calls preserve mutable field
 facts while writes and unknown calls discard those facts before further optimization.
 
+The same report counts managed allocations classified as `NoEscape`, `ArgumentEscape`, or
+`GlobalEscape`. Classification is evidence only: generated allocation behavior remains unchanged.
+
 The IDE plugin should render reports. It must not infer native support from source code
 or JDK inventory by itself.
 

@@ -596,7 +596,8 @@ final class ReportSummarizerTest {
                 "exactTypes": 12, "arrayLengths": 13, "stringLengths": 14},
               "proofs": [{"kind": "branch"}],
               "methodEffects": {"methodCount": 2, "pureMethods": 1, "throwingMethods": 1,
-                "allocatingMethods": 0, "readingMethods": 0, "writingMethods": 1, "unknownMethods": 0}
+                "allocatingMethods": 0, "readingMethods": 0, "writingMethods": 1, "unknownMethods": 0},
+              "escapeAnalysis": {"allocationSites": 3, "noEscape": 1, "argumentEscape": 1, "globalEscape": 1}
             }
             """);
         Files.writeString(reports.resolve("optimizations.md"), "# Optimizations\n");
@@ -613,7 +614,11 @@ final class ReportSummarizerTest {
             "proofs: `1`",
             "methodCount: `2`",
             "pureMethods: `1`",
-            "writingMethods: `1`"
+            "writingMethods: `1`",
+            "allocationSites: `3`",
+            "noEscape: `1`",
+            "argumentEscape: `1`",
+            "globalEscape: `1`"
         );
     }
 

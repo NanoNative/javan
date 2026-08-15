@@ -31,11 +31,13 @@ normally choose the safe path itself.
 Javan currently has entrypoint-rooted reachability, instantiated-type-bounded class-hierarchy
 dispatch, bounded callback receiver provenance, a canonical bytecode CFG, CFG-aware GC-root
 liveness, per-block local value facts with proof-backed release rewrites, and transitive method
-effects for pure, throwing, allocating, reading, writing, and unknown behavior.
+effects for pure, throwing, allocating, reading, writing, and unknown behavior. Escape
+classification is **Done**: managed allocation sites are reported as `NoEscape`, `ArgumentEscape`,
+or `GlobalEscape` without changing allocation behavior.
 
 | Priority | Analysis | Smallest useful scope | Acceptance gate |
 | --- | --- | --- | --- |
-| P2 | Escape classification | Report `NoEscape`, `ArgumentEscape`, and `GlobalEscape` before changing allocation. | Any later stack/arena allocation passes identity, exception, GC-root, sanitizer, and allocation-counter gates. |
+| P2 | Stack/arena allocation | Consume the implemented escape classifications only for proven `NoEscape` sites. | Identity, exception, GC-root, sanitizer, and allocation-counter gates pass. |
 
 Analysis rules:
 

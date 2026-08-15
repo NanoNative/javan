@@ -55,6 +55,12 @@ only proven non-writing calls; unknown calls, writes, and receiver reassignment 
 Other field kinds remain unoptimized rather than guessed. The same optimization report records
 deterministic aggregate counts for the reachable method effects without dumping thousands of rows.
 
+Managed allocation sites are classified conservatively as `NoEscape`, `ArgumentEscape`, or
+`GlobalEscape`. The analysis follows local copies and control-flow merges, treats calls as argument
+escape, and treats returns plus heap/static stores as global escape. Fixed resource bounds fall back
+to `GlobalEscape`. Reports contain aggregate counts only; allocation strategy is unchanged until the
+runtime safety gates for stack or arena allocation are implemented.
+
 Guard patterns:
 
 - `Objects.requireNonNull(x)` implemented for proven non-null local values
@@ -81,7 +87,7 @@ Safety rules:
 Release-mode optimization backlog:
 
 - smart dead-code elimination for unreachable classes, methods, fields, constructors, runtime modules, intrinsics, strings, vtables, and dispatch tables
-- escape analysis and stack allocation
+- stack allocation for proven `NoEscape` sites
 - arena allocation for scoped temporary object graphs
 - devirtualization
 - method specialization

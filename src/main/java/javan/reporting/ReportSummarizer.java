@@ -424,6 +424,10 @@ public final class ReportSummarizer {
         addNumber(result, value, "readingMethods");
         addNumber(result, value, "writingMethods");
         addNumber(result, value, "unknownMethods");
+        addNumber(result, value, "allocationSites");
+        addNumber(result, value, "noEscape");
+        addNumber(result, value, "argumentEscape");
+        addNumber(result, value, "globalEscape");
         return List.copyOf(result);
     }
 
