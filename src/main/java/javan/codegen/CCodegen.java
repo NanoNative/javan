@@ -1243,7 +1243,7 @@ public final class CCodegen {
         for (final javan.ir.IrLocal local : function.locals()) {
             c.append("    ").append(local.type().cName()).append(' ').append(local.name()).append(" = 0;").append(System.lineSeparator());
         }
-        emitStackArrayStorage(function, stackAllocations, c);
+        emitStackStorage(program, function, stackAllocations, c);
         final List<String> rootNames = objectRootNames(function);
         final String rootFrameSymbol = rootFrameSymbol(function);
         final RootLivenessPlan rootLiveness = RootLivenessPlan.forFunction(function);
@@ -1300,13 +1300,18 @@ public final class CCodegen {
         return false;
     }
 
-    private static void emitStackArrayStorage(
+    private static void emitStackStorage(
+        final IrProgram program,
         final IrFunction function,
         final EscapeAnalyzer.StackAllocationPlan plan,
         final StringBuilder c
     ) {
         for (final EscapeAnalyzer.StackAllocationSite site : plan.sites()) {
             if (!sameFunction(function, site)) {
+                continue;
+            }
+            if (site.kind() == IrExpression.Kind.OBJECT_ALLOCATION) {
+                emitStackObjectStorage(program, function, site, c);
                 continue;
             }
             final StackArrayLayout layout = stackArrayLayout(site.kind());
@@ -1327,6 +1332,31 @@ public final class CCodegen {
                 .append("\"}, {0}};")
                 .append(System.lineSeparator());
         }
+    }
+
+    private static void emitStackObjectStorage(
+        final IrProgram program,
+        final IrFunction function,
+        final EscapeAnalyzer.StackAllocationSite site,
+        final StringBuilder c
+    ) {
+        final IrExpression allocation = function.instructions().get(site.instructionIndex())
+            .expression().orElseThrow();
+        for (int classIndex = 0; classIndex < program.classes().size(); classIndex++) {
+            final IrClass classInfo = program.classes().get(classIndex);
+            if (classInfo.jvmName().equals(allocation.value())) {
+                c.append("    struct ")
+                    .append(classInfo.symbol())
+                    .append(' ')
+                    .append(stackObjectSymbol(site.instructionIndex()))
+                    .append(" = {")
+                    .append(classIndex + 1)
+                    .append("};")
+                    .append(System.lineSeparator());
+                return;
+            }
+        }
+        throw new IllegalArgumentException("stack object class is not lowered");
     }
 
     private static boolean sameFunction(
@@ -1373,6 +1403,10 @@ public final class CCodegen {
         return "javan_stack_array_" + instructionIndex;
     }
 
+    private static String stackObjectSymbol(final int instructionIndex) {
+        return "javan_stack_object_" + instructionIndex;
+    }
+
     private static EscapeAnalyzer.StackAllocationSite stackAllocationAt(
         final IrFunction function,
         final int instructionIndex,
@@ -1386,7 +1420,7 @@ public final class CCodegen {
         return null;
     }
 
-    private static void emitStackArrayAssignment(
+    private static void emitStackAssignment(
         final StringBuilder c,
         final String target,
         final EscapeAnalyzer.StackAllocationSite site
@@ -1394,7 +1428,8 @@ public final class CCodegen {
         c.append("    ")
             .append(target)
             .append(" = (void*) &")
-            .append(stackArraySymbol(site.instructionIndex()))
+            .append(site.kind() == IrExpression.Kind.OBJECT_ALLOCATION
+                ? stackObjectSymbol(site.instructionIndex()) : stackArraySymbol(site.instructionIndex()))
             .append(";")
             .append(System.lineSeparator());
     }
@@ -2906,7 +2941,7 @@ public final class CCodegen {
                         nativeWrapperSymbols
                     );
                 } else {
-                    emitStackArrayAssignment(c, instruction.value().orElseThrow(), stackSite);
+                    emitStackAssignment(c, instruction.value().orElseThrow(), stackSite);
                 }
                 break;
             case ASSIGN_FIELD_INT: {

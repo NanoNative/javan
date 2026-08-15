@@ -56,12 +56,14 @@ Other field kinds remain unoptimized rather than guessed. The same optimization 
 deterministic aggregate counts for the reachable method effects without dumping thousands of rows.
 
 Managed allocation sites are classified conservatively as `NoEscape`, `ArgumentEscape`, or
-`GlobalEscape`. The analysis follows local copies and control-flow merges, treats calls as argument
-escape, and treats returns plus heap/static stores as global escape. Fixed resource bounds fall back
-to `GlobalEscape`. Release builds consume this evidence for bounded constant-length primitive arrays
-whose allocation instruction is not inside a control-flow cycle. Those arrays use function stack
-storage within one conservative 4 KiB budget per function; debug builds and all other allocation
-shapes remain managed. Reports include the selected stack-allocation count.
+`GlobalEscape`. The analysis follows local copies, control-flow merges, and transitive argument
+capture through exact application calls; unknown calls remain argument escapes. Returns plus
+heap/static stores are global escapes, and fixed resource bounds fall back to `GlobalEscape`.
+Release builds consume this evidence for bounded constant primitive arrays and reference-free
+application objects whose exact constructor and later calls do not capture the value. Selected sites
+must remain outside control-flow cycles and share one conservative 4 KiB function budget. Debug builds,
+objects with managed-reference fields, and all other allocation shapes remain managed. Reports include
+the selected stack-allocation count.
 
 Guard patterns:
 
@@ -89,8 +91,8 @@ Safety rules:
 Release-mode optimization backlog:
 
 - smart dead-code elimination for unreachable classes, methods, fields, constructors, runtime modules, intrinsics, strings, vtables, and dispatch tables
-- expand stack allocation beyond bounded constant primitive arrays only when identity, publication,
-  contained-reference rooting, and repeated-site lifetime are proven
+- expand stack allocation to managed-reference fields and repeated sites only when contained-reference
+  rooting, publication, identity, and repeated-site lifetime are proven
 - arena allocation for scoped temporary object graphs
 - devirtualization
 - method specialization

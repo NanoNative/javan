@@ -171,4 +171,141 @@ final class CliEscapeClassificationIntegrationTest extends CliIntegrationSupport
         assertThat(Files.readString(project.resolve(".javan/reports/optimizations.json")))
             .contains("\"stackAllocated\": 1");
     }
+
+    @Test
+    void releaseStackObjectPreservesIdentityFieldsAndHeapFallback() throws Exception {
+        final Path project = project("stack-object-allocation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                private static native long allocations();
+
+                public static void main(final String[] args) {
+                    long before = allocations();
+                    Box first = new Box(7, 8L);
+                    Box second = new Box(9, 10L);
+                    long after = allocations();
+                    System.out.println(first == second);
+                    System.out.println(first.sum() + second.sum());
+                    System.out.println(after - before);
+
+                    long referenceBefore = allocations();
+                    RefBox reference = new RefBox("value");
+                    long referenceAfter = allocations();
+                    System.out.println(reference.value() == null);
+                    System.out.println(referenceAfter - referenceBefore);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Box", """
+            package com.acme;
+
+            final class Box {
+                private final int first;
+                private final long second;
+
+                Box(final int first, final long second) {
+                    this.first = first;
+                    this.second = second;
+                }
+
+                long sum() {
+                    return first + second;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.RefBox", """
+            package com.acme;
+
+            final class RefBox {
+                private final Object value;
+
+                RefBox(final Object value) {
+                    this.value = value;
+                }
+
+                Object value() {
+                    return value;
+                }
+            }
+            """);
+        Files.createDirectories(project.resolve("native"));
+        writeC(project, "native/allocations.c", """
+            #include "javan_runtime.h"
+            long long native_allocations(void) { return (long long) javan_heap_total_allocations(); }
+            """);
+        Files.writeString(project.resolve("javan.toml"), """
+            [native]
+            imports = ["com.acme.Main.allocations():long -> native_allocations"]
+            sources = ["native/allocations.c"]
+            """);
+
+        final CliRun build = runSlow(tempDir, "build", project.toString(), "--release");
+
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(
+            project,
+            List.of(project.resolve(".javan/bin/stack-object-allocation").toString()),
+            defaultProcessTimeout(),
+            Map.of("JAVAN_GC_STRESS", "1", "JAVAN_GC_SAFEPOINT_INTERVAL", "1")
+        );
+        assertThat(result.stdout()).isEqualTo("false\n34\n0\nfalse\n1\n");
+        assertThat(Files.readString(project.resolve(".javan/reports/optimizations.json")))
+            .contains("\"stackAllocated\": 2");
+        assertThat(Files.readString(project.resolve(".javan/generated/main.c"))).contains(
+            "javan_stack_object_",
+            "javan_new_com_acme_RefBox()"
+        );
+    }
+
+    @Test
+    void releaseStackObjectPreservesCaughtConstructorException() throws Exception {
+        final Path project = project("stack-object-constructor-exception");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    try {
+                        new FailingBox(true);
+                    } catch (IllegalArgumentException expected) {
+                        System.out.println(expected.getMessage());
+                    }
+                }
+            }
+            """);
+        writeJava(project, "com.acme.FailingBox", """
+            package com.acme;
+
+            final class FailingBox {
+                private int value;
+
+                FailingBox(final boolean fail) {
+                    if (fail) {
+                        throw new IllegalArgumentException("boom");
+                    }
+                    value = 1;
+                }
+            }
+            """);
+        final CliRun build = runSlow(tempDir, "build", project.toString(), "--release");
+
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(
+            project,
+            List.of(project.resolve(".javan/bin/stack-object-constructor-exception").toString()),
+            defaultProcessTimeout(),
+            Map.of("JAVAN_GC_STRESS", "1", "JAVAN_GC_SAFEPOINT_INTERVAL", "1")
+        );
+        assertThat(result.stdout()).isEqualTo("boom\n");
+        assertThat(Files.readString(project.resolve(".javan/reports/optimizations.json")))
+            .contains("\"stackAllocated\": 1");
+    }
 }
