@@ -139,6 +139,22 @@ assert_thread_inventory_summary() {
   assert_contains "$file" '"actualCurrentThreadRootPresent": 0'
 }
 
+assert_thread_sanitizer_summary() {
+  project=$1
+  proof=$project/.javan/reports/sanitizer-proof.json
+  assert_sanitizer_proof_file "$proof"
+  assert_contains "$proof" '"status": "pass"'
+  assert_contains "$proof" '"kind": "app"'
+  assert_contains "$proof" '"counterCheck": true'
+  assert_contains "$proof" '"actualLiveAllocations": 0'
+  assert_contains "$proof" '"actualLiveBytes": 0'
+  assert_contains "$proof" '"failureSignatures": false'
+  assert_thread_inventory_summary "$proof"
+  assert_sanitizer_proof_summary "$project" app
+  report=$project/.javan/reports/report.json
+  assert_thread_inventory_summary "$report"
+}
+
 assert_library_sanitizer_summary() {
   JAVAN_HEAP_LIMIT_BYTES=2048 \
     sh .github/scripts/sanitizer-library-smoke.sh src/test/resources/projects/acceptance/native-library
@@ -209,23 +225,33 @@ JAVAN_SANITIZER_COUNTER_CHECK=true \
 JAVAN_GC_STRESS=1 \
 JAVAN_GC_SAFEPOINT_INTERVAL=1 \
   sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/thread-current-inventory
-THREAD_CURRENT_PROOF=src/test/resources/projects/native-profile/thread-current-inventory/.javan/reports/sanitizer-proof.json
-assert_sanitizer_proof_file "$THREAD_CURRENT_PROOF"
-assert_contains "$THREAD_CURRENT_PROOF" '"status": "pass"'
-assert_contains "$THREAD_CURRENT_PROOF" '"kind": "app"'
-assert_contains "$THREAD_CURRENT_PROOF" '"counterCheck": true'
-assert_contains "$THREAD_CURRENT_PROOF" '"failureSignatures": false'
-assert_thread_inventory_summary "$THREAD_CURRENT_PROOF"
-run_javan_report src/test/resources/projects/native-profile/thread-current-inventory
-THREAD_CURRENT_REPORT=src/test/resources/projects/native-profile/thread-current-inventory/.javan/reports/report.json
-assert_sanitizer_proof_file "$THREAD_CURRENT_REPORT"
-assert_contains "$THREAD_CURRENT_REPORT" '"name": "sanitizer-proof"'
-assert_contains "$THREAD_CURRENT_REPORT" '"status": "present"'
-assert_contains "$THREAD_CURRENT_REPORT" '"status": "pass"'
-assert_contains "$THREAD_CURRENT_REPORT" '"kind": "app"'
-assert_contains "$THREAD_CURRENT_REPORT" '"counterCheck": "true"'
-assert_contains "$THREAD_CURRENT_REPORT" '"failureSignatures": "false"'
-assert_thread_inventory_summary "$THREAD_CURRENT_REPORT"
+assert_thread_sanitizer_summary src/test/resources/projects/native-profile/thread-current-inventory
+
+JAVAN_HEAP_LIMIT_BYTES=65536 \
+JAVAN_SANITIZER_COUNTER_CHECK=true \
+JAVAN_SANITIZER_MAX_LIVE_ALLOCATIONS=0 \
+JAVAN_SANITIZER_MAX_LIVE_BYTES=0 \
+JAVAN_SANITIZER_MIN_TOTAL_ALLOCATIONS=4000 \
+JAVAN_SANITIZER_MIN_GC_COLLECTIONS=1 \
+JAVAN_SANITIZER_MIN_GC_COLLECTED_ALLOCATIONS=4000 \
+JAVAN_GC_STRESS=1 \
+JAVAN_GC_SAFEPOINT_INTERVAL=1 \
+  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/concurrent-object-return-handoff
+CONCURRENT_HANDOFF_PROOF=src/test/resources/projects/native-profile/concurrent-object-return-handoff/.javan/reports/sanitizer-proof.json
+assert_thread_sanitizer_summary src/test/resources/projects/native-profile/concurrent-object-return-handoff
+assert_contains "$CONCURRENT_HANDOFF_PROOF" '"maxLiveAllocations": 0'
+assert_contains "$CONCURRENT_HANDOFF_PROOF" '"maxLiveBytes": 0'
+assert_contains "$CONCURRENT_HANDOFF_PROOF" '"minTotalAllocations": 4000'
+assert_contains "$CONCURRENT_HANDOFF_PROOF" '"minGcCollections": 1'
+assert_contains "$CONCURRENT_HANDOFF_PROOF" '"minGcCollectedAllocations": 4000'
+assert_json_number_at_least "$CONCURRENT_HANDOFF_PROOF" actualTotalAllocations 4000
+assert_json_number_at_least "$CONCURRENT_HANDOFF_PROOF" actualGcCollections 1
+assert_json_number_at_least "$CONCURRENT_HANDOFF_PROOF" actualGcCollectedAllocations 4000
+CONCURRENT_HANDOFF_REPORT=src/test/resources/projects/native-profile/concurrent-object-return-handoff/.javan/reports/report.json
+assert_json_number_at_least "$CONCURRENT_HANDOFF_REPORT" actualTotalAllocations 4000
+assert_json_number_at_least "$CONCURRENT_HANDOFF_REPORT" actualGcCollections 1
+assert_json_number_at_least "$CONCURRENT_HANDOFF_REPORT" actualGcCollectedAllocations 4000
+
 assert_library_sanitizer_summary
 fi
 

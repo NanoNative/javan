@@ -219,6 +219,12 @@ Current gates:
   output. It does not claim concurrent opaque runtime-helper object returns, general concurrent
   allocation or field/static/container pointer mutation, or concurrent starts of the same
   `Thread` object.
+- `concurrent-object-return-handoff` runs two platform workers over pre-created immutable values.
+  Each worker repeatedly receives a newly allocated value from a direct method call while forced
+  collection runs at every safe point. The required sanitizer baseline verifies JVM parity, at
+  least 4,000 tracked allocations and one collection, zero final live heap allocations/bytes, and
+  no retained thread objects, targets, or current-thread root. It does not claim shared mutable pointer
+  publication beyond the lock-protected coordination primitive.
 - `unjoinedWorkersCompleteBeforeProcessExitUnderGcPressureAndMatchJvmOutput` runs a quick
   unjoined worker beside an allocating worker under the same hostile GC settings. The generated
   main drain keeps the selected worker rooted across completion while the peer continues
