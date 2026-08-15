@@ -33,6 +33,7 @@ import javan.detect.MainClassDetector.MainClassDetection;
 import javan.detect.ProjectDetector;
 import javan.detect.ProjectLayout;
 import javan.ir.IrProgram;
+import javan.optimizer.EscapeAnalyzer;
 import javan.optimizer.LocalValueOptimizer;
 import javan.optimizer.MethodEffectAnalyzer;
 import javan.optimizer.OptimizationReports;
@@ -90,6 +91,7 @@ public final class Javan {
     private final CompatibilityReports compatibilityReports = new CompatibilityReports();
     private final LocalValueOptimizer localValueOptimizer = new LocalValueOptimizer();
     private final MethodEffectAnalyzer methodEffectAnalyzer = new MethodEffectAnalyzer();
+    private final EscapeAnalyzer escapeAnalyzer = new EscapeAnalyzer();
     private final OptimizationReports optimizationReports = new OptimizationReports();
     private final DependencyReports dependencyReports = new DependencyReports();
     private final ControlFlowReports controlFlowReports = new ControlFlowReports();
@@ -242,8 +244,9 @@ public final class Javan {
         );
         final MethodEffectAnalyzer.Analysis effects = methodEffectAnalyzer.analyze(lowered);
         final LocalValueOptimizer.Result optimization = localValueOptimizer.optimize(lowered, options.release(), effects);
-        optimizationReports.write(check.layout().outputDirectory(), optimization, effects);
         final IrProgram program = optimization.program();
+        final EscapeAnalyzer.Analysis escapes = escapeAnalyzer.analyze(program);
+        optimizationReports.write(check.layout().outputDirectory(), optimization, effects, escapes);
         exceptionReports.write(check.layout().outputDirectory(), program);
         final Path artifact;
         if (options.appBuild()) {

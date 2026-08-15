@@ -24,7 +24,8 @@ public final class OptimizationReports {
             OptimizationReport.scaffold(),
             new LocalValueOptimizer.FactSummary(0, 0, 0, 0, 0, 0, 0),
             List.of(),
-            new MethodEffectAnalyzer.Analysis(List.of())
+            new MethodEffectAnalyzer.Analysis(List.of()),
+            new EscapeAnalyzer.Analysis(List.of())
         );
     }
 
@@ -34,15 +35,17 @@ public final class OptimizationReports {
      * @param outputDirectory javan output directory
      * @param result optimizer result
      * @param effects transitive method effects
+     * @param escapes managed allocation escape classifications
      * @return report files
      * @throws IOException when writing fails
      */
     public List<Path> write(
         final Path outputDirectory,
         final LocalValueOptimizer.Result result,
-        final MethodEffectAnalyzer.Analysis effects
+        final MethodEffectAnalyzer.Analysis effects,
+        final EscapeAnalyzer.Analysis escapes
     ) throws IOException {
-        return write(outputDirectory, result.report(), result.facts(), result.proofs(), effects);
+        return write(outputDirectory, result.report(), result.facts(), result.proofs(), effects, escapes);
     }
 
     private static List<Path> write(
@@ -50,12 +53,13 @@ public final class OptimizationReports {
         final OptimizationReport report,
         final LocalValueOptimizer.FactSummary facts,
         final List<LocalValueOptimizer.Proof> proofs,
-        final MethodEffectAnalyzer.Analysis effects
+        final MethodEffectAnalyzer.Analysis effects,
+        final EscapeAnalyzer.Analysis escapes
     ) throws IOException {
         final Path reports = outputDirectory.resolve("reports");
         return List.of(
-            Files2.writeString(reports.resolve("optimizations.json"), json(report, facts, proofs, effects)),
-            Files2.writeString(reports.resolve("optimizations.md"), markdown(report, facts, proofs, effects))
+            Files2.writeString(reports.resolve("optimizations.json"), json(report, facts, proofs, effects, escapes)),
+            Files2.writeString(reports.resolve("optimizations.md"), markdown(report, facts, proofs, effects, escapes))
         );
     }
 
@@ -63,7 +67,8 @@ public final class OptimizationReports {
         final OptimizationReport report,
         final LocalValueOptimizer.FactSummary facts,
         final List<LocalValueOptimizer.Proof> proofRecords,
-        final MethodEffectAnalyzer.Analysis effects
+        final MethodEffectAnalyzer.Analysis effects,
+        final EscapeAnalyzer.Analysis escapes
     ) {
         final StringBuilder proofs = new StringBuilder();
         for (int index = 0; index < proofRecords.size(); index++) {
@@ -94,8 +99,17 @@ public final class OptimizationReports {
             + ", \"arrayLengths\": " + facts.arrayLengths()
             + ", \"stringLengths\": " + facts.stringLengths() + "},\n"
             + "  \"proofs\": [\n" + proofs + "\n  ],\n"
-            + "  \"methodEffects\": " + effectJson(effects) + "\n"
+            + "  \"methodEffects\": " + effectJson(effects) + ",\n"
+            + "  \"escapeAnalysis\": " + escapeJson(escapes) + "\n"
             + "}\n";
+    }
+
+    private static String escapeJson(final EscapeAnalyzer.Analysis analysis) {
+        final EscapeCounts counts = escapeCounts(analysis);
+        return "{\"allocationSites\": " + counts.sites()
+            + ", \"noEscape\": " + counts.noEscape()
+            + ", \"argumentEscape\": " + counts.argumentEscape()
+            + ", \"globalEscape\": " + counts.globalEscape() + "}";
     }
 
     private static String effectJson(final MethodEffectAnalyzer.Analysis analysis) {
@@ -113,7 +127,8 @@ public final class OptimizationReports {
         final OptimizationReport report,
         final LocalValueOptimizer.FactSummary facts,
         final List<LocalValueOptimizer.Proof> proofRecords,
-        final MethodEffectAnalyzer.Analysis effects
+        final MethodEffectAnalyzer.Analysis effects,
+        final EscapeAnalyzer.Analysis escapes
     ) {
         final StringBuilder proofs = new StringBuilder();
         for (final LocalValueOptimizer.Proof proof : proofRecords) {
@@ -139,7 +154,8 @@ public final class OptimizationReports {
             + "- string lengths: `" + facts.stringLengths() + "`\n\n"
             + "## Proofs\n\n"
             + (proofs.isEmpty() ? "None.\n" : proofs.toString())
-            + effectMarkdown(effects);
+            + effectMarkdown(effects)
+            + escapeMarkdown(escapes);
     }
 
     private static String effectMarkdown(final MethodEffectAnalyzer.Analysis analysis) {
@@ -173,6 +189,29 @@ public final class OptimizationReports {
         return new EffectCounts(analysis.methods().size(), pure, throwing, allocating, reading, writing, unknown);
     }
 
+    private static String escapeMarkdown(final EscapeAnalyzer.Analysis analysis) {
+        final EscapeCounts counts = escapeCounts(analysis);
+        return "\n## Escape analysis\n\n"
+            + "- allocation sites: `" + counts.sites() + "`\n"
+            + "- no escape: `" + counts.noEscape() + "`\n"
+            + "- argument escape: `" + counts.argumentEscape() + "`\n"
+            + "- global escape: `" + counts.globalEscape() + "`\n";
+    }
+
+    private static EscapeCounts escapeCounts(final EscapeAnalyzer.Analysis analysis) {
+        long noEscape = 0;
+        long argumentEscape = 0;
+        long globalEscape = 0;
+        for (final EscapeAnalyzer.AllocationSite site : analysis.sites()) {
+            switch (site.escape()) {
+                case NO_ESCAPE -> noEscape++;
+                case ARGUMENT_ESCAPE -> argumentEscape++;
+                case GLOBAL_ESCAPE -> globalEscape++;
+            }
+        }
+        return new EscapeCounts(analysis.sites().size(), noEscape, argumentEscape, globalEscape);
+    }
+
     private record EffectCounts(
         long methods,
         long pure,
@@ -182,5 +221,8 @@ public final class OptimizationReports {
         long writing,
         long unknown
     ) {
+    }
+
+    private record EscapeCounts(long sites, long noEscape, long argumentEscape, long globalEscape) {
     }
 }

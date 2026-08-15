@@ -64,7 +64,21 @@ final class OptimizationReportsTest {
                 "()V",
                 "example_Main_run",
                 new MethodEffectAnalyzer.Effect(true, true, false, false, false)
-            )))
+            ))),
+            new EscapeAnalyzer.Analysis(List.of(
+                new EscapeAnalyzer.AllocationSite(
+                    "example/Main", "run", "()V", 0, 7,
+                    javan.ir.IrExpression.Kind.OBJECT_ALLOCATION, EscapeAnalyzer.Escape.NO_ESCAPE
+                ),
+                new EscapeAnalyzer.AllocationSite(
+                    "example/Main", "run", "()V", 1, 8,
+                    javan.ir.IrExpression.Kind.INT_ARRAY_ALLOCATION, EscapeAnalyzer.Escape.ARGUMENT_ESCAPE
+                ),
+                new EscapeAnalyzer.AllocationSite(
+                    "example/Main", "run", "()V", 2, 9,
+                    javan.ir.IrExpression.Kind.OBJECT_ARRAY_ALLOCATION, EscapeAnalyzer.Escape.GLOBAL_ESCAPE
+                )
+            ))
         );
 
         assertThat(Files.readString(tempDir.resolve("reports/optimizations.json"))).contains(
@@ -75,7 +89,12 @@ final class OptimizationReportsTest {
             "\"methodEffects\"",
             "\"methodCount\": 1",
             "\"throwingMethods\": 1",
-            "\"allocatingMethods\": 1"
+            "\"allocatingMethods\": 1",
+            "\"escapeAnalysis\"",
+            "\"allocationSites\": 3",
+            "\"noEscape\": 1",
+            "\"argumentEscape\": 1",
+            "\"globalEscape\": 1"
         );
         assertThat(Files.readString(tempDir.resolve("reports/optimizations.md"))).contains(
             "## Local facts",
@@ -84,7 +103,12 @@ final class OptimizationReportsTest {
             "`null-check` example/Main.run()V @ 7: receiver is proven non-null",
             "## Method effects",
             "- methods: `1`",
-            "- may throw: `1`"
+            "- may throw: `1`",
+            "## Escape analysis",
+            "- allocation sites: `3`",
+            "- no escape: `1`",
+            "- argument escape: `1`",
+            "- global escape: `1`"
         );
     }
 }
