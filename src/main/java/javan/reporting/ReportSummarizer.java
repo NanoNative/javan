@@ -417,7 +417,13 @@ public final class ReportSummarizer {
         addNumber(result, value, "arrayLengths");
         addNumber(result, value, "stringLengths");
         addArrayCount(result, value, "proofs");
-        addArrayCount(result, value, "methodEffects");
+        addNumber(result, value, "methodCount");
+        addNumber(result, value, "pureMethods");
+        addNumber(result, value, "throwingMethods");
+        addNumber(result, value, "allocatingMethods");
+        addNumber(result, value, "readingMethods");
+        addNumber(result, value, "writingMethods");
+        addNumber(result, value, "unknownMethods");
         return List.copyOf(result);
     }
 

@@ -53,7 +53,7 @@ pure, may-throw, allocates, reads, writes, and unknown. Exact application calls 
 callee effects, including recursive call groups. Current integer and object field facts survive
 only proven non-writing calls; unknown calls, writes, and receiver reassignment invalidate them.
 Other field kinds remain unoptimized rather than guessed. The same optimization report records
-every reachable method effect.
+deterministic aggregate counts for the reachable method effects without dumping thousands of rows.
 
 Guard patterns:
 

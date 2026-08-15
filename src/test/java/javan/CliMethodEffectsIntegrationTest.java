@@ -54,23 +54,13 @@ final class CliMethodEffectsIntegrationTest extends CliIntegrationSupport {
         final Path binary = project.resolve(".javan/bin/method-effects");
         assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo(jvm);
         final String report = Files.readString(project.resolve(".javan/reports/optimizations.json"));
-        assertThat(method(report, "increment")).contains(
-            "\"pure\": true",
-            "\"mayThrow\": false",
-            "\"writes\": false",
-            "\"unknown\": false"
+        assertThat(report).contains(
+            "\"methodEffects\"",
+            "\"methodCount\":",
+            "\"pureMethods\":",
+            "\"throwingMethods\":",
+            "\"writingMethods\":",
+            "\"unknownMethods\":"
         );
-        assertThat(method(report, "update")).contains(
-            "\"pure\": false",
-            "\"writes\": true",
-            "\"unknown\": false"
-        );
-    }
-
-    private static String method(final String report, final String name) {
-        final int start = report.indexOf("\"owner\": \"com/acme/Main\", \"method\": \"" + name + "\"");
-        assertThat(start).as("method effect for %s", name).isNotNegative();
-        final int end = report.indexOf('}', start);
-        return report.substring(start, end + 1);
     }
 }

@@ -73,9 +73,9 @@ final class OptimizationReportsTest {
             "\"kind\": \"null-check\"",
             "\"bytecodeOffset\": 7",
             "\"methodEffects\"",
-            "\"pure\": false",
-            "\"mayThrow\": true",
-            "\"allocates\": true"
+            "\"methodCount\": 1",
+            "\"throwingMethods\": 1",
+            "\"allocatingMethods\": 1"
         );
         assertThat(Files.readString(tempDir.resolve("reports/optimizations.md"))).contains(
             "## Local facts",

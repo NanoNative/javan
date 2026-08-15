@@ -94,30 +94,19 @@ public final class OptimizationReports {
             + ", \"arrayLengths\": " + facts.arrayLengths()
             + ", \"stringLengths\": " + facts.stringLengths() + "},\n"
             + "  \"proofs\": [\n" + proofs + "\n  ],\n"
-            + "  \"methodEffects\": [\n" + effectJson(effects) + "\n  ]\n"
+            + "  \"methodEffects\": " + effectJson(effects) + "\n"
             + "}\n";
     }
 
     private static String effectJson(final MethodEffectAnalyzer.Analysis analysis) {
-        final StringBuilder result = new StringBuilder();
-        for (int index = 0; index < analysis.methods().size(); index++) {
-            final MethodEffectAnalyzer.MethodEffect method = analysis.methods().get(index);
-            final MethodEffectAnalyzer.Effect effect = method.effect();
-            if (index > 0) {
-                result.append(",\n");
-            }
-            result.append("    {\"owner\": ").append(Json.string(method.owner()))
-                .append(", \"method\": ").append(Json.string(method.name()))
-                .append(", \"descriptor\": ").append(Json.string(method.descriptor()))
-                .append(", \"symbol\": ").append(Json.string(method.symbol()))
-                .append(", \"pure\": ").append(effect.pure())
-                .append(", \"mayThrow\": ").append(effect.mayThrow())
-                .append(", \"allocates\": ").append(effect.allocates())
-                .append(", \"reads\": ").append(effect.reads())
-                .append(", \"writes\": ").append(effect.writes())
-                .append(", \"unknown\": ").append(effect.unknown()).append('}');
-        }
-        return result.toString();
+        final EffectCounts counts = effectCounts(analysis);
+        return "{\"methodCount\": " + counts.methods()
+            + ", \"pureMethods\": " + counts.pure()
+            + ", \"throwingMethods\": " + counts.throwing()
+            + ", \"allocatingMethods\": " + counts.allocating()
+            + ", \"readingMethods\": " + counts.reading()
+            + ", \"writingMethods\": " + counts.writing()
+            + ", \"unknownMethods\": " + counts.unknown() + "}";
     }
 
     private static String markdown(
@@ -154,6 +143,18 @@ public final class OptimizationReports {
     }
 
     private static String effectMarkdown(final MethodEffectAnalyzer.Analysis analysis) {
+        final EffectCounts counts = effectCounts(analysis);
+        return "\n## Method effects\n\n"
+            + "- methods: `" + counts.methods() + "`\n"
+            + "- pure: `" + counts.pure() + "`\n"
+            + "- may throw: `" + counts.throwing() + "`\n"
+            + "- allocates: `" + counts.allocating() + "`\n"
+            + "- reads: `" + counts.reading() + "`\n"
+            + "- writes: `" + counts.writing() + "`\n"
+            + "- unknown: `" + counts.unknown() + "`\n";
+    }
+
+    private static EffectCounts effectCounts(final MethodEffectAnalyzer.Analysis analysis) {
         long pure = 0;
         long throwing = 0;
         long allocating = 0;
@@ -169,13 +170,17 @@ public final class OptimizationReports {
             writing += effect.writes() ? 1 : 0;
             unknown += effect.unknown() ? 1 : 0;
         }
-        return "\n## Method effects\n\n"
-            + "- methods: `" + analysis.methods().size() + "`\n"
-            + "- pure: `" + pure + "`\n"
-            + "- may throw: `" + throwing + "`\n"
-            + "- allocates: `" + allocating + "`\n"
-            + "- reads: `" + reading + "`\n"
-            + "- writes: `" + writing + "`\n"
-            + "- unknown: `" + unknown + "`\n";
+        return new EffectCounts(analysis.methods().size(), pure, throwing, allocating, reading, writing, unknown);
+    }
+
+    private record EffectCounts(
+        long methods,
+        long pure,
+        long throwing,
+        long allocating,
+        long reading,
+        long writing,
+        long unknown
+    ) {
     }
 }

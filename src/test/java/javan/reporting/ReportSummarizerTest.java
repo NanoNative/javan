@@ -595,7 +595,8 @@ final class ReportSummarizerTest {
               "facts": {"nonNullValues": 8, "nullValues": 9, "integerConstants": 10, "integerRanges": 11,
                 "exactTypes": 12, "arrayLengths": 13, "stringLengths": 14},
               "proofs": [{"kind": "branch"}],
-              "methodEffects": [{"pure": true}, {"writes": true}]
+              "methodEffects": {"methodCount": 2, "pureMethods": 1, "throwingMethods": 1,
+                "allocatingMethods": 0, "readingMethods": 0, "writingMethods": 1, "unknownMethods": 0}
             }
             """);
         Files.writeString(reports.resolve("optimizations.md"), "# Optimizations\n");
@@ -610,7 +611,9 @@ final class ReportSummarizerTest {
             "integerRanges: `11`",
             "stringLengths: `14`",
             "proofs: `1`",
-            "methodEffects: `2`"
+            "methodCount: `2`",
+            "pureMethods: `1`",
+            "writingMethods: `1`"
         );
     }
 
