@@ -59,11 +59,12 @@ Managed allocation sites are classified conservatively as `NoEscape`, `ArgumentE
 `GlobalEscape`. The analysis follows local copies, control-flow merges, and transitive argument
 capture through exact application calls; unknown calls remain argument escapes. Returns plus
 heap/static stores are global escapes, and fixed resource bounds fall back to `GlobalEscape`.
-Release builds consume this evidence for bounded constant primitive arrays and reference-free
-application objects whose exact constructor and later calls do not capture the value. Selected sites
-must remain outside control-flow cycles and share one conservative 4 KiB function budget. Debug builds,
-objects with managed-reference fields, and all other allocation shapes remain managed. Reports include
-the selected stack-allocation count.
+Release builds consume this evidence for bounded constant primitive arrays and application objects
+whose exact constructor and later calls do not capture the value. A stack object's runtime-state slot
+and managed-reference fields remain in the function root frame, so contained heap objects survive GC,
+reassignment, and nulling normally. Selected sites must remain outside control-flow cycles and share
+one conservative 4 KiB function budget. Debug builds and all other allocation shapes remain managed.
+Reports include the selected stack-allocation count.
 
 Guard patterns:
 
@@ -91,8 +92,7 @@ Safety rules:
 Release-mode optimization backlog:
 
 - smart dead-code elimination for unreachable classes, methods, fields, constructors, runtime modules, intrinsics, strings, vtables, and dispatch tables
-- expand stack allocation to managed-reference fields and repeated sites only when contained-reference
-  rooting, publication, identity, and repeated-site lifetime are proven
+- expand stack allocation to repeated sites only when publication, identity, and repeated-site lifetime are proven
 - arena allocation for scoped temporary object graphs
 - devirtualization
 - method specialization

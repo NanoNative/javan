@@ -229,7 +229,7 @@ final class EscapeAnalyzerTest {
     }
 
     @Test
-    void plansOnlyReferenceFreeObjectsForReleaseStackAllocation() {
+    void plansBoundedObjectsIncludingManagedReferenceFields() {
         final List<IrField> oversizedFields = java.util.stream.IntStream.range(0, 600)
             .mapToObj(index -> new IrField(IrType.INT, "value" + index, "field_value_" + index))
             .toList();
@@ -257,10 +257,16 @@ final class EscapeAnalyzerTest {
             program, analyzer.analyze(program), true
         );
 
-        assertThat(plan.sites()).containsExactly(new EscapeAnalyzer.StackAllocationSite(
-            "example/Main", "run", "()Ljava/lang/Object;", 0,
-            IrExpression.Kind.OBJECT_ALLOCATION, 0
-        ));
+        assertThat(plan.sites()).containsExactly(
+            new EscapeAnalyzer.StackAllocationSite(
+                "example/Main", "run", "()Ljava/lang/Object;", 0,
+                IrExpression.Kind.OBJECT_ALLOCATION, 0
+            ),
+            new EscapeAnalyzer.StackAllocationSite(
+                "example/Main", "run", "()Ljava/lang/Object;", 1,
+                IrExpression.Kind.OBJECT_ALLOCATION, 0
+            )
+        );
     }
 
     @Test

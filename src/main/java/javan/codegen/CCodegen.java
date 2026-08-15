@@ -1244,7 +1244,7 @@ public final class CCodegen {
             c.append("    ").append(local.type().cName()).append(' ').append(local.name()).append(" = 0;").append(System.lineSeparator());
         }
         emitStackStorage(program, function, stackAllocations, c);
-        final List<String> rootNames = objectRootNames(function);
+        final List<String> rootNames = objectRootNames(program, function, stackAllocations);
         final String rootFrameSymbol = rootFrameSymbol(function);
         final RootLivenessPlan rootLiveness = RootLivenessPlan.forFunction(function);
         emitRootFramePush(rootFrameSymbol, rootNames, c);
@@ -1802,6 +1802,35 @@ public final class CCodegen {
         for (final javan.ir.IrLocal local : function.locals()) {
             if (local.type() == javan.ir.IrType.OBJECT) {
                 result.add(local.name());
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private static List<String> objectRootNames(
+        final IrProgram program,
+        final IrFunction function,
+        final EscapeAnalyzer.StackAllocationPlan plan
+    ) {
+        final List<String> result = new java.util.ArrayList<>(objectRootNames(function));
+        for (final EscapeAnalyzer.StackAllocationSite site : plan.sites()) {
+            if (!sameFunction(function, site) || site.kind() != IrExpression.Kind.OBJECT_ALLOCATION) {
+                continue;
+            }
+            final IrExpression allocation = function.instructions().get(site.instructionIndex())
+                .expression().orElseThrow();
+            for (final IrClass classInfo : program.classes()) {
+                if (!classInfo.jvmName().equals(allocation.value())) {
+                    continue;
+                }
+                final String object = stackObjectSymbol(site.instructionIndex());
+                result.add(object + "._javan_runtime_state");
+                for (final javan.ir.IrField field : classInfo.fields()) {
+                    if (field.type() == IrType.OBJECT) {
+                        result.add(object + "." + field.symbol());
+                    }
+                }
+                break;
             }
         }
         return List.copyOf(result);

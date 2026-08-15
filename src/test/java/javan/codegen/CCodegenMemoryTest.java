@@ -151,6 +151,44 @@ final class CCodegenMemoryTest {
     }
 
     @Test
+    void rootsManagedReferencesHeldByPlannedStackObject() throws Exception {
+        final IrProgram program = new IrProgram(
+            List.of(nodeClassWithNext()),
+            List.of(new IrFunction(
+                "com/acme/Main",
+                "main",
+                "([Ljava/lang/String;)V",
+                "main_symbol",
+                IrType.VOID,
+                List.of(),
+                List.of(new IrLocal(IrType.OBJECT, "value")),
+                List.of(
+                    IrInstruction.assignObject("value", IrExpression.objectAllocation("com/acme/Node")),
+                    IrInstruction.returnVoid()
+                )
+            )),
+            "main_symbol"
+        );
+        final EscapeAnalyzer analyzer = new EscapeAnalyzer();
+        final EscapeAnalyzer.StackAllocationPlan plan = analyzer.planStackAllocations(
+            program, analyzer.analyze(program), true
+        );
+
+        final String generated = Files.readString(new CCodegen().generate(
+            program, tempDir, javan.build.NativeInteropConfig.empty(), plan
+        ));
+
+        assertThat(plan.sites()).hasSize(1);
+        assertThat(generated).contains(
+            "struct javan_class_com_acme_Node javan_stack_object_0 = {1};",
+            "(void**) &javan_stack_object_0._javan_runtime_state",
+            "(void**) &javan_stack_object_0.field_next",
+            "value = (void*) &javan_stack_object_0;"
+        );
+        assertThat(generated).doesNotContain("value = javan_new_com_acme_Node();");
+    }
+
+    @Test
     void clearsUnusedAssignedObjectLocalBeforeStatementSafePoint() throws Exception {
         final IrProgram program = new IrProgram(
             List.of(nodeClass()),

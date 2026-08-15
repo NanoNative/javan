@@ -135,8 +135,9 @@ facts while writes and unknown calls discard those facts before further optimiza
 
 The same report counts managed allocations classified as `NoEscape`, `ArgumentEscape`, or
 `GlobalEscape`, including transitive capture through exact application calls. Release stack selection
-uses a conservative 4 KiB budget per function for constant primitive arrays and reference-free
-application objects proven `NoEscape` outside control-flow cycles; every other site keeps managed
+uses a conservative 4 KiB budget per function for constant primitive arrays and application objects
+proven `NoEscape` outside control-flow cycles. Stack-object runtime state and
+managed-reference fields remain GC roots for the function lifetime; every other site keeps managed
 allocation behavior.
 
 The IDE plugin should render reports. It must not infer native support from source code
