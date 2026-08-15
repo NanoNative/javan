@@ -107,7 +107,8 @@ public final class EscapeAnalyzer {
                     if (workSize >= maxVisits) {
                         return false;
                     }
-                    work[workSize++] = successor;
+                    work[workSize] = successor;
+                    workSize++;
                 }
             }
         }
