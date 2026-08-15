@@ -113,6 +113,35 @@ final class LocalValueOptimizerTest {
             .noneMatch(instruction -> instruction.value().filter("impossible"::equals).isPresent());
     }
 
+    @Test
+    void overlappingRangesRemainUnknownWithoutUnboxingNull() {
+        final IrFunction function = function(
+            List.of(new IrParameter(IrType.INT, "choice")),
+            List.of(new IrLocal(IrType.INT, "value")),
+            List.of(
+                IrInstruction.branchIf("high", IrExpression.intComparison(
+                    "!=", IrExpression.intLocal("choice"), IrExpression.intLiteral(0)
+                )),
+                IrInstruction.assignInt("value", IrExpression.intLiteral(1)),
+                IrInstruction.jump("merged"),
+                IrInstruction.label("high"),
+                IrInstruction.assignInt("value", IrExpression.intLiteral(3)),
+                IrInstruction.label("merged"),
+                IrInstruction.branchIf("maybe", IrExpression.intComparison(
+                    "<=", IrExpression.intLocal("value"), IrExpression.intLiteral(2)
+                )),
+                IrInstruction.returnInt(IrExpression.intLiteral(0)),
+                IrInstruction.label("maybe"),
+                IrInstruction.returnInt(IrExpression.intLiteral(1))
+            )
+        );
+
+        final LocalValueOptimizer.Result result = optimizer.optimize(new IrProgram(List.of(function), function.symbol()), true);
+
+        assertThat(result.program().functions().getFirst().instructions())
+            .anyMatch(instruction -> instruction.value().filter("maybe"::equals).isPresent());
+    }
+
     private static IrFunction function(
         final List<IrParameter> parameters,
         final List<IrLocal> locals,

@@ -61,7 +61,8 @@ public final class LocalValueOptimizer {
         incoming[0] = State.empty();
         work.add(0);
         while (cursor < work.size()) {
-            final int index = work.get(cursor++);
+            final int index = work.get(cursor);
+            cursor++;
             final IrInstruction instruction = instructions.get(index);
             final State outgoing = transfer(incoming[index], instruction);
             if (instruction.op() == IrInstruction.Op.BRANCH_IF) {
@@ -274,34 +275,37 @@ public final class LocalValueOptimizer {
     }
 
     private static Fact evaluate(final IrExpression expression, final State state) {
-        return switch (expression.kind()) {
-            case INT_LITERAL -> integer(Integer.parseInt(expression.value()));
-            case OBJECT_NULL -> new Fact(Nullness.NULL, null, null, null, null);
-            case STRING_LITERAL -> new Fact(
+        Fact fact = UNKNOWN;
+        switch (expression.kind()) {
+            case INT_LITERAL -> fact = integer(Integer.parseInt(expression.value()));
+            case OBJECT_NULL -> fact = new Fact(Nullness.NULL, null, null, null, null);
+            case STRING_LITERAL -> fact = new Fact(
                 Nullness.NON_NULL,
                 null,
                 "java/lang/String",
                 null,
                 Range.exact(expression.value().length())
             );
-            case LOCAL -> state.fact(expression.value());
-            case OBJECT_ALLOCATION -> new Fact(Nullness.NON_NULL, null, expression.value(), null, null);
-            case OBJECT_ARRAY_ALLOCATION -> array(expression, state, expression.value());
-            case INT_ARRAY_ALLOCATION -> array(expression, state, "[I");
-            case LONG_ARRAY_ALLOCATION -> array(expression, state, "[J");
-            case FLOAT_ARRAY_ALLOCATION -> array(expression, state, "[F");
-            case DOUBLE_ARRAY_ALLOCATION -> array(expression, state, "[D");
-            case BYTE_ARRAY_ALLOCATION -> array(expression, state, "[B");
-            case BOOLEAN_ARRAY_ALLOCATION -> array(expression, state, "[Z");
-            case SHORT_ARRAY_ALLOCATION -> array(expression, state, "[S");
-            case CHAR_ARRAY_ALLOCATION -> array(expression, state, "[C");
-            case ARRAY_LENGTH -> integerRange(evaluate(expression.arguments().getFirst(), state).arrayLength());
-            case INT_BINARY -> integerBinary(expression, state);
-            case INT_COMPARE -> comparison(expression, state, false);
-            case OBJECT_COMPARE -> comparison(expression, state, true);
-            case CALL -> call(expression, state);
-            default -> UNKNOWN;
-        };
+            case LOCAL -> fact = state.fact(expression.value());
+            case OBJECT_ALLOCATION -> fact = new Fact(Nullness.NON_NULL, null, expression.value(), null, null);
+            case OBJECT_ARRAY_ALLOCATION -> fact = array(expression, state, expression.value());
+            case INT_ARRAY_ALLOCATION -> fact = array(expression, state, "[I");
+            case LONG_ARRAY_ALLOCATION -> fact = array(expression, state, "[J");
+            case FLOAT_ARRAY_ALLOCATION -> fact = array(expression, state, "[F");
+            case DOUBLE_ARRAY_ALLOCATION -> fact = array(expression, state, "[D");
+            case BYTE_ARRAY_ALLOCATION -> fact = array(expression, state, "[B");
+            case BOOLEAN_ARRAY_ALLOCATION -> fact = array(expression, state, "[Z");
+            case SHORT_ARRAY_ALLOCATION -> fact = array(expression, state, "[S");
+            case CHAR_ARRAY_ALLOCATION -> fact = array(expression, state, "[C");
+            case ARRAY_LENGTH -> fact = integerRange(evaluate(expression.arguments().getFirst(), state).arrayLength());
+            case INT_BINARY -> fact = integerBinary(expression, state);
+            case INT_COMPARE -> fact = comparison(expression, state, false);
+            case OBJECT_COMPARE -> fact = comparison(expression, state, true);
+            case CALL -> fact = call(expression, state);
+            default -> {
+            }
+        }
+        return fact == null ? UNKNOWN : fact;
     }
 
     private static Fact array(final IrExpression expression, final State state, final String type) {
@@ -367,7 +371,13 @@ public final class LocalValueOptimizer {
         if (equal == null) {
             return null;
         }
-        return "==".equals(operator) ? equal : "!=".equals(operator) ? !equal : null;
+        if ("==".equals(operator)) {
+            return equal;
+        }
+        if ("!=".equals(operator)) {
+            return !equal;
+        }
+        return null;
     }
 
     private static Boolean integerComparison(final String operator, final Range left, final Range right) {
@@ -375,16 +385,30 @@ public final class LocalValueOptimizer {
             return null;
         }
         return switch (operator) {
-            case "==" -> left.max() < right.min() || right.max() < left.min()
-                ? false : left.exact() && right.exact() ? left.min() == right.min() : null;
-            case "!=" -> left.max() < right.min() || right.max() < left.min()
-                ? true : left.exact() && right.exact() ? left.min() != right.min() : null;
-            case "<" -> left.max() < right.min() ? true : left.min() >= right.max() ? false : null;
-            case "<=" -> left.max() <= right.min() ? true : left.min() > right.max() ? false : null;
-            case ">" -> left.min() > right.max() ? true : left.max() <= right.min() ? false : null;
-            case ">=" -> left.min() >= right.max() ? true : left.max() < right.min() ? false : null;
+            case "==" -> decision(
+                left.exact() && right.exact() && left.min() == right.min(),
+                left.max() < right.min() || right.max() < left.min()
+            );
+            case "!=" -> decision(
+                left.max() < right.min() || right.max() < left.min(),
+                left.exact() && right.exact() && left.min() == right.min()
+            );
+            case "<" -> decision(left.max() < right.min(), left.min() >= right.max());
+            case "<=" -> decision(left.max() <= right.min(), left.min() > right.max());
+            case ">" -> decision(left.min() > right.max(), left.max() <= right.min());
+            case ">=" -> decision(left.min() >= right.max(), left.max() < right.min());
             default -> null;
         };
+    }
+
+    private static Boolean decision(final boolean provenTrue, final boolean provenFalse) {
+        if (provenTrue) {
+            return Boolean.TRUE;
+        }
+        if (provenFalse) {
+            return Boolean.FALSE;
+        }
+        return null;
     }
 
     private static State merge(final State left, final State right) {
@@ -466,6 +490,9 @@ public final class LocalValueOptimizer {
     }
 
     private static Boolean booleanValue(final Fact fact) {
+        if (fact == null) {
+            return null;
+        }
         final Integer value = exact(fact.integerRange());
         return value == null ? null : value != 0;
     }
@@ -492,7 +519,8 @@ public final class LocalValueOptimizer {
         int cursor = 0;
         work.add(0);
         while (cursor < work.size()) {
-            final int index = work.get(cursor++);
+            final int index = work.get(cursor);
+            cursor++;
             if (seen[index]) {
                 continue;
             }
