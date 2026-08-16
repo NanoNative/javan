@@ -129,6 +129,10 @@ flag. If a preview runner is unreliable, or a secondary architecture is dispropo
 slower without adding distinct evidence, change that flag to `false`; do not delete the row.
 The disabled row then remains visible as an intentional CI policy decision.
 
+The full self-host package proof does not set `JAVAN_HEAP_LIMIT_BYTES`: it must measure
+the compiler on the runner's real memory. Dedicated native stress tests retain constrained
+heap coverage and deterministic out-of-memory checks.
+
 Manual releases reuse this common build and its uploaded package/publication artifacts.
 External actions are pinned to immutable commit SHAs with readable version comments; moving
 major tags are not accepted by the workflow policy tests.
