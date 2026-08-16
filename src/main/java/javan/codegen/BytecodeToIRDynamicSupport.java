@@ -1210,11 +1210,15 @@ final class BytecodeToIRDynamicSupport {
         final IrExpression self,
         final IrExpression other
     ) {
-        return switch (field.descriptor()) {
-            case "B", "C", "I", "S", "Z" -> IrExpression.intComparison(
+        final String descriptor = field.descriptor();
+        if ("B".equals(descriptor) || "C".equals(descriptor) || "I".equals(descriptor)
+            || "S".equals(descriptor) || "Z".equals(descriptor)) {
+            return IrExpression.intComparison(
                 "==", IrExpression.intField(owner, field.name(), self), IrExpression.intField(owner, field.name(), other)
             );
-            case "J" -> IrExpression.intComparison(
+        }
+        if ("J".equals(descriptor)) {
+            return IrExpression.intComparison(
                 "==",
                 IrExpression.intCall(
                     "javan_lcmp",
@@ -1222,18 +1226,22 @@ final class BytecodeToIRDynamicSupport {
                 ),
                 IrExpression.intLiteral(0)
             );
-            case "F" -> IrExpression.intCall(
+        }
+        if ("F".equals(descriptor)) {
+            return IrExpression.intCall(
                 "javan_record_float_equals",
                 List.of(IrExpression.floatField(owner, field.name(), self), IrExpression.floatField(owner, field.name(), other))
             );
-            case "D" -> IrExpression.intCall(
+        }
+        if ("D".equals(descriptor)) {
+            return IrExpression.intCall(
                 "javan_record_double_equals",
                 List.of(IrExpression.doubleField(owner, field.name(), self), IrExpression.doubleField(owner, field.name(), other))
             );
-            default -> IrExpression.objectComparison(
-                "==", IrExpression.objectField(owner, field.name(), self), IrExpression.objectField(owner, field.name(), other)
-            );
-        };
+        }
+        return IrExpression.objectComparison(
+            "==", IrExpression.objectField(owner, field.name(), self), IrExpression.objectField(owner, field.name(), other)
+        );
     }
 
     static IrExpression popStringConcatArgument(
