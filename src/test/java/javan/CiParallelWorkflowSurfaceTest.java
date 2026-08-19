@@ -70,6 +70,19 @@ final class CiParallelWorkflowSurfaceTest {
     }
 
     @Test
+    void pullRequestWorkflowExposesOneCompletionGateForBranchProtection() throws Exception {
+        assertThat(Files.readString(BUILD_PR))
+            .contains(
+                "  complete:",
+                "    name: Complete",
+                "    needs: verify",
+                "    if: ${{ always() }}",
+                "          VERIFY_RESULT: ${{ needs.verify.result }}",
+                "        run: test \"$VERIFY_RESULT\" = success"
+            );
+    }
+
+    @Test
     void pullRequestsUseGenerationTwoWhileSnapshotsAndReleasesUseGenerationThree() throws Exception {
         assertThat(Files.readString(BUILD_PR))
             .contains("bootstrap_generation: 2")
