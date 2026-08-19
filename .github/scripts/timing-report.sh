@@ -42,6 +42,26 @@ javan_timing_run() {
   return "$javan_timing_run_code"
 }
 
+javan_timing_parse_gnu() {
+  javan_timing_measure_file=$1
+  javan_timing_measure_cpu_seconds=$(LC_NUMERIC=C awk '
+    NR == 1 && $1 ~ /^[0-9]+([.,][0-9]+)?$/ && $2 ~ /^[0-9]+([.,][0-9]+)?$/ {
+      gsub(/,/, ".", $1)
+      gsub(/,/, ".", $2)
+      printf "%.6f", $1 + $2
+      exit
+    }
+  ' "$javan_timing_measure_file")
+  javan_timing_measure_cpu_seconds=${javan_timing_measure_cpu_seconds:-unknown}
+  javan_timing_measure_max_rss_bytes=$(LC_NUMERIC=C awk '
+    NR == 1 && $3 ~ /^[0-9]+$/ {
+      printf "%.0f", $3 * 1024
+      exit
+    }
+  ' "$javan_timing_measure_file")
+  javan_timing_measure_max_rss_bytes=${javan_timing_measure_max_rss_bytes:-unknown}
+}
+
 # Runs the command once while preserving its output and gathering native process resource use when available.
 javan_timing_measure() {
   javan_timing_measure_cpu_seconds=unknown
@@ -60,19 +80,7 @@ javan_timing_measure() {
         else
           javan_timing_measure_code=$?
         fi
-        IFS=' ' read -r javan_timing_measure_user javan_timing_measure_system javan_timing_measure_rss \
-          < "$javan_timing_measure_file" || true
-        javan_timing_measure_user=$(printf '%s' "$javan_timing_measure_user" | tr ',' '.')
-        javan_timing_measure_system=$(printf '%s' "$javan_timing_measure_system" | tr ',' '.')
-        case "$javan_timing_measure_user:$javan_timing_measure_system" in
-          *[!0-9.:]*|:|*:*:*) ;;
-          *) javan_timing_measure_cpu_seconds=$(awk -v user="$javan_timing_measure_user" -v system="$javan_timing_measure_system" \
-            'BEGIN { printf "%.6f", user + system }') ;;
-        esac
-        case "$javan_timing_measure_rss" in
-          ''|*[!0-9]*) ;;
-          *) javan_timing_measure_max_rss_bytes=$(awk -v rss="$javan_timing_measure_rss" 'BEGIN { printf "%.0f", rss * 1024 }') ;;
-        esac
+        javan_timing_parse_gnu "$javan_timing_measure_file"
         javan_timing_measure_source=gnu-time
         rm -f "$javan_timing_measure_file"
         return "$javan_timing_measure_code"
