@@ -564,6 +564,9 @@ final class RuntimeSourceMemorySections {
         static unsigned long javan_heap_limit_bytes = 0;
         static int javan_gc_enabled_value = 0;
         static int javan_gc_collecting = 0;
+        static javan_allocation_node** javan_gc_mark_worklist = NULL;
+        static int javan_gc_mark_worklist_length = 0;
+        static int javan_gc_mark_worklist_capacity = 0;
         static int javan_gc_safe_point_initialized = 0;
         static unsigned long javan_gc_safe_point_interval = 0;
         static unsigned long javan_gc_safe_point_ticks = 0;
@@ -993,6 +996,10 @@ final class RuntimeSourceMemorySections {
             javan_allocation_index.nodes = NULL;
             javan_allocation_index.length = 0;
             javan_allocation_index.capacity = 0;
+            free(javan_gc_mark_worklist);
+            javan_gc_mark_worklist = NULL;
+            javan_gc_mark_worklist_length = 0;
+            javan_gc_mark_worklist_capacity = 0;
             javan_allocation_node* node = javan_allocations;
             javan_allocations = NULL;
             while (node != NULL) {
@@ -7315,7 +7322,6 @@ final class RuntimeSourceMemorySections {
         }
 
         static void javan_gc_mark_value(void* value);
-        static void javan_gc_mark_runtime_object_references(void);
 
         static void javan_gc_mark_object_fields(void* value, int type_id) {
             JavanTypeDescriptor* descriptor = javan_type_descriptor_for(type_id);
@@ -7526,27 +7532,64 @@ final class RuntimeSourceMemorySections {
                 return;
             }
             node->mark = 1;
+            if (javan_gc_mark_worklist_length == javan_gc_mark_worklist_capacity) {
+                if (javan_gc_mark_worklist_capacity > INT_MAX / 2) {
+                    javan_gc_collecting = 0;
+                    javan_runtime_lock_leave();
+                    javan_panic("out of memory");
+                }
+                int next_capacity = javan_gc_mark_worklist_capacity == 0
+                    ? 256
+                    : javan_gc_mark_worklist_capacity * 2;
+                if ((unsigned long) next_capacity
+                    > ULONG_MAX / (unsigned long) sizeof(javan_allocation_node*)) {
+                    javan_gc_collecting = 0;
+                    javan_runtime_lock_leave();
+                    javan_panic("out of memory");
+                }
+                unsigned long bytes = (unsigned long) next_capacity
+                    * (unsigned long) sizeof(javan_allocation_node*);
+                javan_allocation_node** next = (javan_allocation_node**) realloc(javan_gc_mark_worklist, bytes);
+                if (next == NULL) {
+                    javan_gc_collecting = 0;
+                    javan_runtime_lock_leave();
+                    javan_panic("out of memory");
+                }
+                javan_gc_mark_worklist = next;
+                javan_gc_mark_worklist_capacity = next_capacity;
+            }
+            javan_gc_mark_worklist[javan_gc_mark_worklist_length++] = node;
+        }
+
+        static void javan_gc_mark_children(javan_allocation_node* node) {
             if (node->kind == JAVAN_HEAP_KIND_OBJECT) {
-                javan_gc_mark_object_fields(value, node->type_id);
+                javan_gc_mark_object_fields(node->value, node->type_id);
                 if (node->type_id > 0) {
-                    struct javan_object_header* header = (struct javan_object_header*) value;
+                    struct javan_object_header* header = (struct javan_object_header*) node->value;
                     javan_gc_mark_value(header->_javan_runtime_state);
                 }
                 if (node->type_id == JAVAN_TYPE_JAVA_LANG_THREAD) {
-                    javan_gc_mark_value(((javan_thread*) value)->name);
-                    javan_gc_mark_value(((javan_thread*) value)->throwable_state);
-                    javan_gc_mark_value(((javan_thread*) value)->target);
-                    javan_gc_mark_value(((javan_thread*) value)->scheduled_executor);
-                    javan_gc_mark_value(((javan_thread*) value)->thread_locals);
+                    javan_gc_mark_value(((javan_thread*) node->value)->name);
+                    javan_gc_mark_value(((javan_thread*) node->value)->throwable_state);
+                    javan_gc_mark_value(((javan_thread*) node->value)->target);
+                    javan_gc_mark_value(((javan_thread*) node->value)->scheduled_executor);
+                    javan_gc_mark_value(((javan_thread*) node->value)->thread_locals);
                 }
                 return;
             }
             if (node->kind == JAVAN_HEAP_KIND_ARRAY && node->type_id == JAVAN_ARRAY_KIND_OBJECT) {
-                javan_gc_mark_object_array((javan_object_array*) value);
+                javan_gc_mark_object_array((javan_object_array*) node->value);
                 return;
             }
             if (node->kind == JAVAN_HEAP_KIND_RUNTIME) {
-                javan_gc_mark_runtime_children(value, node->runtime_kind);
+                javan_gc_mark_runtime_children(node->value, node->runtime_kind);
+            }
+        }
+
+        static void javan_gc_drain_marks(void) {
+            while (javan_gc_mark_worklist_length > 0) {
+                javan_allocation_node* node = javan_gc_mark_worklist[--javan_gc_mark_worklist_length];
+                javan_gc_mark_children(node);
             }
         }
 
@@ -7595,16 +7638,6 @@ final class RuntimeSourceMemorySections {
                     }
                 }
                 frame = frame->next;
-            }
-        }
-
-        static void javan_gc_mark_runtime_object_references(void) {
-            javan_allocation_node* node = javan_allocations;
-            while (node != NULL) {
-                if (node->kind == JAVAN_HEAP_KIND_RUNTIME && node->mark != 0) {
-                    javan_gc_mark_runtime_children(node->value, node->runtime_kind);
-                }
-                node = node->next;
             }
         }
 
@@ -7657,12 +7690,13 @@ final class RuntimeSourceMemorySections {
             }
             javan_gc_collecting = 1;
             javan_gc_collection_count_value++;
+            javan_gc_mark_worklist_length = 0;
             javan_gc_clear_marks();
             javan_gc_mark_static_roots();
             javan_gc_mark_thread_roots();
             javan_gc_mark_registered_thread_frame_roots();
             javan_gc_mark_frame_roots();
-            javan_gc_mark_runtime_object_references();
+            javan_gc_drain_marks();
             javan_gc_sweep_unmarked();
             javan_gc_collecting = 0;
             javan_heap_maybe_validate();
