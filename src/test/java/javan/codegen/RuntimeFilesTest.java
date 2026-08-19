@@ -3412,13 +3412,16 @@ final class RuntimeFilesTest {
             "void javan_gc_safe_point(void)",
             "void javan_gc_collect(void)",
             "JavanTypeDescriptor* descriptor = javan_type_descriptor_for(type_id);",
-            "javan_gc_mark_object_array((javan_object_array*) value);",
-            "javan_gc_mark_value(((javan_thread*) value)->target);",
+            "javan_gc_mark_object_array((javan_object_array*) node->value);",
+            "javan_gc_mark_value(((javan_thread*) node->value)->target);",
+            "static javan_allocation_node** javan_gc_mark_worklist = NULL;",
+            "javan_gc_mark_worklist[javan_gc_mark_worklist_length++] = node;",
+            "static void javan_gc_drain_marks(void)",
             "javan_gc_mark_static_roots();",
             "static void javan_gc_mark_thread_roots(void)",
             "javan_gc_mark_thread_roots();",
             "javan_gc_mark_frame_roots();",
-            "javan_gc_mark_runtime_object_references();",
+            "javan_gc_drain_marks();",
             "javan_gc_sweep_unmarked();",
             "javan_gc_collected_allocations_value++;",
             "const char* value = getenv(\"JAVAN_GC_SAFEPOINT_INTERVAL\");"
@@ -3519,7 +3522,7 @@ final class RuntimeFilesTest {
             "unsigned long javan_heap_threads_with_target(void) {",
             "int javan_heap_current_thread_root_present(void) {",
             "&& javan_thread_root_index(javan_current_thread_value) >= 0;",
-            "javan_gc_mark_value(((javan_thread*) value)->name);"
+            "javan_gc_mark_value(((javan_thread*) node->value)->name);"
         );
     }
 

@@ -4507,6 +4507,51 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void deeplyReachableObjectGraphSurvivesGc() throws Exception {
+        final Path project = project("deeply-reachable-object-graph");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Node[] roots = new Node[1_024];
+                    for (int index = 0; index < roots.length; index++) {
+                        roots[index] = new Node(null);
+                    }
+                    Node head = null;
+                    for (int index = 0; index < 200_000; index++) {
+                        head = new Node(head);
+                    }
+                    System.out.println(head == null || roots[roots.length - 1] == null ? "missing" : "ok");
+                }
+
+                private static final class Node {
+                    private final Node next;
+
+                    private Node(final Node next) {
+                        this.next = next;
+                    }
+                }
+            }
+            """);
+
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+
+        final ProcessResult result = process(
+            project,
+            List.of(project.resolve(".javan/bin/deeply-reachable-object-graph").toString()),
+            defaultProcessTimeout(),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "250000")
+        );
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("ok\n");
+    }
+
+    @Test
     void deeplyForwardedFunctionBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("deeply-forwarded-function");
         final StringBuilder source = new StringBuilder("""
