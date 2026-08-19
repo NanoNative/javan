@@ -455,18 +455,21 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         assertThat(run.stdout()).contains("Timing: bootstrap_jvm=", "Timing: bootstrap_gen2=");
         assertThat(Files.readString(json))
             .contains("\"target\": \"linux-x64\"")
-            .contains("\"schemaVersion\": 1")
+            .contains("\"schemaVersion\": 2")
             .contains("\"bootstrapGeneration\": 2")
             .contains("\"proofScope\": \"bootstrap\"")
             .contains("\"status\": \"pass\"")
             .contains("\"exitCode\": 0")
-            .containsPattern("\\{\\\"name\\\": \\\"bootstrap_jvm\\\", \\\"seconds\\\": \\d+, \\\"status\\\": \\\"pass\\\", \\\"countedInTotal\\\": true}")
-            .containsPattern("\\{\\\"name\\\": \\\"bootstrap_gen2\\\", \\\"seconds\\\": \\d+, \\\"status\\\": \\\"pass\\\", \\\"countedInTotal\\\": true}")
+            .contains("\"availableProcessors\": \"")
+            .contains("\"physicalMemoryBytes\": \"")
+            .containsPattern("\\{\\\"name\\\": \\\"bootstrap_jvm\\\", \\\"seconds\\\": \\d+, \\\"status\\\": \\\"pass\\\", \\\"countedInTotal\\\": true, \\\"cpuSeconds\\\": \\\"[^\\\"]+\\\", \\\"maxRssBytes\\\": \\\"[^\\\"]+\\\", \\\"resourceSource\\\": \\\"[^\\\"]+\\\"}")
+            .containsPattern("\\{\\\"name\\\": \\\"bootstrap_gen2\\\", \\\"seconds\\\": \\d+, \\\"status\\\": \\\"pass\\\", \\\"countedInTotal\\\": true, \\\"cpuSeconds\\\": \\\"[^\\\"]+\\\", \\\"maxRssBytes\\\": \\\"[^\\\"]+\\\", \\\"resourceSource\\\": \\\"[^\\\"]+\\\"}")
             .containsPattern("\\\"totalSeconds\\\": \\d+");
         assertThat(Files.readString(markdown))
-            .containsPattern("\\| `bootstrap_jvm` \\| \\d+ \\| pass \\| true \\|")
-            .containsPattern("\\| `bootstrap_gen2` \\| \\d+ \\| pass \\| true \\|")
-            .containsPattern("\\| \\*\\*Total measured\\*\\* \\| \\*\\*\\d+\\*\\* \\| \\*\\*pass\\*\\* \\| \\|");
+            .contains("| Phase | Seconds | CPU seconds | Peak RSS bytes | Resource source | Status | Total |")
+            .containsPattern("\\| `bootstrap_jvm` \\| \\d+ \\| [^|]+ \\| [^|]+ \\| [^|]+ \\| pass \\| true \\|")
+            .containsPattern("\\| `bootstrap_gen2` \\| \\d+ \\| [^|]+ \\| [^|]+ \\| [^|]+ \\| pass \\| true \\|")
+            .containsPattern("\\| \\*\\*Total measured\\*\\* \\| \\*\\*\\d+\\*\\* \\| \\| \\| \\| \\*\\*pass\\*\\* \\| \\|");
     }
 
     @Test
@@ -509,8 +512,8 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         assertThat(jsonContent)
             .contains("\"status\": \"fail\"")
             .contains("\"exitCode\": 7")
-            .contains("{\"name\": \"sanitizer_compile\", \"seconds\": 3, \"status\": \"pass\", \"countedInTotal\": false}")
-            .containsPattern("\\{\\\"name\\\": \\\"failed_phase\\\", \\\"seconds\\\": \\d+, \\\"status\\\": \\\"fail\\\", \\\"countedInTotal\\\": true}");
+            .contains("{\"name\": \"sanitizer_compile\", \"seconds\": 3, \"status\": \"pass\", \"countedInTotal\": false, \"cpuSeconds\": \"unknown\", \"maxRssBytes\": \"unknown\", \"resourceSource\": \"unavailable\"}")
+            .containsPattern("\\{\\\"name\\\": \\\"failed_phase\\\", \\\"seconds\\\": \\d+, \\\"status\\\": \\\"fail\\\", \\\"countedInTotal\\\": true, \\\"cpuSeconds\\\": \\\"[^\\\"]+\\\", \\\"maxRssBytes\\\": \\\"[^\\\"]+\\\", \\\"resourceSource\\\": \\\"[^\\\"]+\\\"}");
         final var failedSeconds = Pattern.compile("\\\"name\\\": \\\"failed_phase\\\", \\\"seconds\\\": (\\d+)")
             .matcher(jsonContent);
         final var totalSeconds = Pattern.compile("\\\"totalSeconds\\\": (\\d+)").matcher(jsonContent);

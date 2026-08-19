@@ -138,6 +138,9 @@ programs need the same compiler. Each program still has its own labeled output a
 only the repeated compiler bootstrap is removed. On the implementation host, the complete
 `CliPackagingIntegrationTest` suite fell from `116.49s` on fresh `main` to `80.18s` with
 the same 21 tests passing; remote CI timings remain the acceptance evidence for runner gains.
+Native package timing artifacts record wall time, CPU time, peak RSS, metric source, processor
+count, and physical memory. A platform that cannot provide a resource metric records `unknown`;
+reports never substitute a guessed value.
 
 JUnit parallel execution is enabled by default through `src/test/resources/junit-platform.properties`.
 This keeps the policy visible to Maven, IDEs, and other JUnit Platform launchers. Tests run
