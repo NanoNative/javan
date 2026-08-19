@@ -21,6 +21,7 @@ permissions: {}
 
 concurrency:
   group: build-pr-${{ github.event.pull_request.number || github.run_id }}
+  queue: max
   cancel-in-progress: false
 
 jobs:
@@ -33,3 +34,15 @@ jobs:
       ref: ${{ inputs.ref || github.sha }}
       bootstrap_generation: 2
     secrets: inherit
+
+  complete:
+    name: Complete
+    needs: verify
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: "✅ Result"
+        env:
+          VERIFY_RESULT: ${{ needs.verify.result }}
+        run: test "$VERIFY_RESULT" = success

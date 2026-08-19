@@ -124,17 +124,7 @@ jobs:
 
       - name: "🔨 Native"
         if: runner.os == 'Linux'
-        run: |
-          for attempt in 1 2 3; do
-            if sudo apt-get -o Acquire::ForceIPv4=true update \
-              && sudo apt-get -o Acquire::ForceIPv4=true install -y --fix-missing build-essential mingw-w64; then
-              exit 0
-            fi
-            if [ "$attempt" -eq 3 ]; then
-              exit 1
-            fi
-            sleep 15
-          done
+        run: sh .github/scripts/install-linux-packages.sh build-essential
 
       - name: "📁 Repository"
         run: |
@@ -155,7 +145,7 @@ jobs:
     permissions:
       contents: read
     strategy:
-      fail-fast: true
+      fail-fast: false
       max-parallel: 8
       # Same JUnit suites as local Maven runs. Six native workers shorten CI;
       # discovery keeps class and method selectors out of this workflow.
@@ -202,17 +192,7 @@ jobs:
           rustc --version
 
       - name: "🔨 Native"
-        run: |
-          for attempt in 1 2 3; do
-            if sudo apt-get -o Acquire::ForceIPv4=true update \
-              && sudo apt-get -o Acquire::ForceIPv4=true install -y --fix-missing build-essential mingw-w64; then
-              exit 0
-            fi
-            if [ "$attempt" -eq 3 ]; then
-              exit 1
-            fi
-            sleep 15
-          done
+        run: sh .github/scripts/install-linux-packages.sh build-essential
 
       - name: "📁 Repository"
         run: |
@@ -247,7 +227,7 @@ jobs:
     permissions:
       contents: read
     strategy:
-      fail-fast: true
+      fail-fast: false
       max-parallel: 2
       matrix:
         include:
@@ -277,7 +257,7 @@ jobs:
     permissions:
       contents: read
     strategy:
-      fail-fast: true
+      fail-fast: false
       max-parallel: 9
       matrix:
         include:
@@ -345,7 +325,7 @@ jobs:
     permissions:
       contents: read
     strategy:
-      fail-fast: true
+      fail-fast: false
       max-parallel: 6
       matrix:
         include:
@@ -403,7 +383,7 @@ jobs:
   platform-smoke:
     name: ${{ matrix.label }}
     strategy:
-      fail-fast: true
+      fail-fast: false
       max-parallel: 6
       matrix:
         include:
@@ -450,7 +430,7 @@ jobs:
     permissions:
       contents: read
     strategy:
-      fail-fast: true
+      fail-fast: false
       max-parallel: 2
       matrix:
         include:

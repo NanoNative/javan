@@ -10,6 +10,7 @@ permissions: {}
 
 concurrency:
   group: build-main-${{ github.ref || github.run_id }}
+  queue: max
   cancel-in-progress: false
 
 jobs:

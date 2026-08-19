@@ -143,10 +143,10 @@ final class WorkflowPolicySurfaceTest {
     }
 
     @Test
-    void matricesStopSiblingWorkAfterFailure() throws Exception {
+    void matricesRetainSiblingEvidenceAfterFailure() throws Exception {
         assertThat(Files.readString(BUILD_COMMON))
-            .contains("fail-fast: true")
-            .doesNotContain("fail-fast: false");
+            .contains("fail-fast: false")
+            .doesNotContain("fail-fast: true");
     }
 
     @Test
