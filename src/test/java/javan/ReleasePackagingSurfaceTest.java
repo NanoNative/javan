@@ -453,7 +453,8 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
 
         assertThat(run.exitCode()).isZero();
         assertThat(run.stdout()).contains("Timing: bootstrap_jvm=", "Timing: bootstrap_gen2=");
-        assertThat(Files.readString(json))
+        final String jsonContent = Files.readString(json);
+        assertThat(jsonContent)
             .contains("\"target\": \"linux-x64\"")
             .contains("\"schemaVersion\": 2")
             .contains("\"bootstrapGeneration\": 2")
@@ -470,6 +471,10 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             .containsPattern("\\| `bootstrap_jvm` \\| \\d+ \\| [^|]+ \\| [^|]+ \\| [^|]+ \\| pass \\| true \\|")
             .containsPattern("\\| `bootstrap_gen2` \\| \\d+ \\| [^|]+ \\| [^|]+ \\| [^|]+ \\| pass \\| true \\|")
             .containsPattern("\\| \\*\\*Total measured\\*\\* \\| \\*\\*\\d+\\*\\* \\| \\| \\| \\| \\*\\*pass\\*\\* \\| \\|");
+        if (System.getProperty("os.name").startsWith("Linux") || System.getProperty("os.name").startsWith("Mac")) {
+            assertThat(jsonContent)
+                .containsPattern("\\\"cpuSeconds\\\": \\\"\\d+(?:\\.\\d+)?\\\", \\\"maxRssBytes\\\": \\\"\\d+\\\", \\\"resourceSource\\\": \\\"(?:gnu|bsd)-time\\\"");
+        }
     }
 
     @Test
