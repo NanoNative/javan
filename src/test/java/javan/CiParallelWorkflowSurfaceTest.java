@@ -164,8 +164,12 @@ final class CiParallelWorkflowSurfaceTest {
                 "Acquire::http::Timeout=20",
                 "Acquire::https::Timeout=20",
                 "Acquire::Retries=2",
+                "command -v cc",
+                "command -v x86_64-w64-mingw32-gcc",
                 "dpkg-query -W -f='${db:Status-Status}'",
                 "if [ -z \"$missing_packages\" ]; then",
+                "/etc/apt/apt-mirrors.txt",
+                "^https?://(archive|ports)\\.ubuntu\\.com",
                 "Linux package installation failed after 3 attempts."
             );
         for (final Path workflow : java.util.List.of(BUILD_COMMON, NATIVE_PROOF)) {

@@ -6,17 +6,33 @@ if [ "$#" -eq 0 ]; then
   exit 2
 fi
 
-if command -v dpkg-query >/dev/null 2>&1; then
-  missing_packages=''
-  for package in "$@"; do
-    if ! dpkg-query -W -f='${db:Status-Status}' "$package" 2>/dev/null | grep -qx installed; then
-      missing_packages="$missing_packages $package"
-    fi
-  done
-  if [ -z "$missing_packages" ]; then
-    exit 0
+package_available() {
+  case "$1" in
+    build-essential) command -v cc >/dev/null 2>&1 ;;
+    mingw-w64) command -v x86_64-w64-mingw32-gcc >/dev/null 2>&1 ;;
+    *)
+      command -v dpkg-query >/dev/null 2>&1 \
+        && dpkg-query -W -f='${db:Status-Status}' "$1" 2>/dev/null | grep -qx installed
+      ;;
+  esac
+}
+
+missing_packages=''
+for package in "$@"; do
+  if ! package_available "$package"; then
+    missing_packages="$missing_packages $package"
   fi
-  set -- $missing_packages
+done
+if [ -z "$missing_packages" ]; then
+  exit 0
+fi
+
+mirrors=/etc/apt/apt-mirrors.txt
+if [ -f "$mirrors" ]; then
+  official_mirror=$(grep -E '^https?://(archive|ports)\.ubuntu\.com' "$mirrors" | head -n 1 || true)
+  if [ -n "$official_mirror" ]; then
+    printf '%s\n' "$official_mirror" | sudo tee "$mirrors" >/dev/null
+  fi
 fi
 
 for attempt in 1 2 3; do
