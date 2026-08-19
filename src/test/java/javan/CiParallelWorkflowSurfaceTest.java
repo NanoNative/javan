@@ -154,6 +154,15 @@ final class CiParallelWorkflowSurfaceTest {
     }
 
     @Test
+    void workflowsUseTheDefaultMavenRepositoryWithoutPluginDiscovery() throws Exception {
+        for (final Path workflow : java.util.List.of(BUILD_COMMON, NATIVE_PROOF)) {
+            assertThat(Files.readString(workflow))
+                .contains("${MAVEN_REPO_LOCAL:-$HOME/.m2/repository}")
+                .doesNotContain("help:evaluate -Dexpression=settings.localRepository");
+        }
+    }
+
+    @Test
     void linuxPackageSetupIsSharedAndBoundedBelowTheJobTimeout() throws Exception {
         final String installer = Files.readString(LINUX_PACKAGES);
 

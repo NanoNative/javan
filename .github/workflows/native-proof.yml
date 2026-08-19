@@ -125,8 +125,7 @@ jobs:
         shell: sh
         run: |
           set -eu
-          repo=$(./mvnw -q help:evaluate -Dexpression=settings.localRepository -DforceStdout | tail -n 1)
-          printf 'MAVEN_REPO_LOCAL=%s\n' "$repo" >> "$GITHUB_ENV"
+          printf 'MAVEN_REPO_LOCAL=%s\n' "${MAVEN_REPO_LOCAL:-$HOME/.m2/repository}" >> "$GITHUB_ENV"
 
       - name: "🧪 Probes"
         shell: sh
