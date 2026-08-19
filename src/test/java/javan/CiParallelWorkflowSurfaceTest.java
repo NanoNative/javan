@@ -164,6 +164,8 @@ final class CiParallelWorkflowSurfaceTest {
                 "Acquire::http::Timeout=20",
                 "Acquire::https::Timeout=20",
                 "Acquire::Retries=2",
+                "dpkg-query -W -f='${db:Status-Status}'",
+                "if [ -z \"$missing_packages\" ]; then",
                 "Linux package installation failed after 3 attempts."
             );
         for (final Path workflow : java.util.List.of(BUILD_COMMON, NATIVE_PROOF)) {
@@ -171,6 +173,9 @@ final class CiParallelWorkflowSurfaceTest {
                 .contains("sh .github/scripts/install-linux-packages.sh")
                 .doesNotContain("sudo apt-get -o Acquire::ForceIPv4=true update");
         }
+        assertThat(Files.readString(BUILD_COMMON))
+            .contains("sh .github/scripts/install-linux-packages.sh build-essential")
+            .doesNotContain("install-linux-packages.sh build-essential mingw-w64");
     }
 
     @Test

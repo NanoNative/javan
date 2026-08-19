@@ -6,6 +6,19 @@ if [ "$#" -eq 0 ]; then
   exit 2
 fi
 
+if command -v dpkg-query >/dev/null 2>&1; then
+  missing_packages=''
+  for package in "$@"; do
+    if ! dpkg-query -W -f='${db:Status-Status}' "$package" 2>/dev/null | grep -qx installed; then
+      missing_packages="$missing_packages $package"
+    fi
+  done
+  if [ -z "$missing_packages" ]; then
+    exit 0
+  fi
+  set -- $missing_packages
+fi
+
 for attempt in 1 2 3; do
   if timeout -k 15s 4m sudo apt-get \
     -o Acquire::ForceIPv4=true \

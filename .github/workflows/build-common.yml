@@ -124,7 +124,7 @@ jobs:
 
       - name: "🔨 Native"
         if: runner.os == 'Linux'
-        run: sh .github/scripts/install-linux-packages.sh build-essential mingw-w64
+        run: sh .github/scripts/install-linux-packages.sh build-essential
 
       - name: "📁 Repository"
         run: |
@@ -192,7 +192,7 @@ jobs:
           rustc --version
 
       - name: "🔨 Native"
-        run: sh .github/scripts/install-linux-packages.sh build-essential mingw-w64
+        run: sh .github/scripts/install-linux-packages.sh build-essential
 
       - name: "📁 Repository"
         run: |
