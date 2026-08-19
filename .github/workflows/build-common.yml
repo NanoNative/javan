@@ -145,7 +145,7 @@ jobs:
     permissions:
       contents: read
     strategy:
-      fail-fast: true
+      fail-fast: false
       max-parallel: 8
       # Same JUnit suites as local Maven runs. Six native workers shorten CI;
       # discovery keeps class and method selectors out of this workflow.
@@ -227,7 +227,7 @@ jobs:
     permissions:
       contents: read
     strategy:
-      fail-fast: true
+      fail-fast: false
       max-parallel: 2
       matrix:
         include:
@@ -257,7 +257,7 @@ jobs:
     permissions:
       contents: read
     strategy:
-      fail-fast: true
+      fail-fast: false
       max-parallel: 9
       matrix:
         include:
@@ -325,7 +325,7 @@ jobs:
     permissions:
       contents: read
     strategy:
-      fail-fast: true
+      fail-fast: false
       max-parallel: 6
       matrix:
         include:
@@ -383,7 +383,7 @@ jobs:
   platform-smoke:
     name: ${{ matrix.label }}
     strategy:
-      fail-fast: true
+      fail-fast: false
       max-parallel: 6
       matrix:
         include:
@@ -430,7 +430,7 @@ jobs:
     permissions:
       contents: read
     strategy:
-      fail-fast: true
+      fail-fast: false
       max-parallel: 2
       matrix:
         include:

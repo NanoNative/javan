@@ -135,6 +135,13 @@ final class CiParallelWorkflowSurfaceTest {
     }
 
     @Test
+    void commonBuildDoesNotCancelIndependentMatrixEvidence() throws Exception {
+        assertThat(Files.readString(BUILD_COMMON))
+            .contains("fail-fast: false")
+            .doesNotContain("fail-fast: true");
+    }
+
+    @Test
     void linuxPackageSetupIsSharedAndBoundedBelowTheJobTimeout() throws Exception {
         final String installer = Files.readString(LINUX_PACKAGES);
 
