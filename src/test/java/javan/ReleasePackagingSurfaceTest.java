@@ -426,6 +426,8 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         final Path log = tempDir.resolve("timings.tsv");
         final Path json = tempDir.resolve("timings.json");
         final Path markdown = tempDir.resolve("timings.md");
+        final Path gnuTime = tempDir.resolve("gnu-time.txt");
+        Files.writeString(gnuTime, "0.12 0.34 1024\n");
         Files.writeString(runner, """
             set -eu
             . "$1"
@@ -435,6 +437,8 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             javan_timing_run bootstrap_jvm true
             javan_timing_run bootstrap_gen2 true
             javan_timing_write_reports linux-x64 2 bootstrap "$3" "$4" pass 0
+            javan_timing_parse_gnu "$5"
+            printf 'GNU: cpu=%s rss=%s\\n' "$javan_timing_measure_cpu_seconds" "$javan_timing_measure_max_rss_bytes"
             """);
 
         final ProcessResult run = process(
@@ -445,28 +449,37 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
                 REPO_ROOT.resolve(".github/scripts/timing-report.sh").toString(),
                 log.toString(),
                 json.toString(),
-                markdown.toString()
+                markdown.toString(),
+                gnuTime.toString()
             ),
             Duration.ofSeconds(20),
             Map.of()
         );
 
         assertThat(run.exitCode()).isZero();
-        assertThat(run.stdout()).contains("Timing: bootstrap_jvm=", "Timing: bootstrap_gen2=");
-        assertThat(Files.readString(json))
+        assertThat(run.stdout()).contains("Timing: bootstrap_jvm=", "Timing: bootstrap_gen2=", "GNU: cpu=0.460000 rss=1048576");
+        final String jsonContent = Files.readString(json);
+        assertThat(jsonContent)
             .contains("\"target\": \"linux-x64\"")
-            .contains("\"schemaVersion\": 1")
+            .contains("\"schemaVersion\": 2")
             .contains("\"bootstrapGeneration\": 2")
             .contains("\"proofScope\": \"bootstrap\"")
             .contains("\"status\": \"pass\"")
             .contains("\"exitCode\": 0")
-            .containsPattern("\\{\\\"name\\\": \\\"bootstrap_jvm\\\", \\\"seconds\\\": \\d+, \\\"status\\\": \\\"pass\\\", \\\"countedInTotal\\\": true}")
-            .containsPattern("\\{\\\"name\\\": \\\"bootstrap_gen2\\\", \\\"seconds\\\": \\d+, \\\"status\\\": \\\"pass\\\", \\\"countedInTotal\\\": true}")
+            .contains("\"availableProcessors\": \"")
+            .contains("\"physicalMemoryBytes\": \"")
+            .containsPattern("\\{\\\"name\\\": \\\"bootstrap_jvm\\\", \\\"seconds\\\": \\d+, \\\"status\\\": \\\"pass\\\", \\\"countedInTotal\\\": true, \\\"cpuSeconds\\\": \\\"[^\\\"]+\\\", \\\"maxRssBytes\\\": \\\"[^\\\"]+\\\", \\\"resourceSource\\\": \\\"[^\\\"]+\\\"}")
+            .containsPattern("\\{\\\"name\\\": \\\"bootstrap_gen2\\\", \\\"seconds\\\": \\d+, \\\"status\\\": \\\"pass\\\", \\\"countedInTotal\\\": true, \\\"cpuSeconds\\\": \\\"[^\\\"]+\\\", \\\"maxRssBytes\\\": \\\"[^\\\"]+\\\", \\\"resourceSource\\\": \\\"[^\\\"]+\\\"}")
             .containsPattern("\\\"totalSeconds\\\": \\d+");
         assertThat(Files.readString(markdown))
-            .containsPattern("\\| `bootstrap_jvm` \\| \\d+ \\| pass \\| true \\|")
-            .containsPattern("\\| `bootstrap_gen2` \\| \\d+ \\| pass \\| true \\|")
-            .containsPattern("\\| \\*\\*Total measured\\*\\* \\| \\*\\*\\d+\\*\\* \\| \\*\\*pass\\*\\* \\| \\|");
+            .contains("| Phase | Seconds | CPU seconds | Peak RSS bytes | Resource source | Status | Total |")
+            .containsPattern("\\| `bootstrap_jvm` \\| \\d+ \\| [^|]+ \\| [^|]+ \\| [^|]+ \\| pass \\| true \\|")
+            .containsPattern("\\| `bootstrap_gen2` \\| \\d+ \\| [^|]+ \\| [^|]+ \\| [^|]+ \\| pass \\| true \\|")
+            .containsPattern("\\| \\*\\*Total measured\\*\\* \\| \\*\\*\\d+\\*\\* \\| \\| \\| \\| \\*\\*pass\\*\\* \\| \\|");
+        if (System.getProperty("os.name").startsWith("Linux") || System.getProperty("os.name").startsWith("Mac")) {
+            assertThat(jsonContent)
+                .containsPattern("\\\"cpuSeconds\\\": \\\"\\d+(?:\\.\\d+)?\\\", \\\"maxRssBytes\\\": \\\"\\d+\\\", \\\"resourceSource\\\": \\\"(?:gnu|bsd)-time\\\"");
+        }
     }
 
     @Test
@@ -509,8 +522,8 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         assertThat(jsonContent)
             .contains("\"status\": \"fail\"")
             .contains("\"exitCode\": 7")
-            .contains("{\"name\": \"sanitizer_compile\", \"seconds\": 3, \"status\": \"pass\", \"countedInTotal\": false}")
-            .containsPattern("\\{\\\"name\\\": \\\"failed_phase\\\", \\\"seconds\\\": \\d+, \\\"status\\\": \\\"fail\\\", \\\"countedInTotal\\\": true}");
+            .contains("{\"name\": \"sanitizer_compile\", \"seconds\": 3, \"status\": \"pass\", \"countedInTotal\": false, \"cpuSeconds\": \"unknown\", \"maxRssBytes\": \"unknown\", \"resourceSource\": \"unavailable\"}")
+            .containsPattern("\\{\\\"name\\\": \\\"failed_phase\\\", \\\"seconds\\\": \\d+, \\\"status\\\": \\\"fail\\\", \\\"countedInTotal\\\": true, \\\"cpuSeconds\\\": \\\"[^\\\"]+\\\", \\\"maxRssBytes\\\": \\\"[^\\\"]+\\\", \\\"resourceSource\\\": \\\"[^\\\"]+\\\"}");
         final var failedSeconds = Pattern.compile("\\\"name\\\": \\\"failed_phase\\\", \\\"seconds\\\": (\\d+)")
             .matcher(jsonContent);
         final var totalSeconds = Pattern.compile("\\\"totalSeconds\\\": (\\d+)").matcher(jsonContent);
