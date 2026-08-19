@@ -84,6 +84,18 @@ final class CiParallelWorkflowSurfaceTest {
     }
 
     @Test
+    void pullRequestAndMainWorkflowsQueueRunsWithoutCancellation() throws Exception {
+        for (final Path workflow : java.util.List.of(BUILD_PR, BUILD_MERGE)) {
+            assertThat(Files.readString(workflow))
+                .contains(
+                    "concurrency:",
+                    "queue: max",
+                    "cancel-in-progress: false"
+                );
+        }
+    }
+
+    @Test
     void pullRequestsUseGenerationTwoWhileSnapshotsAndReleasesUseGenerationThree() throws Exception {
         assertThat(Files.readString(BUILD_PR))
             .contains("bootstrap_generation: 2")
