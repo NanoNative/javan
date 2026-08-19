@@ -55,14 +55,15 @@ javan_timing_measure() {
   case "$(uname -s)" in
     Linux)
       if [ -x /usr/bin/time ]; then
-        if /usr/bin/time -f '%U\t%S\t%M' -o "$javan_timing_measure_file" "$@"; then
+        if /usr/bin/time -f '%U %S %M' -o "$javan_timing_measure_file" "$@"; then
           javan_timing_measure_code=0
         else
           javan_timing_measure_code=$?
         fi
-        javan_timing_measure_tab=$(printf '\t')
-        IFS="$javan_timing_measure_tab" read -r javan_timing_measure_user javan_timing_measure_system javan_timing_measure_rss \
+        IFS=' ' read -r javan_timing_measure_user javan_timing_measure_system javan_timing_measure_rss \
           < "$javan_timing_measure_file" || true
+        javan_timing_measure_user=$(printf '%s' "$javan_timing_measure_user" | tr ',' '.')
+        javan_timing_measure_system=$(printf '%s' "$javan_timing_measure_system" | tr ',' '.')
         case "$javan_timing_measure_user:$javan_timing_measure_system" in
           *[!0-9.:]*|:|*:*:*) ;;
           *) javan_timing_measure_cpu_seconds=$(awk -v user="$javan_timing_measure_user" -v system="$javan_timing_measure_system" \
