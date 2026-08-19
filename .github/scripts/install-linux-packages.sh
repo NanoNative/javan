@@ -6,6 +6,26 @@ if [ "$#" -eq 0 ]; then
   exit 2
 fi
 
+javan_native_toolchain_available() {
+  command -v cc >/dev/null 2>&1 \
+    && command -v c++ >/dev/null 2>&1 \
+    && command -v ar >/dev/null 2>&1 \
+    && command -v ranlib >/dev/null 2>&1 \
+    && command -v make >/dev/null 2>&1
+}
+
+requested_packages=''
+for package in "$@"; do
+  if [ "$package" = 'build-essential' ] && javan_native_toolchain_available; then
+    continue
+  fi
+  requested_packages="$requested_packages $package"
+done
+if [ -z "$requested_packages" ]; then
+  exit 0
+fi
+set -- $requested_packages
+
 if command -v dpkg-query >/dev/null 2>&1; then
   missing_packages=''
   for package in "$@"; do

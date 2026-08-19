@@ -164,6 +164,8 @@ final class CiParallelWorkflowSurfaceTest {
                 "Acquire::http::Timeout=20",
                 "Acquire::https::Timeout=20",
                 "Acquire::Retries=2",
+                "javan_native_toolchain_available()",
+                "if [ \"$package\" = 'build-essential' ] && javan_native_toolchain_available; then",
                 "dpkg-query -W -f='${db:Status-Status}'",
                 "if [ -z \"$missing_packages\" ]; then",
                 "Linux package installation failed after 3 attempts."
