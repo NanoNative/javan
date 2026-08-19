@@ -100,20 +100,10 @@ jobs:
         shell: sh
         run: |
           set -eu
-          set -- build-essential
           case '${{ inputs.target }}' in
-            windows-*) set -- "$@" mingw-w64 ;;
+            windows-*) sh .github/scripts/install-linux-packages.sh build-essential mingw-w64 ;;
+            *) sh .github/scripts/install-linux-packages.sh build-essential ;;
           esac
-          for attempt in 1 2 3; do
-            if sudo apt-get -o Acquire::ForceIPv4=true update \
-              && sudo apt-get -o Acquire::ForceIPv4=true install -y --fix-missing "$@"; then
-              exit 0
-            fi
-            if [ "$attempt" -eq 3 ]; then
-              exit 1
-            fi
-            sleep 15
-          done
 
       - name: "🪟 Windows [${{ inputs.target }}]"
         if: runner.os == 'Windows'

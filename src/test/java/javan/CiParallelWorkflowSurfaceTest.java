@@ -20,6 +20,7 @@ final class CiParallelWorkflowSurfaceTest {
     private static final Path BUILD_MERGE = Path.of(".github/workflows/build-merge.yml");
     private static final Path RELEASE = Path.of(".github/workflows/release.yml");
     private static final Path NATIVE_PROOF = Path.of(".github/workflows/native-proof.yml");
+    private static final Path LINUX_PACKAGES = Path.of(".github/scripts/install-linux-packages.sh");
     private static final Path PLATFORM_PROOF = Path.of(".github/workflows/platform-proof.yml");
     private static final Path PUBLISH_CENTRAL = Path.of(".github/workflows/publish-central.yml");
 
@@ -134,6 +135,26 @@ final class CiParallelWorkflowSurfaceTest {
     }
 
     @Test
+    void linuxPackageSetupIsSharedAndBoundedBelowTheJobTimeout() throws Exception {
+        final String installer = Files.readString(LINUX_PACKAGES);
+
+        assertThat(installer)
+            .contains(
+                "for attempt in 1 2 3; do",
+                "timeout -k 15s 4m sudo apt-get",
+                "Acquire::http::Timeout=20",
+                "Acquire::https::Timeout=20",
+                "Acquire::Retries=2",
+                "Linux package installation failed after 3 attempts."
+            );
+        for (final Path workflow : java.util.List.of(BUILD_COMMON, NATIVE_PROOF)) {
+            assertThat(Files.readString(workflow))
+                .contains("sh .github/scripts/install-linux-packages.sh")
+                .doesNotContain("sudo apt-get -o Acquire::ForceIPv4=true update");
+        }
+    }
+
+    @Test
     void platformAndWindowsProofsUseDocumentedSuitesInsteadOfOwnedSelectors() throws Exception {
         assertThat(Files.readString(PLATFORM_PROOF))
             .contains("-Dgroups=platform test")
@@ -223,8 +244,9 @@ final class CiParallelWorkflowSurfaceTest {
             .contains("scope: failure_limits");
         assertThat(Files.readString(NATIVE_PROOF))
             .contains("if: runner.os == 'Linux' && inputs.proof != 'sanitizer'")
-            .contains("set -- build-essential")
-            .contains("windows-*) set -- \"$@\" mingw-w64 ;;")
+            .contains("windows-*) sh .github/scripts/install-linux-packages.sh build-essential mingw-w64 ;;")
+            .contains("*) sh .github/scripts/install-linux-packages.sh build-essential ;;");
+        assertThat(Files.readString(LINUX_PACKAGES))
             .contains("install -y --fix-missing \"$@\"");
 
         final var lines = Files.readAllLines(Path.of(".github/scripts/sanitizer-suite.sh"));

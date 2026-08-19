@@ -124,17 +124,7 @@ jobs:
 
       - name: "🔨 Native"
         if: runner.os == 'Linux'
-        run: |
-          for attempt in 1 2 3; do
-            if sudo apt-get -o Acquire::ForceIPv4=true update \
-              && sudo apt-get -o Acquire::ForceIPv4=true install -y --fix-missing build-essential mingw-w64; then
-              exit 0
-            fi
-            if [ "$attempt" -eq 3 ]; then
-              exit 1
-            fi
-            sleep 15
-          done
+        run: sh .github/scripts/install-linux-packages.sh build-essential mingw-w64
 
       - name: "📁 Repository"
         run: |
@@ -202,17 +192,7 @@ jobs:
           rustc --version
 
       - name: "🔨 Native"
-        run: |
-          for attempt in 1 2 3; do
-            if sudo apt-get -o Acquire::ForceIPv4=true update \
-              && sudo apt-get -o Acquire::ForceIPv4=true install -y --fix-missing build-essential mingw-w64; then
-              exit 0
-            fi
-            if [ "$attempt" -eq 3 ]; then
-              exit 1
-            fi
-            sleep 15
-          done
+        run: sh .github/scripts/install-linux-packages.sh build-essential mingw-w64
 
       - name: "📁 Repository"
         run: |
