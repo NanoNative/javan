@@ -36,8 +36,10 @@ import javan.ir.IrField;
 import javan.ir.IrFunction;
 import javan.ir.IrInstruction;
 import javan.ir.IrLocal;
+import javan.ir.IrMethodMetadata;
 import javan.ir.IrParameter;
 import javan.ir.IrProgram;
+import javan.ir.IrReflectedClass;
 import javan.ir.IrSourceLocation;
 import javan.ir.IrType;
 import javan.profile.Profile;
@@ -443,13 +445,31 @@ final class CoreBehaviorTest {
             "forName",
             "(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;"
         ))).isPresent();
+        assertThat(rules.forbiddenReason(new MethodRef(
+            "java/lang/Class",
+            "getDeclaredMethod",
+            "(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;"
+        ))).isEmpty();
         assertThat(rules.forbiddenReason(new MethodRef("java/lang/ClassLoader", "loadClass", "(Ljava/lang/String;)Ljava/lang/Class;"))).isPresent();
         assertThat(rules.forbiddenReason(new MethodRef("java/lang/ClassLoader", "getSystemClassLoader", "()Ljava/lang/ClassLoader;"))).isEmpty();
         assertThat(rules.forbiddenReason(new MethodRef("java/lang/ClassLoader", "getSystemResourceAsStream", "(Ljava/lang/String;)Ljava/io/InputStream;"))).isEmpty();
         assertThat(rules.forbiddenReason(new MethodRef("java/lang/ClassLoader", "getResourceAsStream", "(Ljava/lang/String;)Ljava/io/InputStream;"))).isEmpty();
         assertThat(rules.forbiddenReason(new MethodRef("java/lang/ClassLoader$NativeLibrary", "load", "()V"))).isPresent();
         assertThat(rules.forbiddenReason(new MethodRef("java/lang/reflect/Proxy", "newProxyInstance", "()Ljava/lang/Object;"))).isPresent();
-        assertThat(rules.forbiddenReason(new MethodRef("java/lang/reflect/Method", "invoke", "()V"))).isPresent();
+        assertThat(rules.forbiddenReason(new MethodRef(
+            "java/lang/reflect/Method", "getName", "()Ljava/lang/String;"
+        ))).isEmpty();
+        assertThat(rules.forbiddenReason(new MethodRef(
+            "java/lang/reflect/Method", "getDeclaringClass", "()Ljava/lang/Class;"
+        ))).isEmpty();
+        assertThat(rules.forbiddenReason(new MethodRef(
+            "java/lang/reflect/Method", "getParameterCount", "()I"
+        ))).isEmpty();
+        assertThat(rules.forbiddenReason(new MethodRef(
+            "java/lang/reflect/Method",
+            "invoke",
+            "(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;"
+        ))).isPresent();
         assertThat(rules.forbiddenReason(new MethodRef("java/lang/invoke/MethodHandle", "invokeExact", "()V"))).isPresent();
         assertThat(rules.forbiddenReason(new MethodRef("java/lang/invoke/MethodHandles", "lookup", "()V"))).isPresent();
         assertThat(rules.forbiddenReason(new MethodRef("java/lang/instrument/Instrumentation", "addTransformer", "()V"))).isPresent();
@@ -16502,6 +16522,70 @@ final class CoreBehaviorTest {
             "static void* javan_generated_class_for_name(void* name_value) {",
             "javan_string_equals(name, \"com.acme.Main\")",
             "return javan_runtime_class_for_name_known(name_value);"
+        );
+    }
+
+    @Test
+    void cCodegenEmitsDeclaredMethodMetadataOnlyWhenUsed() throws Exception {
+        final IrClass classInfo = new IrClass(
+            "com/acme/Main",
+            "javan_class_com_acme_Main",
+            List.of(),
+            List.of(),
+            List.of(),
+            false
+        );
+        final IrFunction plain = new IrFunction(
+            "com/acme/Main",
+            "main",
+            "()V",
+            "main_symbol",
+            IrType.VOID,
+            List.of(),
+            List.of(),
+            List.of(IrInstruction.returnVoid())
+        );
+        final List<IrReflectedClass> metadata = List.of(new IrReflectedClass(
+            "com/acme/Main",
+            List.of(new IrMethodMetadata("main", List.of()))
+        ));
+        final IrProgram plainProgram = new IrProgram(
+            List.of(classInfo), List.of(plain), List.of(), "main_symbol", List.of(), Map.of(), Map.of(),
+            Map.of("com/acme/Main", 1), metadata
+        );
+
+        final String plainGenerated = Files.readString(new CCodegen().generate(
+            plainProgram, tempDir.resolve("plain-method-lookup")
+        ));
+
+        assertThat(plainGenerated).doesNotContain("JavanMethodMetadata", "javan_generated_class_get_declared_method");
+
+        final IrFunction lookup = new IrFunction(
+            "com/acme/Main",
+            "lookup",
+            "()Ljava/lang/reflect/Method;",
+            "lookup_symbol",
+            IrType.OBJECT,
+            List.of(),
+            List.of(),
+            List.of(IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_generated_class_get_declared_method",
+                List.of(IrExpression.objectNull(), IrExpression.objectNull(), IrExpression.objectNull())
+            )))
+        );
+        final IrProgram lookupProgram = new IrProgram(
+            List.of(classInfo), List.of(lookup), List.of(), "lookup_symbol", List.of(), Map.of(), Map.of(),
+            Map.of("com/acme/Main", 1), metadata
+        );
+
+        final String lookupGenerated = Files.readString(new CCodegen().generate(
+            lookupProgram, tempDir.resolve("used-method-lookup")
+        ));
+
+        assertThat(lookupGenerated).contains(
+            "static const JavanMethodMetadata javan_method_metadata_0_0 = ",
+            "{JAVAN_METHOD_METADATA_MAGIC, 0, \"main\", \"com.acme.Main\"}",
+            "static void* javan_generated_class_get_declared_method("
         );
     }
 }

@@ -36,6 +36,15 @@ public final class CurrentJdkTools {
         return tool("jar");
     }
 
+    /**
+     * Returns the current JDK {@code jimage} executable path.
+     *
+     * @return executable path
+     */
+    public static String jimage() {
+        return tool("jimage");
+    }
+
     private static String tool(final String name) {
         final String executable = java.io.File.separatorChar == '\\'
             ? name + ".exe"

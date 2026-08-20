@@ -8176,6 +8176,119 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void declaredMethodLookupExposesClosedWorldMetadataAndMatchesJvmFailure() throws Exception {
+        final Path project = project("declared-method-metadata");
+        writeJava(project, "com.acme.Base", """
+            package com.acme;
+
+            public class Base {
+                public void inherited() {
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+
+            public final class Target extends Base {
+                private String greet(final String name) {
+                    return "hello ".concat(name);
+                }
+
+                private String greet(final int count) {
+                    return Integer.toString(count);
+                }
+
+                private void ping() {
+                }
+
+                private void shape(final int count, final String[] names) {
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.lang.reflect.Method;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final String name = args.length == 0 ? "greet" : args[0];
+                    final Class<?>[] noParameters = null;
+                    final Class<?>[] stringParameter = {String.class};
+                    final Class<?>[] intParameter = {int.class};
+                    final Class<?>[] booleanParameter = {boolean.class};
+                    final Class<?>[] shapeParameters = {int.class, String[].class};
+                    final Method method = Target.class.getDeclaredMethod(name, stringParameter);
+                    final Method zero = Target.class.getDeclaredMethod("ping", noParameters);
+                    final Method shape = Target.class.getDeclaredMethod("shape", shapeParameters);
+                    final Method jdk = String.class.getDeclaredMethod("substring", intParameter);
+                    final Method dynamic = Class.forName("java.util.ArrayList")
+                        .getDeclaredMethod("size", noParameters);
+                    for (int index = 0; index < 10_000; index++) {
+                        final byte[] ignored = new byte[64];
+                    }
+                    System.out.println(method.getName());
+                    System.out.println(method.getParameterCount());
+                    System.out.println(method.getDeclaringClass() == Target.class);
+                    System.out.println(zero.getParameterCount());
+                    System.out.println(shape.getParameterCount());
+                    System.out.println(jdk.getDeclaringClass() == String.class);
+                    System.out.println(dynamic.getDeclaringClass().getName());
+                    try {
+                        Target.class.getDeclaredMethod("missing", noParameters);
+                    } catch (final NoSuchMethodException expected) {
+                        System.out.println("missing");
+                    }
+                    try {
+                        Target.class.getDeclaredMethod("greet", booleanParameter);
+                    } catch (final NoSuchMethodException expected) {
+                        System.out.println("exact-parameters");
+                    }
+                    try {
+                        Target.class.getDeclaredMethod(null, noParameters);
+                    } catch (final NullPointerException expected) {
+                        System.out.println("null");
+                    }
+                    try {
+                        Target.class.getDeclaredMethod("inherited", noParameters);
+                    } catch (final NoSuchMethodException expected) {
+                        System.out.println("declared-only");
+                    }
+                    final Method absent = null;
+                    try {
+                        absent.getName();
+                    } catch (final NullPointerException expected) {
+                        System.out.println("null-method");
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/generated/main.c")))
+            .contains("{JAVAN_METHOD_METADATA_MAGIC, 1, \"substring\", \"java.lang.String\"}")
+            .contains("{JAVAN_METHOD_METADATA_MAGIC, 0, \"size\", \"java.util.ArrayList\"}")
+            .contains("javan_class_name_equals(class_value, \"java.lang.String\") && parameter_count == 1");
+        final ProcessResult nativeRun = process(
+            project,
+            List.of(project.resolve(".javan/bin/declared-method-metadata").toString()),
+            defaultProcessTimeout(),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1")
+        );
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo(
+            "greet\n1\ntrue\n0\n2\ntrue\njava.util.ArrayList\nmissing\nexact-parameters\nnull\ndeclared-only\nnull-method\n"
+        );
+    }
+
+    @Test
     void secureRandomStaticInitializerSurvivesGcAndFillsBytes() throws Exception {
         final Path project = project("secure-random-next-bytes");
         writeJava(project, "com.acme.Main", """

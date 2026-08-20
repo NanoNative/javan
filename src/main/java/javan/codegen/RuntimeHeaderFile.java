@@ -195,6 +195,13 @@ final class RuntimeHeaderFile {
             int object_field_count;
             unsigned long* object_field_offsets;
         } JavanTypeDescriptor;
+        #define JAVAN_METHOD_METADATA_MAGIC 0x4a4d4554
+        typedef struct {
+            int magic;
+            int parameter_count;
+            const char* name;
+            const char* declaring_name;
+        } JavanMethodMetadata;
         #define JAVAN_ARRAY_KIND_OBJECT 1
         #define JAVAN_ARRAY_KIND_INT 2
         #define JAVAN_ARRAY_KIND_LONG 3
@@ -744,6 +751,10 @@ final class RuntimeHeaderFile {
         void* javan_runtime_class_literal(const char* binary_name, int exact_type_id, int is_enum, int is_array, int assignable_count, ...);
         void* javan_runtime_class_for_name_known(void* name_value);
         void* javan_runtime_class_get_name(void* value);
+        int javan_class_name_equals(void* value, const char* expected);
+        void* javan_method_get_name(void* value);
+        void* javan_method_get_declaring_class(void* value);
+        int javan_method_get_parameter_count(void* value);
         int javan_is_system_class_loader(void* value);
         void* javan_class_loader_system(void);
         void* javan_class_resource_as_stream(void* class_value, void* name_value);

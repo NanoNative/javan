@@ -18,6 +18,7 @@ import java.util.Set;
  * @param classInitializationDependencies initialization owner to ordered prerequisite owners
  * @param enumDispatchConstants constant-specific enum implementation to constant name
  * @param classTypeIds stable generated type IDs by JVM class name
+ * @param reflectedClasses classes whose declared methods are available to reflection
  */
 public record IrProgram(
     List<IrClass> classes,
@@ -27,9 +28,11 @@ public record IrProgram(
     List<IrMaterializedLambdaTarget> materializedLambdaTargets,
     Map<String, List<String>> classInitializationDependencies,
     Map<String, String> enumDispatchConstants,
-    Map<String, Integer> classTypeIds
+    Map<String, Integer> classTypeIds,
+    List<IrReflectedClass> reflectedClasses
 ) {
     public IrProgram {
+        reflectedClasses = List.copyOf(reflectedClasses);
         final Map<String, List<String>> dependencies = new LinkedHashMap<>();
         for (final Map.Entry<String, List<String>> entry : classInitializationDependencies.entrySet()) {
             dependencies.put(entry.getKey(), List.copyOf(entry.getValue()));
@@ -46,6 +49,30 @@ public record IrProgram(
             throw new IllegalArgumentException("Class type IDs must match generated classes");
         }
         classTypeIds = Collections.unmodifiableMap(new LinkedHashMap<>(classTypeIds));
+    }
+
+    /** Creates a program without external reflected-class metadata. */
+    public IrProgram(
+        final List<IrClass> classes,
+        final List<IrFunction> functions,
+        final List<IrDispatch> dispatches,
+        final String entryFunction,
+        final List<IrMaterializedLambdaTarget> materializedLambdaTargets,
+        final Map<String, List<String>> classInitializationDependencies,
+        final Map<String, String> enumDispatchConstants,
+        final Map<String, Integer> classTypeIds
+    ) {
+        this(
+            classes,
+            functions,
+            dispatches,
+            entryFunction,
+            materializedLambdaTargets,
+            classInitializationDependencies,
+            enumDispatchConstants,
+            classTypeIds,
+            List.of()
+        );
     }
 
     /** Creates a program with type IDs derived from class order. */
@@ -66,7 +93,8 @@ public record IrProgram(
             materializedLambdaTargets,
             classInitializationDependencies,
             enumDispatchConstants,
-            sequentialTypeIds(classes)
+            sequentialTypeIds(classes),
+            List.of()
         );
     }
 
@@ -78,7 +106,7 @@ public record IrProgram(
      * @param entryFunction entry function C symbol
      */
     public IrProgram(final List<IrClass> classes, final List<IrFunction> functions, final String entryFunction) {
-        this(classes, functions, List.of(), entryFunction, List.of(), Map.of(), Map.of(), sequentialTypeIds(classes));
+        this(classes, functions, List.of(), entryFunction, List.of(), Map.of(), Map.of(), sequentialTypeIds(classes), List.of());
     }
 
     /**
@@ -95,7 +123,7 @@ public record IrProgram(
         final List<IrDispatch> dispatches,
         final String entryFunction
     ) {
-        this(classes, functions, dispatches, entryFunction, List.of(), Map.of(), Map.of(), sequentialTypeIds(classes));
+        this(classes, functions, dispatches, entryFunction, List.of(), Map.of(), Map.of(), sequentialTypeIds(classes), List.of());
     }
 
     /** Creates a program without class-initialization dependency metadata. */
@@ -115,7 +143,8 @@ public record IrProgram(
             materializedLambdaTargets,
             Map.of(),
             enumDispatchConstants,
-            sequentialTypeIds(classes)
+            sequentialTypeIds(classes),
+            List.of()
         );
     }
 
@@ -126,7 +155,7 @@ public record IrProgram(
      * @param entryFunction entry function C symbol
      */
     public IrProgram(final List<IrFunction> functions, final String entryFunction) {
-        this(List.of(), functions, List.of(), entryFunction, List.of(), Map.of(), Map.of(), Map.of());
+        this(List.of(), functions, List.of(), entryFunction, List.of(), Map.of(), Map.of(), Map.of(), List.of());
     }
 
     private static Map<String, Integer> sequentialTypeIds(final List<IrClass> classes) {

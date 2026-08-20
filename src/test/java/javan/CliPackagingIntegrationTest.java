@@ -363,6 +363,63 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanReadsFiniteJdkMethodMetadata() throws Exception {
+        final Path probeProject = tempDir.resolve("selfhost-method-metadata");
+        final Path probeClasses = probeProject.resolve("classes");
+        Files.createDirectories(probeClasses);
+        writeJava(probeProject, "com.acme.Main", """
+            package com.acme;
+
+            import java.lang.reflect.Method;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Method method = String.class.getDeclaredMethod("substring", int.class);
+                    System.out.println(method.getName());
+                    System.out.println(method.getParameterCount());
+                }
+            }
+            """);
+
+        final ProcessResult javac = process(
+            tempDir,
+            List.of(
+                CliTestHarness.currentJavacCommand(),
+                "--release",
+                "25",
+                "-d",
+                probeClasses.toString(),
+                probeProject.resolve("src/main/java/com/acme/Main.java").toString()
+            ),
+            Duration.ofSeconds(30)
+        );
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+
+        final ProcessResult nativeBuild = process(
+            tempDir,
+            List.of(
+                primitiveLiteralBootstrap.toString(),
+                "build",
+                probeClasses.toString(),
+                "--main",
+                "com.acme.Main",
+                "--output",
+                "selfhost-method-metadata"
+            ),
+            Duration.ofSeconds(120)
+        );
+        assertThat(nativeBuild.exitCode()).as(nativeBuild.stderr()).isZero();
+
+        final Path probeBinary = probeProject.resolve(".javan/bin/selfhost-method-metadata");
+        assertThat(probeBinary).isExecutable();
+        assertThat(process(tempDir, List.of(probeBinary.toString())).stdout())
+            .isEqualTo("substring\n1\n");
+    }
+
+    @Test
     void nativeBuiltJavanBuildsPlainLongLiteralProgram() throws Exception {
         final Path longProject = tempDir.resolve("selfhost-plain-long");
         final Path longClasses = longProject.resolve("classes");

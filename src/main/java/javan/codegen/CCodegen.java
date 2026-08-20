@@ -14,6 +14,7 @@ import javan.ir.IrDispatchTarget;
 import javan.ir.IrExpression;
 import javan.ir.IrInstruction;
 import javan.ir.IrProgram;
+import javan.ir.IrReflectedClass;
 import javan.ir.IrSourceLocation;
 import javan.ir.IrType;
 import javan.optimizer.EscapeAnalyzer;
@@ -126,6 +127,10 @@ public final class CCodegen {
         }
         emitTypeDescriptors(program, c);
         c.append(System.lineSeparator());
+        if (features.methodMetadata()) {
+            emitMethodMetadata(program, c);
+            c.append(System.lineSeparator());
+        }
         final boolean emittedStaticFields = emitStaticFields(program, c);
         if (emittedStaticFields) {
             c.append(System.lineSeparator());
@@ -165,6 +170,9 @@ public final class CCodegen {
         emitGeneratedObjectHelpers(program, features, c);
         if (features.classForName()) {
             emitClassForNameHelper(program, c);
+        }
+        if (features.methodMetadata()) {
+            emitDeclaredMethodHelper(program, c);
         }
         emitRecordShapeExactTypeHelper(program, c);
         emitEnumOrdinalHelpers(program, c);
@@ -268,6 +276,10 @@ public final class CCodegen {
         }
         emitTypeDescriptors(program, c);
         c.append(System.lineSeparator());
+        if (features.methodMetadata()) {
+            emitMethodMetadata(program, c);
+            c.append(System.lineSeparator());
+        }
         final boolean emittedStaticFields = emitStaticFields(program, c);
         if (emittedStaticFields) {
             c.append(System.lineSeparator());
@@ -306,6 +318,9 @@ public final class CCodegen {
         if (features.classForName()) {
             emitClassForNameHelper(program, c);
         }
+        if (features.methodMetadata()) {
+            emitDeclaredMethodHelper(program, c);
+        }
         emitRecordShapeExactTypeHelper(program, c);
         emitEnumOrdinalHelpers(program, c);
         emitGeneratedEnumOrdinalHelper(program, c);
@@ -337,6 +352,7 @@ public final class CCodegen {
         return new CodegenFeatures(
             usesGeneratedObjectClone(program),
             usesCall(program, "javan_generated_class_for_name"),
+            usesCall(program, "javan_generated_class_get_declared_method"),
             usesNonFiniteFloatingLiteral(program)
         );
     }
@@ -998,6 +1014,84 @@ public final class CCodegen {
         c.append("    return javan_runtime_class_for_name_known(name_value);")
             .append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+    }
+
+    private static void emitMethodMetadata(final IrProgram program, final StringBuilder c) {
+        final List<IrReflectedClass> reflectedClasses = program.reflectedClasses();
+        for (int classIndex = 0; classIndex < reflectedClasses.size(); classIndex++) {
+            final IrReflectedClass classInfo = reflectedClasses.get(classIndex);
+            for (int methodIndex = 0; methodIndex < classInfo.declaredMethods().size(); methodIndex++) {
+                final javan.ir.IrMethodMetadata method = classInfo.declaredMethods().get(methodIndex);
+                c.append("static const JavanMethodMetadata ")
+                    .append(methodMetadataSymbol(classIndex, methodIndex))
+                    .append(" = {JAVAN_METHOD_METADATA_MAGIC, ")
+                    .append(method.parameterDescriptors().size())
+                    .append(", ")
+                    .append(emitCStringLiteral(method.name()))
+                    .append(", ")
+                    .append(emitCStringLiteral(displayClassName(classInfo.jvmName())))
+                    .append("};")
+                    .append(System.lineSeparator());
+            }
+        }
+    }
+
+    private static void emitDeclaredMethodHelper(final IrProgram program, final StringBuilder c) {
+        c.append("static void* javan_generated_class_get_declared_method(")
+            .append("void* class_value, void* name_value, void* parameter_types) {")
+            .append(System.lineSeparator());
+        c.append("    if (class_value == NULL || name_value == NULL) return NULL;")
+            .append(System.lineSeparator());
+        c.append("    int parameter_count = parameter_types == NULL ? 0 : javan_array_length(parameter_types);")
+            .append(System.lineSeparator());
+        final List<IrReflectedClass> reflectedClasses = program.reflectedClasses();
+        for (int classIndex = 0; classIndex < reflectedClasses.size(); classIndex++) {
+            final IrReflectedClass classInfo = reflectedClasses.get(classIndex);
+            for (int methodIndex = 0; methodIndex < classInfo.declaredMethods().size(); methodIndex++) {
+                final javan.ir.IrMethodMetadata method = classInfo.declaredMethods().get(methodIndex);
+                c.append("    if (")
+                    .append("javan_class_name_equals(class_value, ")
+                    .append(emitCStringLiteral(displayClassName(classInfo.jvmName())))
+                    .append(")")
+                    .append(" && parameter_count == ").append(method.parameterDescriptors().size())
+                    .append(" && javan_string_equals((const char*) name_value, ")
+                    .append(emitCStringLiteral(method.name())).append(")");
+                for (int parameter = 0; parameter < method.parameterDescriptors().size(); parameter++) {
+                    c.append(" && javan_class_name_equals(javan_object_array_get(parameter_types, ")
+                        .append(parameter).append("), ")
+                        .append(emitCStringLiteral(reflectionTypeName(method.parameterDescriptors().get(parameter))))
+                        .append(")");
+                }
+                c.append(") {").append(System.lineSeparator());
+                c.append("        return (void*) &").append(methodMetadataSymbol(classIndex, methodIndex))
+                    .append(";").append(System.lineSeparator());
+                c.append("    }").append(System.lineSeparator());
+            }
+        }
+        c.append("    return NULL;").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+    }
+
+    private static String methodMetadataSymbol(final int classIndex, final int methodIndex) {
+        return "javan_method_metadata_" + classIndex + "_" + methodIndex;
+    }
+
+    private static String reflectionTypeName(final String descriptor) {
+        switch (descriptor) {
+            case "Z": return "boolean";
+            case "B": return "byte";
+            case "S": return "short";
+            case "C": return "char";
+            case "I": return "int";
+            case "J": return "long";
+            case "F": return "float";
+            case "D": return "double";
+            default:
+        }
+        if (descriptor.startsWith("L")) {
+            return descriptor.substring(1, descriptor.length() - 1).replace('/', '.');
+        }
+        return descriptor.replace('/', '.');
     }
 
     private static void emitDispatch(
@@ -4393,6 +4487,11 @@ public final class CCodegen {
         return value;
     }
 
-    private record CodegenFeatures(boolean generatedObjectClone, boolean classForName, boolean nonFiniteFloatingLiteral) {
+    private record CodegenFeatures(
+        boolean generatedObjectClone,
+        boolean classForName,
+        boolean methodMetadata,
+        boolean nonFiniteFloatingLiteral
+    ) {
     }
 }

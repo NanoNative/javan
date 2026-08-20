@@ -25,12 +25,15 @@ import javan.ir.IrInstruction;
 import javan.ir.IrLocal;
 import javan.ir.IrParameter;
 import javan.ir.IrProgram;
+import javan.ir.IrReflectedClass;
 import javan.ir.IrSourceLocation;
 import javan.ir.IrType;
 import javan.util.Strings2;
 import javan.verify.Diagnostic;
 import javan.verify.DiagnosticException;
 
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -137,6 +140,62 @@ public final class BytecodeToIR {
         final NativeInteropConfig nativeInterop,
         final ClassInitializationGraph.Result classInitialization
     ) {
+        final List<EntryPoint> reachableMethods = BytecodeToIRMetadataSupport.sortedEntryPoints(
+            callGraph.reachableMethods()
+        );
+        final BytecodeToIRMetadataSupport.ReflectionClasses reflection =
+            BytecodeToIRMetadataSupport.reflectionClasses(classes, reachableMethods);
+        return lower(
+            classes, callGraph, sourceLines, nativeInterop, classInitialization, reflection, List.of()
+        );
+    }
+
+    /**
+     * Lowers a build and reads finite platform class metadata needed by reachable reflection calls.
+     *
+     * @param classes parsed project classes
+     * @param callGraph reachable call graph
+     * @param sourceLines source-line index
+     * @param nativeInterop declared native imports
+     * @param classInitialization checked runtime initialization model
+     * @param outputDirectory build output used for finite platform metadata
+     * @return lowered IR program
+     * @throws IOException when referenced platform class metadata cannot be read
+     * @throws InterruptedException when platform metadata extraction is interrupted
+     */
+    public IrProgram lower(
+        final Map<String, ClassFile> classes,
+        final CallGraph callGraph,
+        final SourceLineIndex sourceLines,
+        final NativeInteropConfig nativeInterop,
+        final ClassInitializationGraph.Result classInitialization,
+        final Path outputDirectory
+    ) throws IOException, InterruptedException {
+        final List<EntryPoint> reachableMethods = BytecodeToIRMetadataSupport.sortedEntryPoints(
+            callGraph.reachableMethods()
+        );
+        final BytecodeToIRMetadataSupport.ReflectionClasses reflection =
+            BytecodeToIRMetadataSupport.reflectionClasses(classes, reachableMethods);
+        return lower(
+            classes,
+            callGraph,
+            sourceLines,
+            nativeInterop,
+            classInitialization,
+            reflection,
+            BytecodeToIRMetadataSupport.loadExternalReflectedClasses(reflection, outputDirectory)
+        );
+    }
+
+    private IrProgram lower(
+        final Map<String, ClassFile> classes,
+        final CallGraph callGraph,
+        final SourceLineIndex sourceLines,
+        final NativeInteropConfig nativeInterop,
+        final ClassInitializationGraph.Result classInitialization,
+        final BytecodeToIRMetadataSupport.ReflectionClasses reflection,
+        final List<IrReflectedClass> externalReflectedClasses
+    ) {
         final List<IrFunction> functions = new ArrayList<>();
         final Map<String, IrDispatch> dispatches = new LinkedHashMap<>();
         final List<EntryPoint> reachableMethods = BytecodeToIRMetadataSupport.sortedEntryPoints(callGraph.reachableMethods());
@@ -194,7 +253,10 @@ public final class BytecodeToIR {
             List.copyOf(materializedLambdaTargets),
             classInitialization.dependencies(),
             enumDispatchConstants(classes),
-            BytecodeToIRMetadataSupport.retainedTypeIds(classes, loweredClasses)
+            BytecodeToIRMetadataSupport.retainedTypeIds(classes, loweredClasses),
+            BytecodeToIRMetadataSupport.reflectedClasses(
+                classes, loweredClasses, reflection, externalReflectedClasses
+            )
         );
     }
 

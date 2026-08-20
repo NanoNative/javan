@@ -1,6 +1,7 @@
 package javan.classfile;
 
 import javan.detect.ProjectLayout;
+import javan.toolchain.CurrentJdkTools;
 import javan.util.Files2;
 import javan.util.ProcessRunner;
 import javan.util.Strings2;
@@ -57,6 +58,53 @@ public final class ClassFileScanner {
             }
         }
         return Collections.unmodifiableMap(new LinkedHashMap<>(classes));
+    }
+
+    /**
+     * Reads one class from the current JDK without inventorying every module.
+     *
+     * @param jvmName JVM internal class name
+     * @param outputDirectory build output used for native-compiler extraction fallback
+     * @return parsed class file
+     * @throws IOException when the class or runtime image cannot be read
+     * @throws InterruptedException when runtime-image extraction is interrupted
+     */
+    public ClassFile readRuntimeClass(final String jvmName, final Path outputDirectory)
+        throws IOException, InterruptedException {
+        final String resource = jvmName + ".class";
+        final Path javaHome = Path.of(System.getProperty("java.home"));
+        final Path modules = javaHome.resolve("lib/modules");
+        final Path cache = outputDirectory.resolve("reflection-jimage-cache");
+        Files.createDirectories(cache);
+        Path classFile = extractedRuntimeClass(cache, resource);
+        if (classFile == null) {
+            final ProcessRunner.Result extraction = processRunner.run(cache, List.of(
+                CurrentJdkTools.jimage(),
+                "extract",
+                "--dir",
+                cache.toAbsolutePath().toString(),
+                "--include",
+                "glob:**/" + resource,
+                modules.toAbsolutePath().toString()
+            ));
+            if (extraction.exitCode() != 0) {
+                throw new IOException("Unable to extract runtime class " + jvmName + ": " + extraction.stderr());
+            }
+            classFile = extractedRuntimeClass(cache, resource);
+        }
+        if (classFile == null) {
+            throw new IOException("Missing reflected class metadata: " + jvmName);
+        }
+        return reader.read(Files.readAllBytes(classFile), classFile);
+    }
+
+    private static Path extractedRuntimeClass(final Path cache, final String resource) throws IOException {
+        for (final Path classFile : Files2.findClassFiles(cache)) {
+            if (classFile.toString().replace('\\', '/').endsWith("/" + resource)) {
+                return classFile;
+            }
+        }
+        return null;
     }
 
     private void scanFolder(final Path folder, final Map<String, ClassFile> classes, final boolean application) throws IOException {

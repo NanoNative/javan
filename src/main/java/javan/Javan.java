@@ -240,7 +240,8 @@ public final class Javan {
             check.callGraph(),
             SourceLineIndex.from(check.layout()),
             reachableNativeInterop,
-            check.classInitialization()
+            check.classInitialization(),
+            check.layout().outputDirectory()
         );
         final MethodEffectAnalyzer.Analysis effects = methodEffectAnalyzer.analyze(lowered);
         final LocalValueOptimizer.Result optimization = localValueOptimizer.optimize(lowered, options.release(), effects);
