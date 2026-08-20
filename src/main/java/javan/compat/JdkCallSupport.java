@@ -112,6 +112,8 @@ public final class JdkCallSupport {
         intrinsic("System.getProperty", "java/lang/System", "getProperty", "(Ljava/lang/String;)Ljava/lang/String;", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;"),
         intrinsic("System.arraycopy", "java/lang/System", "arraycopy", "(Ljava/lang/Object;ILjava/lang/Object;II)V"),
         intrinsic("System.exit", "java/lang/System", "exit", "(I)V"),
+        runtime("SecureRandom.<init>", "java/security/SecureRandom", "<init>", "()V"),
+        runtime("SecureRandom.nextBytes", "java/security/SecureRandom", "nextBytes", "([B)V"),
         runtime("Object.equals", "java/lang/Object", "equals", "(Ljava/lang/Object;)Z"),
         runtime("Object.getClass", "java/lang/Object", "getClass", "()Ljava/lang/Class;"),
         runtime("Object.clone", "java/lang/Object", "clone", "()Ljava/lang/Object;"),
@@ -1633,6 +1635,9 @@ public final class JdkCallSupport {
         if ("java/lang/Math".equals(owner)) {
             return List.of("math");
         }
+        if ("java/security/SecureRandom".equals(owner)) {
+            return List.of("random");
+        }
         if ("java/lang/Thread".equals(owner)) {
             return List.of("threads");
         }
@@ -1817,6 +1822,11 @@ public final class JdkCallSupport {
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
+        if ("java/security/SecureRandom".equals(methodRef.owner())
+            && "nextBytes".equals(methodRef.name())
+            && "([B)V".equals(methodRef.descriptor())) {
+            return List.of("java/lang/NullPointerException");
+        }
         if (isDecimalParseCall(methodRef)) {
             return List.of("java/lang/NumberFormatException");
         }

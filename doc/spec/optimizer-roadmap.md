@@ -14,7 +14,7 @@ Implemented now:
 
 Runtime module families:
 
-- `random` planned
+- `random` implemented for default `SecureRandom` byte generation
 - `time` implemented for time intrinsics
 - `strings` implemented for current string helpers
 - `arrays` implemented for current array helpers
@@ -22,7 +22,7 @@ Runtime module families:
 
 Runtime initialization hooks:
 
-- `initSecureRandom()` planned
+- default `SecureRandom` needs no user hook; it reads OS entropy when bytes are requested
 - `initTime()` implemented through runtime time helpers
 - `initConsole()` planned
 - `initHeap()` planned
@@ -119,12 +119,11 @@ Intrinsic status:
 | `Long.toString(long)` | implemented |
 | `System.currentTimeMillis` | implemented |
 | `System.nanoTime` | implemented |
-| `SecureRandom.nextBytes` | planned |
+| `SecureRandom.nextBytes` | implemented for the default constructor through OS entropy |
 | `UUID.randomUUID` | planned |
 
 Auto-substitution candidates:
 
-- `new SecureRandom()` to the javan random runtime module and OS entropy
 - `System.getenv` subset
 - `System.getProperty` subset
 - `Path.of`

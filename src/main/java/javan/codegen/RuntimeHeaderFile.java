@@ -684,6 +684,8 @@ final class RuntimeHeaderFile {
         void javan_atomic_long_set(void* value, long long next_value);
         long long javan_atomic_long_increment_and_get(void* value);
         long long javan_atomic_long_decrement_and_get(void* value);
+        void* javan_secure_random_new(void);
+        void javan_secure_random_next_bytes(void* value, void* array);
         void* javan_scheduled_thread_pool_executor_new(void);
         void javan_scheduled_thread_pool_executor_init(void* value, int core_pool_size);
         void javan_scheduled_thread_pool_executor_init_full(void* value, int core_pool_size, void* thread_factory, void* rejected_execution_handler);

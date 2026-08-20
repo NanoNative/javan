@@ -2737,4 +2737,28 @@ final class JdkCallableAccountingTest {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashSet", "equals", "(Ljava/lang/Object;)Z")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
+
+    @Test
+    void marksSecureRandomDefaultConstructionAndByteGenerationAsSupported() {
+        assertThat(List.of(
+            JdkCallableAccounting.status(new MethodRef("java/security/SecureRandom", "<init>", "()V")),
+            JdkCallableAccounting.status(new MethodRef("java/security/SecureRandom", "nextBytes", "([B)V"))
+        )).containsExactly(
+            JdkCallableAccounting.Status.SUPPORTED,
+            JdkCallableAccounting.Status.SUPPORTED
+        );
+    }
+
+    @Test
+    void marksSecureRandomProviderAndSeedApisAsExplicitRejected() {
+        assertThat(List.of(
+            JdkCallableAccounting.status(new MethodRef(
+                "java/security/SecureRandom",
+                "getInstance",
+                "(Ljava/lang/String;)Ljava/security/SecureRandom;"
+            )),
+            JdkCallableAccounting.status(new MethodRef("java/security/SecureRandom", "<init>", "([B)V")),
+            JdkCallableAccounting.status(new MethodRef("java/security/SecureRandom", "setSeed", "(J)V"))
+        )).containsOnly(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
 }
