@@ -3330,6 +3330,77 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsCompatibilityProof
+    void basicBase64CodecHandlesPaddingBinaryDataAndStrictFailures() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+            #include <string.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                const signed char binary_data[] = { (signed char) 0xff, (signed char) 0xee, (signed char) 0xdd };
+                const signed char encoded_m_data[] = { 'T', 'Q', '=', '=' };
+                void* encoder = javan_base64_get_encoder();
+                void* decoder = javan_base64_get_decoder();
+                void* man = javan_byte_array_from((const signed char*) "Man", 3);
+                void* ma = javan_byte_array_from((const signed char*) "Ma", 2);
+                void* m = javan_byte_array_from((const signed char*) "M", 1);
+                void* empty = javan_byte_array_new(0);
+                void* binary = javan_byte_array_from(binary_data, 3);
+                void* encoded_man = NULL;
+                void* encoded_ma = NULL;
+                void* encoded_m = NULL;
+                void* encoded_empty = NULL;
+                void* encoded_binary = NULL;
+                void* encoded_man_bytes = NULL;
+                void* decoded_man = NULL;
+                void* decoded_ma = NULL;
+                void* encoded_m_bytes = javan_byte_array_from(encoded_m_data, 4);
+                void* decoded_m = NULL;
+                void** roots[] = {
+                    &man, &ma, &m, &empty, &binary,
+                    &encoded_man, &encoded_ma, &encoded_m, &encoded_empty, &encoded_binary,
+                    &encoded_man_bytes, &decoded_man, &decoded_ma, &encoded_m_bytes, &decoded_m
+                };
+                javan_root_frame_push(roots, 15);
+
+                encoded_man = javan_base64_encode_string(encoder, man);
+                encoded_ma = javan_base64_encode_string(encoder, ma);
+                encoded_m = javan_base64_encode_string(encoder, m);
+                encoded_empty = javan_base64_encode_string(encoder, empty);
+                encoded_binary = javan_base64_encode_string(encoder, binary);
+                encoded_man_bytes = javan_base64_encode_bytes(encoder, man);
+                decoded_man = javan_base64_decode_string(decoder, encoded_man);
+                decoded_ma = javan_base64_decode_string(decoder, javan_string_from("TWE"));
+                decoded_m = javan_base64_decode_bytes(decoder, encoded_m_bytes);
+                javan_validate_heap_metadata();
+
+                printf("%s:%s:%s:%s:%s:%d:%d:%d:%d:%d:%d\\n",
+                    (const char*) encoded_man,
+                    (const char*) encoded_ma,
+                    (const char*) encoded_m,
+                    (const char*) encoded_empty,
+                    (const char*) encoded_binary,
+                    javan_array_length(encoded_man_bytes),
+                    javan_byte_array_get(decoded_man, 2) == 'n',
+                    javan_byte_array_get(decoded_ma, 1) == 'a',
+                    javan_byte_array_get(decoded_m, 0) == 'M',
+                    javan_base64_decode_string_status(decoder, javan_string_from("A")) != 0,
+                    javan_base64_decode_string_status(decoder, javan_string_from("!!!!")) != 0);
+                javan_root_frame_pop(roots);
+                return 0;
+            }
+            """,
+            "4096",
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1")
+        );
+
+        assertThat(stdout).isEqualTo("TWFu:TWE=:TQ==::/+7d:4:1:1:1:1:1\n");
+    }
+
+    @Test
     void writeEmitsWindowsHighResolutionNanoTimeFallback() throws Exception {
         final Path runtime = new RuntimeFiles().write(tempDir);
 

@@ -4390,4 +4390,51 @@ final class JdkCallSupportTest {
         assertThat(JdkCallSupport.runtimeModules(randomUuid)).containsExactly("random");
         assertThat(JdkCallSupport.runtimeModules(toString)).containsExactly("random");
     }
+
+    @Test
+    void basicBase64EncodingAndDecodingAreSupported() {
+        final List<MethodRef> calls = List.of(
+            new MethodRef("java/util/Base64", "getEncoder", "()Ljava/util/Base64$Encoder;"),
+            new MethodRef("java/util/Base64", "getDecoder", "()Ljava/util/Base64$Decoder;"),
+            new MethodRef("java/util/Base64$Encoder", "encode", "([B)[B"),
+            new MethodRef("java/util/Base64$Encoder", "encodeToString", "([B)Ljava/lang/String;"),
+            new MethodRef("java/util/Base64$Decoder", "decode", "([B)[B"),
+            new MethodRef("java/util/Base64$Decoder", "decode", "(Ljava/lang/String;)[B")
+        );
+
+        assertThat(calls).allMatch(JdkCallSupport::isSupported);
+        assertThat(calls).allSatisfy(call ->
+            assertThat(JdkCallSupport.runtimeModules(call)).containsExactly("arrays", "strings")
+        );
+    }
+
+    @Test
+    void basicBase64FailuresAreTransportedAsPlatformExceptions() {
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/util/Base64$Encoder",
+            "encodeToString",
+            "([B)Ljava/lang/String;"
+        ))).containsExactly("java/lang/NullPointerException");
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/util/Base64$Decoder",
+            "decode",
+            "(Ljava/lang/String;)[B"
+        ))).containsExactly("java/lang/NullPointerException", "java/lang/IllegalArgumentException");
+    }
+
+    @Test
+    void base64VariantsOutsideTheBasicByteAndStringSliceRemainUnsupported() {
+        assertThat(List.of(
+            JdkCallSupport.isSupported(new MethodRef("java/util/Base64", "getUrlEncoder", "()Ljava/util/Base64$Encoder;")),
+            JdkCallSupport.isSupported(new MethodRef("java/util/Base64", "getMimeDecoder", "()Ljava/util/Base64$Decoder;")),
+            JdkCallSupport.isSupported(new MethodRef("java/util/Base64$Encoder", "withoutPadding", "()Ljava/util/Base64$Encoder;")),
+            JdkCallSupport.isSupported(new MethodRef("java/util/Base64$Encoder", "encode", "([B[B)I")),
+            JdkCallSupport.isSupported(new MethodRef("java/util/Base64$Decoder", "decode", "([B[B)I"))
+        )).containsOnly(false);
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/util/Base64$Decoder",
+            "decode",
+            "(Ljava/nio/ByteBuffer;)Ljava/nio/ByteBuffer;"
+        ))).isEmpty();
+    }
 }

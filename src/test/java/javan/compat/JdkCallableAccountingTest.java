@@ -2769,4 +2769,16 @@ final class JdkCallableAccountingTest {
             JdkCallableAccounting.status(new MethodRef("java/util/UUID", "toString", "()Ljava/lang/String;"))
         )).containsOnly(JdkCallableAccounting.Status.SUPPORTED);
     }
+
+    @Test
+    void marksBasicBase64EncodingAndDecodingAsSupported() {
+        assertThat(List.of(
+            JdkCallableAccounting.status(new MethodRef("java/util/Base64", "getEncoder", "()Ljava/util/Base64$Encoder;")),
+            JdkCallableAccounting.status(new MethodRef("java/util/Base64", "getDecoder", "()Ljava/util/Base64$Decoder;")),
+            JdkCallableAccounting.status(new MethodRef("java/util/Base64$Encoder", "encode", "([B)[B")),
+            JdkCallableAccounting.status(new MethodRef("java/util/Base64$Encoder", "encodeToString", "([B)Ljava/lang/String;")),
+            JdkCallableAccounting.status(new MethodRef("java/util/Base64$Decoder", "decode", "([B)[B")),
+            JdkCallableAccounting.status(new MethodRef("java/util/Base64$Decoder", "decode", "(Ljava/lang/String;)[B"))
+        )).containsOnly(JdkCallableAccounting.Status.SUPPORTED);
+    }
 }

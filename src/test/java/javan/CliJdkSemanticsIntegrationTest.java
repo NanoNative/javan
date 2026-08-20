@@ -8200,6 +8200,135 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void basicBase64CodecSurvivesGcAndMatchesJvmFailures() throws Exception {
+        final Path project = project("base64-basic");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Base64;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Base64.Encoder encoder = Base64.getEncoder();
+                    final Base64.Decoder decoder = Base64.getDecoder();
+                    final byte[] binary = {(byte) 0xff, (byte) 0xee, (byte) 0xdd};
+                    for (int index = 0; index < 10_000; index++) {
+                        final byte[] ignored = new byte[64];
+                    }
+                    System.out.println(encoder.encodeToString(new byte[0]));
+                    System.out.println(encoder.encodeToString(new byte[] {'M'}));
+                    System.out.println(encoder.encodeToString(new byte[] {'M', 'a'}));
+                    System.out.println(encoder.encodeToString(new byte[] {'M', 'a', 'n'}));
+                    System.out.println(encoder.encodeToString(binary));
+                    final byte[] encoded = encoder.encode(new byte[] {'M', 'a', 'n'});
+                    System.out.println(encoded.length == 4 && encoded[0] == 'T' && encoded[3] == 'u');
+                    final byte[] padded = decoder.decode("TQ==");
+                    final byte[] unpadded = decoder.decode("TWE");
+                    final byte[] encodedInput = decoder.decode(new byte[] {'T', 'W', 'F', 'u'});
+                    System.out.println(decoder.decode("").length == 0);
+                    System.out.println(padded.length == 1 && padded[0] == 'M');
+                    System.out.println(unpadded.length == 2 && unpadded[1] == 'a');
+                    System.out.println(encodedInput.length == 3 && encodedInput[2] == 'n');
+                    encodeNull(encoder);
+                    encodeBytesNull(encoder);
+                    decodeNull(decoder);
+                    decodeBytesNull(decoder);
+                    reject(decoder, "A");
+                    reject(decoder, "T===");
+                    reject(decoder, "TQ=x");
+                    reject(decoder, "TQ==x");
+                    reject(decoder, "TW Fu");
+                    rejectBytes(decoder);
+                    missingReceiver();
+                }
+
+                private static void encodeNull(final Base64.Encoder encoder) {
+                    try {
+                        encoder.encodeToString(null);
+                    } catch (final NullPointerException expected) {
+                        System.out.println("encode-null");
+                    }
+                }
+
+                private static void decodeNull(final Base64.Decoder decoder) {
+                    final String missingText = null;
+                    try {
+                        decoder.decode(missingText);
+                    } catch (final NullPointerException expected) {
+                        System.out.println("decode-null");
+                    }
+                }
+
+                private static void encodeBytesNull(final Base64.Encoder encoder) {
+                    final byte[] missingBytes = null;
+                    try {
+                        encoder.encode(missingBytes);
+                    } catch (final NullPointerException expected) {
+                        System.out.println("encode-bytes-null");
+                    }
+                }
+
+                private static void decodeBytesNull(final Base64.Decoder decoder) {
+                    final byte[] missingBytes = null;
+                    try {
+                        decoder.decode(missingBytes);
+                    } catch (final NullPointerException expected) {
+                        System.out.println("decode-bytes-null");
+                    }
+                }
+
+                private static void reject(final Base64.Decoder decoder, final String value) {
+                    try {
+                        decoder.decode(value);
+                        System.out.println("accepted");
+                    } catch (final IllegalArgumentException expected) {
+                        System.out.println("invalid");
+                    }
+                }
+
+                private static void rejectBytes(final Base64.Decoder decoder) {
+                    final byte[] invalid = {'!', '!', '!', '!'};
+                    try {
+                        decoder.decode(invalid);
+                        System.out.println("accepted");
+                    } catch (final IllegalArgumentException expected) {
+                        System.out.println("invalid-bytes");
+                    }
+                }
+
+                private static void missingReceiver() {
+                    final Base64.Encoder missing = null;
+                    final byte[] empty = new byte[0];
+                    try {
+                        missing.encode(empty);
+                    } catch (final NullPointerException expected) {
+                        System.out.println("receiver");
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(
+            project,
+            List.of(project.resolve(".javan/bin/base64-basic").toString()),
+            defaultProcessTimeout(),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1")
+        ).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo(
+            "\nTQ==\nTWE=\nTWFu\n/+7d\ntrue\ntrue\ntrue\ntrue\ntrue\n"
+                + "encode-null\nencode-bytes-null\ndecode-null\ndecode-bytes-null\n"
+                + "invalid\ninvalid\ninvalid\ninvalid\ninvalid\ninvalid-bytes\nreceiver\n"
+        );
+    }
+
+    @Test
     void atomicReferenceCompareAndSetSuccessBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("atomic-reference-compare-and-set-success");
         writeJava(project, "com.acme.Main", """

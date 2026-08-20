@@ -1061,6 +1061,33 @@ final class CliRuntimeFeatureIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void checkReportsBasicBase64RuntimeModules() throws Exception {
+        final Path project = project("base64-runtime-modules");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Base64;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Base64.getEncoder().encodeToString(new byte[] {'M'}));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/runtime-features.json"))).contains(
+            "\"reachableRuntimeModules\": [\"arrays\", \"core\", \"io\", \"strings\"]",
+            "\"status\": \"pass\""
+        );
+    }
+
+    @Test
     void checkAcceptsReachableAtomicBooleanConstructorsAndGet() throws Exception {
         final Path project = project("atomic-boolean-runtime");
         writeJava(project, "com.acme.Main", """

@@ -7969,6 +7969,279 @@ final class RuntimeSourceMemorySections {
             return (void*) text;
         }
 
+        """;
+    private static final String SOURCE_BASE64 = """
+        static unsigned char javan_base64_encoder_handle;
+        static unsigned char javan_base64_decoder_handle;
+        static const char javan_base64_alphabet[] =
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+        void* javan_base64_get_encoder(void) {
+            return (void*) &javan_base64_encoder_handle;
+        }
+
+        void* javan_base64_get_decoder(void) {
+            return (void*) &javan_base64_decoder_handle;
+        }
+
+        static void javan_base64_encoder_checked(void* value) {
+            if (value != (void*) &javan_base64_encoder_handle) {
+                javan_panic("invalid Base64 encoder");
+            }
+        }
+
+        static void javan_base64_decoder_checked(void* value) {
+            if (value != (void*) &javan_base64_decoder_handle) {
+                javan_panic("invalid Base64 decoder");
+            }
+        }
+
+        static int javan_base64_encoded_length(int input_length) {
+            if (input_length < 0 || input_length > (INT_MAX / 4) * 3) {
+                javan_panic("Base64 input is too large");
+            }
+            return ((input_length + 2) / 3) * 4;
+        }
+
+        static void javan_base64_encode_into(
+            const unsigned char* input,
+            int input_length,
+            unsigned char* output
+        ) {
+            int input_index = 0;
+            int output_index = 0;
+            while (input_index + 3 <= input_length) {
+                unsigned int bits = ((unsigned int) input[input_index] << 16)
+                    | ((unsigned int) input[input_index + 1] << 8)
+                    | (unsigned int) input[input_index + 2];
+                output[output_index++] = (unsigned char) javan_base64_alphabet[(bits >> 18) & 0x3fU];
+                output[output_index++] = (unsigned char) javan_base64_alphabet[(bits >> 12) & 0x3fU];
+                output[output_index++] = (unsigned char) javan_base64_alphabet[(bits >> 6) & 0x3fU];
+                output[output_index++] = (unsigned char) javan_base64_alphabet[bits & 0x3fU];
+                input_index += 3;
+            }
+            int remaining = input_length - input_index;
+            if (remaining == 1) {
+                unsigned int bits = (unsigned int) input[input_index] << 16;
+                output[output_index++] = (unsigned char) javan_base64_alphabet[(bits >> 18) & 0x3fU];
+                output[output_index++] = (unsigned char) javan_base64_alphabet[(bits >> 12) & 0x3fU];
+                output[output_index++] = '=';
+                output[output_index] = '=';
+            } else if (remaining == 2) {
+                unsigned int bits = ((unsigned int) input[input_index] << 16)
+                    | ((unsigned int) input[input_index + 1] << 8);
+                output[output_index++] = (unsigned char) javan_base64_alphabet[(bits >> 18) & 0x3fU];
+                output[output_index++] = (unsigned char) javan_base64_alphabet[(bits >> 12) & 0x3fU];
+                output[output_index++] = (unsigned char) javan_base64_alphabet[(bits >> 6) & 0x3fU];
+                output[output_index] = '=';
+            }
+        }
+
+        void* javan_base64_encode_bytes(void* encoder, void* input) {
+            javan_base64_encoder_checked(encoder);
+            javan_byte_array* bytes = (javan_byte_array*) javan_array_checked(input);
+            javan_array_kind_checked((javan_array_header*) bytes, JAVAN_ARRAY_KIND_BYTE);
+            void* input_root = input;
+            void** roots[] = {(void**) &input_root};
+            javan_root_frame_push(roots, 1);
+            int output_length = javan_base64_encoded_length(bytes->length);
+            javan_byte_array* result = (javan_byte_array*) javan_byte_array_new(output_length);
+            bytes = (javan_byte_array*) input_root;
+            javan_base64_encode_into(
+                (const unsigned char*) bytes->values,
+                bytes->length,
+                (unsigned char*) result->values
+            );
+            javan_root_frame_pop(roots);
+            return (void*) result;
+        }
+
+        void* javan_base64_encode_string(void* encoder, void* input) {
+            javan_base64_encoder_checked(encoder);
+            javan_byte_array* bytes = (javan_byte_array*) javan_array_checked(input);
+            javan_array_kind_checked((javan_array_header*) bytes, JAVAN_ARRAY_KIND_BYTE);
+            void* input_root = input;
+            void** roots[] = {(void**) &input_root};
+            javan_root_frame_push(roots, 1);
+            int output_length = javan_base64_encoded_length(bytes->length);
+            char* result = javan_string_alloc((unsigned long) output_length + 1UL);
+            bytes = (javan_byte_array*) input_root;
+            javan_base64_encode_into(
+                (const unsigned char*) bytes->values,
+                bytes->length,
+                (unsigned char*) result
+            );
+            result[output_length] = '\\0';
+            javan_root_frame_pop(roots);
+            return (void*) result;
+        }
+
+        static int javan_base64_value(unsigned char value) {
+            if (value >= 'A' && value <= 'Z') {
+                return (int) (value - 'A');
+            }
+            if (value >= 'a' && value <= 'z') {
+                return (int) (value - 'a') + 26;
+            }
+            if (value >= '0' && value <= '9') {
+                return (int) (value - '0') + 52;
+            }
+            if (value == '+') {
+                return 62;
+            }
+            if (value == '/') {
+                return 63;
+            }
+            return -1;
+        }
+
+        static int javan_base64_decode_status(const unsigned char* input, int input_length) {
+            if (input == NULL || input_length < 0 || input_length % 4 == 1) {
+                return 1;
+            }
+            int padding = 0;
+            if (input_length > 0 && input[input_length - 1] == '=') {
+                padding++;
+                if (input_length > 1 && input[input_length - 2] == '=') {
+                    padding++;
+                }
+            }
+            if (padding > 0 && (input_length < 4 || input_length % 4 != 0)) {
+                return 1;
+            }
+            int data_length = input_length - padding;
+            if (data_length % 4 == 1) {
+                return 1;
+            }
+            for (int index = 0; index < data_length; index++) {
+                if (javan_base64_value(input[index]) < 0) {
+                    return 1;
+                }
+            }
+            for (int index = data_length; index < input_length; index++) {
+                if (input[index] != '=') {
+                    return 1;
+                }
+            }
+            return 0;
+        }
+
+        int javan_base64_decode_bytes_status(void* decoder, void* input) {
+            javan_base64_decoder_checked(decoder);
+            javan_byte_array* bytes = (javan_byte_array*) javan_array_checked(input);
+            javan_array_kind_checked((javan_array_header*) bytes, JAVAN_ARRAY_KIND_BYTE);
+            return javan_base64_decode_status((const unsigned char*) bytes->values, bytes->length);
+        }
+
+        int javan_base64_decode_string_status(void* decoder, void* input) {
+            javan_base64_decoder_checked(decoder);
+            if (input == NULL) {
+                javan_panic("null Base64 input");
+            }
+            unsigned long length = strlen((const char*) input);
+            if (length > (unsigned long) INT_MAX) {
+                return 1;
+            }
+            return javan_base64_decode_status((const unsigned char*) input, (int) length);
+        }
+
+        static int javan_base64_decoded_length(const unsigned char* input, int input_length) {
+            int padding = input_length > 0 && input[input_length - 1] == '=' ? 1 : 0;
+            padding += input_length > 1 && input[input_length - 2] == '=' ? 1 : 0;
+            int data_length = input_length - padding;
+            int remainder = data_length % 4;
+            return (data_length / 4) * 3 + (remainder == 2 ? 1 : remainder == 3 ? 2 : 0);
+        }
+
+        static void javan_base64_decode_into(
+            const unsigned char* input,
+            int input_length,
+            signed char* output
+        ) {
+            int padding = input_length > 0 && input[input_length - 1] == '=' ? 1 : 0;
+            padding += input_length > 1 && input[input_length - 2] == '=' ? 1 : 0;
+            int data_length = input_length - padding;
+            int input_index = 0;
+            int output_index = 0;
+            while (input_index + 4 <= data_length) {
+                unsigned int bits = ((unsigned int) javan_base64_value(input[input_index]) << 18)
+                    | ((unsigned int) javan_base64_value(input[input_index + 1]) << 12)
+                    | ((unsigned int) javan_base64_value(input[input_index + 2]) << 6)
+                    | (unsigned int) javan_base64_value(input[input_index + 3]);
+                output[output_index++] = (signed char) (bits >> 16);
+                output[output_index++] = (signed char) (bits >> 8);
+                output[output_index++] = (signed char) bits;
+                input_index += 4;
+            }
+            int remaining = data_length - input_index;
+            if (remaining == 2) {
+                unsigned int bits = ((unsigned int) javan_base64_value(input[input_index]) << 18)
+                    | ((unsigned int) javan_base64_value(input[input_index + 1]) << 12);
+                output[output_index] = (signed char) (bits >> 16);
+            } else if (remaining == 3) {
+                unsigned int bits = ((unsigned int) javan_base64_value(input[input_index]) << 18)
+                    | ((unsigned int) javan_base64_value(input[input_index + 1]) << 12)
+                    | ((unsigned int) javan_base64_value(input[input_index + 2]) << 6);
+                output[output_index++] = (signed char) (bits >> 16);
+                output[output_index] = (signed char) (bits >> 8);
+            }
+        }
+
+        void* javan_base64_decode_bytes(void* decoder, void* input) {
+            javan_base64_decoder_checked(decoder);
+            javan_byte_array* bytes = (javan_byte_array*) javan_array_checked(input);
+            javan_array_kind_checked((javan_array_header*) bytes, JAVAN_ARRAY_KIND_BYTE);
+            if (javan_base64_decode_status((const unsigned char*) bytes->values, bytes->length) != 0) {
+                javan_panic("invalid Base64 input");
+            }
+            void* input_root = input;
+            void** roots[] = {(void**) &input_root};
+            javan_root_frame_push(roots, 1);
+            int output_length = javan_base64_decoded_length(
+                (const unsigned char*) bytes->values,
+                bytes->length
+            );
+            javan_byte_array* result = (javan_byte_array*) javan_byte_array_new(output_length);
+            bytes = (javan_byte_array*) input_root;
+            javan_base64_decode_into(
+                (const unsigned char*) bytes->values,
+                bytes->length,
+                result->values
+            );
+            javan_root_frame_pop(roots);
+            return (void*) result;
+        }
+
+        void* javan_base64_decode_string(void* decoder, void* input) {
+            javan_base64_decoder_checked(decoder);
+            if (input == NULL) {
+                javan_panic("null Base64 input");
+            }
+            unsigned long measured_length = strlen((const char*) input);
+            if (measured_length > (unsigned long) INT_MAX
+                || javan_base64_decode_status((const unsigned char*) input, (int) measured_length) != 0) {
+                javan_panic("invalid Base64 input");
+            }
+            void* input_root = input;
+            void** roots[] = {(void**) &input_root};
+            javan_root_frame_push(roots, 1);
+            int input_length = (int) measured_length;
+            int output_length = javan_base64_decoded_length(
+                (const unsigned char*) input_root,
+                input_length
+            );
+            javan_byte_array* result = (javan_byte_array*) javan_byte_array_new(output_length);
+            javan_base64_decode_into(
+                (const unsigned char*) input_root,
+                input_length,
+                result->values
+            );
+            javan_root_frame_pop(roots);
+            return (void*) result;
+        }
+
+        """;
+    private static final String SOURCE_ARRAYS_TAIL = """
         static void javan_array_bounds_checked(javan_array_header* array, int index) {
             if (index < 0 || index >= array->length) {
                 javan_panic("array index out of bounds");
@@ -13897,7 +14170,10 @@ final class RuntimeSourceMemorySections {
     }
 
     static String arrays() {
-        return SOURCE_ARRAYS;
+        String result = SOURCE_ARRAYS;
+        result = result + SOURCE_BASE64;
+        result = result + SOURCE_ARRAYS_TAIL;
+        return result;
     }
 
     static String collections() {

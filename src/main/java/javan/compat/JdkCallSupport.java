@@ -116,6 +116,11 @@ public final class JdkCallSupport {
         runtime("SecureRandom.nextBytes", "java/security/SecureRandom", "nextBytes", "([B)V"),
         runtime("UUID.randomUUID", "java/util/UUID", "randomUUID", "()Ljava/util/UUID;"),
         runtime("UUID.toString", "java/util/UUID", "toString", "()Ljava/lang/String;"),
+        runtime("Base64.getEncoder", "java/util/Base64", "getEncoder", "()Ljava/util/Base64$Encoder;"),
+        runtime("Base64.getDecoder", "java/util/Base64", "getDecoder", "()Ljava/util/Base64$Decoder;"),
+        runtime("Base64.Encoder.encode", "java/util/Base64$Encoder", "encode", "([B)[B"),
+        runtime("Base64.Encoder.encodeToString", "java/util/Base64$Encoder", "encodeToString", "([B)Ljava/lang/String;"),
+        runtime("Base64.Decoder.decode", "java/util/Base64$Decoder", "decode", "([B)[B", "(Ljava/lang/String;)[B"),
         runtime("Object.equals", "java/lang/Object", "equals", "(Ljava/lang/Object;)Z"),
         runtime("Object.getClass", "java/lang/Object", "getClass", "()Ljava/lang/Class;"),
         runtime("Object.clone", "java/lang/Object", "clone", "()Ljava/lang/Object;"),
@@ -1640,6 +1645,11 @@ public final class JdkCallSupport {
         if ("java/security/SecureRandom".equals(owner) || "java/util/UUID".equals(owner)) {
             return List.of("random");
         }
+        if ("java/util/Base64".equals(owner)
+            || "java/util/Base64$Encoder".equals(owner)
+            || "java/util/Base64$Decoder".equals(owner)) {
+            return List.of("arrays", "strings");
+        }
         if ("java/lang/Thread".equals(owner)) {
             return List.of("threads");
         }
@@ -1824,6 +1834,21 @@ public final class JdkCallSupport {
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
+        if ("java/util/Base64$Encoder".equals(methodRef.owner())
+            && ("encode".equals(methodRef.name()) && "([B)[B".equals(methodRef.descriptor())
+                || "encodeToString".equals(methodRef.name())
+                    && "([B)Ljava/lang/String;".equals(methodRef.descriptor()))) {
+            return List.of("java/lang/NullPointerException");
+        }
+        if ("java/util/Base64$Decoder".equals(methodRef.owner())
+            && "decode".equals(methodRef.name())
+            && ("([B)[B".equals(methodRef.descriptor())
+                || "(Ljava/lang/String;)[B".equals(methodRef.descriptor()))) {
+            return List.of(
+                "java/lang/NullPointerException",
+                "java/lang/IllegalArgumentException"
+            );
+        }
         if ("java/security/SecureRandom".equals(methodRef.owner())
             && "nextBytes".equals(methodRef.name())
             && "([B)V".equals(methodRef.descriptor())) {
