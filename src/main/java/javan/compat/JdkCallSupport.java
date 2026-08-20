@@ -142,6 +142,12 @@ public final class JdkCallSupport {
             "getDeclaredMethod",
             "(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;"
         ),
+        runtime(
+            "Class.getMethod",
+            "java/lang/Class",
+            "getMethod",
+            "(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;"
+        ),
         runtime("Method.getName", "java/lang/reflect/Method", "getName", "()Ljava/lang/String;"),
         runtime(
             "Method.getDeclaringClass",
@@ -1666,7 +1672,7 @@ public final class JdkCallSupport {
             return List.of("arrays", "strings");
         }
         if ("java/lang/Class".equals(owner)
-            && ("forName".equals(name) || "getDeclaredMethod".equals(name))) {
+            && ("forName".equals(name) || "getDeclaredMethod".equals(name) || "getMethod".equals(name))) {
             return List.of("reflection-metadata");
         }
         if ("java/lang/reflect/Method".equals(owner)) {
@@ -1865,7 +1871,7 @@ public final class JdkCallSupport {
             );
         }
         if ("java/lang/Class".equals(methodRef.owner())
-            && "getDeclaredMethod".equals(methodRef.name())
+            && ("getDeclaredMethod".equals(methodRef.name()) || "getMethod".equals(methodRef.name()))
             && "(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;".equals(methodRef.descriptor())) {
             return List.of(
                 "java/lang/NullPointerException",

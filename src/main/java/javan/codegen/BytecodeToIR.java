@@ -146,7 +146,7 @@ public final class BytecodeToIR {
         final BytecodeToIRMetadataSupport.ReflectionClasses reflection =
             BytecodeToIRMetadataSupport.reflectionClasses(classes, reachableMethods);
         return lower(
-            classes, callGraph, sourceLines, nativeInterop, classInitialization, reflection, List.of()
+            classes, callGraph, sourceLines, nativeInterop, classInitialization, reflection, Map.of()
         );
     }
 
@@ -183,7 +183,7 @@ public final class BytecodeToIR {
             nativeInterop,
             classInitialization,
             reflection,
-            BytecodeToIRMetadataSupport.loadExternalReflectedClasses(reflection, outputDirectory)
+            BytecodeToIRMetadataSupport.loadExternalReflectionClasses(classes, reflection, outputDirectory)
         );
     }
 
@@ -194,7 +194,7 @@ public final class BytecodeToIR {
         final NativeInteropConfig nativeInterop,
         final ClassInitializationGraph.Result classInitialization,
         final BytecodeToIRMetadataSupport.ReflectionClasses reflection,
-        final List<IrReflectedClass> externalReflectedClasses
+        final Map<String, ClassFile> externalReflectionClasses
     ) {
         final List<IrFunction> functions = new ArrayList<>();
         final Map<String, IrDispatch> dispatches = new LinkedHashMap<>();
@@ -255,7 +255,7 @@ public final class BytecodeToIR {
             enumDispatchConstants(classes),
             BytecodeToIRMetadataSupport.retainedTypeIds(classes, loweredClasses),
             BytecodeToIRMetadataSupport.reflectedClasses(
-                classes, loweredClasses, reflection, externalReflectedClasses
+                classes, loweredClasses, reflection, externalReflectionClasses
             )
         );
     }

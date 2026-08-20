@@ -77,7 +77,7 @@ public final class NativeLinker {
         Files.createDirectories(output.getParent());
         final List<String> command = new ArrayList<>();
         command.add(compiler);
-        command.addAll(threadFlags());
+        command.addAll(compilerFlags());
         command.add(mainC.toString());
         command.add(runtimeC.toString());
         appendDirectLinkInputs(command, inputs, runtimeC.getParent());
@@ -137,7 +137,7 @@ public final class NativeLinker {
         final String osName = System.getProperty("os.name", "");
         final List<String> command = new ArrayList<>();
         command.add(compiler);
-        command.addAll(threadFlags());
+        command.addAll(compilerFlags());
         if (isMacHost(osName)) {
             command.add("-dynamiclib");
         } else {
@@ -447,7 +447,7 @@ public final class NativeLinker {
     ) throws IOException, InterruptedException {
         final List<String> command = new ArrayList<>();
         command.add(compiler);
-        command.addAll(threadFlags());
+        command.addAll(compilerFlags());
         command.add("-fPIC");
         for (final Path includeDirectory : includeDirectories) {
             command.add("-I");
@@ -463,12 +463,13 @@ public final class NativeLinker {
         }
     }
 
-    private static List<String> threadFlags() {
+    private static List<String> compilerFlags() {
+        // Generated comparisons preserve explicit IR grouping; their redundant parentheses are intentional.
         final String os = Strings2.toAsciiLowerCase(System.getProperty("os.name", ""));
         if (os.contains("win")) {
-            return List.of();
+            return List.of("-Wno-parentheses");
         }
-        return List.of("-pthread");
+        return List.of("-pthread", "-Wno-parentheses");
     }
 
     private static List<String> platformLinkFlags() {

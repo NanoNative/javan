@@ -3496,9 +3496,13 @@ final class BytecodeToIRInvokeSupport {
             }
             return true;
         }
-        if (!"java/lang/Class".equals(methodRef.owner())
-            || !"getDeclaredMethod".equals(methodRef.name())
-            || !"(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;".equals(methodRef.descriptor())) {
+        final boolean declaredLookup = "java/lang/Class".equals(methodRef.owner())
+            && "getDeclaredMethod".equals(methodRef.name())
+            && "(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;".equals(methodRef.descriptor());
+        final boolean publicLookup = "java/lang/Class".equals(methodRef.owner())
+            && "getMethod".equals(methodRef.name())
+            && "(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;".equals(methodRef.descriptor());
+        if (!declaredLookup && !publicLookup) {
             return false;
         }
 
@@ -3512,7 +3516,7 @@ final class BytecodeToIRInvokeSupport {
         instructions.add(IrInstruction.assignObject(classLocal, popObject(classFile, method, stack)));
         final List<StackValue> successStack = List.copyOf(stack);
 
-        final String classPresent = "label_declared_method_class_present_" + instruction.offset();
+        final String classPresent = "label_method_lookup_class_present_" + instruction.offset();
         instructions.add(IrInstruction.branchIf(
             classPresent,
             IrExpression.objectComparison("!=", IrExpression.objectLocal(classLocal), IrExpression.objectNull())
@@ -3524,7 +3528,7 @@ final class BytecodeToIRInvokeSupport {
         instructions.add(IrInstruction.label(classPresent));
         stack.addAll(successStack);
 
-        final String namePresent = "label_declared_method_name_present_" + instruction.offset();
+        final String namePresent = "label_method_lookup_name_present_" + instruction.offset();
         instructions.add(IrInstruction.branchIf(
             namePresent,
             IrExpression.objectComparison("!=", IrExpression.objectLocal(nameLocal), IrExpression.objectNull())
@@ -3540,7 +3544,9 @@ final class BytecodeToIRInvokeSupport {
         instructions.add(IrInstruction.assignObject(
             resultLocal,
             IrExpression.objectCall(
-                "javan_generated_class_get_declared_method",
+                declaredLookup
+                    ? "javan_generated_class_get_declared_method"
+                    : "javan_generated_class_get_method",
                 List.of(
                     IrExpression.objectLocal(classLocal),
                     IrExpression.objectLocal(nameLocal),
@@ -3548,7 +3554,7 @@ final class BytecodeToIRInvokeSupport {
                 )
             )
         ));
-        final String found = "label_declared_method_found_" + instruction.offset();
+        final String found = "label_method_lookup_found_" + instruction.offset();
         instructions.add(IrInstruction.branchIf(
             found,
             IrExpression.objectComparison("!=", IrExpression.objectLocal(resultLocal), IrExpression.objectNull())

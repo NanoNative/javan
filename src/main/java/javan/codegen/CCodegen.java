@@ -13,6 +13,7 @@ import javan.ir.IrDispatch;
 import javan.ir.IrDispatchTarget;
 import javan.ir.IrExpression;
 import javan.ir.IrInstruction;
+import javan.ir.IrMethodMetadata;
 import javan.ir.IrProgram;
 import javan.ir.IrReflectedClass;
 import javan.ir.IrSourceLocation;
@@ -23,6 +24,7 @@ import javan.util.Strings2;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -171,8 +173,11 @@ public final class CCodegen {
         if (features.classForName()) {
             emitClassForNameHelper(program, c);
         }
-        if (features.methodMetadata()) {
-            emitDeclaredMethodHelper(program, c);
+        if (features.declaredMethodMetadata()) {
+            emitMethodLookupHelper(program, c, true);
+        }
+        if (features.publicMethodMetadata()) {
+            emitMethodLookupHelper(program, c, false);
         }
         emitRecordShapeExactTypeHelper(program, c);
         emitEnumOrdinalHelpers(program, c);
@@ -318,8 +323,11 @@ public final class CCodegen {
         if (features.classForName()) {
             emitClassForNameHelper(program, c);
         }
-        if (features.methodMetadata()) {
-            emitDeclaredMethodHelper(program, c);
+        if (features.declaredMethodMetadata()) {
+            emitMethodLookupHelper(program, c, true);
+        }
+        if (features.publicMethodMetadata()) {
+            emitMethodLookupHelper(program, c, false);
         }
         emitRecordShapeExactTypeHelper(program, c);
         emitEnumOrdinalHelpers(program, c);
@@ -353,6 +361,7 @@ public final class CCodegen {
             usesGeneratedObjectClone(program),
             usesCall(program, "javan_generated_class_for_name"),
             usesCall(program, "javan_generated_class_get_declared_method"),
+            usesCall(program, "javan_generated_class_get_method"),
             usesNonFiniteFloatingLiteral(program)
         );
     }
@@ -1017,27 +1026,29 @@ public final class CCodegen {
     }
 
     private static void emitMethodMetadata(final IrProgram program, final StringBuilder c) {
-        final List<IrReflectedClass> reflectedClasses = program.reflectedClasses();
-        for (int classIndex = 0; classIndex < reflectedClasses.size(); classIndex++) {
-            final IrReflectedClass classInfo = reflectedClasses.get(classIndex);
-            for (int methodIndex = 0; methodIndex < classInfo.declaredMethods().size(); methodIndex++) {
-                final javan.ir.IrMethodMetadata method = classInfo.declaredMethods().get(methodIndex);
-                c.append("static const JavanMethodMetadata ")
-                    .append(methodMetadataSymbol(classIndex, methodIndex))
-                    .append(" = {JAVAN_METHOD_METADATA_MAGIC, ")
-                    .append(method.parameterDescriptors().size())
-                    .append(", ")
-                    .append(emitCStringLiteral(method.name()))
-                    .append(", ")
-                    .append(emitCStringLiteral(displayClassName(classInfo.jvmName())))
-                    .append("};")
-                    .append(System.lineSeparator());
-            }
+        for (final Map.Entry<IrMethodMetadata, Integer> entry : methodMetadataSymbols(program).entrySet()) {
+            final IrMethodMetadata method = entry.getKey();
+            c.append("static const JavanMethodMetadata ")
+                .append(methodMetadataSymbol(entry.getValue().intValue()))
+                .append(" = {JAVAN_METHOD_METADATA_MAGIC, ")
+                .append(method.parameterDescriptors().size())
+                .append(", ")
+                .append(emitCStringLiteral(method.name()))
+                .append(", ")
+                .append(emitCStringLiteral(displayClassName(method.declaringJvmName())))
+                .append("};")
+                .append(System.lineSeparator());
         }
     }
 
-    private static void emitDeclaredMethodHelper(final IrProgram program, final StringBuilder c) {
-        c.append("static void* javan_generated_class_get_declared_method(")
+    private static void emitMethodLookupHelper(
+        final IrProgram program,
+        final StringBuilder c,
+        final boolean declared
+    ) {
+        c.append("static void* ")
+            .append(declared ? "javan_generated_class_get_declared_method" : "javan_generated_class_get_method")
+            .append("(")
             .append("void* class_value, void* name_value, void* parameter_types) {")
             .append(System.lineSeparator());
         c.append("    if (class_value == NULL || name_value == NULL) return NULL;")
@@ -1045,15 +1056,21 @@ public final class CCodegen {
         c.append("    int parameter_count = parameter_types == NULL ? 0 : javan_array_length(parameter_types);")
             .append(System.lineSeparator());
         final List<IrReflectedClass> reflectedClasses = program.reflectedClasses();
-        for (int classIndex = 0; classIndex < reflectedClasses.size(); classIndex++) {
-            final IrReflectedClass classInfo = reflectedClasses.get(classIndex);
-            for (int methodIndex = 0; methodIndex < classInfo.declaredMethods().size(); methodIndex++) {
-                final javan.ir.IrMethodMetadata method = classInfo.declaredMethods().get(methodIndex);
-                c.append("    if (")
-                    .append("javan_class_name_equals(class_value, ")
-                    .append(emitCStringLiteral(displayClassName(classInfo.jvmName())))
-                    .append(")")
-                    .append(" && parameter_count == ").append(method.parameterDescriptors().size())
+        final Map<IrMethodMetadata, Integer> symbols = methodMetadataSymbols(program);
+        for (final IrReflectedClass classInfo : reflectedClasses) {
+            final List<IrMethodMetadata> methods = declared
+                ? classInfo.declaredMethods()
+                : classInfo.publicMethods();
+            for (final IrMethodMetadata method : methods) {
+                c.append("    if (");
+                if (classInfo.arrayFamily()) {
+                    c.append("javan_class_is_array(class_value) != 0");
+                } else {
+                    c.append("javan_class_name_equals(class_value, ")
+                        .append(emitCStringLiteral(displayClassName(classInfo.jvmName())))
+                        .append(")");
+                }
+                c.append(" && parameter_count == ").append(method.parameterDescriptors().size())
                     .append(" && javan_string_equals((const char*) name_value, ")
                     .append(emitCStringLiteral(method.name())).append(")");
                 for (int parameter = 0; parameter < method.parameterDescriptors().size(); parameter++) {
@@ -1063,7 +1080,8 @@ public final class CCodegen {
                         .append(")");
                 }
                 c.append(") {").append(System.lineSeparator());
-                c.append("        return (void*) &").append(methodMetadataSymbol(classIndex, methodIndex))
+                c.append("        return (void*) &")
+                    .append(methodMetadataSymbol(symbols.get(method).intValue()))
                     .append(";").append(System.lineSeparator());
                 c.append("    }").append(System.lineSeparator());
             }
@@ -1072,8 +1090,21 @@ public final class CCodegen {
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
     }
 
-    private static String methodMetadataSymbol(final int classIndex, final int methodIndex) {
-        return "javan_method_metadata_" + classIndex + "_" + methodIndex;
+    private static Map<IrMethodMetadata, Integer> methodMetadataSymbols(final IrProgram program) {
+        final Map<IrMethodMetadata, Integer> result = new LinkedHashMap<>();
+        for (final IrReflectedClass reflectedClass : program.reflectedClasses()) {
+            for (final IrMethodMetadata method : reflectedClass.declaredMethods()) {
+                result.putIfAbsent(method, result.size());
+            }
+            for (final IrMethodMetadata method : reflectedClass.publicMethods()) {
+                result.putIfAbsent(method, result.size());
+            }
+        }
+        return result;
+    }
+
+    private static String methodMetadataSymbol(final int index) {
+        return "javan_method_metadata_" + index;
     }
 
     private static String reflectionTypeName(final String descriptor) {
@@ -4490,8 +4521,12 @@ public final class CCodegen {
     private record CodegenFeatures(
         boolean generatedObjectClone,
         boolean classForName,
-        boolean methodMetadata,
+        boolean declaredMethodMetadata,
+        boolean publicMethodMetadata,
         boolean nonFiniteFloatingLiteral
     ) {
+        private boolean methodMetadata() {
+            return declaredMethodMetadata || publicMethodMetadata;
+        }
     }
 }

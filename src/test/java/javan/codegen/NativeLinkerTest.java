@@ -260,6 +260,7 @@ final class NativeLinkerTest {
         assertThat(commandArguments(runner.commands())).containsExactlyElementsOf(List.of(
             List.of(
                 "-pthread",
+                "-Wno-parentheses",
                 tempDir.resolve("main.c").toString(),
                 tempDir.resolve("runtime.c").toString(),
                 "-I",
@@ -296,6 +297,7 @@ final class NativeLinkerTest {
         assertThat(commandArguments(runner.commands())).containsExactlyElementsOf(List.of(
             List.of(
                 "-pthread",
+                "-Wno-parentheses",
                 tempDir.resolve("main.c").toString(),
                 tempDir.resolve("runtime.c").toString(),
                 "-lobjc",
@@ -474,6 +476,7 @@ final class NativeLinkerTest {
         assertThat(commandArguments(runner.commands())).containsExactlyElementsOf(List.of(
             List.of(
                 "-pthread",
+                "-Wno-parentheses",
                 "-shared",
                 "-fPIC",
                 "-Wl,--no-undefined",
@@ -596,10 +599,10 @@ final class NativeLinkerTest {
         ));
 
         assertThat(commandArguments(runner.commands())).containsExactlyElementsOf(List.of(
-            List.of("-pthread", "-fPIC", "-c", tempDir.resolve("main.c").toString(), "-o", tempDir.resolve("out/objects/javan_library.o").toString()),
-            List.of("-pthread", "-fPIC", "-c", tempDir.resolve("runtime.c").toString(), "-o", tempDir.resolve("out/objects/javan_runtime.o").toString()),
-            List.of("-pthread", "-fPIC", "-I", tempDir.toString(), "-c", firstSource.toString(), "-o", tempDir.resolve("out/objects/native_input_0.o").toString()),
-            List.of("-pthread", "-fPIC", "-I", tempDir.toString(), "-c", secondSource.toString(), "-o", tempDir.resolve("out/objects/native_input_1.o").toString()),
+            List.of("-pthread", "-Wno-parentheses", "-fPIC", "-c", tempDir.resolve("main.c").toString(), "-o", tempDir.resolve("out/objects/javan_library.o").toString()),
+            List.of("-pthread", "-Wno-parentheses", "-fPIC", "-c", tempDir.resolve("runtime.c").toString(), "-o", tempDir.resolve("out/objects/javan_runtime.o").toString()),
+            List.of("-pthread", "-Wno-parentheses", "-fPIC", "-I", tempDir.toString(), "-c", firstSource.toString(), "-o", tempDir.resolve("out/objects/native_input_0.o").toString()),
+            List.of("-pthread", "-Wno-parentheses", "-fPIC", "-I", tempDir.toString(), "-c", secondSource.toString(), "-o", tempDir.resolve("out/objects/native_input_1.o").toString()),
             List.of(
                 "rcs",
                 output.toString(),

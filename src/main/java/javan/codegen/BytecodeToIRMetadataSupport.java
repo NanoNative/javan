@@ -58,6 +58,7 @@ final class BytecodeToIRMetadataSupport {
         for (final MethodInfo method : classFile.methods()) {
             if (!"<init>".equals(method.name()) && !"<clinit>".equals(method.name())) {
                 result.add(new IrMethodMetadata(
+                    classFile.name(),
                     method.name(),
                     BytecodeToIRDynamicSupport.parameterDescriptors(method.descriptor()).orElseThrow()
                 ));
@@ -66,11 +67,179 @@ final class BytecodeToIRMetadataSupport {
         return List.copyOf(result);
     }
 
+    private static List<IrMethodMetadata> publicMethods(
+        final ClassFile receiver,
+        final Map<String, ClassFile> classes
+    ) {
+        final List<IrMethodMetadata> result = new ArrayList<>();
+        for (final List<PublicMethodCandidate> candidates : publicMethodCandidates(
+            receiver, classes, true, new HashSet<>()
+        ).values()) {
+            PublicMethodCandidate selected = candidates.getFirst();
+            for (int index = 1; index < candidates.size(); index++) {
+                final PublicMethodCandidate candidate = candidates.get(index);
+                if (!selected.returnDescriptor().equals(candidate.returnDescriptor())
+                    && returnTypeAssignableFrom(selected.returnDescriptor(), candidate.returnDescriptor(), classes)) {
+                    selected = candidate;
+                }
+            }
+            result.add(selected.method());
+        }
+        return List.copyOf(result);
+    }
+
+    private static Map<MethodShape, List<PublicMethodCandidate>> publicMethodCandidates(
+        final ClassFile classFile,
+        final Map<String, ClassFile> classes,
+        final boolean includeStatic,
+        final Set<String> visiting
+    ) {
+        if (!visiting.add(classFile.name())) {
+            return Map.of();
+        }
+        final Map<MethodShape, List<PublicMethodCandidate>> result = new LinkedHashMap<>();
+        final Set<MethodShape> declaredShapes = new HashSet<>();
+        for (final MethodInfo method : classFile.methods()) {
+            if (!method.isPublic()
+                || !includeStatic && method.isStatic()
+                || "<init>".equals(method.name())
+                || "<clinit>".equals(method.name())) {
+                continue;
+            }
+            final List<String> parameters = BytecodeToIRDynamicSupport.parameterDescriptors(
+                method.descriptor()
+            ).orElseThrow();
+            final MethodShape shape = new MethodShape(method.name(), parameters);
+            declaredShapes.add(shape);
+            List<PublicMethodCandidate> declared = result.get(shape);
+            if (declared == null) {
+                declared = new ArrayList<>();
+                result.put(shape, declared);
+            }
+            declared.add(new PublicMethodCandidate(
+                new IrMethodMetadata(classFile.name(), method.name(), parameters),
+                returnDescriptor(method.descriptor()),
+                classFile.isInterface()
+            ));
+        }
+        final ClassFile superclass = classFile.isInterface() ? null : classes.get(classFile.superName());
+        if (superclass != null) {
+            mergeInheritedMethods(
+                result,
+                declaredShapes,
+                publicMethodCandidates(superclass, classes, includeStatic, new HashSet<>(visiting)),
+                classes
+            );
+        }
+        for (final String interfaceName : classFile.interfaces()) {
+            final ClassFile interfaceClass = classes.get(interfaceName);
+            if (interfaceClass != null) {
+                mergeInheritedMethods(
+                    result,
+                    declaredShapes,
+                    publicMethodCandidates(interfaceClass, classes, false, new HashSet<>(visiting)),
+                    classes
+                );
+            }
+        }
+        return result;
+    }
+
+    private static void mergeInheritedMethods(
+        final Map<MethodShape, List<PublicMethodCandidate>> result,
+        final Set<MethodShape> declaredShapes,
+        final Map<MethodShape, List<PublicMethodCandidate>> inherited,
+        final Map<String, ClassFile> classes
+    ) {
+        for (final Map.Entry<MethodShape, List<PublicMethodCandidate>> entry : inherited.entrySet()) {
+            if (declaredShapes.contains(entry.getKey())) {
+                continue;
+            }
+            List<PublicMethodCandidate> merged = result.get(entry.getKey());
+            if (merged == null) {
+                merged = new ArrayList<>();
+                result.put(entry.getKey(), merged);
+            }
+            for (final PublicMethodCandidate candidate : entry.getValue()) {
+                mergePublicMethod(merged, candidate, classes);
+            }
+        }
+    }
+
+    private static void mergePublicMethod(
+        final List<PublicMethodCandidate> methods,
+        final PublicMethodCandidate candidate,
+        final Map<String, ClassFile> classes
+    ) {
+        int index = 0;
+        while (index < methods.size()) {
+            final PublicMethodCandidate existing = methods.get(index);
+            if (!candidate.returnDescriptor().equals(existing.returnDescriptor())) {
+                index++;
+                continue;
+            }
+            if (candidate.declaringInterface() != existing.declaringInterface()) {
+                if (candidate.declaringInterface()) {
+                    return;
+                }
+                methods.remove(index);
+                continue;
+            }
+            if (BytecodeToIR.isAssignableTo(
+                classes, existing.method().declaringJvmName(), candidate.method().declaringJvmName()
+            )) {
+                return;
+            }
+            if (BytecodeToIR.isAssignableTo(
+                classes, candidate.method().declaringJvmName(), existing.method().declaringJvmName()
+            )) {
+                methods.remove(index);
+                continue;
+            }
+            index++;
+        }
+        methods.add(candidate);
+    }
+
+    private static String returnDescriptor(final String methodDescriptor) {
+        return methodDescriptor.substring(methodDescriptor.indexOf(')') + 1);
+    }
+
+    private static boolean returnTypeAssignableFrom(
+        final String expected,
+        final String candidate,
+        final Map<String, ClassFile> classes
+    ) {
+        if (expected.equals(candidate)) {
+            return true;
+        }
+        if ((candidate.startsWith("[") || candidate.startsWith("L"))
+            && "Ljava/lang/Object;".equals(expected)) {
+            return true;
+        }
+        if (candidate.startsWith("[")
+            && ("Ljava/lang/Cloneable;".equals(expected) || "Ljava/io/Serializable;".equals(expected))) {
+            return true;
+        }
+        if (expected.startsWith("[") && candidate.startsWith("[")) {
+            return returnTypeAssignableFrom(expected.substring(1), candidate.substring(1), classes);
+        }
+        if (!expected.startsWith("L") || !candidate.startsWith("L")) {
+            return false;
+        }
+        return BytecodeToIR.isAssignableTo(
+            classes,
+            candidate.substring(1, candidate.length() - 1),
+            expected.substring(1, expected.length() - 1)
+        );
+    }
+
     static ReflectionClasses reflectionClasses(
         final Map<String, ClassFile> classes,
         final List<EntryPoint> reachableMethods
     ) {
         boolean declaredMethodLookup = false;
+        boolean publicMethodLookup = false;
         boolean dynamicClassLookup = false;
         final Set<String> classLiterals = new HashSet<>();
         for (final EntryPoint entryPoint : reachableMethods) {
@@ -87,6 +256,9 @@ final class BytecodeToIRMetadataSupport {
                     declaredMethodLookup |= "java/lang/Class".equals(reference.owner())
                         && "getDeclaredMethod".equals(reference.name())
                         && "(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;".equals(reference.descriptor());
+                    publicMethodLookup |= "java/lang/Class".equals(reference.owner())
+                        && "getMethod".equals(reference.name())
+                        && "(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;".equals(reference.descriptor());
                     dynamicClassLookup |= isClassForName(reference);
                 }
                 if ((instruction.opcode() == 18 || instruction.opcode() == 19 || instruction.opcode() == 20)
@@ -98,8 +270,8 @@ final class BytecodeToIRMetadataSupport {
                 }
             }
         }
-        if (!declaredMethodLookup) {
-            return new ReflectionClasses(false, List.of());
+        if (!declaredMethodLookup && !publicMethodLookup) {
+            return new ReflectionClasses(false, false, List.of());
         }
         if (dynamicClassLookup) {
             classLiterals.addAll(List.of(
@@ -119,48 +291,126 @@ final class BytecodeToIRMetadataSupport {
             }
             sorted.add(index, classLiteral);
         }
-        return new ReflectionClasses(true, List.copyOf(sorted));
+        return new ReflectionClasses(declaredMethodLookup, publicMethodLookup, List.copyOf(sorted));
     }
 
-    static List<IrReflectedClass> loadExternalReflectedClasses(
+    static Map<String, ClassFile> loadExternalReflectionClasses(
+        final Map<String, ClassFile> projectClasses,
         final ReflectionClasses reflection,
         final Path outputDirectory
     ) throws IOException, InterruptedException {
-        final List<IrReflectedClass> result = new ArrayList<>();
+        final Map<String, ClassFile> result = new LinkedHashMap<>();
         final ClassFileScanner scanner = new ClassFileScanner();
         for (final String jvmName : reflection.externalClassNames()) {
-            result.add(new IrReflectedClass(
-                jvmName,
-                declaredMethods(scanner.readRuntimeClass(jvmName, outputDirectory))
-            ));
+            loadExternalClass(
+                jvmName, projectClasses, result, scanner, outputDirectory, reflection.publicMethodLookup()
+            );
         }
-        return List.copyOf(result);
+        if (reflection.publicMethodLookup()) {
+            loadExternalClass("java/lang/Object", projectClasses, result, scanner, outputDirectory, true);
+            for (final ClassFile classFile : projectClasses.values()) {
+                loadExternalClass(classFile.superName(), projectClasses, result, scanner, outputDirectory, true);
+                for (final String interfaceName : classFile.interfaces()) {
+                    loadExternalClass(interfaceName, projectClasses, result, scanner, outputDirectory, true);
+                }
+            }
+        }
+        return Collections.unmodifiableMap(new LinkedHashMap<>(result));
+    }
+
+    private static void loadExternalClass(
+        final String jvmName,
+        final Map<String, ClassFile> projectClasses,
+        final Map<String, ClassFile> result,
+        final ClassFileScanner scanner,
+        final Path outputDirectory,
+        final boolean hierarchy
+    ) throws IOException, InterruptedException {
+        if (jvmName == null || jvmName.isEmpty() || projectClasses.containsKey(jvmName) || result.containsKey(jvmName)) {
+            return;
+        }
+        final ClassFile classFile = scanner.readRuntimeClass(jvmName, outputDirectory);
+        result.put(jvmName, classFile);
+        if (!hierarchy) {
+            return;
+        }
+        loadExternalClass(classFile.superName(), projectClasses, result, scanner, outputDirectory, true);
+        for (final String interfaceName : classFile.interfaces()) {
+            loadExternalClass(interfaceName, projectClasses, result, scanner, outputDirectory, true);
+        }
     }
 
     static List<IrReflectedClass> reflectedClasses(
         final Map<String, ClassFile> classes,
         final List<IrClass> retainedClasses,
         final ReflectionClasses reflection,
-        final List<IrReflectedClass> externalClasses
+        final Map<String, ClassFile> externalClasses
     ) {
-        if (!reflection.declaredMethodLookup()) {
+        if (!reflection.declaredMethodLookup() && !reflection.publicMethodLookup()) {
             return List.of();
         }
+        final Map<String, ClassFile> allClasses = new LinkedHashMap<>(externalClasses);
+        allClasses.putAll(classes);
         final List<IrReflectedClass> result = new ArrayList<>();
         for (final IrClass retained : retainedClasses) {
             final ClassFile classFile = classes.get(retained.jvmName());
             if (classFile != null) {
-                result.add(new IrReflectedClass(classFile.name(), declaredMethods(classFile)));
+                result.add(reflectedClass(classFile, allClasses, reflection));
             }
         }
-        result.addAll(externalClasses);
+        for (final String jvmName : reflection.externalClassNames()) {
+            final ClassFile classFile = externalClasses.get(jvmName);
+            if (classFile != null) {
+                result.add(reflectedClass(classFile, allClasses, reflection));
+            }
+        }
+        if (reflection.publicMethodLookup()) {
+            final ClassFile objectClass = allClasses.get("java/lang/Object");
+            if (objectClass != null) {
+                result.add(new IrReflectedClass(
+                    "java/lang/Object",
+                    List.of(),
+                    publicMethods(objectClass, allClasses),
+                    true
+                ));
+            }
+        }
         return List.copyOf(result);
     }
 
-    record ReflectionClasses(boolean declaredMethodLookup, List<String> externalClassNames) {
+    private static IrReflectedClass reflectedClass(
+        final ClassFile classFile,
+        final Map<String, ClassFile> classes,
+        final ReflectionClasses reflection
+    ) {
+        return new IrReflectedClass(
+            classFile.name(),
+            reflection.declaredMethodLookup() ? declaredMethods(classFile) : List.of(),
+            reflection.publicMethodLookup() ? publicMethods(classFile, classes) : List.of()
+        );
+    }
+
+    record ReflectionClasses(
+        boolean declaredMethodLookup,
+        boolean publicMethodLookup,
+        List<String> externalClassNames
+    ) {
         ReflectionClasses {
             externalClassNames = List.copyOf(externalClassNames);
         }
+    }
+
+    private record MethodShape(String name, List<String> parameters) {
+        private MethodShape {
+            parameters = List.copyOf(parameters);
+        }
+    }
+
+    private record PublicMethodCandidate(
+        IrMethodMetadata method,
+        String returnDescriptor,
+        boolean declaringInterface
+    ) {
     }
 
     static List<IrClass> lowerReachableClasses(

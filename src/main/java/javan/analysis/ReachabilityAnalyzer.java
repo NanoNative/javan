@@ -2565,7 +2565,7 @@ public final class ReachabilityAnalyzer {
 
     private static final class CallEdgeTracker {
         private final List<CallEdge> edges = new ArrayList<>();
-        private final Map<String, List<CallerBucket>> ownerBuckets = new HashMap<>();
+        private final Map<EntryPoint, List<CallEdge>> buckets = new HashMap<>();
 
         private void add(final EntryPoint caller, final EntryPoint callee, final CallEdge.Kind kind) {
             final List<CallEdge> bucket = bucket(caller);
@@ -2584,24 +2584,11 @@ public final class ReachabilityAnalyzer {
         }
 
         private List<CallEdge> bucket(final EntryPoint caller) {
-            final List<CallerBucket> ownerBucket = ownerBucket(caller.className());
-            for (final CallerBucket bucket : ownerBucket) {
-                if (sameEntry(bucket.caller(), caller)) {
-                    return bucket.edges();
-                }
+            List<CallEdge> bucket = buckets.get(caller);
+            if (bucket == null) {
+                bucket = new ArrayList<>();
+                buckets.put(caller, bucket);
             }
-            final CallerBucket bucket = new CallerBucket(caller, new ArrayList<>());
-            ownerBucket.add(bucket);
-            return bucket.edges();
-        }
-
-        private List<CallerBucket> ownerBucket(final String owner) {
-            final List<CallerBucket> existing = ownerBuckets.get(owner);
-            if (existing != null) {
-                return existing;
-            }
-            final List<CallerBucket> bucket = new ArrayList<>();
-            ownerBuckets.put(owner, bucket);
             return bucket;
         }
     }
@@ -2684,9 +2671,6 @@ public final class ReachabilityAnalyzer {
         private List<EntryPoint> existingOwnerBucket(final String owner) {
             return buckets.get(owner);
         }
-    }
-
-    private record CallerBucket(EntryPoint caller, List<CallEdge> edges) {
     }
 
 }
