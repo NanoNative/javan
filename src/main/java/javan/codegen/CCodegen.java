@@ -163,6 +163,9 @@ public final class CCodegen {
         c.append(System.lineSeparator());
         emitAllocators(program, c);
         emitGeneratedObjectHelpers(program, features, c);
+        if (features.classForName()) {
+            emitClassForNameHelper(program, c);
+        }
         emitRecordShapeExactTypeHelper(program, c);
         emitEnumOrdinalHelpers(program, c);
         emitGeneratedEnumOrdinalHelper(program, c);
@@ -300,6 +303,9 @@ public final class CCodegen {
         c.append(System.lineSeparator());
         emitAllocators(program, c);
         emitGeneratedObjectHelpers(program, features, c);
+        if (features.classForName()) {
+            emitClassForNameHelper(program, c);
+        }
         emitRecordShapeExactTypeHelper(program, c);
         emitEnumOrdinalHelpers(program, c);
         emitGeneratedEnumOrdinalHelper(program, c);
@@ -328,7 +334,11 @@ public final class CCodegen {
     }
 
     private static CodegenFeatures codegenFeatures(final IrProgram program) {
-        return new CodegenFeatures(usesGeneratedObjectClone(program), usesNonFiniteFloatingLiteral(program));
+        return new CodegenFeatures(
+            usesGeneratedObjectClone(program),
+            usesCall(program, "javan_generated_class_for_name"),
+            usesNonFiniteFloatingLiteral(program)
+        );
     }
 
     private static List<String> objectResultSymbols(final IrProgram program) {
@@ -955,6 +965,38 @@ public final class CCodegen {
         c.append("        default: javan_panic(\"unsupported generated object type\");").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
         c.append("    return 0;").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+    }
+
+    private static void emitClassForNameHelper(final IrProgram program, final StringBuilder c) {
+        final java.util.Map<String, Integer> typeIds = typeIds(program);
+        c.append("static void* javan_generated_class_for_name(void* name_value) {")
+            .append(System.lineSeparator());
+        c.append("    if (name_value == NULL) {").append(System.lineSeparator());
+        c.append("        return NULL;").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        c.append("    const char* name = (const char*) name_value;").append(System.lineSeparator());
+        for (final IrClass classInfo : program.classes()) {
+            final int typeId = typeIds.get(classInfo.jvmName()).intValue();
+            c.append("    if (javan_string_equals(name, ")
+                .append(emitCStringLiteral(displayClassName(classInfo.jvmName())))
+                .append(")) {")
+                .append(System.lineSeparator());
+            emitClassInitialization(program, classInfo.jvmName(), c);
+            c.append("        return javan_runtime_class_literal(")
+                .append(emitCStringLiteral(displayClassName(classInfo.jvmName())))
+                .append(", ")
+                .append(typeId)
+                .append(", ")
+                .append(classInfo.enumClass() ? 1 : 0)
+                .append(", 0, 1, ")
+                .append(typeId)
+                .append(");")
+                .append(System.lineSeparator());
+            c.append("    }").append(System.lineSeparator());
+        }
+        c.append("    return javan_runtime_class_for_name_known(name_value);")
+            .append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
     }
 
@@ -4098,6 +4140,30 @@ public final class CCodegen {
         return false;
     }
 
+    private static boolean usesCall(final IrProgram program, final String symbol) {
+        for (final IrFunction function : program.functions()) {
+            for (final IrInstruction instruction : function.instructions()) {
+                if (instruction.expression().isPresent()
+                    && usesCall(instruction.expression().orElseThrow(), symbol)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean usesCall(final IrExpression expression, final String symbol) {
+        if (expression.kind() == IrExpression.Kind.CALL && symbol.equals(expression.value())) {
+            return true;
+        }
+        for (final IrExpression argument : expression.arguments()) {
+            if (usesCall(argument, symbol)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static boolean usesGeneratedObjectClone(final IrExpression expression) {
         if (expression.kind() == IrExpression.Kind.CALL && GENERATED_OBJECT_CLONE_SYMBOL.equals(expression.value())) {
             return true;
@@ -4332,6 +4398,6 @@ public final class CCodegen {
         return value;
     }
 
-    private record CodegenFeatures(boolean generatedObjectClone, boolean nonFiniteFloatingLiteral) {
+    private record CodegenFeatures(boolean generatedObjectClone, boolean classForName, boolean nonFiniteFloatingLiteral) {
     }
 }

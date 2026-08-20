@@ -418,7 +418,7 @@ abstract class CliIntegrationSupport {
         for (int index = 0; index < count; index++) {
             calls.append("        Class.forName(\"com.acme.Plugin")
                 .append(index)
-                .append("\");\n");
+                .append("\", true, ClassLoader.getSystemClassLoader());\n");
         }
         return """
             package com.acme;

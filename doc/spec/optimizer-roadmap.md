@@ -122,14 +122,12 @@ Intrinsic status:
 | `SecureRandom.nextBytes` | implemented for the default constructor through OS entropy |
 | `UUID.randomUUID` | implemented through OS entropy with canonical version-4 text |
 | basic `Base64` encoder/decoder | implemented for byte arrays, encoded strings, strict basic-alphabet validation, padding, and legal unpadded final units; URL, MIME, streams, no-padding mode, and destination-buffer overloads remain unsupported |
+| `Class.forName(String)` | implemented for compiled closed-world classes and valid arrays, including one-time class initialization and catchable lookup failures; loader-selecting overloads remain unsupported |
 
-Auto-substitution candidates:
+Runtime substitutions:
 
-- `System.getenv` subset
-- `System.getProperty` subset
-- `Path.of`
-- `Files.readString`
-- `Files.writeString`
+- `System.getenv` and `System.getProperty` subsets are implemented.
+- `Path.of`, `Files.readString`, and `Files.writeString` are implemented.
 
 Reports:
 

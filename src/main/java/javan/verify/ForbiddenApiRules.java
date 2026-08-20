@@ -17,7 +17,9 @@ public final class ForbiddenApiRules {
     public Optional<String> forbiddenReason(final MethodRef methodRef) {
         final String owner = methodRef.owner();
         final String name = methodRef.name();
-        if ("java/lang/Class".equals(owner) && "forName".equals(name)) {
+        if ("java/lang/Class".equals(owner)
+            && "forName".equals(name)
+            && !"(Ljava/lang/String;)Ljava/lang/Class;".equals(methodRef.descriptor())) {
             return Optional.of("dynamic class loading is not supported");
         }
         if ("java/lang/ClassLoader".equals(owner)

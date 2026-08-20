@@ -96,9 +96,12 @@ See [cross-platform-verification.md](cross-platform-verification.md).
 
 ## Java And JDK Compatibility
 
-Compatibility grows as complete behavior families:
+Compatibility grows as complete behavior families. One-argument `Class.forName` is implemented
+for classes and arrays present in the compiled closed world; it initializes classes once and
+transports `ClassNotFoundException` and `NullPointerException` through normal Java catches.
+Selecting a runtime class loader remains outside the static native model.
 
-- reflection from closed-world class/member metadata, with constant and finite class flows
+- reflection beyond class lookup, starting with closed-world member metadata and finite member flows
 - service loading from standard descriptors and module declarations
 - broader exception semantics and platform throwable transport
 - collections, streams, time, networking, files, and concurrency only with native/JVM parity

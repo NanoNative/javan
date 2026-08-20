@@ -3870,6 +3870,63 @@ final class RuntimeSourceMemorySections {
             return 0;
         }
 
+        void* javan_runtime_class_for_name_known(void* name_value) {
+            if (name_value == NULL) {
+                return NULL;
+            }
+            void* name_root = name_value;
+            void** roots[] = {(void**) &name_root};
+            javan_root_frame_push(roots, 1);
+            unsigned long binary_name_length = (unsigned long) strlen((const char*) name_root) + 1UL;
+            char* binary_name = (char*) javan_raw_calloc_retry(binary_name_length);
+            if (binary_name == NULL) {
+                javan_panic("out of memory");
+            }
+            memcpy(binary_name, (const char*) name_root, binary_name_length);
+            void* result = NULL;
+            int exact_type_id = javan_runtime_class_known_exact_type_id(binary_name);
+            if (exact_type_id != 0
+                && !(exact_type_id <= JAVAN_CLASS_EXACT_PRIMITIVE_BOOLEAN
+                    && exact_type_id >= JAVAN_CLASS_EXACT_PRIMITIVE_VOID)) {
+                result = javan_runtime_class_literal(binary_name, exact_type_id, 0, 0, 0);
+                goto complete;
+            }
+            int dimensions = 0;
+            while (binary_name[dimensions] == '[') {
+                dimensions++;
+            }
+            if (dimensions == 0) {
+                goto complete;
+            }
+            const char* component = binary_name + dimensions;
+            if (component[0] != '\\0' && component[1] == '\\0' && strchr("ZBSCIJFD", component[0]) != NULL) {
+                result = javan_runtime_class_literal(binary_name, 0, 0, 1, 0);
+                goto complete;
+            }
+            unsigned long component_length = (unsigned long) strlen(component);
+            if (component[0] != 'L' || component_length < 3UL || component[component_length - 1UL] != ';') {
+                goto complete;
+            }
+            unsigned long base_length = component_length - 2UL;
+            char* base_name = (char*) javan_raw_calloc_retry(base_length + 1UL);
+            if (base_name == NULL) {
+                javan_panic("out of memory");
+            }
+            memcpy(base_name, component + 1, base_length);
+            base_name[base_length] = '\\0';
+            int base_exact_type_id = javan_runtime_class_known_exact_type_id(base_name);
+            int base_type_id = javan_runtime_class_type_id_for_binary_name(base_name);
+            free(base_name);
+            if (base_exact_type_id == 0 && base_type_id == 0) {
+                goto complete;
+            }
+            result = javan_runtime_class_literal(binary_name, 0, 0, 1, 0);
+        complete:
+            free(binary_name);
+            javan_root_frame_pop(roots);
+            return result;
+        }
+
         static void* javan_runtime_class_from_binary_name(const char* binary_name) {
             int exact_type_id = javan_runtime_class_known_exact_type_id(binary_name);
             if (exact_type_id != 0) {

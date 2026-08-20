@@ -8097,6 +8097,85 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void classForNameFindsClosedWorldClassInitializesOnceAndMatchesJvmFailures() throws Exception {
+        final Path project = project("class-for-name");
+        writeJava(project, "com.acme.Plugin", """
+            package com.acme;
+
+            public final class Plugin {
+                static {
+                    System.out.println("initialized");
+                }
+
+                private Plugin() {
+                }
+            }
+            """);
+        writeJava(project, "com.acme.DynamicOnly", """
+            package com.acme;
+
+            public final class DynamicOnly {
+                static {
+                    System.out.println("dynamic-initialized");
+                }
+
+                private DynamicOnly() {
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final String suffix = args.length == 0 ? "DynamicOnly" : args[0];
+                    final String name = "com.acme.".concat(suffix);
+                    for (int index = 0; index < 10_000; index++) {
+                        final byte[] ignored = new byte[64];
+                    }
+                    System.out.println(Class.forName("[[Lcom.acme.DynamicOnly;").getTypeName());
+                    System.out.println(Class.forName(name).getName());
+                    System.out.println(Class.forName("com.acme.Plugin") == Plugin.class);
+                    System.out.println(Class.forName("com.acme.Plugin").getSimpleName());
+                    System.out.println(Class.forName("java.lang.String") == String.class);
+                    System.out.println(Class.forName("[[Ljava.lang.String;").getTypeName());
+                    System.out.println(Class.forName("[[I") == int[][].class);
+                    try {
+                        Class.forName("com.acme.Missing");
+                    } catch (final ClassNotFoundException expected) {
+                        System.out.println("missing");
+                    }
+                    try {
+                        Class.forName(null);
+                    } catch (final NullPointerException expected) {
+                        System.out.println("null");
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(
+            project,
+            List.of(project.resolve(".javan/bin/class-for-name").toString()),
+            Duration.ofSeconds(10),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1")
+        );
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo(
+            "com.acme.DynamicOnly[][]\ndynamic-initialized\ncom.acme.DynamicOnly\n"
+                + "initialized\ntrue\nPlugin\ntrue\njava.lang.String[][]\ntrue\nmissing\nnull\n"
+        );
+    }
+
+    @Test
     void secureRandomStaticInitializerSurvivesGcAndFillsBytes() throws Exception {
         final Path project = project("secure-random-next-bytes");
         writeJava(project, "com.acme.Main", """

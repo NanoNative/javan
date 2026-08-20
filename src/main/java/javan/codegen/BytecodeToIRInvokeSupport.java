@@ -2119,6 +2119,19 @@ final class BytecodeToIRInvokeSupport {
         if (lowerEnumValues(classes, classFile, method, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
+        if (lowerClassForName(
+            classFile,
+            method,
+            instruction,
+            methodRef,
+            instructions,
+            stack,
+            localDeclarations,
+            pendingExceptionHandlerStacks,
+            sourceLines
+        )) {
+            return;
+        }
         if (lowerJdkStaticIntrinsic(
             classes,
             classFile,
@@ -3352,6 +3365,74 @@ final class BytecodeToIRInvokeSupport {
             symbol,
             List.of(IrExpression.objectLocal(receiverLocal), IrExpression.objectLocal(inputLocal))
         );
+        return true;
+    }
+
+    private static boolean lowerClassForName(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final MethodRef methodRef,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
+    ) {
+        if (!"java/lang/Class".equals(methodRef.owner())
+            || !"forName".equals(methodRef.name())
+            || !"(Ljava/lang/String;)Ljava/lang/Class;".equals(methodRef.descriptor())) {
+            return false;
+        }
+
+        final IrExpression name = popObject(classFile, method, stack);
+        final String nameLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(nameLocal, name));
+        final List<StackValue> successStack = List.copyOf(stack);
+
+        final String namePresent = "label_class_for_name_present_" + instruction.offset();
+        instructions.add(IrInstruction.branchIf(
+            namePresent,
+            IrExpression.objectComparison("!=", IrExpression.objectLocal(nameLocal), IrExpression.objectNull())
+        ));
+        routePendingPlatformException(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            "java/lang/NullPointerException",
+            IrExpression.stringLiteral("name")
+        );
+        instructions.add(IrInstruction.label(namePresent));
+        stack.addAll(successStack);
+
+        final String resultLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(
+            resultLocal,
+            IrExpression.objectCall("javan_generated_class_for_name", List.of(IrExpression.objectLocal(nameLocal)))
+        ));
+        final String classFound = "label_class_for_name_found_" + instruction.offset();
+        instructions.add(IrInstruction.branchIf(
+            classFound,
+            IrExpression.objectComparison("!=", IrExpression.objectLocal(resultLocal), IrExpression.objectNull())
+        ));
+        routePendingPlatformException(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            "java/lang/ClassNotFoundException",
+            IrExpression.objectLocal(nameLocal)
+        );
+        instructions.add(IrInstruction.label(classFound));
+        stack.addAll(successStack);
+        stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
         return true;
     }
 

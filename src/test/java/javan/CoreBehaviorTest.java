@@ -437,7 +437,12 @@ final class CoreBehaviorTest {
     void forbiddenRulesRejectDynamicApis() {
         final ForbiddenApiRules rules = new ForbiddenApiRules();
 
-        assertThat(rules.forbiddenReason(new MethodRef("java/lang/Class", "forName", "(Ljava/lang/String;)Ljava/lang/Class;"))).isPresent();
+        assertThat(rules.forbiddenReason(new MethodRef("java/lang/Class", "forName", "(Ljava/lang/String;)Ljava/lang/Class;"))).isEmpty();
+        assertThat(rules.forbiddenReason(new MethodRef(
+            "java/lang/Class",
+            "forName",
+            "(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;"
+        ))).isPresent();
         assertThat(rules.forbiddenReason(new MethodRef("java/lang/ClassLoader", "loadClass", "(Ljava/lang/String;)Ljava/lang/Class;"))).isPresent();
         assertThat(rules.forbiddenReason(new MethodRef("java/lang/ClassLoader", "getSystemClassLoader", "()Ljava/lang/ClassLoader;"))).isEmpty();
         assertThat(rules.forbiddenReason(new MethodRef("java/lang/ClassLoader", "getSystemResourceAsStream", "(Ljava/lang/String;)Ljava/io/InputStream;"))).isEmpty();
@@ -16446,5 +16451,57 @@ final class CoreBehaviorTest {
             .isLessThan(cloneGenerated.indexOf("\tjavan_root_frame_pop(javan_clone_roots);"));
         assertThat(cloneGenerated.indexOf("javan_root_frame_push(javan_expr_roots, 1);"))
             .isLessThan(cloneGenerated.indexOf("javan_generated_object_clone((void**) &javan_expr_tmp_0, self);"));
+    }
+
+    @Test
+    void cCodegenEmitsClassForNameTableOnlyWhenUsed() throws Exception {
+        final IrClass classInfo = new IrClass(
+            "com/acme/Main",
+            "javan_class_com_acme_Main",
+            List.of(),
+            List.of(),
+            List.of(),
+            false
+        );
+        final IrFunction plain = new IrFunction(
+            "com/acme/Main",
+            "main",
+            "()V",
+            "main_symbol",
+            IrType.VOID,
+            List.of(),
+            List.of(),
+            List.of(IrInstruction.returnVoid())
+        );
+        final String plainGenerated = Files.readString(new CCodegen().generate(
+            new IrProgram(List.of(classInfo), List.of(plain), "main_symbol"),
+            tempDir.resolve("plain-class-lookup")
+        ));
+
+        assertThat(plainGenerated).doesNotContain("javan_generated_class_for_name");
+
+        final IrFunction lookup = new IrFunction(
+            "com/acme/Main",
+            "lookup",
+            "(Ljava/lang/String;)Ljava/lang/Class;",
+            "lookup_symbol",
+            IrType.OBJECT,
+            List.of(new IrParameter(IrType.OBJECT, "name")),
+            List.of(),
+            List.of(IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_generated_class_for_name",
+                List.of(IrExpression.objectLocal("name"))
+            )))
+        );
+        final String lookupGenerated = Files.readString(new CCodegen().generate(
+            new IrProgram(List.of(classInfo), List.of(lookup), "lookup_symbol"),
+            tempDir.resolve("used-class-lookup")
+        ));
+
+        assertThat(lookupGenerated).contains(
+            "static void* javan_generated_class_for_name(void* name_value) {",
+            "javan_string_equals(name, \"com.acme.Main\")",
+            "return javan_runtime_class_for_name_known(name_value);"
+        );
     }
 }

@@ -5,6 +5,6 @@ public final class Main {
     }
 
     public static void main(final String[] args) throws ClassNotFoundException {
-        Class.forName("com.acme.Plugin");
+        Class.forName("com.acme.Plugin", true, ClassLoader.getSystemClassLoader());
     }
 }

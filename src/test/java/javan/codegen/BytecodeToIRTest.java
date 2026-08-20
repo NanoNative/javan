@@ -11508,6 +11508,33 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersClassForNameToClosedWorldLookupWithPlatformFailures() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/String;)Ljava/lang/Class;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeStatic(1, new MethodRef("java/lang/Class", "forName", "(Ljava/lang/String;)Ljava/lang/Class;")),
+            plain(4, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).anySatisfy(instruction ->
+            assertThat(instruction.expression()).contains(IrExpression.objectCall(
+                "javan_generated_class_for_name",
+                List.of(IrExpression.objectLocal("object0"))
+            ))
+        );
+        assertThat(function.instructions()).extracting(IrInstruction::op).contains(
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.THROW_PENDING,
+            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.RETURN_OBJECT
+        );
+    }
+
+    @Test
     void lowersBasicBase64FactoriesToRuntimeHandles() {
         final IrFunction encoder = lowerMain(method(
             0x0008,
