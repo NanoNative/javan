@@ -67,6 +67,15 @@ javan_timing_measure() {
   javan_timing_measure_cpu_seconds=unknown
   javan_timing_measure_max_rss_bytes=unknown
   javan_timing_measure_source=unavailable
+  # External timing tools cannot execute a function defined by this shell.
+  if [ "$#" -gt 0 ]; then
+    case "$(command -V "$1" 2>/dev/null || :)" in
+      *function*)
+        "$@"
+        return $?
+        ;;
+    esac
+  fi
   javan_timing_measure_file=$(mktemp "${TMPDIR:-/tmp}/javan-timing.XXXXXX") || {
     "$@"
     return $?
