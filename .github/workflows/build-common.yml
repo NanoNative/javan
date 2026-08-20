@@ -128,8 +128,7 @@ jobs:
 
       - name: "📁 Repository"
         run: |
-          repo=$(./mvnw -q help:evaluate -Dexpression=settings.localRepository -DforceStdout | tail -n 1)
-          echo "MAVEN_REPO_LOCAL=$repo" >> "$GITHUB_ENV"
+          echo "MAVEN_REPO_LOCAL=${MAVEN_REPO_LOCAL:-$HOME/.m2/repository}" >> "$GITHUB_ENV"
 
       - name: "🧪 Probes"
         run: |
@@ -196,8 +195,7 @@ jobs:
 
       - name: "📁 Repository"
         run: |
-          repo=$(./mvnw -q help:evaluate -Dexpression=settings.localRepository -DforceStdout | tail -n 1)
-          echo "MAVEN_REPO_LOCAL=$repo" >> "$GITHUB_ENV"
+          echo "MAVEN_REPO_LOCAL=${MAVEN_REPO_LOCAL:-$HOME/.m2/repository}" >> "$GITHUB_ENV"
 
       - name: "🧪 Probes"
         run: |
