@@ -11508,6 +11508,80 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersBasicBase64FactoriesToRuntimeHandles() {
+        final IrFunction encoder = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/util/Base64$Encoder;",
+            1,
+            0,
+            invokeStatic(0, new MethodRef("java/util/Base64", "getEncoder", "()Ljava/util/Base64$Encoder;")),
+            plain(1, 176, "areturn")
+        ));
+        final IrFunction decoder = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/util/Base64$Decoder;",
+            1,
+            0,
+            invokeStatic(0, new MethodRef("java/util/Base64", "getDecoder", "()Ljava/util/Base64$Decoder;")),
+            plain(1, 176, "areturn")
+        ));
+
+        assertThat(encoder.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall("javan_base64_get_encoder", List.of()))
+        );
+        assertThat(decoder.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall("javan_base64_get_decoder", List.of()))
+        );
+    }
+
+    @Test
+    void lowersBasicBase64EncodeAndDecodeToRuntimeHelpers() {
+        final IrFunction encode = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/Base64$Encoder;[B)Ljava/lang/String;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/util/Base64$Encoder", "encodeToString", "([B)Ljava/lang/String;")),
+            plain(3, 176, "areturn")
+        ));
+        final IrFunction decode = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/Base64$Decoder;Ljava/lang/String;)[B",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/util/Base64$Decoder", "decode", "(Ljava/lang/String;)[B")),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(encode.instructions()).anySatisfy(instruction ->
+            assertThat(instruction.expression()).contains(IrExpression.objectCall(
+                "javan_base64_encode_string",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.objectLocal("object1"))
+            ))
+        );
+        assertThat(decode.instructions()).anySatisfy(instruction ->
+            assertThat(instruction.expression()).contains(IrExpression.objectCall(
+                "javan_base64_decode_string",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.objectLocal("object1"))
+            ))
+        );
+        assertThat(decode.instructions()).extracting(IrInstruction::op).contains(
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.THROW_PENDING,
+            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.RETURN_OBJECT
+        );
+    }
+
+    @Test
     void lowersMapOfEmptyToRuntimeHelper() {
         final IrFunction function = lowerMain(method(
             0x0008,

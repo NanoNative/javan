@@ -688,6 +688,14 @@ final class RuntimeHeaderFile {
         void javan_secure_random_next_bytes(void* value, void* array);
         void* javan_uuid_random(void);
         void* javan_uuid_to_string(void* value);
+        void* javan_base64_get_encoder(void);
+        void* javan_base64_get_decoder(void);
+        void* javan_base64_encode_bytes(void* encoder, void* input);
+        void* javan_base64_encode_string(void* encoder, void* input);
+        int javan_base64_decode_bytes_status(void* decoder, void* input);
+        int javan_base64_decode_string_status(void* decoder, void* input);
+        void* javan_base64_decode_bytes(void* decoder, void* input);
+        void* javan_base64_decode_string(void* decoder, void* input);
         void* javan_scheduled_thread_pool_executor_new(void);
         void javan_scheduled_thread_pool_executor_init(void* value, int core_pool_size);
         void javan_scheduled_thread_pool_executor_init_full(void* value, int core_pool_size, void* thread_factory, void* rejected_execution_handler);

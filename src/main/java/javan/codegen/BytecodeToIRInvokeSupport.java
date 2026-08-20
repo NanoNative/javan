@@ -1073,6 +1073,19 @@ final class BytecodeToIRInvokeSupport {
             )));
             return;
         }
+        if (lowerBase64InstanceCall(
+            classFile,
+            method,
+            instruction,
+            methodRef,
+            instructions,
+            stack,
+            localDeclarations,
+            pendingExceptionHandlerStacks,
+            sourceLines
+        )) {
+            return;
+        }
         if (lowerAtomicBooleanInstanceCall(classFile, method, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
@@ -2136,6 +2149,18 @@ final class BytecodeToIRInvokeSupport {
             && "randomUUID".equals(methodRef.name())
             && "()Ljava/util/UUID;".equals(methodRef.descriptor())) {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_uuid_random", List.of())));
+            return;
+        }
+        if ("java/util/Base64".equals(methodRef.owner())
+            && "getEncoder".equals(methodRef.name())
+            && "()Ljava/util/Base64$Encoder;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_base64_get_encoder", List.of())));
+            return;
+        }
+        if ("java/util/Base64".equals(methodRef.owner())
+            && "getDecoder".equals(methodRef.name())
+            && "()Ljava/util/Base64$Decoder;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_base64_get_decoder", List.of())));
             return;
         }
         if (lowerJdkHttpStaticCall(classFile, method, methodRef, stack)) {
@@ -3206,6 +3231,128 @@ final class BytecodeToIRInvokeSupport {
         localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
         instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall(symbol, arguments)));
         stack.add(StackValue.objectExpression(IrExpression.objectLocal(localName)));
+    }
+
+    private static boolean lowerBase64InstanceCall(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final MethodRef methodRef,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
+    ) {
+        final boolean encoder = "java/util/Base64$Encoder".equals(methodRef.owner())
+            && ("encode".equals(methodRef.name()) && "([B)[B".equals(methodRef.descriptor())
+                || "encodeToString".equals(methodRef.name()) && "([B)Ljava/lang/String;".equals(methodRef.descriptor()));
+        final boolean decoder = "java/util/Base64$Decoder".equals(methodRef.owner())
+            && "decode".equals(methodRef.name())
+            && ("([B)[B".equals(methodRef.descriptor())
+                || "(Ljava/lang/String;)[B".equals(methodRef.descriptor()));
+        if (!encoder && !decoder) {
+            return false;
+        }
+
+        final IrExpression input = popObject(classFile, method, stack);
+        final IrExpression receiver = popObject(classFile, method, stack);
+        final String receiverLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(receiverLocal, receiver));
+        final String inputLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(inputLocal, input));
+        final List<StackValue> successStack = List.copyOf(stack);
+
+        final String receiverPresent = "label_base64_receiver_present_" + instruction.offset();
+        instructions.add(IrInstruction.branchIf(
+            receiverPresent,
+            IrExpression.objectComparison("!=", IrExpression.objectLocal(receiverLocal), IrExpression.objectNull())
+        ));
+        routePendingPlatformException(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            "java/lang/NullPointerException",
+            IrExpression.stringLiteral("Base64 codec")
+        );
+        instructions.add(IrInstruction.label(receiverPresent));
+        stack.addAll(successStack);
+
+        final String inputPresent = "label_base64_input_present_" + instruction.offset();
+        instructions.add(IrInstruction.branchIf(
+            inputPresent,
+            IrExpression.objectComparison("!=", IrExpression.objectLocal(inputLocal), IrExpression.objectNull())
+        ));
+        routePendingPlatformException(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            "java/lang/NullPointerException",
+            IrExpression.stringLiteral("src")
+        );
+        instructions.add(IrInstruction.label(inputPresent));
+        stack.addAll(successStack);
+
+        if (decoder) {
+            final String statusLocal = "int" + localDeclarations.size();
+            localDeclarations.put(
+                Integer.MIN_VALUE + localDeclarations.size(),
+                new IrLocal(IrType.INT, statusLocal)
+            );
+            final boolean stringInput = "(Ljava/lang/String;)[B".equals(methodRef.descriptor());
+            instructions.add(IrInstruction.assignInt(
+                statusLocal,
+                IrExpression.intCall(
+                    stringInput ? "javan_base64_decode_string_status" : "javan_base64_decode_bytes_status",
+                    List.of(IrExpression.objectLocal(receiverLocal), IrExpression.objectLocal(inputLocal))
+                )
+            ));
+            final String validInput = "label_base64_input_valid_" + instruction.offset();
+            instructions.add(IrInstruction.branchIf(
+                validInput,
+                IrExpression.intComparison("==", IrExpression.intLocal(statusLocal), IrExpression.intLiteral(0))
+            ));
+            routePendingPlatformException(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                pendingExceptionHandlerStacks,
+                sourceLines,
+                "java/lang/IllegalArgumentException",
+                IrExpression.stringLiteral("Invalid Base64 input")
+            );
+            instructions.add(IrInstruction.label(validInput));
+            stack.addAll(successStack);
+        }
+
+        final String symbol;
+        if (encoder) {
+            symbol = "encodeToString".equals(methodRef.name())
+                ? "javan_base64_encode_string"
+                : "javan_base64_encode_bytes";
+        } else {
+            symbol = "(Ljava/lang/String;)[B".equals(methodRef.descriptor())
+                ? "javan_base64_decode_string"
+                : "javan_base64_decode_bytes";
+        }
+        pushObjectCall(
+            instructions,
+            stack,
+            localDeclarations,
+            symbol,
+            List.of(IrExpression.objectLocal(receiverLocal), IrExpression.objectLocal(inputLocal))
+        );
+        return true;
     }
 
     static void routePendingPlatformException(

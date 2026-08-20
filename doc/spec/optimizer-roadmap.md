@@ -16,8 +16,8 @@ Runtime module families:
 
 - `random` implemented for default `SecureRandom` byte generation and version-4 UUIDs
 - `time` implemented for time intrinsics
-- `strings` implemented for current string helpers
-- `arrays` implemented for current array helpers
+- `strings` implemented for current string helpers and basic Base64 text output/input
+- `arrays` implemented for current array helpers and basic Base64 byte input/output
 - `io` planned
 
 Runtime initialization hooks:
@@ -121,6 +121,7 @@ Intrinsic status:
 | `System.nanoTime` | implemented |
 | `SecureRandom.nextBytes` | implemented for the default constructor through OS entropy |
 | `UUID.randomUUID` | implemented through OS entropy with canonical version-4 text |
+| basic `Base64` encoder/decoder | implemented for byte arrays, encoded strings, strict basic-alphabet validation, padding, and legal unpadded final units; URL, MIME, streams, no-padding mode, and destination-buffer overloads remain unsupported |
 
 Auto-substitution candidates:
 
@@ -129,7 +130,6 @@ Auto-substitution candidates:
 - `Path.of`
 - `Files.readString`
 - `Files.writeString`
-- Base64 encoder/decoder
 
 Reports:
 

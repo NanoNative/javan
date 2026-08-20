@@ -241,6 +241,7 @@ final class CiParallelWorkflowSurfaceTest {
                 "generatedRuntimeExecutesBasicWindowsProbeWhenHostCompilerIsAvailable",
                 "secureRandomFillsByteArraysFromOsEntropy",
                 "randomUuidUsesVersionFourVariantTwoAndCanonicalText",
+                "basicBase64CodecHandlesPaddingBinaryDataAndStrictFailures",
                 "runtimeHostThreadGetsDistinctCurrentThreadAndDetachesCleanly",
                 "runtimeConcurrentHostThreadsCanAttachCollectDetachWithoutLeakingRoots",
                 "runtimeHostThreadRootFramesStayPublishedAcrossConcurrentGc",
