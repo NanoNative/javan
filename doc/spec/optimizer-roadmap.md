@@ -91,7 +91,7 @@ Safety rules:
 
 Release-mode optimization backlog:
 
-- smart dead-code elimination for unreachable classes, methods, fields, constructors, runtime modules, intrinsics, strings, vtables, and dispatch tables
+- extend dead-code elimination beyond generated class metadata to unreachable methods, fields, constructors, runtime modules, intrinsics, strings, vtables, and dispatch tables
 - expand stack allocation to repeated sites only when publication, identity, and repeated-site lifetime are proven
 - arena allocation for scoped temporary object graphs
 - devirtualization

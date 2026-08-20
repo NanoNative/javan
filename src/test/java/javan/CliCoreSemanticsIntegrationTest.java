@@ -21,6 +21,46 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @NativeTest
 final class CliCoreSemanticsIntegrationTest extends CliIntegrationSupport {
     @Test
+    void buildOmitsUnusedClassMetadataWithoutRenumberingLiveTypes() throws Exception {
+        final Path project = project("reachable-class-metadata");
+        writeJava(project, "com.acme.AlphaUnused", """
+            package com.acme;
+
+            final class AlphaUnused {
+                Object payload;
+            }
+            """);
+        writeJava(project, "com.acme.Used", """
+            package com.acme;
+
+            final class Used {
+                Object payload;
+            }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new Used().getClass().getName());
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/reachable-class-metadata").toString())).stdout())
+            .isEqualTo("com.acme.Used\n");
+        assertThat(Files.readString(project.resolve(".javan/generated/main.c")))
+            .contains("javan_class_com_acme_Used", "\"com.acme.Used\"")
+            .doesNotContain("javan_class_com_acme_AlphaUnused", "\"com.acme.AlphaUnused\"");
+    }
+
+    @Test
     void staticHelperCallBuilds() throws Exception {
         final Path project = project("helper");
         writeJava(project, "com.acme.Main", """

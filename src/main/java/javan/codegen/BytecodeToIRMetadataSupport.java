@@ -1,10 +1,16 @@
 package javan.codegen;
 
+import javan.analysis.CallGraph;
+import javan.analysis.ClassInitializationGraph;
 import javan.analysis.EntryPoint;
 import javan.analysis.GeneratedObjectCloneSupport;
 import javan.classfile.ClassFile;
+import javan.classfile.CodeAttribute;
+import javan.classfile.CodeException;
 import javan.classfile.FieldInfo;
+import javan.classfile.Instruction;
 import javan.classfile.MethodInfo;
+import javan.classfile.MethodRef;
 import javan.ir.IrClass;
 import javan.ir.IrExpression;
 import javan.ir.IrField;
@@ -13,7 +19,9 @@ import javan.ir.IrType;
 import javan.util.Strings2;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -38,6 +46,125 @@ final class BytecodeToIRMetadataSupport {
             ));
         }
         return List.copyOf(result);
+    }
+
+    static List<IrClass> lowerReachableClasses(
+        final Map<String, ClassFile> classes,
+        final CallGraph callGraph,
+        final ClassInitializationGraph.Result classInitialization
+    ) {
+        if (!callGraph.instantiatedTypes().complete()) {
+            return lowerClasses(classes);
+        }
+        final Set<String> retained = new HashSet<>();
+        for (final EntryPoint entryPoint : callGraph.reachableMethods()) {
+            if (isClassForName(entryPoint.className(), entryPoint.methodName(), entryPoint.descriptor())) {
+                return lowerClasses(classes);
+            }
+            addClass(classes, retained, entryPoint.className());
+            final ClassFile owner = classes.get(entryPoint.className());
+            final Optional<MethodInfo> method = owner == null
+                ? Optional.empty()
+                : owner.method(entryPoint.methodName(), entryPoint.descriptor());
+            if (method.isEmpty()) {
+                continue;
+            }
+            final Optional<CodeAttribute> methodCode = method.orElseThrow().code();
+            if (methodCode.isEmpty()) {
+                continue;
+            }
+            final CodeAttribute code = methodCode.orElseThrow();
+            for (final CodeException handler : code.exceptionTable()) {
+                if (handler.catchType().isPresent()) {
+                    addClass(classes, retained, handler.catchType().orElseThrow());
+                }
+            }
+            for (final Instruction instruction : code.instructions()) {
+                if (instruction.className().isPresent()) {
+                    addClass(classes, retained, instruction.className().orElseThrow());
+                }
+                if (instruction.methodRef().isPresent()) {
+                    final MethodRef reference = instruction.methodRef().orElseThrow();
+                    if (isClassForName(reference)) {
+                        return lowerClasses(classes);
+                    }
+                    addClass(classes, retained, reference.owner());
+                }
+                if (instruction.fieldRef().isPresent()) {
+                    addClass(classes, retained, instruction.fieldRef().orElseThrow().owner());
+                }
+            }
+        }
+        for (final String type : callGraph.instantiatedTypes().types()) {
+            addClass(classes, retained, type);
+        }
+        for (final Map.Entry<String, List<String>> entry : classInitialization.dependencies().entrySet()) {
+            addClass(classes, retained, entry.getKey());
+            for (final String dependency : entry.getValue()) {
+                addClass(classes, retained, dependency);
+            }
+        }
+        final Map<String, ClassFile> selected = new LinkedHashMap<>();
+        for (final ClassFile classFile : sortedClasses(classes)) {
+            if (retained.contains(classFile.name())) {
+                selected.put(classFile.name(), classFile);
+            }
+        }
+        return lowerClasses(selected);
+    }
+
+    static Map<String, Integer> retainedTypeIds(
+        final Map<String, ClassFile> classes,
+        final List<IrClass> retainedClasses
+    ) {
+        final Set<String> retained = new HashSet<>();
+        for (final IrClass classInfo : retainedClasses) {
+            retained.add(classInfo.jvmName());
+        }
+        final Map<String, Integer> result = new LinkedHashMap<>();
+        final List<ClassFile> sorted = sortedClasses(classes);
+        for (int index = 0; index < sorted.size(); index++) {
+            final String name = sorted.get(index).name();
+            if (retained.contains(name)) {
+                result.put(name, index + 1);
+            }
+        }
+        return Collections.unmodifiableMap(result);
+    }
+
+    private static boolean isClassForName(final MethodRef reference) {
+        return isClassForName(reference.owner(), reference.name(), reference.descriptor());
+    }
+
+    private static boolean isClassForName(final String owner, final String name, final String descriptor) {
+        return "java/lang/Class".equals(owner)
+            && "forName".equals(name)
+            && "(Ljava/lang/String;)Ljava/lang/Class;".equals(descriptor);
+    }
+
+    private static void addClass(
+        final Map<String, ClassFile> classes,
+        final Set<String> retained,
+        final String reference
+    ) {
+        if (reference == null || reference.isEmpty()) {
+            return;
+        }
+        String name = reference;
+        while (name.startsWith("[")) {
+            name = name.substring(1);
+        }
+        if (name.startsWith("L") && name.endsWith(";")) {
+            name = name.substring(1, name.length() - 1);
+        }
+        final ClassFile classFile = classes.get(name);
+        if (classFile == null || !retained.add(name)) {
+            return;
+        }
+        addClass(classes, retained, classFile.superName());
+        for (final String interfaceName : classFile.interfaces()) {
+            addClass(classes, retained, interfaceName);
+        }
     }
     static List<EntryPoint> sortedEntryPoints(final List<EntryPoint> entries) {
         final List<EntryPoint> result = new ArrayList<>();

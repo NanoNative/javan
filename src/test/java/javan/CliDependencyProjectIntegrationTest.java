@@ -218,7 +218,7 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void checkWritesDependencyAndLicenseReportsForResolvedClasspath() throws Exception {
+    void buildReportsDependenciesAndOmitsUnusedDependencyMetadata() throws Exception {
         final Path used = dependencyJarWithMavenLicense("usedlib", "dep.Used", """
             package dep;
 
@@ -259,9 +259,14 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
             }
             """);
 
-        final CliRun run = run(tempDir, "check", project.toString(), "--classpath", used.toString(), "--classpath", unused.toString());
+        final CliRun run = run(tempDir, "build", project.toString(), "--classpath", used.toString(), "--classpath", unused.toString());
 
         assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/dependency-reports").toString())).stdout())
+            .isEqualTo("7\n");
+        assertThat(Files.readString(project.resolve(".javan/generated/main.c")))
+            .contains("javan_class_dep_Used", "\"dep.Used\"")
+            .doesNotContain("javan_class_unused_Unused", "\"unused.Unused\"");
         final String dependencies = Files.readString(project.resolve(".javan/reports/dependencies.json"));
         final String licenses = Files.readString(project.resolve(".javan/reports/licenses.json"));
         assertThat(dependencies).contains(

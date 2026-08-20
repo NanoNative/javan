@@ -322,6 +322,171 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void completeReachabilityOmitsUnusedClassMetadata() {
+        final MethodInfo main = method(0x0008, "main", "()V", 0, 0, plain(0, 177, "return"));
+        final ClassFile mainClass = classFile(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            List.of(),
+            List.of(main)
+        );
+        final ClassFile unused = classFile(
+            "com/acme/Unused",
+            "java/lang/Object",
+            0,
+            List.of(),
+            List.of(new FieldInfo(0, "payload", "Ljava/lang/Object;")),
+            List.of()
+        );
+        final EntryPoint entryPoint = new EntryPoint(mainClass.name(), main.name(), main.descriptor());
+        final CallGraph graph = new CallGraph(
+            entryPoint,
+            List.of(entryPoint),
+            List.of(),
+            List.of(),
+            FunctionValueFlow.Result.unavailable(),
+            new InstantiatedTypeAnalysis.Result(List.of(), true)
+        );
+
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(mainClass.name(), mainClass, unused.name(), unused),
+            graph,
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.classes()).extracting(IrClass::jvmName).containsExactly("com/acme/Main");
+    }
+
+    @Test
+    void classForNameReachabilityRetainsClosedWorldClassMetadata() {
+        final MethodInfo main = method(
+            0x0008,
+            "main",
+            "()V",
+            1,
+            0,
+            stringConstant(0, "com.acme.Unused"),
+            invokeStatic(1, new MethodRef("java/lang/Class", "forName", "(Ljava/lang/String;)Ljava/lang/Class;")),
+            plain(4, 87, "pop"),
+            plain(5, 177, "return")
+        );
+        final ClassFile mainClass = classFile(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            List.of(),
+            List.of(main)
+        );
+        final ClassFile unused = classFile(
+            "com/acme/Unused",
+            "java/lang/Object",
+            0,
+            List.of(),
+            List.of(),
+            List.of()
+        );
+        final EntryPoint entryPoint = new EntryPoint(mainClass.name(), main.name(), main.descriptor());
+        final CallGraph graph = new CallGraph(
+            entryPoint,
+            List.of(entryPoint),
+            List.of(),
+            List.of(),
+            FunctionValueFlow.Result.unavailable(),
+            new InstantiatedTypeAnalysis.Result(List.of(), true)
+        );
+
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(mainClass.name(), mainClass, unused.name(), unused),
+            graph,
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.classes()).extracting(IrClass::jvmName)
+            .containsExactly("com/acme/Main", "com/acme/Unused");
+    }
+
+    @Test
+    void reachableClassMetadataKeepsHierarchyAndOriginalTypeIds() throws Exception {
+        final MethodInfo main = method(
+            0x0008,
+            "main",
+            "()V",
+            1,
+            0,
+            classInstruction(0, 187, "new", "com/acme/Child"),
+            plain(3, 87, "pop"),
+            plain(4, 177, "return")
+        );
+        final ClassFile alphaUnused = classFile(
+            "com/acme/AlphaUnused", "java/lang/Object", 0, List.of(), List.of(), List.of()
+        );
+        final ClassFile base = classFile(
+            "com/acme/Base", "java/lang/Object", 0, List.of(), List.of(), List.of()
+        );
+        final ClassFile child = classFile(
+            "com/acme/Child", base.name(), 0, List.of("com/acme/Marker"), List.of(), List.of()
+        );
+        final ClassFile mainClass = classFile(
+            "com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(main)
+        );
+        final ClassFile marker = classFile(
+            "com/acme/Marker", "java/lang/Object", 0x0200, List.of(), List.of(), List.of()
+        );
+        final EntryPoint entryPoint = new EntryPoint(mainClass.name(), main.name(), main.descriptor());
+        final CallGraph graph = new CallGraph(
+            entryPoint,
+            List.of(entryPoint),
+            List.of(),
+            List.of(),
+            FunctionValueFlow.Result.unavailable(),
+            new InstantiatedTypeAnalysis.Result(
+                List.of(new InstantiatedTypeAnalysis.Fact(
+                    child.name(),
+                    List.of(InstantiatedTypeAnalysis.Origin.ALLOCATION)
+                )),
+                true
+            )
+        );
+
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                alphaUnused.name(), alphaUnused,
+                base.name(), base,
+                child.name(), child,
+                mainClass.name(), mainClass,
+                marker.name(), marker
+            ),
+            graph,
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.classes()).extracting(IrClass::jvmName).containsExactly(
+            "com/acme/Base",
+            "com/acme/Child",
+            "com/acme/Main",
+            "com/acme/Marker"
+        );
+        assertThat(program.classTypeIds()).containsExactly(
+            Map.entry("com/acme/Base", 2),
+            Map.entry("com/acme/Child", 3),
+            Map.entry("com/acme/Main", 4),
+            Map.entry("com/acme/Marker", 5)
+        );
+        assertThat(Files.readString(new CCodegen().generate(
+            program,
+            tempDir.resolve("reachable-class-metadata")
+        ))).contains(
+            "{2, \"com.acme.Base\"",
+            "{3, \"com.acme.Child\"",
+            "{4, \"com.acme.Main\"",
+            "{5, \"com.acme.Marker\""
+        );
+    }
+
+    @Test
     void lowersInheritedInstanceFieldsIntoConcreteClassLayout() {
         final MethodInfo main = method(0x0008, "main", "()V", 0, 0, plain(0, 177, "return"));
         final ClassFile marker = classFile(

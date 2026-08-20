@@ -118,6 +118,11 @@ Unknown external receivers remain conservative. The resulting receiver types and
 to `.javan/reports/instantiated-types.json` and `.javan/reports/instantiated-types.md`, and the C
 backend consumes the same facts as reachability.
 
+The C backend emits class structs and descriptors only for classes required by reachable code,
+instantiated types, class initialization, and their hierarchies. Stable type IDs keep lowered
+instructions correct when unused classes leave gaps. Incomplete analysis or reachable
+`Class.forName(String)` retains the complete parsed class set conservatively.
+
 Direct `Function.apply` and `Supplier.get` calls refine that global receiver set with exact types
 tracked through locals, casts, final fields, direct arguments, returns, and control-flow merges. Sets
 of up to four types are written to `.javan/reports/receiver-provenance.json` and its Markdown summary.
