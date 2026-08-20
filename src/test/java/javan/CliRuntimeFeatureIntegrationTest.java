@@ -1034,6 +1034,33 @@ final class CliRuntimeFeatureIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void checkReportsUuidRandomRuntimeModule() throws Exception {
+        final Path project = project("uuid-random-runtime-module");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.UUID;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(UUID.randomUUID().toString());
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/runtime-features.json"))).contains(
+            "\"reachableRuntimeModules\": [\"core\", \"io\", \"random\", \"strings\"]",
+            "\"status\": \"pass\""
+        );
+    }
+
+    @Test
     void checkAcceptsReachableAtomicBooleanConstructorsAndGet() throws Exception {
         final Path project = project("atomic-boolean-runtime");
         writeJava(project, "com.acme.Main", """

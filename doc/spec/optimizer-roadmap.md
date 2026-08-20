@@ -14,7 +14,7 @@ Implemented now:
 
 Runtime module families:
 
-- `random` implemented for default `SecureRandom` byte generation
+- `random` implemented for default `SecureRandom` byte generation and version-4 UUIDs
 - `time` implemented for time intrinsics
 - `strings` implemented for current string helpers
 - `arrays` implemented for current array helpers
@@ -22,7 +22,7 @@ Runtime module families:
 
 Runtime initialization hooks:
 
-- default `SecureRandom` needs no user hook; it reads OS entropy when bytes are requested
+- default `SecureRandom` and `UUID.randomUUID()` need no user hook; they read OS entropy on demand
 - `initTime()` implemented through runtime time helpers
 - `initConsole()` planned
 - `initHeap()` planned
@@ -120,7 +120,7 @@ Intrinsic status:
 | `System.currentTimeMillis` | implemented |
 | `System.nanoTime` | implemented |
 | `SecureRandom.nextBytes` | implemented for the default constructor through OS entropy |
-| `UUID.randomUUID` | planned |
+| `UUID.randomUUID` | implemented through OS entropy with canonical version-4 text |
 
 Auto-substitution candidates:
 
@@ -129,7 +129,6 @@ Auto-substitution candidates:
 - `Path.of`
 - `Files.readString`
 - `Files.writeString`
-- `UUID.randomUUID`
 - Base64 encoder/decoder
 
 Reports:

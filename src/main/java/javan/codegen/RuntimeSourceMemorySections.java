@@ -77,6 +77,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_RUNTIME_KIND_THROWABLE_STATE 34
         #define JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE 35
         #define JAVAN_RUNTIME_KIND_SECURE_RANDOM 36
+        #define JAVAN_RUNTIME_KIND_UUID 37
         #define JAVAN_LIST_VIEW_UNMODIFIABLE 1
         #define JAVAN_LIST_VIEW_SET 2
         #define JAVAN_MAP_VIEW_UNMODIFIABLE 1
@@ -205,6 +206,12 @@ final class RuntimeSourceMemorySections {
             int magic;
             int reserved0;
         } javan_secure_random_state;
+
+        typedef struct {
+            int magic;
+            int reserved0;
+            unsigned char bytes[16];
+        } javan_uuid_state;
 
         typedef struct {
             int magic;
@@ -436,6 +443,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_ATOMIC_INTEGER_MAGIC 0x4a415449
         #define JAVAN_ATOMIC_REFERENCE_MAGIC 0x4a415452
         #define JAVAN_SECURE_RANDOM_MAGIC 0x4a53524e
+        #define JAVAN_UUID_MAGIC 0x4a555549
         #define JAVAN_DATE_TIME_FORMATTER_MAGIC 0x4a445446
         #define JAVAN_DATE_TIME_FORMATTER_BUILDER_MAGIC 0x4a445442
         #define JAVAN_TEXT_STYLE_MAGIC 0x4a545354
@@ -1513,7 +1521,8 @@ final class RuntimeSourceMemorySections {
                 || runtime_kind == JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA
                 || runtime_kind == JAVAN_RUNTIME_KIND_THROWABLE_STATE
                 || runtime_kind == JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE
-                || runtime_kind == JAVAN_RUNTIME_KIND_SECURE_RANDOM;
+                || runtime_kind == JAVAN_RUNTIME_KIND_SECURE_RANDOM
+                || runtime_kind == JAVAN_RUNTIME_KIND_UUID;
             javan_heap_maybe_validate();
             javan_runtime_lock_leave();
         }
@@ -1813,6 +1822,13 @@ final class RuntimeSourceMemorySections {
                 if (state->magic != JAVAN_SECURE_RANDOM_MAGIC) {
                     javan_panic("invalid runtime secure random metadata");
                 }
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_UUID) {
+                javan_uuid_state* state = (javan_uuid_state*) node->value;
+                if (state->magic != JAVAN_UUID_MAGIC
+                    || (state->bytes[6] & 0xf0U) != 0x40U
+                    || (state->bytes[8] & 0xc0U) != 0x80U) {
+                    javan_panic("invalid runtime UUID metadata");
+                }
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA) {
                 javan_materialized_lambda_state* state =
                     javan_materialized_lambda_wrapper_state_unlocked(node->value);
@@ -2013,6 +2029,9 @@ final class RuntimeSourceMemorySections {
             if (snapshot.runtime_kind == JAVAN_RUNTIME_KIND_INET_SOCKET_ADDRESS) {
                 return javan_inet_socket_address_to_string(value);
             }
+            if (snapshot.runtime_kind == JAVAN_RUNTIME_KIND_UUID) {
+                return javan_uuid_to_string(value);
+            }
             if (snapshot.type_id == JAVAN_TYPE_JAVA_LANG_INTEGER) {
                 return javan_string_value_of_int(javan_integer_int_value(value));
             }
@@ -2174,7 +2193,8 @@ final class RuntimeSourceMemorySections {
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_THROWABLE_STATE
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE
-                    && node->runtime_kind != JAVAN_RUNTIME_KIND_SECURE_RANDOM) {
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_SECURE_RANDOM
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_UUID) {
                     javan_panic("invalid runtime allocation kind");
                 }
                 javan_validate_runtime_container_references(node);
@@ -7857,31 +7877,29 @@ final class RuntimeSourceMemorySections {
 
         static void javan_array_kind_checked(javan_array_header* array, int expected_kind);
 
-        void javan_secure_random_next_bytes(void* value, void* array) {
-            if (value == NULL || ((javan_secure_random_state*) value)->magic != JAVAN_SECURE_RANDOM_MAGIC) {
-                javan_panic("invalid SecureRandom state");
+        static void javan_os_random_bytes(unsigned char* target, int length) {
+            if (length < 0 || (length > 0 && target == NULL)) {
+                javan_panic("invalid OS entropy target");
             }
-            javan_byte_array* bytes = (javan_byte_array*) javan_array_checked(array);
-            javan_array_kind_checked((javan_array_header*) bytes, JAVAN_ARRAY_KIND_BYTE);
-            if (bytes->length == 0) {
+            if (length == 0) {
                 return;
             }
         #if defined(_WIN32)
             HMODULE library = LoadLibraryA("bcrypt.dll");
             if (library == NULL) {
-                javan_panic("SecureRandom could not load Windows system entropy");
+                javan_panic("could not load Windows system entropy");
             }
             typedef LONG (WINAPI *javan_bcrypt_gen_random_fn)(void*, unsigned char*, ULONG, ULONG);
             javan_bcrypt_gen_random_fn generate =
                 (javan_bcrypt_gen_random_fn) (void*) GetProcAddress(library, "BCryptGenRandom");
             if (generate == NULL) {
                 FreeLibrary(library);
-                javan_panic("SecureRandom could not resolve Windows system entropy");
+                javan_panic("could not resolve Windows system entropy");
             }
-            LONG status = generate(NULL, (unsigned char*) bytes->values, (ULONG) bytes->length, 0x00000002UL);
+            LONG status = generate(NULL, target, (ULONG) length, 0x00000002UL);
             FreeLibrary(library);
             if (status < 0) {
-                javan_panic("SecureRandom could not read Windows system entropy");
+                javan_panic("could not read Windows system entropy");
             }
         #else
             int descriptor;
@@ -7889,22 +7907,66 @@ final class RuntimeSourceMemorySections {
                 descriptor = open("/dev/urandom", O_RDONLY);
             } while (descriptor < 0 && errno == EINTR);
             if (descriptor < 0) {
-                javan_panic("SecureRandom could not open OS entropy");
+                javan_panic("could not open OS entropy");
             }
             int offset = 0;
-            while (offset < bytes->length) {
-                ssize_t count = read(descriptor, bytes->values + offset, (size_t) (bytes->length - offset));
+            while (offset < length) {
+                ssize_t count = read(descriptor, target + offset, (size_t) (length - offset));
                 if (count > 0) {
                     offset += (int) count;
                 } else if (count < 0 && errno == EINTR) {
                     continue;
                 } else {
                     close(descriptor);
-                    javan_panic("SecureRandom could not read OS entropy");
+                    javan_panic("could not read OS entropy");
                 }
             }
             close(descriptor);
         #endif
+        }
+
+        void javan_secure_random_next_bytes(void* value, void* array) {
+            if (value == NULL || ((javan_secure_random_state*) value)->magic != JAVAN_SECURE_RANDOM_MAGIC) {
+                javan_panic("invalid SecureRandom state");
+            }
+            javan_byte_array* bytes = (javan_byte_array*) javan_array_checked(array);
+            javan_array_kind_checked((javan_array_header*) bytes, JAVAN_ARRAY_KIND_BYTE);
+            javan_os_random_bytes((unsigned char*) bytes->values, bytes->length);
+        }
+
+        void* javan_uuid_random(void) {
+            javan_uuid_state* uuid = (javan_uuid_state*) javan_alloc(sizeof(javan_uuid_state));
+            uuid->magic = JAVAN_UUID_MAGIC;
+            uuid->reserved0 = 0;
+            javan_os_random_bytes(uuid->bytes, 16);
+            uuid->bytes[6] = (unsigned char) ((uuid->bytes[6] & 0x0fU) | 0x40U);
+            uuid->bytes[8] = (unsigned char) ((uuid->bytes[8] & 0x3fU) | 0x80U);
+            javan_update_runtime_allocation_kind((void*) uuid, JAVAN_RUNTIME_KIND_UUID);
+            return (void*) uuid;
+        }
+
+        void* javan_uuid_to_string(void* value) {
+            if (value == NULL || ((javan_uuid_state*) value)->magic != JAVAN_UUID_MAGIC) {
+                javan_panic("invalid UUID state");
+            }
+            static const char hex[] = "0123456789abcdef";
+            void* uuid_root = value;
+            void** roots[] = {(void**) &uuid_root};
+            javan_root_frame_push(roots, 1);
+            javan_uuid_state* uuid = (javan_uuid_state*) uuid_root;
+            char* text = javan_string_alloc(37);
+            int output = 0;
+            for (int index = 0; index < 16; index++) {
+                unsigned char byte = uuid->bytes[index];
+                text[output++] = hex[byte >> 4];
+                text[output++] = hex[byte & 0x0fU];
+                if (index == 3 || index == 5 || index == 7 || index == 9) {
+                    text[output++] = '-';
+                }
+            }
+            text[output] = '\\0';
+            javan_root_frame_pop(roots);
+            return (void*) text;
         }
 
         static void javan_array_bounds_checked(javan_array_header* array, int index) {

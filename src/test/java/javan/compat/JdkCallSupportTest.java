@@ -4377,4 +4377,17 @@ final class JdkCallSupportTest {
             JdkCallSupport.isSupported(new MethodRef("java/security/SecureRandom", "setSeed", "(J)V"))
         )).containsExactly(false, false, false);
     }
+
+    @Test
+    void uuidRandomGenerationAndTextAreSupportedByTheRandomRuntime() {
+        final MethodRef randomUuid = new MethodRef("java/util/UUID", "randomUUID", "()Ljava/util/UUID;");
+        final MethodRef toString = new MethodRef("java/util/UUID", "toString", "()Ljava/lang/String;");
+
+        assertThat(List.of(
+            JdkCallSupport.isSupported(randomUuid),
+            JdkCallSupport.isSupported(toString)
+        )).containsExactly(true, true);
+        assertThat(JdkCallSupport.runtimeModules(randomUuid)).containsExactly("random");
+        assertThat(JdkCallSupport.runtimeModules(toString)).containsExactly("random");
+    }
 }

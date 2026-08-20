@@ -11470,6 +11470,44 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersUuidRandomGenerationToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/util/UUID;",
+            1,
+            0,
+            invokeStatic(0, new MethodRef("java/util/UUID", "randomUUID", "()Ljava/util/UUID;")),
+            plain(1, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall("javan_uuid_random", List.of()))
+        );
+    }
+
+    @Test
+    void lowersUuidTextToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/UUID;)Ljava/lang/String;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/util/UUID", "toString", "()Ljava/lang/String;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_uuid_to_string",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
     void lowersMapOfEmptyToRuntimeHelper() {
         final IrFunction function = lowerMain(method(
             0x0008,

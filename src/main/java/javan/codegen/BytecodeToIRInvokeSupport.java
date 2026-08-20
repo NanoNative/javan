@@ -1064,6 +1064,15 @@ final class BytecodeToIRInvokeSupport {
             ));
             return;
         }
+        if ("java/util/UUID".equals(methodRef.owner())
+            && "toString".equals(methodRef.name())
+            && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_uuid_to_string",
+                List.of(popObject(classFile, method, stack))
+            )));
+            return;
+        }
         if (lowerAtomicBooleanInstanceCall(classFile, method, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
@@ -2121,6 +2130,12 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if (lowerJdkFileStaticCall(classFile, method, methodRef, instructions, stack, localDeclarations)) {
+            return;
+        }
+        if ("java/util/UUID".equals(methodRef.owner())
+            && "randomUUID".equals(methodRef.name())
+            && "()Ljava/util/UUID;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_uuid_random", List.of())));
             return;
         }
         if (lowerJdkHttpStaticCall(classFile, method, methodRef, stack)) {
