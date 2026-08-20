@@ -3241,6 +3241,43 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsCompatibilityProof
+    void secureRandomFillsByteArraysFromOsEntropy() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* random = javan_secure_random_new();
+                void* first = javan_byte_array_new(64);
+                void* second = javan_byte_array_new(64);
+                void* empty = javan_byte_array_new(0);
+                void** roots[] = { &random, &first, &second, &empty };
+                javan_root_frame_push(roots, 4);
+
+                javan_secure_random_next_bytes(random, first);
+                javan_secure_random_next_bytes(random, second);
+                javan_secure_random_next_bytes(random, empty);
+                int non_zero = 0;
+                int different = 0;
+                for (int index = 0; index < 64; index++) {
+                    non_zero |= javan_byte_array_get(first, index) != 0;
+                    different |= javan_byte_array_get(first, index) != javan_byte_array_get(second, index);
+                }
+                printf("%d:%d:%d\\n", javan_array_length(empty), non_zero, different);
+                javan_root_frame_pop(roots);
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("0:1:1\n");
+    }
+
+    @Test
     void writeEmitsWindowsHighResolutionNanoTimeFallback() throws Exception {
         final Path runtime = new RuntimeFiles().write(tempDir);
 

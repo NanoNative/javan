@@ -1744,6 +1744,14 @@ final class BytecodeToIRDynamicSupport {
             stack.add(StackValue.objectExpression(local));
             return;
         }
+        if ("java/security/SecureRandom".equals(owner)) {
+            final String localName = "object" + localDeclarations.size();
+            localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
+            final IrExpression local = IrExpression.objectLocal(localName);
+            instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall("javan_secure_random_new", List.of())));
+            stack.add(StackValue.objectExpression(local));
+            return;
+        }
         if ("java/util/concurrent/atomic/AtomicInteger".equals(owner)) {
             final String localName = "object" + localDeclarations.size();
             localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));

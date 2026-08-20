@@ -76,6 +76,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_RUNTIME_KIND_RESOURCE_INPUT_STREAM 33
         #define JAVAN_RUNTIME_KIND_THROWABLE_STATE 34
         #define JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE 35
+        #define JAVAN_RUNTIME_KIND_SECURE_RANDOM 36
         #define JAVAN_LIST_VIEW_UNMODIFIABLE 1
         #define JAVAN_LIST_VIEW_SET 2
         #define JAVAN_MAP_VIEW_UNMODIFIABLE 1
@@ -199,6 +200,11 @@ final class RuntimeSourceMemorySections {
             int reserved0;
             void* value;
         } javan_atomic_reference_state;
+
+        typedef struct {
+            int magic;
+            int reserved0;
+        } javan_secure_random_state;
 
         typedef struct {
             int magic;
@@ -429,6 +435,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_MAP_ENTRY_MAGIC 0x4a4d454e
         #define JAVAN_ATOMIC_INTEGER_MAGIC 0x4a415449
         #define JAVAN_ATOMIC_REFERENCE_MAGIC 0x4a415452
+        #define JAVAN_SECURE_RANDOM_MAGIC 0x4a53524e
         #define JAVAN_DATE_TIME_FORMATTER_MAGIC 0x4a445446
         #define JAVAN_DATE_TIME_FORMATTER_BUILDER_MAGIC 0x4a445442
         #define JAVAN_TEXT_STYLE_MAGIC 0x4a545354
@@ -1505,7 +1512,8 @@ final class RuntimeSourceMemorySections {
                 || runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE
                 || runtime_kind == JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA
                 || runtime_kind == JAVAN_RUNTIME_KIND_THROWABLE_STATE
-                || runtime_kind == JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE;
+                || runtime_kind == JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE
+                || runtime_kind == JAVAN_RUNTIME_KIND_SECURE_RANDOM;
             javan_heap_maybe_validate();
             javan_runtime_lock_leave();
         }
@@ -1800,6 +1808,11 @@ final class RuntimeSourceMemorySections {
                     javan_panic("invalid runtime atomic reference metadata");
                 }
                 javan_validate_runtime_managed_reference(state->value);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_SECURE_RANDOM) {
+                javan_secure_random_state* state = (javan_secure_random_state*) node->value;
+                if (state->magic != JAVAN_SECURE_RANDOM_MAGIC) {
+                    javan_panic("invalid runtime secure random metadata");
+                }
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA) {
                 javan_materialized_lambda_state* state =
                     javan_materialized_lambda_wrapper_state_unlocked(node->value);
@@ -2160,7 +2173,8 @@ final class RuntimeSourceMemorySections {
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_THROWABLE_STATE
-                    && node->runtime_kind != JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE) {
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_SECURE_RANDOM) {
                     javan_panic("invalid runtime allocation kind");
                 }
                 javan_validate_runtime_container_references(node);
@@ -4865,6 +4879,15 @@ final class RuntimeSourceMemorySections {
             state->reserved0 = 0;
             state->value = 0LL;
             javan_update_runtime_allocation_kind(value, JAVAN_RUNTIME_KIND_ATOMIC_LONG);
+            return value;
+        }
+
+        void* javan_secure_random_new(void) {
+            void* value = javan_alloc(sizeof(javan_secure_random_state));
+            javan_secure_random_state* state = (javan_secure_random_state*) value;
+            state->magic = JAVAN_SECURE_RANDOM_MAGIC;
+            state->reserved0 = 0;
+            javan_update_runtime_allocation_kind(value, JAVAN_RUNTIME_KIND_SECURE_RANDOM);
             return value;
         }
 
@@ -7830,6 +7853,58 @@ final class RuntimeSourceMemorySections {
                 javan_panic("null array");
             }
             return (javan_array_header*) array;
+        }
+
+        static void javan_array_kind_checked(javan_array_header* array, int expected_kind);
+
+        void javan_secure_random_next_bytes(void* value, void* array) {
+            if (value == NULL || ((javan_secure_random_state*) value)->magic != JAVAN_SECURE_RANDOM_MAGIC) {
+                javan_panic("invalid SecureRandom state");
+            }
+            javan_byte_array* bytes = (javan_byte_array*) javan_array_checked(array);
+            javan_array_kind_checked((javan_array_header*) bytes, JAVAN_ARRAY_KIND_BYTE);
+            if (bytes->length == 0) {
+                return;
+            }
+        #if defined(_WIN32)
+            HMODULE library = LoadLibraryA("bcrypt.dll");
+            if (library == NULL) {
+                javan_panic("SecureRandom could not load Windows system entropy");
+            }
+            typedef LONG (WINAPI *javan_bcrypt_gen_random_fn)(void*, unsigned char*, ULONG, ULONG);
+            javan_bcrypt_gen_random_fn generate =
+                (javan_bcrypt_gen_random_fn) (void*) GetProcAddress(library, "BCryptGenRandom");
+            if (generate == NULL) {
+                FreeLibrary(library);
+                javan_panic("SecureRandom could not resolve Windows system entropy");
+            }
+            LONG status = generate(NULL, (unsigned char*) bytes->values, (ULONG) bytes->length, 0x00000002UL);
+            FreeLibrary(library);
+            if (status < 0) {
+                javan_panic("SecureRandom could not read Windows system entropy");
+            }
+        #else
+            int descriptor;
+            do {
+                descriptor = open("/dev/urandom", O_RDONLY);
+            } while (descriptor < 0 && errno == EINTR);
+            if (descriptor < 0) {
+                javan_panic("SecureRandom could not open OS entropy");
+            }
+            int offset = 0;
+            while (offset < bytes->length) {
+                ssize_t count = read(descriptor, bytes->values + offset, (size_t) (bytes->length - offset));
+                if (count > 0) {
+                    offset += (int) count;
+                } else if (count < 0 && errno == EINTR) {
+                    continue;
+                } else {
+                    close(descriptor);
+                    javan_panic("SecureRandom could not read OS entropy");
+                }
+            }
+            close(descriptor);
+        #endif
         }
 
         static void javan_array_bounds_checked(javan_array_header* array, int index) {

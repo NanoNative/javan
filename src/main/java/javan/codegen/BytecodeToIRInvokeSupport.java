@@ -1019,6 +1019,51 @@ final class BytecodeToIRInvokeSupport {
         if (lowerJdkFileInstanceCall(classFile, method, instruction, methodRef, stack)) {
             return;
         }
+        if ("java/security/SecureRandom".equals(methodRef.owner())
+            && "nextBytes".equals(methodRef.name())
+            && "([B)V".equals(methodRef.descriptor())) {
+            final IrExpression bytes = popObject(classFile, method, stack);
+            final IrExpression receiver = popObject(classFile, method, stack);
+            final String receiverLabel = "label_secure_random_receiver_" + instruction.offset();
+            instructions.add(IrInstruction.branchIf(
+                receiverLabel,
+                IrExpression.objectComparison("!=", receiver, IrExpression.objectNull())
+            ));
+            routePendingPlatformException(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                pendingExceptionHandlerStacks,
+                sourceLines,
+                "java/lang/NullPointerException",
+                IrExpression.stringLiteral("SecureRandom")
+            );
+            instructions.add(IrInstruction.label(receiverLabel));
+            final String bytesLabel = "label_secure_random_bytes_" + instruction.offset();
+            instructions.add(IrInstruction.branchIf(
+                bytesLabel,
+                IrExpression.objectComparison("!=", bytes, IrExpression.objectNull())
+            ));
+            routePendingPlatformException(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                pendingExceptionHandlerStacks,
+                sourceLines,
+                "java/lang/NullPointerException",
+                IrExpression.stringLiteral("bytes")
+            );
+            instructions.add(IrInstruction.label(bytesLabel));
+            instructions.add(IrInstruction.callStaticVoid(
+                "javan_secure_random_next_bytes",
+                List.of(receiver, bytes)
+            ));
+            return;
+        }
         if (lowerAtomicBooleanInstanceCall(classFile, method, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
@@ -2030,6 +2075,7 @@ final class BytecodeToIRInvokeSupport {
         }
         return "java/lang/Object".equals(methodRef.owner())
             || "java/lang/Record".equals(methodRef.owner())
+            || "java/security/SecureRandom".equals(methodRef.owner())
             || "java/util/concurrent/ThreadPoolExecutor$CallerRunsPolicy".equals(methodRef.owner());
     }
 

@@ -8097,6 +8097,65 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void secureRandomStaticInitializerSurvivesGcAndFillsBytes() throws Exception {
+        final Path project = project("secure-random-next-bytes");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.security.SecureRandom;
+
+            public final class Main {
+                private static final SecureRandom RANDOM = new SecureRandom();
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    for (int index = 0; index < 10_000; index++) {
+                        final byte[] ignored = new byte[64];
+                    }
+                    final byte[] first = new byte[64];
+                    final byte[] second = new byte[64];
+                    final byte[] empty = new byte[0];
+                    final SecureRandom random = RANDOM;
+                    try {
+                        random.nextBytes(null);
+                    } catch (final NullPointerException expected) {
+                        System.out.println("null");
+                    }
+                    final SecureRandom missing = null;
+                    try {
+                        missing.nextBytes(empty);
+                    } catch (final NullPointerException expected) {
+                        System.out.println("receiver");
+                    }
+                    RANDOM.nextBytes(first);
+                    RANDOM.nextBytes(second);
+                    boolean nonZero = false;
+                    boolean different = false;
+                    for (int index = 0; index < first.length; index++) {
+                        nonZero |= first[index] != 0;
+                        different |= first[index] != second[index];
+                    }
+                    System.out.println(nonZero);
+                    System.out.println(different);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(
+            project,
+            List.of(project.resolve(".javan/bin/secure-random-next-bytes").toString()),
+            defaultProcessTimeout(),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1")
+        ).stdout())
+            .isEqualTo("null\nreceiver\ntrue\ntrue\n");
+    }
+
+    @Test
     void atomicReferenceCompareAndSetSuccessBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("atomic-reference-compare-and-set-success");
         writeJava(project, "com.acme.Main", """

@@ -1007,6 +1007,33 @@ final class CliRuntimeFeatureIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void checkReportsSecureRandomRuntimeModule() throws Exception {
+        final Path project = project("secure-random-runtime-module");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.security.SecureRandom;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    new SecureRandom().nextBytes(new byte[8]);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/runtime-features.json"))).contains(
+            "\"reachableRuntimeModules\": [\"arrays\", \"core\", \"random\"]",
+            "\"status\": \"pass\""
+        );
+    }
+
+    @Test
     void checkAcceptsReachableAtomicBooleanConstructorsAndGet() throws Exception {
         final Path project = project("atomic-boolean-runtime");
         writeJava(project, "com.acme.Main", """

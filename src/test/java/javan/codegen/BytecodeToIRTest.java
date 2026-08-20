@@ -11422,6 +11422,54 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersSecureRandomDefaultConstructionToRuntimeObject() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/security/SecureRandom;",
+            2,
+            0,
+            classInstruction(0, 187, "new", "java/security/SecureRandom"),
+            plain(1, 89, "dup"),
+            invokeSpecial(2, new MethodRef("java/security/SecureRandom", "<init>", "()V")),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_secure_random_new", List.of())),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersSecureRandomNextBytesToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/security/SecureRandom;[B)V",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/security/SecureRandom", "nextBytes", "([B)V")),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.instructions()).contains(
+            IrInstruction.callStaticVoid(
+                "javan_secure_random_next_bytes",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            )
+        );
+        assertThat(function.instructions()).extracting(IrInstruction::op).contains(
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.THROW_PENDING,
+            IrInstruction.Op.CALL_STATIC_VOID,
+            IrInstruction.Op.RETURN_VOID
+        );
+    }
+
+    @Test
     void lowersMapOfEmptyToRuntimeHelper() {
         final IrFunction function = lowerMain(method(
             0x0008,

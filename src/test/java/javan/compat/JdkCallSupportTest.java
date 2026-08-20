@@ -4338,4 +4338,43 @@ final class JdkCallSupportTest {
             JdkCallSupport.isSupported(new MethodRef("java/lang/Character", "toString", "(C)Ljava/lang/String;"))
         )).containsExactly(true, true, true);
     }
+
+    @Test
+    void secureRandomDefaultConstructionAndByteGenerationAreSupported() {
+        assertThat(List.of(
+            JdkCallSupport.isSupported(new MethodRef("java/security/SecureRandom", "<init>", "()V")),
+            JdkCallSupport.isSupported(new MethodRef("java/security/SecureRandom", "nextBytes", "([B)V"))
+        )).containsExactly(true, true);
+    }
+
+    @Test
+    void secureRandomRequiresTheRandomRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new MethodRef(
+            "java/security/SecureRandom",
+            "nextBytes",
+            "([B)V"
+        ))).containsExactly("random");
+    }
+
+    @Test
+    void secureRandomNextBytesTransportsNullPointerException() {
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/security/SecureRandom",
+            "nextBytes",
+            "([B)V"
+        ))).containsExactly("java/lang/NullPointerException");
+    }
+
+    @Test
+    void secureRandomProviderAndSeedApisRemainUnsupported() {
+        assertThat(List.of(
+            JdkCallSupport.isSupported(new MethodRef(
+                "java/security/SecureRandom",
+                "getInstance",
+                "(Ljava/lang/String;)Ljava/security/SecureRandom;"
+            )),
+            JdkCallSupport.isSupported(new MethodRef("java/security/SecureRandom", "<init>", "([B)V")),
+            JdkCallSupport.isSupported(new MethodRef("java/security/SecureRandom", "setSeed", "(J)V"))
+        )).containsExactly(false, false, false);
+    }
 }
