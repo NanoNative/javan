@@ -1172,7 +1172,7 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void load() throws ClassNotFoundException {
-                    Class.forName("dep.Plugin");
+                    Class.forName("dep.Plugin", true, ClassLoader.getSystemClassLoader());
                 }
             }
             """);
@@ -1329,7 +1329,7 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) throws ClassNotFoundException {
-                    Class.forName("com.acme.Plugin");
+                    Class.forName("com.acme.Plugin", true, ClassLoader.getSystemClassLoader());
                 }
             }
             """);
@@ -1355,7 +1355,7 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void load() throws ClassNotFoundException {
-                    Class.forName("com.acme.Plugin");
+                    Class.forName("com.acme.Plugin", true, ClassLoader.getSystemClassLoader());
                 }
             }
             """);

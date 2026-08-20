@@ -274,7 +274,7 @@ final class CliCommandIntegrationTest {
         Files.writeString(source, """
             public final class FacadeStrictMain {
                 public static void main(final String[] args) throws Exception {
-                    Class.forName("com.acme.OptionalPlugin");
+                    Class.forName("com.acme.OptionalPlugin", true, ClassLoader.getSystemClassLoader());
                 }
             }
             """);

@@ -4340,6 +4340,29 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void oneArgumentClassForNameSupportsClosedWorldLookupAndPlatformFailures() {
+        final MethodRef supported = new MethodRef(
+            "java/lang/Class",
+            "forName",
+            "(Ljava/lang/String;)Ljava/lang/Class;"
+        );
+        final MethodRef unsupported = new MethodRef(
+            "java/lang/Class",
+            "forName",
+            "(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;"
+        );
+
+        assertThat(JdkCallSupport.isSupported(supported)).isTrue();
+        assertThat(JdkCallSupport.isSupported(unsupported)).isFalse();
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(supported)).containsExactly(
+            "java/lang/NullPointerException",
+            "java/lang/ClassNotFoundException"
+        );
+        assertThat(JdkCallSupport.runtimeModules(supported)).containsExactly("reflection-metadata");
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(unsupported)).isEmpty();
+    }
+
+    @Test
     void secureRandomDefaultConstructionAndByteGenerationAreSupported() {
         assertThat(List.of(
             JdkCallSupport.isSupported(new MethodRef("java/security/SecureRandom", "<init>", "()V")),

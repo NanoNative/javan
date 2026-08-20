@@ -175,6 +175,15 @@ public final class ReachabilityAnalyzer {
                             entryPoints
                         );
                         enqueueClassInitializer(classes, instruction, work, workSet, current, callEdges, entryPoints);
+                        enqueueClassForNameInitializers(
+                            classes,
+                            instruction,
+                            work,
+                            workSet,
+                            current,
+                            callEdges,
+                            entryPoints
+                        );
                         enqueueLambdaApplicationCall(
                             classes,
                             method.orElseThrow(),
@@ -1591,6 +1600,39 @@ public final class ReachabilityAnalyzer {
             if (className.isPresent()) {
                 enqueueClassInitializer(classes, className.orElseThrow(), work, workSet, current, callEdges, entryPoints);
             }
+        }
+    }
+
+    private static void enqueueClassForNameInitializers(
+        final Map<String, ClassFile> classes,
+        final Instruction instruction,
+        final List<EntryPoint> work,
+        final EntryPointMembership workSet,
+        final EntryPoint current,
+        final CallEdgeTracker callEdges,
+        final EntryPointPool entryPoints
+    ) {
+        if (instruction.methodRef().isEmpty()) {
+            return;
+        }
+        final MethodRef method = instruction.methodRef().orElseThrow();
+        if (!"java/lang/Class".equals(method.owner())
+            || !"forName".equals(method.name())
+            || !"(Ljava/lang/String;)Ljava/lang/Class;".equals(method.descriptor())) {
+            return;
+        }
+        final List<String> owners = new ArrayList<>(classes.keySet());
+        for (int index = 1; index < owners.size(); index++) {
+            final String owner = owners.get(index);
+            int insertion = index;
+            while (insertion > 0 && Strings2.compareAscii(owners.get(insertion - 1), owner) > 0) {
+                owners.set(insertion, owners.get(insertion - 1));
+                insertion--;
+            }
+            owners.set(insertion, owner);
+        }
+        for (final String owner : owners) {
+            enqueueClassInitializer(classes, owner, work, workSet, current, callEdges, entryPoints);
         }
     }
 

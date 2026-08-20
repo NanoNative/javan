@@ -1007,6 +1007,31 @@ final class CliRuntimeFeatureIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void checkReportsClosedWorldClassLookupRuntimeModule() throws Exception {
+        final Path project = project("class-for-name-runtime-module");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws ClassNotFoundException {
+                    Class.forName("com.acme.Main");
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/runtime-features.json"))).contains(
+            "\"reachableRuntimeModules\": [\"core\", \"reflection-metadata\"]",
+            "\"status\": \"pass\""
+        );
+    }
+
+    @Test
     void checkReportsSecureRandomRuntimeModule() throws Exception {
         final Path project = project("secure-random-runtime-module");
         writeJava(project, "com.acme.Main", """

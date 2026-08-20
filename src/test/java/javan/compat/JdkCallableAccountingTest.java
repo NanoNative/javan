@@ -45,9 +45,18 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksForbiddenDynamicApiAsExplicitRejected() {
+    void marksClosedWorldClassLookupAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Class", "forName", "(Ljava/lang/String;)Ljava/lang/Class;")))
-            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksClassLoaderSelectingLookupAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef(
+            "java/lang/Class",
+            "forName",
+            "(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;"
+        ))).isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
     }
 
     @Test
