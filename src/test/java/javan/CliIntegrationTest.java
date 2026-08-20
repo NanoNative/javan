@@ -1406,6 +1406,35 @@ final class CliIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void methodInvocationFailsAtCheckBoundary() throws Exception {
+        final Path project = project("method-invocation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.lang.reflect.Method;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Method method = Main.class.getDeclaredMethod("main", String[].class);
+                    method.invoke(null, (Object) args);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains(
+            "error[JAVAN001]",
+            "java/lang/reflect/Method.invoke",
+            "reflection is outside the static native profile"
+        );
+    }
+
+    @Test
     void reachableInterfaceApplicationVoidCallBuilds() throws Exception {
         final Path project = project("interface-call");
         writeJava(project, "com.acme.Main", """

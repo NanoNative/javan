@@ -4412,6 +4412,48 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        int javan_class_name_equals(void* value, const char* expected) {
+            if (value == NULL || expected == NULL) {
+                return 0;
+            }
+            javan_runtime_lock_enter();
+            int result = strcmp(javan_runtime_class_checked_unlocked(value)->binary_name, expected) == 0 ? 1 : 0;
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        static const JavanMethodMetadata* javan_method_metadata_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("null method metadata");
+            }
+            const JavanMethodMetadata* metadata = (const JavanMethodMetadata*) value;
+            if (metadata->magic != JAVAN_METHOD_METADATA_MAGIC
+                || metadata->parameter_count < 0
+                || metadata->name == NULL
+                || metadata->declaring_name == NULL) {
+                javan_panic("invalid method metadata");
+            }
+            return metadata;
+        }
+
+        void* javan_method_get_name(void* value) {
+            return javan_string_from(javan_method_metadata_checked(value)->name);
+        }
+
+        void* javan_method_get_declaring_class(void* value) {
+            void* result = javan_runtime_class_from_binary_name(
+                javan_method_metadata_checked(value)->declaring_name
+            );
+            if (result == NULL) {
+                javan_panic("unknown declaring class metadata");
+            }
+            return result;
+        }
+
+        int javan_method_get_parameter_count(void* value) {
+            return javan_method_metadata_checked(value)->parameter_count;
+        }
+
         static const char* javan_runtime_class_primitive_type_name(int exact_type_id) {
             switch (exact_type_id) {
                 case JAVAN_CLASS_EXACT_PRIMITIVE_BOOLEAN:

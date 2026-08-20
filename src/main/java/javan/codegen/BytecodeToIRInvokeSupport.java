@@ -466,6 +466,19 @@ final class BytecodeToIRInvokeSupport {
         if (lowerPrintStreamCall(classFile, method, instruction, methodRef, instructions, stack)) {
             return;
         }
+        if (lowerMethodMetadataCall(
+            classFile,
+            method,
+            instruction,
+            methodRef,
+            instructions,
+            stack,
+            localDeclarations,
+            pendingExceptionHandlerStacks,
+            sourceLines
+        )) {
+            return;
+        }
         if (isEnumIntrinsic(classes, methodRef)) {
             final IrExpression receiver = popObject(classFile, method, stack);
             pushObjectCall(instructions, stack, localDeclarations, "javan_string_from", List.of(receiver));
@@ -3434,6 +3447,134 @@ final class BytecodeToIRInvokeSupport {
         stack.addAll(successStack);
         stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
         return true;
+    }
+
+    private static boolean lowerMethodMetadataCall(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final MethodRef methodRef,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
+    ) {
+        if ("java/lang/reflect/Method".equals(methodRef.owner())) {
+            final String runtimeHelper = methodMetadataRuntimeHelper(methodRef);
+            if (runtimeHelper == null) {
+                return false;
+            }
+            final String receiverLocal = newObjectLocal(localDeclarations);
+            instructions.add(IrInstruction.assignObject(receiverLocal, popObject(classFile, method, stack)));
+            final List<StackValue> successStack = List.copyOf(stack);
+            final String receiverPresent = "label_method_metadata_receiver_present_" + instruction.offset();
+            instructions.add(IrInstruction.branchIf(
+                receiverPresent,
+                IrExpression.objectComparison(
+                    "!=", IrExpression.objectLocal(receiverLocal), IrExpression.objectNull()
+                )
+            ));
+            routePendingPlatformException(
+                classFile, method, instruction, instructions, stack, pendingExceptionHandlerStacks, sourceLines,
+                "java/lang/NullPointerException", IrExpression.stringLiteral("method")
+            );
+            instructions.add(IrInstruction.label(receiverPresent));
+            stack.addAll(successStack);
+            if ("getParameterCount".equals(methodRef.name())) {
+                stack.add(StackValue.intExpression(IrExpression.intCall(
+                    runtimeHelper, List.of(IrExpression.objectLocal(receiverLocal))
+                )));
+            } else {
+                pushObjectCall(
+                    instructions,
+                    stack,
+                    localDeclarations,
+                    runtimeHelper,
+                    List.of(IrExpression.objectLocal(receiverLocal))
+                );
+            }
+            return true;
+        }
+        if (!"java/lang/Class".equals(methodRef.owner())
+            || !"getDeclaredMethod".equals(methodRef.name())
+            || !"(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;".equals(methodRef.descriptor())) {
+            return false;
+        }
+
+        final String parametersLocal = newObjectLocal(localDeclarations);
+        final String nameLocal = newObjectLocal(localDeclarations);
+        final String classLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(
+            parametersLocal, popObject(classFile, method, stack)
+        ));
+        instructions.add(IrInstruction.assignObject(nameLocal, popObject(classFile, method, stack)));
+        instructions.add(IrInstruction.assignObject(classLocal, popObject(classFile, method, stack)));
+        final List<StackValue> successStack = List.copyOf(stack);
+
+        final String classPresent = "label_declared_method_class_present_" + instruction.offset();
+        instructions.add(IrInstruction.branchIf(
+            classPresent,
+            IrExpression.objectComparison("!=", IrExpression.objectLocal(classLocal), IrExpression.objectNull())
+        ));
+        routePendingPlatformException(
+            classFile, method, instruction, instructions, stack, pendingExceptionHandlerStacks, sourceLines,
+            "java/lang/NullPointerException", IrExpression.stringLiteral("class")
+        );
+        instructions.add(IrInstruction.label(classPresent));
+        stack.addAll(successStack);
+
+        final String namePresent = "label_declared_method_name_present_" + instruction.offset();
+        instructions.add(IrInstruction.branchIf(
+            namePresent,
+            IrExpression.objectComparison("!=", IrExpression.objectLocal(nameLocal), IrExpression.objectNull())
+        ));
+        routePendingPlatformException(
+            classFile, method, instruction, instructions, stack, pendingExceptionHandlerStacks, sourceLines,
+            "java/lang/NullPointerException", IrExpression.stringLiteral("name")
+        );
+        instructions.add(IrInstruction.label(namePresent));
+        stack.addAll(successStack);
+
+        final String resultLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(
+            resultLocal,
+            IrExpression.objectCall(
+                "javan_generated_class_get_declared_method",
+                List.of(
+                    IrExpression.objectLocal(classLocal),
+                    IrExpression.objectLocal(nameLocal),
+                    IrExpression.objectLocal(parametersLocal)
+                )
+            )
+        ));
+        final String found = "label_declared_method_found_" + instruction.offset();
+        instructions.add(IrInstruction.branchIf(
+            found,
+            IrExpression.objectComparison("!=", IrExpression.objectLocal(resultLocal), IrExpression.objectNull())
+        ));
+        routePendingPlatformException(
+            classFile, method, instruction, instructions, stack, pendingExceptionHandlerStacks, sourceLines,
+            "java/lang/NoSuchMethodException", IrExpression.objectLocal(nameLocal)
+        );
+        instructions.add(IrInstruction.label(found));
+        stack.addAll(successStack);
+        stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
+        return true;
+    }
+
+    private static String methodMetadataRuntimeHelper(final MethodRef methodRef) {
+        if ("getName".equals(methodRef.name()) && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
+            return "javan_method_get_name";
+        }
+        if ("getDeclaringClass".equals(methodRef.name())
+            && "()Ljava/lang/Class;".equals(methodRef.descriptor())) {
+            return "javan_method_get_declaring_class";
+        }
+        if ("getParameterCount".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
+            return "javan_method_get_parameter_count";
+        }
+        return null;
     }
 
     static void routePendingPlatformException(

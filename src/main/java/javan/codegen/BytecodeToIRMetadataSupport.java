@@ -5,6 +5,7 @@ import javan.analysis.ClassInitializationGraph;
 import javan.analysis.EntryPoint;
 import javan.analysis.GeneratedObjectCloneSupport;
 import javan.classfile.ClassFile;
+import javan.classfile.ClassFileScanner;
 import javan.classfile.CodeAttribute;
 import javan.classfile.CodeException;
 import javan.classfile.FieldInfo;
@@ -14,10 +15,14 @@ import javan.classfile.MethodRef;
 import javan.ir.IrClass;
 import javan.ir.IrExpression;
 import javan.ir.IrField;
+import javan.ir.IrMethodMetadata;
 import javan.ir.IrParameter;
+import javan.ir.IrReflectedClass;
 import javan.ir.IrType;
 import javan.util.Strings2;
 
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -46,6 +51,116 @@ final class BytecodeToIRMetadataSupport {
             ));
         }
         return List.copyOf(result);
+    }
+
+    private static List<IrMethodMetadata> declaredMethods(final ClassFile classFile) {
+        final List<IrMethodMetadata> result = new ArrayList<>();
+        for (final MethodInfo method : classFile.methods()) {
+            if (!"<init>".equals(method.name()) && !"<clinit>".equals(method.name())) {
+                result.add(new IrMethodMetadata(
+                    method.name(),
+                    BytecodeToIRDynamicSupport.parameterDescriptors(method.descriptor()).orElseThrow()
+                ));
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    static ReflectionClasses reflectionClasses(
+        final Map<String, ClassFile> classes,
+        final List<EntryPoint> reachableMethods
+    ) {
+        boolean declaredMethodLookup = false;
+        boolean dynamicClassLookup = false;
+        final Set<String> classLiterals = new HashSet<>();
+        for (final EntryPoint entryPoint : reachableMethods) {
+            final ClassFile owner = classes.get(entryPoint.className());
+            final Optional<MethodInfo> method = owner == null
+                ? Optional.empty()
+                : owner.method(entryPoint.methodName(), entryPoint.descriptor());
+            if (method.isEmpty() || method.orElseThrow().code().isEmpty()) {
+                continue;
+            }
+            for (final Instruction instruction : method.orElseThrow().code().orElseThrow().instructions()) {
+                if (instruction.methodRef().isPresent()) {
+                    final MethodRef reference = instruction.methodRef().orElseThrow();
+                    declaredMethodLookup |= "java/lang/Class".equals(reference.owner())
+                        && "getDeclaredMethod".equals(reference.name())
+                        && "(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;".equals(reference.descriptor());
+                    dynamicClassLookup |= isClassForName(reference);
+                }
+                if ((instruction.opcode() == 18 || instruction.opcode() == 19 || instruction.opcode() == 20)
+                    && instruction.className().isPresent()) {
+                    final String jvmName = instruction.className().orElseThrow();
+                    if (!jvmName.startsWith("[") && !classes.containsKey(jvmName)) {
+                        classLiterals.add(jvmName);
+                    }
+                }
+            }
+        }
+        if (!declaredMethodLookup) {
+            return new ReflectionClasses(false, List.of());
+        }
+        if (dynamicClassLookup) {
+            classLiterals.addAll(List.of(
+                "java/lang/String",
+                "java/lang/Object",
+                "java/lang/Class",
+                "java/lang/ClassLoader",
+                "java/util/ArrayList",
+                "java/util/HashMap"
+            ));
+        }
+        final List<String> sorted = new ArrayList<>();
+        for (final String classLiteral : classLiterals) {
+            int index = 0;
+            while (index < sorted.size() && Strings2.compareAscii(sorted.get(index), classLiteral) < 0) {
+                index++;
+            }
+            sorted.add(index, classLiteral);
+        }
+        return new ReflectionClasses(true, List.copyOf(sorted));
+    }
+
+    static List<IrReflectedClass> loadExternalReflectedClasses(
+        final ReflectionClasses reflection,
+        final Path outputDirectory
+    ) throws IOException, InterruptedException {
+        final List<IrReflectedClass> result = new ArrayList<>();
+        final ClassFileScanner scanner = new ClassFileScanner();
+        for (final String jvmName : reflection.externalClassNames()) {
+            result.add(new IrReflectedClass(
+                jvmName,
+                declaredMethods(scanner.readRuntimeClass(jvmName, outputDirectory))
+            ));
+        }
+        return List.copyOf(result);
+    }
+
+    static List<IrReflectedClass> reflectedClasses(
+        final Map<String, ClassFile> classes,
+        final List<IrClass> retainedClasses,
+        final ReflectionClasses reflection,
+        final List<IrReflectedClass> externalClasses
+    ) {
+        if (!reflection.declaredMethodLookup()) {
+            return List.of();
+        }
+        final List<IrReflectedClass> result = new ArrayList<>();
+        for (final IrClass retained : retainedClasses) {
+            final ClassFile classFile = classes.get(retained.jvmName());
+            if (classFile != null) {
+                result.add(new IrReflectedClass(classFile.name(), declaredMethods(classFile)));
+            }
+        }
+        result.addAll(externalClasses);
+        return List.copyOf(result);
+    }
+
+    record ReflectionClasses(boolean declaredMethodLookup, List<String> externalClassNames) {
+        ReflectionClasses {
+            externalClassNames = List.copyOf(externalClassNames);
+        }
     }
 
     static List<IrClass> lowerReachableClasses(

@@ -136,6 +136,20 @@ public final class JdkCallSupport {
         runtime("Class.getPackageName", "java/lang/Class", "getPackageName", "()Ljava/lang/String;"),
         runtime("Class.getTypeName", "java/lang/Class", "getTypeName", "()Ljava/lang/String;"),
         runtime("Class.getComponentType", "java/lang/Class", "getComponentType", "()Ljava/lang/Class;"),
+        runtime(
+            "Class.getDeclaredMethod",
+            "java/lang/Class",
+            "getDeclaredMethod",
+            "(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;"
+        ),
+        runtime("Method.getName", "java/lang/reflect/Method", "getName", "()Ljava/lang/String;"),
+        runtime(
+            "Method.getDeclaringClass",
+            "java/lang/reflect/Method",
+            "getDeclaringClass",
+            "()Ljava/lang/Class;"
+        ),
+        runtime("Method.getParameterCount", "java/lang/reflect/Method", "getParameterCount", "()I"),
         runtime("Class.getResourceAsStream", "java/lang/Class", "getResourceAsStream", "(Ljava/lang/String;)Ljava/io/InputStream;"),
         runtime("ClassLoader.getSystemClassLoader", "java/lang/ClassLoader", "getSystemClassLoader", "()Ljava/lang/ClassLoader;"),
         runtime("ClassLoader.getSystemResourceAsStream", "java/lang/ClassLoader", "getSystemResourceAsStream", "(Ljava/lang/String;)Ljava/io/InputStream;"),
@@ -1651,7 +1665,11 @@ public final class JdkCallSupport {
             || "java/util/Base64$Decoder".equals(owner)) {
             return List.of("arrays", "strings");
         }
-        if ("java/lang/Class".equals(owner) && "forName".equals(name)) {
+        if ("java/lang/Class".equals(owner)
+            && ("forName".equals(name) || "getDeclaredMethod".equals(name))) {
+            return List.of("reflection-metadata");
+        }
+        if ("java/lang/reflect/Method".equals(owner)) {
             return List.of("reflection-metadata");
         }
         if ("java/lang/Thread".equals(owner)) {
@@ -1846,6 +1864,17 @@ public final class JdkCallSupport {
                 "java/lang/ClassNotFoundException"
             );
         }
+        if ("java/lang/Class".equals(methodRef.owner())
+            && "getDeclaredMethod".equals(methodRef.name())
+            && "(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;".equals(methodRef.descriptor())) {
+            return List.of(
+                "java/lang/NullPointerException",
+                "java/lang/NoSuchMethodException"
+            );
+        }
+        if (methodMetadataAccessor(methodRef)) {
+            return List.of("java/lang/NullPointerException");
+        }
         if ("java/util/Base64$Encoder".equals(methodRef.owner())
             && ("encode".equals(methodRef.name()) && "([B)[B".equals(methodRef.descriptor())
                 || "encodeToString".equals(methodRef.name())
@@ -1913,6 +1942,15 @@ public final class JdkCallSupport {
             return List.of("java/lang/InterruptedException");
         }
         return List.of();
+    }
+
+    private static boolean methodMetadataAccessor(final MethodRef methodRef) {
+        if (!"java/lang/reflect/Method".equals(methodRef.owner())) {
+            return false;
+        }
+        return "getName".equals(methodRef.name()) && "()Ljava/lang/String;".equals(methodRef.descriptor())
+            || "getDeclaringClass".equals(methodRef.name()) && "()Ljava/lang/Class;".equals(methodRef.descriptor())
+            || "getParameterCount".equals(methodRef.name()) && "()I".equals(methodRef.descriptor());
     }
 
     private static boolean isDecimalParseCall(final MethodRef methodRef) {
