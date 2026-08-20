@@ -436,6 +436,8 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             : > "$JAVAN_TIMING_LOG"
             javan_timing_run bootstrap_jvm true
             javan_timing_run bootstrap_gen2 true
+            run_shell_function() { :; }
+            javan_timing_run shell_function run_shell_function
             javan_timing_write_reports linux-x64 2 bootstrap "$3" "$4" pass 0
             javan_timing_parse_gnu "$5"
             printf 'GNU: cpu=%s rss=%s\\n' "$javan_timing_measure_cpu_seconds" "$javan_timing_measure_max_rss_bytes"
@@ -457,7 +459,12 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         );
 
         assertThat(run.exitCode()).isZero();
-        assertThat(run.stdout()).contains("Timing: bootstrap_jvm=", "Timing: bootstrap_gen2=", "GNU: cpu=0.460000 rss=1048576");
+        assertThat(run.stdout()).contains(
+            "Timing: bootstrap_jvm=",
+            "Timing: bootstrap_gen2=",
+            "Timing: shell_function="
+        ).containsPattern("Timing: shell_function=\\d+s status=pass counted=true cpu=unknown max_rss_bytes=unknown source=unavailable")
+            .contains("GNU: cpu=0.460000 rss=1048576");
         final String jsonContent = Files.readString(json);
         assertThat(jsonContent)
             .contains("\"target\": \"linux-x64\"")
@@ -470,11 +477,13 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             .contains("\"physicalMemoryBytes\": \"")
             .containsPattern("\\{\\\"name\\\": \\\"bootstrap_jvm\\\", \\\"seconds\\\": \\d+, \\\"status\\\": \\\"pass\\\", \\\"countedInTotal\\\": true, \\\"cpuSeconds\\\": \\\"[^\\\"]+\\\", \\\"maxRssBytes\\\": \\\"[^\\\"]+\\\", \\\"resourceSource\\\": \\\"[^\\\"]+\\\"}")
             .containsPattern("\\{\\\"name\\\": \\\"bootstrap_gen2\\\", \\\"seconds\\\": \\d+, \\\"status\\\": \\\"pass\\\", \\\"countedInTotal\\\": true, \\\"cpuSeconds\\\": \\\"[^\\\"]+\\\", \\\"maxRssBytes\\\": \\\"[^\\\"]+\\\", \\\"resourceSource\\\": \\\"[^\\\"]+\\\"}")
+            .containsPattern("\\{\\\"name\\\": \\\"shell_function\\\", \\\"seconds\\\": \\d+, \\\"status\\\": \\\"pass\\\", \\\"countedInTotal\\\": true, \\\"cpuSeconds\\\": \\\"unknown\\\", \\\"maxRssBytes\\\": \\\"unknown\\\", \\\"resourceSource\\\": \\\"unavailable\\\"}")
             .containsPattern("\\\"totalSeconds\\\": \\d+");
         assertThat(Files.readString(markdown))
             .contains("| Phase | Seconds | CPU seconds | Peak RSS bytes | Resource source | Status | Total |")
             .containsPattern("\\| `bootstrap_jvm` \\| \\d+ \\| [^|]+ \\| [^|]+ \\| [^|]+ \\| pass \\| true \\|")
             .containsPattern("\\| `bootstrap_gen2` \\| \\d+ \\| [^|]+ \\| [^|]+ \\| [^|]+ \\| pass \\| true \\|")
+            .containsPattern("\\| `shell_function` \\| \\d+ \\| unknown \\| unknown \\| unavailable \\| pass \\| true \\|")
             .containsPattern("\\| \\*\\*Total measured\\*\\* \\| \\*\\*\\d+\\*\\* \\| \\| \\| \\| \\*\\*pass\\*\\* \\| \\|");
         if (System.getProperty("os.name").startsWith("Linux") || System.getProperty("os.name").startsWith("Mac")) {
             assertThat(jsonContent)
@@ -495,8 +504,9 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             export JAVAN_TIMING_LOG
             printf 'package_sanitizer\\t5\\tpass\\ttrue\\n' > "$JAVAN_TIMING_LOG"
             printf 'sanitizer_compile\\t3\\tpass\\tfalse\\n' >> "$JAVAN_TIMING_LOG"
+            fail_shell_function() { return 7; }
             set +e
-            javan_timing_run failed_phase sh -c 'exit 7'
+            javan_timing_run failed_phase fail_shell_function
             code=$?
             set -e
             javan_timing_write_reports linux-x64 3 full "$3" "$4" fail "$code"
