@@ -1,9 +1,11 @@
 package javan.ir;
 
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Lowered program independent of JVM bytecode.
@@ -15,6 +17,7 @@ import java.util.Map;
  * @param materializedLambdaTargets generated uncaptured lambda targets
  * @param classInitializationDependencies initialization owner to ordered prerequisite owners
  * @param enumDispatchConstants constant-specific enum implementation to constant name
+ * @param classTypeIds stable generated type IDs by JVM class name
  */
 public record IrProgram(
     List<IrClass> classes,
@@ -23,7 +26,8 @@ public record IrProgram(
     String entryFunction,
     List<IrMaterializedLambdaTarget> materializedLambdaTargets,
     Map<String, List<String>> classInitializationDependencies,
-    Map<String, String> enumDispatchConstants
+    Map<String, String> enumDispatchConstants,
+    Map<String, Integer> classTypeIds
 ) {
     public IrProgram {
         final Map<String, List<String>> dependencies = new LinkedHashMap<>();
@@ -31,6 +35,39 @@ public record IrProgram(
             dependencies.put(entry.getKey(), List.copyOf(entry.getValue()));
         }
         classInitializationDependencies = Collections.unmodifiableMap(dependencies);
+        final Set<Integer> assignedTypeIds = new HashSet<>();
+        for (final IrClass classInfo : classes) {
+            final Integer typeId = classTypeIds.get(classInfo.jvmName());
+            if (typeId == null || typeId.intValue() <= 0 || !assignedTypeIds.add(typeId)) {
+                throw new IllegalArgumentException("Invalid class type ID: " + classInfo.jvmName());
+            }
+        }
+        if (classTypeIds.size() != classes.size()) {
+            throw new IllegalArgumentException("Class type IDs must match generated classes");
+        }
+        classTypeIds = Collections.unmodifiableMap(new LinkedHashMap<>(classTypeIds));
+    }
+
+    /** Creates a program with type IDs derived from class order. */
+    public IrProgram(
+        final List<IrClass> classes,
+        final List<IrFunction> functions,
+        final List<IrDispatch> dispatches,
+        final String entryFunction,
+        final List<IrMaterializedLambdaTarget> materializedLambdaTargets,
+        final Map<String, List<String>> classInitializationDependencies,
+        final Map<String, String> enumDispatchConstants
+    ) {
+        this(
+            classes,
+            functions,
+            dispatches,
+            entryFunction,
+            materializedLambdaTargets,
+            classInitializationDependencies,
+            enumDispatchConstants,
+            sequentialTypeIds(classes)
+        );
     }
 
     /**
@@ -41,7 +78,7 @@ public record IrProgram(
      * @param entryFunction entry function C symbol
      */
     public IrProgram(final List<IrClass> classes, final List<IrFunction> functions, final String entryFunction) {
-        this(classes, functions, List.of(), entryFunction, List.of(), Map.of(), Map.of());
+        this(classes, functions, List.of(), entryFunction, List.of(), Map.of(), Map.of(), sequentialTypeIds(classes));
     }
 
     /**
@@ -58,7 +95,7 @@ public record IrProgram(
         final List<IrDispatch> dispatches,
         final String entryFunction
     ) {
-        this(classes, functions, dispatches, entryFunction, List.of(), Map.of(), Map.of());
+        this(classes, functions, dispatches, entryFunction, List.of(), Map.of(), Map.of(), sequentialTypeIds(classes));
     }
 
     /** Creates a program without class-initialization dependency metadata. */
@@ -70,7 +107,16 @@ public record IrProgram(
         final List<IrMaterializedLambdaTarget> materializedLambdaTargets,
         final Map<String, String> enumDispatchConstants
     ) {
-        this(classes, functions, dispatches, entryFunction, materializedLambdaTargets, Map.of(), enumDispatchConstants);
+        this(
+            classes,
+            functions,
+            dispatches,
+            entryFunction,
+            materializedLambdaTargets,
+            Map.of(),
+            enumDispatchConstants,
+            sequentialTypeIds(classes)
+        );
     }
 
     /**
@@ -80,6 +126,14 @@ public record IrProgram(
      * @param entryFunction entry function C symbol
      */
     public IrProgram(final List<IrFunction> functions, final String entryFunction) {
-        this(List.of(), functions, List.of(), entryFunction, List.of(), Map.of(), Map.of());
+        this(List.of(), functions, List.of(), entryFunction, List.of(), Map.of(), Map.of(), Map.of());
+    }
+
+    private static Map<String, Integer> sequentialTypeIds(final List<IrClass> classes) {
+        final Map<String, Integer> result = new LinkedHashMap<>();
+        for (int index = 0; index < classes.size(); index++) {
+            result.put(classes.get(index).jvmName(), index + 1);
+        }
+        return result;
     }
 }

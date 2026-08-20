@@ -181,14 +181,20 @@ public final class BytecodeToIR {
                 sourceLines
             ));
         }
+        final List<javan.ir.IrClass> loweredClasses = BytecodeToIRMetadataSupport.lowerReachableClasses(
+            classes,
+            callGraph,
+            classInitialization
+        );
         return new IrProgram(
-            BytecodeToIRMetadataSupport.lowerClasses(classes),
+            loweredClasses,
             List.copyOf(functions),
             List.copyOf(dispatches.values()),
             symbol(callGraph.entryPoint()),
             List.copyOf(materializedLambdaTargets),
             classInitialization.dependencies(),
-            enumDispatchConstants(classes)
+            enumDispatchConstants(classes),
+            BytecodeToIRMetadataSupport.retainedTypeIds(classes, loweredClasses)
         );
     }
 

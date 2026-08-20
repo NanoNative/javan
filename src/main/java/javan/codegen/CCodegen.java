@@ -1384,15 +1384,14 @@ public final class CCodegen {
     ) {
         final IrExpression allocation = function.instructions().get(site.instructionIndex())
             .expression().orElseThrow();
-        for (int classIndex = 0; classIndex < program.classes().size(); classIndex++) {
-            final IrClass classInfo = program.classes().get(classIndex);
+        for (final IrClass classInfo : program.classes()) {
             if (classInfo.jvmName().equals(allocation.value())) {
                 c.append("    struct ")
                     .append(classInfo.symbol())
                     .append(' ')
                     .append(stackObjectSymbol(site.instructionIndex()))
                     .append(" = {")
-                    .append(classIndex + 1)
+                    .append(program.classTypeIds().get(classInfo.jvmName()).intValue())
                     .append("};")
                     .append(System.lineSeparator());
                 return;
@@ -3997,11 +3996,7 @@ public final class CCodegen {
     }
 
     private static java.util.Map<String, Integer> typeIds(final IrProgram program) {
-        final java.util.Map<String, Integer> result = new java.util.LinkedHashMap<>();
-        for (int index = 0; index < program.classes().size(); index++) {
-            result.put(program.classes().get(index).jvmName(), index + 1);
-        }
-        return java.util.Map.copyOf(result);
+        return program.classTypeIds();
     }
 
     private static String sanitize(final String value) {

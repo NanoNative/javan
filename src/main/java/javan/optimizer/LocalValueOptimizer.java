@@ -832,7 +832,7 @@ public final class LocalValueOptimizer {
     private static IrProgram copy(final IrProgram program, final List<IrFunction> functions) {
         return new IrProgram(
             program.classes(), functions, program.dispatches(), program.entryFunction(), program.materializedLambdaTargets(),
-            program.classInitializationDependencies(), program.enumDispatchConstants()
+            program.classInitializationDependencies(), program.enumDispatchConstants(), program.classTypeIds()
         );
     }
 

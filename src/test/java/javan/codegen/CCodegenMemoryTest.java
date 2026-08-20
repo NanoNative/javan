@@ -24,6 +24,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -148,6 +149,42 @@ final class CCodegenMemoryTest {
             "value = (void*) &javan_stack_object_0;"
         );
         assertThat(generated).doesNotContain("value = javan_new_com_acme_Node();");
+    }
+
+    @Test
+    void emitsStableTypeIdForPlannedStackObject() throws Exception {
+        final IrProgram program = new IrProgram(
+            List.of(nodeClass()),
+            List.of(new IrFunction(
+                "com/acme/Main",
+                "main",
+                "([Ljava/lang/String;)V",
+                "main_symbol",
+                IrType.VOID,
+                List.of(),
+                List.of(new IrLocal(IrType.OBJECT, "value")),
+                List.of(
+                    IrInstruction.assignObject("value", IrExpression.objectAllocation("com/acme/Node")),
+                    IrInstruction.returnVoid()
+                )
+            )),
+            List.of(),
+            "main_symbol",
+            List.of(),
+            Map.of(),
+            Map.of(),
+            Map.of("com/acme/Node", 7)
+        );
+        final EscapeAnalyzer analyzer = new EscapeAnalyzer();
+        final EscapeAnalyzer.StackAllocationPlan plan = analyzer.planStackAllocations(
+            program, analyzer.analyze(program), true
+        );
+
+        final String generated = Files.readString(new CCodegen().generate(
+            program, tempDir, javan.build.NativeInteropConfig.empty(), plan
+        ));
+
+        assertThat(generated).contains("struct javan_class_com_acme_Node javan_stack_object_0 = {7};");
     }
 
     @Test
