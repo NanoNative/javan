@@ -3278,6 +3278,58 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    @WindowsCompatibilityProof
+    void randomUuidUsesVersionFourVariantTwoAndCanonicalText() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+            #include <string.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* first = NULL;
+                void* second = NULL;
+                void* first_text = NULL;
+                void* second_text = NULL;
+                void* printable_text = NULL;
+                void** roots[] = { &first, &second, &first_text, &second_text, &printable_text };
+                javan_root_frame_push(roots, 5);
+                first = javan_uuid_random();
+                second = javan_uuid_random();
+                first_text = javan_uuid_to_string(first);
+                second_text = javan_uuid_to_string(second);
+                printable_text = javan_printable_object_string(first);
+                const char* first_chars = (const char*) first_text;
+                const char* second_chars = (const char*) second_text;
+                int canonical = strlen(first_chars) == 36
+                    && first_chars[8] == '-'
+                    && first_chars[13] == '-'
+                    && first_chars[18] == '-'
+                    && first_chars[23] == '-';
+                int variant = first_chars[19] == '8'
+                    || first_chars[19] == '9'
+                    || first_chars[19] == 'a'
+                    || first_chars[19] == 'b';
+                javan_validate_heap_metadata();
+                printf("%d:%d:%d:%d:%d\\n",
+                    canonical,
+                    first_chars[14] == '4',
+                    variant,
+                    strcmp(first_chars, second_chars) != 0,
+                    strcmp(first_chars, (const char*) printable_text) == 0);
+                javan_root_frame_pop(roots);
+                return 0;
+            }
+            """,
+            "4096",
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1")
+        );
+
+        assertThat(stdout).isEqualTo("1:1:1:1:1\n");
+    }
+
+    @Test
     void writeEmitsWindowsHighResolutionNanoTimeFallback() throws Exception {
         final Path runtime = new RuntimeFiles().write(tempDir);
 

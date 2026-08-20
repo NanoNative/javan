@@ -2761,4 +2761,12 @@ final class JdkCallableAccountingTest {
             JdkCallableAccounting.status(new MethodRef("java/security/SecureRandom", "setSeed", "(J)V"))
         )).containsOnly(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
     }
+
+    @Test
+    void marksUuidRandomGenerationAndTextAsSupported() {
+        assertThat(List.of(
+            JdkCallableAccounting.status(new MethodRef("java/util/UUID", "randomUUID", "()Ljava/util/UUID;")),
+            JdkCallableAccounting.status(new MethodRef("java/util/UUID", "toString", "()Ljava/lang/String;"))
+        )).containsOnly(JdkCallableAccounting.Status.SUPPORTED);
+    }
 }

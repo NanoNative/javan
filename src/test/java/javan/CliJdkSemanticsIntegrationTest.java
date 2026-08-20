@@ -8156,6 +8156,50 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void uuidRandomGenerationSurvivesGcAndUsesCanonicalVersionFourText() throws Exception {
+        final Path project = project("uuid-random");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.UUID;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final UUID first = UUID.randomUUID();
+                    final UUID second = UUID.randomUUID();
+                    for (int index = 0; index < 10_000; index++) {
+                        final byte[] ignored = new byte[64];
+                    }
+                    final String text = first.toString();
+                    final boolean canonical = text.length() == 36
+                        && text.charAt(8) == '-'
+                        && text.charAt(13) == '-'
+                        && text.charAt(18) == '-'
+                        && text.charAt(23) == '-';
+                    final char variant = text.charAt(19);
+                    System.out.println(canonical);
+                    System.out.println(text.charAt(14) == '4');
+                    System.out.println(variant == '8' || variant == '9' || variant == 'a' || variant == 'b');
+                    System.out.println(!text.equals(second.toString()));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(
+            project,
+            List.of(project.resolve(".javan/bin/uuid-random").toString()),
+            defaultProcessTimeout(),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1")
+        ).stdout()).isEqualTo("true\ntrue\ntrue\ntrue\n");
+    }
+
+    @Test
     void atomicReferenceCompareAndSetSuccessBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("atomic-reference-compare-and-set-success");
         writeJava(project, "com.acme.Main", """

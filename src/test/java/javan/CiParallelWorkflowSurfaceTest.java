@@ -240,6 +240,7 @@ final class CiParallelWorkflowSurfaceTest {
                 "generatedRuntimeCrossCompilesToWindowsPeWhenMinGwIsAvailable",
                 "generatedRuntimeExecutesBasicWindowsProbeWhenHostCompilerIsAvailable",
                 "secureRandomFillsByteArraysFromOsEntropy",
+                "randomUuidUsesVersionFourVariantTwoAndCanonicalText",
                 "runtimeHostThreadGetsDistinctCurrentThreadAndDetachesCleanly",
                 "runtimeConcurrentHostThreadsCanAttachCollectDetachWithoutLeakingRoots",
                 "runtimeHostThreadRootFramesStayPublishedAcrossConcurrentGc",

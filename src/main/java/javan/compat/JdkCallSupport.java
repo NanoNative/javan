@@ -114,6 +114,8 @@ public final class JdkCallSupport {
         intrinsic("System.exit", "java/lang/System", "exit", "(I)V"),
         runtime("SecureRandom.<init>", "java/security/SecureRandom", "<init>", "()V"),
         runtime("SecureRandom.nextBytes", "java/security/SecureRandom", "nextBytes", "([B)V"),
+        runtime("UUID.randomUUID", "java/util/UUID", "randomUUID", "()Ljava/util/UUID;"),
+        runtime("UUID.toString", "java/util/UUID", "toString", "()Ljava/lang/String;"),
         runtime("Object.equals", "java/lang/Object", "equals", "(Ljava/lang/Object;)Z"),
         runtime("Object.getClass", "java/lang/Object", "getClass", "()Ljava/lang/Class;"),
         runtime("Object.clone", "java/lang/Object", "clone", "()Ljava/lang/Object;"),
@@ -1635,7 +1637,7 @@ public final class JdkCallSupport {
         if ("java/lang/Math".equals(owner)) {
             return List.of("math");
         }
-        if ("java/security/SecureRandom".equals(owner)) {
+        if ("java/security/SecureRandom".equals(owner) || "java/util/UUID".equals(owner)) {
             return List.of("random");
         }
         if ("java/lang/Thread".equals(owner)) {
