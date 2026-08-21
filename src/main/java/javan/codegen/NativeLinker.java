@@ -7,11 +7,7 @@ import javan.util.Strings2;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -20,6 +16,10 @@ import java.util.Optional;
  * Links generated C into a native executable with an available C compiler.
  */
 public final class NativeLinker {
+    // FNV-1a keeps the self-host cache independent of unavailable crypto APIs.
+    private static final long FNV_OFFSET_BASIS = -3750763034362895579L;
+    private static final long FNV_PRIME = 1099511628211L;
+
     private final ProcessRunner processRunner;
 
     /**
@@ -127,13 +127,13 @@ public final class NativeLinker {
         final String compiler = requiredExecutable(compilerCandidates(), "No C compiler found. Install gcc, clang, or cc.");
         final String compilerIdentity = compilerIdentity(root, compiler);
         Files.createDirectories(output.getParent());
-        final CacheEntry mainObject = cachedObject(root, compiler, compilerIdentity, mainC, cacheDirectory);
-        final CacheEntry runtimeObject = cachedObject(root, compiler, compilerIdentity, runtimeC, cacheDirectory);
+        final CachedObject mainObject = cachedObject(root, compiler, compilerIdentity, mainC, cacheDirectory);
+        final CachedObject runtimeObject = cachedObject(root, compiler, compilerIdentity, runtimeC, cacheDirectory);
         final List<String> command = new ArrayList<>();
         command.add(compiler);
         command.addAll(threadFlags());
-        command.add(mainObject.object().toString());
-        command.add(runtimeObject.object().toString());
+        command.add(mainObject.linkObject().toString());
+        command.add(runtimeObject.linkObject().toString());
         appendDirectLinkInputs(command, inputs, runtimeC.getParent());
         command.addAll(platformLinkFlags());
         command.add("-o");
@@ -142,7 +142,7 @@ public final class NativeLinker {
         if (result.exitCode() != 0) {
             throw linkFailure("Native link failed", result, symbols);
         }
-        return new CacheLinkResult(output, List.of(mainObject, runtimeObject));
+        return new CacheLinkResult(output, List.of(mainObject.entry(), runtimeObject.entry()));
     }
 
     /**
@@ -492,7 +492,7 @@ public final class NativeLinker {
         compileObject(root, compiler, source, output, List.of());
     }
 
-    private CacheEntry cachedObject(
+    private CachedObject cachedObject(
         final Path root,
         final String compiler,
         final String compilerIdentity,
@@ -501,22 +501,19 @@ public final class NativeLinker {
     ) throws IOException, InterruptedException {
         final String fingerprint = objectFingerprint(compiler, compilerIdentity, source);
         final Path object = cacheDirectory.resolve(fingerprint + ".o");
-        final Path checksum = cacheDirectory.resolve(fingerprint + ".sha256");
+        final Path checksum = cacheDirectory.resolve(fingerprint + ".fnv64");
         if (Files.isRegularFile(object) && Files.isRegularFile(checksum)
             && objectChecksum(object).equals(Files.readString(checksum).trim())) {
-            return new CacheEntry(source.getFileName().toString(), object, true);
+            return new CachedObject(new CacheEntry(source.getFileName().toString(), object, true), object);
         }
         Files.createDirectories(cacheDirectory);
-        final Path temporary = Files.createTempFile(cacheDirectory, fingerprint + ".", ".tmp");
-        try {
-            compileObject(root, compiler, source, temporary);
-            final String objectChecksum = objectChecksum(temporary);
-            Files.move(temporary, object, StandardCopyOption.REPLACE_EXISTING);
-            Files.writeString(checksum, objectChecksum + System.lineSeparator());
-        } finally {
-            Files.deleteIfExists(temporary);
-        }
-        return new CacheEntry(source.getFileName().toString(), object, false);
+        final Path sourceDirectory = Objects.requireNonNull(source.getParent(), "source parent");
+        final Path staging = sourceDirectory.resolve(source.getFileName().toString() + ".object");
+        compileObject(root, compiler, source, staging);
+        final String objectChecksum = objectChecksum(staging);
+        Files.write(object, Files.readAllBytes(staging));
+        Files.writeString(checksum, objectChecksum + System.lineSeparator());
+        return new CachedObject(new CacheEntry(source.getFileName().toString(), object, false), staging);
     }
 
     private String compilerIdentity(final Path root, final String compiler) throws IOException, InterruptedException {
@@ -525,67 +522,56 @@ public final class NativeLinker {
     }
 
     private static String objectFingerprint(final String compiler, final String compilerIdentity, final Path source) throws IOException {
-        final MessageDigest digest = digest();
-        update(digest, "javan-native-object-v1");
-        update(digest, System.getProperty("os.name", ""));
-        update(digest, System.getProperty("os.arch", ""));
-        update(digest, compiler);
-        update(digest, compilerIdentity);
+        long hash = FNV_OFFSET_BASIS;
+        hash = fingerprint(hash, "javan-native-object-v2");
+        hash = fingerprint(hash, System.getProperty("os.name", ""));
+        hash = fingerprint(hash, System.getProperty("os.arch", ""));
+        hash = fingerprint(hash, compiler);
+        hash = fingerprint(hash, compilerIdentity);
         final Path compilerPath = Path.of(compiler);
         if (Files.isRegularFile(compilerPath)) {
-            update(digest, compilerPath.toRealPath().toString());
-            update(digest, Long.toString(Files.size(compilerPath)));
-            update(digest, Long.toString(Files.getLastModifiedTime(compilerPath).toMillis()));
+            hash = fingerprint(hash, compilerPath.toAbsolutePath().normalize().toString());
+            hash = fingerprint(hash, Long.toString(Files.size(compilerPath)));
+            hash = fingerprint(hash, Long.toString(Files.getLastModifiedTime(compilerPath).toMillis()));
         }
-        update(digest, "-pthread");
-        update(digest, "-fPIC");
-        update(digest, Files.readAllBytes(source));
+        for (final String flag : threadFlags()) {
+            hash = fingerprint(hash, flag);
+        }
+        hash = fingerprint(hash, "-fPIC");
+        hash = fingerprint(hash, Files.readAllBytes(source));
         final Path directory = source.getParent();
-        if (directory != null && Files.isDirectory(directory)) {
-            try (var files = Files.list(directory)) {
-                final List<Path> headers = files
-                    .filter(path -> path.getFileName().toString().endsWith(".h"))
-                    .sorted(Comparator.comparing(Path::toString))
-                    .toList();
-                for (final Path header : headers) {
-                    update(digest, header.getFileName().toString());
-                    update(digest, Files.readAllBytes(header));
-                }
-            }
+        final Path header = directory == null ? source : directory.resolve("javan_runtime.h");
+        if (Files.isRegularFile(header)) {
+            hash = fingerprint(hash, header.getFileName().toString());
+            hash = fingerprint(hash, Files.readAllBytes(header));
         }
-        return hex(digest.digest());
+        return Long.toString(hash);
     }
 
     private static String objectChecksum(final Path object) throws IOException {
-        final MessageDigest digest = digest();
-        update(digest, Files.readAllBytes(object));
-        return hex(digest.digest());
+        return Long.toString(fingerprint(FNV_OFFSET_BASIS, Files.readAllBytes(object)));
     }
 
-    private static MessageDigest digest() {
-        try {
-            return MessageDigest.getInstance("SHA-256");
-        } catch (final NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is unavailable", exception);
+    private static long fingerprint(long hash, final String value) {
+        hash = fingerprintByte(hash, 0);
+        for (int index = 0; index < value.length(); index++) {
+            final char character = value.charAt(index);
+            hash = fingerprintByte(hash, character);
+            hash = fingerprintByte(hash, character >>> 8);
         }
+        return hash;
     }
 
-    private static void update(final MessageDigest digest, final String value) {
-        update(digest, value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-    }
-
-    private static void update(final MessageDigest digest, final byte[] value) {
-        digest.update((byte) 0);
-        digest.update(value);
-    }
-
-    private static String hex(final byte[] bytes) {
-        final StringBuilder value = new StringBuilder(bytes.length * 2);
-        for (final byte byteValue : bytes) {
-            value.append(Character.forDigit((byteValue >>> 4) & 15, 16));
-            value.append(Character.forDigit(byteValue & 15, 16));
+    private static long fingerprint(long hash, final byte[] value) {
+        hash = fingerprintByte(hash, 0);
+        for (final byte byteValue : value) {
+            hash = fingerprintByte(hash, byteValue);
         }
-        return value.toString();
+        return hash;
+    }
+
+    private static long fingerprintByte(final long hash, final int value) {
+        return (hash ^ (value & 255)) * FNV_PRIME;
     }
 
     private void compileObject(
@@ -823,6 +809,13 @@ public final class NativeLinker {
 
     private static boolean isWindowsHost(final String osName) {
         return Strings2.toAsciiLowerCase(osName).contains("win");
+    }
+
+    private record CachedObject(CacheEntry entry, Path linkObject) {
+        private CachedObject {
+            entry = Objects.requireNonNull(entry, "entry");
+            linkObject = Objects.requireNonNull(linkObject, "linkObject");
+        }
     }
 
     /**
