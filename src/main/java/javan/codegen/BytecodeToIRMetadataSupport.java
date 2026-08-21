@@ -60,7 +60,9 @@ final class BytecodeToIRMetadataSupport {
                 result.add(new IrMethodMetadata(
                     classFile.name(),
                     method.name(),
-                    BytecodeToIRDynamicSupport.parameterDescriptors(method.descriptor()).orElseThrow()
+                    BytecodeToIRDynamicSupport.parameterDescriptors(method.descriptor()).orElseThrow(),
+                    returnDescriptor(method.descriptor()),
+                    method.accessFlags()
                 ));
             }
         }
@@ -78,8 +80,10 @@ final class BytecodeToIRMetadataSupport {
             PublicMethodCandidate selected = candidates.getFirst();
             for (int index = 1; index < candidates.size(); index++) {
                 final PublicMethodCandidate candidate = candidates.get(index);
-                if (!selected.returnDescriptor().equals(candidate.returnDescriptor())
-                    && returnTypeAssignableFrom(selected.returnDescriptor(), candidate.returnDescriptor(), classes)) {
+                if (!selected.method().returnDescriptor().equals(candidate.method().returnDescriptor())
+                    && returnTypeAssignableFrom(
+                        selected.method().returnDescriptor(), candidate.method().returnDescriptor(), classes
+                    )) {
                     selected = candidate;
                 }
             }
@@ -117,8 +121,10 @@ final class BytecodeToIRMetadataSupport {
                 result.put(shape, declared);
             }
             declared.add(new PublicMethodCandidate(
-                new IrMethodMetadata(classFile.name(), method.name(), parameters),
-                returnDescriptor(method.descriptor()),
+                new IrMethodMetadata(
+                    classFile.name(), method.name(), parameters,
+                    returnDescriptor(method.descriptor()), method.accessFlags()
+                ),
                 classFile.isInterface()
             ));
         }
@@ -174,7 +180,7 @@ final class BytecodeToIRMetadataSupport {
         int index = 0;
         while (index < methods.size()) {
             final PublicMethodCandidate existing = methods.get(index);
-            if (!candidate.returnDescriptor().equals(existing.returnDescriptor())) {
+            if (!candidate.method().returnDescriptor().equals(existing.method().returnDescriptor())) {
                 index++;
                 continue;
             }
@@ -408,7 +414,6 @@ final class BytecodeToIRMetadataSupport {
 
     private record PublicMethodCandidate(
         IrMethodMetadata method,
-        String returnDescriptor,
         boolean declaringInterface
     ) {
     }

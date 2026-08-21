@@ -199,8 +199,11 @@ final class RuntimeHeaderFile {
         typedef struct {
             int magic;
             int parameter_count;
+            int modifiers;
             const char* name;
             const char* declaring_name;
+            const char* return_name;
+            const char* const* parameter_names;
         } JavanMethodMetadata;
         #define JAVAN_ARRAY_KIND_OBJECT 1
         #define JAVAN_ARRAY_KIND_INT 2
@@ -755,6 +758,9 @@ final class RuntimeHeaderFile {
         void* javan_method_get_name(void* value);
         void* javan_method_get_declaring_class(void* value);
         int javan_method_get_parameter_count(void* value);
+        void* javan_method_get_parameter_types(void* value);
+        void* javan_method_get_return_type(void* value);
+        int javan_method_get_modifiers(void* value);
         int javan_is_system_class_loader(void* value);
         void* javan_class_loader_system(void);
         void* javan_class_resource_as_stream(void* class_value, void* name_value);

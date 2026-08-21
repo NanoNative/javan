@@ -1028,14 +1028,35 @@ public final class CCodegen {
     private static void emitMethodMetadata(final IrProgram program, final StringBuilder c) {
         for (final Map.Entry<IrMethodMetadata, Integer> entry : methodMetadataSymbols(program).entrySet()) {
             final IrMethodMetadata method = entry.getKey();
+            final int symbol = entry.getValue().intValue();
+            if (!method.parameterDescriptors().isEmpty()) {
+                c.append("static const char* ")
+                    .append(methodParameterMetadataSymbol(symbol))
+                    .append("[] = {");
+                for (int index = 0; index < method.parameterDescriptors().size(); index++) {
+                    if (index > 0) {
+                        c.append(", ");
+                    }
+                    c.append(emitCStringLiteral(reflectionTypeName(method.parameterDescriptors().get(index))));
+                }
+                c.append("};").append(System.lineSeparator());
+            }
             c.append("static const JavanMethodMetadata ")
-                .append(methodMetadataSymbol(entry.getValue().intValue()))
+                .append(methodMetadataSymbol(symbol))
                 .append(" = {JAVAN_METHOD_METADATA_MAGIC, ")
                 .append(method.parameterDescriptors().size())
+                .append(", ")
+                .append(method.modifiers())
                 .append(", ")
                 .append(emitCStringLiteral(method.name()))
                 .append(", ")
                 .append(emitCStringLiteral(displayClassName(method.declaringJvmName())))
+                .append(", ")
+                .append(emitCStringLiteral(reflectionTypeName(method.returnDescriptor())))
+                .append(", ")
+                .append(method.parameterDescriptors().isEmpty()
+                    ? "NULL"
+                    : methodParameterMetadataSymbol(symbol))
                 .append("};")
                 .append(System.lineSeparator());
         }
@@ -1107,6 +1128,10 @@ public final class CCodegen {
         return "javan_method_metadata_" + index;
     }
 
+    private static String methodParameterMetadataSymbol(final int index) {
+        return "javan_method_parameter_types_" + index;
+    }
+
     private static String reflectionTypeName(final String descriptor) {
         switch (descriptor) {
             case "Z": return "boolean";
@@ -1117,6 +1142,7 @@ public final class CCodegen {
             case "J": return "long";
             case "F": return "float";
             case "D": return "double";
+            case "V": return "void";
             default:
         }
         if (descriptor.startsWith("L")) {
