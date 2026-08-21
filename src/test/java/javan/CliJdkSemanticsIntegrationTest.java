@@ -10782,10 +10782,15 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                     System.out.println(Long.MIN_VALUE - 1L);
                     System.out.println(Long.MIN_VALUE * -1L);
                     System.out.println(fingerprintByte(-3750763034362895579L, 0));
+                    System.out.println(score(7, -3));
                 }
 
                 private static long fingerprintByte(final long hash, final int value) {
                     return (hash ^ (value & 255)) * 1099511628211L;
+                }
+
+                private static int score(final int value, final int delta) {
+                    return Math.max(value + Math.abs(delta), 0);
                 }
             }
             """);

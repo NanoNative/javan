@@ -29,6 +29,7 @@ import java.util.Optional;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 final class CCodegenMemoryTest {
     @TempDir
@@ -95,6 +96,25 @@ final class CCodegenMemoryTest {
             "return javan_long_subtract_wrapping(7LL, 3LL);",
             "return javan_long_multiply_wrapping(7LL, 3LL);"
         );
+    }
+
+    @Test
+    void rejectsIntegerBinaryExpressionWithoutOperator() {
+        final IrProgram program = new IrProgram(
+            List.of(),
+            List.of(
+                new IrFunction(
+                    "com/acme/Main", "main", "([Ljava/lang/String;)V", "main_symbol", IrType.VOID,
+                    List.of(), List.of(), List.of(IrInstruction.returnVoid())
+                ),
+                primitiveArithmeticFunction("missing_operator", IrType.INT, null)
+            ),
+            "main_symbol"
+        );
+
+        assertThatThrownBy(() -> new CCodegen().generate(program, tempDir))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("Integer binary expression is missing its operator");
     }
 
     @Test

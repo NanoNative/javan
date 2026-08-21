@@ -363,6 +363,62 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsNestedIntegerExpression() throws Exception {
+        final Path probeProject = tempDir.resolve("selfhost-nested-integer-expression");
+        final Path probeClasses = probeProject.resolve("classes");
+        Files.createDirectories(probeClasses);
+        writeJava(probeProject, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(score(7, -3));
+                }
+
+                private static int score(final int value, final int delta) {
+                    return Math.max(value + Math.abs(delta), 0);
+                }
+            }
+            """);
+
+        final ProcessResult javac = process(
+            tempDir,
+            List.of(
+                CliTestHarness.currentJavacCommand(),
+                "--release",
+                "25",
+                "-d",
+                probeClasses.toString(),
+                probeProject.resolve("src/main/java/com/acme/Main.java").toString()
+            ),
+            Duration.ofSeconds(30)
+        );
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+
+        final ProcessResult nativeBuild = process(
+            tempDir,
+            List.of(
+                primitiveLiteralBootstrap.toString(),
+                "build",
+                probeClasses.toString(),
+                "--main",
+                "com.acme.Main",
+                "--output",
+                "selfhost-nested-integer-expression"
+            ),
+            Duration.ofSeconds(120)
+        );
+        assertThat(nativeBuild.exitCode()).as(nativeBuild.stderr()).isZero();
+
+        final Path probeBinary = probeProject.resolve(".javan/bin/selfhost-nested-integer-expression");
+        assertThat(probeBinary).isExecutable();
+        assertThat(process(tempDir, List.of(probeBinary.toString())).stdout()).isEqualTo("10\n");
+    }
+
+    @Test
     void nativeBuiltJavanBuildsPlainSourceProject() throws Exception {
         final Path sourceProject = tempDir.resolve("selfhost-source-project");
         writeJava(sourceProject, "com.acme.Main", """
