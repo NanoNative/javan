@@ -371,15 +371,19 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             package com.acme;
 
             import java.lang.reflect.Method;
+            import java.util.ArrayList;
+            import java.util.Collection;
 
             public final class Main {
                 private Main() {
                 }
 
                 public static void main(final String[] args) throws Exception {
-                    final Method method = String.class.getDeclaredMethod("substring", int.class);
-                    System.out.println(method.getName());
-                    System.out.println(method.getParameterCount());
+                    final Method declared = String.class.getDeclaredMethod("substring", int.class);
+                    final Method inherited = ArrayList.class.getMethod("containsAll", Collection.class);
+                    System.out.println(declared.getName());
+                    System.out.println(declared.getParameterCount());
+                    System.out.println(inherited.getDeclaringClass().getName());
                 }
             }
             """);
@@ -416,7 +420,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         final Path probeBinary = probeProject.resolve(".javan/bin/selfhost-method-metadata");
         assertThat(probeBinary).isExecutable();
         assertThat(process(tempDir, List.of(probeBinary.toString())).stdout())
-            .isEqualTo("substring\n1\n");
+            .isEqualTo("substring\n1\njava.util.AbstractCollection\n");
     }
 
     @Test

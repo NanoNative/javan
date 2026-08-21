@@ -8289,6 +8289,269 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void publicMethodLookupIncludesInheritedClassAndInterfaceMethods() throws Exception {
+        final Path project = project("public-method-metadata");
+        writeJava(project, "com.acme.PublicRoot", """
+            package com.acme;
+
+            public interface PublicRoot {
+                default void inheritedInterface(final String value) {
+                }
+
+                default void classWins() {
+                }
+
+                static void staticInterface() {
+                }
+            }
+            """);
+        writeJava(project, "com.acme.PublicChild", """
+            package com.acme;
+
+            public interface PublicChild extends PublicRoot {
+            }
+            """);
+        writeJava(project, "com.acme.PublicBroad", """
+            package com.acme;
+
+            public interface PublicBroad {
+                Object covariant();
+            }
+            """);
+        writeJava(project, "com.acme.PublicNarrow", """
+            package com.acme;
+
+            public interface PublicNarrow extends PublicBroad {
+                @Override
+                String covariant();
+            }
+            """);
+        writeJava(project, "com.acme.PublicDiamond", """
+            package com.acme;
+
+            public interface PublicDiamond extends PublicBroad, PublicNarrow {
+            }
+            """);
+        writeJava(project, "com.acme.PublicFirst", """
+            package com.acme;
+
+            public interface PublicFirst {
+                Object selectedReturn();
+            }
+            """);
+        writeJava(project, "com.acme.PublicSecond", """
+            package com.acme;
+
+            public interface PublicSecond {
+                String selectedReturn();
+            }
+            """);
+        writeJava(project, "com.acme.PublicCombined", """
+            package com.acme;
+
+            public interface PublicCombined extends PublicFirst, PublicSecond {
+            }
+            """);
+        writeJava(project, "com.acme.Base", """
+            package com.acme;
+
+            public class Base {
+                public void inherited(final int value) {
+                }
+
+                public static void inheritedStatic() {
+                }
+
+                public void overridden() {
+                }
+
+                public void classWins() {
+                }
+
+                protected void hidden() {
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+
+            public final class Target extends Base implements PublicChild {
+                public void own() {
+                }
+
+                @Override
+                public void overridden() {
+                }
+
+                private void privateMethod() {
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.lang.reflect.Method;
+            import java.util.ArrayList;
+            import java.util.Collection;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Class<?>[] noParameters = null;
+                    final Method own = Target.class.getMethod("own", noParameters);
+                    final Method inherited = Target.class.getMethod("inherited", int.class);
+                    final Method inheritedStatic = Target.class.getMethod("inheritedStatic", noParameters);
+                    final Method inheritedInterface = Target.class.getMethod("inheritedInterface", String.class);
+                    final Method parentInterface = PublicChild.class.getMethod("inheritedInterface", String.class);
+                    final Method ownInterfaceStatic = PublicRoot.class.getMethod("staticInterface", noParameters);
+                    final Method overridden = Target.class.getMethod("overridden", noParameters);
+                    final Method classWins = Target.class.getMethod("classWins", noParameters);
+                    final Method objectMethod = Target.class.getMethod("toString", noParameters);
+                    final Method arrayObjectMethod = String[].class.getMethod("toString", noParameters);
+                    final Method dynamicArrayMethod = Class.forName("[Ljava.lang.String;")
+                        .getMethod("hashCode", noParameters);
+                    final Method covariant = PublicDiamond.class.getMethod("covariant", noParameters);
+                    final Method selectedReturn = PublicCombined.class.getMethod("selectedReturn", noParameters);
+                    final Method jdkInherited = ArrayList.class.getMethod("containsAll", Collection.class);
+                    final Method dynamic = Class.forName("java.util.ArrayList")
+                        .getMethod("containsAll", Collection.class);
+                    for (int index = 0; index < 10_000; index++) {
+                        final byte[] ignored = new byte[64];
+                    }
+                    System.out.println(own.getDeclaringClass().getName());
+                    System.out.println(inherited.getDeclaringClass().getName());
+                    System.out.println(inheritedStatic.getDeclaringClass().getName());
+                    System.out.println(inheritedInterface.getDeclaringClass().getName());
+                    System.out.println(parentInterface.getDeclaringClass().getName());
+                    System.out.println(ownInterfaceStatic.getDeclaringClass().getName());
+                    System.out.println(overridden.getDeclaringClass().getName());
+                    System.out.println(classWins.getDeclaringClass().getName());
+                    System.out.println(objectMethod.getDeclaringClass().getName());
+                    System.out.println(arrayObjectMethod.getDeclaringClass().getName());
+                    System.out.println(dynamicArrayMethod.getDeclaringClass().getName());
+                    System.out.println(covariant.getDeclaringClass().getName());
+                    System.out.println(selectedReturn.getDeclaringClass().getName());
+                    System.out.println(jdkInherited.getDeclaringClass().getName());
+                    System.out.println(dynamic.getDeclaringClass().getName());
+                    printPrivateFailure(noParameters);
+                    printProtectedFailure(noParameters);
+                    printStaticInterfaceFailure(noParameters);
+                    printInterfaceObjectFailure(noParameters);
+                    printArrayCloneFailure(noParameters);
+                    printPrimitiveFailure(noParameters);
+                    printParameterFailure();
+                    printNullClassFailure(noParameters);
+                    printNullNameFailure(noParameters);
+                }
+
+                private static void printPrivateFailure(final Class<?>[] noParameters) {
+                    try {
+                        Target.class.getMethod("privateMethod", noParameters);
+                    } catch (final NoSuchMethodException expected) {
+                        System.out.println("private-hidden");
+                    }
+                }
+
+                private static void printProtectedFailure(final Class<?>[] noParameters) {
+                    try {
+                        Target.class.getMethod("hidden", noParameters);
+                    } catch (final NoSuchMethodException expected) {
+                        System.out.println("protected-hidden");
+                    }
+                }
+
+                private static void printStaticInterfaceFailure(final Class<?>[] noParameters) {
+                    try {
+                        PublicChild.class.getMethod("staticInterface", noParameters);
+                    } catch (final NoSuchMethodException expected) {
+                        System.out.println("static-interface-not-inherited");
+                    }
+                }
+
+                private static void printInterfaceObjectFailure(final Class<?>[] noParameters) {
+                    try {
+                        PublicChild.class.getMethod("toString", noParameters);
+                    } catch (final NoSuchMethodException expected) {
+                        System.out.println("interface-object-not-inherited");
+                    }
+                }
+
+                private static void printArrayCloneFailure(final Class<?>[] noParameters) {
+                    try {
+                        String[].class.getMethod("clone", noParameters);
+                    } catch (final NoSuchMethodException expected) {
+                        System.out.println("array-clone-not-public");
+                    }
+                }
+
+                private static void printPrimitiveFailure(final Class<?>[] noParameters) {
+                    final Class<?> primitive = int.class;
+                    try {
+                        primitive.getMethod("toString", noParameters);
+                    } catch (final NoSuchMethodException expected) {
+                        System.out.println("primitive-has-no-methods");
+                    }
+                }
+
+                private static void printParameterFailure() {
+                    final Class<?>[] intParameter = {int.class};
+                    try {
+                        Target.class.getMethod("own", intParameter);
+                    } catch (final NoSuchMethodException expected) {
+                        System.out.println("exact-parameters");
+                    }
+                }
+
+                private static void printNullClassFailure(final Class<?>[] noParameters) throws NoSuchMethodException {
+                    final Class<?> absent = null;
+                    try {
+                        absent.getMethod("own", noParameters);
+                    } catch (final NullPointerException expected) {
+                        System.out.println("null-class");
+                    }
+                }
+
+                private static void printNullNameFailure(final Class<?>[] noParameters) throws NoSuchMethodException {
+                    try {
+                        Target.class.getMethod(null, noParameters);
+                    } catch (final NullPointerException expected) {
+                        System.out.println("null-name");
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/generated/main.c")))
+            .contains("static void* javan_generated_class_get_method(")
+            .contains("JAVAN_METHOD_METADATA_MAGIC, 1, \"containsAll\", \"java.util.AbstractCollection\"");
+        final ProcessResult nativeRun = process(
+            project,
+            List.of(project.resolve(".javan/bin/public-method-metadata").toString()),
+            defaultProcessTimeout(),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1")
+        );
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo(
+            "com.acme.Target\ncom.acme.Base\ncom.acme.Base\ncom.acme.PublicRoot\n"
+                + "com.acme.PublicRoot\ncom.acme.PublicRoot\ncom.acme.Target\ncom.acme.Base\njava.lang.Object\n"
+                + "java.lang.Object\njava.lang.Object\n"
+                + "com.acme.PublicNarrow\ncom.acme.PublicSecond\n"
+                + "java.util.AbstractCollection\njava.util.AbstractCollection\n"
+                + "private-hidden\nprotected-hidden\nstatic-interface-not-inherited\n"
+                + "interface-object-not-inherited\narray-clone-not-public\nprimitive-has-no-methods\n"
+                + "exact-parameters\n"
+                + "null-class\nnull-name\n"
+        );
+    }
+
+    @Test
     void secureRandomStaticInitializerSurvivesGcAndFillsBytes() throws Exception {
         final Path project = project("secure-random-next-bytes");
         writeJava(project, "com.acme.Main", """

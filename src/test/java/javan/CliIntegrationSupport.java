@@ -312,7 +312,8 @@ abstract class CliIntegrationSupport {
         } catch (final Exception exception) {
             throw new IllegalStateException("Unable to prepare JVM run", exception);
         }
-        assertThat(process(project, compile).exitCode()).isZero();
+        final ProcessResult compilation = process(project, compile);
+        assertThat(compilation.exitCode()).as(compilation.stderr()).isZero();
         final List<Path> runtimeClasspath = new java.util.ArrayList<>();
         runtimeClasspath.add(classes);
         runtimeClasspath.addAll(classpathEntries);
@@ -322,7 +323,7 @@ abstract class CliIntegrationSupport {
             String.join(java.io.File.pathSeparator, runtimeClasspath.stream().map(Path::toString).toList()),
             mainClass
         ));
-        assertThat(run.exitCode()).isZero();
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(run.stderr()).isEmpty();
         return run.stdout();
     }

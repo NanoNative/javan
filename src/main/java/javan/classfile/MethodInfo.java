@@ -40,6 +40,15 @@ public record MethodInfo(int accessFlags, String name, String descriptor, Option
     }
 
     /**
+     * Returns true when the method is public.
+     *
+     * @return true when public
+     */
+    public boolean isPublic() {
+        return (accessFlags & ACC_PUBLIC) != 0;
+    }
+
+    /**
      * Returns true when the method is static.
      *
      * @return true when static

@@ -4363,6 +4363,25 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void exactMethodLookupsShareMetadataAndPlatformFailureSupport() {
+        final String descriptor = "(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;";
+        final MethodRef declared = new MethodRef("java/lang/Class", "getDeclaredMethod", descriptor);
+        final MethodRef inherited = new MethodRef("java/lang/Class", "getMethod", descriptor);
+        final MethodRef wrongDescriptor = new MethodRef(
+            "java/lang/Class", "getMethod", "(Ljava/lang/String;)Ljava/lang/reflect/Method;"
+        );
+
+        assertThat(List.of(declared, inherited)).allMatch(JdkCallSupport::isSupported);
+        assertThat(JdkCallSupport.isSupported(wrongDescriptor)).isFalse();
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(inherited)).containsExactly(
+            "java/lang/NullPointerException",
+            "java/lang/NoSuchMethodException"
+        );
+        assertThat(JdkCallSupport.runtimeModules(inherited)).containsExactly("reflection-metadata");
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(wrongDescriptor)).isEmpty();
+    }
+
+    @Test
     void secureRandomDefaultConstructionAndByteGenerationAreSupported() {
         assertThat(List.of(
             JdkCallSupport.isSupported(new MethodRef("java/security/SecureRandom", "<init>", "()V")),

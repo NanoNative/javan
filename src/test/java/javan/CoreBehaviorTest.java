@@ -450,6 +450,11 @@ final class CoreBehaviorTest {
             "getDeclaredMethod",
             "(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;"
         ))).isEmpty();
+        assertThat(rules.forbiddenReason(new MethodRef(
+            "java/lang/Class",
+            "getMethod",
+            "(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;"
+        ))).isEmpty();
         assertThat(rules.forbiddenReason(new MethodRef("java/lang/ClassLoader", "loadClass", "(Ljava/lang/String;)Ljava/lang/Class;"))).isPresent();
         assertThat(rules.forbiddenReason(new MethodRef("java/lang/ClassLoader", "getSystemClassLoader", "()Ljava/lang/ClassLoader;"))).isEmpty();
         assertThat(rules.forbiddenReason(new MethodRef("java/lang/ClassLoader", "getSystemResourceAsStream", "(Ljava/lang/String;)Ljava/io/InputStream;"))).isEmpty();
@@ -16526,7 +16531,7 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void cCodegenEmitsDeclaredMethodMetadataOnlyWhenUsed() throws Exception {
+    void cCodegenEmitsMethodMetadataOnlyForReachableLookupKinds() throws Exception {
         final IrClass classInfo = new IrClass(
             "com/acme/Main",
             "javan_class_com_acme_Main",
@@ -16547,7 +16552,7 @@ final class CoreBehaviorTest {
         );
         final List<IrReflectedClass> metadata = List.of(new IrReflectedClass(
             "com/acme/Main",
-            List.of(new IrMethodMetadata("main", List.of()))
+            List.of(new IrMethodMetadata("com/acme/Main", "main", List.of()))
         ));
         final IrProgram plainProgram = new IrProgram(
             List.of(classInfo), List.of(plain), List.of(), "main_symbol", List.of(), Map.of(), Map.of(),
@@ -16558,7 +16563,11 @@ final class CoreBehaviorTest {
             plainProgram, tempDir.resolve("plain-method-lookup")
         ));
 
-        assertThat(plainGenerated).doesNotContain("JavanMethodMetadata", "javan_generated_class_get_declared_method");
+        assertThat(plainGenerated).doesNotContain(
+            "JavanMethodMetadata",
+            "javan_generated_class_get_declared_method",
+            "javan_generated_class_get_method"
+        );
 
         final IrFunction lookup = new IrFunction(
             "com/acme/Main",
@@ -16583,9 +16592,44 @@ final class CoreBehaviorTest {
         ));
 
         assertThat(lookupGenerated).contains(
-            "static const JavanMethodMetadata javan_method_metadata_0_0 = ",
+            "static const JavanMethodMetadata javan_method_metadata_0 = ",
             "{JAVAN_METHOD_METADATA_MAGIC, 0, \"main\", \"com.acme.Main\"}",
             "static void* javan_generated_class_get_declared_method("
+        ).doesNotContain("javan_generated_class_get_method");
+
+        final IrMethodMetadata inherited = new IrMethodMetadata("com/acme/Base", "work", List.of("I"));
+        final IrProgram publicProgram = new IrProgram(
+            List.of(classInfo),
+            List.of(new IrFunction(
+                "com/acme/Main",
+                "publicLookup",
+                "()Ljava/lang/reflect/Method;",
+                "public_lookup_symbol",
+                IrType.OBJECT,
+                List.of(),
+                List.of(),
+                List.of(IrInstruction.returnObject(IrExpression.objectCall(
+                    "javan_generated_class_get_method",
+                    List.of(IrExpression.objectNull(), IrExpression.objectNull(), IrExpression.objectNull())
+                )))
+            )),
+            List.of(),
+            "public_lookup_symbol",
+            List.of(),
+            Map.of(),
+            Map.of(),
+            Map.of("com/acme/Main", 1),
+            List.of(new IrReflectedClass("com/acme/Main", List.of(), List.of(inherited)))
         );
+
+        final String publicGenerated = Files.readString(new CCodegen().generate(
+            publicProgram, tempDir.resolve("public-method-lookup")
+        ));
+
+        assertThat(publicGenerated).contains(
+            "static const JavanMethodMetadata javan_method_metadata_0 = ",
+            "{JAVAN_METHOD_METADATA_MAGIC, 1, \"work\", \"com.acme.Base\"}",
+            "static void* javan_generated_class_get_method("
+        ).doesNotContain("javan_generated_class_get_declared_method");
     }
 }

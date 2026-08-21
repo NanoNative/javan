@@ -99,11 +99,12 @@ See [cross-platform-verification.md](cross-platform-verification.md).
 Compatibility grows as complete behavior families. One-argument `Class.forName` is implemented
 for classes and arrays present in the compiled closed world; it initializes classes once and
 transports `ClassNotFoundException` and `NullPointerException` through normal Java catches.
-Closed-world `getDeclaredMethod` lookup supports exact declared parameter shapes, private
-metadata, `Method.getName`, `getDeclaringClass`, and `getParameterCount`, with catchable lookup
-and null failures. Selecting a runtime class loader remains outside the static native model.
+Closed-world `getDeclaredMethod` and `getMethod` lookup support exact parameter shapes,
+declared private metadata, inherited public class and interface methods, `Method.getName`,
+`getDeclaringClass`, and `getParameterCount`, with catchable lookup and null failures. Selecting
+a runtime class loader remains outside the static native model.
 
-- continue finite member flows with inherited/public lookup, richer metadata, access checks, and invocation
+- continue finite member flows with richer metadata, access checks, and invocation
 - service loading from standard descriptors and module declarations
 - broader exception semantics and platform throwable transport
 - collections, streams, time, networking, files, and concurrency only with native/JVM parity
