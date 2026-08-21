@@ -227,6 +227,38 @@ final class ClassFileReaderTest {
     }
 
     @Test
+    void readerParsesModuleServiceProviders() throws Exception {
+        final Path sources = tempDir.resolve("module-sources");
+        final Path classes = tempDir.resolve("module-classes");
+        Files.createDirectories(sources.resolve("service"));
+        Files.createDirectories(sources.resolve("impl"));
+        Files.writeString(sources.resolve("module-info.java"), """
+            module example.module {
+                exports service;
+                uses service.Api;
+                provides service.Api with impl.Provider;
+            }
+            """);
+        Files.writeString(sources.resolve("service/Api.java"), "package service; public interface Api {}\n");
+        Files.writeString(sources.resolve("impl/Provider.java"),
+            "package impl; public final class Provider implements service.Api {}\n");
+        Files.createDirectories(classes);
+
+        final int result = ToolProvider.getSystemJavaCompiler().run(null, null, null,
+            "-d", classes.toString(),
+            sources.resolve("module-info.java").toString(),
+            sources.resolve("service/Api.java").toString(),
+            sources.resolve("impl/Provider.java").toString());
+
+        assertThat(result).isZero();
+        final ClassFile module = new ClassFileReader().read(
+            Files.readAllBytes(classes.resolve("module-info.class")), SOURCE
+        );
+        assertThat(module.serviceUses()).containsExactly("service/Api");
+        assertThat(module.serviceProviders()).containsExactly(new ServiceProvider("service/Api", "impl/Provider", true));
+    }
+
+    @Test
     void readerUsesAuthoritativeNestHostMetadata() throws Exception {
         final Path source = tempDir.resolve("Outer.java");
         final Path classes = tempDir.resolve("nest-classes");

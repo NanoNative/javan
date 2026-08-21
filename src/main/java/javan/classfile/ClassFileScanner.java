@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,18 +47,38 @@ public final class ClassFileScanner {
      * @throws InterruptedException when interrupted while extracting jars
      */
     public Map<String, ClassFile> scan(final ProjectLayout layout) throws IOException, InterruptedException {
+        return scanAll(layout).classes();
+    }
+
+    /**
+     * Scans classes and standard service-provider declarations in one classpath traversal.
+     *
+     * @param layout project layout
+     * @return immutable closed-world scan
+     * @throws IOException when inputs cannot be read
+     * @throws InterruptedException when interrupted while extracting jars
+     */
+    public ScanResult scanAll(final ProjectLayout layout) throws IOException, InterruptedException {
         final Map<String, ClassFile> classes = new LinkedHashMap<>();
+        final Map<String, LinkedHashSet<ServiceProvider>> providers = new LinkedHashMap<>();
         for (final Path folder : layout.classFolders()) {
-            scanFolder(folder, classes, true);
+            scanFolder(folder, classes, providers, true);
         }
         for (final Path entry : layout.classpathEntries()) {
             if (entry.getFileName().toString().endsWith(".jar")) {
-                scanJar(entry, classes, entry.equals(layout.input()), layout.outputDirectory());
+                scanJar(entry, classes, providers, entry.equals(layout.input()), layout.outputDirectory());
             } else if (Files.isDirectory(entry)) {
-                scanFolder(entry, classes, entry.equals(layout.input()));
+                scanFolder(entry, classes, providers, entry.equals(layout.input()));
             }
         }
-        return Collections.unmodifiableMap(new LinkedHashMap<>(classes));
+        final Map<String, List<ServiceProvider>> immutableProviders = new LinkedHashMap<>();
+        for (final Map.Entry<String, LinkedHashSet<ServiceProvider>> entry : providers.entrySet()) {
+            immutableProviders.put(entry.getKey(), List.copyOf(entry.getValue()));
+        }
+        return new ScanResult(
+            Collections.unmodifiableMap(new LinkedHashMap<>(classes)),
+            Collections.unmodifiableMap(immutableProviders)
+        );
     }
 
     /**
@@ -107,19 +128,65 @@ public final class ClassFileScanner {
         return null;
     }
 
-    private void scanFolder(final Path folder, final Map<String, ClassFile> classes, final boolean application) throws IOException {
+    private void scanFolder(
+        final Path folder,
+        final Map<String, ClassFile> classes,
+        final Map<String, LinkedHashSet<ServiceProvider>> providers,
+        final boolean application
+    ) throws IOException {
         if (!Files.isDirectory(folder)) {
             return;
         }
         for (final Path classFile : Files2.findClassFiles(folder)) {
             final ClassFile parsed = reader.read(Files.readAllBytes(classFile), classFile);
+            for (final ServiceProvider provider : parsed.serviceProviders()) {
+                providers.computeIfAbsent(provider.service(), ignored -> new LinkedHashSet<>()).add(provider);
+            }
             classes.put(parsed.name(), parsed.withApplication(application));
+        }
+        final Path descriptors = folder.resolve("META-INF/services");
+        if (Files.isDirectory(descriptors)) {
+            for (final Path descriptor : Files2.findResourceFiles(descriptors)) {
+                if (descriptors.equals(descriptor.getParent())) {
+                    readServiceDescriptor(descriptor, providers);
+                }
+            }
+        }
+    }
+
+    private static void readServiceDescriptor(
+        final Path descriptor,
+        final Map<String, LinkedHashSet<ServiceProvider>> providers
+    ) throws IOException {
+        final String service = descriptor.getFileName().toString().replace('.', '/');
+        final LinkedHashSet<ServiceProvider> declarations = providers.computeIfAbsent(service, ignored -> new LinkedHashSet<>());
+        final String content = Files.readString(descriptor);
+        int start = 0;
+        while (start <= content.length()) {
+            int end = start;
+            while (end < content.length() && content.charAt(end) != '\n' && content.charAt(end) != '\r') {
+                end++;
+            }
+            final String line = Strings2.slice(content, start, end);
+            final int comment = line.indexOf('#');
+            final String provider = Strings2.trimAscii(comment < 0 ? line : Strings2.slice(line, 0, comment));
+            if (!provider.isEmpty()) {
+                declarations.add(new ServiceProvider(service, Strings2.replaceChar(provider, '.', '/'), false));
+            }
+            while (end < content.length() && (content.charAt(end) == '\n' || content.charAt(end) == '\r')) {
+                end++;
+            }
+            if (end == content.length()) {
+                break;
+            }
+            start = end;
         }
     }
 
     private void scanJar(
         final Path jar,
         final Map<String, ClassFile> classes,
+        final Map<String, LinkedHashSet<ServiceProvider>> providers,
         final boolean application,
         final Path outputDirectory
     ) throws IOException, InterruptedException {
@@ -133,7 +200,7 @@ public final class ClassFileScanner {
         if (result.exitCode() != 0) {
             throw new IOException("Unable to extract jar " + jar.toString() + ": " + result.stderr());
         }
-        scanFolder(cache, classes, application);
+        scanFolder(cache, classes, providers, application);
     }
 
     private static String cacheName(final Path jar) throws IOException {
@@ -151,5 +218,9 @@ public final class ClassFileScanner {
             hash *= 0x100000001b3L;
         }
         return hash;
+    }
+
+    /** Immutable classes and service providers discovered from the same classpath snapshot. */
+    public record ScanResult(Map<String, ClassFile> classes, Map<String, List<ServiceProvider>> serviceProviders) {
     }
 }

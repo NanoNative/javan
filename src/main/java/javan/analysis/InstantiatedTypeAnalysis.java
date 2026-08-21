@@ -24,7 +24,8 @@ public final class InstantiatedTypeAnalysis {
         ALLOCATION,
         ENUM,
         EXTERNAL,
-        SUBSTITUTION
+        SUBSTITUTION,
+        SERVICE
     }
 
     /**
@@ -81,7 +82,20 @@ public final class InstantiatedTypeAnalysis {
         final List<EntryPoint> reachableMethods,
         final List<EntryPoint> roots
     ) {
+        return analyze(classes, reachableMethods, roots, List.of());
+    }
+
+    /** Derives construction facts including configured service providers. */
+    public static Result analyze(
+        final Map<String, ClassFile> classes,
+        final List<EntryPoint> reachableMethods,
+        final List<EntryPoint> roots,
+        final List<String> serviceProviders
+    ) {
         final Map<String, List<Origin>> origins = new LinkedHashMap<>();
+        for (final String provider : serviceProviders) {
+            addConcrete(classes, origins, provider, Origin.SERVICE);
+        }
         for (final EntryPoint root : roots) {
             final ClassFile owner = classes.get(root.className());
             final Optional<MethodInfo> rootMethod = owner == null
@@ -279,6 +293,9 @@ public final class InstantiatedTypeAnalysis {
         }
         if (origins.contains(Origin.SUBSTITUTION)) {
             result.add(Origin.SUBSTITUTION);
+        }
+        if (origins.contains(Origin.SERVICE)) {
+            result.add(Origin.SERVICE);
         }
         return List.copyOf(result);
     }

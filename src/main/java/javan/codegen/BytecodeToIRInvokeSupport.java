@@ -980,6 +980,34 @@ final class BytecodeToIRInvokeSupport {
         if (lowerJdkWrapperInstanceCall(classFile, method, methodRef, stack)) {
             return;
         }
+        if ("java/util/ServiceLoader".equals(methodRef.owner())
+            && "iterator".equals(methodRef.name())
+            && "()Ljava/util/Iterator;".equals(methodRef.descriptor())) {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_service_loader_iterator",
+                List.of(popObject(classFile, method, stack)));
+            return;
+        }
+        if ("java/util/ServiceLoader".equals(methodRef.owner())
+            && "findFirst".equals(methodRef.name())
+            && "()Ljava/util/Optional;".equals(methodRef.descriptor())) {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_service_loader_find_first",
+                List.of(popObject(classFile, method, stack)));
+            BytecodeToIRControlFlowSupport.appendPendingExceptionDispatch(
+                method,
+                instruction,
+                instructions,
+                List.of("java/lang/Throwable"),
+                pendingExceptionHandlerStacks
+            );
+            return;
+        }
+        if ("java/util/ServiceLoader".equals(methodRef.owner())
+            && "reload".equals(methodRef.name())
+            && "()V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.callStaticVoid("javan_service_loader_reload",
+                List.of(popObject(classFile, method, stack))));
+            return;
+        }
         if (lowerOptionalInstanceCall(
             classes,
             classFile,
@@ -2182,6 +2210,30 @@ final class BytecodeToIRInvokeSupport {
         if (lowerJdkCollectionStaticCall(classFile, method, methodRef, stack)) {
             return;
         }
+        if ("java/util/ServiceLoader".equals(methodRef.owner())
+            && ("load".equals(methodRef.name()) || "loadInstalled".equals(methodRef.name()))
+            && "(Ljava/lang/Class;)Ljava/util/ServiceLoader;".equals(methodRef.descriptor())) {
+            final String loader = "loadInstalled".equals(methodRef.name())
+                ? applicationModule(classes, classFile)
+                    ? "javan_generated_service_loader_load_installed_module"
+                    : "javan_generated_service_loader_load_installed"
+                : applicationModule(classes, classFile)
+                    ? "javan_generated_service_loader_load_module"
+                    : "javan_generated_service_loader_load";
+            pushObjectCall(instructions, stack, localDeclarations, loader,
+                List.of(popObject(classFile, method, stack)));
+            return;
+        }
+        if ("java/util/ServiceLoader".equals(methodRef.owner()) && "load".equals(methodRef.name())
+            && "(Ljava/lang/Class;Ljava/lang/ClassLoader;)Ljava/util/ServiceLoader;".equals(methodRef.descriptor())) {
+            popObject(classFile, method, stack);
+            final String loader = applicationModule(classes, classFile)
+                ? "javan_generated_service_loader_load_module"
+                : "javan_generated_service_loader_load";
+            pushObjectCall(instructions, stack, localDeclarations, loader,
+                List.of(popObject(classFile, method, stack)));
+            return;
+        }
         if (lowerJdkFileStaticCall(classFile, method, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
@@ -2228,6 +2280,11 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         appendCallResult(instructions, stack, localDeclarations, descriptor.returnType(), symbol, arguments);
+    }
+
+    private static boolean applicationModule(final Map<String, ClassFile> classes, final ClassFile caller) {
+        final ClassFile module = classes.get("module-info");
+        return caller.application() && module != null && module.application();
     }
 
     private static boolean lowerExecutorsStaticCall(

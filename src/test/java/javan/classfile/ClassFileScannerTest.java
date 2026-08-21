@@ -150,6 +150,22 @@ final class ClassFileScannerTest {
     }
 
     @Test
+    void scanAggregatesStandardServiceDescriptorsInClasspathOrder(@TempDir final Path tempDir) throws Exception {
+        final Path first = classDirectory(tempDir, "first", "example/First");
+        final Path second = classDirectory(tempDir, "second", "example/Second");
+        writeService(first, "example.Service", "example.First\n# ignored\nexample.Shared\n");
+        writeService(second, "example.Service", " example.Shared # duplicate\nexample.Second\n");
+
+        final ClassFileScanner.ScanResult scan = new ClassFileScanner().scanAll(projectLayout(
+            tempDir, tempDir, List.of(), List.of(first, second)
+        ));
+
+        assertThat(scan.serviceProviders().get("example/Service"))
+            .extracting(ServiceProvider::provider)
+            .containsExactly("example/First", "example/Shared", "example/Second");
+    }
+
+    @Test
     void scanUsesLastClasspathEntryForDuplicateClassName(@TempDir final Path tempDir) throws Exception {
         final String className = "example/duplicate/Main";
         final Path firstDirectory = classDirectory(tempDir, "first", className);
@@ -181,6 +197,12 @@ final class ClassFileScannerTest {
 
     private static ProjectLayout jarInputLayout(final Path root, final Path input) {
         return projectLayout(root, input, List.of(), List.of(input), InputKind.JAR_FILE, BuildTool.JAR);
+    }
+
+    private static void writeService(final Path classes, final String service, final String providers) throws IOException {
+        final Path descriptor = classes.resolve("META-INF/services").resolve(service);
+        Files.createDirectories(descriptor.getParent());
+        Files.writeString(descriptor, providers);
     }
 
     private static ProjectLayout projectLayoutWithClasspath(final Path root, final Path classpathEntry) {

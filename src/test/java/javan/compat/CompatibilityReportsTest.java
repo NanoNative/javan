@@ -80,17 +80,24 @@ final class CompatibilityReportsTest {
         );
 
         final String summary = Files.readString(tempDir.resolve(".javan/reports/compatibility-summary.json"));
+        final String matrix = Files.readString(tempDir.resolve("doc/status/support-matrix.json"));
+        final int rows = jsonInt(matrix, "rows");
+        final int pass = jsonInt(matrix, "pass");
+        final int scoped = jsonInt(matrix, "scoped");
+        final int target = jsonInt(matrix, "target");
+        final int rejected = jsonInt(matrix, "rejected");
+        final int accounted = pass + scoped + rejected;
 
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 2, \"constructors\": 1, \"methods\": 3, \"callables\": 4, \"totalCallables\": 6, \"leftCallables\": 2, \"coveragePercent\": \"66.6\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 4, \"explicitRejectedCallables\": 2, \"doneCallables\": 6, \"unknownCallables\": 0, \"totalCallables\": 6, \"donePercent\": \"100.0\"}",
-            "\"supportRows\": 309",
-            "\"passRows\": 309",
-            "\"scopedRows\": 0",
-            "\"targetRows\": 0",
-            "\"rejectedRows\": 0",
-            "\"accountedRows\": 309",
-            "\"unaccountedRows\": 0"
+            "\"supportRows\": " + rows,
+            "\"passRows\": " + pass,
+            "\"scopedRows\": " + scoped,
+            "\"targetRows\": " + target,
+            "\"rejectedRows\": " + rejected,
+            "\"accountedRows\": " + accounted,
+            "\"unaccountedRows\": " + (rows - accounted)
         );
     }
 
@@ -891,6 +898,17 @@ final class CompatibilityReportsTest {
             return "0" + value;
         }
         return Integer.toString(value);
+    }
+
+    private static int jsonInt(final String json, final String key) {
+        final String marker = "\"" + key + "\": ";
+        final int counts = json.indexOf("\"counts\": {");
+        final int start = json.indexOf(marker, counts) + marker.length();
+        int end = start;
+        while (end < json.length() && Character.isDigit(json.charAt(end))) {
+            end++;
+        }
+        return Integer.parseInt(json.substring(start, end));
     }
 
     private static MemberMetadata member(

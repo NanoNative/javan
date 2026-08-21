@@ -79,6 +79,10 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_RUNTIME_KIND_SECURE_RANDOM 36
         #define JAVAN_RUNTIME_KIND_UUID 37
         #define JAVAN_RUNTIME_KIND_METHOD 38
+        #define JAVAN_RUNTIME_KIND_SERVICE_LOADER 39
+        #define JAVAN_RUNTIME_KIND_SERVICE_ITERATOR 40
+        #define JAVAN_SERVICE_LOADER_MAGIC 0x4a534c44
+        #define JAVAN_SERVICE_ITERATOR_MAGIC 0x4a534954
         #define JAVAN_LIST_VIEW_UNMODIFIABLE 1
         #define JAVAN_LIST_VIEW_SET 2
         #define JAVAN_MAP_VIEW_UNMODIFIABLE 1
@@ -114,6 +118,23 @@ final class RuntimeSourceMemorySections {
             int reserved;
             javan_object_list* list;
         } javan_object_iterator;
+
+        typedef void* (*javan_service_provider_resolver)(int service_type_id, int provider_index);
+        typedef int (*javan_service_provider_counter)(int service_type_id);
+
+        typedef struct {
+            int magic;
+            int service_type_id;
+            int provider_count;
+            void* providers;
+            javan_service_provider_resolver resolver;
+        } javan_service_loader;
+
+        typedef struct {
+            int magic;
+            int index;
+            javan_service_loader* loader;
+        } javan_service_iterator;
 
         typedef struct javan_object_map {
             int magic;
@@ -1525,7 +1546,9 @@ final class RuntimeSourceMemorySections {
                 || runtime_kind == JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE
                 || runtime_kind == JAVAN_RUNTIME_KIND_SECURE_RANDOM
                 || runtime_kind == JAVAN_RUNTIME_KIND_UUID
-                || runtime_kind == JAVAN_RUNTIME_KIND_METHOD;
+                || runtime_kind == JAVAN_RUNTIME_KIND_METHOD
+                || runtime_kind == JAVAN_RUNTIME_KIND_SERVICE_LOADER
+                || runtime_kind == JAVAN_RUNTIME_KIND_SERVICE_ITERATOR;
             javan_heap_maybe_validate();
             javan_runtime_lock_leave();
         }
@@ -1717,6 +1740,20 @@ final class RuntimeSourceMemorySections {
                 }
                 javan_validate_runtime_managed_reference((void*) list->backing);
                 javan_validate_owned_runtime_buffer_reference((void*) list->values);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_SERVICE_LOADER) {
+                javan_service_loader* loader = (javan_service_loader*) node->value;
+                if (loader->magic != JAVAN_SERVICE_LOADER_MAGIC || loader->service_type_id <= 0
+                    || loader->provider_count < 0 || loader->resolver == NULL) {
+                    javan_panic("invalid service loader metadata");
+                }
+                javan_validate_runtime_managed_reference(loader->providers);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_SERVICE_ITERATOR) {
+                javan_service_iterator* iterator = (javan_service_iterator*) node->value;
+                if (iterator->magic != JAVAN_SERVICE_ITERATOR_MAGIC || iterator->index < 0
+                    || iterator->loader == NULL) {
+                    javan_panic("invalid service iterator metadata");
+                }
+                javan_validate_runtime_managed_reference((void*) iterator->loader);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_MAP) {
                 javan_object_map* map = (javan_object_map*) node->value;
                 if (map->magic != JAVAN_OBJECT_MAP_MAGIC || map->length < 0 || map->capacity < 0 || map->length > map->capacity) {
@@ -2177,6 +2214,7 @@ final class RuntimeSourceMemorySections {
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_SERVER_SOCKET
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_SOCKET_INPUT_STREAM
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_SOCKET_OUTPUT_STREAM
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_RESOURCE_INPUT_STREAM
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_URI
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_HTTP_CLIENT
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_HTTP_REQUEST_BUILDER
@@ -2197,7 +2235,10 @@ final class RuntimeSourceMemorySections {
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_THROWABLE_STATE
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_SECURE_RANDOM
-                    && node->runtime_kind != JAVAN_RUNTIME_KIND_UUID) {
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_UUID
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_METHOD
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_SERVICE_LOADER
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_SERVICE_ITERATOR) {
                     javan_panic("invalid runtime allocation kind");
                 }
                 javan_validate_runtime_container_references(node);
@@ -7841,6 +7882,16 @@ final class RuntimeSourceMemorySections {
                 if (iterator != NULL && iterator->magic == JAVAN_OBJECT_ITERATOR_MAGIC) {
                     javan_gc_mark_value((void*) iterator->list);
                 }
+            } else if (runtime_kind == JAVAN_RUNTIME_KIND_SERVICE_LOADER) {
+                javan_service_loader* loader = (javan_service_loader*) value;
+                if (loader->magic == JAVAN_SERVICE_LOADER_MAGIC) {
+                    javan_gc_mark_value(loader->providers);
+                }
+            } else if (runtime_kind == JAVAN_RUNTIME_KIND_SERVICE_ITERATOR) {
+                javan_service_iterator* iterator = (javan_service_iterator*) value;
+                if (iterator->magic == JAVAN_SERVICE_ITERATOR_MAGIC) {
+                    javan_gc_mark_value((void*) iterator->loader);
+                }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_MAP) {
                 javan_gc_mark_runtime_map((javan_object_map*) value);
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_OPTIONAL) {
@@ -10991,6 +11042,116 @@ final class RuntimeSourceMemorySections {
             return javan_list_new_with_capacity(0, 0);
         }
 
+        static javan_service_loader* javan_service_loader_checked(void* value) {
+            javan_allocation_metadata snapshot;
+            if (value == NULL || javan_find_allocation(value, &snapshot) == 0
+                || snapshot.runtime_kind != JAVAN_RUNTIME_KIND_SERVICE_LOADER) {
+                javan_panic("invalid service loader");
+            }
+            javan_service_loader* loader = (javan_service_loader*) value;
+            if (loader->magic != JAVAN_SERVICE_LOADER_MAGIC || loader->resolver == NULL) {
+                javan_panic("invalid service loader");
+            }
+            return loader;
+        }
+
+        void* javan_service_loader_new(
+            void* service,
+            javan_service_provider_resolver resolver,
+            javan_service_provider_counter counter
+        ) {
+            if (resolver == NULL || counter == NULL) {
+                javan_panic("missing service provider resolver");
+            }
+            int service_type_id = javan_class_exact_type_id(service);
+            void* result = NULL;
+            javan_alloc_rooted(sizeof(javan_service_loader), &result);
+            javan_service_loader* loader = (javan_service_loader*) result;
+            void** roots[] = { &result };
+            javan_root_frame_push(roots, 1);
+            loader->magic = JAVAN_SERVICE_LOADER_MAGIC;
+            loader->service_type_id = service_type_id;
+            loader->provider_count = counter(loader->service_type_id);
+            loader->providers = javan_arraylist_new();
+            loader->resolver = resolver;
+            javan_update_runtime_allocation_kind(result, JAVAN_RUNTIME_KIND_SERVICE_LOADER);
+            javan_root_frame_pop(roots);
+            return result;
+        }
+
+        static void* javan_service_loader_provider(javan_service_loader* loader, int index) {
+            if (index < 0 || index >= loader->provider_count) {
+                javan_pending_throw(
+                    "java/util/NoSuchElementException",
+                    javan_string_from("service iterator exhausted"),
+                    NULL,
+                    NULL,
+                    NULL,
+                    -1,
+                    -1,
+                    NULL
+                );
+                return NULL;
+            }
+            while (javan_list_size(loader->providers) <= index) {
+                int provider_index = javan_list_size(loader->providers);
+                void* provider = loader->resolver(loader->service_type_id, provider_index);
+                if (provider == NULL) {
+                    if (javan_pending_has() != 0) {
+                        return NULL;
+                    }
+                    javan_panic("service provider returned null");
+                }
+                javan_arraylist_add(loader->providers, provider);
+            }
+            return javan_list_get(loader->providers, index);
+        }
+
+        void* javan_service_loader_iterator(void* value) {
+            javan_service_loader* loader = javan_service_loader_checked(value);
+            void* result = NULL;
+            void** roots[] = { (void**) &loader, &result };
+            javan_root_frame_push(roots, 2);
+            javan_alloc_rooted(sizeof(javan_service_iterator), &result);
+            javan_service_iterator* iterator = (javan_service_iterator*) result;
+            iterator->magic = JAVAN_SERVICE_ITERATOR_MAGIC;
+            iterator->index = 0;
+            iterator->loader = loader;
+            javan_update_runtime_allocation_kind(result, JAVAN_RUNTIME_KIND_SERVICE_ITERATOR);
+            javan_root_frame_pop(roots);
+            return result;
+        }
+
+        void* javan_service_loader_find_first(void* value) {
+            javan_service_loader* loader = javan_service_loader_checked(value);
+            if (loader->provider_count == 0) {
+                return javan_optional_empty();
+            }
+            void* provider = javan_service_loader_provider(loader, 0);
+            return javan_pending_has() == 0 ? javan_optional_of(provider) : NULL;
+        }
+
+        void javan_service_loader_reload(void* value) {
+            javan_service_loader* loader = javan_service_loader_checked(value);
+            void** roots[] = { (void**) &loader };
+            javan_root_frame_push(roots, 1);
+            loader->providers = javan_arraylist_new();
+            javan_root_frame_pop(roots);
+        }
+
+        static javan_service_iterator* javan_service_iterator_or_null(void* value) {
+            javan_allocation_metadata snapshot;
+            if (value == NULL || javan_find_allocation(value, &snapshot) == 0
+                || snapshot.runtime_kind != JAVAN_RUNTIME_KIND_SERVICE_ITERATOR) {
+                return NULL;
+            }
+            javan_service_iterator* iterator = (javan_service_iterator*) value;
+            if (iterator->magic != JAVAN_SERVICE_ITERATOR_MAGIC || iterator->loader == NULL) {
+                javan_panic("invalid service iterator");
+            }
+            return iterator;
+        }
+
         int javan_arraylist_add(void* value, void* element) {
             javan_object_list* list = javan_list_checked(value);
             javan_list_mutable_checked(list);
@@ -11442,15 +11603,39 @@ final class RuntimeSourceMemorySections {
         }
 
         int javan_iterator_has_next(void* value) {
+            javan_service_iterator* service_iterator = javan_service_iterator_or_null(value);
+            if (service_iterator != NULL) {
+                javan_service_iterator* iterator = service_iterator;
+                return iterator->index < iterator->loader->provider_count;
+            }
             javan_object_iterator* iterator = javan_iterator_checked(value);
             return iterator->index < javan_list_logical_length(iterator->list);
         }
 
         void* javan_iterator_next(void* value) {
+            javan_service_iterator* service_iterator = javan_service_iterator_or_null(value);
+            if (service_iterator != NULL) {
+                javan_service_iterator* iterator = service_iterator;
+                void* provider = javan_service_loader_provider(iterator->loader, iterator->index);
+                if (javan_pending_has() == 0) {
+                    iterator->index++;
+                }
+                return provider;
+            }
             javan_object_iterator* iterator = javan_iterator_checked(value);
             javan_list_iterator_state_checked(iterator);
             if (iterator->index >= javan_list_logical_length(iterator->list)) {
-                javan_panic("iterator exhausted");
+                javan_pending_throw(
+                    "java/util/NoSuchElementException",
+                    javan_string_from("iterator exhausted"),
+                    NULL,
+                    NULL,
+                    NULL,
+                    -1,
+                    -1,
+                    NULL
+                );
+                return NULL;
             }
             void* result = javan_list_get_unchecked(iterator->list, iterator->index);
             iterator->reserved = iterator->index;

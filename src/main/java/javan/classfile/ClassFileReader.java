@@ -65,6 +65,8 @@ public final class ClassFileReader {
             classAttributes.recordComponents(),
             classAttributes.permittedSubclasses(),
             classAttributes.nestHost().orElse(thisClass),
+            classAttributes.serviceUses(),
+            classAttributes.serviceProviders(),
             source,
             true
         );
@@ -232,6 +234,9 @@ public final class ClassFileReader {
         Optional<List<RecordComponentInfo>> recordComponents = Optional.empty();
         List<String> permittedSubclasses = List.of();
         Optional<String> nestHost = Optional.empty();
+        List<String> serviceUses = List.of();
+        List<ServiceProvider> serviceProviders = List.of();
+        boolean moduleSeen = false;
         for (int index = 0; index < count; index++) {
             final String attributeName = constantPool.utf8(in.u2());
             final long length = in.u4();
@@ -258,13 +263,70 @@ public final class ClassFileReader {
                     throw new IOException("Invalid or duplicate NestHost attribute");
                 }
                 nestHost = Optional.of(constantPool.className(in.u2()));
+            } else if ("Module".equals(attributeName)) {
+                if (moduleSeen) {
+                    throw new IOException("Duplicate Module attribute");
+                }
+                moduleSeen = true;
+                final ModuleServices services = readModuleServices(in, length, constantPool);
+                serviceUses = services.uses();
+                serviceProviders = services.providers();
             } else {
                 in.skip(length);
             }
         }
         return new ClassAttributes(
-            List.copyOf(bootstrapMethods), sourceFile, recordComponents, permittedSubclasses, nestHost
+            List.copyOf(bootstrapMethods), sourceFile, recordComponents, permittedSubclasses, nestHost,
+            serviceUses, serviceProviders
         );
+    }
+
+    private static ModuleServices readModuleServices(
+        final ClassByteCursor in,
+        final long length,
+        final ConstantPool constantPool
+    ) throws IOException {
+        final ClassByteCursor attribute = new ClassByteCursor(in.bytes(length));
+        attribute.skip(6);
+        skipFixedModuleTable(attribute, 3);
+        skipTargetedModuleTable(attribute);
+        skipTargetedModuleTable(attribute);
+        final int uses = attribute.u2();
+        final List<String> serviceUses = new ArrayList<>();
+        for (int index = 0; index < uses; index++) {
+            serviceUses.add(constantPool.className(attribute.u2()));
+        }
+        final int provides = attribute.u2();
+        final List<ServiceProvider> result = new ArrayList<>();
+        for (int index = 0; index < provides; index++) {
+            final String service = constantPool.className(attribute.u2());
+            final int providerCount = attribute.u2();
+            for (int provider = 0; provider < providerCount; provider++) {
+                result.add(new ServiceProvider(service, constantPool.className(attribute.u2()), true));
+            }
+        }
+        if (!attribute.exhausted()) {
+            throw new IOException("Invalid Module attribute length");
+        }
+        return new ModuleServices(List.copyOf(serviceUses), List.copyOf(result));
+    }
+
+    private static void skipFixedModuleTable(final ClassByteCursor in, final int fields) throws IOException {
+        final int count = in.u2();
+        in.skip((long) count * fields * 2L);
+    }
+
+    private static void skipTargetedModuleTable(final ClassByteCursor in) throws IOException {
+        final int count = in.u2();
+        for (int index = 0; index < count; index++) {
+            attributeEntry(in);
+        }
+    }
+
+    private static void attributeEntry(final ClassByteCursor in) throws IOException {
+        in.skip(4);
+        final int targets = in.u2();
+        in.skip(2L * targets);
     }
 
     private static List<String> readPermittedSubclassesAttribute(
@@ -404,8 +466,13 @@ public final class ClassFileReader {
         Optional<String> sourceFile,
         Optional<List<RecordComponentInfo>> recordComponents,
         List<String> permittedSubclasses,
-        Optional<String> nestHost
+        Optional<String> nestHost,
+        List<String> serviceUses,
+        List<ServiceProvider> serviceProviders
     ) {
+    }
+
+    private record ModuleServices(List<String> uses, List<ServiceProvider> providers) {
     }
 
     private static Optional<String> readSignatureAttribute(

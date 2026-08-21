@@ -499,6 +499,7 @@ public final class CompatibilityReports {
             pass("native-import-configured-static-abi"),
             pass("resource-system-loader-stream"),
             pass("resource-loader-instance-stream"),
+            pass("service-loader-closed-world"),
             pass("library-static-int-export"),
             pass("library-string-export"),
             pass("library-byte-array-export"),

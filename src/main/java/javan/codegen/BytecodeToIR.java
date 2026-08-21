@@ -14,6 +14,7 @@ import javan.classfile.FieldInfo;
 import javan.classfile.Instruction;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
+import javan.classfile.ServiceProvider;
 import javan.compat.JdkCallSupport;
 import javan.compat.ExactMethodSupport;
 import javan.ir.IrDispatch;
@@ -147,7 +148,7 @@ public final class BytecodeToIR {
         final BytecodeToIRMetadataSupport.ReflectionClasses reflection =
             BytecodeToIRMetadataSupport.reflectionClasses(classes, reachableMethods);
         return lower(
-            classes, callGraph, sourceLines, nativeInterop, classInitialization, reflection, Map.of()
+            classes, callGraph, sourceLines, nativeInterop, classInitialization, reflection, Map.of(), Map.of()
         );
     }
 
@@ -184,8 +185,27 @@ public final class BytecodeToIR {
             nativeInterop,
             classInitialization,
             reflection,
-            BytecodeToIRMetadataSupport.loadExternalReflectionClasses(classes, reflection, outputDirectory)
+            BytecodeToIRMetadataSupport.loadExternalReflectionClasses(classes, reflection, outputDirectory),
+            Map.of()
         );
+    }
+
+    /** Lowers a build with validated closed-world service providers. */
+    public IrProgram lower(
+        final Map<String, ClassFile> classes,
+        final CallGraph callGraph,
+        final SourceLineIndex sourceLines,
+        final NativeInteropConfig nativeInterop,
+        final ClassInitializationGraph.Result classInitialization,
+        final Path outputDirectory,
+        final Map<String, List<ServiceProvider>> serviceProviders
+    ) throws IOException, InterruptedException {
+        final List<EntryPoint> reachableMethods = BytecodeToIRMetadataSupport.sortedEntryPoints(callGraph.reachableMethods());
+        final BytecodeToIRMetadataSupport.ReflectionClasses reflection =
+            BytecodeToIRMetadataSupport.reflectionClasses(classes, reachableMethods);
+        return lower(classes, callGraph, sourceLines, nativeInterop, classInitialization, reflection,
+            BytecodeToIRMetadataSupport.loadExternalReflectionClasses(classes, reflection, outputDirectory),
+            serviceProviders);
     }
 
     private IrProgram lower(
@@ -195,7 +215,8 @@ public final class BytecodeToIR {
         final NativeInteropConfig nativeInterop,
         final ClassInitializationGraph.Result classInitialization,
         final BytecodeToIRMetadataSupport.ReflectionClasses reflection,
-        final Map<String, ClassFile> externalReflectionClasses
+        final Map<String, ClassFile> externalReflectionClasses,
+        final Map<String, List<ServiceProvider>> serviceProviders
     ) {
         final List<IrFunction> functions = new ArrayList<>();
         final Map<String, IrDispatch> dispatches = new LinkedHashMap<>();
@@ -262,8 +283,15 @@ public final class BytecodeToIR {
             classInitialization.dependencies(),
             enumDispatchConstants(classes),
             BytecodeToIRMetadataSupport.retainedTypeIds(classes, loweredClasses),
-            reflectedClasses
+            reflectedClasses,
+            applicationServiceUses(classes),
+            serviceProviders
         );
+    }
+
+    private static List<String> applicationServiceUses(final Map<String, ClassFile> classes) {
+        final ClassFile module = classes.get("module-info");
+        return module == null || !module.application() ? List.of() : module.serviceUses();
     }
 
     private static void addReflectiveInvocationDispatches(
@@ -908,6 +936,17 @@ public final class BytecodeToIR {
         final Map<Integer, StackValue> pendingExceptionHandlerStacks
     ) {
         final Set<String> possibleTypes = new LinkedHashSet<>();
+        if (bytecodeInstruction.methodRef().isPresent()) {
+            final MethodRef reference = bytecodeInstruction.methodRef().orElseThrow();
+            if (("java/util/Iterator".equals(reference.owner()) || "java/util/ListIterator".equals(reference.owner()))
+                && "next".equals(reference.name()) && "()Ljava/lang/Object;".equals(reference.descriptor())) {
+                possibleTypes.add("java/util/NoSuchElementException");
+            }
+            if ("java/util/ServiceLoader".equals(reference.owner())
+                && ("load".equals(reference.name()) || "loadInstalled".equals(reference.name()))) {
+                possibleTypes.add("java/util/ServiceConfigurationError");
+            }
+        }
         for (int index = instructionStart; index < instructions.size(); index++) {
             collectTransportedThrowableTypes(
                 instructions.get(index),

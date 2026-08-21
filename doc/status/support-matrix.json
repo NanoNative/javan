@@ -11,8 +11,8 @@
     "rule": "done = supported variants + rejected variants; unknown leftovers must be 0 for a release-gated JDK"
   },
   "counts": {
-    "rows": 309,
-    "pass": 309,
+    "rows": 310,
+    "pass": 310,
     "scoped": 0,
     "target": 0,
     "rejected": 0
@@ -82,6 +82,7 @@
     {"feature": "native-import-configured-static-abi", "jdk25": "pass"},
     {"feature": "resource-system-loader-stream", "jdk25": "pass"},
     {"feature": "resource-loader-instance-stream", "jdk25": "pass"},
+    {"feature": "service-loader-closed-world", "jdk25": "pass"},
     {"feature": "library-static-int-export", "jdk25": "pass"},
     {"feature": "library-string-export", "jdk25": "pass"},
     {"feature": "library-byte-array-export", "jdk25": "pass"},
