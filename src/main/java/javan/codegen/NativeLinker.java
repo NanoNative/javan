@@ -131,7 +131,7 @@ public final class NativeLinker {
         final CachedObject runtimeObject = cachedObject(root, compiler, compilerIdentity, runtimeC, cacheDirectory);
         final List<String> command = new ArrayList<>();
         command.add(compiler);
-        command.addAll(threadFlags());
+        command.addAll(compilerFlags());
         command.add(mainObject.linkObject().toString());
         command.add(runtimeObject.linkObject().toString());
         appendDirectLinkInputs(command, inputs, runtimeC.getParent());
@@ -534,7 +534,7 @@ public final class NativeLinker {
             hash = fingerprint(hash, Long.toString(Files.size(compilerPath)));
             hash = fingerprint(hash, Long.toString(Files.getLastModifiedTime(compilerPath).toMillis()));
         }
-        for (final String flag : threadFlags()) {
+        for (final String flag : compilerFlags()) {
             hash = fingerprint(hash, flag);
         }
         hash = fingerprint(hash, "-fPIC");
