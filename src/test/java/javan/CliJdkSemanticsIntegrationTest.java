@@ -8505,6 +8505,216 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void methodInvocationMatchesJvmForDispatchConversionsAccessAndFailures() throws Exception {
+        final Path project = project("method-invocation");
+        writeJava(project, "com.acme.Base", """
+            package com.acme;
+
+            public class Base {
+                public String value(final String prefix, final int count) {
+                    return prefix + count;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Named", """
+            package com.acme;
+
+            public interface Named {
+                String name();
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+
+            public final class Target extends Base implements Named {
+                @Override
+                public String value(final String prefix, final int count) {
+                    return prefix + (count + 1);
+                }
+
+                private static long widen(final long value) {
+                    return value + 2L;
+                }
+
+                public static double widenAll(
+                    final byte byteValue,
+                    final short shortValue,
+                    final char charValue,
+                    final int intValue,
+                    final long longValue,
+                    final float floatValue,
+                    final double doubleValue
+                ) {
+                    return byteValue + shortValue + charValue + intValue + doubleValue;
+                }
+
+                public static int objectArguments(final Object value, final int[] values) {
+                    return (value == null ? 10 : 0) + values.length;
+                }
+
+                @Override
+                public String name() {
+                    return "interface";
+                }
+
+                public void ping() {
+                }
+
+                public int fail() {
+                    throw new IllegalStateException("boom");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.lang.reflect.InvocationTargetException;
+            import java.lang.reflect.Method;
+
+            public final class Main {
+                private Main() {
+                }
+
+                private static void privateFailure(final Method method, final Object[] arguments) throws Exception {
+                    try {
+                        method.invoke(null, arguments);
+                    } catch (final IllegalAccessException expected) {
+                        System.out.println("private");
+                    }
+                }
+
+                private static void nullReceiver(final Method method, final Object[] arguments) throws Exception {
+                    try {
+                        method.invoke(null, arguments);
+                    } catch (final NullPointerException expected) {
+                        System.out.println("null-receiver");
+                    }
+                }
+
+                private static void badReceiver(
+                    final Method method,
+                    final Object target,
+                    final Object[] arguments
+                ) throws Exception {
+                    try {
+                        method.invoke(target, arguments);
+                    } catch (final IllegalArgumentException expected) {
+                        System.out.println("receiver-type");
+                    }
+                }
+
+                private static void badArguments(
+                    final Method method,
+                    final Object target,
+                    final Object[] arguments,
+                    final String label
+                ) throws Exception {
+                    try {
+                        method.invoke(target, arguments);
+                    } catch (final IllegalArgumentException expected) {
+                        System.out.println(label);
+                    }
+                }
+
+                private static void targetFailure(
+                    final Method method,
+                    final Object target,
+                    final Object[] arguments
+                ) throws Exception {
+                    try {
+                        method.invoke(target, arguments);
+                    } catch (final InvocationTargetException expected) {
+                        System.out.println(expected.getCause().getClass().getName());
+                        System.out.println(expected.getCause().getMessage());
+                    }
+                }
+
+                private static void inlineArguments(final Method method, final Object target) {
+                    Object result;
+                    try {
+                        result = method.invoke(target, "inline-", Byte.valueOf((byte) 4));
+                    } catch (final ReflectiveOperationException expected) {
+                        result = "unexpected";
+                    }
+                    System.out.println(result);
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Target target = new Target();
+                    final Method value = Base.class.getDeclaredMethod("value", String.class, int.class);
+                    final Method widen = Target.class.getDeclaredMethod("widen", long.class);
+                    final Method ping = Target.class.getDeclaredMethod("ping");
+                    final Method fail = Target.class.getDeclaredMethod("fail");
+                    final Method name = Named.class.getMethod("name");
+                    final Method widenAll = Target.class.getDeclaredMethod(
+                        "widenAll",
+                        byte.class,
+                        short.class,
+                        char.class,
+                        int.class,
+                        long.class,
+                        float.class,
+                        double.class
+                    );
+                    final Method objectArguments = Target.class.getDeclaredMethod(
+                        "objectArguments", Object.class, int[].class
+                    );
+                    final Integer one = Integer.valueOf(1);
+                    final Integer seven = Integer.valueOf(7);
+                    final Object[] valueArguments = {"x", one};
+                    final Object[] sevenArguments = {seven};
+                    final Object[] shortArguments = {"x"};
+                    final Object[] wrongArguments = {"x", Long.valueOf(1L)};
+                    final Object[] nullPrimitiveArguments = {"x", null};
+
+                    System.out.println(value.invoke(target, "value-", Byte.valueOf((byte) 3)));
+                    inlineArguments(value, target);
+                    System.out.println(widenAll.invoke(
+                        null,
+                        Byte.valueOf((byte) 1),
+                        Byte.valueOf((byte) 2),
+                        Character.valueOf((char) 3),
+                        Short.valueOf((short) 4),
+                        Integer.valueOf(5),
+                        Long.valueOf(6L),
+                        Float.valueOf(7.0F)
+                    ));
+                    System.out.println(objectArguments.invoke(new Main(), null, new int[] {1, 2}));
+                    System.out.println(name.invoke(target));
+                    System.out.println(ping.invoke(target) == null);
+                    privateFailure(widen, sevenArguments);
+                    widen.setAccessible(true);
+                    System.out.println(widen.invoke(new Main(), seven));
+                    nullReceiver(value, valueArguments);
+                    badReceiver(value, new Main(), valueArguments);
+                    badArguments(value, target, shortArguments, "arity");
+                    badArguments(value, target, wrongArguments, "argument-type");
+                    badArguments(value, target, nullPrimitiveArguments, "null-primitive");
+                    targetFailure(fail, target, null);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(
+            project,
+            List.of(project.resolve(".javan/bin/method-invocation").toString()),
+            defaultProcessTimeout(),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1")
+        );
+        assertThat(nativeRun.exitCode()).as(nativeRun.stdout() + nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo(
+            "value-4\ninline-5\n17.0\n12\ninterface\ntrue\nprivate\n9\nnull-receiver\nreceiver-type\narity\n"
+                + "argument-type\nnull-primitive\n"
+                + "java.lang.IllegalStateException\nboom\n"
+        );
+    }
+
+    @Test
     void publicMethodLookupIncludesInheritedClassAndInterfaceMethods() throws Exception {
         final Path project = project("public-method-metadata");
         writeJava(project, "com.acme.PublicRoot", """

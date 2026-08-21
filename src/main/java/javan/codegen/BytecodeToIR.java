@@ -23,6 +23,7 @@ import javan.ir.IrMaterializedLambdaTarget;
 import javan.ir.IrExpression;
 import javan.ir.IrInstruction;
 import javan.ir.IrLocal;
+import javan.ir.IrMethodMetadata;
 import javan.ir.IrParameter;
 import javan.ir.IrProgram;
 import javan.ir.IrReflectedClass;
@@ -245,6 +246,13 @@ public final class BytecodeToIR {
             callGraph,
             classInitialization
         );
+        final List<IrReflectedClass> reflectedClasses =
+            BytecodeToIRMetadataSupport.reflectedClasses(
+                classes, loweredClasses, reflection, externalReflectionClasses
+            );
+        if (usesMethodInvocation(classes, reachableMethods)) {
+            addReflectiveInvocationDispatches(classes, reflectedClasses, callGraph.instantiatedTypes(), dispatches);
+        }
         return new IrProgram(
             loweredClasses,
             List.copyOf(functions),
@@ -254,10 +262,76 @@ public final class BytecodeToIR {
             classInitialization.dependencies(),
             enumDispatchConstants(classes),
             BytecodeToIRMetadataSupport.retainedTypeIds(classes, loweredClasses),
-            BytecodeToIRMetadataSupport.reflectedClasses(
-                classes, loweredClasses, reflection, externalReflectionClasses
-            )
+            reflectedClasses
         );
+    }
+
+    private static void addReflectiveInvocationDispatches(
+        final Map<String, ClassFile> classes,
+        final List<IrReflectedClass> reflectedClasses,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
+        final Map<String, IrDispatch> dispatches
+    ) {
+        final Set<IrMethodMetadata> methods = new LinkedHashSet<>();
+        for (final IrReflectedClass reflectedClass : reflectedClasses) {
+            methods.addAll(reflectedClass.declaredMethods());
+            methods.addAll(reflectedClass.publicMethods());
+        }
+        for (final IrMethodMetadata method : methods) {
+            final ClassFile owner = classes.get(method.declaringJvmName());
+            if (owner == null || (method.modifiers() & 0x0008) != 0) {
+                continue;
+            }
+            final String descriptor = methodDescriptor(method);
+            final MethodRef reference = new MethodRef(method.declaringJvmName(), method.name(), descriptor);
+            final List<EntryPoint> targets = owner.isInterface()
+                ? interfaceTargets(classes, reference, instantiatedTypes)
+                : virtualTargets(classes, reference, instantiatedTypes);
+            if (!targets.isEmpty()) {
+                final String symbol = dispatchSymbol(reference);
+                dispatches.putIfAbsent(
+                    symbol,
+                    BytecodeToIRDynamicSupport.dispatch(
+                        classes, symbol, MethodDescriptor.parse(descriptor), targets
+                    )
+                );
+            }
+        }
+    }
+
+    private static boolean usesMethodInvocation(
+        final Map<String, ClassFile> classes,
+        final List<EntryPoint> reachableMethods
+    ) {
+        for (final EntryPoint entryPoint : reachableMethods) {
+            final ClassFile owner = classes.get(entryPoint.className());
+            final Optional<MethodInfo> method = owner == null
+                ? Optional.empty()
+                : owner.method(entryPoint.methodName(), entryPoint.descriptor());
+            if (method.isEmpty() || method.orElseThrow().code().isEmpty()) {
+                continue;
+            }
+            for (final Instruction instruction : method.orElseThrow().code().orElseThrow().instructions()) {
+                if (instruction.methodRef().isEmpty()) {
+                    continue;
+                }
+                final MethodRef target = instruction.methodRef().orElseThrow();
+                if ("java/lang/reflect/Method".equals(target.owner())
+                    && "invoke".equals(target.name())
+                    && "(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;".equals(target.descriptor())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    static String methodDescriptor(final IrMethodMetadata method) {
+        final StringBuilder descriptor = new StringBuilder("(");
+        for (final String parameter : method.parameterDescriptors()) {
+            descriptor.append(parameter);
+        }
+        return descriptor.append(')').append(method.returnDescriptor()).toString();
     }
 
     private static boolean configuredNativeLeaf(
@@ -361,6 +435,14 @@ public final class BytecodeToIR {
         for (final Map.Entry<String, Set<String>> entry : materializedTypes.entrySet()) {
             result.put(entry.getKey(), orderedThrowableTypes(entry.getValue()));
         }
+        result.put(
+            "javan_generated_method_invoke",
+            JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+                "java/lang/reflect/Method",
+                "invoke",
+                "(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;"
+            ))
+        );
         return Map.copyOf(result);
     }
 
@@ -4023,6 +4105,12 @@ public final class BytecodeToIR {
             return false;
         }
         return isKnownPlatformThrowable(methodRef.owner());
+    }
+
+    static boolean isPlatformThrowableGetCause(final MethodRef methodRef) {
+        return "getCause".equals(methodRef.name())
+            && "()Ljava/lang/Throwable;".equals(methodRef.descriptor())
+            && isKnownPlatformThrowable(methodRef.owner());
     }
 
     static boolean isKnownPlatformThrowable(final String owner) {

@@ -20,6 +20,29 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 @PlatformTest
 final class JdkCallSupportTest {
     @Test
+    void methodInvocationUsesReflectionMetadataAndTransportsJavaFailures() {
+        final MethodRef method = new MethodRef(
+            "java/lang/reflect/Method",
+            "invoke",
+            "(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;"
+        );
+
+        assertThat(JdkCallSupport.isSupported(method)).isTrue();
+        assertThat(JdkCallSupport.runtimeModules(method)).containsExactly("reflection-metadata");
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(method)).containsExactly(
+            "java/lang/NullPointerException",
+            "java/lang/IllegalAccessException",
+            "java/lang/IllegalArgumentException",
+            "java/lang/reflect/InvocationTargetException",
+            "java/lang/UnsupportedOperationException"
+        );
+        assertThat(JdkCallSupport.isPlatformThrowableAssignable(
+            "java/lang/reflect/InvocationTargetException",
+            "java/lang/ReflectiveOperationException"
+        )).isTrue();
+    }
+
+    @Test
     void boundedOptionalOrElseThrowSupplierHasExactSupportAndRuntimeModule() {
         final MethodRef method = new MethodRef(
             "java/util/Optional",

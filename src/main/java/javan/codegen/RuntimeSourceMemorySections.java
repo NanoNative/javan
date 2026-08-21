@@ -3066,6 +3066,7 @@ final class RuntimeSourceMemorySections {
         typedef struct {
             const char* pending_throwable_type;
             void* pending_throwable_message;
+            void* pending_throwable_cause;
             const char* pending_throwable_class;
             const char* pending_throwable_method;
             const char* pending_throwable_file;
@@ -3077,6 +3078,7 @@ final class RuntimeSourceMemorySections {
         typedef struct {
             const char* throwable_type;
             void* throwable_message;
+            void* throwable_cause;
             const char* throwable_class;
             const char* throwable_method;
             const char* throwable_file;
@@ -4322,6 +4324,17 @@ final class RuntimeSourceMemorySections {
                 }
                 return javan_runtime_class_literal(snapshot.array_class_name, 0, 0, 1, 0);
             }
+            if (found != 0 && snapshot.runtime_kind == JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE) {
+                const char* internal_name = ((javan_caught_throwable*) value)->throwable_type;
+                char binary_name[256];
+                int index = 0;
+                while (internal_name[index] != '\\0' && index < 255) {
+                    binary_name[index] = internal_name[index] == '/' ? '.' : internal_name[index];
+                    index++;
+                }
+                binary_name[index] = '\\0';
+                return javan_runtime_class_from_binary_name(binary_name);
+            }
             int type_id = javan_registered_type_id(value);
             if (type_id > 0) {
                 JavanTypeDescriptor* descriptor = javan_type_descriptor_for(type_id);
@@ -4635,6 +4648,108 @@ final class RuntimeSourceMemorySections {
 
         int javan_method_get_modifiers(void* value) {
             return javan_method_metadata(value)->modifiers;
+        }
+
+        static void javan_reflection_argument_failure(void) {
+            javan_pending_throw(
+                "java/lang/IllegalArgumentException",
+                javan_string_from("argument type mismatch"),
+                NULL, NULL, NULL, -1, -1, NULL
+            );
+        }
+
+        int javan_reflection_argument_count(void* arguments) {
+            if (arguments == NULL) {
+                return 0;
+            }
+            if (javan_object_builtin_instance_of(arguments, JAVAN_BUILTIN_INSTANCEOF_OBJECT_ARRAY) == 0) {
+                javan_reflection_argument_failure();
+                return 0;
+            }
+            return javan_array_length(arguments);
+        }
+
+        static void* javan_reflection_argument(void* arguments, int index) {
+            return javan_object_array_get(arguments, index);
+        }
+
+        void* javan_reflection_object_argument(void* arguments, int index, const char* expected_name) {
+            void* value = javan_reflection_argument(arguments, index);
+            if (value == NULL) {
+                return NULL;
+            }
+            void* expected = javan_runtime_class_from_binary_name(expected_name);
+            if (expected == NULL || javan_class_is_instance(expected, value) == 0) {
+                javan_reflection_argument_failure();
+            }
+            return value;
+        }
+
+        int javan_reflection_int_argument(void* arguments, int index, int expected_kind) {
+            void* value = javan_reflection_argument(arguments, index);
+            const int type = javan_registered_type_id(value);
+            if (expected_kind == 'Z' && type == JAVAN_TYPE_JAVA_LANG_BOOLEAN) {
+                return ((javan_boxed_boolean*) value)->value;
+            }
+            if (expected_kind == 'B' && type == JAVAN_TYPE_JAVA_LANG_BYTE) {
+                return ((javan_boxed_byte*) value)->value;
+            }
+            if ((expected_kind == 'S' || expected_kind == 'I') && type == JAVAN_TYPE_JAVA_LANG_BYTE) {
+                return ((javan_boxed_byte*) value)->value;
+            }
+            if ((expected_kind == 'S' || expected_kind == 'I') && type == JAVAN_TYPE_JAVA_LANG_SHORT) {
+                return ((javan_boxed_short*) value)->value;
+            }
+            if (expected_kind == 'C' && type == JAVAN_TYPE_JAVA_LANG_CHARACTER) {
+                return ((javan_boxed_character*) value)->value;
+            }
+            if (expected_kind == 'I' && type == JAVAN_TYPE_JAVA_LANG_CHARACTER) {
+                return ((javan_boxed_character*) value)->value;
+            }
+            if (expected_kind == 'I' && type == JAVAN_TYPE_JAVA_LANG_INTEGER) {
+                return ((javan_boxed_int*) value)->value;
+            }
+            javan_reflection_argument_failure();
+            return 0;
+        }
+
+        long long javan_reflection_long_argument(void* arguments, int index) {
+            void* value = javan_reflection_argument(arguments, index);
+            const int type = javan_registered_type_id(value);
+            if (type == JAVAN_TYPE_JAVA_LANG_BYTE) return ((javan_boxed_byte*) value)->value;
+            if (type == JAVAN_TYPE_JAVA_LANG_SHORT) return ((javan_boxed_short*) value)->value;
+            if (type == JAVAN_TYPE_JAVA_LANG_CHARACTER) return ((javan_boxed_character*) value)->value;
+            if (type == JAVAN_TYPE_JAVA_LANG_INTEGER) return ((javan_boxed_int*) value)->value;
+            if (type == JAVAN_TYPE_JAVA_LANG_LONG) return ((javan_boxed_long*) value)->value;
+            javan_reflection_argument_failure();
+            return 0;
+        }
+
+        float javan_reflection_float_argument(void* arguments, int index) {
+            void* value = javan_reflection_argument(arguments, index);
+            const int type = javan_registered_type_id(value);
+            if (type == JAVAN_TYPE_JAVA_LANG_BYTE) return (float) ((javan_boxed_byte*) value)->value;
+            if (type == JAVAN_TYPE_JAVA_LANG_SHORT) return (float) ((javan_boxed_short*) value)->value;
+            if (type == JAVAN_TYPE_JAVA_LANG_CHARACTER) return (float) ((javan_boxed_character*) value)->value;
+            if (type == JAVAN_TYPE_JAVA_LANG_INTEGER) return (float) ((javan_boxed_int*) value)->value;
+            if (type == JAVAN_TYPE_JAVA_LANG_LONG) return (float) ((javan_boxed_long*) value)->value;
+            if (type == JAVAN_TYPE_JAVA_LANG_FLOAT) return ((javan_boxed_float*) value)->value;
+            javan_reflection_argument_failure();
+            return 0;
+        }
+
+        double javan_reflection_double_argument(void* arguments, int index) {
+            void* value = javan_reflection_argument(arguments, index);
+            const int type = javan_registered_type_id(value);
+            if (type == JAVAN_TYPE_JAVA_LANG_BYTE) return (double) ((javan_boxed_byte*) value)->value;
+            if (type == JAVAN_TYPE_JAVA_LANG_SHORT) return (double) ((javan_boxed_short*) value)->value;
+            if (type == JAVAN_TYPE_JAVA_LANG_CHARACTER) return (double) ((javan_boxed_character*) value)->value;
+            if (type == JAVAN_TYPE_JAVA_LANG_INTEGER) return (double) ((javan_boxed_int*) value)->value;
+            if (type == JAVAN_TYPE_JAVA_LANG_LONG) return (double) ((javan_boxed_long*) value)->value;
+            if (type == JAVAN_TYPE_JAVA_LANG_FLOAT) return (double) ((javan_boxed_float*) value)->value;
+            if (type == JAVAN_TYPE_JAVA_LANG_DOUBLE) return ((javan_boxed_double*) value)->value;
+            javan_reflection_argument_failure();
+            return 0;
         }
 
         static const char* javan_runtime_class_primitive_type_name(int exact_type_id) {
@@ -6270,6 +6385,7 @@ final class RuntimeSourceMemorySections {
         static void javan_pending_clear_state(javan_throwable_state* state) {
             state->pending_throwable_type = NULL;
             state->pending_throwable_message = NULL;
+            state->pending_throwable_cause = NULL;
             state->pending_throwable_class = NULL;
             state->pending_throwable_method = NULL;
             state->pending_throwable_file = NULL;
@@ -6323,12 +6439,25 @@ final class RuntimeSourceMemorySections {
             javan_runtime_lock_enter();
             state->pending_throwable_type = throwable_type;
             state->pending_throwable_message = message;
+            state->pending_throwable_cause = NULL;
             state->pending_throwable_class = class_name;
             state->pending_throwable_method = method;
             state->pending_throwable_file = file;
             state->pending_throwable_line = line;
             state->pending_throwable_bytecode_offset = bytecode_offset;
             state->pending_throwable_source_line = source_line;
+            javan_runtime_lock_leave();
+        }
+
+        void javan_pending_throw_with_cause(
+            const char* throwable_type,
+            void* message,
+            void* cause
+        ) {
+            javan_pending_throw(throwable_type, message, NULL, NULL, NULL, -1, -1, NULL);
+            javan_thread* thread = javan_current_thread_object();
+            javan_runtime_lock_enter();
+            thread->throwable_state->pending_throwable_cause = cause;
             javan_runtime_lock_leave();
         }
 
@@ -6409,6 +6538,7 @@ final class RuntimeSourceMemorySections {
             }
             caught->throwable_type = state->pending_throwable_type;
             caught->throwable_message = state->pending_throwable_message;
+            caught->throwable_cause = state->pending_throwable_cause;
             caught->throwable_class = state->pending_throwable_class;
             caught->throwable_method = state->pending_throwable_method;
             caught->throwable_file = state->pending_throwable_file;
@@ -6425,6 +6555,10 @@ final class RuntimeSourceMemorySections {
             return javan_require_caught_throwable(value)->throwable_message;
         }
 
+        void* javan_caught_throwable_cause(void* value) {
+            return javan_require_caught_throwable(value)->throwable_cause;
+        }
+
         void javan_pending_rethrow(void* value) {
             javan_caught_throwable* caught = javan_require_caught_throwable(value);
             javan_thread* thread = javan_current_thread_object();
@@ -6432,6 +6566,7 @@ final class RuntimeSourceMemorySections {
             javan_runtime_lock_enter();
             state->pending_throwable_type = caught->throwable_type;
             state->pending_throwable_message = caught->throwable_message;
+            state->pending_throwable_cause = caught->throwable_cause;
             state->pending_throwable_class = caught->throwable_class;
             state->pending_throwable_method = caught->throwable_method;
             state->pending_throwable_file = caught->throwable_file;
@@ -7839,9 +7974,11 @@ final class RuntimeSourceMemorySections {
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_THROWABLE_STATE) {
                 javan_throwable_state* state = (javan_throwable_state*) value;
                 javan_gc_mark_value(state->pending_throwable_message);
+                javan_gc_mark_value(state->pending_throwable_cause);
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE) {
                 javan_caught_throwable* caught = (javan_caught_throwable*) value;
                 javan_gc_mark_value(caught->throwable_message);
+                javan_gc_mark_value(caught->throwable_cause);
             }
         }
 

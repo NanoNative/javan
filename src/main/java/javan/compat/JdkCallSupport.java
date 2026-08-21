@@ -64,6 +64,7 @@ public final class JdkCallSupport {
         java/lang/InstantiationException=java/lang/ReflectiveOperationException
         java/lang/NoSuchFieldException=java/lang/ReflectiveOperationException
         java/lang/NoSuchMethodException=java/lang/ReflectiveOperationException
+        java/lang/reflect/InvocationTargetException=java/lang/ReflectiveOperationException
         java/lang/LinkageError=java/lang/Error
         java/lang/ClassCircularityError=java/lang/LinkageError
         java/lang/ClassFormatError=java/lang/LinkageError
@@ -169,6 +170,12 @@ public final class JdkCallSupport {
         runtime("Method.setAccessible", "java/lang/reflect/Method", "setAccessible", "(Z)V"),
         runtime("Method.trySetAccessible", "java/lang/reflect/Method", "trySetAccessible", "()Z"),
         runtime("Method.isAccessible", "java/lang/reflect/Method", "isAccessible", "()Z"),
+        runtime(
+            "Method.invoke",
+            "java/lang/reflect/Method",
+            "invoke",
+            "(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;"
+        ),
         runtime("AccessibleObject.canAccess", "java/lang/reflect/AccessibleObject", "canAccess", "(Ljava/lang/Object;)Z"),
         runtime("AccessibleObject.setAccessible", "java/lang/reflect/AccessibleObject", "setAccessible", "(Z)V"),
         runtime("AccessibleObject.trySetAccessible", "java/lang/reflect/AccessibleObject", "trySetAccessible", "()Z"),
@@ -1920,6 +1927,17 @@ public final class JdkCallSupport {
                 || "isAccessible".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor()))) {
             return List.of("java/lang/NullPointerException");
         }
+        if ("java/lang/reflect/Method".equals(methodRef.owner())
+            && "invoke".equals(methodRef.name())
+            && "(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;".equals(methodRef.descriptor())) {
+            return List.of(
+                "java/lang/NullPointerException",
+                "java/lang/IllegalAccessException",
+                "java/lang/IllegalArgumentException",
+                "java/lang/reflect/InvocationTargetException",
+                "java/lang/UnsupportedOperationException"
+            );
+        }
         if ("java/util/Base64$Encoder".equals(methodRef.owner())
             && ("encode".equals(methodRef.name()) && "([B)[B".equals(methodRef.descriptor())
                 || "encodeToString".equals(methodRef.name())
@@ -2225,13 +2243,10 @@ public final class JdkCallSupport {
         if ("<init>".equals(methodRef.name()) && "(Ljava/lang/String;)V".equals(methodRef.descriptor())) {
             return true;
         }
-        if (!"getMessage".equals(methodRef.name())) {
-            return false;
-        }
-        if (!"()Ljava/lang/String;".equals(methodRef.descriptor())) {
-            return false;
-        }
-        return true;
+        return ("getMessage".equals(methodRef.name())
+                && "()Ljava/lang/String;".equals(methodRef.descriptor())
+            || "getCause".equals(methodRef.name())
+                && "()Ljava/lang/Throwable;".equals(methodRef.descriptor()));
     }
 
     private static SupportedCall intrinsic(

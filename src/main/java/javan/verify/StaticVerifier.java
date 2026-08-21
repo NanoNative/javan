@@ -1824,6 +1824,7 @@ public final class StaticVerifier {
         final String catchType = handler.catchType().orElseThrow();
         int hasThrowableTransport = 0;
         final List<Instruction> instructions = code.instructions();
+        final boolean reflectiveInvocationRange = containsMethodInvocation(instructions, handler);
         for (int instructionIndex = 0; instructionIndex < instructions.size(); instructionIndex++) {
             final Instruction instruction = instructions.get(instructionIndex);
             if (instruction.offset() < handler.startPc()) {
@@ -1845,6 +1846,7 @@ public final class StaticVerifier {
                 && !supportedGeneratedThrowableCall(classes, instruction)
                 && !supportedTransportedJdkThrowableCall(instruction, catchType)
                 && !supportedThrowableWrapRangeInstruction(instruction)
+                && !(reflectiveInvocationRange && supportedMethodInvocationPreparationInstruction(instruction))
                 && !supportedCaughtThrowableCauseConstructor(code, instructions, instructionIndex, instruction)
                 && !supportedProtectedFinallyRethrowInstruction(classes, code, instruction)) {
                 return false;
@@ -1852,6 +1854,25 @@ public final class StaticVerifier {
         }
         if (hasThrowableTransport == 1) {
             return true;
+        }
+        return false;
+    }
+
+    private static boolean containsMethodInvocation(
+        final List<Instruction> instructions,
+        final CodeException handler
+    ) {
+        for (final Instruction instruction : instructions) {
+            if (instruction.offset() < handler.startPc() || instruction.offset() >= handler.endPc()
+                || instruction.methodRef().isEmpty()) {
+                continue;
+            }
+            final MethodRef target = instruction.methodRef().orElseThrow();
+            if ("java/lang/reflect/Method".equals(target.owner())
+                && "invoke".equals(target.name())
+                && "(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;".equals(target.descriptor())) {
+                return true;
+            }
         }
         return false;
     }
@@ -2778,6 +2799,36 @@ public final class StaticVerifier {
         return JdkCallSupport.isPlatformThrowable(target.owner())
             && "getMessage".equals(target.name())
             && "()Ljava/lang/String;".equals(target.descriptor());
+    }
+
+    private static boolean supportedMethodInvocationPreparationInstruction(final Instruction instruction) {
+        final int opcode = instruction.opcode();
+        if ((opcode >= 1 && opcode <= 20)
+            || (opcode >= 46 && opcode <= 53)
+            || opcode == 83
+            || (opcode >= 87 && opcode <= 95)) {
+            return true;
+        }
+        if (opcode == 189) {
+            return instruction.className().isPresent()
+                && "java/lang/Object".equals(instruction.className().orElseThrow());
+        }
+        if (instruction.methodRef().isEmpty()) {
+            return false;
+        }
+        final MethodRef target = instruction.methodRef().orElseThrow();
+        return "valueOf".equals(target.name())
+            && switch (target.owner()) {
+                case "java/lang/Boolean" -> "(Z)Ljava/lang/Boolean;".equals(target.descriptor());
+                case "java/lang/Byte" -> "(B)Ljava/lang/Byte;".equals(target.descriptor());
+                case "java/lang/Short" -> "(S)Ljava/lang/Short;".equals(target.descriptor());
+                case "java/lang/Character" -> "(C)Ljava/lang/Character;".equals(target.descriptor());
+                case "java/lang/Integer" -> "(I)Ljava/lang/Integer;".equals(target.descriptor());
+                case "java/lang/Long" -> "(J)Ljava/lang/Long;".equals(target.descriptor());
+                case "java/lang/Float" -> "(F)Ljava/lang/Float;".equals(target.descriptor());
+                case "java/lang/Double" -> "(D)Ljava/lang/Double;".equals(target.descriptor());
+                default -> false;
+            };
     }
 
     private static boolean supportedCaughtThrowableCauseConstructor(

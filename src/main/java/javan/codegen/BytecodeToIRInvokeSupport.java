@@ -674,7 +674,9 @@ final class BytecodeToIRInvokeSupport {
         if ("java/lang/Object".equals(methodRef.owner())
             && "getClass".equals(methodRef.name())
             && "()Ljava/lang/Class;".equals(methodRef.descriptor())) {
-            final IrExpression receiver = popObject(classFile, method, stack);
+            final IrExpression receiver = popObjectValue(classFile, method, instruction, stack)
+                .expression()
+                .orElseThrow();
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_object_get_class", List.of(receiver))));
             return;
         }
@@ -1142,6 +1144,18 @@ final class BytecodeToIRInvokeSupport {
                 )
                 : receiver.expression().orElseThrow();
             stack.add(StackValue.objectExpression(message));
+            return;
+        }
+        if (isPlatformThrowableGetCause(methodRef)) {
+            final StackValue receiver = popObjectValue(classFile, method, instruction, stack);
+            if (receiver.kind() == StackKind.CAUGHT_THROWABLE) {
+                stack.add(StackValue.caughtThrowable(IrExpression.objectCall(
+                    "javan_caught_throwable_cause",
+                    List.of(receiver.expression().orElseThrow())
+                )));
+            } else {
+                stack.add(StackValue.objectExpression(IrExpression.objectNull()));
+            }
             return;
         }
         if (isConcreteExactCallTarget(classes, methodRef.owner())) {
@@ -3460,6 +3474,46 @@ final class BytecodeToIRInvokeSupport {
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final SourceLineIndex sourceLines
     ) {
+        if ("java/lang/reflect/Method".equals(methodRef.owner())
+            && "invoke".equals(methodRef.name())
+            && "(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;".equals(methodRef.descriptor())) {
+            final String argumentsLocal = newObjectLocal(localDeclarations);
+            final String targetLocal = newObjectLocal(localDeclarations);
+            final String receiverLocal = newObjectLocal(localDeclarations);
+            instructions.add(IrInstruction.assignObject(
+                argumentsLocal, popObject(classFile, method, stack)
+            ));
+            instructions.add(IrInstruction.assignObject(targetLocal, popObject(classFile, method, stack)));
+            instructions.add(IrInstruction.assignObject(receiverLocal, popObject(classFile, method, stack)));
+            final List<StackValue> successStack = List.copyOf(stack);
+            final String receiverPresent = "label_method_invoke_receiver_present_" + instruction.offset();
+            instructions.add(IrInstruction.branchIf(
+                receiverPresent,
+                IrExpression.objectComparison(
+                    "!=", IrExpression.objectLocal(receiverLocal), IrExpression.objectNull()
+                )
+            ));
+            routePendingPlatformException(
+                classFile, method, instruction, instructions, stack, pendingExceptionHandlerStacks, sourceLines,
+                "java/lang/NullPointerException", IrExpression.stringLiteral("method")
+            );
+            instructions.add(IrInstruction.label(receiverPresent));
+            stack.addAll(successStack);
+            pushObjectCall(
+                instructions,
+                stack,
+                localDeclarations,
+                "javan_generated_method_invoke",
+                List.of(
+                    IrExpression.objectLocal(receiverLocal),
+                    IrExpression.objectLocal(targetLocal),
+                    IrExpression.objectLocal(argumentsLocal),
+                    IrExpression.stringLiteral(classFile.name().replace('/', '.')),
+                    IrExpression.stringLiteral(classFile.nestHost().replace('/', '.'))
+                )
+            );
+            return true;
+        }
         if (methodAccessCall(methodRef)) {
             return lowerMethodAccessCall(
                 classFile, method, instruction, methodRef, instructions, stack, localDeclarations,
