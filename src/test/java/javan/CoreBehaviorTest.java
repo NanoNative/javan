@@ -481,18 +481,18 @@ final class CoreBehaviorTest {
             new MethodRef("java/lang/reflect/AccessibleObject", "canAccess", "(Ljava/lang/Object;)Z"),
             new MethodRef("java/lang/reflect/AccessibleObject", "setAccessible", "(Z)V"),
             new MethodRef("java/lang/reflect/AccessibleObject", "trySetAccessible", "()Z"),
-            new MethodRef("java/lang/reflect/AccessibleObject", "isAccessible", "()Z")
+            new MethodRef("java/lang/reflect/AccessibleObject", "isAccessible", "()Z"),
+            new MethodRef(
+                "java/lang/reflect/Method",
+                "invoke",
+                "(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;"
+            )
         )).allSatisfy(call -> assertThat(rules.forbiddenReason(call)).isEmpty());
         assertThat(rules.forbiddenReason(new MethodRef(
             "java/lang/reflect/Method", "getModifiers", "()J"
         ))).isPresent();
         assertThat(rules.forbiddenReason(new MethodRef(
             "java/lang/reflect/Method", "canAccess", "()Z"
-        ))).isPresent();
-        assertThat(rules.forbiddenReason(new MethodRef(
-            "java/lang/reflect/Method",
-            "invoke",
-            "(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;"
         ))).isPresent();
         assertThat(rules.forbiddenReason(new MethodRef("java/lang/invoke/MethodHandle", "invokeExact", "()V"))).isPresent();
         assertThat(rules.forbiddenReason(new MethodRef("java/lang/invoke/MethodHandles", "lookup", "()V"))).isPresent();

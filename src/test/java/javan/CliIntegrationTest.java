@@ -1406,7 +1406,7 @@ final class CliIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void methodInvocationFailsAtCheckBoundary() throws Exception {
+    void applicationEntryCanBeInvokedAsJavaMethod() throws Exception {
         final Path project = project("method-invocation");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -1418,20 +1418,21 @@ final class CliIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) throws Exception {
+                    if (args.length > 0) {
+                        System.out.println(args[0]);
+                        return;
+                    }
                     final Method method = Main.class.getDeclaredMethod("main", String[].class);
-                    method.invoke(null, (Object) args);
+                    method.invoke(null, (Object) new String[] {"nested"});
                 }
             }
             """);
 
-        final CliRun run = run(tempDir, "check", project.toString());
+        final CliRun run = run(tempDir, "build", project.toString());
 
-        assertThat(run.exitCode()).isEqualTo(2);
-        assertThat(run.stderr()).contains(
-            "error[JAVAN001]",
-            "java/lang/reflect/Method.invoke",
-            "reflection is outside the static native profile"
-        );
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/method-invocation").toString())).stdout())
+            .isEqualTo("nested\n");
     }
 
     @Test

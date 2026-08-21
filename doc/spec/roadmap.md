@@ -104,10 +104,12 @@ declared private metadata, inherited public class and interface methods, `Method
 `getDeclaringClass`, `getParameterCount`, `getParameterTypes`, `getReturnType`, and `getModifiers`,
 plus stateful `canAccess`, `setAccessible`, `trySetAccessible`, and `isAccessible` behavior.
 Access checks use the caller, receiver, exact nest metadata, and a bounded platform-access
-policy, with catchable lookup, receiver, access, and null failures. Selecting a runtime class
-loader remains outside the static native model.
+policy, with catchable lookup, receiver, access, and null failures. `Method.invoke` is implemented
+for generated application methods in the compiled closed world, including virtual dispatch,
+primitive widening and boxing, access checks, entry methods, and `InvocationTargetException`
+causes. Platform methods that only have metadata remain outside the compiled invocation set.
+Selecting a runtime class loader remains outside the static native model.
 
-- continue finite member flows with invocation
 - service loading from standard descriptors and module declarations
 - broader exception semantics and platform throwable transport
 - collections, streams, time, networking, files, and concurrency only with native/JVM parity
