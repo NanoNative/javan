@@ -1308,17 +1308,15 @@ public final class CCodegen {
     }
 
     private static String reflectiveBox(final String descriptor) {
-        return switch (descriptor) {
-            case "Z" -> "javan_boolean_value_of";
-            case "B" -> "javan_byte_value_of";
-            case "S" -> "javan_short_value_of";
-            case "C" -> "javan_character_value_of";
-            case "I" -> "javan_integer_value_of";
-            case "J" -> "javan_long_value_of";
-            case "F" -> "javan_float_value_of";
-            case "D" -> "javan_double_value_of";
-            default -> throw new IllegalArgumentException("unsupported reflective return: " + descriptor);
-        };
+        if ("Z".equals(descriptor)) return "javan_boolean_value_of";
+        if ("B".equals(descriptor)) return "javan_byte_value_of";
+        if ("S".equals(descriptor)) return "javan_short_value_of";
+        if ("C".equals(descriptor)) return "javan_character_value_of";
+        if ("I".equals(descriptor)) return "javan_integer_value_of";
+        if ("J".equals(descriptor)) return "javan_long_value_of";
+        if ("F".equals(descriptor)) return "javan_float_value_of";
+        if ("D".equals(descriptor)) return "javan_double_value_of";
+        throw new IllegalArgumentException("unsupported reflective return: " + descriptor);
     }
 
     private static void emitReflectiveFailure(
