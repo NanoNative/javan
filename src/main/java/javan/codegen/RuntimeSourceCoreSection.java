@@ -559,26 +559,30 @@ final class RuntimeSourceCoreSection {
             return ferror(stream) == 0;
         }
 
+        static void javan_write_printstream(FILE* stream, const char* value, int newline) {
+            javan_runtime_lock_enter();
+            (void) javan_write_string_utf8(stream, value);
+            if (newline != 0) {
+                fputc('\\n', stream);
+            }
+            fflush(stream);
+            javan_runtime_lock_leave();
+        }
+
         void javan_println(const char* value) {
-            (void) javan_write_string_utf8(stdout, value);
-            fputc('\\n', stdout);
-            fflush(stdout);
+            javan_write_printstream(stdout, value, 1);
         }
 
         void javan_print(const char* value) {
-            (void) javan_write_string_utf8(stdout, value);
-            fflush(stdout);
+            javan_write_printstream(stdout, value, 0);
         }
 
         void javan_eprintln(const char* value) {
-            (void) javan_write_string_utf8(stderr, value);
-            fputc('\\n', stderr);
-            fflush(stderr);
+            javan_write_printstream(stderr, value, 1);
         }
 
         void javan_eprint(const char* value) {
-            (void) javan_write_string_utf8(stderr, value);
-            fflush(stderr);
+            javan_write_printstream(stderr, value, 0);
         }
 
         static char javan_system_out_sentinel;
@@ -597,21 +601,27 @@ final class RuntimeSourceCoreSection {
         }
 
         void javan_println_int(int value) {
-            printf("%d\\n", value);
+            char buffer[32];
+            snprintf(buffer, sizeof(buffer), "%d", value);
+            javan_println(buffer);
         }
 
         void javan_eprintln_int(int value) {
-            fprintf(stderr, "%d\\n", value);
-            fflush(stderr);
+            char buffer[32];
+            snprintf(buffer, sizeof(buffer), "%d", value);
+            javan_eprintln(buffer);
         }
 
         void javan_println_long(long long value) {
-            printf("%lld\\n", value);
+            char buffer[32];
+            snprintf(buffer, sizeof(buffer), "%lld", value);
+            javan_println(buffer);
         }
 
         void javan_eprintln_long(long long value) {
-            fprintf(stderr, "%lld\\n", value);
-            fflush(stderr);
+            char buffer[32];
+            snprintf(buffer, sizeof(buffer), "%lld", value);
+            javan_eprintln(buffer);
         }
 
         static void javan_format_real(char* buffer, unsigned long size, double value, const char* format) {
@@ -637,39 +647,33 @@ final class RuntimeSourceCoreSection {
         void javan_println_float(float value) {
             char buffer[64];
             javan_format_real(buffer, sizeof(buffer), value, "%.9g");
-            puts(buffer);
+            javan_println(buffer);
         }
 
         void javan_eprintln_float(float value) {
             char buffer[64];
             javan_format_real(buffer, sizeof(buffer), value, "%.9g");
-            fputs(buffer, stderr);
-            fputc('\\n', stderr);
-            fflush(stderr);
+            javan_eprintln(buffer);
         }
 
         void javan_println_double(double value) {
             char buffer[128];
             javan_format_real(buffer, sizeof(buffer), value, "%.17g");
-            puts(buffer);
+            javan_println(buffer);
         }
 
         void javan_eprintln_double(double value) {
             char buffer[128];
             javan_format_real(buffer, sizeof(buffer), value, "%.17g");
-            fputs(buffer, stderr);
-            fputc('\\n', stderr);
-            fflush(stderr);
+            javan_eprintln(buffer);
         }
 
         void javan_println_bool(int value) {
-            puts(value == 0 ? "false" : "true");
+            javan_println(value == 0 ? "false" : "true");
         }
 
         void javan_eprintln_bool(int value) {
-            fputs(value == 0 ? "false" : "true", stderr);
-            fputc('\\n', stderr);
-            fflush(stderr);
+            javan_eprintln(value == 0 ? "false" : "true");
         }
 
         void javan_printstream_print(void* stream, const char* value) {
