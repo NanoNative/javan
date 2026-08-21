@@ -217,6 +217,57 @@ final class NativeLinkerTest {
     }
 
     @Test
+    void cachedLinkReusesVerifiedObjectsAndInvalidatesChangedGeneratedInputs() throws Exception {
+        final Path header = Files.writeString(tempDir.resolve("javan_runtime.h"), "#define EXIT_CODE 0\n");
+        final Path main = Files.writeString(
+            tempDir.resolve("main.c"), "#include \"javan_runtime.h\"\nint main(void) { return EXIT_CODE; }\n"
+        );
+        final Path runtime = Files.writeString(tempDir.resolve("runtime.c"), "\n");
+        final Path cache = tempDir.resolve("cache");
+        final NativeLinker linker = new NativeLinker();
+
+        final NativeLinker.CacheLinkResult initial = linker.linkCached(
+            tempDir, main, runtime, tempDir.resolve("out/initial"), cache, NativeLinkInputs.empty(), List.of()
+        );
+        final NativeLinker.CacheLinkResult reused = linker.linkCached(
+            tempDir, main, runtime, tempDir.resolve("out/reused"), cache, NativeLinkInputs.empty(), List.of()
+        );
+        Files.writeString(header, "#define EXIT_CODE 1\n");
+        final NativeLinker.CacheLinkResult changedHeader = linker.linkCached(
+            tempDir, main, runtime, tempDir.resolve("out/changed-header"), cache, NativeLinkInputs.empty(), List.of()
+        );
+        Files.writeString(changedHeader.objects().getFirst().object(), "corrupt object");
+        final NativeLinker.CacheLinkResult repaired = linker.linkCached(
+            tempDir, main, runtime, tempDir.resolve("out/repaired"), cache, NativeLinkInputs.empty(), List.of()
+        );
+        Files.writeString(main, "int main(void) { return 1; }\n");
+        final NativeLinker.CacheLinkResult changed = linker.linkCached(
+            tempDir, main, runtime, tempDir.resolve("out/changed"), cache, NativeLinkInputs.empty(), List.of()
+        );
+
+        assertThat(initial.artifact()).isRegularFile();
+        assertThat(initial.objects()).allSatisfy(entry -> assertThat(entry.reused()).isFalse());
+        assertThat(reused.objects()).allSatisfy(entry -> assertThat(entry.reused()).isTrue());
+        assertThat(changedHeader.objects()).allSatisfy(entry -> assertThat(entry.reused()).isFalse());
+        assertThat(repaired.objects()).anySatisfy(entry -> {
+            assertThat(entry.source()).isEqualTo("main.c");
+            assertThat(entry.reused()).isFalse();
+        });
+        assertThat(repaired.objects()).anySatisfy(entry -> {
+            assertThat(entry.source()).isEqualTo("runtime.c");
+            assertThat(entry.reused()).isTrue();
+        });
+        assertThat(changed.objects()).anySatisfy(entry -> {
+            assertThat(entry.source()).isEqualTo("main.c");
+            assertThat(entry.reused()).isFalse();
+        });
+        assertThat(changed.objects()).anySatisfy(entry -> {
+            assertThat(entry.source()).isEqualTo("runtime.c");
+            assertThat(entry.reused()).isTrue();
+        });
+    }
+
+    @Test
     void legacyAppOverloadMatchesExplicitEmptyInputs() throws Exception {
         final RecordingProcessRunner runner = new RecordingProcessRunner(
             new ProcessRunner.Result(0, "", ""),

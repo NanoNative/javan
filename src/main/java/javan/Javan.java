@@ -275,14 +275,17 @@ public final class Javan {
         final Path mainC = cCodegen.generate(program, generated, nativeInterop, stackAllocations);
         final Path runtimeC = runtimeFiles.write(generated, resources);
         final Path output = check.layout().outputDirectory().resolve("bin").resolve(check.layout().outputName());
-        final Path binary = nativeLinker.link(
+        final NativeLinker.CacheLinkResult linked = nativeLinker.linkCached(
             check.layout().root(),
             mainC,
             runtimeC,
             output,
+            check.layout().outputDirectory().resolve("cache").resolve("native"),
             nativeInterop.linkInputs(),
             nativeInterop.externalSymbols()
         );
+        final Path binary = linked.artifact();
+        writeNativeObjectCacheReport(check.layout().outputDirectory(), linked);
         runtimeContractReports.write(check.layout().outputDirectory(), "app", List.of(binary));
         runtimeFootprintReports.write(
             check.layout().outputDirectory(),
@@ -514,6 +517,28 @@ public final class Javan {
     private void writeUnifiedReport(final Path outputDirectory) throws IOException {
         reports.refreshVirtualThreadRuntimeStatus(outputDirectory);
         reportSummarizer.write(outputDirectory);
+    }
+
+    private static void writeNativeObjectCacheReport(
+        final Path outputDirectory,
+        final NativeLinker.CacheLinkResult linked
+    ) throws IOException {
+        final Path reports = outputDirectory.resolve("reports");
+        final StringBuilder json = new StringBuilder("{\n  \"objects\": [");
+        final StringBuilder markdown = new StringBuilder("# Native Object Cache\n\n| Source | Decision |\n| --- | --- |\n");
+        for (int index = 0; index < linked.objects().size(); index++) {
+            final NativeLinker.CacheEntry entry = linked.objects().get(index);
+            if (index > 0) {
+                json.append(',');
+            }
+            final String decision = entry.reused() ? "reused" : "rebuilt";
+            json.append("\n    {\"source\": \"").append(entry.source()).append("\", \"decision\": \"")
+                .append(decision).append("\"}");
+            markdown.append("| `").append(entry.source()).append("` | ").append(decision).append(" |\n");
+        }
+        json.append("\n  ]\n}\n");
+        Files2.writeString(reports.resolve("native-object-cache.json"), json.toString());
+        Files2.writeString(reports.resolve("native-object-cache.md"), markdown.toString());
     }
 
     private MainClassDetection selectedMainClass(final Options options, final Map<String, ClassFile> classes) {
