@@ -197,7 +197,7 @@ final class WorkflowPolicySurfaceTest {
     }
 
     @Test
-    void nativePackagingEnablesMacArmAndKeepsUnsupportedRowsVisible() throws Exception {
+    void nativePackagingUsesAvailableRunnerMemoryAndKeepsUnsupportedRowsVisible() throws Exception {
         assertThat(Files.readString(BUILD_COMMON))
             .contains("target: macos-x64", "os: macos-15-intel")
             .contains("target: macos-aarch64", "os: macos-15")
@@ -207,7 +207,7 @@ final class WorkflowPolicySurfaceTest {
             .contains("label: package_mac_arm64\n            enabled: true")
             .contains("enabled: false");
         assertThat(Files.readString(NATIVE_PROOF))
-            .contains("JAVAN_HEAP_LIMIT_BYTES: ${{ startsWith(inputs.target, 'macos-') && '1073741824' || '2147483648' }}");
+            .doesNotContain("JAVAN_HEAP_LIMIT_BYTES");
     }
 
     @Test
