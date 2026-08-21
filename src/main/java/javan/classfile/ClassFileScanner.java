@@ -72,7 +72,7 @@ public final class ClassFileScanner {
     public ClassFile readRuntimeClass(final String jvmName, final Path outputDirectory)
         throws IOException, InterruptedException {
         final String resource = jvmName + ".class";
-        final Path javaHome = Path.of(System.getProperty("java.home"));
+        final Path javaHome = CurrentJdkTools.home();
         final Path modules = javaHome.resolve("lib/modules");
         final Path cache = outputDirectory.resolve("reflection-jimage-cache");
         Files.createDirectories(cache);

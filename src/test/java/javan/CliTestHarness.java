@@ -96,19 +96,32 @@ final class CliTestHarness {
     }
 
     static String currentJavaCommand() {
-        return CurrentJdkTools.java();
+        return currentJdkTool("java");
     }
 
     static String currentJavacCommand() {
-        return CurrentJdkTools.javac();
+        return currentJdkTool("javac");
     }
 
     static String currentJarCommand() {
-        return CurrentJdkTools.jar();
+        return currentJdkTool("jar");
     }
 
     static List<String> childCoverageCommandForTesting(final List<String> command) {
         return childCoverageCommand(command);
+    }
+
+    private static String currentJdkTool(final String name) {
+        try {
+            return switch (name) {
+                case "java" -> CurrentJdkTools.java();
+                case "javac" -> CurrentJdkTools.javac();
+                case "jar" -> CurrentJdkTools.jar();
+                default -> throw new IllegalArgumentException("Unsupported JDK tool: " + name);
+            };
+        } catch (final IOException exception) {
+            throw new UncheckedIOException(exception);
+        }
     }
 
     private static List<String> childCoverageCommand(final List<String> command) {

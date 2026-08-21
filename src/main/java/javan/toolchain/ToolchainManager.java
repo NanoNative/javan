@@ -184,6 +184,45 @@ public final class ToolchainManager {
     }
 
     /**
+     * Resolves one executable from a locally available JDK.
+     *
+     * <p>This is the native-Javan fallback when no JVM supplies {@code java.home}. It never
+     * downloads or mutates a JDK installation.</p>
+     *
+     * @param name JDK executable name without a platform suffix
+     * @return executable path from the first usable candidate that provides it
+     * @throws IOException when no locally available JDK provides the executable
+     */
+    public Path requiredJdkTool(final String name) throws IOException {
+        if (Strings2.isBlank(name)) {
+            throw new IllegalArgumentException("name");
+        }
+        final String tool = Strings2.trimAscii(name);
+        for (final JdkResolver.Candidate candidate : resolveLocalJdk(Optional.empty()).candidates()) {
+            final Path executable = jdkTool(candidate, tool);
+            if (candidate.usable() && Files.isExecutable(executable)) {
+                return executable;
+            }
+        }
+        throw new IOException("No usable local JDK provides " + tool + "; run javan jdk install");
+    }
+
+    /**
+     * Resolves a locally available JDK home with runtime-image metadata.
+     *
+     * @return verified JDK home
+     * @throws IOException when no locally available verified JDK exists
+     */
+    public Path requiredJdkHome() throws IOException {
+        for (final JdkResolver.Candidate candidate : resolveLocalJdk(Optional.empty()).candidates()) {
+            if (candidate.usable() && Files.isRegularFile(candidate.home().resolve("release"))) {
+                return candidate.home();
+            }
+        }
+        throw new IOException("No usable local JDK home found; run javan jdk install");
+    }
+
+    /**
      * Creates a JDK-shaped facade over the selected local backend JDK.
      *
      * @param output generated facade home
@@ -249,6 +288,21 @@ public final class ToolchainManager {
             }
         }
         return Optional.empty();
+    }
+
+    private static Path jdkTool(final JdkResolver.Candidate candidate, final String name) {
+        if ("java".equals(name)) {
+            return candidate.javaExecutable();
+        }
+        if ("javac".equals(name)) {
+            return candidate.javacExecutable();
+        }
+        final Path bin = candidate.javaExecutable().getParent();
+        if (bin == null) {
+            return candidate.home().resolve("bin").resolve(name);
+        }
+        final String executable = java.io.File.separatorChar == '\\' ? name + ".exe" : name;
+        return bin.resolve(executable);
     }
 
     private static Optional<Path> facadeMetadataValue(final Path metadata, final String prefix) throws IOException {
