@@ -265,6 +265,25 @@ final class CliCommandIntegrationTest {
         assertThat(Files.readString(tempDir.resolve(".javan/reports/javac-invocation.json")))
             .contains("\"analysis\": \"built\"");
         assertThat(process(binary.getParent(), List.of(binary.toString())).stdout()).isEqualTo("facade-native\n");
+
+        final CliRun rebuilt = run(
+            tempDir,
+            "javac",
+            "--jn-build",
+            "--jn-main",
+            "com.acme.FacadeNativeMain",
+            "--jn-out",
+            "facade-native",
+            "-d",
+            classes.toString(),
+            source.getFileName().toString()
+        );
+
+        assertThat(rebuilt.exitCode()).isZero();
+        assertThat(Files.readString(tempDir.resolve(".javan/reports/native-object-cache.json")))
+            .contains("\"source\": \"main.c\", \"decision\": \"reused\"")
+            .contains("\"source\": \"javan_runtime.c\", \"decision\": \"reused\"");
+        assertThat(Files.readString(tempDir.resolve(".javan/reports/report.md"))).contains("`native-object-cache` | present");
     }
 
     @Test

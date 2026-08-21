@@ -7,7 +7,11 @@ import javan.util.Strings2;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -89,6 +93,56 @@ public final class NativeLinker {
             throw linkFailure("Native link failed", result, symbols);
         }
         return output;
+    }
+
+    /**
+     * Links generated application sources while reusing verified generated object files.
+     *
+     * <p>The final link intentionally remains fresh: only generated C and runtime source objects
+     * have a complete compiler-owned input boundary at this stage.</p>
+     *
+     * @param root working directory
+     * @param mainC generated main C path
+     * @param runtimeC generated runtime C path
+     * @param output output binary path
+     * @param cacheDirectory project-local native object cache
+     * @param linkInputs validated native link inputs
+     * @param importedSymbols immutable native import symbol names
+     * @return linked artifact and object-cache evidence
+     * @throws IOException when compilation, cache validation, or linking fails
+     * @throws InterruptedException when interrupted while compiling or linking
+     */
+    public CacheLinkResult linkCached(
+        final Path root,
+        final Path mainC,
+        final Path runtimeC,
+        final Path output,
+        final Path cacheDirectory,
+        final NativeLinkInputs linkInputs,
+        final List<String> importedSymbols
+    ) throws IOException, InterruptedException {
+        final NativeLinkInputs inputs = Objects.requireNonNull(linkInputs, "linkInputs");
+        final List<String> symbols = List.copyOf(Objects.requireNonNull(importedSymbols, "importedSymbols"));
+        rejectUnsupportedFrameworks(inputs, System.getProperty("os.name", ""));
+        final String compiler = requiredExecutable(compilerCandidates(), "No C compiler found. Install gcc, clang, or cc.");
+        final String compilerIdentity = compilerIdentity(root, compiler);
+        Files.createDirectories(output.getParent());
+        final CacheEntry mainObject = cachedObject(root, compiler, compilerIdentity, mainC, cacheDirectory);
+        final CacheEntry runtimeObject = cachedObject(root, compiler, compilerIdentity, runtimeC, cacheDirectory);
+        final List<String> command = new ArrayList<>();
+        command.add(compiler);
+        command.addAll(threadFlags());
+        command.add(mainObject.object().toString());
+        command.add(runtimeObject.object().toString());
+        appendDirectLinkInputs(command, inputs, runtimeC.getParent());
+        command.addAll(platformLinkFlags());
+        command.add("-o");
+        command.add(output.toString());
+        final ProcessRunner.Result result = processRunner.run(root, command);
+        if (result.exitCode() != 0) {
+            throw linkFailure("Native link failed", result, symbols);
+        }
+        return new CacheLinkResult(output, List.of(mainObject, runtimeObject));
     }
 
     /**
@@ -438,6 +492,102 @@ public final class NativeLinker {
         compileObject(root, compiler, source, output, List.of());
     }
 
+    private CacheEntry cachedObject(
+        final Path root,
+        final String compiler,
+        final String compilerIdentity,
+        final Path source,
+        final Path cacheDirectory
+    ) throws IOException, InterruptedException {
+        final String fingerprint = objectFingerprint(compiler, compilerIdentity, source);
+        final Path object = cacheDirectory.resolve(fingerprint + ".o");
+        final Path checksum = cacheDirectory.resolve(fingerprint + ".sha256");
+        if (Files.isRegularFile(object) && Files.isRegularFile(checksum)
+            && objectChecksum(object).equals(Files.readString(checksum).trim())) {
+            return new CacheEntry(source.getFileName().toString(), object, true);
+        }
+        Files.createDirectories(cacheDirectory);
+        final Path temporary = Files.createTempFile(cacheDirectory, fingerprint + ".", ".tmp");
+        try {
+            compileObject(root, compiler, source, temporary);
+            final String objectChecksum = objectChecksum(temporary);
+            Files.move(temporary, object, StandardCopyOption.REPLACE_EXISTING);
+            Files.writeString(checksum, objectChecksum + System.lineSeparator());
+        } finally {
+            Files.deleteIfExists(temporary);
+        }
+        return new CacheEntry(source.getFileName().toString(), object, false);
+    }
+
+    private String compilerIdentity(final Path root, final String compiler) throws IOException, InterruptedException {
+        final ProcessRunner.Result result = processRunner.run(root, List.of(compiler, "--version"));
+        return result.exitCode() + "\n" + result.stdout() + "\n" + result.stderr();
+    }
+
+    private static String objectFingerprint(final String compiler, final String compilerIdentity, final Path source) throws IOException {
+        final MessageDigest digest = digest();
+        update(digest, "javan-native-object-v1");
+        update(digest, System.getProperty("os.name", ""));
+        update(digest, System.getProperty("os.arch", ""));
+        update(digest, compiler);
+        update(digest, compilerIdentity);
+        final Path compilerPath = Path.of(compiler);
+        if (Files.isRegularFile(compilerPath)) {
+            update(digest, compilerPath.toRealPath().toString());
+            update(digest, Long.toString(Files.size(compilerPath)));
+            update(digest, Long.toString(Files.getLastModifiedTime(compilerPath).toMillis()));
+        }
+        update(digest, "-pthread");
+        update(digest, "-fPIC");
+        update(digest, Files.readAllBytes(source));
+        final Path directory = source.getParent();
+        if (directory != null && Files.isDirectory(directory)) {
+            try (var files = Files.list(directory)) {
+                final List<Path> headers = files
+                    .filter(path -> path.getFileName().toString().endsWith(".h"))
+                    .sorted(Comparator.comparing(Path::toString))
+                    .toList();
+                for (final Path header : headers) {
+                    update(digest, header.getFileName().toString());
+                    update(digest, Files.readAllBytes(header));
+                }
+            }
+        }
+        return hex(digest.digest());
+    }
+
+    private static String objectChecksum(final Path object) throws IOException {
+        final MessageDigest digest = digest();
+        update(digest, Files.readAllBytes(object));
+        return hex(digest.digest());
+    }
+
+    private static MessageDigest digest() {
+        try {
+            return MessageDigest.getInstance("SHA-256");
+        } catch (final NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
+    }
+
+    private static void update(final MessageDigest digest, final String value) {
+        update(digest, value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    private static void update(final MessageDigest digest, final byte[] value) {
+        digest.update((byte) 0);
+        digest.update(value);
+    }
+
+    private static String hex(final byte[] bytes) {
+        final StringBuilder value = new StringBuilder(bytes.length * 2);
+        for (final byte byteValue : bytes) {
+            value.append(Character.forDigit((byteValue >>> 4) & 15, 16));
+            value.append(Character.forDigit(byteValue & 15, 16));
+        }
+        return value.toString();
+    }
+
     private void compileObject(
         final Path root,
         final String compiler,
@@ -673,5 +823,32 @@ public final class NativeLinker {
 
     private static boolean isWindowsHost(final String osName) {
         return Strings2.toAsciiLowerCase(osName).contains("win");
+    }
+
+    /**
+     * Native link result with immutable generated-object cache evidence.
+     *
+     * @param artifact linked native artifact
+     * @param objects generated object cache entries
+     */
+    public record CacheLinkResult(Path artifact, List<CacheEntry> objects) {
+        public CacheLinkResult {
+            artifact = Objects.requireNonNull(artifact, "artifact");
+            objects = List.copyOf(Objects.requireNonNull(objects, "objects"));
+        }
+    }
+
+    /**
+     * One generated native object cache decision.
+     *
+     * @param source generated source file name
+     * @param object verified cached object file
+     * @param reused whether the object was reused rather than compiled
+     */
+    public record CacheEntry(String source, Path object, boolean reused) {
+        public CacheEntry {
+            source = Objects.requireNonNull(source, "source");
+            object = Objects.requireNonNull(object, "object");
+        }
     }
 }

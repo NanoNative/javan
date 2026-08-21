@@ -39,6 +39,7 @@ public final class ReportSummarizer {
         new ReportSpec("runtime-features", List.of("runtime-features.json", "runtime-features.md")),
         new ReportSpec("runtime", List.of("runtime.json", "runtime.md")),
         new ReportSpec("runtime-footprint", List.of("runtime-footprint.json", "runtime-footprint.md")),
+        new ReportSpec("native-object-cache", List.of("native-object-cache.json", "native-object-cache.md")),
         new ReportSpec("sanitizer-proof", List.of("sanitizer-proof.json", "sanitizer-proof.md")),
         new ReportSpec("compatibility", List.of("compatibility-summary.json", "compatibility-summary.md"))
     );
