@@ -110,7 +110,11 @@ primitive widening and boxing, access checks, entry methods, and `InvocationTarg
 causes. Platform methods that only have metadata remain outside the compiled invocation set.
 Selecting a runtime class loader remains outside the static native model.
 
-- service loading from standard descriptors and module declarations
+- Done: closed-world service loading from aggregated `META-INF/services` descriptors and module
+  `provides` declarations, including lazy cached construction, module `provider()` factories,
+  module `uses` checks, iteration, `findFirst`, and `reload`. `loadInstalled` uses the platform
+  loader view and therefore excludes application descriptors. Dynamic class-loader discovery
+  and provider streams remain part of the broader loader and stream work.
 - broader exception semantics and platform throwable transport
 - collections, streams, time, networking, files, and concurrency only with native/JVM parity
 - deterministic rejection for dynamic class definition, arbitrary loaders, proxies,

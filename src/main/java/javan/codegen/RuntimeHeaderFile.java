@@ -371,6 +371,12 @@ final class RuntimeHeaderFile {
         void* javan_string_substring(const char* value, int begin);
         void* javan_string_substring_range(const char* value, int begin, int end);
         void* javan_arraylist_new(void);
+        typedef void* (*javan_service_provider_resolver)(int service_type_id, int provider_index);
+        typedef int (*javan_service_provider_counter)(int service_type_id);
+        void* javan_service_loader_new(void* service, javan_service_provider_resolver resolver, javan_service_provider_counter counter);
+        void* javan_service_loader_iterator(void* loader);
+        void* javan_service_loader_find_first(void* loader);
+        void javan_service_loader_reload(void* loader);
         int javan_arraylist_add(void* list, void* value);
         int javan_collection_add(void* list, void* value);
         void javan_arraylist_add_at(void* list, int index, void* value);

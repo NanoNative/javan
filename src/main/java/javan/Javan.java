@@ -18,6 +18,8 @@ import javan.build.ResourceBundler;
 import javan.build.RuntimeFeatureSelection;
 import javan.classfile.ClassFile;
 import javan.classfile.ClassFileScanner;
+import javan.classfile.MethodInfo;
+import javan.classfile.ServiceProvider;
 import javan.cli.Options;
 import javan.codegen.BytecodeToIR;
 import javan.codegen.CCodegen;
@@ -58,9 +60,13 @@ import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * High-level command orchestration for javan.
@@ -135,7 +141,8 @@ public final class Javan {
         final ProjectLayout detected = projectDetector.detect(cwd, options);
         final ProjectLayout layout = buildInvoker.ensureClasses(detected, options);
         reports.writeProject(layout, options.profile());
-        final Map<String, ClassFile> classes = classFileScanner.scan(layout);
+        final ClassFileScanner.ScanResult scan = classFileScanner.scanAll(layout);
+        final Map<String, ClassFile> classes = scan.classes();
         final String nativeTarget = options.targetTriple().isPresent()
             ? RuntimeFootprintReports.normalizeTarget(options.targetTriple().orElseThrow())
             : RuntimeFootprintReports.hostTarget();
@@ -149,15 +156,33 @@ public final class Javan {
         }
         final MainClassDetection mainDetection = selectedMainClass(options, classes);
         final String mainClass = mainDetection.mainClass();
-        final CallGraph callGraph;
+        final List<EntryPoint> analysisEntries;
         if (options.libraryBuild()) {
-            callGraph = reachabilityAnalyzer.analyze(classes, entryPoints(exports), nativeEntryPoints);
+            analysisEntries = entryPoints(exports);
         } else if (mainDetection.pass()) {
-            callGraph = reachabilityAnalyzer.analyze(classes, mainClass, nativeEntryPoints);
+            analysisEntries = List.of(new EntryPoint(mainClass, "main", "([Ljava/lang/String;)V"));
         } else {
-            callGraph = emptyCallGraph();
+            analysisEntries = List.of();
+        }
+        CallGraph callGraph = analysisEntries.isEmpty()
+            ? emptyCallGraph()
+            : reachabilityAnalyzer.analyze(classes, analysisEntries, nativeEntryPoints);
+        ServiceProviderResolution services = ServiceProviderResolution.empty();
+        if (ReachabilityAnalyzer.usesServiceLoader(classes, callGraph.reachableMethods())) {
+            services = resolveServiceProviders(
+                classes,
+                scan.serviceProviders(),
+                ReachabilityAnalyzer.requestedServiceTypes(classes, callGraph.reachableMethods())
+            );
+            callGraph = reachabilityAnalyzer.analyze(
+                classes,
+                analysisEntries,
+                nativeEntryPoints,
+                services.providers()
+            );
         }
         final List<Diagnostic> diagnostics = new ArrayList<>(mainDetection.diagnostics());
+        diagnostics.addAll(services.diagnostics());
         diagnostics.addAll(callGraph.diagnostics());
         instantiatedTypeReports.write(layout.outputDirectory(), callGraph.instantiatedTypes());
         instantiatedTypeReports.writeProvenance(layout.outputDirectory(), callGraph.functionValueFlow());
@@ -180,7 +205,8 @@ public final class Javan {
         writeUnifiedReport(layout.outputDirectory());
         final List<Diagnostic> errors = errors(diagnostics);
         if (!errors.isEmpty()) {
-            return new CheckResult(layout, classes, mainClass, callGraph, classInitialization, nativeInterop, diagnostics, exports);
+            return new CheckResult(layout, classes, mainClass, callGraph, classInitialization, nativeInterop,
+                diagnostics, exports, services.providers());
         }
         out.println("Checking static Java profile...");
         printText(out, "  build kind:        ", Strings2.toAsciiLowerCase(options.buildKind().name()));
@@ -192,7 +218,8 @@ public final class Javan {
         printInt(out, "  reachable methods: ", callGraph.reachableMethods().size());
         printInt(out, "  diagnostics:       ", diagnostics.size());
         printWarnings(diagnostics, out);
-        return new CheckResult(layout, classes, mainClass, callGraph, classInitialization, nativeInterop, diagnostics, exports);
+        return new CheckResult(layout, classes, mainClass, callGraph, classInitialization, nativeInterop,
+            diagnostics, exports, services.providers());
     }
 
     /**
@@ -241,7 +268,8 @@ public final class Javan {
             SourceLineIndex.from(check.layout()),
             reachableNativeInterop,
             check.classInitialization(),
-            check.layout().outputDirectory()
+            check.layout().outputDirectory(),
+            check.serviceProviders()
         );
         final MethodEffectAnalyzer.Analysis effects = methodEffectAnalyzer.analyze(lowered);
         final LocalValueOptimizer.Result optimization = localValueOptimizer.optimize(lowered, options.release(), effects);
@@ -773,6 +801,144 @@ public final class Javan {
         return new StringBuilder().append(first).append(second).append(third).toString();
     }
 
+    private static ServiceProviderResolution resolveServiceProviders(
+        final Map<String, ClassFile> classes,
+        final Map<String, List<ServiceProvider>> declarations,
+        final Set<String> requestedServices
+    ) {
+        final Map<String, List<ServiceProvider>> providers = new LinkedHashMap<>();
+        final List<Diagnostic> diagnostics = new ArrayList<>();
+        for (final Map.Entry<String, List<ServiceProvider>> entry : declarations.entrySet()) {
+            if (!requestedServices.contains(entry.getKey())) {
+                continue;
+            }
+            final List<ServiceProvider> resolved = new ArrayList<>();
+            for (final ServiceProvider declaration : preferredServiceDeclarations(entry.getValue())) {
+                final ClassFile provider = classes.get(declaration.provider());
+                final ClassFile service = classes.get(declaration.service());
+                final Optional<MethodInfo> factory = providerFactory(classes, provider, declaration.service());
+                final boolean validConstructor = provider != null
+                    && provider.isPublic()
+                    && !provider.isAbstract()
+                    && hasPublicNoArgConstructor(provider);
+                final boolean assignable = provider != null && service != null
+                    && isAssignableTo(classes, provider.name(), service.name(), new HashSet<>());
+                final boolean validFactory = declaration.factoryMethod() && provider != null
+                    && provider.isPublic() && factory.isPresent();
+                if (provider == null || service == null || (!validFactory && (!validConstructor || !assignable))) {
+                    diagnostics.add(serviceProviderDiagnostic(declaration, provider, service, assignable));
+                    continue;
+                }
+                final String implementation = validFactory
+                    ? factory.orElseThrow().descriptor().substring(3, factory.orElseThrow().descriptor().length() - 1)
+                    : declaration.provider();
+                resolved.add(new ServiceProvider(declaration.service(), declaration.provider(), validFactory, implementation));
+            }
+            providers.put(entry.getKey(), List.copyOf(resolved));
+        }
+        return new ServiceProviderResolution(
+            Collections.unmodifiableMap(new LinkedHashMap<>(providers)),
+            List.copyOf(diagnostics)
+        );
+    }
+
+    private static List<ServiceProvider> preferredServiceDeclarations(final List<ServiceProvider> declarations) {
+        final Map<String, ServiceProvider> providers = new LinkedHashMap<>();
+        for (final ServiceProvider declaration : declarations) {
+            final ServiceProvider previous = providers.get(declaration.provider());
+            if (previous == null || !previous.factoryMethod() && declaration.factoryMethod()) {
+                providers.put(declaration.provider(), declaration);
+            }
+        }
+        return List.copyOf(providers.values());
+    }
+
+    private static boolean hasPublicNoArgConstructor(final ClassFile provider) {
+        final Optional<MethodInfo> constructor = provider.method("<init>", "()V");
+        return constructor.isPresent() && constructor.orElseThrow().isPublic();
+    }
+
+    private static Optional<MethodInfo> providerFactory(
+        final Map<String, ClassFile> classes,
+        final ClassFile provider,
+        final String service
+    ) {
+        if (provider == null) {
+            return Optional.empty();
+        }
+        for (final MethodInfo method : provider.methods()) {
+            if (method.isPublic() && method.isStatic() && "provider".equals(method.name())
+                && method.descriptor().startsWith("()L") && method.descriptor().endsWith(";")) {
+                final String returned = method.descriptor().substring(3, method.descriptor().length() - 1);
+                if (isAssignableTo(classes, returned, service, new HashSet<>())) {
+                    return Optional.of(method);
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static boolean isAssignableTo(
+        final Map<String, ClassFile> classes,
+        final String candidate,
+        final String expected,
+        final Set<String> visited
+    ) {
+        if (candidate.equals(expected)) {
+            return true;
+        }
+        if (!visited.add(candidate)) {
+            return false;
+        }
+        final ClassFile classFile = classes.get(candidate);
+        if (classFile == null) {
+            return false;
+        }
+        for (final String interfaceName : classFile.interfaces()) {
+            if (isAssignableTo(classes, interfaceName, expected, visited)) {
+                return true;
+            }
+        }
+        return !classFile.superName().isEmpty()
+            && isAssignableTo(classes, classFile.superName(), expected, visited);
+    }
+
+    private static Diagnostic serviceProviderDiagnostic(
+        final ServiceProvider declaration,
+        final ClassFile provider,
+        final ClassFile service,
+        final boolean assignable
+    ) {
+        final String reason;
+        if (service == null) {
+            reason = "The declared service type is not in the closed world.";
+        } else if (provider == null) {
+            reason = "The declared provider type is not in the closed world.";
+        } else if (!declaration.factoryMethod() && !assignable) {
+            reason = "The provider is not assignable to the declared service type.";
+        } else {
+            reason = "The provider needs a public no-argument constructor or an eligible module provider() factory.";
+        }
+        return Diagnostic.error(
+            "JAVAN079",
+            "invalid service provider",
+            declaration.provider(),
+            "-",
+            declaration.service() + " -> " + declaration.provider(),
+            reason,
+            "Fix META-INF/services or the module provides declaration."
+        );
+    }
+
+    private record ServiceProviderResolution(
+        Map<String, List<ServiceProvider>> providers,
+        List<Diagnostic> diagnostics
+    ) {
+        private static ServiceProviderResolution empty() {
+            return new ServiceProviderResolution(Map.of(), List.of());
+        }
+    }
+
     /**
      * Result of a successful static check.
      *
@@ -784,6 +950,7 @@ public final class Javan {
      * @param nativeInterop resolved native interop configuration
      * @param diagnostics non-fatal diagnostics
      * @param exports native library exports
+     * @param serviceProviders validated closed-world service providers
      */
     public record CheckResult(
         ProjectLayout layout,
@@ -793,7 +960,8 @@ public final class Javan {
         ClassInitializationGraph.Result classInitialization,
         NativeInteropConfig nativeInterop,
         List<Diagnostic> diagnostics,
-        List<ExportedMethod> exports
+        List<ExportedMethod> exports,
+        Map<String, List<ServiceProvider>> serviceProviders
     ) {
         /**
          * Reports whether the check completed without fatal diagnostics.

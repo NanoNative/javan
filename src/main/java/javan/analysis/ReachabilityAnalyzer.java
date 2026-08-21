@@ -10,6 +10,7 @@ import javan.classfile.LambdaMetafactoryCall;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
 import javan.classfile.RecordObjectMethodsCall;
+import javan.classfile.ServiceProvider;
 import javan.compat.ExactMethodSupport;
 import javan.compat.JdkCallSupport;
 import javan.compat.NetworkApiSupport;
@@ -20,6 +21,7 @@ import javan.verify.Diagnostic;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -55,8 +57,18 @@ public final class ReachabilityAnalyzer {
         final String mainClass,
         final List<EntryPoint> declaredExternalLeaves
     ) {
+        return analyze(classes, mainClass, declaredExternalLeaves, Map.of());
+    }
+
+    /** Analyzes a main class with validated closed-world service providers. */
+    public CallGraph analyze(
+        final Map<String, ClassFile> classes,
+        final String mainClass,
+        final List<EntryPoint> declaredExternalLeaves,
+        final Map<String, List<ServiceProvider>> serviceProviders
+    ) {
         final EntryPoint entry = new EntryPoint(mainClass, "main", "([Ljava/lang/String;)V");
-        return analyze(classes, List.of(entry), declaredExternalLeaves);
+        return analyze(classes, List.of(entry), declaredExternalLeaves, serviceProviders);
     }
 
     /**
@@ -83,20 +95,195 @@ public final class ReachabilityAnalyzer {
         final List<EntryPoint> entries,
         final List<EntryPoint> declaredExternalLeaves
     ) {
+        return analyze(classes, entries, declaredExternalLeaves, Map.of());
+    }
+
+    /** Analyzes explicit roots with validated closed-world service providers. */
+    public CallGraph analyze(
+        final Map<String, ClassFile> classes,
+        final List<EntryPoint> entries,
+        final List<EntryPoint> declaredExternalLeaves,
+        final Map<String, List<ServiceProvider>> serviceProviders
+    ) {
         if (entries.isEmpty()) {
             throw new IllegalArgumentException("Reachability requires at least one entry point");
         }
         InstantiatedTypeAnalysis.Result instantiatedTypes = new InstantiatedTypeAnalysis.Result(List.of(), true);
+        List<EntryPoint> serviceRoots = List.of();
+        List<String> serviceTypes = List.of();
+        boolean serviceRootsResolved = false;
         CallGraph graph;
         while (true) {
-            graph = analyzePass(classes, entries, declaredExternalLeaves, instantiatedTypes, false);
+            final List<EntryPoint> roots = new ArrayList<>(entries);
+            roots.addAll(serviceRoots);
+            graph = analyzePass(classes, roots, declaredExternalLeaves, instantiatedTypes, false);
+            if (!serviceProviders.isEmpty()
+                && !serviceRootsResolved
+                && usesServiceLoader(classes, graph.reachableMethods())) {
+                serviceRoots = serviceProviderRoots(classes, serviceProviders);
+                serviceTypes = serviceProviderTypes(serviceProviders);
+                serviceRootsResolved = true;
+                continue;
+            }
             final InstantiatedTypeAnalysis.Result discovered =
-                InstantiatedTypeAnalysis.analyze(classes, graph.reachableMethods(), entries);
+                InstantiatedTypeAnalysis.analyze(classes, graph.reachableMethods(), roots, serviceTypes);
             if (discovered.equals(instantiatedTypes)) {
-                return analyzePass(classes, entries, declaredExternalLeaves, instantiatedTypes, true);
+                return analyzePass(classes, roots, declaredExternalLeaves, instantiatedTypes, true);
             }
             instantiatedTypes = discovered;
         }
+    }
+
+    /**
+     * Reports whether reachable bytecode invokes the closed-world service-loader surface.
+     *
+     * @param classes parsed closed-world classes
+     * @param reachableMethods reachable methods to inspect
+     * @return true when service providers must participate in reachability
+     */
+    public static boolean usesServiceLoader(
+        final Map<String, ClassFile> classes,
+        final List<EntryPoint> reachableMethods
+    ) {
+        for (final EntryPoint entry : reachableMethods) {
+            final ClassFile owner = classes.get(entry.className());
+            final Optional<MethodInfo> method = owner == null
+                ? Optional.empty()
+                : owner.method(entry.methodName(), entry.descriptor());
+            if (method.isEmpty() || method.orElseThrow().code().isEmpty()) {
+                continue;
+            }
+            for (final Instruction instruction : method.orElseThrow().code().orElseThrow().instructions()) {
+                if (instruction.methodRef().isPresent()
+                    && "java/util/ServiceLoader".equals(instruction.methodRef().orElseThrow().owner())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** Returns service class literals requested by reachable regular load calls. */
+    public static Set<String> requestedServiceTypes(
+        final Map<String, ClassFile> classes,
+        final List<EntryPoint> reachableMethods
+    ) {
+        final Set<String> result = new LinkedHashSet<>();
+        for (final EntryPoint entry : reachableMethods) {
+            final ClassFile owner = classes.get(entry.className());
+            final Optional<MethodInfo> method = owner == null
+                ? Optional.empty()
+                : owner.method(entry.methodName(), entry.descriptor());
+            if (method.isEmpty() || method.orElseThrow().code().isEmpty()) {
+                continue;
+            }
+            final List<Instruction> instructions = method.orElseThrow().code().orElseThrow().instructions();
+            for (int index = 0; index < instructions.size(); index++) {
+                final Instruction instruction = instructions.get(index);
+                if (instruction.methodRef().isEmpty()) {
+                    continue;
+                }
+                final MethodRef reference = instruction.methodRef().orElseThrow();
+                if (!"java/util/ServiceLoader".equals(reference.owner()) || !"load".equals(reference.name())) {
+                    continue;
+                }
+                final Optional<String> service = serviceArgument(instructions, index, reference.descriptor());
+                if (service.isPresent()) {
+                    result.add(service.orElseThrow());
+                }
+            }
+        }
+        return Set.copyOf(result);
+    }
+
+    private static Optional<String> serviceArgument(
+        final List<Instruction> instructions,
+        final int callIndex,
+        final String descriptor
+    ) {
+        final int minimum = descriptor.startsWith("(Ljava/lang/Class;Ljava/lang/ClassLoader;")
+            ? Math.max(0, callIndex - 8)
+            : callIndex - 1;
+        for (int index = callIndex - 1; index >= minimum; index--) {
+            final Optional<String> value = classValue(instructions, index, new HashSet<>());
+            if (value.isPresent()) {
+                return value;
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<String> classValue(
+        final List<Instruction> instructions,
+        final int index,
+        final Set<Integer> visitedLocals
+    ) {
+        if (index < 0) {
+            return Optional.empty();
+        }
+        final Instruction instruction = instructions.get(index);
+        if (("ldc".equals(instruction.mnemonic()) || "ldc_w".equals(instruction.mnemonic()))
+            && instruction.className().isPresent()) {
+            return instruction.className();
+        }
+        final int local = loadedReferenceLocal(instruction);
+        if (local < 0 || !visitedLocals.add(local)) {
+            return Optional.empty();
+        }
+        for (int candidate = index - 1; candidate >= 0; candidate--) {
+            if (storedReferenceLocal(instructions.get(candidate)) == local) {
+                return classValue(instructions, candidate - 1, visitedLocals);
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static int loadedReferenceLocal(final Instruction instruction) {
+        if (instruction.opcode() == 25 && instruction.operands().length == 1) {
+            return instruction.operands()[0] & 0xFF;
+        }
+        return instruction.opcode() >= 42 && instruction.opcode() <= 45 ? instruction.opcode() - 42 : -1;
+    }
+
+    private static int storedReferenceLocal(final Instruction instruction) {
+        if (instruction.opcode() == 58 && instruction.operands().length == 1) {
+            return instruction.operands()[0] & 0xFF;
+        }
+        return instruction.opcode() >= 75 && instruction.opcode() <= 78 ? instruction.opcode() - 75 : -1;
+    }
+
+    private static List<EntryPoint> serviceProviderRoots(
+        final Map<String, ClassFile> classes,
+        final Map<String, List<ServiceProvider>> providers
+    ) {
+        final List<EntryPoint> result = new ArrayList<>();
+        for (final List<ServiceProvider> declarations : providers.values()) {
+            for (final ServiceProvider provider : declarations) {
+                if (!provider.factoryMethod()) {
+                    result.add(new EntryPoint(provider.provider(), "<init>", "()V"));
+                    continue;
+                }
+                final ClassFile owner = classes.get(provider.provider());
+                for (final MethodInfo method : owner.methods()) {
+                    if (method.isPublic() && method.isStatic() && "provider".equals(method.name())
+                        && method.descriptor().startsWith("()L")) {
+                        result.add(new EntryPoint(provider.provider(), method.name(), method.descriptor()));
+                        break;
+                    }
+                }
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private static List<String> serviceProviderTypes(final Map<String, List<ServiceProvider>> providers) {
+        final Set<String> result = new LinkedHashSet<>();
+        for (final List<ServiceProvider> declarations : providers.values()) {
+            for (final ServiceProvider provider : declarations) {
+                result.add(provider.implementation());
+            }
+        }
+        return List.copyOf(result);
     }
 
     private static CallGraph analyzePass(
@@ -108,6 +295,7 @@ public final class ReachabilityAnalyzer {
     ) {
         final MethodRefFactsCache methodRefFacts = new MethodRefFactsCache(classes);
         final EntryPointPool entryPoints = new EntryPointPool();
+        final DispatchTargetsCache dispatchTargets = new DispatchTargetsCache(classes, entryPoints, instantiatedTypes);
         final List<EntryPoint> roots = new ArrayList<>(entries.size());
         for (final EntryPoint entry : entries) {
             roots.add(entryPoints.entry(entry.className(), entry.methodName(), entry.descriptor()));
@@ -216,7 +404,8 @@ public final class ReachabilityAnalyzer {
                             materializedLambdaMethods,
                             entryPoints,
                             methodRefFacts,
-                            instantiatedTypes
+                            instantiatedTypes,
+                            dispatchTargets
                         );
                     }
                 }
@@ -501,6 +690,71 @@ public final class ReachabilityAnalyzer {
         }
     }
 
+    private static final class DispatchTargetsCache {
+        private final Map<String, ClassFile> classes;
+        private final EntryPointPool entryPoints;
+        private final InstantiatedTypeAnalysis.Result instantiatedTypes;
+        private final Map<String, List<EntryPoint>> interfaceTargets = new HashMap<>();
+        private final Map<String, List<EntryPoint>> virtualTargets = new HashMap<>();
+        private final Map<String, Boolean> instantiatedReceivers = new HashMap<>();
+
+        private DispatchTargetsCache(
+            final Map<String, ClassFile> classes,
+            final EntryPointPool entryPoints,
+            final InstantiatedTypeAnalysis.Result instantiatedTypes
+        ) {
+            this.classes = classes;
+            this.entryPoints = entryPoints;
+            this.instantiatedTypes = instantiatedTypes;
+        }
+
+        private List<EntryPoint> interfaceTargets(final MethodRef target) {
+            final String key = target.display();
+            final List<EntryPoint> cached = interfaceTargets.get(key);
+            if (cached != null) {
+                return cached;
+            }
+            final List<EntryPoint> resolved = ReachabilityAnalyzer.interfaceTargets(
+                classes,
+                target,
+                entryPoints,
+                instantiatedTypes
+            );
+            interfaceTargets.put(key, resolved);
+            return resolved;
+        }
+
+        private List<EntryPoint> virtualTargets(final MethodRef target) {
+            final String key = target.display();
+            final List<EntryPoint> cached = virtualTargets.get(key);
+            if (cached != null) {
+                return cached;
+            }
+            final List<EntryPoint> resolved = ReachabilityAnalyzer.virtualTargets(
+                classes,
+                target,
+                entryPoints,
+                instantiatedTypes
+            );
+            virtualTargets.put(key, resolved);
+            return resolved;
+        }
+
+        private boolean hasInstantiatedReceiver(final String declaredType) {
+            final Boolean cached = instantiatedReceivers.get(declaredType);
+            if (cached != null) {
+                return cached;
+            }
+            final boolean resolved = ReachabilityAnalyzer.hasInstantiatedReceiver(
+                classes,
+                declaredType,
+                instantiatedTypes
+            );
+            instantiatedReceivers.put(declaredType, resolved);
+            return resolved;
+        }
+    }
+
     private record MethodRefFacts(
         String methodName,
         String descriptor,
@@ -537,7 +791,8 @@ public final class ReachabilityAnalyzer {
         final List<MethodRef> materializedLambdaMethods,
         final EntryPointPool entryPoints,
         final MethodRefFactsCache methodRefFacts,
-        final InstantiatedTypeAnalysis.Result instantiatedTypes
+        final InstantiatedTypeAnalysis.Result instantiatedTypes,
+        final DispatchTargetsCache dispatchTargets
     ) {
         final Optional<MethodRef> methodRef = instruction.methodRef();
         if (methodRef.isEmpty()) {
@@ -561,7 +816,7 @@ public final class ReachabilityAnalyzer {
         }
         if (instruction.opcode() == 185 && isIteratorForEachRemaining(target)) {
             final MethodRef consumerAccept = new MethodRef("java/util/function/Consumer", "accept", "(Ljava/lang/Object;)V");
-            final List<EntryPoint> targetMethods = interfaceTargets(classes, consumerAccept, entryPoints, instantiatedTypes);
+            final List<EntryPoint> targetMethods = dispatchTargets.interfaceTargets(consumerAccept);
             if (!targetMethods.isEmpty()) {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
@@ -582,7 +837,7 @@ public final class ReachabilityAnalyzer {
         }
         if (instruction.opcode() == 185 && isIterableForEach(target)) {
             final MethodRef consumerAccept = new MethodRef("java/util/function/Consumer", "accept", "(Ljava/lang/Object;)V");
-            final List<EntryPoint> targetMethods = interfaceTargets(classes, consumerAccept, entryPoints, instantiatedTypes);
+            final List<EntryPoint> targetMethods = dispatchTargets.interfaceTargets(consumerAccept);
             if (!targetMethods.isEmpty()) {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
@@ -603,7 +858,7 @@ public final class ReachabilityAnalyzer {
         }
         if (isCollectionRemoveIf(target)) {
             final MethodRef predicateTest = new MethodRef("java/util/function/Predicate", "test", "(Ljava/lang/Object;)Z");
-            final List<EntryPoint> targetMethods = interfaceTargets(classes, predicateTest, entryPoints, instantiatedTypes);
+            final List<EntryPoint> targetMethods = dispatchTargets.interfaceTargets(predicateTest);
             if (!targetMethods.isEmpty()) {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
@@ -626,7 +881,7 @@ public final class ReachabilityAnalyzer {
         }
         if (instruction.opcode() == 185 && isMapForEach(target)) {
             final MethodRef biConsumerAccept = new MethodRef("java/util/function/BiConsumer", "accept", "(Ljava/lang/Object;Ljava/lang/Object;)V");
-            final List<EntryPoint> targetMethods = interfaceTargets(classes, biConsumerAccept, entryPoints, instantiatedTypes);
+            final List<EntryPoint> targetMethods = dispatchTargets.interfaceTargets(biConsumerAccept);
             if (!targetMethods.isEmpty()) {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
@@ -647,7 +902,7 @@ public final class ReachabilityAnalyzer {
         }
         if (isMapComputeIfAbsent(target)) {
             final MethodRef functionApply = new MethodRef("java/util/function/Function", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;");
-            final List<EntryPoint> targetMethods = interfaceTargets(classes, functionApply, entryPoints, instantiatedTypes);
+            final List<EntryPoint> targetMethods = dispatchTargets.interfaceTargets(functionApply);
             if (!targetMethods.isEmpty()) {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
@@ -674,7 +929,7 @@ public final class ReachabilityAnalyzer {
         }
         if (isOptionalFilter(target)) {
             final MethodRef predicateTest = new MethodRef("java/util/function/Predicate", "test", "(Ljava/lang/Object;)Z");
-            final List<EntryPoint> targetMethods = interfaceTargets(classes, predicateTest, entryPoints, instantiatedTypes);
+            final List<EntryPoint> targetMethods = dispatchTargets.interfaceTargets(predicateTest);
             if (!targetMethods.isEmpty()) {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
@@ -695,7 +950,7 @@ public final class ReachabilityAnalyzer {
         }
         if (isOptionalMap(target)) {
             final MethodRef functionApply = new MethodRef("java/util/function/Function", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;");
-            final List<EntryPoint> targetMethods = interfaceTargets(classes, functionApply, entryPoints, instantiatedTypes);
+            final List<EntryPoint> targetMethods = dispatchTargets.interfaceTargets(functionApply);
             if (!targetMethods.isEmpty()) {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
@@ -722,7 +977,7 @@ public final class ReachabilityAnalyzer {
         }
         if (isOptionalFlatMap(target)) {
             final MethodRef functionApply = new MethodRef("java/util/function/Function", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;");
-            final List<EntryPoint> targetMethods = interfaceTargets(classes, functionApply, entryPoints, instantiatedTypes);
+            final List<EntryPoint> targetMethods = dispatchTargets.interfaceTargets(functionApply);
             if (!targetMethods.isEmpty()) {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
@@ -749,7 +1004,7 @@ public final class ReachabilityAnalyzer {
         }
         if (isOptionalIfPresent(target)) {
             final MethodRef consumerAccept = new MethodRef("java/util/function/Consumer", "accept", "(Ljava/lang/Object;)V");
-            final List<EntryPoint> targetMethods = interfaceTargets(classes, consumerAccept, entryPoints, instantiatedTypes);
+            final List<EntryPoint> targetMethods = dispatchTargets.interfaceTargets(consumerAccept);
             if (!targetMethods.isEmpty()) {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
@@ -770,7 +1025,7 @@ public final class ReachabilityAnalyzer {
         }
         if (isOptionalOr(target)) {
             final MethodRef supplierGet = new MethodRef("java/util/function/Supplier", "get", "()Ljava/lang/Object;");
-            final List<EntryPoint> targetMethods = interfaceTargets(classes, supplierGet, entryPoints, instantiatedTypes);
+            final List<EntryPoint> targetMethods = dispatchTargets.interfaceTargets(supplierGet);
             if (!targetMethods.isEmpty()) {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
@@ -797,7 +1052,7 @@ public final class ReachabilityAnalyzer {
         }
         if (isOptionalOrElseGet(target)) {
             final MethodRef supplierGet = new MethodRef("java/util/function/Supplier", "get", "()Ljava/lang/Object;");
-            final List<EntryPoint> targetMethods = interfaceTargets(classes, supplierGet, entryPoints, instantiatedTypes);
+            final List<EntryPoint> targetMethods = dispatchTargets.interfaceTargets(supplierGet);
             if (!targetMethods.isEmpty()) {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
@@ -824,7 +1079,7 @@ public final class ReachabilityAnalyzer {
         }
         if (isObjectsRequireNonNullElseGet(target)) {
             final MethodRef supplierGet = new MethodRef("java/util/function/Supplier", "get", "()Ljava/lang/Object;");
-            final List<EntryPoint> targetMethods = interfaceTargets(classes, supplierGet, entryPoints, instantiatedTypes);
+            final List<EntryPoint> targetMethods = dispatchTargets.interfaceTargets(supplierGet);
             if (!targetMethods.isEmpty()) {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
@@ -851,7 +1106,7 @@ public final class ReachabilityAnalyzer {
         }
         if (isMapComputeIfPresent(target) || isMapCompute(target) || isMapMerge(target)) {
             final MethodRef biFunctionApply = new MethodRef("java/util/function/BiFunction", "apply", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
-            final List<EntryPoint> targetMethods = interfaceTargets(classes, biFunctionApply, entryPoints, instantiatedTypes);
+            final List<EntryPoint> targetMethods = dispatchTargets.interfaceTargets(biFunctionApply);
             if (!targetMethods.isEmpty()) {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
@@ -879,7 +1134,7 @@ public final class ReachabilityAnalyzer {
             return;
         }
         if (instruction.opcode() == 185 && isPredicateTest(target)) {
-            final List<EntryPoint> targetMethods = interfaceTargets(classes, target, entryPoints, instantiatedTypes);
+            final List<EntryPoint> targetMethods = dispatchTargets.interfaceTargets(target);
             if (!targetMethods.isEmpty()) {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
@@ -901,7 +1156,7 @@ public final class ReachabilityAnalyzer {
             return;
         }
         if (instruction.opcode() == 185 && isConsumerAccept(target)) {
-            final List<EntryPoint> targetMethods = interfaceTargets(classes, target, entryPoints, instantiatedTypes);
+            final List<EntryPoint> targetMethods = dispatchTargets.interfaceTargets(target);
             if (!targetMethods.isEmpty()) {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
@@ -921,7 +1176,7 @@ public final class ReachabilityAnalyzer {
             return;
         }
         if (instruction.opcode() == 185 && isBiConsumerAccept(target)) {
-            final List<EntryPoint> targetMethods = interfaceTargets(classes, target, entryPoints, instantiatedTypes);
+            final List<EntryPoint> targetMethods = dispatchTargets.interfaceTargets(target);
             if (!targetMethods.isEmpty()) {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
@@ -941,7 +1196,7 @@ public final class ReachabilityAnalyzer {
             return;
         }
         if (instruction.opcode() == 185 && isSupplierGet(target)) {
-            final List<EntryPoint> targetMethods = interfaceTargets(classes, target, entryPoints, instantiatedTypes);
+            final List<EntryPoint> targetMethods = dispatchTargets.interfaceTargets(target);
             if (!targetMethods.isEmpty()) {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
@@ -967,7 +1222,7 @@ public final class ReachabilityAnalyzer {
             return;
         }
         if (instruction.opcode() == 185 && isFunctionApply(target)) {
-            final List<EntryPoint> targetMethods = interfaceTargets(classes, target, entryPoints, instantiatedTypes);
+            final List<EntryPoint> targetMethods = dispatchTargets.interfaceTargets(target);
             if (!targetMethods.isEmpty()) {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
@@ -985,7 +1240,7 @@ public final class ReachabilityAnalyzer {
             return;
         }
         if (instruction.opcode() == 185 && isBiFunctionApply(target)) {
-            final List<EntryPoint> targetMethods = interfaceTargets(classes, target, entryPoints, instantiatedTypes);
+            final List<EntryPoint> targetMethods = dispatchTargets.interfaceTargets(target);
             if (!targetMethods.isEmpty()) {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
@@ -1015,7 +1270,7 @@ public final class ReachabilityAnalyzer {
             return;
         }
         if (instruction.opcode() == 185) {
-            final Optional<EntryPoint> defaultTarget = hasInstantiatedReceiver(classes, target.owner(), instantiatedTypes)
+            final Optional<EntryPoint> defaultTarget = dispatchTargets.hasInstantiatedReceiver(target.owner())
                 || containsOwner(materializedLambdaMethods, target.owner())
                 ? defaultInterfaceTarget(classes, target, entryPoints)
                 : Optional.empty();
@@ -1025,14 +1280,14 @@ public final class ReachabilityAnalyzer {
                 addEdge(callEdges, current, callee, CallEdge.Kind.CALL);
                 if (isCatchNullFunctionalInterfaceCall(classes, target)) {
                     final MethodRef implementationTarget = new MethodRef(target.owner(), "applyWithException", target.descriptor());
-                    final List<EntryPoint> targetMethods = interfaceTargets(classes, implementationTarget, entryPoints, instantiatedTypes);
+                    final List<EntryPoint> targetMethods = dispatchTargets.interfaceTargets(implementationTarget);
                     enqueueAll(work, workSet, targetMethods);
                     addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
                 }
             }
             if (isCatchNullFunctionalInterfaceCall(classes, target)) {
                 final MethodRef implementationTarget = new MethodRef(target.owner(), "applyWithException", target.descriptor());
-                final List<EntryPoint> targetMethods = interfaceTargets(classes, implementationTarget, entryPoints, instantiatedTypes);
+                final List<EntryPoint> targetMethods = dispatchTargets.interfaceTargets(implementationTarget);
                 if (!targetMethods.isEmpty()) {
                     enqueueAll(work, workSet, targetMethods);
                     addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
@@ -1053,7 +1308,7 @@ public final class ReachabilityAnalyzer {
                 ));
                 return;
             }
-            final List<EntryPoint> targetMethods = interfaceTargets(classes, target, entryPoints, instantiatedTypes);
+            final List<EntryPoint> targetMethods = dispatchTargets.interfaceTargets(target);
             if (!targetMethods.isEmpty()) {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
@@ -1120,7 +1375,7 @@ public final class ReachabilityAnalyzer {
             }
         }
         if (instruction.opcode() == 182) {
-            final List<EntryPoint> targets = virtualTargets(classes, target, entryPoints, instantiatedTypes);
+            final List<EntryPoint> targets = dispatchTargets.virtualTargets(target);
             if (!targets.isEmpty()) {
                 enqueueAll(work, workSet, targets);
                 addEdges(callEdges, current, targets, CallEdge.Kind.CALL);

@@ -302,16 +302,17 @@ public final class FunctionValueFlow {
         final List<EntryPoint> reachableMethods,
         final List<EntryPoint> declaredExternalLeaves
     ) {
+        final MethodFlowCache methodFlows = new MethodFlowCache();
         final FlowResult function = containsTrackedUse(
             classes,
             reachableMethods,
             CallbackKind.FUNCTION
-        ) ? new Engine(classes, reachableMethods, declaredExternalLeaves, CallbackKind.FUNCTION).analyze() : FlowResult.empty();
+        ) ? new Engine(classes, reachableMethods, declaredExternalLeaves, CallbackKind.FUNCTION, methodFlows).analyze() : FlowResult.empty();
         final FlowResult supplier = containsTrackedUse(
             classes,
             reachableMethods,
             CallbackKind.SUPPLIER
-        ) ? new Engine(classes, reachableMethods, declaredExternalLeaves, CallbackKind.SUPPLIER).analyze() : FlowResult.empty();
+        ) ? new Engine(classes, reachableMethods, declaredExternalLeaves, CallbackKind.SUPPLIER, methodFlows).analyze() : FlowResult.empty();
         return new Result(
             function.kinds(),
             supplier.kinds(),
@@ -348,11 +349,104 @@ public final class FunctionValueFlow {
         return false;
     }
 
+    private record CachedMethodFlow(
+        String methodName,
+        String descriptor,
+        BytecodeControlFlow.Result controlFlow,
+        Map<Integer, Integer> instructionIndexes
+    ) {
+    }
+
+    private static final class MethodFlowCache {
+        private final Map<String, List<CachedMethodFlow>> byOwner = new HashMap<>();
+
+        private CachedMethodFlow methodFlow(
+            final EntryPoint entryPoint,
+            final MethodInfo method,
+            final List<Instruction> bytecode
+        ) {
+            List<CachedMethodFlow> ownerFlows = byOwner.get(entryPoint.className());
+            if (ownerFlows == null) {
+                ownerFlows = new ArrayList<>();
+                byOwner.put(entryPoint.className(), ownerFlows);
+            }
+            for (final CachedMethodFlow flow : ownerFlows) {
+                if (flow.methodName().equals(entryPoint.methodName())
+                    && flow.descriptor().equals(entryPoint.descriptor())) {
+                    return flow;
+                }
+            }
+            final CachedMethodFlow flow = new CachedMethodFlow(
+                entryPoint.methodName(),
+                entryPoint.descriptor(),
+                BytecodeControlFlow.analyze(method),
+                instructionIndexes(bytecode)
+            );
+            ownerFlows.add(flow);
+            return flow;
+        }
+    }
+
+    private static final class EntryPointMembership {
+        private final Map<String, List<EntryPoint>> byOwner = new HashMap<>();
+
+        private EntryPointMembership(final List<EntryPoint> entries) {
+            for (final EntryPoint entry : entries) {
+                add(entry);
+            }
+        }
+
+        private boolean add(final EntryPoint entry) {
+            List<EntryPoint> bucket = byOwner.get(entry.className());
+            if (bucket == null) {
+                bucket = new ArrayList<>();
+                byOwner.put(entry.className(), bucket);
+            }
+            for (final EntryPoint candidate : bucket) {
+                if (candidate.methodName().equals(entry.methodName())
+                    && candidate.descriptor().equals(entry.descriptor())) {
+                    return false;
+                }
+            }
+            bucket.add(entry);
+            return true;
+        }
+
+        private boolean contains(final EntryPoint entry) {
+            final List<EntryPoint> bucket = byOwner.get(entry.className());
+            if (bucket == null) {
+                return false;
+            }
+            for (final EntryPoint candidate : bucket) {
+                if (candidate.methodName().equals(entry.methodName())
+                    && candidate.descriptor().equals(entry.descriptor())) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private void remove(final EntryPoint entry) {
+            final List<EntryPoint> bucket = byOwner.get(entry.className());
+            if (bucket == null) {
+                return;
+            }
+            for (int index = 0; index < bucket.size(); index++) {
+                final EntryPoint candidate = bucket.get(index);
+                if (candidate.methodName().equals(entry.methodName())
+                    && candidate.descriptor().equals(entry.descriptor())) {
+                    bucket.remove(index);
+                    return;
+                }
+            }
+        }
+    }
+
     private static final class Engine {
         private final Map<String, ClassFile> classes;
         private final List<EntryPoint> reachableMethods;
-        private final Set<EntryPoint> reachableSet;
-        private final Set<EntryPoint> declaredExternalLeaves;
+        private final EntryPointMembership reachableSet;
+        private final EntryPointMembership declaredExternalLeaves;
         private final CallbackKind callbackKind;
         private final Map<EntryPoint, Fact[]> parameterFacts = new LinkedHashMap<>();
         private final Map<EntryPoint, Fact> returnFacts = new LinkedHashMap<>();
@@ -360,29 +454,39 @@ public final class FunctionValueFlow {
         private final Map<FieldRef, Fact> fieldFacts = new LinkedHashMap<>();
         private final Map<Site, Fact> callbackFacts = new LinkedHashMap<>();
         private final Map<String, Boolean> callbackTypeCache = new HashMap<>();
-        private boolean changed;
+        private final MethodFlowCache methodFlows;
+        private final Map<EntryPoint, List<EntryPoint>> callers = new HashMap<>();
+        private final Map<FieldRef, List<EntryPoint>> fieldReaders = new HashMap<>();
+        private final List<EntryPoint> pendingMethods = new ArrayList<>();
+        private final EntryPointMembership queuedMethods = new EntryPointMembership(List.of());
 
         private Engine(
             final Map<String, ClassFile> classes,
             final List<EntryPoint> reachableMethods,
             final List<EntryPoint> declaredExternalLeaves,
-            final CallbackKind callbackKind
+            final CallbackKind callbackKind,
+            final MethodFlowCache methodFlows
         ) {
             this.classes = classes;
             this.reachableMethods = List.copyOf(reachableMethods);
-            this.reachableSet = Set.copyOf(reachableMethods);
-            this.declaredExternalLeaves = Set.copyOf(declaredExternalLeaves);
+            this.reachableSet = new EntryPointMembership(reachableMethods);
+            this.declaredExternalLeaves = new EntryPointMembership(declaredExternalLeaves);
             this.callbackKind = callbackKind;
+            this.methodFlows = methodFlows;
             initializeFacts();
         }
 
         private FlowResult analyze() {
-            do {
-                changed = false;
-                for (final EntryPoint entryPoint : reachableMethods) {
-                    simulate(entryPoint);
-                }
-            } while (changed);
+            for (final EntryPoint entryPoint : reachableMethods) {
+                enqueueMethod(entryPoint);
+            }
+            int pendingIndex = 0;
+            while (pendingIndex < pendingMethods.size()) {
+                final EntryPoint entryPoint = pendingMethods.get(pendingIndex);
+                pendingIndex++;
+                queuedMethods.remove(entryPoint);
+                simulate(entryPoint);
+            }
             final Map<Site, ValueKind> kinds = new LinkedHashMap<>();
             final Map<Site, Provenance> provenance = new LinkedHashMap<>();
             for (final Map.Entry<Site, Fact> entry : callbackFacts.entrySet()) {
@@ -433,12 +537,13 @@ public final class FunctionValueFlow {
             if (bytecode.isEmpty()) {
                 return;
             }
-            final BytecodeControlFlow.Result controlFlow = BytecodeControlFlow.analyze(method);
+            final CachedMethodFlow methodFlow = methodFlows.methodFlow(entryPoint, method, bytecode);
+            final BytecodeControlFlow.Result controlFlow = methodFlow.controlFlow();
             if (!controlFlow.valid()) {
                 markUnsafe(entryPoint, method);
                 return;
             }
-            final Map<Integer, Integer> indexes = instructionIndexes(bytecode);
+            final Map<Integer, Integer> indexes = methodFlow.instructionIndexes();
             final State[] states = new State[bytecode.size()];
             final List<Integer> pending = new ArrayList<>();
             final boolean[] queued = new boolean[bytecode.size()];
@@ -700,7 +805,7 @@ public final class FunctionValueFlow {
             }
             final ValueType type = resolvedType.orElseThrow();
             if (instruction.opcode() == 178) {
-                state.stack().add(fieldValue(field, type));
+                state.stack().add(fieldValue(entryPoint, field, type));
                 return;
             }
             if (instruction.opcode() == 179) {
@@ -710,7 +815,7 @@ public final class FunctionValueFlow {
             }
             if (instruction.opcode() == 180) {
                 pop(state);
-                state.stack().add(fieldValue(field, type));
+                state.stack().add(fieldValue(entryPoint, field, type));
                 return;
             }
             final Slot value = pop(state);
@@ -718,16 +823,23 @@ public final class FunctionValueFlow {
             addFieldFact(field, value.fact());
         }
 
-        private Slot fieldValue(final FieldRef field, final ValueType type) {
+        private Slot fieldValue(final EntryPoint reader, final FieldRef field, final ValueType type) {
             if (!type.reference() || !finalCallbackFields.contains(field)) {
                 return new Slot(Fact.unsafe(), type.width());
             }
+            addDependency(fieldReaders, field, reader);
             return new Slot(fieldFacts.getOrDefault(field, Fact.none()), 1);
         }
 
         private void addFieldFact(final FieldRef field, final Fact fact) {
-            if (finalCallbackFields.contains(field)) {
-                addFact(fieldFacts, field, fact);
+            if (!finalCallbackFields.contains(field)) {
+                return;
+            }
+            final Fact current = fieldFacts.getOrDefault(field, Fact.none());
+            final Fact merged = current.merge(fact);
+            if (merged != current) {
+                fieldFacts.put(field, merged);
+                enqueueMethods(fieldReaders.get(field));
             }
         }
 
@@ -763,6 +875,7 @@ public final class FunctionValueFlow {
             }
             final Optional<EntryPoint> target = exactTarget(instruction, methodRef);
             if (target.isPresent()) {
+                addDependency(callers, target.orElseThrow(), caller);
                 contributeCall(target.orElseThrow(), receiver, arguments, state);
                 pushReturn(
                     state,
@@ -979,29 +1092,63 @@ public final class FunctionValueFlow {
             if (current == null) {
                 return;
             }
+            boolean updated = false;
             for (int index = 0; index < current.length && index < contribution.length; index++) {
                 final Fact merged = current[index].merge(contribution[index]);
                 if (merged != current[index]) {
                     current[index] = merged;
-                    changed = true;
+                    updated = true;
                 }
+            }
+            if (updated) {
+                enqueueMethod(target);
             }
         }
 
         private void addReturnFact(final EntryPoint entryPoint, final Fact fact) {
-            addFact(returnFacts, entryPoint, fact);
+            final Fact current = returnFacts.getOrDefault(entryPoint, Fact.none());
+            final Fact merged = current.merge(fact);
+            if (merged != current) {
+                returnFacts.put(entryPoint, merged);
+                enqueueMethods(callers.get(entryPoint));
+            }
         }
 
         private void addCallbackFact(final Site site, final Fact fact) {
-            addFact(callbackFacts, site, fact);
-        }
-
-        private <K> void addFact(final Map<K, Fact> facts, final K key, final Fact fact) {
-            final Fact current = facts.getOrDefault(key, Fact.none());
+            final Fact current = callbackFacts.getOrDefault(site, Fact.none());
             final Fact merged = current.merge(fact);
             if (merged != current) {
-                facts.put(key, merged);
-                changed = true;
+                callbackFacts.put(site, merged);
+            }
+        }
+
+        private void enqueueMethod(final EntryPoint entryPoint) {
+            if (queuedMethods.add(entryPoint)) {
+                pendingMethods.add(entryPoint);
+            }
+        }
+
+        private void enqueueMethods(final List<EntryPoint> methods) {
+            if (methods == null) {
+                return;
+            }
+            for (final EntryPoint method : methods) {
+                enqueueMethod(method);
+            }
+        }
+
+        private static <K> void addDependency(
+            final Map<K, List<EntryPoint>> dependencies,
+            final K source,
+            final EntryPoint dependent
+        ) {
+            List<EntryPoint> methods = dependencies.get(source);
+            if (methods == null) {
+                methods = new ArrayList<>();
+                dependencies.put(source, methods);
+            }
+            if (!methods.contains(dependent)) {
+                methods.add(dependent);
             }
         }
 

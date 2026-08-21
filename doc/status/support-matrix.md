@@ -9,8 +9,8 @@ External project names do not belong in this matrix; this ledger stays compiler-
 
 | Measure | Count |
 | --- | ---: |
-| rows | 309 |
-| pass | 309 |
+| rows | 310 |
+| pass | 310 |
 | scoped | 0 |
 | target | 0 |
 | rejected | 0 |
@@ -90,6 +90,7 @@ Status mapping:
 | `native-import-configured-static-abi` | pass |
 | `resource-system-loader-stream` | pass |
 | `resource-loader-instance-stream` | pass |
+| `service-loader-closed-world` | pass |
 | `library-static-int-export` | pass |
 | `library-string-export` | pass |
 | `library-byte-array-export` | pass |

@@ -10,7 +10,6 @@ import org.junit.jupiter.api.parallel.Resources;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -259,42 +258,4 @@ final class CliResourceRuntimeIntegrationTest extends CliIntegrationSupport {
         assertThat(nativeOutput).contains("ClassLoader");
     }
 
-    private String runJvmWithResources(final Path project, final String mainClass) throws Exception {
-        final Path output = project.resolve("jvm-classes");
-        final Path sourceRoot = project.resolve("src/main/java");
-        final List<String> compile = new ArrayList<>(List.of(CliTestHarness.currentJavacCommand(), "-d", output.toString()));
-        Files.createDirectories(output);
-        try (var sources = Files.walk(sourceRoot)) {
-            sources
-                .filter(Files::isRegularFile)
-                .filter(file -> file.getFileName().toString().endsWith(".java"))
-                .map(Path::toString)
-                .forEach(compile::add);
-        }
-        assertThat(process(project, compile).exitCode()).isZero();
-        final Path resources = project.resolve("src/main/resources");
-        if (Files.isDirectory(resources)) {
-            try (var files = Files.walk(resources)) {
-                for (final Path file : files.toList()) {
-                    final Path relative = resources.relativize(file);
-                    final Path target = output.resolve(relative.toString());
-                    if (Files.isDirectory(file)) {
-                        Files.createDirectories(target);
-                    } else {
-                        Files.createDirectories(target.getParent());
-                        Files.copy(file, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                    }
-                }
-            }
-        }
-        final ProcessResult run = process(project, List.of(
-            CliTestHarness.currentJavaCommand(),
-            "-cp",
-            output.toString(),
-            mainClass
-        ));
-        assertThat(run.exitCode()).isZero();
-        assertThat(run.stderr()).isEmpty();
-        return run.stdout();
-    }
 }

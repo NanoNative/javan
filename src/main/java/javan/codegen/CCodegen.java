@@ -428,9 +428,151 @@ public final class CCodegen {
         final StringBuilder c
     ) {
         emitGeneratedObjectClassHelpers(program, c);
+        emitServiceLoaderHelpers(program, c);
         if (features.generatedObjectClone()) {
             emitGeneratedObjectCloneHelpers(program, c);
         }
+    }
+
+    private static void emitServiceLoaderHelpers(final IrProgram program, final StringBuilder c) {
+        final boolean regular = usesCall(program, "javan_generated_service_loader_load");
+        final boolean module = usesCall(program, "javan_generated_service_loader_load_module");
+        final boolean installed = usesCall(program, "javan_generated_service_loader_load_installed");
+        final boolean installedModule = usesCall(program, "javan_generated_service_loader_load_installed_module");
+        if (!regular && !module && !installed && !installedModule) {
+            return;
+        }
+        c.append("static void* javan_generated_service_provider(int service_type_id, int provider_index) {")
+            .append(System.lineSeparator());
+        c.append("    void* provider = NULL;").append(System.lineSeparator());
+        c.append("    void** roots[] = { &provider };").append(System.lineSeparator());
+        c.append("    javan_root_frame_push(roots, 1);").append(System.lineSeparator());
+        c.append("    switch (service_type_id) {").append(System.lineSeparator());
+        for (final java.util.Map.Entry<String, java.util.List<javan.classfile.ServiceProvider>> entry
+            : program.serviceProviders().entrySet()) {
+            final Integer typeId = program.classTypeIds().get(entry.getKey());
+            if (typeId == null) {
+                continue;
+            }
+            c.append("        case ").append(typeId.intValue()).append(":").append(System.lineSeparator());
+            c.append("            switch (provider_index) {").append(System.lineSeparator());
+            for (int index = 0; index < entry.getValue().size(); index++) {
+                final javan.classfile.ServiceProvider declaration = entry.getValue().get(index);
+                c.append("                case ").append(index).append(":").append(System.lineSeparator());
+                if (program.classInitializationDependencies().containsKey(declaration.provider())) {
+                    c.append("                    ").append(classInitializationSymbol(declaration.provider())).append("();")
+                        .append(System.lineSeparator());
+                }
+                if (declaration.factoryMethod()) {
+                    final IrFunction factory = serviceProviderFactory(program, declaration.provider());
+                    c.append("                    ").append(factory.symbol()).append("(&provider);")
+                        .append(System.lineSeparator());
+                } else {
+                    c.append("                    provider = ").append(allocatorSymbol(declaration.provider())).append("();")
+                        .append(System.lineSeparator());
+                    c.append("                    ").append(CMethodSymbols.symbol(new EntryPoint(
+                        declaration.provider(), "<init>", "()V"
+                    ))).append("(provider);").append(System.lineSeparator());
+                }
+                c.append("                    break;").append(System.lineSeparator());
+            }
+            c.append("                default: break;").append(System.lineSeparator());
+            c.append("            }").append(System.lineSeparator());
+            c.append("            break;").append(System.lineSeparator());
+        }
+        c.append("        default: break;").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        c.append("    javan_root_frame_pop(roots);").append(System.lineSeparator());
+        c.append("    return javan_pending_has() == 0 ? provider : NULL;").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+        c.append("static int javan_generated_service_provider_count(int service_type_id) {")
+            .append(System.lineSeparator());
+        c.append("    switch (service_type_id) {").append(System.lineSeparator());
+        for (final java.util.Map.Entry<String, java.util.List<javan.classfile.ServiceProvider>> entry
+            : program.serviceProviders().entrySet()) {
+            final Integer typeId = program.classTypeIds().get(entry.getKey());
+            if (typeId != null) {
+                c.append("        case ").append(typeId.intValue()).append(": return ")
+                    .append(entry.getValue().size()).append(";").append(System.lineSeparator());
+            }
+        }
+        c.append("        default: return 0;").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+        if (regular) {
+            c.append("static void* javan_generated_service_loader_load(void* service) {")
+                .append(System.lineSeparator());
+            c.append("    return javan_service_loader_new(service, javan_generated_service_provider, ")
+                .append("javan_generated_service_provider_count);")
+                .append(System.lineSeparator());
+            c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+        }
+        if (installed || installedModule) {
+            c.append("static int javan_generated_service_provider_count_installed(int service_type_id) {")
+                .append(System.lineSeparator());
+            c.append("    (void) service_type_id;").append(System.lineSeparator());
+            c.append("    return 0;").append(System.lineSeparator());
+            c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+            if (installed) {
+                c.append("static void* javan_generated_service_loader_load_installed(void* service) {")
+                    .append(System.lineSeparator());
+                c.append("    return javan_service_loader_new(service, javan_generated_service_provider, ")
+                    .append("javan_generated_service_provider_count_installed);")
+                    .append(System.lineSeparator());
+                c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+            }
+        }
+        if (module || installedModule) {
+            c.append("static int javan_generated_service_loader_module_uses(int service_type_id) {")
+                .append(System.lineSeparator());
+            c.append("    switch (service_type_id) {").append(System.lineSeparator());
+            for (final String service : program.serviceUses()) {
+                final Integer typeId = program.classTypeIds().get(service);
+                if (typeId != null) {
+                    c.append("        case ").append(typeId.intValue()).append(": return 1;")
+                        .append(System.lineSeparator());
+                }
+            }
+            c.append("        default: return 0;").append(System.lineSeparator());
+            c.append("    }").append(System.lineSeparator());
+            c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+            if (module) {
+                emitModuleServiceLoader(c, "javan_generated_service_loader_load_module",
+                    "javan_generated_service_provider_count");
+            }
+            if (installedModule) {
+                emitModuleServiceLoader(c, "javan_generated_service_loader_load_installed_module",
+                    "javan_generated_service_provider_count_installed");
+            }
+        }
+    }
+
+    private static void emitModuleServiceLoader(
+        final StringBuilder c,
+        final String symbol,
+        final String counter
+    ) {
+        c.append("static void* ").append(symbol).append("(void* service) {").append(System.lineSeparator());
+        c.append("    if (javan_generated_service_loader_module_uses(javan_class_exact_type_id(service)) == 0) {")
+            .append(System.lineSeparator());
+        c.append("        javan_pending_throw(\"java/util/ServiceConfigurationError\", ")
+            .append("javan_string_from(\"module does not declare uses\"), NULL, NULL, NULL, -1, -1, NULL);")
+            .append(System.lineSeparator());
+        c.append("        return NULL;").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        c.append("    return javan_service_loader_new(service, javan_generated_service_provider, ")
+            .append(counter).append(");").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+    }
+
+    private static IrFunction serviceProviderFactory(final IrProgram program, final String provider) {
+        for (final IrFunction function : program.functions()) {
+            if (provider.equals(function.owner()) && "provider".equals(function.name())
+                && function.descriptor().startsWith("()L")) {
+                return function;
+            }
+        }
+        throw new IllegalStateException("Missing reachable service provider factory: " + provider);
     }
 
     private static void emitStruct(final IrClass classInfo, final StringBuilder c) {

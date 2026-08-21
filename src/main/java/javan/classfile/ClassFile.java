@@ -18,6 +18,8 @@ import java.util.Optional;
  * @param recordComponents Record attribute components when the attribute is present
  * @param permittedSubclasses PermittedSubclasses attribute owners in source order, empty when absent
  * @param nestHost JVM name of the nest host, equal to {@code name} for a nest host
+ * @param serviceUses services consumed by a module descriptor
+ * @param serviceProviders providers declared by a module descriptor
  * @param source source class file path
  * @param application whether the class belongs to the application input rather than a dependency
  */
@@ -33,6 +35,8 @@ public record ClassFile(
     Optional<List<RecordComponentInfo>> recordComponents,
     List<String> permittedSubclasses,
     String nestHost,
+    List<String> serviceUses,
+    List<ServiceProvider> serviceProviders,
     Path source,
     boolean application
 ) {
@@ -79,6 +83,8 @@ public record ClassFile(
             Optional.empty(),
             List.of(),
             name,
+            List.of(),
+            List.of(),
             source,
             application
         );
@@ -122,6 +128,8 @@ public record ClassFile(
             Optional.empty(),
             List.of(),
             name,
+            List.of(),
+            List.of(),
             source,
             application
         );
@@ -132,6 +140,49 @@ public record ClassFile(
             recordComponents = Optional.of(List.copyOf(recordComponents.orElseThrow()));
         }
         permittedSubclasses = List.copyOf(permittedSubclasses);
+        serviceUses = List.copyOf(serviceUses);
+        serviceProviders = List.copyOf(serviceProviders);
+    }
+
+    /** Creates a class file without module service-provider metadata. */
+    public ClassFile(
+        final int majorVersion,
+        final String name,
+        final String superName,
+        final int accessFlags,
+        final List<String> interfaces,
+        final List<FieldInfo> fields,
+        final List<MethodInfo> methods,
+        final Optional<String> sourceFile,
+        final Optional<List<RecordComponentInfo>> recordComponents,
+        final List<String> permittedSubclasses,
+        final String nestHost,
+        final Path source,
+        final boolean application
+    ) {
+        this(majorVersion, name, superName, accessFlags, interfaces, fields, methods, sourceFile,
+            recordComponents, permittedSubclasses, nestHost, List.of(), List.of(), source, application);
+    }
+
+    /** Creates a class file without module service-use metadata. */
+    public ClassFile(
+        final int majorVersion,
+        final String name,
+        final String superName,
+        final int accessFlags,
+        final List<String> interfaces,
+        final List<FieldInfo> fields,
+        final List<MethodInfo> methods,
+        final Optional<String> sourceFile,
+        final Optional<List<RecordComponentInfo>> recordComponents,
+        final List<String> permittedSubclasses,
+        final String nestHost,
+        final List<ServiceProvider> serviceProviders,
+        final Path source,
+        final boolean application
+    ) {
+        this(majorVersion, name, superName, accessFlags, interfaces, fields, methods, sourceFile,
+            recordComponents, permittedSubclasses, nestHost, List.of(), serviceProviders, source, application);
     }
 
     /**
@@ -176,6 +227,7 @@ public record ClassFile(
             recordComponents,
             permittedSubclasses,
             name,
+            List.of(),
             source,
             application
         );
@@ -221,6 +273,7 @@ public record ClassFile(
             recordComponents,
             List.of(),
             name,
+            List.of(),
             source,
             application
         );
@@ -339,6 +392,8 @@ public record ClassFile(
             recordComponents,
             permittedSubclasses,
             nestHost,
+            serviceUses,
+            serviceProviders,
             source,
             value
         );

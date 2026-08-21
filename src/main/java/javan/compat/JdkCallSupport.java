@@ -51,6 +51,7 @@ public final class JdkCallSupport {
         java/lang/invoke/WrongMethodTypeException=java/lang/RuntimeException
         java/lang/classfile/constantpool/ConstantPoolException=java/lang/IllegalArgumentException
         java/util/NoSuchElementException=java/lang/RuntimeException
+        java/util/ServiceConfigurationError=java/lang/Error
         java/lang/InterruptedException=java/lang/Exception
         java/io/IOException=java/lang/Exception
         java/io/EOFException=java/io/IOException
@@ -540,6 +541,11 @@ public final class JdkCallSupport {
         runtime("StringBuilder.setLength", "java/lang/StringBuilder", "setLength", "(I)V"),
         runtime("StringBuilder.capacity", "java/lang/StringBuilder", "capacity", "()I"),
         runtime("ArrayList.<init>", "java/util/ArrayList", "<init>", "()V", "(I)V", "(Ljava/util/Collection;)V"),
+        runtime("ServiceLoader.load", "java/util/ServiceLoader", "load", "(Ljava/lang/Class;)Ljava/util/ServiceLoader;", "(Ljava/lang/Class;Ljava/lang/ClassLoader;)Ljava/util/ServiceLoader;"),
+        runtime("ServiceLoader.loadInstalled", "java/util/ServiceLoader", "loadInstalled", "(Ljava/lang/Class;)Ljava/util/ServiceLoader;"),
+        runtime("ServiceLoader.iterator", "java/util/ServiceLoader", "iterator", "()Ljava/util/Iterator;"),
+        runtime("ServiceLoader.findFirst", "java/util/ServiceLoader", "findFirst", "()Ljava/util/Optional;"),
+        runtime("ServiceLoader.reload", "java/util/ServiceLoader", "reload", "()V"),
         runtime("ArrayList.add", "java/util/ArrayList", "add", "(Ljava/lang/Object;)Z"),
         runtime("ArrayList.addAll", "java/util/ArrayList", "addAll", "(Ljava/util/Collection;)Z"),
         runtime("ArrayList.removeAll", "java/util/ArrayList", "removeAll", "(Ljava/util/Collection;)Z"),
@@ -2003,6 +2009,14 @@ public final class JdkCallSupport {
             && ("sleep".equals(methodRef.name()) || "join".equals(methodRef.name()))
             && supportedCall(methodRef).isPresent()) {
             return List.of("java/lang/InterruptedException");
+        }
+        if ("java/util/ServiceLoader".equals(methodRef.owner())
+            && ("load".equals(methodRef.name()) || "loadInstalled".equals(methodRef.name()))) {
+            return List.of("java/util/ServiceConfigurationError");
+        }
+        if (("java/util/Iterator".equals(methodRef.owner()) || "java/util/ListIterator".equals(methodRef.owner()))
+            && "next".equals(methodRef.name()) && "()Ljava/lang/Object;".equals(methodRef.descriptor())) {
+            return List.of("java/util/NoSuchElementException");
         }
         return List.of();
     }
