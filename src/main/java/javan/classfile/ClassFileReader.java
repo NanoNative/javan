@@ -64,6 +64,7 @@ public final class ClassFileReader {
             classAttributes.sourceFile(),
             classAttributes.recordComponents(),
             classAttributes.permittedSubclasses(),
+            classAttributes.nestHost().orElse(thisClass),
             source,
             true
         );
@@ -230,6 +231,7 @@ public final class ClassFileReader {
         Optional<String> sourceFile = Optional.empty();
         Optional<List<RecordComponentInfo>> recordComponents = Optional.empty();
         List<String> permittedSubclasses = List.of();
+        Optional<String> nestHost = Optional.empty();
         for (int index = 0; index < count; index++) {
             final String attributeName = constantPool.utf8(in.u2());
             final long length = in.u4();
@@ -251,11 +253,18 @@ public final class ClassFileReader {
                     throw new IOException("Duplicate PermittedSubclasses attribute");
                 }
                 permittedSubclasses = readPermittedSubclassesAttribute(in, length, constantPool);
+            } else if ("NestHost".equals(attributeName)) {
+                if (nestHost.isPresent() || length != 2L) {
+                    throw new IOException("Invalid or duplicate NestHost attribute");
+                }
+                nestHost = Optional.of(constantPool.className(in.u2()));
             } else {
                 in.skip(length);
             }
         }
-        return new ClassAttributes(List.copyOf(bootstrapMethods), sourceFile, recordComponents, permittedSubclasses);
+        return new ClassAttributes(
+            List.copyOf(bootstrapMethods), sourceFile, recordComponents, permittedSubclasses, nestHost
+        );
     }
 
     private static List<String> readPermittedSubclassesAttribute(
@@ -394,7 +403,8 @@ public final class ClassFileReader {
         List<BootstrapMethod> bootstrapMethods,
         Optional<String> sourceFile,
         Optional<List<RecordComponentInfo>> recordComponents,
-        List<String> permittedSubclasses
+        List<String> permittedSubclasses,
+        Optional<String> nestHost
     ) {
     }
 

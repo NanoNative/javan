@@ -8293,8 +8293,8 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(Files.readString(project.resolve(".javan/generated/main.c")))
-            .contains("{JAVAN_METHOD_METADATA_MAGIC, 1, 1, \"substring\", \"java.lang.String\", \"java.lang.String\"")
-            .contains("{JAVAN_METHOD_METADATA_MAGIC, 0, 1, \"size\", \"java.util.ArrayList\", \"int\", NULL}")
+            .contains("{JAVAN_METHOD_METADATA_MAGIC, 1, 1, 1, 1, 0, NULL, \"substring\", \"java.lang.String\", \"java.lang.String\", \"java.lang.String\"")
+            .contains("{JAVAN_METHOD_METADATA_MAGIC, 0, 1, 1, 1, 0, NULL, \"size\", \"java.util.ArrayList\", \"java.util.ArrayList\", \"int\", NULL}")
             .contains("static const char* javan_method_parameter_types_")
             .contains("javan_class_name_equals(class_value, \"java.lang.String\") && parameter_count == 1");
         final ProcessResult nativeRun = process(
@@ -8310,6 +8310,197 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                 + "0\nvoid\n0\n2\ntrue\nint\n[Ljava.lang.String;\n"
                 + "true\ntrue\njava.util.ArrayList\ntrue\n"
                 + "missing\nexact-parameters\nnull\ndeclared-only\nnull-method\nnull-return-type\n"
+        );
+    }
+
+    @Test
+    void methodAccessControlIsStatefulCallerSensitiveAndGcSafe() throws Exception {
+        final Path project = project("method-access-control");
+        writeJava(project, "com.acme.Base", """
+            package com.acme;
+
+            public class Base {
+                private void privateValue() {
+                }
+
+                void packageValue() {
+                }
+
+                protected void protectedValue() {
+                }
+
+                public void publicValue() {
+                }
+
+                public static void staticValue() {
+                }
+
+                public static boolean privateAccessible(
+                    final java.lang.reflect.Method method,
+                    final Base target
+                ) {
+                    return method.canAccess(target);
+                }
+
+                public static final class Nested {
+                    public static boolean privateAccessible(
+                        final java.lang.reflect.Method method,
+                        final Base target
+                    ) {
+                        return method.canAccess(target);
+                    }
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Base$Impostor", """
+            package com.acme;
+
+            public final class Base$Impostor {
+                public static boolean privateAccessible(
+                    final java.lang.reflect.Method method,
+                    final Base target
+                ) {
+                    return method.canAccess(target);
+                }
+            }
+            """);
+        writeJava(project, "com.other.Child", """
+            package com.other;
+
+            public final class Child extends com.acme.Base {
+                public static boolean protectedAccessible(
+                    final java.lang.reflect.Method method,
+                    final Object target
+                ) {
+                    return method.canAccess(target);
+                }
+
+                public static final class Nested {
+                    public static boolean protectedAccessible(
+                        final java.lang.reflect.Method method,
+                        final Object target
+                    ) {
+                        return method.canAccess(target);
+                    }
+                }
+            }
+            """);
+        writeJava(project, "com.other.Loader", """
+            package com.other;
+
+            public final class Loader extends ClassLoader {
+                public static boolean makeAccessible(final java.lang.reflect.Method method) {
+                    return method.trySetAccessible();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import com.other.Child;
+            import com.other.Loader;
+            import java.lang.reflect.AccessibleObject;
+            import java.lang.reflect.Method;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Base base = new Base();
+                    final Child child = new Child();
+                    final Method privateMethod = Base.class.getDeclaredMethod("privateValue");
+                    final Method secondPrivate = Base.class.getDeclaredMethod("privateValue");
+                    final Method packageMethod = Base.class.getDeclaredMethod("packageValue");
+                    final Method protectedMethod = Base.class.getDeclaredMethod("protectedValue");
+                    final Method publicMethod = Base.class.getDeclaredMethod("publicValue");
+                    final Method staticMethod = Base.class.getDeclaredMethod("staticValue");
+
+                    System.out.println(privateMethod.canAccess(base));
+                    System.out.println(Base.privateAccessible(privateMethod, base));
+                    System.out.println(Base.Nested.privateAccessible(privateMethod, base));
+                    System.out.println(Base$Impostor.privateAccessible(privateMethod, base));
+                    System.out.println(packageMethod.canAccess(base));
+                    System.out.println(protectedMethod.canAccess(base));
+                    System.out.println(publicMethod.canAccess(base));
+                    System.out.println(Child.protectedAccessible(protectedMethod, child));
+                    System.out.println(Child.protectedAccessible(protectedMethod, base));
+                    System.out.println(Child.Nested.protectedAccessible(protectedMethod, child));
+                    System.out.println(staticMethod.canAccess(null));
+
+                    privateMethod.setAccessible(true);
+                    for (int index = 0; index < 10_000; index++) {
+                        final byte[] ignored = new byte[64];
+                    }
+                    System.out.println(privateMethod.isAccessible());
+                    System.out.println(privateMethod.canAccess(base));
+                    System.out.println(secondPrivate.isAccessible());
+                    final AccessibleObject genericAccess = secondPrivate;
+                    System.out.println(genericAccess.trySetAccessible());
+                    System.out.println(genericAccess.canAccess(base));
+                    genericAccess.setAccessible(false);
+                    System.out.println(genericAccess.isAccessible());
+                    privateMethod.setAccessible(false);
+                    System.out.println(privateMethod.canAccess(base));
+                    System.out.println(privateMethod.trySetAccessible());
+                    System.out.println(privateMethod.canAccess(base));
+
+                    final Method substring = String.class.getDeclaredMethod("substring", int.class);
+                    System.out.println(substring.trySetAccessible());
+                    System.out.println(substring.canAccess("value"));
+
+                    final Method clone = Object.class.getDeclaredMethod("clone");
+                    System.out.println(clone.trySetAccessible());
+                    try {
+                        clone.setAccessible(true);
+                    } catch (final java.lang.reflect.InaccessibleObjectException expected) {
+                        System.out.println("closed-module");
+                    }
+
+                    final Method parallel = ClassLoader.class.getDeclaredMethod("registerAsParallelCapable");
+                    System.out.println(parallel.trySetAccessible());
+                    System.out.println(Loader.makeAccessible(parallel));
+                    System.out.println(parallel.canAccess(null));
+
+                    try {
+                        staticMethod.canAccess(base);
+                    } catch (final IllegalArgumentException expected) {
+                        System.out.println("static-receiver");
+                    }
+                    try {
+                        publicMethod.canAccess(null);
+                    } catch (final IllegalArgumentException expected) {
+                        System.out.println("instance-receiver");
+                    }
+                    final Method absent = null;
+                    try {
+                        absent.trySetAccessible();
+                    } catch (final NullPointerException expected) {
+                        System.out.println("null-method");
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/generated/main.c")))
+            .contains("static const char* javan_method_override_callers_", "\"com.other.Loader\"");
+        final ProcessResult nativeRun = process(
+            project,
+            List.of(project.resolve(".javan/bin/method-access-control").toString()),
+            defaultProcessTimeout(),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1")
+        );
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo(
+            "false\ntrue\ntrue\nfalse\ntrue\ntrue\ntrue\ntrue\nfalse\nfalse\ntrue\n"
+                + "true\ntrue\nfalse\ntrue\ntrue\nfalse\nfalse\ntrue\ntrue\ntrue\ntrue\nfalse\nclosed-module\n"
+                + "false\ntrue\ntrue\n"
+                + "static-receiver\ninstance-receiver\nnull-method\n"
         );
     }
 
@@ -8554,7 +8745,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(Files.readString(project.resolve(".javan/generated/main.c")))
             .contains("static void* javan_generated_class_get_method(")
-            .contains("JAVAN_METHOD_METADATA_MAGIC, 1, 1, \"containsAll\", \"java.util.AbstractCollection\"");
+            .contains("JAVAN_METHOD_METADATA_MAGIC, 1, 1, 1, 1, 0, NULL, \"containsAll\", \"java.util.AbstractCollection\", \"java.util.AbstractCollection\"");
         final ProcessResult nativeRun = process(
             project,
             List.of(project.resolve(".javan/bin/public-method-metadata").toString()),

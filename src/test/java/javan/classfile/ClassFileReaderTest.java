@@ -227,6 +227,33 @@ final class ClassFileReaderTest {
     }
 
     @Test
+    void readerUsesAuthoritativeNestHostMetadata() throws Exception {
+        final Path source = tempDir.resolve("Outer.java");
+        final Path classes = tempDir.resolve("nest-classes");
+        Files.writeString(source, """
+            public final class Outer {
+                static final class Nested {
+                }
+            }
+            """);
+        Files.createDirectories(classes);
+        final int result = ToolProvider.getSystemJavaCompiler().run(
+            null, null, null, "-d", classes.toString(), source.toString()
+        );
+        if (result != 0) {
+            throw new IllegalStateException("javac failed with exit code " + result);
+        }
+
+        final ClassFile outer = new ClassFileReader().read(Files.readAllBytes(classes.resolve("Outer.class")), source);
+        final ClassFile nested = new ClassFileReader().read(
+            Files.readAllBytes(classes.resolve("Outer$Nested.class")), source
+        );
+
+        assertThat(outer.nestHost()).isEqualTo("Outer");
+        assertThat(nested.nestHost()).isEqualTo("Outer");
+    }
+
+    @Test
     void readerRejectsDuplicatePermittedSubclassesAttributes() {
         assertThatThrownBy(() -> new ClassFileReader().read(classfileWithPermittedSubclasses(
             permittedSubclasses(7), permittedSubclasses(7)

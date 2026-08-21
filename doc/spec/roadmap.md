@@ -102,10 +102,12 @@ transports `ClassNotFoundException` and `NullPointerException` through normal Ja
 Closed-world `getDeclaredMethod` and `getMethod` lookup support exact parameter shapes,
 declared private metadata, inherited public class and interface methods, `Method.getName`,
 `getDeclaringClass`, `getParameterCount`, `getParameterTypes`, `getReturnType`, and `getModifiers`,
-with catchable lookup and null failures. Selecting a runtime class loader remains outside the
-static native model.
+plus stateful `canAccess`, `setAccessible`, `trySetAccessible`, and `isAccessible` behavior.
+Access checks use the caller, receiver, exact nest metadata, and a bounded platform-access
+policy, with catchable lookup, receiver, access, and null failures. Selecting a runtime class
+loader remains outside the static native model.
 
-- continue finite member flows with access checks and invocation
+- continue finite member flows with invocation
 - service loading from standard descriptors and module declarations
 - broader exception semantics and platform throwable transport
 - collections, streams, time, networking, files, and concurrency only with native/JVM parity

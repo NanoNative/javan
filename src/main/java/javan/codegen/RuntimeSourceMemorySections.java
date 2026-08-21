@@ -78,6 +78,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE 35
         #define JAVAN_RUNTIME_KIND_SECURE_RANDOM 36
         #define JAVAN_RUNTIME_KIND_UUID 37
+        #define JAVAN_RUNTIME_KIND_METHOD 38
         #define JAVAN_LIST_VIEW_UNMODIFIABLE 1
         #define JAVAN_LIST_VIEW_SET 2
         #define JAVAN_MAP_VIEW_UNMODIFIABLE 1
@@ -1267,7 +1268,8 @@ final class RuntimeSourceMemorySections {
             node->kind = kind;
             node->type_id = type_id;
             node->collectible = runtime_kind == JAVAN_RUNTIME_KIND_THROWABLE_STATE
-                || runtime_kind == JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE;
+                || runtime_kind == JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE
+                || runtime_kind == JAVAN_RUNTIME_KIND_METHOD;
             node->runtime_kind = runtime_kind;
             node->mark = 0;
             node->array_class_name = NULL;
@@ -1522,7 +1524,8 @@ final class RuntimeSourceMemorySections {
                 || runtime_kind == JAVAN_RUNTIME_KIND_THROWABLE_STATE
                 || runtime_kind == JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE
                 || runtime_kind == JAVAN_RUNTIME_KIND_SECURE_RANDOM
-                || runtime_kind == JAVAN_RUNTIME_KIND_UUID;
+                || runtime_kind == JAVAN_RUNTIME_KIND_UUID
+                || runtime_kind == JAVAN_RUNTIME_KIND_METHOD;
             javan_heap_maybe_validate();
             javan_runtime_lock_leave();
         }
@@ -4422,29 +4425,182 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
-        static const JavanMethodMetadata* javan_method_metadata_checked(void* value) {
-            if (value == NULL) {
+        """;
+
+    private static final String SOURCE_HEAP_ALLOC_METHODS = """
+
+        typedef struct {
+            const JavanMethodMetadata* metadata;
+            int access_override;
+        } javan_method_value;
+
+        static const JavanMethodMetadata* javan_method_metadata_checked(
+            const JavanMethodMetadata* metadata
+        ) {
+            if (metadata == NULL) {
                 javan_panic("null method metadata");
             }
-            const JavanMethodMetadata* metadata = (const JavanMethodMetadata*) value;
             if (metadata->magic != JAVAN_METHOD_METADATA_MAGIC
                 || metadata->parameter_count < 0
                 || metadata->name == NULL
                 || metadata->declaring_name == NULL
+                || metadata->declaring_nest_name == NULL
                 || metadata->return_name == NULL
-                || (metadata->parameter_count > 0 && metadata->parameter_names == NULL)) {
+                || (metadata->parameter_count > 0 && metadata->parameter_names == NULL)
+                || metadata->protected_override_caller_count < 0
+                || (metadata->protected_override_caller_count > 0
+                    && metadata->protected_override_caller_names == NULL)) {
                 javan_panic("invalid method metadata");
             }
             return metadata;
         }
 
+        static javan_method_value* javan_method_checked_unlocked(void* value) {
+            javan_allocation_node* node = javan_find_allocation_locked(value, NULL);
+            if (node == NULL
+                || node->kind != JAVAN_HEAP_KIND_RUNTIME
+                || node->runtime_kind != JAVAN_RUNTIME_KIND_METHOD) {
+                javan_panic("invalid Method object");
+            }
+            javan_method_value* method = (javan_method_value*) value;
+            javan_method_metadata_checked(method->metadata);
+            return method;
+        }
+
+        void* javan_method_new(const JavanMethodMetadata* metadata) {
+            javan_method_metadata_checked(metadata);
+            void* result = NULL;
+            void** roots[] = {(void**) &result};
+            javan_root_frame_push(roots, 1);
+            javan_alloc_runtime_rooted(sizeof(javan_method_value), &result, JAVAN_RUNTIME_KIND_METHOD);
+            javan_method_value* method = (javan_method_value*) result;
+            method->metadata = metadata;
+            method->access_override = 0;
+            javan_root_frame_pop(roots);
+            return result;
+        }
+
+        const JavanMethodMetadata* javan_method_metadata(void* value) {
+            javan_runtime_lock_enter();
+            const JavanMethodMetadata* result = javan_method_checked_unlocked(value)->metadata;
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        int javan_method_access_override(void* value) {
+            javan_runtime_lock_enter();
+            int result = javan_method_checked_unlocked(value)->access_override;
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        int javan_method_set_accessible(void* value, int accessible, void* caller_name_value) {
+            const char* caller_name = (const char*) caller_name_value;
+            if (caller_name == NULL || caller_name[0] == '\\0') {
+                javan_panic("missing Method access caller");
+            }
+            void* method_root = value;
+            void** roots[] = {(void**) &method_root};
+            javan_root_frame_push(roots, 1);
+            const JavanMethodMetadata* metadata = javan_method_metadata(method_root);
+            int allowed = metadata->override_allowed;
+            for (int index = 0; accessible != 0 && allowed == 0
+                && index < metadata->protected_override_caller_count; index++) {
+                if (strcmp(caller_name, metadata->protected_override_caller_names[index]) == 0) {
+                    allowed = 1;
+                }
+            }
+            if (accessible != 0 && allowed == 0) {
+                javan_root_frame_pop(roots);
+                return 0;
+            }
+            javan_runtime_lock_enter();
+            javan_method_value* method = javan_method_checked_unlocked(method_root);
+            method->access_override = accessible == 0 ? 0 : 1;
+            javan_runtime_lock_leave();
+            javan_root_frame_pop(roots);
+            return 1;
+        }
+
+        static int javan_method_name_prefix_equal(
+            const char* left,
+            const char* right,
+            char delimiter
+        ) {
+            const char* left_end = strrchr(left, delimiter);
+            const char* right_end = strrchr(right, delimiter);
+            unsigned long left_length = left_end == NULL ? 0UL : (unsigned long) (left_end - left);
+            unsigned long right_length = right_end == NULL ? 0UL : (unsigned long) (right_end - right);
+            return left_length == right_length && strncmp(left, right, left_length) == 0 ? 1 : 0;
+        }
+
+        int javan_method_can_access(
+            void* value,
+            void* target,
+            void* caller_name_value,
+            void* caller_nest_name_value
+        ) {
+            const char* caller_name = (const char*) caller_name_value;
+            const char* caller_nest_name = (const char*) caller_nest_name_value;
+            if (caller_name == NULL || caller_name[0] == '\\0'
+                || caller_nest_name == NULL || caller_nest_name[0] == '\\0') {
+                javan_panic("missing Method access caller");
+            }
+            void* method_root = value;
+            void* target_root = target;
+            void* declaring_class = NULL;
+            void* caller_class = NULL;
+            void** roots[] = {
+                (void**) &method_root,
+                (void**) &target_root,
+                (void**) &declaring_class,
+                (void**) &caller_class
+            };
+            javan_root_frame_push(roots, 4);
+            const JavanMethodMetadata* metadata = javan_method_metadata(method_root);
+            const int static_method = (metadata->modifiers & 0x0008) != 0;
+            declaring_class = javan_runtime_class_from_binary_name(metadata->declaring_name);
+            if ((static_method && target_root != NULL)
+                || (!static_method && (target_root == NULL
+                    || javan_class_is_instance(declaring_class, target_root) == 0))) {
+                javan_root_frame_pop(roots);
+                return -1;
+            }
+            if (javan_method_access_override(method_root) != 0) {
+                javan_root_frame_pop(roots);
+                return 1;
+            }
+            const int public_method = (metadata->modifiers & 0x0001) != 0;
+            const int private_method = (metadata->modifiers & 0x0002) != 0;
+            const int protected_method = (metadata->modifiers & 0x0004) != 0;
+            const int same_package = javan_method_name_prefix_equal(
+                caller_name, metadata->declaring_name, '.'
+            );
+            int accessible = 0;
+            if (private_method) {
+                accessible = strcmp(caller_nest_name, metadata->declaring_nest_name) == 0 ? 1 : 0;
+            } else if (same_package) {
+                accessible = 1;
+            } else if (metadata->declaring_public != 0 && public_method) {
+                accessible = 1;
+            } else if (metadata->declaring_public != 0 && protected_method) {
+                caller_class = javan_runtime_class_from_binary_name(caller_name);
+                accessible = javan_class_is_assignable_from(declaring_class, caller_class);
+                if (accessible != 0 && !static_method) {
+                    accessible = javan_class_is_instance(caller_class, target_root);
+                }
+            }
+            javan_root_frame_pop(roots);
+            return accessible;
+        }
+
         void* javan_method_get_name(void* value) {
-            return javan_string_from(javan_method_metadata_checked(value)->name);
+            return javan_string_from(javan_method_metadata(value)->name);
         }
 
         void* javan_method_get_declaring_class(void* value) {
             void* result = javan_runtime_class_from_binary_name(
-                javan_method_metadata_checked(value)->declaring_name
+                javan_method_metadata(value)->declaring_name
             );
             if (result == NULL) {
                 javan_panic("unknown declaring class metadata");
@@ -4453,11 +4609,11 @@ final class RuntimeSourceMemorySections {
         }
 
         int javan_method_get_parameter_count(void* value) {
-            return javan_method_metadata_checked(value)->parameter_count;
+            return javan_method_metadata(value)->parameter_count;
         }
 
         void* javan_method_get_parameter_types(void* value) {
-            const JavanMethodMetadata* metadata = javan_method_metadata_checked(value);
+            const JavanMethodMetadata* metadata = javan_method_metadata(value);
             void* result = javan_object_array_new(metadata->parameter_count, "[Ljava.lang.Class;");
             void* result_root = result;
             void** roots[] = {(void**) &result_root};
@@ -4474,11 +4630,11 @@ final class RuntimeSourceMemorySections {
         }
 
         void* javan_method_get_return_type(void* value) {
-            return javan_runtime_class_from_binary_name(javan_method_metadata_checked(value)->return_name);
+            return javan_runtime_class_from_binary_name(javan_method_metadata(value)->return_name);
         }
 
         int javan_method_get_modifiers(void* value) {
-            return javan_method_metadata_checked(value)->modifiers;
+            return javan_method_metadata(value)->modifiers;
         }
 
         static const char* javan_runtime_class_primitive_type_name(int exact_type_id) {
@@ -14285,6 +14441,7 @@ final class RuntimeSourceMemorySections {
         result = result + SOURCE_HEAP_TAIL_B;
         result = result + SOURCE_HEAP_TAIL_C;
         result = result + SOURCE_HEAP_ALLOC_CLASSES;
+        result = result + SOURCE_HEAP_ALLOC_METHODS;
         result = result + SOURCE_HEAP_ALLOC_EXECUTOR;
         result = result + SOURCE_HEAP_ALLOC_DATE_TIME;
         result = result + platformThrowableHierarchy();

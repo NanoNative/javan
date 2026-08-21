@@ -473,10 +473,21 @@ final class CoreBehaviorTest {
         assertThat(List.of(
             new MethodRef("java/lang/reflect/Method", "getParameterTypes", "()[Ljava/lang/Class;"),
             new MethodRef("java/lang/reflect/Method", "getReturnType", "()Ljava/lang/Class;"),
-            new MethodRef("java/lang/reflect/Method", "getModifiers", "()I")
+            new MethodRef("java/lang/reflect/Method", "getModifiers", "()I"),
+            new MethodRef("java/lang/reflect/Method", "canAccess", "(Ljava/lang/Object;)Z"),
+            new MethodRef("java/lang/reflect/Method", "setAccessible", "(Z)V"),
+            new MethodRef("java/lang/reflect/Method", "trySetAccessible", "()Z"),
+            new MethodRef("java/lang/reflect/Method", "isAccessible", "()Z"),
+            new MethodRef("java/lang/reflect/AccessibleObject", "canAccess", "(Ljava/lang/Object;)Z"),
+            new MethodRef("java/lang/reflect/AccessibleObject", "setAccessible", "(Z)V"),
+            new MethodRef("java/lang/reflect/AccessibleObject", "trySetAccessible", "()Z"),
+            new MethodRef("java/lang/reflect/AccessibleObject", "isAccessible", "()Z")
         )).allSatisfy(call -> assertThat(rules.forbiddenReason(call)).isEmpty());
         assertThat(rules.forbiddenReason(new MethodRef(
             "java/lang/reflect/Method", "getModifiers", "()J"
+        ))).isPresent();
+        assertThat(rules.forbiddenReason(new MethodRef(
+            "java/lang/reflect/Method", "canAccess", "()Z"
         ))).isPresent();
         assertThat(rules.forbiddenReason(new MethodRef(
             "java/lang/reflect/Method",
@@ -16560,7 +16571,9 @@ final class CoreBehaviorTest {
         );
         final List<IrReflectedClass> metadata = List.of(new IrReflectedClass(
             "com/acme/Main",
-            List.of(new IrMethodMetadata("com/acme/Main", "main", List.of(), "V", 9))
+            List.of(new IrMethodMetadata(
+                "com/acme/Main", "com/acme/Main", "main", List.of(), "V", 9, true, true, List.of()
+            ))
         ));
         final IrProgram plainProgram = new IrProgram(
             List.of(classInfo), List.of(plain), List.of(), "main_symbol", List.of(), Map.of(), Map.of(),
@@ -16601,12 +16614,13 @@ final class CoreBehaviorTest {
 
         assertThat(lookupGenerated).contains(
             "static const JavanMethodMetadata javan_method_metadata_0 = ",
-            "{JAVAN_METHOD_METADATA_MAGIC, 0, 9, \"main\", \"com.acme.Main\", \"void\", NULL}",
+            "{JAVAN_METHOD_METADATA_MAGIC, 0, 9, 1, 1, 0, NULL, \"main\", \"com.acme.Main\", \"com.acme.Main\", \"void\", NULL}",
             "static void* javan_generated_class_get_declared_method("
         ).doesNotContain("javan_generated_class_get_method");
 
         final IrMethodMetadata inherited = new IrMethodMetadata(
-            "com/acme/Base", "work", List.of("I"), "[Ljava/lang/String;", 1
+            "com/acme/Base", "com/acme/Base", "work", List.of("I"), "[Ljava/lang/String;", 1, true, true,
+            List.of()
         );
         final IrProgram publicProgram = new IrProgram(
             List.of(classInfo),
@@ -16639,7 +16653,7 @@ final class CoreBehaviorTest {
         assertThat(publicGenerated).contains(
             "static const char* javan_method_parameter_types_0[] = {\"int\"};",
             "static const JavanMethodMetadata javan_method_metadata_0 = ",
-            "{JAVAN_METHOD_METADATA_MAGIC, 1, 1, \"work\", \"com.acme.Base\", \"[Ljava.lang.String;\", javan_method_parameter_types_0}",
+            "{JAVAN_METHOD_METADATA_MAGIC, 1, 1, 1, 1, 0, NULL, \"work\", \"com.acme.Base\", \"com.acme.Base\", \"[Ljava.lang.String;\", javan_method_parameter_types_0}",
             "static void* javan_generated_class_get_method("
         ).doesNotContain("javan_generated_class_get_declared_method");
     }
