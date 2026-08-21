@@ -111,7 +111,7 @@ final class CiParallelWorkflowSurfaceTest {
             .contains("bootstrap_generation: ${{ inputs.bootstrap_generation }}")
             .contains("timeout_minutes: ${{ inputs.bootstrap_generation == 3 && 90 || 60 }}")
             .doesNotContain("package_timeout_minutes:")
-            .contains("package_scope: ${{ inputs.prepare_publication && startsWith(matrix.target, 'linux-') && 'full' || 'bootstrap' }}")
+            .contains("package_scope: ${{ inputs.prepare_publication && matrix.enabled && 'full' || 'bootstrap' }}")
             .contains("""
                   - target: linux-x64
                     os: ubuntu-24.04
