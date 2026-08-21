@@ -363,6 +363,42 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsPlainSourceProject() throws Exception {
+        final Path sourceProject = tempDir.resolve("selfhost-source-project");
+        writeJava(sourceProject, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("source-project");
+                }
+            }
+            """);
+
+        final ProcessResult nativeBuild = process(
+            tempDir,
+            List.of(
+                primitiveLiteralBootstrap.toString(),
+                "build",
+                sourceProject.toString(),
+                "--main",
+                "com.acme.Main",
+                "--output",
+                "selfhost-source-project"
+            ),
+            Duration.ofSeconds(120)
+        );
+
+        assertThat(nativeBuild.exitCode()).as(nativeBuild.stderr()).isZero();
+        final Path probeBinary = sourceProject.resolve(".javan/bin/selfhost-source-project");
+        assertThat(probeBinary).isExecutable();
+        assertThat(process(tempDir, List.of(probeBinary.toString())).stdout()).isEqualTo("source-project\n");
+    }
+
+    @Test
     void nativeBuiltJavanReadsFiniteJdkMethodMetadata() throws Exception {
         final Path probeProject = tempDir.resolve("selfhost-method-metadata");
         final Path probeClasses = probeProject.resolve("classes");

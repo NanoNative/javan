@@ -754,8 +754,12 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-start-parameterized-static-helper").toString())).stdout())
-            .isEqualTo(jvmOutput);
+        final Path binary = project.resolve(".javan/bin/virtual-thread-builder-start-parameterized-static-helper");
+        for (int attempt = 0; attempt < 16; attempt++) {
+            assertThat(process(project, List.of(binary.toString())).stdout())
+                .as("native virtual-thread output attempt %s", attempt)
+                .isEqualTo(jvmOutput);
+        }
     }
 
     @Test
