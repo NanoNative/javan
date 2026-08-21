@@ -10765,6 +10765,40 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void primitiveArithmeticWrapsLikeJvm() throws Exception {
+        final Path project = project("primitive-arithmetic-wrapping");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Integer.MAX_VALUE + 1);
+                    System.out.println(Integer.MIN_VALUE - 1);
+                    System.out.println(Integer.MIN_VALUE * -1);
+                    System.out.println(Long.MAX_VALUE + 1L);
+                    System.out.println(Long.MIN_VALUE - 1L);
+                    System.out.println(Long.MIN_VALUE * -1L);
+                    System.out.println(fingerprintByte(-3750763034362895579L, 0));
+                }
+
+                private static long fingerprintByte(final long hash, final int value) {
+                    return (hash ^ (value & 255)) * 1099511628211L;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/primitive-arithmetic-wrapping").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
     void jdkMathIntrinsicsBuildAndMatchJvmOutput() throws Exception {
         final Path project = project("jdk-math-intrinsics");
         writeJava(project, "com.acme.Main", """

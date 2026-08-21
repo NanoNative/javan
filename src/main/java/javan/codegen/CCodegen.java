@@ -2852,7 +2852,9 @@ public final class CCodegen {
                         + stringArguments(expression.arguments())
                         + "})";
                 case INT_BINARY:
+                    return signedIntegerBinary(expression, "javan_int");
                 case LONG_BINARY:
+                    return signedIntegerBinary(expression, "javan_long");
                 case FLOAT_BINARY:
                 case DOUBLE_BINARY:
                 case INT_COMPARE:
@@ -2972,6 +2974,17 @@ public final class CCodegen {
                 default:
                     throw new IllegalStateException("Unsupported IR expression kind");
             }
+        }
+
+        private String signedIntegerBinary(final javan.ir.IrExpression expression, final String prefix) {
+            final String left = expression(expression.arguments().get(0));
+            final String right = expression(expression.arguments().get(1));
+            return switch (expression.value()) {
+                case "+" -> prefix + "_add_wrapping(" + left + ", " + right + ")";
+                case "-" -> prefix + "_subtract_wrapping(" + left + ", " + right + ")";
+                case "*" -> prefix + "_multiply_wrapping(" + left + ", " + right + ")";
+                default -> "(" + left + " " + expression.value() + " " + right + ")";
+            };
         }
 
         private String expressionArguments(final List<javan.ir.IrExpression> arguments) {
