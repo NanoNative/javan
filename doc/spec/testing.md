@@ -138,6 +138,10 @@ programs need the same compiler. Each program still has its own labeled output a
 only the repeated compiler bootstrap is removed. On the implementation host, the complete
 `CliPackagingIntegrationTest` suite fell from `116.49s` on fresh `main` to `80.18s` with
 the same 21 tests passing; remote CI timings remain the acceptance evidence for runner gains.
+The package self-host proof sets a target-specific managed-heap bound so collection occurs
+under the release workload and the proof stays within its host time budget. Dedicated
+acceptance and sanitizer probes keep their own smaller explicit heap bounds for deterministic
+out-of-memory behavior.
 Native package timing artifacts record wall time, CPU time, peak RSS, metric source, processor
 count, and physical memory. A platform that cannot provide a resource metric records `unknown`;
 reports never substitute a guessed value.

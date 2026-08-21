@@ -45,19 +45,18 @@ long-running services, allocation-heavy applications, or general thread-heavy pr
 does not yet manage every Java/runtime allocation shape or synchronize every concurrent pointer
 publication during execution.
 
-## Next Milestone: M13R Remote Release-Matrix No-Residue Proof
+## M13R Remote Release-Matrix No-Residue Proof
 
 Goal: prove the generated native Javan binary itself is sanitizer-clean, counter-clean,
 warning-free, and represented in fresh reports.
 
-Status: Partial. Local package-backed self-host sanitizer proof exists on macOS
-aarch64 with nonzero tracked allocation/GC counters, zero final live heap/root residue,
-and no sanitizer failure signatures. The reduced package-backed `platform-smoke` path
-now also completes locally in `8m50s` by reusing the just-generated self-host C output
-and narrowing the repeated probes to `--version` plus the tiny build/check loop while
-still proving zero final heap/root residue with nonzero allocation/GC counters. Remote
-release-matrix validation remains 0/4
-completed.
+Status: Done for the currently enabled release package targets. Accepted remote
+package-backed self-host sanitizer proof passed on Linux x64, Linux ARM64, and macOS
+ARM64 with nonzero tracked allocation/GC counters, zero final live heap/root residue,
+and no sanitizer failure signatures. The reduced `platform-smoke` path reuses the
+just-generated self-host C output and narrows repeated probes to `--version` plus a tiny
+build/check loop while retaining the counter and residue assertions. macOS x64 and
+Windows package rows remain explicitly disabled and are not release support claims.
 
 Exit criteria:
 
@@ -80,10 +79,9 @@ This milestone is intentionally smaller than full managed heap. It proves the pr
 tool binary under the current runtime contract before expanding into long-running service
 memory behavior.
 
-Local proof currently records the self-host probes through an exit-safe counter writer.
-The latest local run produced nonzero tracked self-host allocations and GC collections
-with zero final tracked heap/root residue. The remaining gate is remote release-matrix
-proof on every supported OS/ARCH target.
+The package proof records the self-host probes through an exit-safe counter writer. The
+accepted remote package matrix produced nonzero tracked self-host allocations and GC
+collections with zero final tracked heap/root residue on every enabled release target.
 
 ## Required Managed Heap Design
 
