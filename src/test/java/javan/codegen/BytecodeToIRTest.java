@@ -5798,6 +5798,52 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersIntMultiplicationToIrExpression() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(II)I",
+            2,
+            2,
+            plain(0, 26, "iload_0"),
+            plain(1, 27, "iload_1"),
+            plain(2, 104, "imul"),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intBinary(
+                "*",
+                IrExpression.intLocal("arg0"),
+                IrExpression.intLocal("arg1")
+            ))
+        );
+    }
+
+    @Test
+    void lowersLongMultiplicationToIrExpression() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(JJ)J",
+            4,
+            4,
+            plain(0, 30, "lload_0"),
+            plainOperands(1, 22, "lload", 2),
+            plain(2, 105, "lmul"),
+            plain(3, 173, "lreturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnLong(IrExpression.longBinary(
+                "*",
+                IrExpression.longLocal("arg0"),
+                IrExpression.longLocal("arg1")
+            ))
+        );
+    }
+
+    @Test
     void lowersIntDivisionToIrExpression() {
         final IrFunction function = lowerMain(method(
             0x0008,

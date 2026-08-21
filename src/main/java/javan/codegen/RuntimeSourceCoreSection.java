@@ -50,6 +50,8 @@ final class RuntimeSourceCoreSection {
         #endif
         _Static_assert(sizeof(uint32_t) == 4, "Javan requires 32-bit uint32_t");
         _Static_assert(sizeof(uint64_t) == 8, "Javan requires 64-bit uint64_t");
+        _Static_assert(sizeof(int) == 4, "Javan requires 32-bit int");
+        _Static_assert(sizeof(long long) == 8, "Javan requires 64-bit long long");
         _Static_assert(sizeof(double) == 8, "Javan requires 64-bit double");
         _Static_assert(sizeof(float) == 4, "Javan requires 32-bit float");
         #if defined(_MSC_VER)
@@ -1134,15 +1136,48 @@ final class RuntimeSourceCoreSection {
             return (int) value;
         }
 
-        int javan_int_neg(int value) {
-            const unsigned int bits = 0U - (unsigned int) value;
+        static int javan_int_from_bits(uint32_t bits) {
             int result = 0;
             memcpy(&result, &bits, sizeof(result));
             return result;
         }
 
+        static long long javan_long_from_bits(uint64_t bits) {
+            long long result = 0;
+            memcpy(&result, &bits, sizeof(result));
+            return result;
+        }
+
+        int javan_int_neg(int value) {
+            return javan_int_from_bits(0U - (uint32_t) value);
+        }
+
+        int javan_int_add_wrapping(int left, int right) {
+            return javan_int_from_bits((uint32_t) left + (uint32_t) right);
+        }
+
+        int javan_int_subtract_wrapping(int left, int right) {
+            return javan_int_from_bits((uint32_t) left - (uint32_t) right);
+        }
+
+        int javan_int_multiply_wrapping(int left, int right) {
+            return javan_int_from_bits((uint32_t) left * (uint32_t) right);
+        }
+
         long long javan_long_neg(long long value) {
-            return value == LLONG_MIN ? LLONG_MIN : -value;
+            return javan_long_from_bits(UINT64_C(0) - (uint64_t) value);
+        }
+
+        long long javan_long_add_wrapping(long long left, long long right) {
+            return javan_long_from_bits((uint64_t) left + (uint64_t) right);
+        }
+
+        long long javan_long_subtract_wrapping(long long left, long long right) {
+            return javan_long_from_bits((uint64_t) left - (uint64_t) right);
+        }
+
+        long long javan_long_multiply_wrapping(long long left, long long right) {
+            return javan_long_from_bits((uint64_t) left * (uint64_t) right);
         }
 
         int javan_int_shl(int value, int shift) {

@@ -29,6 +29,7 @@ import java.util.Optional;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 final class CCodegenMemoryTest {
     @TempDir
@@ -64,6 +65,56 @@ final class CCodegenMemoryTest {
             "javan_root_frame_pop(javan_expr_roots);",
             "javan_gc_safe_point();"
         );
+    }
+
+    @Test
+    void emitsWrappingHelpersForSignedPrimitiveArithmetic() throws Exception {
+        final IrProgram program = new IrProgram(
+            List.of(),
+            List.of(
+                new IrFunction(
+                    "com/acme/Main", "main", "([Ljava/lang/String;)V", "main_symbol", IrType.VOID,
+                    List.of(), List.of(), List.of(IrInstruction.returnVoid())
+                ),
+                primitiveArithmeticFunction("int_add", IrType.INT, "+"),
+                primitiveArithmeticFunction("int_subtract", IrType.INT, "-"),
+                primitiveArithmeticFunction("int_multiply", IrType.INT, "*"),
+                primitiveArithmeticFunction("long_add", IrType.LONG, "+"),
+                primitiveArithmeticFunction("long_subtract", IrType.LONG, "-"),
+                primitiveArithmeticFunction("long_multiply", IrType.LONG, "*")
+            ),
+            "main_symbol"
+        );
+
+        final String generated = Files.readString(new CCodegen().generate(program, tempDir));
+
+        assertThat(generated).contains(
+            "return javan_int_add_wrapping(7, 3);",
+            "return javan_int_subtract_wrapping(7, 3);",
+            "return javan_int_multiply_wrapping(7, 3);",
+            "return javan_long_add_wrapping(7LL, 3LL);",
+            "return javan_long_subtract_wrapping(7LL, 3LL);",
+            "return javan_long_multiply_wrapping(7LL, 3LL);"
+        );
+    }
+
+    @Test
+    void rejectsIntegerBinaryExpressionWithoutOperator() {
+        final IrProgram program = new IrProgram(
+            List.of(),
+            List.of(
+                new IrFunction(
+                    "com/acme/Main", "main", "([Ljava/lang/String;)V", "main_symbol", IrType.VOID,
+                    List.of(), List.of(), List.of(IrInstruction.returnVoid())
+                ),
+                primitiveArithmeticFunction("missing_operator", IrType.INT, null)
+            ),
+            "main_symbol"
+        );
+
+        assertThatThrownBy(() -> new CCodegen().generate(program, tempDir))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("Integer binary expression is missing its operator");
     }
 
     @Test
@@ -2105,6 +2156,27 @@ final class CCodegenMemoryTest {
             List.of(),
             List.of(),
             List.of(instruction, IrInstruction.returnVoid())
+        );
+    }
+
+    private static IrFunction primitiveArithmeticFunction(final String symbol, final IrType type, final String operator) {
+        final IrExpression left = type == IrType.INT ? IrExpression.intLiteral(7) : IrExpression.longLiteral(7L);
+        final IrExpression right = type == IrType.INT ? IrExpression.intLiteral(3) : IrExpression.longLiteral(3L);
+        final IrExpression expression = type == IrType.INT
+            ? IrExpression.intBinary(operator, left, right)
+            : IrExpression.longBinary(operator, left, right);
+        final IrInstruction instruction = type == IrType.INT
+            ? IrInstruction.returnInt(expression)
+            : IrInstruction.returnLong(expression);
+        return new IrFunction(
+            "com/acme/Main",
+            symbol,
+            "()" + (type == IrType.INT ? "I" : "J"),
+            symbol,
+            type,
+            List.of(),
+            List.of(),
+            List.of(instruction)
         );
     }
 

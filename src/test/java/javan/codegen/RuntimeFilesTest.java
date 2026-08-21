@@ -11044,6 +11044,40 @@ final class RuntimeFilesTest {
         assertThat(longNegation("LLONG_MIN")).isEqualTo("-9223372036854775808\n");
     }
 
+    @Test
+    void intMultiplicationWrapsAtMinimumTimesNegativeOne() throws Exception {
+        assertThat(intWrappingArithmetic("javan_int_multiply_wrapping", "INT_MIN", "-1"))
+            .isEqualTo("-2147483648\n");
+    }
+
+    @Test
+    void longMultiplicationWrapsAtMinimumTimesNegativeOne() throws Exception {
+        assertThat(longWrappingArithmetic("javan_long_multiply_wrapping", "LLONG_MIN", "-1LL"))
+            .isEqualTo("-9223372036854775808\n");
+    }
+
+    @Test
+    void intAdditionWrapsAtMaximumPlusOne() throws Exception {
+        assertThat(intWrappingArithmetic("javan_int_add_wrapping", "INT_MAX", "1")).isEqualTo("-2147483648\n");
+    }
+
+    @Test
+    void intSubtractionWrapsAtMinimumMinusOne() throws Exception {
+        assertThat(intWrappingArithmetic("javan_int_subtract_wrapping", "INT_MIN", "1")).isEqualTo("2147483647\n");
+    }
+
+    @Test
+    void longAdditionWrapsAtMaximumPlusOne() throws Exception {
+        assertThat(longWrappingArithmetic("javan_long_add_wrapping", "LLONG_MAX", "1LL"))
+            .isEqualTo("-9223372036854775808\n");
+    }
+
+    @Test
+    void longSubtractionWrapsAtMinimumMinusOne() throws Exception {
+        assertThat(longWrappingArithmetic("javan_long_subtract_wrapping", "LLONG_MIN", "1LL"))
+            .isEqualTo("9223372036854775807\n");
+    }
+
     private String longNegation(final String value) throws Exception {
         return runRuntimeBoundaryProbe(
             """
@@ -11056,6 +11090,38 @@ final class RuntimeFilesTest {
                 return 0;
             }
             """.formatted(value),
+            "4096"
+        );
+    }
+
+    private String intWrappingArithmetic(final String symbol, final String left, final String right) throws Exception {
+        return runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <limits.h>
+            #include <stdio.h>
+
+            int main(void) {
+                printf("%%d\\n", %s(%s, %s));
+                return 0;
+            }
+            """.formatted(symbol, left, right),
+            "4096"
+        );
+    }
+
+    private String longWrappingArithmetic(final String symbol, final String left, final String right) throws Exception {
+        return runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <limits.h>
+            #include <stdio.h>
+
+            int main(void) {
+                printf("%%lld\\n", %s(%s, %s));
+                return 0;
+            }
+            """.formatted(symbol, left, right),
             "4096"
         );
     }

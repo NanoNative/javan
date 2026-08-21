@@ -3096,7 +3096,9 @@ public final class CCodegen {
                         + stringArguments(expression.arguments())
                         + "})";
                 case INT_BINARY:
+                    return signedIntegerBinary(expression, "javan_int");
                 case LONG_BINARY:
+                    return signedIntegerBinary(expression, "javan_long");
                 case FLOAT_BINARY:
                 case DOUBLE_BINARY:
                 case INT_COMPARE:
@@ -3216,6 +3218,49 @@ public final class CCodegen {
                 default:
                     throw new IllegalStateException("Unsupported IR expression kind");
             }
+        }
+
+        private String signedIntegerBinary(final javan.ir.IrExpression expression, final String prefix) {
+            final String operator = expression.value();
+            if (operator == null) {
+                throw new IllegalStateException("Integer binary expression is missing its operator");
+            }
+            final String left = expression(expression.arguments().get(0));
+            final String right = expression(expression.arguments().get(1));
+            if ("+".equals(operator)) {
+                return wrappingIntegerBinary(prefix, "add", left, right);
+            }
+            if ("-".equals(operator)) {
+                return wrappingIntegerBinary(prefix, "subtract", left, right);
+            }
+            if ("*".equals(operator)) {
+                return wrappingIntegerBinary(prefix, "multiply", left, right);
+            }
+            return new StringBuilder("(")
+                .append(left)
+                .append(" ")
+                .append(operator)
+                .append(" ")
+                .append(right)
+                .append(")")
+                .toString();
+        }
+
+        private static String wrappingIntegerBinary(
+            final String prefix,
+            final String operation,
+            final String left,
+            final String right
+        ) {
+            return new StringBuilder(prefix)
+                .append("_")
+                .append(operation)
+                .append("_wrapping(")
+                .append(left)
+                .append(", ")
+                .append(right)
+                .append(")")
+                .toString();
         }
 
         private String expressionArguments(final List<javan.ir.IrExpression> arguments) {
