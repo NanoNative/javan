@@ -4430,7 +4430,9 @@ final class RuntimeSourceMemorySections {
             if (metadata->magic != JAVAN_METHOD_METADATA_MAGIC
                 || metadata->parameter_count < 0
                 || metadata->name == NULL
-                || metadata->declaring_name == NULL) {
+                || metadata->declaring_name == NULL
+                || metadata->return_name == NULL
+                || (metadata->parameter_count > 0 && metadata->parameter_names == NULL)) {
                 javan_panic("invalid method metadata");
             }
             return metadata;
@@ -4452,6 +4454,31 @@ final class RuntimeSourceMemorySections {
 
         int javan_method_get_parameter_count(void* value) {
             return javan_method_metadata_checked(value)->parameter_count;
+        }
+
+        void* javan_method_get_parameter_types(void* value) {
+            const JavanMethodMetadata* metadata = javan_method_metadata_checked(value);
+            void* result = javan_object_array_new(metadata->parameter_count, "[Ljava.lang.Class;");
+            void* result_root = result;
+            void** roots[] = {(void**) &result_root};
+            javan_root_frame_push(roots, 1);
+            for (int index = 0; index < metadata->parameter_count; index++) {
+                javan_object_array_set(
+                    result_root,
+                    index,
+                    javan_runtime_class_from_binary_name(metadata->parameter_names[index])
+                );
+            }
+            javan_root_frame_pop(roots);
+            return result_root;
+        }
+
+        void* javan_method_get_return_type(void* value) {
+            return javan_runtime_class_from_binary_name(javan_method_metadata_checked(value)->return_name);
+        }
+
+        int javan_method_get_modifiers(void* value) {
+            return javan_method_metadata_checked(value)->modifiers;
         }
 
         static const char* javan_runtime_class_primitive_type_name(int exact_type_id) {

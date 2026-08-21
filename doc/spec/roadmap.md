@@ -101,10 +101,11 @@ for classes and arrays present in the compiled closed world; it initializes clas
 transports `ClassNotFoundException` and `NullPointerException` through normal Java catches.
 Closed-world `getDeclaredMethod` and `getMethod` lookup support exact parameter shapes,
 declared private metadata, inherited public class and interface methods, `Method.getName`,
-`getDeclaringClass`, and `getParameterCount`, with catchable lookup and null failures. Selecting
-a runtime class loader remains outside the static native model.
+`getDeclaringClass`, `getParameterCount`, `getParameterTypes`, `getReturnType`, and `getModifiers`,
+with catchable lookup and null failures. Selecting a runtime class loader remains outside the
+static native model.
 
-- continue finite member flows with richer metadata, access checks, and invocation
+- continue finite member flows with access checks and invocation
 - service loading from standard descriptors and module declarations
 - broader exception semantics and platform throwable transport
 - collections, streams, time, networking, files, and concurrency only with native/JVM parity

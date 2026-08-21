@@ -4382,6 +4382,30 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void exactMethodMetadataAccessorsUseReflectionMetadata() {
+        final List<MethodRef> supported = List.of(
+            new MethodRef("java/lang/reflect/Method", "getParameterTypes", "()[Ljava/lang/Class;"),
+            new MethodRef("java/lang/reflect/Method", "getReturnType", "()Ljava/lang/Class;"),
+            new MethodRef("java/lang/reflect/Method", "getModifiers", "()I")
+        );
+        final List<MethodRef> wrongDescriptors = List.of(
+            new MethodRef("java/lang/reflect/Method", "getParameterTypes", "()Ljava/lang/Class;"),
+            new MethodRef("java/lang/reflect/Method", "getReturnType", "()[Ljava/lang/Class;"),
+            new MethodRef("java/lang/reflect/Method", "getModifiers", "()J")
+        );
+
+        assertThat(supported).allMatch(JdkCallSupport::isSupported);
+        assertThat(supported).allSatisfy(call ->
+            assertThat(JdkCallSupport.runtimeModules(call)).containsExactly("reflection-metadata")
+        );
+        assertThat(supported).allSatisfy(call ->
+            assertThat(JdkCallSupport.transportedPlatformThrowableTypes(call))
+                .containsExactly("java/lang/NullPointerException")
+        );
+        assertThat(wrongDescriptors).noneMatch(JdkCallSupport::isSupported);
+    }
+
+    @Test
     void secureRandomDefaultConstructionAndByteGenerationAreSupported() {
         assertThat(List.of(
             JdkCallSupport.isSupported(new MethodRef("java/security/SecureRandom", "<init>", "()V")),
