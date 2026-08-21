@@ -156,6 +156,14 @@ public final class JdkCallSupport {
             "()Ljava/lang/Class;"
         ),
         runtime("Method.getParameterCount", "java/lang/reflect/Method", "getParameterCount", "()I"),
+        runtime(
+            "Method.getParameterTypes",
+            "java/lang/reflect/Method",
+            "getParameterTypes",
+            "()[Ljava/lang/Class;"
+        ),
+        runtime("Method.getReturnType", "java/lang/reflect/Method", "getReturnType", "()Ljava/lang/Class;"),
+        runtime("Method.getModifiers", "java/lang/reflect/Method", "getModifiers", "()I"),
         runtime("Class.getResourceAsStream", "java/lang/Class", "getResourceAsStream", "(Ljava/lang/String;)Ljava/io/InputStream;"),
         runtime("ClassLoader.getSystemClassLoader", "java/lang/ClassLoader", "getSystemClassLoader", "()Ljava/lang/ClassLoader;"),
         runtime("ClassLoader.getSystemResourceAsStream", "java/lang/ClassLoader", "getSystemResourceAsStream", "(Ljava/lang/String;)Ljava/io/InputStream;"),
@@ -1956,7 +1964,11 @@ public final class JdkCallSupport {
         }
         return "getName".equals(methodRef.name()) && "()Ljava/lang/String;".equals(methodRef.descriptor())
             || "getDeclaringClass".equals(methodRef.name()) && "()Ljava/lang/Class;".equals(methodRef.descriptor())
-            || "getParameterCount".equals(methodRef.name()) && "()I".equals(methodRef.descriptor());
+            || "getParameterCount".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())
+            || "getParameterTypes".equals(methodRef.name())
+                && "()[Ljava/lang/Class;".equals(methodRef.descriptor())
+            || "getReturnType".equals(methodRef.name()) && "()Ljava/lang/Class;".equals(methodRef.descriptor())
+            || "getModifiers".equals(methodRef.name()) && "()I".equals(methodRef.descriptor());
     }
 
     private static boolean isDecimalParseCall(final MethodRef methodRef) {

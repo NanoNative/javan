@@ -3481,7 +3481,7 @@ final class BytecodeToIRInvokeSupport {
             );
             instructions.add(IrInstruction.label(receiverPresent));
             stack.addAll(successStack);
-            if ("getParameterCount".equals(methodRef.name())) {
+            if ("getParameterCount".equals(methodRef.name()) || "getModifiers".equals(methodRef.name())) {
                 stack.add(StackValue.intExpression(IrExpression.intCall(
                     runtimeHelper, List.of(IrExpression.objectLocal(receiverLocal))
                 )));
@@ -3579,6 +3579,16 @@ final class BytecodeToIRInvokeSupport {
         }
         if ("getParameterCount".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
             return "javan_method_get_parameter_count";
+        }
+        if ("getParameterTypes".equals(methodRef.name())
+            && "()[Ljava/lang/Class;".equals(methodRef.descriptor())) {
+            return "javan_method_get_parameter_types";
+        }
+        if ("getReturnType".equals(methodRef.name()) && "()Ljava/lang/Class;".equals(methodRef.descriptor())) {
+            return "javan_method_get_return_type";
+        }
+        if ("getModifiers".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
+            return "javan_method_get_modifiers";
         }
         return null;
     }

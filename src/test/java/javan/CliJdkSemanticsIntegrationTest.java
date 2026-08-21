@@ -8233,10 +8233,26 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                     System.out.println(method.getName());
                     System.out.println(method.getParameterCount());
                     System.out.println(method.getDeclaringClass() == Target.class);
+                    System.out.println(method.getReturnType().getName());
+                    System.out.println(method.getParameterTypes()[0].getName());
+                    System.out.println(method.getModifiers());
                     System.out.println(zero.getParameterCount());
+                    System.out.println(zero.getReturnType().getName());
+                    System.out.println(zero.getParameterTypes().length);
                     System.out.println(shape.getParameterCount());
+                    final Class<?>[] firstShape = shape.getParameterTypes();
+                    final Class<?>[] secondShape = shape.getParameterTypes();
+                    firstShape[0] = boolean.class;
+                    for (int index = 0; index < 10_000; index++) {
+                        final byte[] ignored = new byte[64];
+                    }
+                    System.out.println(firstShape != secondShape);
+                    System.out.println(secondShape[0].getName());
+                    System.out.println(secondShape[1].getName());
                     System.out.println(jdk.getDeclaringClass() == String.class);
+                    System.out.println(jdk.getReturnType() == String.class);
                     System.out.println(dynamic.getDeclaringClass().getName());
+                    System.out.println(dynamic.getReturnType() == int.class);
                     try {
                         Target.class.getDeclaredMethod("missing", noParameters);
                     } catch (final NoSuchMethodException expected) {
@@ -8263,6 +8279,11 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                     } catch (final NullPointerException expected) {
                         System.out.println("null-method");
                     }
+                    try {
+                        absent.getReturnType();
+                    } catch (final NullPointerException expected) {
+                        System.out.println("null-return-type");
+                    }
                 }
             }
             """);
@@ -8272,8 +8293,9 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(Files.readString(project.resolve(".javan/generated/main.c")))
-            .contains("{JAVAN_METHOD_METADATA_MAGIC, 1, \"substring\", \"java.lang.String\"}")
-            .contains("{JAVAN_METHOD_METADATA_MAGIC, 0, \"size\", \"java.util.ArrayList\"}")
+            .contains("{JAVAN_METHOD_METADATA_MAGIC, 1, 1, \"substring\", \"java.lang.String\", \"java.lang.String\"")
+            .contains("{JAVAN_METHOD_METADATA_MAGIC, 0, 1, \"size\", \"java.util.ArrayList\", \"int\", NULL}")
+            .contains("static const char* javan_method_parameter_types_")
             .contains("javan_class_name_equals(class_value, \"java.lang.String\") && parameter_count == 1");
         final ProcessResult nativeRun = process(
             project,
@@ -8284,7 +8306,10 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
         assertThat(nativeRun.stdout()).isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo(
-            "greet\n1\ntrue\n0\n2\ntrue\njava.util.ArrayList\nmissing\nexact-parameters\nnull\ndeclared-only\nnull-method\n"
+            "greet\n1\ntrue\njava.lang.String\njava.lang.String\n2\n"
+                + "0\nvoid\n0\n2\ntrue\nint\n[Ljava.lang.String;\n"
+                + "true\ntrue\njava.util.ArrayList\ntrue\n"
+                + "missing\nexact-parameters\nnull\ndeclared-only\nnull-method\nnull-return-type\n"
         );
     }
 
@@ -8529,7 +8554,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(Files.readString(project.resolve(".javan/generated/main.c")))
             .contains("static void* javan_generated_class_get_method(")
-            .contains("JAVAN_METHOD_METADATA_MAGIC, 1, \"containsAll\", \"java.util.AbstractCollection\"");
+            .contains("JAVAN_METHOD_METADATA_MAGIC, 1, 1, \"containsAll\", \"java.util.AbstractCollection\"");
         final ProcessResult nativeRun = process(
             project,
             List.of(project.resolve(".javan/bin/public-method-metadata").toString()),
