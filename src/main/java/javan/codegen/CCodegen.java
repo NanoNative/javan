@@ -1041,6 +1041,20 @@ public final class CCodegen {
                 }
                 c.append("};").append(System.lineSeparator());
             }
+            if (!method.protectedOverrideCallerJvmNames().isEmpty()) {
+                c.append("static const char* ")
+                    .append(methodOverrideCallerMetadataSymbol(symbol))
+                    .append("[] = {");
+                for (int index = 0; index < method.protectedOverrideCallerJvmNames().size(); index++) {
+                    if (index > 0) {
+                        c.append(", ");
+                    }
+                    c.append(emitCStringLiteral(displayClassName(
+                        method.protectedOverrideCallerJvmNames().get(index)
+                    )));
+                }
+                c.append("};").append(System.lineSeparator());
+            }
             c.append("static const JavanMethodMetadata ")
                 .append(methodMetadataSymbol(symbol))
                 .append(" = {JAVAN_METHOD_METADATA_MAGIC, ")
@@ -1048,9 +1062,21 @@ public final class CCodegen {
                 .append(", ")
                 .append(method.modifiers())
                 .append(", ")
+                .append(method.declaringPublic() ? 1 : 0)
+                .append(", ")
+                .append(method.overrideAllowed() ? 1 : 0)
+                .append(", ")
+                .append(method.protectedOverrideCallerJvmNames().size())
+                .append(", ")
+                .append(method.protectedOverrideCallerJvmNames().isEmpty()
+                    ? "NULL"
+                    : methodOverrideCallerMetadataSymbol(symbol))
+                .append(", ")
                 .append(emitCStringLiteral(method.name()))
                 .append(", ")
                 .append(emitCStringLiteral(displayClassName(method.declaringJvmName())))
+                .append(", ")
+                .append(emitCStringLiteral(displayClassName(method.declaringNestJvmName())))
                 .append(", ")
                 .append(emitCStringLiteral(reflectionTypeName(method.returnDescriptor())))
                 .append(", ")
@@ -1101,9 +1127,9 @@ public final class CCodegen {
                         .append(")");
                 }
                 c.append(") {").append(System.lineSeparator());
-                c.append("        return (void*) &")
+                c.append("        return javan_method_new(&")
                     .append(methodMetadataSymbol(symbols.get(method).intValue()))
-                    .append(";").append(System.lineSeparator());
+                    .append(");").append(System.lineSeparator());
                 c.append("    }").append(System.lineSeparator());
             }
         }
@@ -1130,6 +1156,10 @@ public final class CCodegen {
 
     private static String methodParameterMetadataSymbol(final int index) {
         return "javan_method_parameter_types_" + index;
+    }
+
+    private static String methodOverrideCallerMetadataSymbol(final int index) {
+        return "javan_method_override_callers_" + index;
     }
 
     private static String reflectionTypeName(final String descriptor) {

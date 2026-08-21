@@ -35,7 +35,7 @@ public final class ForbiddenApiRules {
         if ("java/lang/reflect/Proxy".equals(owner)) {
             return Optional.of("dynamic proxies require runtime type generation");
         }
-        if ("java/lang/reflect/Method".equals(owner) && JdkCallSupport.isSupported(methodRef)) {
+        if (owner.startsWith("java/lang/reflect/") && JdkCallSupport.isSupported(methodRef)) {
             return Optional.empty();
         }
         if (owner.startsWith("java/lang/reflect/")) {

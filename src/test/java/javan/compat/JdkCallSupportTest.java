@@ -4406,6 +4406,67 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void exactMethodAccessCallsUseReflectionMetadataAndTransportFailures() {
+        final MethodRef canAccess = new MethodRef(
+            "java/lang/reflect/Method", "canAccess", "(Ljava/lang/Object;)Z"
+        );
+        final MethodRef setAccessible = new MethodRef(
+            "java/lang/reflect/Method", "setAccessible", "(Z)V"
+        );
+        final List<MethodRef> simpleCalls = List.of(
+            new MethodRef("java/lang/reflect/Method", "trySetAccessible", "()Z"),
+            new MethodRef("java/lang/reflect/Method", "isAccessible", "()Z")
+        );
+        final List<MethodRef> supported = List.of(
+            canAccess,
+            setAccessible,
+            simpleCalls.get(0),
+            simpleCalls.get(1)
+        );
+        final List<MethodRef> accessibleObjectCalls = List.of(
+            new MethodRef("java/lang/reflect/AccessibleObject", "canAccess", "(Ljava/lang/Object;)Z"),
+            new MethodRef("java/lang/reflect/AccessibleObject", "setAccessible", "(Z)V"),
+            new MethodRef("java/lang/reflect/AccessibleObject", "trySetAccessible", "()Z"),
+            new MethodRef("java/lang/reflect/AccessibleObject", "isAccessible", "()Z")
+        );
+
+        assertThat(supported).allMatch(JdkCallSupport::isSupported);
+        assertThat(accessibleObjectCalls).allMatch(JdkCallSupport::isSupported);
+        assertThat(supported).allSatisfy(call ->
+            assertThat(JdkCallSupport.runtimeModules(call)).containsExactly("reflection-metadata")
+        );
+        assertThat(accessibleObjectCalls).allSatisfy(call ->
+            assertThat(JdkCallSupport.runtimeModules(call)).containsExactly("reflection-metadata")
+        );
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(canAccess)).containsExactly(
+            "java/lang/NullPointerException",
+            "java/lang/IllegalArgumentException"
+        );
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(setAccessible)).containsExactly(
+            "java/lang/NullPointerException",
+            "java/lang/reflect/InaccessibleObjectException"
+        );
+        assertThat(simpleCalls).allSatisfy(call ->
+            assertThat(JdkCallSupport.transportedPlatformThrowableTypes(call))
+                .containsExactly("java/lang/NullPointerException")
+        );
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(accessibleObjectCalls.get(0)))
+            .containsExactly("java/lang/NullPointerException", "java/lang/IllegalArgumentException");
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(accessibleObjectCalls.get(1)))
+            .containsExactly("java/lang/NullPointerException", "java/lang/reflect/InaccessibleObjectException");
+        assertThat(accessibleObjectCalls.subList(2, 4)).allSatisfy(call ->
+            assertThat(JdkCallSupport.transportedPlatformThrowableTypes(call))
+                .containsExactly("java/lang/NullPointerException")
+        );
+        assertThat(List.of(
+            new MethodRef("java/lang/reflect/Method", "canAccess", "()Z"),
+            new MethodRef("java/lang/reflect/Method", "setAccessible", "()V"),
+            new MethodRef("java/lang/reflect/Method", "trySetAccessible", "(Z)Z"),
+            new MethodRef("java/lang/reflect/Method", "isAccessible", "(Z)Z")
+        )).noneMatch(JdkCallSupport::isSupported);
+    }
+
+    @Test
     void secureRandomDefaultConstructionAndByteGenerationAreSupported() {
         assertThat(List.of(
             JdkCallSupport.isSupported(new MethodRef("java/security/SecureRandom", "<init>", "()V")),

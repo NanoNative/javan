@@ -60,6 +60,7 @@ public final class JdkCallSupport {
         java/lang/ReflectiveOperationException=java/lang/Exception
         java/lang/ClassNotFoundException=java/lang/ReflectiveOperationException
         java/lang/IllegalAccessException=java/lang/ReflectiveOperationException
+        java/lang/reflect/InaccessibleObjectException=java/lang/RuntimeException
         java/lang/InstantiationException=java/lang/ReflectiveOperationException
         java/lang/NoSuchFieldException=java/lang/ReflectiveOperationException
         java/lang/NoSuchMethodException=java/lang/ReflectiveOperationException
@@ -164,6 +165,14 @@ public final class JdkCallSupport {
         ),
         runtime("Method.getReturnType", "java/lang/reflect/Method", "getReturnType", "()Ljava/lang/Class;"),
         runtime("Method.getModifiers", "java/lang/reflect/Method", "getModifiers", "()I"),
+        runtime("Method.canAccess", "java/lang/reflect/Method", "canAccess", "(Ljava/lang/Object;)Z"),
+        runtime("Method.setAccessible", "java/lang/reflect/Method", "setAccessible", "(Z)V"),
+        runtime("Method.trySetAccessible", "java/lang/reflect/Method", "trySetAccessible", "()Z"),
+        runtime("Method.isAccessible", "java/lang/reflect/Method", "isAccessible", "()Z"),
+        runtime("AccessibleObject.canAccess", "java/lang/reflect/AccessibleObject", "canAccess", "(Ljava/lang/Object;)Z"),
+        runtime("AccessibleObject.setAccessible", "java/lang/reflect/AccessibleObject", "setAccessible", "(Z)V"),
+        runtime("AccessibleObject.trySetAccessible", "java/lang/reflect/AccessibleObject", "trySetAccessible", "()Z"),
+        runtime("AccessibleObject.isAccessible", "java/lang/reflect/AccessibleObject", "isAccessible", "()Z"),
         runtime("Class.getResourceAsStream", "java/lang/Class", "getResourceAsStream", "(Ljava/lang/String;)Ljava/io/InputStream;"),
         runtime("ClassLoader.getSystemClassLoader", "java/lang/ClassLoader", "getSystemClassLoader", "()Ljava/lang/ClassLoader;"),
         runtime("ClassLoader.getSystemResourceAsStream", "java/lang/ClassLoader", "getSystemResourceAsStream", "(Ljava/lang/String;)Ljava/io/InputStream;"),
@@ -1683,7 +1692,8 @@ public final class JdkCallSupport {
             && ("forName".equals(name) || "getDeclaredMethod".equals(name) || "getMethod".equals(name))) {
             return List.of("reflection-metadata");
         }
-        if ("java/lang/reflect/Method".equals(owner)) {
+        if ("java/lang/reflect/Method".equals(owner)
+            || "java/lang/reflect/AccessibleObject".equals(owner)) {
             return List.of("reflection-metadata");
         }
         if ("java/lang/Thread".equals(owner)) {
@@ -1889,6 +1899,27 @@ public final class JdkCallSupport {
         if (methodMetadataAccessor(methodRef)) {
             return List.of("java/lang/NullPointerException");
         }
+        if (methodAccessOwner(methodRef)
+            && "canAccess".equals(methodRef.name())
+            && "(Ljava/lang/Object;)Z".equals(methodRef.descriptor())) {
+            return List.of(
+                "java/lang/NullPointerException",
+                "java/lang/IllegalArgumentException"
+            );
+        }
+        if (methodAccessOwner(methodRef)
+            && "setAccessible".equals(methodRef.name())
+            && "(Z)V".equals(methodRef.descriptor())) {
+            return List.of(
+                "java/lang/NullPointerException",
+                "java/lang/reflect/InaccessibleObjectException"
+            );
+        }
+        if (methodAccessOwner(methodRef)
+            && ("trySetAccessible".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())
+                || "isAccessible".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor()))) {
+            return List.of("java/lang/NullPointerException");
+        }
         if ("java/util/Base64$Encoder".equals(methodRef.owner())
             && ("encode".equals(methodRef.name()) && "([B)[B".equals(methodRef.descriptor())
                 || "encodeToString".equals(methodRef.name())
@@ -1969,6 +2000,11 @@ public final class JdkCallSupport {
                 && "()[Ljava/lang/Class;".equals(methodRef.descriptor())
             || "getReturnType".equals(methodRef.name()) && "()Ljava/lang/Class;".equals(methodRef.descriptor())
             || "getModifiers".equals(methodRef.name()) && "()I".equals(methodRef.descriptor());
+    }
+
+    private static boolean methodAccessOwner(final MethodRef methodRef) {
+        return "java/lang/reflect/Method".equals(methodRef.owner())
+            || "java/lang/reflect/AccessibleObject".equals(methodRef.owner());
     }
 
     private static boolean isDecimalParseCall(final MethodRef methodRef) {

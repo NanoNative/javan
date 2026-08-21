@@ -53,17 +53,47 @@ final class BytecodeToIRMetadataSupport {
         return List.copyOf(result);
     }
 
-    private static List<IrMethodMetadata> declaredMethods(final ClassFile classFile) {
+    private static List<IrMethodMetadata> declaredMethods(
+        final ClassFile classFile,
+        final Map<String, ClassFile> classes,
+        final Set<String> classpathClasses
+    ) {
         final List<IrMethodMetadata> result = new ArrayList<>();
         for (final MethodInfo method : classFile.methods()) {
             if (!"<init>".equals(method.name()) && !"<clinit>".equals(method.name())) {
                 result.add(new IrMethodMetadata(
                     classFile.name(),
+                    classFile.nestHost(),
                     method.name(),
                     BytecodeToIRDynamicSupport.parameterDescriptors(method.descriptor()).orElseThrow(),
                     returnDescriptor(method.descriptor()),
-                    method.accessFlags()
+                    method.accessFlags(),
+                    classFile.isPublic(),
+                    classpathClasses.contains(classFile.name()) || (method.isPublic() && classFile.isPublic()),
+                    protectedOverrideCallers(classFile, method, classes, classpathClasses)
                 ));
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private static List<String> protectedOverrideCallers(
+        final ClassFile declaringClass,
+        final MethodInfo method,
+        final Map<String, ClassFile> classes,
+        final Set<String> classpathClasses
+    ) {
+        if (classpathClasses.contains(declaringClass.name())
+            || !declaringClass.isPublic()
+            || (method.accessFlags() & 0x0004) == 0
+            || !method.isStatic()) {
+            return List.of();
+        }
+        final List<String> result = new ArrayList<>();
+        for (final ClassFile candidate : sortedClasses(classes)) {
+            if (classpathClasses.contains(candidate.name())
+                && BytecodeToIR.isAssignableTo(classes, candidate.name(), declaringClass.name())) {
+                result.add(candidate.name());
             }
         }
         return List.copyOf(result);
@@ -71,11 +101,12 @@ final class BytecodeToIRMetadataSupport {
 
     private static List<IrMethodMetadata> publicMethods(
         final ClassFile receiver,
-        final Map<String, ClassFile> classes
+        final Map<String, ClassFile> classes,
+        final Set<String> classpathClasses
     ) {
         final List<IrMethodMetadata> result = new ArrayList<>();
         for (final List<PublicMethodCandidate> candidates : publicMethodCandidates(
-            receiver, classes, true, new HashSet<>()
+            receiver, classes, classpathClasses, true, new HashSet<>()
         ).values()) {
             PublicMethodCandidate selected = candidates.getFirst();
             for (int index = 1; index < candidates.size(); index++) {
@@ -95,6 +126,7 @@ final class BytecodeToIRMetadataSupport {
     private static Map<MethodShape, List<PublicMethodCandidate>> publicMethodCandidates(
         final ClassFile classFile,
         final Map<String, ClassFile> classes,
+        final Set<String> classpathClasses,
         final boolean includeStatic,
         final Set<String> visiting
     ) {
@@ -122,8 +154,10 @@ final class BytecodeToIRMetadataSupport {
             }
             declared.add(new PublicMethodCandidate(
                 new IrMethodMetadata(
-                    classFile.name(), method.name(), parameters,
-                    returnDescriptor(method.descriptor()), method.accessFlags()
+                    classFile.name(), classFile.nestHost(), method.name(), parameters,
+                    returnDescriptor(method.descriptor()), method.accessFlags(), classFile.isPublic(),
+                    classpathClasses.contains(classFile.name()) || (method.isPublic() && classFile.isPublic()),
+                    protectedOverrideCallers(classFile, method, classes, classpathClasses)
                 ),
                 classFile.isInterface()
             ));
@@ -133,7 +167,9 @@ final class BytecodeToIRMetadataSupport {
             mergeInheritedMethods(
                 result,
                 declaredShapes,
-                publicMethodCandidates(superclass, classes, includeStatic, new HashSet<>(visiting)),
+                publicMethodCandidates(
+                    superclass, classes, classpathClasses, includeStatic, new HashSet<>(visiting)
+                ),
                 classes
             );
         }
@@ -143,7 +179,9 @@ final class BytecodeToIRMetadataSupport {
                 mergeInheritedMethods(
                     result,
                     declaredShapes,
-                    publicMethodCandidates(interfaceClass, classes, false, new HashSet<>(visiting)),
+                    publicMethodCandidates(
+                        interfaceClass, classes, classpathClasses, false, new HashSet<>(visiting)
+                    ),
                     classes
                 );
             }
@@ -357,17 +395,18 @@ final class BytecodeToIRMetadataSupport {
         }
         final Map<String, ClassFile> allClasses = new LinkedHashMap<>(externalClasses);
         allClasses.putAll(classes);
+        final Set<String> classpathClasses = classes.keySet();
         final List<IrReflectedClass> result = new ArrayList<>();
         for (final IrClass retained : retainedClasses) {
             final ClassFile classFile = classes.get(retained.jvmName());
             if (classFile != null) {
-                result.add(reflectedClass(classFile, allClasses, reflection));
+                result.add(reflectedClass(classFile, allClasses, classpathClasses, reflection));
             }
         }
         for (final String jvmName : reflection.externalClassNames()) {
             final ClassFile classFile = externalClasses.get(jvmName);
             if (classFile != null) {
-                result.add(reflectedClass(classFile, allClasses, reflection));
+                result.add(reflectedClass(classFile, allClasses, classpathClasses, reflection));
             }
         }
         if (reflection.publicMethodLookup()) {
@@ -376,7 +415,7 @@ final class BytecodeToIRMetadataSupport {
                 result.add(new IrReflectedClass(
                     "java/lang/Object",
                     List.of(),
-                    publicMethods(objectClass, allClasses),
+                    publicMethods(objectClass, allClasses, classpathClasses),
                     true
                 ));
             }
@@ -387,12 +426,15 @@ final class BytecodeToIRMetadataSupport {
     private static IrReflectedClass reflectedClass(
         final ClassFile classFile,
         final Map<String, ClassFile> classes,
+        final Set<String> classpathClasses,
         final ReflectionClasses reflection
     ) {
         return new IrReflectedClass(
             classFile.name(),
-            reflection.declaredMethodLookup() ? declaredMethods(classFile) : List.of(),
-            reflection.publicMethodLookup() ? publicMethods(classFile, classes) : List.of()
+            reflection.declaredMethodLookup()
+                ? declaredMethods(classFile, classes, classpathClasses)
+                : List.of(),
+            reflection.publicMethodLookup() ? publicMethods(classFile, classes, classpathClasses) : List.of()
         );
     }
 
