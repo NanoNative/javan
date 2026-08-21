@@ -674,7 +674,9 @@ final class BytecodeToIRInvokeSupport {
         if ("java/lang/Object".equals(methodRef.owner())
             && "getClass".equals(methodRef.name())
             && "()Ljava/lang/Class;".equals(methodRef.descriptor())) {
-            final IrExpression receiver = popObject(classFile, method, stack);
+            final IrExpression receiver = popObjectValue(classFile, method, instruction, stack)
+                .expression()
+                .orElseThrow();
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_object_get_class", List.of(receiver))));
             return;
         }
@@ -1142,6 +1144,18 @@ final class BytecodeToIRInvokeSupport {
                 )
                 : receiver.expression().orElseThrow();
             stack.add(StackValue.objectExpression(message));
+            return;
+        }
+        if (isPlatformThrowableGetCause(methodRef)) {
+            final StackValue receiver = popObjectValue(classFile, method, instruction, stack);
+            if (receiver.kind() == StackKind.CAUGHT_THROWABLE) {
+                stack.add(StackValue.caughtThrowable(IrExpression.objectCall(
+                    "javan_caught_throwable_cause",
+                    List.of(receiver.expression().orElseThrow())
+                )));
+            } else {
+                stack.add(StackValue.objectExpression(IrExpression.objectNull()));
+            }
             return;
         }
         if (isConcreteExactCallTarget(classes, methodRef.owner())) {
@@ -3460,6 +3474,52 @@ final class BytecodeToIRInvokeSupport {
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final SourceLineIndex sourceLines
     ) {
+        if ("java/lang/reflect/Method".equals(methodRef.owner())
+            && "invoke".equals(methodRef.name())
+            && "(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;".equals(methodRef.descriptor())) {
+            final String argumentsLocal = newObjectLocal(localDeclarations);
+            final String targetLocal = newObjectLocal(localDeclarations);
+            final String receiverLocal = newObjectLocal(localDeclarations);
+            instructions.add(IrInstruction.assignObject(
+                argumentsLocal, popObject(classFile, method, stack)
+            ));
+            instructions.add(IrInstruction.assignObject(targetLocal, popObject(classFile, method, stack)));
+            instructions.add(IrInstruction.assignObject(receiverLocal, popObject(classFile, method, stack)));
+            final List<StackValue> successStack = List.copyOf(stack);
+            final String receiverPresent = "label_method_invoke_receiver_present_" + instruction.offset();
+            instructions.add(IrInstruction.branchIf(
+                receiverPresent,
+                IrExpression.objectComparison(
+                    "!=", IrExpression.objectLocal(receiverLocal), IrExpression.objectNull()
+                )
+            ));
+            routePendingPlatformException(
+                classFile, method, instruction, instructions, stack, pendingExceptionHandlerStacks, sourceLines,
+                "java/lang/NullPointerException", IrExpression.stringLiteral("method")
+            );
+            instructions.add(IrInstruction.label(receiverPresent));
+            stack.addAll(successStack);
+            pushObjectCall(
+                instructions,
+                stack,
+                localDeclarations,
+                "javan_generated_method_invoke",
+                List.of(
+                    IrExpression.objectLocal(receiverLocal),
+                    IrExpression.objectLocal(targetLocal),
+                    IrExpression.objectLocal(argumentsLocal),
+                    IrExpression.stringLiteral(classFile.name().replace('/', '.')),
+                    IrExpression.stringLiteral(classFile.nestHost().replace('/', '.'))
+                )
+            );
+            return true;
+        }
+        if (methodAccessCall(methodRef)) {
+            return lowerMethodAccessCall(
+                classFile, method, instruction, methodRef, instructions, stack, localDeclarations,
+                pendingExceptionHandlerStacks, sourceLines
+            );
+        }
         if ("java/lang/reflect/Method".equals(methodRef.owner())) {
             final String runtimeHelper = methodMetadataRuntimeHelper(methodRef);
             if (runtimeHelper == null) {
@@ -3567,6 +3627,139 @@ final class BytecodeToIRInvokeSupport {
         stack.addAll(successStack);
         stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
         return true;
+    }
+
+    private static boolean lowerMethodAccessCall(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final MethodRef methodRef,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
+    ) {
+        final String targetLocal;
+        final String accessibleLocal;
+        if ("canAccess".equals(methodRef.name())) {
+            targetLocal = newObjectLocal(localDeclarations);
+            instructions.add(IrInstruction.assignObject(targetLocal, popObject(classFile, method, stack)));
+            accessibleLocal = null;
+        } else if ("setAccessible".equals(methodRef.name())) {
+            targetLocal = null;
+            accessibleLocal = "int" + localDeclarations.size();
+            localDeclarations.put(
+                Integer.MIN_VALUE + localDeclarations.size(),
+                new IrLocal(IrType.INT, accessibleLocal)
+            );
+            instructions.add(IrInstruction.assignInt(accessibleLocal, popInt(classFile, method, stack)));
+        } else {
+            targetLocal = null;
+            accessibleLocal = null;
+        }
+        final String receiverLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(receiverLocal, popObject(classFile, method, stack)));
+        final List<StackValue> successStack = List.copyOf(stack);
+        final String receiverPresent = "label_method_access_receiver_present_" + instruction.offset();
+        instructions.add(IrInstruction.branchIf(
+            receiverPresent,
+            IrExpression.objectComparison(
+                "!=", IrExpression.objectLocal(receiverLocal), IrExpression.objectNull()
+            )
+        ));
+        routePendingPlatformException(
+            classFile, method, instruction, instructions, stack, pendingExceptionHandlerStacks, sourceLines,
+            "java/lang/NullPointerException", IrExpression.stringLiteral("method")
+        );
+        instructions.add(IrInstruction.label(receiverPresent));
+        stack.addAll(successStack);
+
+        if ("trySetAccessible".equals(methodRef.name())) {
+            stack.add(StackValue.intExpression(IrExpression.intCall(
+                "javan_method_set_accessible",
+                List.of(
+                    IrExpression.objectLocal(receiverLocal),
+                    IrExpression.intLiteral(1),
+                    IrExpression.stringLiteral(classFile.name().replace('/', '.'))
+                )
+            )));
+            return true;
+        }
+        if ("isAccessible".equals(methodRef.name())) {
+            stack.add(StackValue.intExpression(IrExpression.intCall(
+                "javan_method_access_override", List.of(IrExpression.objectLocal(receiverLocal))
+            )));
+            return true;
+        }
+
+        final String statusLocal = "int" + localDeclarations.size();
+        localDeclarations.put(
+            Integer.MIN_VALUE + localDeclarations.size(),
+            new IrLocal(IrType.INT, statusLocal)
+        );
+        if ("canAccess".equals(methodRef.name())) {
+            instructions.add(IrInstruction.assignInt(
+                statusLocal,
+                IrExpression.intCall(
+                    "javan_method_can_access",
+                    List.of(
+                        IrExpression.objectLocal(receiverLocal),
+                        IrExpression.objectLocal(targetLocal),
+                        IrExpression.stringLiteral(classFile.name().replace('/', '.')),
+                        IrExpression.stringLiteral(classFile.nestHost().replace('/', '.'))
+                    )
+                )
+            ));
+            final String validTarget = "label_method_access_target_valid_" + instruction.offset();
+            instructions.add(IrInstruction.branchIf(
+                validTarget,
+                IrExpression.intComparison(">=", IrExpression.intLocal(statusLocal), IrExpression.intLiteral(0))
+            ));
+            routePendingPlatformException(
+                classFile, method, instruction, instructions, stack, pendingExceptionHandlerStacks, sourceLines,
+                "java/lang/IllegalArgumentException", IrExpression.stringLiteral("object is not an instance")
+            );
+            instructions.add(IrInstruction.label(validTarget));
+            stack.addAll(successStack);
+            stack.add(StackValue.intExpression(IrExpression.intLocal(statusLocal)));
+            return true;
+        }
+
+        instructions.add(IrInstruction.assignInt(
+            statusLocal,
+            IrExpression.intCall(
+                "javan_method_set_accessible",
+                List.of(
+                    IrExpression.objectLocal(receiverLocal),
+                    IrExpression.intLocal(accessibleLocal),
+                    IrExpression.stringLiteral(classFile.name().replace('/', '.'))
+                )
+            )
+        ));
+        final String allowed = "label_method_access_override_allowed_" + instruction.offset();
+        instructions.add(IrInstruction.branchIf(
+            allowed,
+            IrExpression.intComparison("!=", IrExpression.intLocal(statusLocal), IrExpression.intLiteral(0))
+        ));
+        routePendingPlatformException(
+            classFile, method, instruction, instructions, stack, pendingExceptionHandlerStacks, sourceLines,
+            "java/lang/reflect/InaccessibleObjectException", IrExpression.stringLiteral("access is not open")
+        );
+        instructions.add(IrInstruction.label(allowed));
+        stack.addAll(successStack);
+        return true;
+    }
+
+    private static boolean methodAccessCall(final MethodRef methodRef) {
+        if (!"java/lang/reflect/Method".equals(methodRef.owner())
+            && !"java/lang/reflect/AccessibleObject".equals(methodRef.owner())) {
+            return false;
+        }
+        return "canAccess".equals(methodRef.name()) && "(Ljava/lang/Object;)Z".equals(methodRef.descriptor())
+            || "setAccessible".equals(methodRef.name()) && "(Z)V".equals(methodRef.descriptor())
+            || "trySetAccessible".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())
+            || "isAccessible".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor());
     }
 
     private static String methodMetadataRuntimeHelper(final MethodRef methodRef) {

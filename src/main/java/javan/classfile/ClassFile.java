@@ -17,6 +17,7 @@ import java.util.Optional;
  * @param sourceFile SourceFile attribute value when present
  * @param recordComponents Record attribute components when the attribute is present
  * @param permittedSubclasses PermittedSubclasses attribute owners in source order, empty when absent
+ * @param nestHost JVM name of the nest host, equal to {@code name} for a nest host
  * @param source source class file path
  * @param application whether the class belongs to the application input rather than a dependency
  */
@@ -31,9 +32,11 @@ public record ClassFile(
     Optional<String> sourceFile,
     Optional<List<RecordComponentInfo>> recordComponents,
     List<String> permittedSubclasses,
+    String nestHost,
     Path source,
     boolean application
 ) {
+    private static final int ACC_PUBLIC = 0x0001;
     private static final int ACC_FINAL = 0x0010;
     private static final int ACC_ABSTRACT = 0x0400;
     private static final int ACC_INTERFACE = 0x0200;
@@ -75,6 +78,7 @@ public record ClassFile(
             Optional.empty(),
             Optional.empty(),
             List.of(),
+            name,
             source,
             application
         );
@@ -117,6 +121,7 @@ public record ClassFile(
             sourceFile,
             Optional.empty(),
             List.of(),
+            name,
             source,
             application
         );
@@ -127,6 +132,53 @@ public record ClassFile(
             recordComponents = Optional.of(List.copyOf(recordComponents.orElseThrow()));
         }
         permittedSubclasses = List.copyOf(permittedSubclasses);
+    }
+
+    /**
+     * Creates a class file without parsed nest-host metadata.
+     *
+     * @param majorVersion class file major version
+     * @param name JVM internal class name
+     * @param superName JVM internal superclass name
+     * @param accessFlags class access flags
+     * @param interfaces JVM internal interface names implemented by this class
+     * @param fields fields declared by the class
+     * @param methods methods declared by the class
+     * @param sourceFile parsed source-file metadata
+     * @param recordComponents parsed record metadata
+     * @param permittedSubclasses parsed permitted subclasses
+     * @param source source class file path
+     * @param application whether the class belongs to the application input
+     */
+    public ClassFile(
+        final int majorVersion,
+        final String name,
+        final String superName,
+        final int accessFlags,
+        final List<String> interfaces,
+        final List<FieldInfo> fields,
+        final List<MethodInfo> methods,
+        final Optional<String> sourceFile,
+        final Optional<List<RecordComponentInfo>> recordComponents,
+        final List<String> permittedSubclasses,
+        final Path source,
+        final boolean application
+    ) {
+        this(
+            majorVersion,
+            name,
+            superName,
+            accessFlags,
+            interfaces,
+            fields,
+            methods,
+            sourceFile,
+            recordComponents,
+            permittedSubclasses,
+            name,
+            source,
+            application
+        );
     }
 
     /**
@@ -168,6 +220,7 @@ public record ClassFile(
             sourceFile,
             recordComponents,
             List.of(),
+            name,
             source,
             application
         );
@@ -199,6 +252,15 @@ public record ClassFile(
             return false;
         }
         return true;
+    }
+
+    /**
+     * Returns true when this class or interface is public.
+     *
+     * @return true when public
+     */
+    public boolean isPublic() {
+        return (accessFlags & ACC_PUBLIC) != 0;
     }
 
     /**
@@ -276,6 +338,7 @@ public record ClassFile(
             sourceFile,
             recordComponents,
             permittedSubclasses,
+            nestHost,
             source,
             value
         );

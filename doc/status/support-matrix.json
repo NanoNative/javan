@@ -11,8 +11,8 @@
     "rule": "done = supported variants + rejected variants; unknown leftovers must be 0 for a release-gated JDK"
   },
   "counts": {
-    "rows": 308,
-    "pass": 308,
+    "rows": 309,
+    "pass": 309,
     "scoped": 0,
     "target": 0,
     "rejected": 0
@@ -43,6 +43,7 @@
     {"feature": "interface-dispatch", "jdk25": "pass"},
     {"feature": "polymorphic-virtual", "jdk25": "pass"},
     {"feature": "interface-polymorphic", "jdk25": "pass"},
+    {"feature": "closed-world-application-method-invocation", "jdk25": "pass"},
     {"feature": "string-intrinsics", "jdk25": "pass"},
     {"feature": "non-ascii-string-semantic-rejection", "jdk25": "pass"},
     {"feature": "operand-object-compare-temporary-root", "jdk25": "pass"},

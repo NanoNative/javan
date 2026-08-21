@@ -195,6 +195,15 @@ public final class ReachabilityAnalyzer {
                             materializedLambdaMethods,
                             entryPoints
                         );
+                        enqueueReflectiveInvocationTargets(
+                            classes,
+                            instruction,
+                            work,
+                            workSet,
+                            current,
+                            callEdges,
+                            entryPoints
+                        );
                         enqueueApplicationCall(
                             classes,
                             instruction,
@@ -230,6 +239,42 @@ public final class ReachabilityAnalyzer {
             functionValueFlow,
             instantiatedTypes
         );
+    }
+
+    private static void enqueueReflectiveInvocationTargets(
+        final Map<String, ClassFile> classes,
+        final Instruction instruction,
+        final List<EntryPoint> work,
+        final EntryPointMembership workSet,
+        final EntryPoint current,
+        final CallEdgeTracker callEdges,
+        final EntryPointPool entryPoints
+    ) {
+        final Optional<MethodRef> reference = instruction.methodRef();
+        if (reference.isEmpty()) {
+            return;
+        }
+        final MethodRef target = reference.orElseThrow();
+        if (!"java/lang/reflect/Method".equals(target.owner())
+            || !"invoke".equals(target.name())
+            || !"(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;".equals(
+                target.descriptor()
+            )) {
+            return;
+        }
+        final List<EntryPoint> targets = new ArrayList<>();
+        for (final ClassFile classFile : classes.values()) {
+            for (final MethodInfo method : classFile.methods()) {
+                if (method.code().isEmpty()
+                    || "<init>".equals(method.name())
+                    || "<clinit>".equals(method.name())) {
+                    continue;
+                }
+                targets.add(entryPoints.entry(classFile.name(), method.name(), method.descriptor()));
+            }
+        }
+        enqueueAll(work, workSet, targets);
+        addEdges(callEdges, current, targets, CallEdge.Kind.CALL);
     }
 
     private static List<Diagnostic> resolveCallbackDiagnostics(

@@ -206,8 +206,13 @@ final class RuntimeHeaderFile {
             int magic;
             int parameter_count;
             int modifiers;
+            int declaring_public;
+            int override_allowed;
+            int protected_override_caller_count;
+            const char* const* protected_override_caller_names;
             const char* name;
             const char* declaring_name;
+            const char* declaring_nest_name;
             const char* return_name;
             const char* const* parameter_names;
         } JavanMethodMetadata;
@@ -767,6 +772,22 @@ final class RuntimeHeaderFile {
         void* javan_method_get_parameter_types(void* value);
         void* javan_method_get_return_type(void* value);
         int javan_method_get_modifiers(void* value);
+        void* javan_method_new(const JavanMethodMetadata* metadata);
+        const JavanMethodMetadata* javan_method_metadata(void* value);
+        int javan_method_access_override(void* value);
+        int javan_method_set_accessible(void* value, int accessible, void* caller_name_value);
+        int javan_method_can_access(
+            void* value,
+            void* target,
+            void* caller_name_value,
+            void* caller_nest_name_value
+        );
+        int javan_reflection_argument_count(void* arguments);
+        void* javan_reflection_object_argument(void* arguments, int index, const char* expected_name);
+        int javan_reflection_int_argument(void* arguments, int index, int expected_kind);
+        long long javan_reflection_long_argument(void* arguments, int index);
+        float javan_reflection_float_argument(void* arguments, int index);
+        double javan_reflection_double_argument(void* arguments, int index);
         int javan_is_system_class_loader(void* value);
         void* javan_class_loader_system(void);
         void* javan_class_resource_as_stream(void* class_value, void* name_value);
@@ -930,11 +951,13 @@ final class RuntimeHeaderFile {
             int bytecode_offset,
             const char* source_line
         );
+        void javan_pending_throw_with_cause(const char* throwable_type, void* message, void* cause);
         int javan_pending_has(void);
         int javan_pending_type_is(void* throwable_type);
         int javan_pending_type_assignable_to(void* catch_type);
         void* javan_pending_catch(void);
         void* javan_caught_throwable_message(void* value);
+        void* javan_caught_throwable_cause(void* value);
         void javan_pending_rethrow(void* value);
         void javan_pending_clear(void);
         void javan_pending_panic(void);

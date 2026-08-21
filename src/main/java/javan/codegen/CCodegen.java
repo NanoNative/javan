@@ -32,6 +32,7 @@ import java.util.Map;
  * Emits portable C for the initial javan IR profile.
  */
 public final class CCodegen {
+    private static final String GENERATED_METHOD_INVOKE_SYMBOL = "javan_generated_method_invoke";
     private static final String RUNNABLE_RUN_DISPATCH_SYMBOL = BytecodeToIR.dispatchSymbol(new MethodRef("java/lang/Runnable", "run", "()V"));
     private static final String MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL = "javan_materialized_lambda_apply_object";
     private static final String MATERIALIZED_LAMBDA_LONG_OBJECT_APPLY_SYMBOL = "javan_materialized_lambda_apply_long_object";
@@ -146,7 +147,7 @@ public final class CCodegen {
                 .append(System.lineSeparator());
         }
         for (final IrFunction function : program.functions()) {
-            if (!function.symbol().equals(program.entryFunction())) {
+            if (!function.symbol().equals(program.entryFunction()) || features.methodInvocation()) {
                 emitSignature(function, c, true);
                 c.append(";").append(System.lineSeparator());
             }
@@ -158,6 +159,11 @@ public final class CCodegen {
         }
         emitClassInitializationPrototypes(program, c);
         emitRuntimeHelperPrototypes(features, c);
+        if (features.methodInvocation()) {
+            c.append("static void ").append(GENERATED_METHOD_INVOKE_SYMBOL)
+                .append("(void** result, void* method, void* target, void* arguments, void* caller, void* caller_nest);")
+                .append(System.lineSeparator());
+        }
         if (!program.materializedLambdaTargets().isEmpty()) {
             c.append("static void ").append(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL).append("(void** result, void* self, void* arg);").append(System.lineSeparator());
             c.append("static void ").append(MATERIALIZED_LAMBDA_LONG_OBJECT_APPLY_SYMBOL).append("(void** result, void* self, int64_t arg);").append(System.lineSeparator());
@@ -179,6 +185,9 @@ public final class CCodegen {
         if (features.publicMethodMetadata()) {
             emitMethodLookupHelper(program, c, false);
         }
+        if (features.methodInvocation()) {
+            emitMethodInvocationHelper(program, c);
+        }
         emitRecordShapeExactTypeHelper(program, c);
         emitEnumOrdinalHelpers(program, c);
         emitGeneratedEnumOrdinalHelper(program, c);
@@ -194,6 +203,9 @@ public final class CCodegen {
         }
         for (final IrFunction function : program.functions()) {
             emitFunction(program, function, objectResultSymbols, nativeWrapperSymbols, stackAllocations, c, true);
+            if (features.methodInvocation() && function.symbol().equals(program.entryFunction())) {
+                emitFunction(program, function, objectResultSymbols, nativeWrapperSymbols, stackAllocations, c, false);
+            }
         }
         return Files2.writeString(generatedDirectory.resolve("main.c"), c.toString());
     }
@@ -308,6 +320,11 @@ public final class CCodegen {
         }
         emitClassInitializationPrototypes(program, c);
         emitRuntimeHelperPrototypes(features, c);
+        if (features.methodInvocation()) {
+            c.append("static void ").append(GENERATED_METHOD_INVOKE_SYMBOL)
+                .append("(void** result, void* method, void* target, void* arguments, void* caller, void* caller_nest);")
+                .append(System.lineSeparator());
+        }
         if (!program.materializedLambdaTargets().isEmpty()) {
             c.append("static void ").append(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL).append("(void** result, void* self, void* arg);").append(System.lineSeparator());
             c.append("static void ").append(MATERIALIZED_LAMBDA_LONG_OBJECT_APPLY_SYMBOL).append("(void** result, void* self, int64_t arg);").append(System.lineSeparator());
@@ -328,6 +345,9 @@ public final class CCodegen {
         }
         if (features.publicMethodMetadata()) {
             emitMethodLookupHelper(program, c, false);
+        }
+        if (features.methodInvocation()) {
+            emitMethodInvocationHelper(program, c);
         }
         emitRecordShapeExactTypeHelper(program, c);
         emitEnumOrdinalHelpers(program, c);
@@ -362,6 +382,7 @@ public final class CCodegen {
             usesCall(program, "javan_generated_class_for_name"),
             usesCall(program, "javan_generated_class_get_declared_method"),
             usesCall(program, "javan_generated_class_get_method"),
+            usesCall(program, GENERATED_METHOD_INVOKE_SYMBOL),
             usesNonFiniteFloatingLiteral(program)
         );
     }
@@ -377,6 +398,9 @@ public final class CCodegen {
             if (dispatch.returnType() == javan.ir.IrType.OBJECT) {
                 result.add(dispatch.symbol());
             }
+        }
+        if (usesCall(program, GENERATED_METHOD_INVOKE_SYMBOL)) {
+            result.add(GENERATED_METHOD_INVOKE_SYMBOL);
         }
         result.add(EXACT_CATCH_NULL_APPLY_SYMBOL);
         if (!program.materializedLambdaTargets().isEmpty()) {
@@ -1041,6 +1065,20 @@ public final class CCodegen {
                 }
                 c.append("};").append(System.lineSeparator());
             }
+            if (!method.protectedOverrideCallerJvmNames().isEmpty()) {
+                c.append("static const char* ")
+                    .append(methodOverrideCallerMetadataSymbol(symbol))
+                    .append("[] = {");
+                for (int index = 0; index < method.protectedOverrideCallerJvmNames().size(); index++) {
+                    if (index > 0) {
+                        c.append(", ");
+                    }
+                    c.append(emitCStringLiteral(displayClassName(
+                        method.protectedOverrideCallerJvmNames().get(index)
+                    )));
+                }
+                c.append("};").append(System.lineSeparator());
+            }
             c.append("static const JavanMethodMetadata ")
                 .append(methodMetadataSymbol(symbol))
                 .append(" = {JAVAN_METHOD_METADATA_MAGIC, ")
@@ -1048,9 +1086,21 @@ public final class CCodegen {
                 .append(", ")
                 .append(method.modifiers())
                 .append(", ")
+                .append(method.declaringPublic() ? 1 : 0)
+                .append(", ")
+                .append(method.overrideAllowed() ? 1 : 0)
+                .append(", ")
+                .append(method.protectedOverrideCallerJvmNames().size())
+                .append(", ")
+                .append(method.protectedOverrideCallerJvmNames().isEmpty()
+                    ? "NULL"
+                    : methodOverrideCallerMetadataSymbol(symbol))
+                .append(", ")
                 .append(emitCStringLiteral(method.name()))
                 .append(", ")
                 .append(emitCStringLiteral(displayClassName(method.declaringJvmName())))
+                .append(", ")
+                .append(emitCStringLiteral(displayClassName(method.declaringNestJvmName())))
                 .append(", ")
                 .append(emitCStringLiteral(reflectionTypeName(method.returnDescriptor())))
                 .append(", ")
@@ -1101,14 +1151,204 @@ public final class CCodegen {
                         .append(")");
                 }
                 c.append(") {").append(System.lineSeparator());
-                c.append("        return (void*) &")
+                c.append("        return javan_method_new(&")
                     .append(methodMetadataSymbol(symbols.get(method).intValue()))
-                    .append(";").append(System.lineSeparator());
+                    .append(");").append(System.lineSeparator());
                 c.append("    }").append(System.lineSeparator());
             }
         }
         c.append("    return NULL;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+    }
+
+    private static void emitMethodInvocationHelper(final IrProgram program, final StringBuilder c) {
+        final Map<IrMethodMetadata, Integer> symbols = methodMetadataSymbols(program);
+        c.append("static void ").append(GENERATED_METHOD_INVOKE_SYMBOL)
+            .append("(void** result, void* method, void* target, void* arguments, void* caller, void* caller_nest) {")
+            .append(System.lineSeparator());
+        c.append("    const JavanMethodMetadata* metadata = javan_method_metadata(method);")
+            .append(System.lineSeparator());
+        for (final Map.Entry<IrMethodMetadata, Integer> entry : symbols.entrySet()) {
+            final IrMethodMetadata reflected = entry.getKey();
+            final String descriptor = BytecodeToIR.methodDescriptor(reflected);
+            final boolean staticMethod = (reflected.modifiers() & 0x0008) != 0;
+            final String direct = BytecodeToIR.symbol(new javan.analysis.EntryPoint(
+                reflected.declaringJvmName(), reflected.name(), descriptor
+            ));
+            final String dispatch = BytecodeToIR.dispatchSymbol(new javan.classfile.MethodRef(
+                reflected.declaringJvmName(), reflected.name(), descriptor
+            ));
+            final String targetSymbol = staticMethod ? direct : dispatch;
+            if (staticMethod ? !containsFunction(program, direct) : !containsDispatch(program, dispatch)) {
+                continue;
+            }
+            c.append("    if (metadata == &")
+                .append(methodMetadataSymbol(entry.getValue().intValue()))
+                .append(") {").append(System.lineSeparator());
+            if (!staticMethod) {
+                c.append("        if (target == NULL) {").append(System.lineSeparator());
+                emitReflectiveFailure(c, "java/lang/NullPointerException", "target", "            ");
+                c.append("        }").append(System.lineSeparator());
+            }
+            c.append("        int access = javan_method_can_access(method, ")
+                .append(staticMethod ? "NULL" : "target")
+                .append(", caller, caller_nest);").append(System.lineSeparator());
+            c.append("        if (access < 0) {").append(System.lineSeparator());
+            emitReflectiveFailure(c, "java/lang/IllegalArgumentException", "object is not an instance", "            ");
+            c.append("        }").append(System.lineSeparator());
+            c.append("        if (access == 0) {").append(System.lineSeparator());
+            emitReflectiveFailure(c, "java/lang/IllegalAccessException", "method is not accessible", "            ");
+            c.append("        }").append(System.lineSeparator());
+            c.append("        if (javan_reflection_argument_count(arguments) != ")
+                .append(reflected.parameterDescriptors().size()).append(") {")
+                .append(System.lineSeparator());
+            emitReflectiveFailure(c, "java/lang/IllegalArgumentException", "wrong number of arguments", "            ");
+            c.append("        }").append(System.lineSeparator());
+            emitReflectiveArguments(c, reflected);
+            c.append("        if (javan_pending_has() != 0) return;").append(System.lineSeparator());
+            c.append("        void* invocation_cause = NULL;").append(System.lineSeparator());
+            c.append("        void** invocation_roots[] = { &invocation_cause };").append(System.lineSeparator());
+            c.append("        javan_root_frame_push(invocation_roots, 1);").append(System.lineSeparator());
+            if (staticMethod && program.classInitializationDependencies().containsKey(reflected.declaringJvmName())) {
+                c.append("        ").append(classInitializationSymbol(reflected.declaringJvmName()))
+                    .append("();").append(System.lineSeparator());
+            }
+            emitReflectiveCall(c, reflected, targetSymbol, staticMethod);
+            c.append("        if (javan_pending_has() != 0) {").append(System.lineSeparator());
+            c.append("            invocation_cause = javan_pending_catch();").append(System.lineSeparator());
+            c.append("            javan_pending_throw_with_cause(\"java/lang/reflect/InvocationTargetException\", NULL, invocation_cause);")
+                .append(System.lineSeparator());
+            c.append("        }").append(System.lineSeparator());
+            c.append("        javan_root_frame_pop(invocation_roots);").append(System.lineSeparator());
+            c.append("        return;").append(System.lineSeparator());
+            c.append("    }").append(System.lineSeparator());
+        }
+        emitReflectiveFailure(
+            c,
+            "java/lang/UnsupportedOperationException",
+            "method target is outside the compiled invocation set",
+            "    "
+        );
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+    }
+
+    private static void emitReflectiveCall(
+        final StringBuilder c,
+        final IrMethodMetadata method,
+        final String targetSymbol,
+        final boolean staticMethod
+    ) {
+        final StringBuilder arguments = new StringBuilder();
+        if (!staticMethod) {
+            arguments.append("target");
+        }
+        for (int index = 0; index < method.parameterDescriptors().size(); index++) {
+            if (!arguments.isEmpty()) {
+                arguments.append(", ");
+            }
+            arguments.append("invocation_arg_").append(index);
+        }
+        final String argumentText = arguments.toString();
+        final String returnDescriptor = method.returnDescriptor();
+        if (returnDescriptor.startsWith("L") || returnDescriptor.startsWith("[")) {
+            c.append("        ").append(targetSymbol).append("(result");
+            if (!arguments.isEmpty()) {
+                c.append(", ").append(argumentText);
+            }
+            c.append(");").append(System.lineSeparator());
+            return;
+        }
+        if ("V".equals(returnDescriptor)) {
+            c.append("        ").append(targetSymbol).append('(').append(argumentText).append(");")
+                .append(System.lineSeparator());
+            c.append("        *result = NULL;").append(System.lineSeparator());
+            return;
+        }
+        c.append("        *result = ").append(reflectiveBox(returnDescriptor)).append('(')
+            .append(targetSymbol).append('(').append(argumentText).append("));")
+            .append(System.lineSeparator());
+    }
+
+    private static void emitReflectiveArguments(final StringBuilder c, final IrMethodMetadata method) {
+        for (int index = 0; index < method.parameterDescriptors().size(); index++) {
+            final String descriptor = method.parameterDescriptors().get(index);
+            final String cType;
+            if (descriptor.startsWith("L") || descriptor.startsWith("[")) {
+                cType = "void*";
+            } else if ("J".equals(descriptor)) {
+                cType = "long long";
+            } else if ("F".equals(descriptor)) {
+                cType = "float";
+            } else if ("D".equals(descriptor)) {
+                cType = "double";
+            } else {
+                cType = "int";
+            }
+            c.append("        ").append(cType).append(" invocation_arg_").append(index)
+                .append(" = ").append(reflectiveArgument(descriptor, index)).append(";")
+                .append(System.lineSeparator());
+        }
+    }
+
+    private static String reflectiveArgument(final String descriptor, final int index) {
+        if (descriptor.startsWith("L") || descriptor.startsWith("[")) {
+            return "javan_reflection_object_argument(arguments, " + index + ", "
+                + emitCStringLiteral(reflectionTypeName(descriptor)) + ")";
+        }
+        if ("J".equals(descriptor)) {
+            return "javan_reflection_long_argument(arguments, " + index + ")";
+        }
+        if ("F".equals(descriptor)) {
+            return "javan_reflection_float_argument(arguments, " + index + ")";
+        }
+        if ("D".equals(descriptor)) {
+            return "javan_reflection_double_argument(arguments, " + index + ")";
+        }
+        return "javan_reflection_int_argument(arguments, " + index + ", '" + descriptor + "')";
+    }
+
+    private static String reflectiveBox(final String descriptor) {
+        if ("Z".equals(descriptor)) return "javan_boolean_value_of";
+        if ("B".equals(descriptor)) return "javan_byte_value_of";
+        if ("S".equals(descriptor)) return "javan_short_value_of";
+        if ("C".equals(descriptor)) return "javan_character_value_of";
+        if ("I".equals(descriptor)) return "javan_integer_value_of";
+        if ("J".equals(descriptor)) return "javan_long_value_of";
+        if ("F".equals(descriptor)) return "javan_float_value_of";
+        if ("D".equals(descriptor)) return "javan_double_value_of";
+        throw new IllegalArgumentException("unsupported reflective return: " + descriptor);
+    }
+
+    private static void emitReflectiveFailure(
+        final StringBuilder c,
+        final String type,
+        final String message,
+        final String indent
+    ) {
+        c.append(indent).append("javan_pending_throw(")
+            .append(emitCStringLiteral(type)).append(", javan_string_from(")
+            .append(emitCStringLiteral(message))
+            .append("), NULL, NULL, NULL, -1, -1, NULL);")
+            .append(System.lineSeparator());
+        c.append(indent).append("return;").append(System.lineSeparator());
+    }
+
+    private static boolean containsFunction(final IrProgram program, final String symbol) {
+        for (final IrFunction function : program.functions()) {
+            if (function.symbol().equals(symbol)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean containsDispatch(final IrProgram program, final String symbol) {
+        for (final IrDispatch dispatch : program.dispatches()) {
+            if (dispatch.symbol().equals(symbol)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static Map<IrMethodMetadata, Integer> methodMetadataSymbols(final IrProgram program) {
@@ -1130,6 +1370,10 @@ public final class CCodegen {
 
     private static String methodParameterMetadataSymbol(final int index) {
         return "javan_method_parameter_types_" + index;
+    }
+
+    private static String methodOverrideCallerMetadataSymbol(final int index) {
+        return "javan_method_override_callers_" + index;
     }
 
     private static String reflectionTypeName(final String descriptor) {
@@ -4594,6 +4838,7 @@ public final class CCodegen {
         boolean classForName,
         boolean declaredMethodMetadata,
         boolean publicMethodMetadata,
+        boolean methodInvocation,
         boolean nonFiniteFloatingLiteral
     ) {
         private boolean methodMetadata() {

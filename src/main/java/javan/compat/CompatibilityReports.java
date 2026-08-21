@@ -460,6 +460,7 @@ public final class CompatibilityReports {
             pass("interface-dispatch"),
             pass("polymorphic-virtual"),
             pass("interface-polymorphic"),
+            pass("closed-world-application-method-invocation"),
             pass("string-intrinsics"),
             pass("non-ascii-string-semantic-rejection"),
             pass("operand-object-compare-temporary-root"),

@@ -78,6 +78,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE 35
         #define JAVAN_RUNTIME_KIND_SECURE_RANDOM 36
         #define JAVAN_RUNTIME_KIND_UUID 37
+        #define JAVAN_RUNTIME_KIND_METHOD 38
         #define JAVAN_LIST_VIEW_UNMODIFIABLE 1
         #define JAVAN_LIST_VIEW_SET 2
         #define JAVAN_MAP_VIEW_UNMODIFIABLE 1
@@ -1267,7 +1268,8 @@ final class RuntimeSourceMemorySections {
             node->kind = kind;
             node->type_id = type_id;
             node->collectible = runtime_kind == JAVAN_RUNTIME_KIND_THROWABLE_STATE
-                || runtime_kind == JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE;
+                || runtime_kind == JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE
+                || runtime_kind == JAVAN_RUNTIME_KIND_METHOD;
             node->runtime_kind = runtime_kind;
             node->mark = 0;
             node->array_class_name = NULL;
@@ -1522,7 +1524,8 @@ final class RuntimeSourceMemorySections {
                 || runtime_kind == JAVAN_RUNTIME_KIND_THROWABLE_STATE
                 || runtime_kind == JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE
                 || runtime_kind == JAVAN_RUNTIME_KIND_SECURE_RANDOM
-                || runtime_kind == JAVAN_RUNTIME_KIND_UUID;
+                || runtime_kind == JAVAN_RUNTIME_KIND_UUID
+                || runtime_kind == JAVAN_RUNTIME_KIND_METHOD;
             javan_heap_maybe_validate();
             javan_runtime_lock_leave();
         }
@@ -3063,6 +3066,7 @@ final class RuntimeSourceMemorySections {
         typedef struct {
             const char* pending_throwable_type;
             void* pending_throwable_message;
+            void* pending_throwable_cause;
             const char* pending_throwable_class;
             const char* pending_throwable_method;
             const char* pending_throwable_file;
@@ -3074,6 +3078,7 @@ final class RuntimeSourceMemorySections {
         typedef struct {
             const char* throwable_type;
             void* throwable_message;
+            void* throwable_cause;
             const char* throwable_class;
             const char* throwable_method;
             const char* throwable_file;
@@ -4319,6 +4324,17 @@ final class RuntimeSourceMemorySections {
                 }
                 return javan_runtime_class_literal(snapshot.array_class_name, 0, 0, 1, 0);
             }
+            if (found != 0 && snapshot.runtime_kind == JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE) {
+                const char* internal_name = ((javan_caught_throwable*) value)->throwable_type;
+                char binary_name[256];
+                int index = 0;
+                while (internal_name[index] != '\\0' && index < 255) {
+                    binary_name[index] = internal_name[index] == '/' ? '.' : internal_name[index];
+                    index++;
+                }
+                binary_name[index] = '\\0';
+                return javan_runtime_class_from_binary_name(binary_name);
+            }
             int type_id = javan_registered_type_id(value);
             if (type_id > 0) {
                 JavanTypeDescriptor* descriptor = javan_type_descriptor_for(type_id);
@@ -4422,29 +4438,182 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
-        static const JavanMethodMetadata* javan_method_metadata_checked(void* value) {
-            if (value == NULL) {
+        """;
+
+    private static final String SOURCE_HEAP_ALLOC_METHODS = """
+
+        typedef struct {
+            const JavanMethodMetadata* metadata;
+            int access_override;
+        } javan_method_value;
+
+        static const JavanMethodMetadata* javan_method_metadata_checked(
+            const JavanMethodMetadata* metadata
+        ) {
+            if (metadata == NULL) {
                 javan_panic("null method metadata");
             }
-            const JavanMethodMetadata* metadata = (const JavanMethodMetadata*) value;
             if (metadata->magic != JAVAN_METHOD_METADATA_MAGIC
                 || metadata->parameter_count < 0
                 || metadata->name == NULL
                 || metadata->declaring_name == NULL
+                || metadata->declaring_nest_name == NULL
                 || metadata->return_name == NULL
-                || (metadata->parameter_count > 0 && metadata->parameter_names == NULL)) {
+                || (metadata->parameter_count > 0 && metadata->parameter_names == NULL)
+                || metadata->protected_override_caller_count < 0
+                || (metadata->protected_override_caller_count > 0
+                    && metadata->protected_override_caller_names == NULL)) {
                 javan_panic("invalid method metadata");
             }
             return metadata;
         }
 
+        static javan_method_value* javan_method_checked_unlocked(void* value) {
+            javan_allocation_node* node = javan_find_allocation_locked(value, NULL);
+            if (node == NULL
+                || node->kind != JAVAN_HEAP_KIND_RUNTIME
+                || node->runtime_kind != JAVAN_RUNTIME_KIND_METHOD) {
+                javan_panic("invalid Method object");
+            }
+            javan_method_value* method = (javan_method_value*) value;
+            javan_method_metadata_checked(method->metadata);
+            return method;
+        }
+
+        void* javan_method_new(const JavanMethodMetadata* metadata) {
+            javan_method_metadata_checked(metadata);
+            void* result = NULL;
+            void** roots[] = {(void**) &result};
+            javan_root_frame_push(roots, 1);
+            javan_alloc_runtime_rooted(sizeof(javan_method_value), &result, JAVAN_RUNTIME_KIND_METHOD);
+            javan_method_value* method = (javan_method_value*) result;
+            method->metadata = metadata;
+            method->access_override = 0;
+            javan_root_frame_pop(roots);
+            return result;
+        }
+
+        const JavanMethodMetadata* javan_method_metadata(void* value) {
+            javan_runtime_lock_enter();
+            const JavanMethodMetadata* result = javan_method_checked_unlocked(value)->metadata;
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        int javan_method_access_override(void* value) {
+            javan_runtime_lock_enter();
+            int result = javan_method_checked_unlocked(value)->access_override;
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        int javan_method_set_accessible(void* value, int accessible, void* caller_name_value) {
+            const char* caller_name = (const char*) caller_name_value;
+            if (caller_name == NULL || caller_name[0] == '\\0') {
+                javan_panic("missing Method access caller");
+            }
+            void* method_root = value;
+            void** roots[] = {(void**) &method_root};
+            javan_root_frame_push(roots, 1);
+            const JavanMethodMetadata* metadata = javan_method_metadata(method_root);
+            int allowed = metadata->override_allowed;
+            for (int index = 0; accessible != 0 && allowed == 0
+                && index < metadata->protected_override_caller_count; index++) {
+                if (strcmp(caller_name, metadata->protected_override_caller_names[index]) == 0) {
+                    allowed = 1;
+                }
+            }
+            if (accessible != 0 && allowed == 0) {
+                javan_root_frame_pop(roots);
+                return 0;
+            }
+            javan_runtime_lock_enter();
+            javan_method_value* method = javan_method_checked_unlocked(method_root);
+            method->access_override = accessible == 0 ? 0 : 1;
+            javan_runtime_lock_leave();
+            javan_root_frame_pop(roots);
+            return 1;
+        }
+
+        static int javan_method_name_prefix_equal(
+            const char* left,
+            const char* right,
+            char delimiter
+        ) {
+            const char* left_end = strrchr(left, delimiter);
+            const char* right_end = strrchr(right, delimiter);
+            unsigned long left_length = left_end == NULL ? 0UL : (unsigned long) (left_end - left);
+            unsigned long right_length = right_end == NULL ? 0UL : (unsigned long) (right_end - right);
+            return left_length == right_length && strncmp(left, right, left_length) == 0 ? 1 : 0;
+        }
+
+        int javan_method_can_access(
+            void* value,
+            void* target,
+            void* caller_name_value,
+            void* caller_nest_name_value
+        ) {
+            const char* caller_name = (const char*) caller_name_value;
+            const char* caller_nest_name = (const char*) caller_nest_name_value;
+            if (caller_name == NULL || caller_name[0] == '\\0'
+                || caller_nest_name == NULL || caller_nest_name[0] == '\\0') {
+                javan_panic("missing Method access caller");
+            }
+            void* method_root = value;
+            void* target_root = target;
+            void* declaring_class = NULL;
+            void* caller_class = NULL;
+            void** roots[] = {
+                (void**) &method_root,
+                (void**) &target_root,
+                (void**) &declaring_class,
+                (void**) &caller_class
+            };
+            javan_root_frame_push(roots, 4);
+            const JavanMethodMetadata* metadata = javan_method_metadata(method_root);
+            const int static_method = (metadata->modifiers & 0x0008) != 0;
+            declaring_class = javan_runtime_class_from_binary_name(metadata->declaring_name);
+            if ((static_method && target_root != NULL)
+                || (!static_method && (target_root == NULL
+                    || javan_class_is_instance(declaring_class, target_root) == 0))) {
+                javan_root_frame_pop(roots);
+                return -1;
+            }
+            if (javan_method_access_override(method_root) != 0) {
+                javan_root_frame_pop(roots);
+                return 1;
+            }
+            const int public_method = (metadata->modifiers & 0x0001) != 0;
+            const int private_method = (metadata->modifiers & 0x0002) != 0;
+            const int protected_method = (metadata->modifiers & 0x0004) != 0;
+            const int same_package = javan_method_name_prefix_equal(
+                caller_name, metadata->declaring_name, '.'
+            );
+            int accessible = 0;
+            if (private_method) {
+                accessible = strcmp(caller_nest_name, metadata->declaring_nest_name) == 0 ? 1 : 0;
+            } else if (same_package) {
+                accessible = 1;
+            } else if (metadata->declaring_public != 0 && public_method) {
+                accessible = 1;
+            } else if (metadata->declaring_public != 0 && protected_method) {
+                caller_class = javan_runtime_class_from_binary_name(caller_name);
+                accessible = javan_class_is_assignable_from(declaring_class, caller_class);
+                if (accessible != 0 && !static_method) {
+                    accessible = javan_class_is_instance(caller_class, target_root);
+                }
+            }
+            javan_root_frame_pop(roots);
+            return accessible;
+        }
+
         void* javan_method_get_name(void* value) {
-            return javan_string_from(javan_method_metadata_checked(value)->name);
+            return javan_string_from(javan_method_metadata(value)->name);
         }
 
         void* javan_method_get_declaring_class(void* value) {
             void* result = javan_runtime_class_from_binary_name(
-                javan_method_metadata_checked(value)->declaring_name
+                javan_method_metadata(value)->declaring_name
             );
             if (result == NULL) {
                 javan_panic("unknown declaring class metadata");
@@ -4453,11 +4622,11 @@ final class RuntimeSourceMemorySections {
         }
 
         int javan_method_get_parameter_count(void* value) {
-            return javan_method_metadata_checked(value)->parameter_count;
+            return javan_method_metadata(value)->parameter_count;
         }
 
         void* javan_method_get_parameter_types(void* value) {
-            const JavanMethodMetadata* metadata = javan_method_metadata_checked(value);
+            const JavanMethodMetadata* metadata = javan_method_metadata(value);
             void* result = javan_object_array_new(metadata->parameter_count, "[Ljava.lang.Class;");
             void* result_root = result;
             void** roots[] = {(void**) &result_root};
@@ -4474,11 +4643,113 @@ final class RuntimeSourceMemorySections {
         }
 
         void* javan_method_get_return_type(void* value) {
-            return javan_runtime_class_from_binary_name(javan_method_metadata_checked(value)->return_name);
+            return javan_runtime_class_from_binary_name(javan_method_metadata(value)->return_name);
         }
 
         int javan_method_get_modifiers(void* value) {
-            return javan_method_metadata_checked(value)->modifiers;
+            return javan_method_metadata(value)->modifiers;
+        }
+
+        static void javan_reflection_argument_failure(void) {
+            javan_pending_throw(
+                "java/lang/IllegalArgumentException",
+                javan_string_from("argument type mismatch"),
+                NULL, NULL, NULL, -1, -1, NULL
+            );
+        }
+
+        int javan_reflection_argument_count(void* arguments) {
+            if (arguments == NULL) {
+                return 0;
+            }
+            if (javan_object_builtin_instance_of(arguments, JAVAN_BUILTIN_INSTANCEOF_OBJECT_ARRAY) == 0) {
+                javan_reflection_argument_failure();
+                return 0;
+            }
+            return javan_array_length(arguments);
+        }
+
+        static void* javan_reflection_argument(void* arguments, int index) {
+            return javan_object_array_get(arguments, index);
+        }
+
+        void* javan_reflection_object_argument(void* arguments, int index, const char* expected_name) {
+            void* value = javan_reflection_argument(arguments, index);
+            if (value == NULL) {
+                return NULL;
+            }
+            void* expected = javan_runtime_class_from_binary_name(expected_name);
+            if (expected == NULL || javan_class_is_instance(expected, value) == 0) {
+                javan_reflection_argument_failure();
+            }
+            return value;
+        }
+
+        int javan_reflection_int_argument(void* arguments, int index, int expected_kind) {
+            void* value = javan_reflection_argument(arguments, index);
+            const int type = javan_registered_type_id(value);
+            if (expected_kind == 'Z' && type == JAVAN_TYPE_JAVA_LANG_BOOLEAN) {
+                return ((javan_boxed_boolean*) value)->value;
+            }
+            if (expected_kind == 'B' && type == JAVAN_TYPE_JAVA_LANG_BYTE) {
+                return ((javan_boxed_byte*) value)->value;
+            }
+            if ((expected_kind == 'S' || expected_kind == 'I') && type == JAVAN_TYPE_JAVA_LANG_BYTE) {
+                return ((javan_boxed_byte*) value)->value;
+            }
+            if ((expected_kind == 'S' || expected_kind == 'I') && type == JAVAN_TYPE_JAVA_LANG_SHORT) {
+                return ((javan_boxed_short*) value)->value;
+            }
+            if (expected_kind == 'C' && type == JAVAN_TYPE_JAVA_LANG_CHARACTER) {
+                return ((javan_boxed_character*) value)->value;
+            }
+            if (expected_kind == 'I' && type == JAVAN_TYPE_JAVA_LANG_CHARACTER) {
+                return ((javan_boxed_character*) value)->value;
+            }
+            if (expected_kind == 'I' && type == JAVAN_TYPE_JAVA_LANG_INTEGER) {
+                return ((javan_boxed_int*) value)->value;
+            }
+            javan_reflection_argument_failure();
+            return 0;
+        }
+
+        long long javan_reflection_long_argument(void* arguments, int index) {
+            void* value = javan_reflection_argument(arguments, index);
+            const int type = javan_registered_type_id(value);
+            if (type == JAVAN_TYPE_JAVA_LANG_BYTE) return ((javan_boxed_byte*) value)->value;
+            if (type == JAVAN_TYPE_JAVA_LANG_SHORT) return ((javan_boxed_short*) value)->value;
+            if (type == JAVAN_TYPE_JAVA_LANG_CHARACTER) return ((javan_boxed_character*) value)->value;
+            if (type == JAVAN_TYPE_JAVA_LANG_INTEGER) return ((javan_boxed_int*) value)->value;
+            if (type == JAVAN_TYPE_JAVA_LANG_LONG) return ((javan_boxed_long*) value)->value;
+            javan_reflection_argument_failure();
+            return 0;
+        }
+
+        float javan_reflection_float_argument(void* arguments, int index) {
+            void* value = javan_reflection_argument(arguments, index);
+            const int type = javan_registered_type_id(value);
+            if (type == JAVAN_TYPE_JAVA_LANG_BYTE) return (float) ((javan_boxed_byte*) value)->value;
+            if (type == JAVAN_TYPE_JAVA_LANG_SHORT) return (float) ((javan_boxed_short*) value)->value;
+            if (type == JAVAN_TYPE_JAVA_LANG_CHARACTER) return (float) ((javan_boxed_character*) value)->value;
+            if (type == JAVAN_TYPE_JAVA_LANG_INTEGER) return (float) ((javan_boxed_int*) value)->value;
+            if (type == JAVAN_TYPE_JAVA_LANG_LONG) return (float) ((javan_boxed_long*) value)->value;
+            if (type == JAVAN_TYPE_JAVA_LANG_FLOAT) return ((javan_boxed_float*) value)->value;
+            javan_reflection_argument_failure();
+            return 0;
+        }
+
+        double javan_reflection_double_argument(void* arguments, int index) {
+            void* value = javan_reflection_argument(arguments, index);
+            const int type = javan_registered_type_id(value);
+            if (type == JAVAN_TYPE_JAVA_LANG_BYTE) return (double) ((javan_boxed_byte*) value)->value;
+            if (type == JAVAN_TYPE_JAVA_LANG_SHORT) return (double) ((javan_boxed_short*) value)->value;
+            if (type == JAVAN_TYPE_JAVA_LANG_CHARACTER) return (double) ((javan_boxed_character*) value)->value;
+            if (type == JAVAN_TYPE_JAVA_LANG_INTEGER) return (double) ((javan_boxed_int*) value)->value;
+            if (type == JAVAN_TYPE_JAVA_LANG_LONG) return (double) ((javan_boxed_long*) value)->value;
+            if (type == JAVAN_TYPE_JAVA_LANG_FLOAT) return (double) ((javan_boxed_float*) value)->value;
+            if (type == JAVAN_TYPE_JAVA_LANG_DOUBLE) return ((javan_boxed_double*) value)->value;
+            javan_reflection_argument_failure();
+            return 0;
         }
 
         static const char* javan_runtime_class_primitive_type_name(int exact_type_id) {
@@ -6114,6 +6385,7 @@ final class RuntimeSourceMemorySections {
         static void javan_pending_clear_state(javan_throwable_state* state) {
             state->pending_throwable_type = NULL;
             state->pending_throwable_message = NULL;
+            state->pending_throwable_cause = NULL;
             state->pending_throwable_class = NULL;
             state->pending_throwable_method = NULL;
             state->pending_throwable_file = NULL;
@@ -6167,12 +6439,25 @@ final class RuntimeSourceMemorySections {
             javan_runtime_lock_enter();
             state->pending_throwable_type = throwable_type;
             state->pending_throwable_message = message;
+            state->pending_throwable_cause = NULL;
             state->pending_throwable_class = class_name;
             state->pending_throwable_method = method;
             state->pending_throwable_file = file;
             state->pending_throwable_line = line;
             state->pending_throwable_bytecode_offset = bytecode_offset;
             state->pending_throwable_source_line = source_line;
+            javan_runtime_lock_leave();
+        }
+
+        void javan_pending_throw_with_cause(
+            const char* throwable_type,
+            void* message,
+            void* cause
+        ) {
+            javan_pending_throw(throwable_type, message, NULL, NULL, NULL, -1, -1, NULL);
+            javan_thread* thread = javan_current_thread_object();
+            javan_runtime_lock_enter();
+            thread->throwable_state->pending_throwable_cause = cause;
             javan_runtime_lock_leave();
         }
 
@@ -6253,6 +6538,7 @@ final class RuntimeSourceMemorySections {
             }
             caught->throwable_type = state->pending_throwable_type;
             caught->throwable_message = state->pending_throwable_message;
+            caught->throwable_cause = state->pending_throwable_cause;
             caught->throwable_class = state->pending_throwable_class;
             caught->throwable_method = state->pending_throwable_method;
             caught->throwable_file = state->pending_throwable_file;
@@ -6269,6 +6555,10 @@ final class RuntimeSourceMemorySections {
             return javan_require_caught_throwable(value)->throwable_message;
         }
 
+        void* javan_caught_throwable_cause(void* value) {
+            return javan_require_caught_throwable(value)->throwable_cause;
+        }
+
         void javan_pending_rethrow(void* value) {
             javan_caught_throwable* caught = javan_require_caught_throwable(value);
             javan_thread* thread = javan_current_thread_object();
@@ -6276,6 +6566,7 @@ final class RuntimeSourceMemorySections {
             javan_runtime_lock_enter();
             state->pending_throwable_type = caught->throwable_type;
             state->pending_throwable_message = caught->throwable_message;
+            state->pending_throwable_cause = caught->throwable_cause;
             state->pending_throwable_class = caught->throwable_class;
             state->pending_throwable_method = caught->throwable_method;
             state->pending_throwable_file = caught->throwable_file;
@@ -7683,9 +7974,11 @@ final class RuntimeSourceMemorySections {
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_THROWABLE_STATE) {
                 javan_throwable_state* state = (javan_throwable_state*) value;
                 javan_gc_mark_value(state->pending_throwable_message);
+                javan_gc_mark_value(state->pending_throwable_cause);
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE) {
                 javan_caught_throwable* caught = (javan_caught_throwable*) value;
                 javan_gc_mark_value(caught->throwable_message);
+                javan_gc_mark_value(caught->throwable_cause);
             }
         }
 
@@ -14285,6 +14578,7 @@ final class RuntimeSourceMemorySections {
         result = result + SOURCE_HEAP_TAIL_B;
         result = result + SOURCE_HEAP_TAIL_C;
         result = result + SOURCE_HEAP_ALLOC_CLASSES;
+        result = result + SOURCE_HEAP_ALLOC_METHODS;
         result = result + SOURCE_HEAP_ALLOC_EXECUTOR;
         result = result + SOURCE_HEAP_ALLOC_DATE_TIME;
         result = result + platformThrowableHierarchy();
