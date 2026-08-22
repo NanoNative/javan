@@ -79,15 +79,16 @@ public final class ClasspathResolver {
      * @param layout detected layout
      * @return layout with declared main dependencies on the classpath
      * @throws IOException when module or lock files cannot be read or written
+     * @throws InterruptedException when dependency metadata extraction is interrupted
      */
-    public ProjectLayout resolveDeclaredDependencies(final ProjectLayout layout) throws IOException {
+    public ProjectLayout resolveDeclaredDependencies(final ProjectLayout layout) throws IOException, InterruptedException {
         final JavanModule module = moduleParser.read(layout.root());
         if (!module.present()) {
             return layout;
         }
         validateModule(module);
         final JavanModule resolvedModule = coordinateResolver.resolve(module);
-        lockWriter.write(layout.root(), resolvedModule);
+        lockWriter.write(layout.root(), layout.outputDirectory(), resolvedModule);
         validateDependencies(resolvedModule);
         final List<Path> classpath = new ArrayList<>(layout.classpathEntries());
         for (final JavanDependency dependency : resolvedModule.dependencies()) {

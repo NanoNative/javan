@@ -144,6 +144,29 @@ public final class JavanCoordinateResolver {
         );
     }
 
+    static String repositoryOrigin(final JavanDependency dependency) throws IOException {
+        if (!dependency.coordinate() || dependency.path().isEmpty()) {
+            return "";
+        }
+        final MavenCoordinate coordinate = parse(dependency);
+        Path repository = dependency.path().orElseThrow().toAbsolutePath().normalize().getParent();
+        final int groupSegments = segmentCount(coordinate.groupId());
+        for (int index = 0; index < groupSegments + 2 && repository != null; index++) {
+            repository = repository.getParent();
+        }
+        return repository == null ? "" : repository.toString();
+    }
+
+    private static int segmentCount(final String value) {
+        int result = 1;
+        for (int index = 0; index < value.length(); index++) {
+            if (value.charAt(index) == '.') {
+                result++;
+            }
+        }
+        return result;
+    }
+
     private static int asciiWhitespaceIndex(final String value) {
         for (int index = 0; index < value.length(); index++) {
             final char ch = value.charAt(index);

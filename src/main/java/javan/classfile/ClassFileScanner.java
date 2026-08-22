@@ -21,6 +21,7 @@ import java.util.Map;
 public final class ClassFileScanner {
     private final ClassFileReader reader = new ClassFileReader();
     private final ProcessRunner processRunner;
+    private final JarCache jarCache;
 
     /**
      * Creates a scanner using the local toolchain.
@@ -36,6 +37,7 @@ public final class ClassFileScanner {
      */
     public ClassFileScanner(final ProcessRunner processRunner) {
         this.processRunner = processRunner;
+        this.jarCache = new JarCache(processRunner);
     }
 
     /**
@@ -193,31 +195,8 @@ public final class ClassFileScanner {
         if (!Files.exists(jar)) {
             return;
         }
-        final Path cache = outputDirectory.resolve("jar-cache").resolve(cacheName(jar));
-        Files2.deleteRecursive(cache);
-        Files.createDirectories(cache);
-        final ProcessRunner.Result result = processRunner.run(cache, List.of("jar", "--extract", "--file", jar.toAbsolutePath().toString()));
-        if (result.exitCode() != 0) {
-            throw new IOException("Unable to extract jar " + jar.toString() + ": " + result.stderr());
-        }
+        final Path cache = jarCache.extract(jar, outputDirectory);
         scanFolder(cache, classes, providers, application);
-    }
-
-    private static String cacheName(final Path jar) throws IOException {
-        final Path fileName = jar.getFileName();
-        final String base = fileName == null ? "dependency.jar" : fileName.toString();
-        final String normalized = Strings2.executableName(base);
-        return normalized + "-" + Strings2.hexLong(pathHash(jar)) + "-" + Files.size(jar);
-    }
-
-    private static long pathHash(final Path path) {
-        final String value = path.toAbsolutePath().normalize().toString();
-        long hash = 0xcbf29ce484222325L;
-        for (int index = 0; index < value.length(); index++) {
-            hash ^= value.charAt(index);
-            hash *= 0x100000001b3L;
-        }
-        return hash;
     }
 
     /** Immutable classes and service providers discovered from the same classpath snapshot. */

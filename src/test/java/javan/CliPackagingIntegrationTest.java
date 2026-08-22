@@ -501,6 +501,66 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanWritesDependencyLicenseProvenance() throws Exception {
+        final Path dependency = dependencyJarWithMavenLicense(
+            "selfhost-provenance-tool",
+            "dep.Tool",
+            """
+                package dep;
+
+                public final class Tool {
+                    private Tool() {
+                    }
+                }
+                """,
+            "com.acme",
+            "tool",
+            "1.0.0",
+            "Apache License 2.0"
+        );
+        final Path sourceProject = tempDir.resolve("selfhost-dependency-provenance");
+        writeJava(sourceProject, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("dependency-provenance");
+                }
+            }
+            """);
+        Files2.writeString(sourceProject.resolve("javan.mod"), """
+            module com.acme.app
+            java 25
+            require tool %s
+            """.formatted(sourceProject.relativize(dependency)));
+
+        final ProcessResult nativeBuild = process(
+            tempDir,
+            List.of(
+                primitiveLiteralBootstrap.toString(),
+                "build",
+                sourceProject.toString(),
+                "--main",
+                "com.acme.Main",
+                "--output",
+                "selfhost-dependency-provenance"
+            ),
+            Duration.ofSeconds(120)
+        );
+
+        assertThat(nativeBuild.exitCode()).as(nativeBuild.stderr()).isZero();
+        assertThat(Files.readString(sourceProject.resolve("javan.lock"))).contains(
+            "\"licenseName\": \"Apache License 2.0\"",
+            "\"licenseUrl\": \"https://example.invalid/license\"",
+            "\"licenseSource\": \"pom.xml\"",
+            "\"licensePath\": \"META-INF/maven/com/acme/tool/pom.xml\""
+        );
+    }
+
+    @Test
     void nativeBuiltJavanReadsFiniteJdkMethodMetadata() throws Exception {
         final Path probeProject = tempDir.resolve("selfhost-method-metadata");
         final Path probeClasses = probeProject.resolve("classes");
