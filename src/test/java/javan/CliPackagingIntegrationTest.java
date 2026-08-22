@@ -594,11 +594,38 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             sourceProject,
             List.of(sourceProject.resolve(".javan/bin/selfhost-transitive-coordinate").toString())
         ).stdout()).isEqualTo("31\n");
-        assertThat(Files.readString(sourceProject.resolve("javan.lock"))).contains(
+        final String lock = Files.readString(sourceProject.resolve("javan.lock"));
+        assertThat(lock).contains(
             "\"notation\": \"com.acme:transitive:2.0.0\"",
             "\"direct\": false",
             "\"requestedBy\": \"com.acme:direct:1.0.0\""
         );
+        assertThat(home.resolve(".javan/cache/dependencies/com/acme/transitive/2.0.0/transitive-2.0.0.jar"))
+            .isRegularFile();
+        Files2.deleteRecursive(repository);
+        Files2.deleteRecursive(sourceProject.resolve(".javan"));
+
+        final ProcessResult offlineBuild = process(
+            tempDir,
+            List.of(
+                primitiveLiteralBootstrap.toString(),
+                "build",
+                sourceProject.toString(),
+                "--main",
+                "com.acme.Main",
+                "--output",
+                "selfhost-transitive-coordinate-offline"
+            ),
+            Duration.ofSeconds(120),
+            Map.of("HOME", home.toString())
+        );
+
+        assertThat(offlineBuild.exitCode()).as(offlineBuild.stderr()).isZero();
+        assertThat(Files.readString(sourceProject.resolve("javan.lock"))).isEqualTo(lock);
+        assertThat(process(
+            sourceProject,
+            List.of(sourceProject.resolve(".javan/bin/selfhost-transitive-coordinate-offline").toString())
+        ).stdout()).isEqualTo("31\n");
     }
 
     @Test

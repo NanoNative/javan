@@ -4,9 +4,10 @@ Status: implemented slice plus roadmap. Javan now writes classpath dependency an
 license reports from resolved `--classpath`, Maven, and Gradle runtime classpaths during
 reachability-backed `check`, `build`, and `compat` flows. Javan also reads local
 `javan.mod` path dependencies, resolves direct and compile/runtime-transitive coordinates
-from a configured local Maven repository or `~/.m2/repository`, and writes deterministic
-`javan.lock`. Network resolution, authenticated mirrors, full test reachability, and license
-policy blocking remain roadmap work.
+from a configured local Maven repository or `~/.m2/repository`, stores verified artifacts
+and POM metadata in the global Javan cache, and writes deterministic `javan.lock`. Network
+resolution, authenticated mirrors, full test reachability, and license policy blocking remain
+roadmap work.
 
 ## Current Implementation
 
@@ -43,6 +44,11 @@ Rules today:
   taking precedence; optional, test, provided, and system dependencies stay out.
 - local POM properties, parent inheritance, imported BOM and dependency-management versions,
   and exclusions are honored; missing or cyclic parent/BOM metadata fails before compilation.
+- successful coordinate resolution copies the complete used JAR/POM closure to
+  `$JAVAN_HOME/cache/dependencies` (normally `~/.javan/cache/dependencies`); later builds replay
+  from that cache without the original Maven repository.
+- every cached file has SHA-256 metadata. Corrupt cache content fails before compilation;
+  an interrupted entry without checksum metadata is repaired only while its source remains available.
 - `test` and `tool` local dependencies are recorded in `javan.lock` but not added to
   native app classpath.
 - missing local declarations fail clearly.
@@ -99,17 +105,17 @@ should be more explicit because Java projects already separate main and test sou
 Resolver order should be deterministic and configurable:
 
 1. local project paths
-2. configured local Maven cache (`-Djavan.maven.localRepository`, `-Dmaven.repo.local`,
+2. verified global Javan dependency cache
+3. configured local Maven repositories (`-Djavan.maven.localRepository`, `-Dmaven.repo.local`,
    then `~/.m2/repository`)
-3. configured Maven/Ivy repositories
-4. Maven Central when enabled
-5. GitHub Packages when configured
-6. Git source dependencies pinned by tag, commit, or signed release archive
-7. other authenticated mirrors declared in global or project settings
+4. configured Maven/Ivy repositories
+5. Maven Central when enabled
+6. GitHub Packages when configured
+7. Git source dependencies pinned by tag, commit, or signed release archive
+8. other authenticated mirrors declared in global or project settings
 
-The lock file must record which resolver produced each dependency and the checksum or
-source revision used. Normal verification must be able to run without network access once
-the lock/cache is populated.
+The lock file records which local cache produced each dependency and its checksum. Normal
+verification runs without the original repository once the cache is populated.
 
 ## Authentication
 
