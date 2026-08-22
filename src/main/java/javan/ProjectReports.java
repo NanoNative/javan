@@ -4,6 +4,7 @@ import javan.analysis.CallGraph;
 import javan.analysis.CallEdge;
 import javan.analysis.EntryPoint;
 import javan.classfile.ClassFile;
+import javan.codegen.NativeLinker;
 import javan.detect.ProjectLayout;
 import javan.profile.Profile;
 import javan.reporting.ThreadReports;
@@ -62,6 +63,38 @@ public final class ProjectReports {
         appendJsonField(json, "warnings", jsonList(layout.warnings()), false);
         json.append("}\n");
         Files2.writeString(layout.outputDirectory().resolve("reports/project.json"), json.toString());
+    }
+
+    /**
+     * Writes native target and compiler availability.
+     *
+     * @param layout detected project layout
+     * @param toolchain inspected native toolchain
+     * @throws IOException when writing fails
+     */
+    public void writeToolchain(final ProjectLayout layout, final NativeLinker.Toolchain toolchain) throws IOException {
+        final String compiler = toolchain.compiler().orElse("missing");
+        final String compilerStatus = toolchain.compiler().isPresent() ? "available" : "missing";
+        final StringBuilder json = new StringBuilder("{\n");
+        appendJsonField(json, "hostTarget", json(toolchain.hostTarget()), true);
+        appendJsonField(json, "target", json(toolchain.target()), true);
+        appendJsonField(json, "decision", json(toolchain.status()), true);
+        appendJsonField(json, "compilerStatus", json(compilerStatus), true);
+        appendJsonField(json, "compiler", json(compiler), true);
+        appendJsonField(json, "detail", json(toolchain.detail()), true);
+        appendJsonField(json, "candidates", jsonList(toolchain.candidates()), false);
+        json.append("}\n");
+        final String markdown = "# Native toolchain\n\n"
+            + "- host target: `" + toolchain.hostTarget() + "`\n"
+            + "- requested target: `" + toolchain.target() + "`\n"
+            + "- decision: `" + toolchain.status() + "`\n"
+            + "- compiler status: `" + compilerStatus + "`\n"
+            + "- compiler: `" + compiler + "`\n"
+            + "- detail: " + toolchain.detail() + "\n"
+            + "- candidates: `" + joined(toolchain.candidates(), ", ") + "`\n";
+        final Path directory = layout.outputDirectory().resolve("reports");
+        Files2.writeString(directory.resolve("toolchain.json"), json.toString());
+        Files2.writeString(directory.resolve("toolchain.md"), markdown);
     }
 
     /**
@@ -1265,6 +1298,17 @@ public final class ProjectReports {
 
     private static String json(final String value) {
         return Json.string(value);
+    }
+
+    private static String joined(final List<String> values, final String separator) {
+        final StringBuilder result = new StringBuilder();
+        for (int index = 0; index < values.size(); index++) {
+            if (index > 0) {
+                result.append(separator);
+            }
+            result.append(values.get(index));
+        }
+        return result.toString();
     }
 
     private static void appendJsonField(

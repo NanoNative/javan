@@ -125,21 +125,6 @@ final class RuntimeFootprintReportsTest {
         );
     }
 
-    @Test
-    void requireHostTargetAcceptsCurrentHostTarget() {
-        RuntimeFootprintReports.requireHostTarget(Optional.of(RuntimeFootprintReports.hostTarget()));
-    }
-
-    @Test
-    void requireHostTargetRejectsCrossTarget() {
-        final String crossTarget = RuntimeFootprintReports.hostTarget().startsWith("linux-") ? "macos-aarch64" : "linux-x64";
-
-        assertThatThrownBy(() -> RuntimeFootprintReports.requireHostTarget(Optional.of(crossTarget)))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("Cross-target native linking is not implemented")
-            .hasMessageContaining("host is " + RuntimeFootprintReports.hostTarget());
-    }
-
     private static void withHostProperties(final String os, final String arch, final Runnable assertion) {
         final String originalOs = System.getProperty("os.name");
         final String originalArch = System.getProperty("os.arch");

@@ -15414,7 +15414,8 @@ final class CoreBehaviorTest {
         final ProcessRunner runner = new ProcessRunner(Duration.ofMillis(50));
 
         assertThat(runner.commandExists("definitely-not-a-javan-command")).isFalse();
-        assertThat(runner.firstAvailable(List.of("definitely-not-a-javan-command", "java"))).contains("java");
+        assertThat(runner.firstAvailable(List.of("definitely-not-a-javan-command", "java")).orElseThrow())
+            .endsWith("java");
         assertThat(runner.run(tempDir, List.of("sh", "-c", "sleep 1")).exitCode()).isEqualTo(124);
     }
 

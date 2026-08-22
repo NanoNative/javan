@@ -39,6 +39,69 @@ public final class NativeLinker {
     }
 
     /**
+     * Inspects the native compiler required for a target.
+     *
+     * @param outputDirectory project output directory
+     * @param hostTarget normalized host target
+     * @param target normalized native target
+     * @return target and compiler availability
+     * @throws IOException when executable inspection fails
+     * @throws InterruptedException when inspection is interrupted
+     */
+    public Toolchain inspect(final Path outputDirectory, final String hostTarget, final String target) throws IOException, InterruptedException {
+        final List<String> candidates = compilerCandidates();
+        final Optional<String> compiler = processRunner.firstAvailable(candidates);
+        if (!hostTarget.equals(target)) {
+            return new Toolchain(hostTarget, target, "cross-target", candidates, compiler,
+                "Cross-target native linking is not implemented.");
+        }
+        if (compiler.isEmpty()) {
+            return new Toolchain(hostTarget, target, "missing", candidates, compiler,
+                "No supported C compiler was found on PATH or through CC.");
+        }
+        return probe(outputDirectory, hostTarget, target, candidates, compiler.orElseThrow());
+    }
+
+    private Toolchain probe(
+        final Path outputDirectory,
+        final String hostTarget,
+        final String target,
+        final List<String> candidates,
+        final String compiler
+    ) throws IOException, InterruptedException {
+        Files.createDirectories(outputDirectory);
+        final Path source = outputDirectory.resolve("toolchain-probe.c");
+        final Path output = outputDirectory.resolve(isWindowsHost() ? "toolchain-probe.exe" : "toolchain-probe.bin");
+        Files.writeString(source, "int main(void) { return 0; }\n");
+        Files.deleteIfExists(output);
+        final List<String> command = new ArrayList<>();
+        command.add(compiler);
+        command.addAll(compilerFlags());
+        command.add(source.toString());
+        command.addAll(platformLinkFlags());
+        command.add("-o");
+        command.add(output.toString());
+        final ProcessRunner.Result result = processRunner.run(outputDirectory, command);
+        final boolean passed = result.exitCode() == 0 && Files.isRegularFile(output);
+        Files.deleteIfExists(source);
+        Files.deleteIfExists(output);
+        if (passed) {
+            return new Toolchain(hostTarget, target, "ready", candidates, Optional.of(compiler), "Native compile probe passed.");
+        }
+        return new Toolchain(hostTarget, target, "incompatible", candidates, Optional.of(compiler),
+            probeFailure(result));
+    }
+
+    private static String probeFailure(final ProcessRunner.Result result) {
+        final String detail = !Strings2.isBlank(result.stderr()) ? result.stderr().trim() : result.stdout().trim();
+        if (Strings2.isBlank(detail)) {
+            return "Native compile probe exited with code " + result.exitCode() + ".";
+        }
+        final int newline = detail.indexOf('\n');
+        return newline < 0 ? detail : Strings2.slice(detail, 0, newline);
+    }
+
+    /**
      * Links generated C sources.
      *
      * @param root working directory
@@ -644,24 +707,11 @@ public final class NativeLinker {
     }
 
     private String requiredExecutable(final List<String> executables, final String message) throws IOException, InterruptedException {
-        final Optional<String> pathExecutable = firstOnPath(executables);
-        if (pathExecutable.isPresent()) {
-            return pathExecutable.orElseThrow();
-        }
         final Optional<String> executable = processRunner.firstAvailable(executables);
         if (executable.isEmpty()) {
             throw new IOException(message);
         }
         return executable.orElseThrow();
-    }
-
-    private static Optional<String> firstOnPath(final List<String> executables) {
-        return firstOnPathForOs(
-            executables,
-            System.getenv("PATH"),
-            System.getProperty("os.name", ""),
-            windowsExecutableExtensions()
-        );
     }
 
     static Optional<String> firstOnPathForOs(
@@ -671,124 +721,31 @@ public final class NativeLinker {
         final List<String> windowsExtensions
     ) {
         for (final String executable : executables) {
-            final Optional<String> resolved = resolveOnPath(executable, path, osName, windowsExtensions);
+            final Optional<Path> resolved = ProcessRunner.resolveExecutable(
+                path, executable, joined(windowsExtensions, ";"), osName
+            );
             if (resolved.isPresent()) {
-                return resolved;
+                return Optional.of(resolved.orElseThrow().toString());
             }
         }
         return Optional.empty();
-    }
-
-    private static Optional<String> resolveOnPath(final String executable) {
-        return resolveOnPath(
-            executable,
-            System.getenv("PATH"),
-            System.getProperty("os.name", ""),
-            windowsExecutableExtensions()
-        );
-    }
-
-    private static Optional<String> resolveOnPath(
-        final String executable,
-        final String path,
-        final String osName,
-        final List<String> windowsExtensions
-    ) {
-        if (Strings2.isBlank(executable)) {
-            return Optional.empty();
-        }
-        if (containsPathSeparator(executable)) {
-            return resolveExecutablePathForOs(Path.of(executable), osName, windowsExtensions);
-        }
-        if (Strings2.isBlank(path)) {
-            return Optional.empty();
-        }
-        final char separator = pathSeparator();
-        int start = 0;
-        for (int index = 0; index <= path.length(); index++) {
-            if (index == path.length() || path.charAt(index) == separator) {
-                String directory = Strings2.slice(path, start, index);
-                if (Strings2.isBlank(directory)) {
-                    directory = ".";
-                }
-                final Optional<String> resolved = resolveExecutablePathForOs(Path.of(directory).resolve(executable), osName, windowsExtensions);
-                if (resolved.isPresent()) {
-                    return resolved;
-                }
-                start = index + 1;
-            }
-        }
-        return Optional.empty();
-    }
-
-    private static Optional<String> resolveExecutablePath(final Path candidate) {
-        return resolveExecutablePathForOs(candidate, System.getProperty("os.name", ""), windowsExecutableExtensions());
     }
 
     static Optional<String> resolveExecutablePathForOs(final Path candidate, final String osName, final List<String> windowsExtensions) {
-        if (Files.isExecutable(candidate)) {
-            return Optional.of(candidate.toString());
-        }
-        if (!isWindowsHost(osName) || hasExplicitExtension(candidate)) {
-            return Optional.empty();
-        }
-        for (final String extension : windowsExtensions) {
-            final Path extended = Path.of(candidate.toString() + extension);
-            if (Files.isExecutable(extended)) {
-                return Optional.of(extended.toString());
+        return ProcessRunner.resolveExecutable(
+            "", candidate.toString(), joined(windowsExtensions, ";"), osName
+        ).map(Path::toString);
+    }
+
+    private static String joined(final List<String> values, final String separator) {
+        final StringBuilder result = new StringBuilder();
+        for (int index = 0; index < values.size(); index++) {
+            if (index > 0) {
+                result.append(separator);
             }
+            result.append(values.get(index));
         }
-        return Optional.empty();
-    }
-
-    private static boolean hasExplicitExtension(final Path candidate) {
-        final Path fileName = candidate.getFileName();
-        if (fileName == null) {
-            return false;
-        }
-        final String name = fileName.toString();
-        final int index = name.lastIndexOf('.');
-        return index > 0 && index < name.length() - 1;
-    }
-
-    private static List<String> windowsExecutableExtensions() {
-        final String pathExt = System.getenv("PATHEXT");
-        if (Strings2.isBlank(pathExt)) {
-            return List.of(".exe", ".cmd", ".bat", ".com");
-        }
-        final List<String> result = new ArrayList<>();
-        int start = 0;
-        for (int index = 0; index <= pathExt.length(); index++) {
-            if (index == pathExt.length() || pathExt.charAt(index) == ';') {
-                final String extension = Strings2.slice(pathExt, start, index).trim();
-                if (!Strings2.isBlank(extension)) {
-                    result.add(extension.startsWith(".") ? extension : "." + extension);
-                }
-                start = index + 1;
-            }
-        }
-        if (result.isEmpty()) {
-            return List.of(".exe", ".cmd", ".bat", ".com");
-        }
-        return List.copyOf(result);
-    }
-
-    private static boolean containsPathSeparator(final String executable) {
-        for (int index = 0; index < executable.length(); index++) {
-            final char ch = executable.charAt(index);
-            if (ch == '/' || ch == '\\') {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static char pathSeparator() {
-        final String separator = System.getProperty("path.separator", ":");
-        if (separator.isEmpty()) {
-            return ':';
-        }
-        return separator.charAt(0);
+        return result.toString();
     }
 
     private static boolean isWindowsHost() {
@@ -809,6 +766,43 @@ public final class NativeLinker {
 
     private static boolean isWindowsHost(final String osName) {
         return Strings2.toAsciiLowerCase(osName).contains("win");
+    }
+
+    /**
+     * Native compiler availability for one target.
+     *
+     * @param hostTarget normalized host target triple
+     * @param target normalized requested target triple
+     * @param status ready, missing, incompatible, or cross-target
+     * @param candidates compiler candidates in selection order
+     * @param compiler resolved compiler path
+     * @param detail concise decision evidence
+     */
+    public record Toolchain(
+        String hostTarget,
+        String target,
+        String status,
+        List<String> candidates,
+        Optional<String> compiler,
+        String detail
+    ) {
+        public Toolchain {
+            hostTarget = Objects.requireNonNull(hostTarget, "hostTarget");
+            target = Objects.requireNonNull(target, "target");
+            status = Objects.requireNonNull(status, "status");
+            candidates = List.copyOf(Objects.requireNonNull(candidates, "candidates"));
+            compiler = Objects.requireNonNull(compiler, "compiler");
+            detail = Objects.requireNonNull(detail, "detail");
+        }
+
+        /**
+         * Returns whether a compiler is available.
+         *
+         * @return true when a compiler was resolved
+         */
+        public boolean available() {
+            return "ready".equals(status);
+        }
     }
 
     private record CachedObject(CacheEntry entry, Path linkObject) {

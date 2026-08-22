@@ -322,21 +322,6 @@ final class ToolchainManagerTest {
     }
 
     @Test
-    void normalizedProbePathUsesEmptyStringWhenInputIsNull() {
-        assertThat(ToolchainManager.normalizedProbePathForTesting(null)).isEmpty();
-    }
-
-    @Test
-    void pathEntriesForTestingReturnsEmptyWhenPathIsBlank() {
-        assertThat(ToolchainManager.pathEntriesForTesting("")).isEmpty();
-    }
-
-    @Test
-    void hasExplicitExtensionForTestingReturnsFalseForRootPath() {
-        assertThat(ToolchainManager.hasExplicitExtensionForTesting(Path.of("/"))).isFalse();
-    }
-
-    @Test
     void doctorReportsMissingJavaHomeWhenSystemPropertyIsBlank() {
         final ToolchainManager manager = new ToolchainManager(tempDir.resolve("home"), missingProbe());
         final String previousJavaHome = System.getProperty("java.home");

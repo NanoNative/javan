@@ -88,20 +88,9 @@ public class ProcessRunner {
      * @throws InterruptedException when interrupted while waiting
      */
     public boolean commandExists(final String executable) throws IOException, InterruptedException {
-        final Result result = isWindows()
-            ? run(Path.of("").toAbsolutePath(), List.of("where", executable))
-            : run(Path.of("").toAbsolutePath(), List.of(posixShell(), "-c", "command -v " + executable));
-        if (result.exitCode() == 0) {
-            return true;
-        }
-        if (!Strings2.isBlank(result.stdout())) {
-            return true;
-        }
-        return false;
-    }
-
-    private static boolean isWindows() {
-        return Strings2.toAsciiLowerCase(System.getProperty("os.name", "")).contains("win");
+        return resolveExecutable(
+            System.getenv("PATH"), executable, System.getenv("PATHEXT"), System.getProperty("os.name", "")
+        ).isPresent();
     }
 
     /**
@@ -114,19 +103,114 @@ public class ProcessRunner {
      */
     public Optional<String> firstAvailable(final List<String> executables) throws IOException, InterruptedException {
         for (final String executable : executables) {
-            if (commandExists(executable)) {
-                return Optional.of(executable);
+            final Optional<Path> resolved = resolveExecutable(
+                System.getenv("PATH"), executable, System.getenv("PATHEXT"), System.getProperty("os.name", "")
+            );
+            if (resolved.isPresent()) {
+                return Optional.of(resolved.orElseThrow().toString());
             }
         }
         return Optional.empty();
     }
 
-    private static String posixShell() {
-        final Path shell = Path.of("/bin/sh");
-        if (Files.isExecutable(shell)) {
-            return shell.toString();
+    /**
+     * Resolves an executable without invoking a shell.
+     *
+     * @param path search path
+     * @param executable executable name or path
+     * @param pathExt Windows executable extensions
+     * @param osName operating-system name
+     * @return resolved executable path
+     */
+    public static Optional<Path> resolveExecutable(
+        final String path,
+        final String executable,
+        final String pathExt,
+        final String osName
+    ) {
+        if (Strings2.isBlank(executable)) {
+            return Optional.empty();
         }
-        return "sh";
+        if (containsPathSeparator(executable)) {
+            return resolveCandidate(Path.of(executable), pathExt, osName);
+        }
+        if (Strings2.isBlank(path)) {
+            return Optional.empty();
+        }
+        int start = 0;
+        for (int index = 0; index <= path.length(); index++) {
+            if (index == path.length() || path.charAt(index) == java.io.File.pathSeparatorChar) {
+                final String entry = Strings2.slice(path, start, index);
+                if (!Strings2.isBlank(entry)) {
+                    final Optional<Path> resolved = resolveCandidate(Path.of(entry).resolve(executable), pathExt, osName);
+                    if (resolved.isPresent()) {
+                        return resolved;
+                    }
+                }
+                start = index + 1;
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<Path> resolveCandidate(final Path candidate, final String pathExt, final String osName) {
+        if (Files.isExecutable(candidate)) {
+            return Optional.of(candidate);
+        }
+        if (!isWindows(osName) || hasExplicitExtension(candidate)) {
+            return Optional.empty();
+        }
+        for (final String extension : windowsExtensions(pathExt)) {
+            final Path extended = Path.of(candidate + extension);
+            if (Files.isExecutable(extended)) {
+                return Optional.of(extended);
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static List<String> windowsExtensions(final String pathExt) {
+        if (Strings2.isBlank(pathExt)) {
+            return List.of(".exe", ".cmd", ".bat", ".com");
+        }
+        final List<String> extensions = new ArrayList<>();
+        int start = 0;
+        for (int index = 0; index <= pathExt.length(); index++) {
+            if (index == pathExt.length() || pathExt.charAt(index) == ';') {
+                final String extension = Strings2.toAsciiLowerCase(Strings2.slice(pathExt, start, index).trim());
+                if (!Strings2.isBlank(extension)) {
+                    extensions.add(extension.startsWith(".") ? extension : "." + extension);
+                }
+                start = index + 1;
+            }
+        }
+        if (extensions.isEmpty()) {
+            return List.of(".exe", ".cmd", ".bat", ".com");
+        }
+        return List.copyOf(extensions);
+    }
+
+    private static boolean containsPathSeparator(final String executable) {
+        for (int index = 0; index < executable.length(); index++) {
+            if (executable.charAt(index) == '/' || executable.charAt(index) == '\\') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasExplicitExtension(final Path candidate) {
+        final Path fileName = candidate.getFileName();
+        if (fileName == null) {
+            return false;
+        }
+        final String name = fileName.toString();
+        final int dot = name.lastIndexOf('.');
+        return dot > 0 && dot < name.length() - 1;
+    }
+
+    private static boolean isWindows(final String osName) {
+        return Strings2.toAsciiLowerCase(osName).contains("win");
     }
 
     private static String commandLine(final List<String> command) {

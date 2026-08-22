@@ -18,6 +18,7 @@ public final class ReportSummarizer {
     private static final long NO_NUMBER = Long.MIN_VALUE;
     private static final List<ReportSpec> REPORTS = List.of(
         new ReportSpec("project", List.of("project.json")),
+        new ReportSpec("toolchain", List.of("toolchain.json", "toolchain.md")),
         new ReportSpec("diagnostics", List.of("diagnostics.txt", "diagnostics.json", "diagnostics.md")),
         new ReportSpec("threads", List.of("threads.json", "threads.md")),
         new ReportSpec("virtual-threads", List.of("virtual-threads.json", "virtual-threads.md")),

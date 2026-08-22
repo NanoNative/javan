@@ -528,7 +528,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             Map.of()
         );
 
-        assertThat(run.exitCode()).isZero();
+        assertThat(run.exitCode()).as("stdout=%s stderr=%s", run.stdout(), run.stderr()).isZero();
         assertThat(run.stdout()).contains(
             "Timing: bootstrap_jvm=",
             "Timing: bootstrap_gen2=",

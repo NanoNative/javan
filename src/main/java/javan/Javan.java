@@ -146,6 +146,9 @@ public final class Javan {
         final String nativeTarget = options.targetTriple().isPresent()
             ? RuntimeFootprintReports.normalizeTarget(options.targetTriple().orElseThrow())
             : RuntimeFootprintReports.hostTarget();
+        final NativeLinker.Toolchain toolchain = nativeLinker.inspect(
+            layout.outputDirectory(), RuntimeFootprintReports.hostTarget(), nativeTarget
+        );
         final NativeInteropConfig nativeInterop = nativeInteropResolver.resolve(classes, layout.root(), nativeTarget);
         final List<EntryPoint> nativeEntryPoints = nativeInterop.nativeEntryPoints();
         final List<ExportedMethod> exports;
@@ -200,17 +203,22 @@ public final class Javan {
         diagnostics.addAll(runtimeFeatureSelection.write(layout.root(), layout.outputDirectory(), deduplicationPlan).diagnostics());
         dependencyReports.write(layout, classes, callGraph);
         reports.writeDiagnostics(layout, diagnostics, classes, callGraph);
+        reports.writeToolchain(layout, toolchain);
         intrinsicUsageReports.write(layout.outputDirectory(), classes, callGraph);
         optimizationReports.writeScaffold(layout.outputDirectory());
         writeUnifiedReport(layout.outputDirectory());
         final List<Diagnostic> errors = errors(diagnostics);
         if (!errors.isEmpty()) {
             return new CheckResult(layout, classes, mainClass, callGraph, classInitialization, nativeInterop,
-                diagnostics, exports, services.providers());
+                diagnostics, exports, services.providers(), toolchain);
         }
         out.println("Checking static Java profile...");
         printText(out, "  build kind:        ", Strings2.toAsciiLowerCase(options.buildKind().name()));
         printText(out, "  profile:           ", options.profile().cliName());
+        printText(out, "  host target:       ", toolchain.hostTarget());
+        printText(out, "  native target:     ", toolchain.target());
+        printText(out, "  c compiler:        ", toolchain.compiler().orElse("missing"));
+        printText(out, "  toolchain:         ", toolchain.status());
         if (options.libraryBuild()) {
             printInt(out, "  exported methods:  ", exports.size());
         }
@@ -219,7 +227,7 @@ public final class Javan {
         printInt(out, "  diagnostics:       ", diagnostics.size());
         printWarnings(diagnostics, out);
         return new CheckResult(layout, classes, mainClass, callGraph, classInitialization, nativeInterop,
-            diagnostics, exports, services.providers());
+            diagnostics, exports, services.providers(), toolchain);
     }
 
     /**
@@ -253,10 +261,12 @@ public final class Javan {
         if (options.jarBuild()) {
             return BuildResult.success(buildJar(cwd, options, out), List.of());
         }
-        RuntimeFootprintReports.requireHostTarget(options.targetTriple());
         final CheckResult check = check(cwd, options, out);
         if (!check.pass()) {
             return BuildResult.failed(check.diagnostics());
+        }
+        if (!check.toolchain().available()) {
+            return BuildResult.failed(List.of(toolchainDiagnostic(check.toolchain())));
         }
         final NativeInteropConfig reachableNativeInterop = check.nativeInterop().forReachableMethods(
             check.callGraph().reachableMethods()
@@ -930,6 +940,40 @@ public final class Javan {
         );
     }
 
+    private static String compilerCandidates(final List<String> candidates) {
+        final StringBuilder result = new StringBuilder();
+        for (int index = 0; index < candidates.size(); index++) {
+            if (index > 0) {
+                result.append('|');
+            }
+            result.append(candidates.get(index));
+        }
+        return result.toString();
+    }
+
+    private static Diagnostic toolchainDiagnostic(final NativeLinker.Toolchain toolchain) {
+        if ("cross-target".equals(toolchain.status())) {
+            return Diagnostic.error(
+                "JAVAN081",
+                "unsupported native target",
+                "-",
+                "-",
+                toolchain.hostTarget() + " -> " + toolchain.target(),
+                toolchain.detail(),
+                "Build on the requested OS/architecture runner or leave --target unset."
+            );
+        }
+        return Diagnostic.error(
+            "JAVAN080",
+            "native toolchain unavailable",
+            "-",
+            "-",
+            compilerCandidates(toolchain.candidates()),
+            toolchain.detail(),
+            "Install a working cc, clang, or gcc, or set CC to an executable path."
+        );
+    }
+
     private record ServiceProviderResolution(
         Map<String, List<ServiceProvider>> providers,
         List<Diagnostic> diagnostics
@@ -951,6 +995,7 @@ public final class Javan {
      * @param diagnostics non-fatal diagnostics
      * @param exports native library exports
      * @param serviceProviders validated closed-world service providers
+     * @param toolchain inspected native toolchain
      */
     public record CheckResult(
         ProjectLayout layout,
@@ -961,7 +1006,8 @@ public final class Javan {
         NativeInteropConfig nativeInterop,
         List<Diagnostic> diagnostics,
         List<ExportedMethod> exports,
-        Map<String, List<ServiceProvider>> serviceProviders
+        Map<String, List<ServiceProvider>> serviceProviders,
+        NativeLinker.Toolchain toolchain
     ) {
         /**
          * Reports whether the check completed without fatal diagnostics.

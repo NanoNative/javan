@@ -3,6 +3,7 @@ package javan;
 import javan.analysis.CallGraph;
 import javan.analysis.CallEdge;
 import javan.analysis.EntryPoint;
+import javan.codegen.NativeLinker;
 import javan.detect.BuildTool;
 import javan.detect.InputKind;
 import javan.detect.ProjectLayout;
@@ -15,6 +16,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -50,6 +52,27 @@ final class ProjectReportsTest {
 
         assertThat(Files.readString(layout.outputDirectory().resolve("reports/project.json")))
             .contains("\"warnings\": [\"first\", \"second\"]");
+    }
+
+    @Test
+    void writeToolchainReportsTargetCompilerAndDecision() throws Exception {
+        final ProjectLayout layout = layout(List.of());
+        final NativeLinker.Toolchain toolchain = new NativeLinker.Toolchain(
+            "linux-x64", "linux-x64", "incompatible", List.of("cc", "clang"),
+            Optional.of("/usr/bin/cc"), "unsupported \"flag\""
+        );
+
+        new ProjectReports().writeToolchain(layout, toolchain);
+
+        assertThat(Files.readString(layout.outputDirectory().resolve("reports/toolchain.json")))
+            .contains(
+                "\"hostTarget\": \"linux-x64\"",
+                "\"decision\": \"incompatible\"",
+                "\"compilerStatus\": \"available\"",
+                "\"detail\": \"unsupported \\\"flag\\\"\""
+            );
+        assertThat(Files.readString(layout.outputDirectory().resolve("reports/toolchain.md")))
+            .contains("- requested target: `linux-x64`", "- compiler: `/usr/bin/cc`");
     }
 
     @Test

@@ -97,7 +97,12 @@ report but no guessed class directory. Reports are written below `.javan/reports
 
 ## Boundaries
 
-- The current native backend builds for the host target; cross-linking is rejected.
+- `javan check` writes `.javan/reports/toolchain.json` and `.md` with the host, requested
+  target, compiler, compile-probe evidence, and decision.
+- Native generation starts only after the configured compiler accepts Javan's host flags.
+- The current native backend builds for the host target; cross-linking fails with `JAVAN081`.
+- A missing or incompatible native compiler fails `javan build` with `JAVAN080`; static
+  `javan check` remains usable and reports the unavailable toolchain.
 - A `PATH` compiler without a verified JDK home can compile but cannot back a JDK facade.
 - Managed downloads require an explicit install path and verified metadata/checksum.
 - Maven, Gradle, and IDE integrations are optional consumers of the same CLI and reports.
