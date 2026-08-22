@@ -56,6 +56,11 @@ Local macOS aarch64 proof exists; remote Linux release-matrix validation remains
 The self-host proof requires nonzero allocation and GC counters plus zero
 final tracked heap/root residue.
 
+Package verification composes existing proofs instead of rebuilding the whole compiler a
+fourth time: the packaged binary checks the compiler classes and builds its self-JAR, while
+the sanitizer reuses C emitted by the selected bootstrap generation. Archive verification
+separately runs the packaged compiler against the native showcase and installed JDK facade.
+
 Library-output changes are covered by `.github/scripts/acceptance.sh`, including:
 
 ```sh

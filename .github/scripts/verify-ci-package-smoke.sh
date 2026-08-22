@@ -89,16 +89,18 @@ if [ "$archive_status" = "fail" ]; then
   exit "$archive_code"
 fi
 javan_timing_run package_verify .github/scripts/verify-package.sh "$ARCHIVE"
+if [ "$PACKAGE_PROOF_SCOPE" = "bootstrap" ]; then
+  printf '%s\n' "Verified CI bootstrap package $ARCHIVE"
+  exit 0
+fi
 
 tar -xzf "$ARCHIVE" -C "$TMP"
 PACKAGE_ROOT=$TMP/$(basename "$ARCHIVE" .tar.gz)
 PACKAGE_BIN=$PACKAGE_ROOT/bin/javan
-PACKAGE_VERSION=$(cat "$PACKAGE_ROOT/VERSION")
 
 "$PACKAGE_BIN" doctor >/dev/null
 "$PACKAGE_BIN" --version >/dev/null
 self_check_started=$(javan_timing_now)
-rm -rf target/.javan
 "$PACKAGE_BIN" check target/classes --main javan.Main >/dev/null
 "$PACKAGE_BIN" report target >/dev/null
 
@@ -128,11 +130,6 @@ assert_contains "$REPORT" '"name": "reachability"'
 assert_contains "$REPORT" '"reachableMethods":'
 javan_timing_record package_self_check "$self_check_started"
 
-if [ "$PACKAGE_PROOF_SCOPE" = "bootstrap" ]; then
-  printf '%s\n' "Verified CI bootstrap package with $PACKAGE_BIN"
-  exit 0
-fi
-
 javan_timing_run package_jar \
   "$PACKAGE_BIN" build target/classes --main javan.Main --jar --output javan-package-selfhost-jar >/dev/null
 SELFHOST_JAR=$ROOT/target/.javan/dist/javan-package-selfhost-jar.jar
@@ -147,15 +144,6 @@ SELFHOST_JAR_EXTRACT=$TMP/selfhost-jar-extract
 mkdir -p "$SELFHOST_JAR_EXTRACT"
 (cd "$SELFHOST_JAR_EXTRACT" && jar xf "$SELFHOST_JAR" META-INF/MANIFEST.MF)
 assert_contains "$SELFHOST_JAR_EXTRACT/META-INF/MANIFEST.MF" "Main-Class: javan.Main"
-
-javan_timing_run package_native \
-  "$PACKAGE_BIN" build target/classes --main javan.Main --output javan-package-selfhost-smoke >/dev/null
-SELFHOST_BIN=target/.javan/bin/javan-package-selfhost-smoke
-if [ ! -x "$SELFHOST_BIN" ]; then
-  printf '%s\n' "Missing package-built self-host smoke binary: $SELFHOST_BIN" >&2
-  exit 1
-fi
-"$SELFHOST_BIN" --version | grep -F "javan $PACKAGE_VERSION" >/dev/null
 
 SELF_HOST_PROBE_SCOPE=full
 case "$PACKAGE_SANITIZER_SCOPE" in
