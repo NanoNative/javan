@@ -45,14 +45,18 @@ Rules today:
 - missing local declarations fail clearly.
 - missing local Maven-cache coordinates fail clearly after writing lock metadata.
 - `javan.lock` records scope, notation, status, artifact kind, path, relative path, size,
-  and SHA-256 content checksum metadata. Existing FNV64 locks upgrade automatically on
-  their next verified use.
+  SHA-256 content checksum, local repository origin, and detected license name, URL, source,
+  and path. Existing FNV64 or checksum-only locks upgrade automatically on their next verified use.
 - unchanged declarations verify their locked content checksum before compilation; changed
   module or dependency declarations regenerate the lock deterministically.
+- unchanged declarations also reject repository or license metadata drift without rewriting
+  the lock.
+- jar extraction is content-addressed by SHA-256 and shared by lock, scan, and report generation.
 
 Current license rows inspect jar metadata first:
 
 - `META-INF/maven/**/pom.xml` license name and URL
+- sibling local-Maven `.pom` license name and URL
 - `META-INF/LICENSE*`, `META-INF/NOTICE*`, `LICENSE*`, `NOTICE*`, `COPYING`
 - directory-level `LICENSE`, `LICENSE.txt`, `LICENSE.md`, `NOTICE`, `COPYING`
 
@@ -72,7 +76,7 @@ Module files:
 - `javan.mod`: module identity, Java version, and direct main, test, or tool dependencies
 - `javan.lock`: resolved direct artifacts, scopes, paths, sizes, and content checksums
 
-Repositories, source revisions, and license policy remain future schema work.
+Remote repositories, source revisions, and license policy remain future schema work.
 
 Dependency scopes:
 

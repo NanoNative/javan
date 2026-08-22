@@ -1,7 +1,9 @@
 package javan.dependency;
 
+import javan.classfile.JarCache;
 import javan.util.Files2;
 import javan.util.Json;
+import javan.util.Sha256;
 import javan.util.Strings2;
 
 import java.io.IOException;
@@ -15,6 +17,8 @@ import java.util.List;
  * Writes deterministic {@code javan.lock} files for resolved local dependencies.
  */
 public final class JavanLockWriter {
+    private final JarCache jarCache = new JarCache();
+
     /**
      * Writes {@code javan.lock} when {@code javan.mod} is present.
      *
@@ -22,13 +26,32 @@ public final class JavanLockWriter {
      * @param module parsed module
      * @return lock path
      * @throws IOException when filesystem metadata, lock verification, or lock writing fails
+     * @throws InterruptedException when jar metadata extraction is interrupted
      */
-    public Path write(final Path root, final JavanModule module) throws IOException {
+    public Path write(final Path root, final JavanModule module) throws IOException, InterruptedException {
+        return write(root, root.resolve(".javan"), module);
+    }
+
+    /**
+     * Writes {@code javan.lock} using a specific build output for extracted artifact metadata.
+     *
+     * @param root project root
+     * @param outputDirectory build output directory
+     * @param module parsed module
+     * @return lock path
+     * @throws IOException when filesystem metadata, lock verification, or lock writing fails
+     * @throws InterruptedException when jar metadata extraction is interrupted
+     */
+    public Path write(
+        final Path root,
+        final Path outputDirectory,
+        final JavanModule module
+    ) throws IOException, InterruptedException {
         final Path lock = root.resolve("javan.lock");
         if (!module.present()) {
             return lock;
         }
-        final List<DependencyState> states = states(root, module);
+        final List<DependencyState> states = states(root, outputDirectory, module);
         final String rendered = render(module, states);
         if (Files.isRegularFile(lock)) {
             final String existing = Files.readString(lock);
@@ -41,10 +64,14 @@ public final class JavanLockWriter {
         return lock;
     }
 
-    private static List<DependencyState> states(final Path root, final JavanModule module) throws IOException {
+    private List<DependencyState> states(
+        final Path root,
+        final Path outputDirectory,
+        final JavanModule module
+    ) throws IOException, InterruptedException {
         final List<DependencyState> result = new ArrayList<>();
         for (final JavanDependency dependency : module.dependencies()) {
-            result.add(state(root, dependency));
+            result.add(state(root, outputDirectory, dependency));
         }
         return List.copyOf(result);
     }
@@ -89,6 +116,11 @@ public final class JavanLockWriter {
         appendNumber(json, "size", state.size(), true);
         appendText(json, "checksumAlgorithm", state.checksumAlgorithm(), true);
         appendText(json, "checksum", state.checksum(), true);
+        appendText(json, "repositoryOrigin", state.repositoryOrigin(), true);
+        appendText(json, "licenseName", state.license().name(), true);
+        appendText(json, "licenseUrl", state.license().url(), true);
+        appendText(json, "licenseSource", state.license().source(), true);
+        appendText(json, "licensePath", state.license().path(), true);
         appendNumber(json, "line", dependency.line(), false);
         json.append("    }");
         return json.toString();
@@ -117,7 +149,36 @@ public final class JavanLockWriter {
         }
         for (int index = 0; index < blocks.size(); index++) {
             verifyChecksum(module.dependencies().get(index), states.get(index), blocks.get(index));
+            verifyMetadata(module.dependencies().get(index), states.get(index), blocks.get(index));
         }
+    }
+
+    private static void verifyMetadata(
+        final JavanDependency dependency,
+        final DependencyState state,
+        final String block
+    ) throws IOException {
+        if (!block.contains(Json.string("repositoryOrigin"))) {
+            return;
+        }
+        if (hasText(block, "status", "missing")
+            || hasText(block, "status", "missing-coordinate")
+            || hasText(block, "status", "unsupported-coordinate")) {
+            return;
+        }
+        final ArtifactMetadata.License license = state.license();
+        if (hasText(block, "repositoryOrigin", state.repositoryOrigin())
+            && hasText(block, "licenseName", license.name())
+            && hasText(block, "licenseUrl", license.url())
+            && hasText(block, "licenseSource", license.source())
+            && hasText(block, "licensePath", license.path())) {
+            return;
+        }
+        throw new IOException(
+            "Dependency lock provenance mismatch for "
+                + dependency.notation()
+                + "\nFix: Restore the locked repository/license metadata or change javan.mod to update the lock."
+        );
     }
 
     private static List<String> dependencyBlocks(final String lock) throws IOException {
@@ -231,11 +292,16 @@ public final class JavanLockWriter {
         return block.substring(valueStart, end);
     }
 
-    private static DependencyState state(final Path root, final JavanDependency dependency) throws IOException {
+    private DependencyState state(
+        final Path root,
+        final Path outputDirectory,
+        final JavanDependency dependency
+    ) throws IOException, InterruptedException {
         if (!dependency.local()) {
             if (dependency.path().isPresent()) {
                 final Path path = dependency.path().orElseThrow();
                 if (Files.exists(path)) {
+                    final Integrity integrity = integrity(path);
                     return new DependencyState(
                         "present",
                         artifactKind(path),
@@ -243,7 +309,9 @@ public final class JavanLockWriter {
                         relativePath(root, path),
                         size(path),
                         "sha256",
-                        checksum(path)
+                        integrity.checksum(),
+                        JavanCoordinateResolver.repositoryOrigin(dependency),
+                        metadata(path, outputDirectory, integrity)
                     );
                 }
                 return new DependencyState(
@@ -253,7 +321,9 @@ public final class JavanLockWriter {
                     relativePath(root, path),
                     0L,
                     "none",
-                    ""
+                    "",
+                    "",
+                    unknownLicense()
                 );
             }
             return new DependencyState(
@@ -263,7 +333,9 @@ public final class JavanLockWriter {
                 "",
                 0L,
                 "none",
-                ""
+                "",
+                "",
+                unknownLicense()
             );
         }
         final Path path = dependency.path().orElseThrow();
@@ -275,9 +347,12 @@ public final class JavanLockWriter {
                 relativePath(root, path),
                 0L,
                 "none",
-                ""
+                "",
+                "",
+                unknownLicense()
             );
         }
+        final Integrity integrity = integrity(path);
         return new DependencyState(
             "present",
             artifactKind(path),
@@ -285,8 +360,25 @@ public final class JavanLockWriter {
             relativePath(root, path),
             size(path),
             "sha256",
-            checksum(path)
+            integrity.checksum(),
+            "",
+            metadata(path, outputDirectory, integrity)
         );
+    }
+
+    private ArtifactMetadata.License metadata(
+        final Path artifact,
+        final Path outputDirectory,
+        final Integrity integrity
+    ) throws IOException, InterruptedException {
+        final Path contents = isJar(artifact) && integrity.zip()
+            ? jarCache.extract(artifact, outputDirectory, integrity.checksum())
+            : artifact;
+        return ArtifactMetadata.read(artifact, contents).license();
+    }
+
+    private static ArtifactMetadata.License unknownLicense() {
+        return new ArtifactMetadata.License("unknown", "unknown", "", "none", "");
     }
 
     private static long size(final Path path) throws IOException {
@@ -300,10 +392,12 @@ public final class JavanLockWriter {
         return result;
     }
 
-    private static String checksum(final Path path) throws IOException {
+    private static Integrity integrity(final Path path) throws IOException {
         final Sha256 digest = new Sha256();
         if (Files.isRegularFile(path)) {
-            return digest.update(Files.readAllBytes(path)).hex();
+            final byte[] content = Files.readAllBytes(path);
+            final boolean zip = content.length >= 4 && content[0] == 'P' && content[1] == 'K';
+            return new Integrity(digest.update(content).hex(), zip);
         }
         digest.update("javan-directory-sha256-v1\n".getBytes(StandardCharsets.UTF_8));
         for (final Path file : files(path)) {
@@ -311,7 +405,7 @@ public final class JavanLockWriter {
             final byte[] content = Files.readAllBytes(file);
             digest.updateInt(name.length).update(name).updateLong(content.length).update(content);
         }
-        return digest.hex();
+        return new Integrity(digest.hex(), false);
     }
 
     private static long legacyHash(final Path path) throws IOException {
@@ -427,146 +521,13 @@ public final class JavanLockWriter {
         String relativePath,
         long size,
         String checksumAlgorithm,
-        String checksum
+        String checksum,
+        String repositoryOrigin,
+        ArtifactMetadata.License license
     ) {
     }
 
-    private static final class Sha256 {
-        private static final String HEX = "0123456789abcdef";
-        private static final int[] ROUND = {
-            0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
-            0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
-            0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-            0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
-            0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
-            0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-            0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-            0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
-        };
-        private final int[] state = {
-            0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-            0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
-        };
-        private final byte[] block = new byte[64];
-        private long length;
-        private int blockLength;
-        private boolean finished;
-
-        private Sha256 update(final byte[] value) {
-            for (int index = 0; index < value.length; index++) {
-                updateByte(value[index] & 0xff);
-            }
-            return this;
-        }
-
-        private Sha256 updateInt(final int value) {
-            updateByte(value >>> 24);
-            updateByte(value >>> 16);
-            updateByte(value >>> 8);
-            updateByte(value);
-            return this;
-        }
-
-        private Sha256 updateLong(final long value) {
-            updateInt((int) (value >>> 32));
-            updateInt((int) value);
-            return this;
-        }
-
-        private void updateByte(final int value) {
-            if (finished) {
-                throw new IllegalStateException("SHA-256 is already finished");
-            }
-            block[blockLength] = (byte) value;
-            blockLength++;
-            length++;
-            if (blockLength == block.length) {
-                compress();
-            }
-        }
-
-        private String hex() {
-            finish();
-            final StringBuilder result = new StringBuilder(64);
-            for (int index = 0; index < state.length; index++) {
-                for (int shift = 28; shift >= 0; shift -= 4) {
-                    result.append(HEX.charAt((state[index] >>> shift) & 15));
-                }
-            }
-            return result.toString();
-        }
-
-        private void finish() {
-            if (finished) {
-                return;
-            }
-            final long bits = length * 8L;
-            updateByte(0x80);
-            while (blockLength != 56) {
-                updateByte(0);
-            }
-            for (int shift = 56; shift >= 0; shift -= 8) {
-                updateByte((int) (bits >>> shift));
-            }
-            finished = true;
-        }
-
-        private void compress() {
-            final int[] words = new int[64];
-            for (int index = 0; index < 16; index++) {
-                final int offset = index * 4;
-                words[index] = ((block[offset] & 0xff) << 24)
-                    | ((block[offset + 1] & 0xff) << 16)
-                    | ((block[offset + 2] & 0xff) << 8)
-                    | (block[offset + 3] & 0xff);
-            }
-            for (int index = 16; index < words.length; index++) {
-                final int first = rotateRight(words[index - 15], 7)
-                    ^ rotateRight(words[index - 15], 18)
-                    ^ (words[index - 15] >>> 3);
-                final int second = rotateRight(words[index - 2], 17)
-                    ^ rotateRight(words[index - 2], 19)
-                    ^ (words[index - 2] >>> 10);
-                words[index] = words[index - 16] + first + words[index - 7] + second;
-            }
-            int a = state[0];
-            int b = state[1];
-            int c = state[2];
-            int d = state[3];
-            int e = state[4];
-            int f = state[5];
-            int g = state[6];
-            int h = state[7];
-            for (int index = 0; index < words.length; index++) {
-                final int first = h
-                    + (rotateRight(e, 6) ^ rotateRight(e, 11) ^ rotateRight(e, 25))
-                    + ((e & f) ^ (~e & g))
-                    + ROUND[index]
-                    + words[index];
-                final int second = (rotateRight(a, 2) ^ rotateRight(a, 13) ^ rotateRight(a, 22))
-                    + ((a & b) ^ (a & c) ^ (b & c));
-                h = g;
-                g = f;
-                f = e;
-                e = d + first;
-                d = c;
-                c = b;
-                b = a;
-                a = first + second;
-            }
-            state[0] += a;
-            state[1] += b;
-            state[2] += c;
-            state[3] += d;
-            state[4] += e;
-            state[5] += f;
-            state[6] += g;
-            state[7] += h;
-            blockLength = 0;
-        }
-
-        private static int rotateRight(final int value, final int distance) {
-            return (value >>> distance) | (value << (32 - distance));
-        }
+    private record Integrity(String checksum, boolean zip) {
     }
+
 }

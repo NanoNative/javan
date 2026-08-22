@@ -4,10 +4,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.jar.JarEntry;
+import java.util.jar.JarOutputStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -196,6 +199,70 @@ final class JavanLockWriterTest {
     }
 
     @Test
+    void writeRecordsCoordinateRepositoryAndEmbeddedLicense() throws Exception {
+        final Path jar = tempDir.resolve("repo/com/acme/math/1.2.3/math-1.2.3.jar");
+        Files.createDirectories(jar.getParent());
+        jar(jar, "META-INF/maven/com.acme/math/pom.xml", """
+            <project>
+              <name>Math</name>
+              <licenses>
+                <license>
+                  <name>Apache License 2.0</name>
+                  <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+                </license>
+              </licenses>
+            </project>
+            """);
+
+        final Path lock = new JavanLockWriter().write(tempDir, module("com.acme:math:1.2.3", jar));
+
+        assertThat(Files.readString(lock)).contains(
+            "\"repositoryOrigin\": " + javan.util.Json.string(tempDir.resolve("repo").toString()),
+            "\"licenseName\": \"Apache License 2.0\"",
+            "\"licenseUrl\": \"https://www.apache.org/licenses/LICENSE-2.0.txt\"",
+            "\"licenseSource\": \"pom.xml\"",
+            "\"licensePath\": \"META-INF/maven/com.acme/math/pom.xml\""
+        );
+    }
+
+    @Test
+    void writeRejectsChangedSiblingLicenseMetadata() throws Exception {
+        final Path jar = tempDir.resolve("repo/com/acme/math/1.2.3/math-1.2.3.jar");
+        Files.createDirectories(jar.getParent());
+        jar(jar, "value.txt", "value");
+        final Path pom = jar.resolveSibling("math-1.2.3.pom");
+        Files.writeString(pom, "<project><licenses><license><name>First</name></license></licenses></project>");
+        final JavanLockWriter writer = new JavanLockWriter();
+        final Path lock = writer.write(tempDir, module("com.acme:math:1.2.3", jar));
+        final String original = Files.readString(lock);
+        Files.writeString(pom, "<project><licenses><license><name>Second</name></license></licenses></project>");
+
+        assertThatThrownBy(() -> writer.write(tempDir, module("com.acme:math:1.2.3", jar)))
+            .isInstanceOf(java.io.IOException.class)
+            .hasMessageContaining("Dependency lock provenance mismatch")
+            .hasMessageContaining("com.acme:math:1.2.3");
+        assertThat(Files.readString(lock)).isEqualTo(original);
+    }
+
+    @Test
+    void writeUpgradesLockWithoutProvenanceFields() throws Exception {
+        final Path jar = tempDir.resolve("repo/com/acme/math/1.2.3/math-1.2.3.jar");
+        Files.createDirectories(jar.getParent());
+        Files.writeString(jar, "jar");
+        final JavanLockWriter writer = new JavanLockWriter();
+        final Path lock = writer.write(tempDir, module("com.acme:math:1.2.3", jar));
+        Files.writeString(lock, Files.readString(lock)
+            .replaceAll("(?m)^      \"(repositoryOrigin|licenseName|licenseUrl|licenseSource|licensePath)\":.*\\R", ""));
+
+        writer.write(tempDir, module("com.acme:math:1.2.3", jar));
+
+        assertThat(Files.readString(lock)).contains(
+            "\"repositoryOrigin\": " + javan.util.Json.string(tempDir.resolve("repo").toString()),
+            "\"licenseName\": \"unknown\""
+        );
+    }
+
+    @Test
     void writeRejectsChangedArtifactForUnchangedDeclaration() throws Exception {
         final Path jar = tempDir.resolve("repo/com/acme/math/1.2.3/math-1.2.3.jar");
         Files.createDirectories(jar.getParent());
@@ -326,5 +393,13 @@ final class JavanLockWriterTest {
             List.of(new JavanDependency("main", notation, "coordinate", Optional.of(jar), 3)),
             List.of()
         );
+    }
+
+    private static void jar(final Path path, final String name, final String value) throws Exception {
+        try (JarOutputStream output = new JarOutputStream(Files.newOutputStream(path))) {
+            output.putNextEntry(new JarEntry(name));
+            output.write(value.getBytes(StandardCharsets.UTF_8));
+            output.closeEntry();
+        }
     }
 }

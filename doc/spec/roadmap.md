@@ -132,7 +132,6 @@ same executable and reports.
 
 Planned vertical slices:
 
-- add repository origin and license metadata to cryptographically locked direct dependencies
 - separate production/test graphs used by `javan build` and `javan test`
 - offline replay from the Javan cache
 - Maven and Gradle convenience integrations with no second compiler path

@@ -145,6 +145,10 @@ final class CliSharedStateIntegrationTest {
             """);
         final Path repository = tempDir.resolve("local-maven-repository");
         installMavenCoordinate(repository, "com.acme", "mod-coordinate-mathlib", "1.0.0", dependency);
+        Files.writeString(
+            repository.resolve("com/acme/mod-coordinate-mathlib/1.0.0/mod-coordinate-mathlib-1.0.0.pom"),
+            "<project><name>Math</name><licenses><license><name>Apache License 2.0</name></license></licenses></project>"
+        );
         final Path project = project("javan-mod-coordinate-dependency");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -176,7 +180,10 @@ final class CliSharedStateIntegrationTest {
                 "\"kind\": \"coordinate\"",
                 "\"notation\": \"com.acme:mod-coordinate-mathlib:1.0.0\"",
                 "\"status\": \"present\"",
-                "\"checksumAlgorithm\": \"sha256\""
+                "\"checksumAlgorithm\": \"sha256\"",
+                "\"repositoryOrigin\": " + javan.util.Json.string(repository.toString()),
+                "\"licenseName\": \"Apache License 2.0\"",
+                "\"licenseSource\": \"pom.xml\""
             );
             assertThat(Files.readString(project.resolve(".javan/reports/dependencies.json"))).contains(
                 "\"source\": \"javan.mod\"",

@@ -3,7 +3,9 @@ package javan.reporting;
 import javan.analysis.CallGraph;
 import javan.analysis.EntryPoint;
 import javan.classfile.ClassFile;
+import javan.classfile.JarCache;
 import javan.detect.ProjectLayout;
+import javan.dependency.ArtifactMetadata;
 import javan.dependency.JavanDependency;
 import javan.dependency.JavanModule;
 import javan.dependency.JavanModuleParser;
@@ -68,7 +70,7 @@ public final class DependencyReports {
             final DeclaredPath declaredPath = declaredPath(declaredPaths, entry.path());
             final List<String> reachable = reachableFor(entry.path(), reachableDependencyClasses, classOwners);
             final boolean present = Files.exists(entry.path());
-            final String coordinate = coordinate(layout.outputDirectory(), entry.path()).orElse("");
+            final ArtifactMetadata metadata = metadata(layout.outputDirectory(), entry.path());
             result.add(new DependencyEntry(
                 index,
                 entry.path(),
@@ -76,10 +78,10 @@ public final class DependencyReports {
                 declaredPath.scope(),
                 present ? "present" : "missing",
                 declaredPath.source(),
-                coordinate,
+                metadata.coordinate(),
                 entry.classNames(),
                 reachable,
-                license(layout.outputDirectory(), entry.path())
+                metadata.license()
             ));
         }
         return List.copyOf(result);
@@ -179,98 +181,9 @@ public final class DependencyReports {
         return List.copyOf(result);
     }
 
-    private static LicenseInfo license(final Path outputDirectory, final Path entry) throws IOException {
-        if (!Files.exists(entry)) {
-            return LicenseInfo.unknown("none", "");
-        }
-        if (isJar(entry)) {
-            return jarLicense(jarCache(outputDirectory, entry));
-        }
-        if (Files.isDirectory(entry)) {
-            return directoryLicense(entry);
-        }
-        return LicenseInfo.unknown("none", "");
-    }
-
-    private static LicenseInfo jarLicense(final Path extractedJar) throws IOException {
-        final Optional<LicenseInfo> pomLicense = pomLicense(extractedJar);
-        if (pomLicense.isPresent()) {
-            return pomLicense.orElseThrow();
-        }
-        final Optional<String> licenseFile = jarLicenseFile(extractedJar);
-        if (licenseFile.isPresent()) {
-            return LicenseInfo.unknown("file", licenseFile.orElseThrow());
-        }
-        return LicenseInfo.unknown("none", "");
-    }
-
-    private static Optional<LicenseInfo> pomLicense(final Path extractedJar) throws IOException {
-        if (!Files.isDirectory(extractedJar)) {
-            return Optional.empty();
-        }
-        for (final Path file : Files2.findResourceFiles(extractedJar)) {
-            final String name = slashPath(extractedJar.relativize(file));
-            if (name.startsWith("META-INF/maven/") && name.endsWith("/pom.xml")) {
-                final String xml = Files.readString(file);
-                final Optional<String> licenseName = tagValue(xml, "name");
-                if (licenseName.isPresent()) {
-                    return Optional.of(new LicenseInfo(
-                        licenseName.orElseThrow(),
-                        licenseName.orElseThrow(),
-                        tagValue(xml, "url").orElse(""),
-                        "pom.xml",
-                        name
-                    ));
-                }
-            }
-        }
-        return Optional.empty();
-    }
-
-    private static Optional<String> jarLicenseFile(final Path extractedJar) throws IOException {
-        if (!Files.isDirectory(extractedJar)) {
-            return Optional.empty();
-        }
-        for (final Path file : Files2.findResourceFiles(extractedJar)) {
-            final String name = slashPath(extractedJar.relativize(file));
-            if (licenseFilename(name)) {
-                return Optional.of(name);
-            }
-        }
-        return Optional.empty();
-    }
-
-    private static LicenseInfo directoryLicense(final Path directory) {
-        for (final String name : List.of("LICENSE", "LICENSE.txt", "LICENSE.md", "NOTICE", "COPYING")) {
-            final Path file = directory.resolve(name);
-            if (Files.isRegularFile(file)) {
-                return LicenseInfo.unknown("file", name);
-            }
-        }
-        return LicenseInfo.unknown("none", "");
-    }
-
-    private static Optional<String> coordinate(final Path outputDirectory, final Path entry) throws IOException {
-        if (!Files.exists(entry) || !isJar(entry)) {
-            return Optional.empty();
-        }
-        final Path extractedJar = jarCache(outputDirectory, entry);
-        if (!Files.isDirectory(extractedJar)) {
-            return Optional.empty();
-        }
-        for (final Path file : Files2.findResourceFiles(extractedJar)) {
-            final String name = slashPath(extractedJar.relativize(file));
-            if (name.startsWith("META-INF/maven/") && name.endsWith("/pom.properties")) {
-                final String properties = Files.readString(file);
-                final String groupId = propertyValue(properties, "groupId");
-                final String artifactId = propertyValue(properties, "artifactId");
-                final String version = propertyValue(properties, "version");
-                if (!Strings2.isBlank(groupId) && !Strings2.isBlank(artifactId) && !Strings2.isBlank(version)) {
-                    return Optional.of(groupId + ":" + artifactId + ":" + version);
-                }
-            }
-        }
-        return Optional.empty();
+    private static ArtifactMetadata metadata(final Path outputDirectory, final Path entry) throws IOException {
+        final Path contents = isJar(entry) && Files.exists(entry) ? jarCache(outputDirectory, entry) : entry;
+        return ArtifactMetadata.read(entry, contents);
     }
 
     private static String dependenciesJson(final List<DependencyEntry> entries) {
@@ -349,7 +262,7 @@ public final class DependencyReports {
 
     private static String licenseJson(final DependencyEntry entry) {
         final StringBuilder json = new StringBuilder();
-        final LicenseInfo license = entry.license();
+        final ArtifactMetadata.License license = entry.license();
         json.append("    {\n");
         appendNumber(json, "index", entry.index(), true, 6);
         appendText(json, "dependency", path(entry.path()), true, 6);
@@ -401,7 +314,7 @@ public final class DependencyReports {
         markdown.append("| Dependency | Coordinate | License | Source | Policy |\n");
         markdown.append("| --- | --- | --- | --- | --- |\n");
         for (final DependencyEntry entry : entries) {
-            final LicenseInfo license = entry.license();
+            final ArtifactMetadata.License license = entry.license();
             markdown
                 .append("| `").append(path(entry.path())).append("` | `").append(entry.coordinate())
                 .append("` | `").append(license.id()).append("` | `").append(license.sourcePath())
@@ -507,57 +420,6 @@ public final class DependencyReports {
         }
     }
 
-    private static Optional<String> tagValue(final String xml, final String tag) {
-        final String open = "<" + tag + ">";
-        final String close = "</" + tag + ">";
-        final int start = xml.indexOf(open);
-        if (start < 0) {
-            return Optional.empty();
-        }
-        final int valueStart = start + open.length();
-        final int end = xml.indexOf(close, valueStart);
-        if (end < 0) {
-            return Optional.empty();
-        }
-        final String value = Strings2.trimAscii(xml.substring(valueStart, end));
-        if (Strings2.isBlank(value)) {
-            return Optional.empty();
-        }
-        return Optional.of(value);
-    }
-
-    private static String propertyValue(final String properties, final String key) {
-        int start = 0;
-        while (start < properties.length()) {
-            int end = properties.indexOf('\n', start);
-            if (end < 0) {
-                end = properties.length();
-            }
-            final String line = Strings2.trimAscii(properties.substring(start, end));
-            final String prefix = key + "=";
-            if (line.startsWith(prefix)) {
-                return Strings2.trimAscii(line.substring(prefix.length()));
-            }
-            start = end + 1;
-        }
-        return "";
-    }
-
-    private static String slashPath(final Path path) {
-        return path.toString().replace('\\', '/');
-    }
-
-    private static boolean licenseFilename(final String value) {
-        final String name = upperAscii(value);
-        return name.equals("LICENSE")
-            || name.equals("NOTICE")
-            || name.equals("COPYING")
-            || name.startsWith("LICENSE.")
-            || name.startsWith("NOTICE.")
-            || name.startsWith("META-INF/LICENSE")
-            || name.startsWith("META-INF/NOTICE");
-    }
-
     private static String kind(final Path entry) {
         if (!Files.exists(entry)) {
             return isJar(entry) ? "missing-jar" : "missing";
@@ -580,24 +442,7 @@ public final class DependencyReports {
     }
 
     private static Path jarCache(final Path outputDirectory, final Path jar) throws IOException {
-        return outputDirectory.resolve("jar-cache").resolve(cacheName(jar));
-    }
-
-    private static String cacheName(final Path jar) throws IOException {
-        final Path fileName = jar.getFileName();
-        final String base = fileName == null ? "dependency.jar" : fileName.toString();
-        final String normalized = Strings2.executableName(base);
-        return normalized + "-" + Strings2.hexLong(pathHash(jar)) + "-" + Files.size(jar);
-    }
-
-    private static long pathHash(final Path path) {
-        final String value = path.toAbsolutePath().normalize().toString();
-        long hash = 0xcbf29ce484222325L;
-        for (int index = 0; index < value.length(); index++) {
-            hash ^= value.charAt(index);
-            hash *= 0x100000001b3L;
-        }
-        return hash;
+        return JarCache.path(jar, outputDirectory);
     }
 
     private static String path(final Path path) {
@@ -625,19 +470,6 @@ public final class DependencyReports {
             final char ch = value.charAt(index);
             if (ch >= 'A' && ch <= 'Z') {
                 result.append((char) ('a' + (ch - 'A')));
-            } else {
-                result.append(ch);
-            }
-        }
-        return result.toString();
-    }
-
-    private static String upperAscii(final String value) {
-        final StringBuilder result = new StringBuilder();
-        for (int index = 0; index < value.length(); index++) {
-            final char ch = value.charAt(index);
-            if (ch >= 'a' && ch <= 'z') {
-                result.append((char) ('A' + (ch - 'a')));
             } else {
                 result.append(ch);
             }
@@ -677,27 +509,10 @@ public final class DependencyReports {
         String coordinate,
         List<String> classes,
         List<String> reachableClasses,
-        LicenseInfo license
+        ArtifactMetadata.License license
     ) {
         private boolean used() {
             return !reachableClasses.isEmpty();
-        }
-    }
-
-    private record LicenseInfo(String id, String name, String url, String source, String path) {
-        private static LicenseInfo unknown(final String source, final String path) {
-            return new LicenseInfo("unknown", "unknown", "", source, path);
-        }
-
-        private boolean known() {
-            return !"unknown".equals(id);
-        }
-
-        private String sourcePath() {
-            if (Strings2.isBlank(path)) {
-                return source;
-            }
-            return source + ":" + path;
         }
     }
 
