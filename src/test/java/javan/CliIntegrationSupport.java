@@ -385,6 +385,27 @@ abstract class CliIntegrationSupport {
         return jar;
     }
 
+    protected final Path addJarResource(
+        final Path jar,
+        final String path,
+        final String content
+    ) throws Exception {
+        final Path resources = tempDir.resolve(jar.getFileName().toString() + "-resources");
+        final Path resource = resources.resolve(path);
+        Files.createDirectories(resource.getParent());
+        Files.writeString(resource, content, StandardCharsets.UTF_8);
+        assertThat(process(tempDir, List.of(
+            CliTestHarness.currentJarCommand(),
+            "--update",
+            "--file",
+            jar.toString(),
+            "-C",
+            resources.toString(),
+            path
+        )).exitCode()).isZero();
+        return jar;
+    }
+
     protected final Path dependencyJarWithMavenLicense(
         final String name,
         final String className,

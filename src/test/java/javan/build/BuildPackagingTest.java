@@ -72,6 +72,35 @@ final class BuildPackagingTest {
     }
 
     @Test
+    void resourceBundlerKeepsApplicationResourceBeforeDependencyResource() throws Exception {
+        final Path classes = tempDir.resolve("classes");
+        final Path dependency = tempDir.resolve("dependency");
+        Files.createDirectories(classes);
+        Files.createDirectories(dependency);
+        Files.writeString(classes.resolve("config.txt"), "application");
+        Files.writeString(dependency.resolve("config.txt"), "dependency");
+        Files.writeString(dependency.resolve("dependency.txt"), "available");
+        final ProjectLayout layout = new ProjectLayout(
+            tempDir,
+            tempDir,
+            InputKind.PROJECT_DIRECTORY,
+            BuildTool.CLASSES,
+            List.of(),
+            List.of(),
+            List.of(classes),
+            List.of(dependency),
+            tempDir.resolve(".javan"),
+            "demo",
+            List.of()
+        );
+
+        new ResourceBundler().bundle(layout);
+
+        assertThat(layout.outputDirectory().resolve("resources/config.txt")).hasContent("application");
+        assertThat(layout.outputDirectory().resolve("resources/dependency.txt")).hasContent("available");
+    }
+
+    @Test
     void jarPackagerCopiesInputJarVerbatim() throws Exception {
         final Path sourceJar = tempDir.resolve("input.jar");
         Files.write(sourceJar, new byte[]{1, 2, 3, 4});

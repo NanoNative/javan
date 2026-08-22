@@ -5747,12 +5747,22 @@ public final class StaticVerifier {
         final MethodRef methodRef,
         final int reachable
     ) {
-        final String reason = "This reachable JDK method has no native intrinsic, substitution, or supported runtime model yet.";
-        final String fix = "Use a currently supported intrinsic or add a deterministic JDK substitution before native code generation.";
+        final boolean resourceUrl = resourceUrlLookup(methodRef);
+        final String reason = resourceUrl
+            ? "URL-shaped resource lookup is not supported by the closed-world native resource table."
+            : "This reachable JDK method has no native intrinsic, substitution, or supported runtime model yet.";
+        final String fix = resourceUrl
+            ? "Use Class.getResourceAsStream(String), ClassLoader.getResourceAsStream(String), or ClassLoader.getSystemResourceAsStream(String)."
+            : "Use a currently supported intrinsic or add a deterministic JDK substitution before native code generation.";
         if (reachable == 1) {
             return error(classFile, method, "JAVAN031", "unsupported reachable JDK call", methodRef.display(), reason, fix);
         }
         return warning(classFile, method, "JAVAN131", "unsupported JDK call in unreachable code", methodRef.display(), reason, fix);
+    }
+
+    private static boolean resourceUrlLookup(final MethodRef methodRef) {
+        return ("java/lang/Class".equals(methodRef.owner()) || "java/lang/ClassLoader".equals(methodRef.owner()))
+            && ("getResource".equals(methodRef.name()) || "getResources".equals(methodRef.name()));
     }
 
     private static Diagnostic networkCallDiagnostic(

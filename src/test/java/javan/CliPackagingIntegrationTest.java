@@ -866,6 +866,71 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void staticLibraryEmbedsDependencyResourceAndReadsItFromCExport() throws Exception {
+        final Path dependency = addJarResource(
+            dependencyJar("library-resource", "dep.Library", """
+                package dep;
+
+                public final class Library {
+                    private Library() {
+                    }
+                }
+                """),
+            "dep/value.txt",
+            "B"
+        );
+        final Path project = project("library-resource");
+        writeJava(project, "com.acme.Resource", """
+            package com.acme;
+
+            import java.io.InputStream;
+
+            public final class Resource {
+                private Resource() {
+                }
+
+                public static int first() throws Exception {
+                    final InputStream stream = ClassLoader.getSystemResourceAsStream("dep/value.txt");
+                    final int value = stream.read();
+                    stream.close();
+                    return value;
+                }
+            }
+            """);
+        Files.writeString(project.resolve("javan.mod"), """
+            module com.acme.library
+            java 25
+            require main %s
+            """.formatted(pathForMod(project, dependency)), StandardCharsets.UTF_8);
+
+        final CliRun run = run(
+            tempDir,
+            "build",
+            project.toString(),
+            "--kind",
+            "staticlib",
+            "--export",
+            "com.acme.Resource.first"
+        );
+
+        assertThat(run.exitCode()).isZero();
+        final Path library = project.resolve(".javan/dist/liblibrary-resource.a");
+        final Path caller = writeC(project, "call_resource.c", """
+            #include <stdio.h>
+            #include ".javan/dist/bindings/c/library-resource.h"
+
+            int main(void) {
+                printf("%d\\n", javan_export_com_acme_Resource_first_void());
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-resource");
+        assertThat(process(project, List.of("cc", caller.toString(), library.toString(), "-o", binary.toString())).exitCode()).isZero();
+        assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo("66\n");
+        assertThat(project.resolve(".javan/dist/resources/dep/value.txt")).hasContent("B");
+    }
+
+    @Test
     void staticLibraryExportedMathFloorLinksAndRunsFromCWithoutMathLibrary() throws Exception {
         final Path project = project("library-floor");
         writeJava(project, "com.acme.Math", """

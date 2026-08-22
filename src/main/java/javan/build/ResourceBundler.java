@@ -1,8 +1,10 @@
 package javan.build;
 
+import javan.classfile.JarCache;
 import javan.detect.ProjectLayout;
 import javan.util.Files2;
 import javan.util.Json;
+import javan.util.Sha256;
 import javan.util.Strings2;
 
 import java.io.IOException;
@@ -18,14 +20,17 @@ import java.util.Map;
  * Copies classpath resources into deterministic javan output folders and reports them.
  */
 public final class ResourceBundler {
+    private final JarCache jarCache = new JarCache();
+
     /**
-     * Copies resources from class folders to .javan/resources and .javan/dist/resources.
+     * Copies application and dependency resources to .javan/resources and .javan/dist/resources.
      *
      * @param layout project layout
      * @return copied resources
      * @throws IOException when resources cannot be copied
+     * @throws InterruptedException when dependency-jar extraction is interrupted
      */
-    public List<ResourceFile> bundle(final ProjectLayout layout) throws IOException {
+    public List<ResourceFile> bundle(final ProjectLayout layout) throws IOException, InterruptedException {
         final List<ResourceFile> resources = collect(layout);
         copy(resources, layout.outputDirectory().resolve("resources"));
         copy(resources, layout.outputDirectory().resolve("dist/resources"));
@@ -34,24 +39,41 @@ public final class ResourceBundler {
     }
 
     /**
-     * Finds non-class resources in class folders.
+     * Finds non-class resources in application and dependency classpath entries.
      *
      * @param layout project layout
      * @return resources
      * @throws IOException when scanning fails
+     * @throws InterruptedException when dependency-jar extraction is interrupted
      */
-    public List<ResourceFile> collect(final ProjectLayout layout) throws IOException {
+    public List<ResourceFile> collect(final ProjectLayout layout) throws IOException, InterruptedException {
         final LinkedHashMap<String, ResourceFile> result = new LinkedHashMap<>();
         for (final Path classFolder : layout.classFolders()) {
-            if (!Files.isDirectory(classFolder)) {
-                continue;
-            }
-            for (final Path file : Files2.findResourceFiles(classFolder)) {
-                final String path = classFolder.relativize(file).toString().replace(java.io.File.separatorChar, '/');
-                result.putIfAbsent(path, new ResourceFile(path, file, Files.size(file)));
+            addResources(result, classFolder);
+        }
+        for (final Path entry : layout.classpathEntries()) {
+            if (Files.isDirectory(entry)) {
+                addResources(result, entry);
+            } else if (isJar(entry)) {
+                addResources(result, jarCache.extract(entry, layout.outputDirectory()));
             }
         }
         return sorted(result);
+    }
+
+    private static void addResources(final Map<String, ResourceFile> result, final Path root) throws IOException {
+        if (!Files.isDirectory(root)) {
+            return;
+        }
+        for (final Path file : Files2.findResourceFiles(root)) {
+            final String path = root.relativize(file).toString().replace(java.io.File.separatorChar, '/');
+            result.putIfAbsent(path, new ResourceFile(path, file, Files.size(file), Sha256.of(file)));
+        }
+    }
+
+    private static boolean isJar(final Path path) {
+        final Path fileName = path.getFileName();
+        return fileName != null && Files.isRegularFile(path) && fileName.toString().endsWith(".jar");
     }
 
     private static void copy(final List<ResourceFile> resources, final Path targetRoot) throws IOException {
@@ -78,10 +100,12 @@ public final class ResourceBundler {
         final StringBuilder markdown = new StringBuilder();
         markdown.append("# Resources").append(System.lineSeparator()).append(System.lineSeparator());
         markdown.append("Resource files copied: ").append(resources.size()).append(System.lineSeparator()).append(System.lineSeparator());
-        markdown.append("| path | bytes |").append(System.lineSeparator());
-        markdown.append("| --- | ---: |").append(System.lineSeparator());
+        markdown.append("| path | bytes | sha256 |").append(System.lineSeparator());
+        markdown.append("| --- | ---: | --- |").append(System.lineSeparator());
         for (final ResourceFile resource : resources) {
-            markdown.append("| `").append(resource.path()).append("` | ").append(resource.size()).append(" |").append(System.lineSeparator());
+            markdown.append("| `").append(resource.path()).append("` | ")
+                .append(resource.size()).append(" | `").append(resource.checksum()).append("` |")
+                .append(System.lineSeparator());
         }
         Files2.writeString(layout.outputDirectory().resolve("reports/resources.md"), markdown.toString());
     }
@@ -113,6 +137,8 @@ public final class ResourceBundler {
                 .append(Json.string(resource.path()))
                 .append(", \"size\": ")
                 .append(resource.size())
+                .append(", \"sha256\": ")
+                .append(Json.string(resource.checksum()))
                 .append("}");
         }
         return result.toString();
@@ -124,7 +150,8 @@ public final class ResourceBundler {
      * @param path classpath-relative resource path
      * @param source source file
      * @param size byte size
+     * @param checksum lowercase SHA-256 content digest
      */
-    public record ResourceFile(String path, Path source, long size) {
+    public record ResourceFile(String path, Path source, long size, String checksum) {
     }
 }

@@ -137,6 +137,20 @@ Returns:
 - generated export wrappers root returned Java `byte[]` values until the C ABI copy is
   complete
 
+## Embedded Resources
+
+App and library builds embed resources from application class folders and dependency
+classpath entries. Application resources win path collisions, followed by dependencies in
+classpath order. The same bytes are copied to `.javan/resources` and
+`.javan/dist/resources`; `.javan/reports/resources.json` records their paths, sizes, and
+SHA-256 checksums.
+
+Embedded bytes are immutable and owned by the generated runtime. Each resource stream owns
+only its cursor; closing it never transfers or releases the embedded bytes. A library export
+that returns data read from a resource follows the normal `String` or `byte[]` ABI ownership
+rules above. URL-shaped `getResource` and `getResources` calls remain unsupported and fail
+during `javan check`; use the supported stream APIs instead.
+
 ## Error And Result ABI
 
 Current ABI v2 behavior:
