@@ -60,10 +60,10 @@ Package verification composes existing proofs instead of rebuilding the whole co
 fourth time: the packaged binary checks the compiler classes and builds its self-JAR, while
 the sanitizer reuses C emitted by the selected bootstrap generation. Archive verification
 separately runs the packaged compiler against the native showcase and installed JDK facade.
-For macOS generation 3, the Linux x64 proof uploads the portable C emitted by its verified
-third-generation compiler build. A fresh macOS runner compiles that same C natively, then runs
-the normal package and self-host proofs. This keeps the required macOS binary proof while
-removing two redundant macOS compiler generations and their runner-load variance.
+For generation 3, the Linux x64 proof uploads the portable C emitted by its verified compiler
+build. Fresh Linux and macOS ARM64 runners compile that same C natively, then run the normal
+package and self-host proofs. This keeps the required host-native binary evidence while removing
+redundant compiler generations and their runner-load variance from both ARM64 targets.
 
 Library-output changes are covered by `.github/scripts/acceptance.sh`, including:
 

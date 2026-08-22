@@ -376,7 +376,8 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             .contains("name: bootstrap-source-${{ inputs.target }}")
             .contains("include-hidden-files: true")
             .contains("uses: actions/download-artifact@")
-            .contains("JAVAN_BOOTSTRAP_SOURCE: ${{ inputs.bootstrap_source_artifact != '' && 'target/bootstrap-source'")
+            .contains("path: target/.javan/generated")
+            .contains("JAVAN_BOOTSTRAP_SOURCE: ${{ inputs.bootstrap_source_artifact != '' && 'target/.javan/generated'")
             .doesNotContain("proof == 'bootstrap-seed'", "JAVAN_BOOTSTRAP_TIMING_SEED");
         assertThat(Files.readString(Path.of(".github/workflows/build-common.yml")))
             .contains("  linux-package-generation3:")
