@@ -701,8 +701,95 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         final CliRun run = run(tempDir, "build", project.toString(), "--target", crossTarget);
 
         assertThat(run.exitCode()).isEqualTo(2);
-        assertThat(run.stdout()).isEmpty();
-        assertThat(run.stderr()).contains("error[JAVAN900]", "Cross-target native linking is not implemented");
+        assertThat(run.stdout()).contains("native target:     " + crossTarget, "toolchain:         cross-target");
+        assertThat(run.stderr()).contains("error[JAVAN081]", "Cross-target native linking is not implemented");
+        assertThat(Files.readString(project.resolve(".javan/reports/toolchain.json")))
+            .contains("\"decision\": \"cross-target\"");
+        assertThat(project.resolve(".javan/generated")).doesNotExist();
+    }
+
+    @Test
+    void checkReportsMissingCompilerAndBuildFailsBeforeCGeneration() throws Exception {
+        final Path project = project("missing-native-compiler");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("ready");
+                }
+            }
+            """);
+        final String java = CliTestHarness.currentJavaCommand();
+        final String classes = Path.of("target/classes").toAbsolutePath().normalize().toString();
+        final Map<String, String> noCompiler = Map.of("PATH", "", "CC", "");
+
+        final ProcessResult check = process(
+            project,
+            List.of(java, "-cp", classes, "javan.Main", "check", project.toString()),
+            defaultProcessTimeout(),
+            noCompiler
+        );
+        final ProcessResult build = process(
+            project,
+            List.of(java, "-cp", classes, "javan.Main", "build", project.toString()),
+            defaultProcessTimeout(),
+            noCompiler
+        );
+
+        assertThat(check.exitCode()).isZero();
+        assertThat(check.stdout()).contains("native target:", "c compiler:        missing");
+        assertThat(Files.readString(project.resolve(".javan/reports/toolchain.json")))
+            .contains("\"compilerStatus\": \"missing\"");
+        assertThat(build.exitCode()).as(build.stderr()).isEqualTo(2);
+        assertThat(build.stderr()).contains(
+            "error[JAVAN080]: native toolchain unavailable",
+            "Install a working cc, clang, or gcc"
+        );
+        assertThat(project.resolve(".javan/generated")).doesNotExist();
+    }
+
+    @Test
+    void checkReportsIncompatibleCompilerAndBuildFailsBeforeCGeneration() throws Exception {
+        final Path project = project("incompatible-native-compiler");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("ready");
+                }
+            }
+            """);
+        final String java = CliTestHarness.currentJavaCommand();
+        final String classes = Path.of("target/classes").toAbsolutePath().normalize().toString();
+        final Map<String, String> incompatibleCompiler = Map.of("PATH", "", "CC", java);
+
+        final ProcessResult check = process(
+            project,
+            List.of(java, "-cp", classes, "javan.Main", "check", project.toString()),
+            defaultProcessTimeout(),
+            incompatibleCompiler
+        );
+        final ProcessResult build = process(
+            project,
+            List.of(java, "-cp", classes, "javan.Main", "build", project.toString()),
+            defaultProcessTimeout(),
+            incompatibleCompiler
+        );
+
+        assertThat(check.exitCode()).isZero();
+        assertThat(check.stdout()).contains("toolchain:         incompatible");
+        assertThat(Files.readString(project.resolve(".javan/reports/toolchain.json")))
+            .contains("\"decision\": \"incompatible\"", "\"compilerStatus\": \"available\"");
+        assertThat(build.exitCode()).as(build.stderr()).isEqualTo(2);
+        assertThat(build.stderr()).contains("error[JAVAN080]: native toolchain unavailable");
         assertThat(project.resolve(".javan/generated")).doesNotExist();
     }
 

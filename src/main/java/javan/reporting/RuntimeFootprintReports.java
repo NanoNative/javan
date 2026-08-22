@@ -18,36 +18,11 @@ public final class RuntimeFootprintReports {
     private static final List<MatrixTarget> MATRIX_TARGETS = List.of(
         new MatrixTarget("linux-x64", "ubuntu-24.04", "required-ci", "host-native Linux x64 app/library acceptance"),
         new MatrixTarget("linux-aarch64", "ubuntu-24.04-arm", "required-ci", "host-native Linux arm64 app/library acceptance"),
-        new MatrixTarget("macos-aarch64", "macos-15", "required-ci", "macOS arm64 compiler/platform contract; native package lane disabled after local timeout"),
+        new MatrixTarget("macos-aarch64", "macos-15", "required-ci", "host-native macOS arm64 app/library acceptance"),
         new MatrixTarget("macos-x64", "macos-15-intel", "required-ci", "macOS x64 compiler/platform contract; slower native package lane remains disabled"),
         new MatrixTarget("windows-x64", "windows-2025", "planned-runtime-port", "Windows linker/runtime support is not implemented"),
         new MatrixTarget("windows-aarch64", "windows-11-arm", "planned-runtime-port", "Windows arm64 linker/runtime support is not implemented")
     );
-
-    /**
-     * Fails when a requested target would silently produce a host binary.
-     *
-     * @param requestedTarget requested target triple
-     */
-    public static void requireHostTarget(final Optional<String> requestedTarget) {
-        if (requestedTarget.isEmpty()) {
-            return;
-        }
-        final String requested = requestedTarget.orElseThrow();
-        final String normalized = normalizeTarget(requested);
-        final String host = hostTarget();
-        if (!host.equals(normalized)) {
-            throw new IllegalArgumentException(
-                "Cross-target native linking is not implemented: requested "
-                    + requested
-                    + " ("
-                    + normalized
-                    + "), host is "
-                    + host
-                    + ". Build on that OS/architecture runner or leave --target unset."
-            );
-        }
-    }
 
     /**
      * Returns the canonical target for the current host.

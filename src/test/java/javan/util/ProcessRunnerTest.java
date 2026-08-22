@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
@@ -26,6 +27,22 @@ final class ProcessRunnerTest {
         final String missing = "definitely-not-a-javan-command-" + System.nanoTime();
 
         assertThat(new ProcessRunner().firstAvailable(List.of(missing))).isEmpty();
+    }
+
+    @Test
+    void resolveExecutableAcceptsAnExplicitPath() throws Exception {
+        final Path executable = Files.createFile(tempDir.resolve("compiler"));
+        assertThat(executable.toFile().setExecutable(true)).isTrue();
+
+        assertThat(ProcessRunner.resolveExecutable("", executable.toString(), "", "Linux"))
+            .contains(executable);
+    }
+
+    @Test
+    void resolveExecutableNeverEvaluatesShellSyntax() {
+        assertThat(ProcessRunner.resolveExecutable(
+            System.getenv("PATH"), "sh; exit 0", "", "Linux"
+        )).isEmpty();
     }
 
     @Test
