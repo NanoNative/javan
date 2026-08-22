@@ -170,8 +170,11 @@ final class CliSharedStateIntegrationTest {
             require main com.acme:mod-coordinate-mathlib:1.0.0
             """, StandardCharsets.UTF_8);
 
-        final String previous = System.getProperty("javan.maven.localRepository");
+        final Path home = tempDir.resolve("coordinate-home");
+        final String previousRepository = System.getProperty("javan.maven.localRepository");
+        final String previousHome = System.getProperty("javan.home");
         System.setProperty("javan.maven.localRepository", repository.toString());
+        System.setProperty("javan.home", home.toString());
         try {
             final CliRun run = run(tempDir, "check", project.toString());
 
@@ -181,10 +184,12 @@ final class CliSharedStateIntegrationTest {
                 "\"notation\": \"com.acme:mod-coordinate-mathlib:1.0.0\"",
                 "\"status\": \"present\"",
                 "\"checksumAlgorithm\": \"sha256\"",
-                "\"repositoryOrigin\": " + javan.util.Json.string(repository.toString()),
+                "\"repositoryOrigin\": " + javan.util.Json.string(home.resolve("cache/dependencies").toString()),
                 "\"licenseName\": \"Apache License 2.0\"",
                 "\"licenseSource\": \"pom.xml\""
             );
+            assertThat(home.resolve("cache/dependencies/com/acme/mod-coordinate-mathlib/1.0.0/mod-coordinate-mathlib-1.0.0.jar"))
+                .isRegularFile();
             assertThat(Files.readString(project.resolve(".javan/reports/dependencies.json"))).contains(
                 "\"source\": \"javan.mod\"",
                 "\"scope\": \"main\"",
@@ -192,11 +197,8 @@ final class CliSharedStateIntegrationTest {
                 "\"reachableClasses\": [\"dep/ModCoordinateMath\"]"
             );
         } finally {
-            if (previous == null) {
-                System.clearProperty("javan.maven.localRepository");
-            } else {
-                System.setProperty("javan.maven.localRepository", previous);
-            }
+            restoreProperty("javan.maven.localRepository", previousRepository);
+            restoreProperty("javan.home", previousHome);
         }
     }
 
@@ -258,8 +260,10 @@ final class CliSharedStateIntegrationTest {
             require main com.acme:direct:1.0.0
             """, StandardCharsets.UTF_8);
 
-        final String previous = System.getProperty("javan.maven.localRepository");
+        final String previousRepository = System.getProperty("javan.maven.localRepository");
+        final String previousHome = System.getProperty("javan.home");
         System.setProperty("javan.maven.localRepository", repository.toString());
+        System.setProperty("javan.home", tempDir.resolve("transitive-home").toString());
         try {
             final CliRun run = run(tempDir, "check", project.toString());
 
@@ -277,16 +281,13 @@ final class CliSharedStateIntegrationTest {
                 "\"reachableClasses\": [\"dep/TransitiveMath\"]"
             );
         } finally {
-            if (previous == null) {
-                System.clearProperty("javan.maven.localRepository");
-            } else {
-                System.setProperty("javan.maven.localRepository", previous);
-            }
+            restoreProperty("javan.maven.localRepository", previousRepository);
+            restoreProperty("javan.home", previousHome);
         }
     }
 
     @Test
-    void unchangedCoordinateDeclarationRejectsChangedArtifactBeforeCompilation() throws Exception {
+    void unchangedCoordinateDeclarationKeepsCachedArtifactWhenRepositoryChanges() throws Exception {
         final Path dependency = dependencyJar("mod-locked-mathlib", "dep.LockedMath", """
             package dep;
 
@@ -323,8 +324,14 @@ final class CliSharedStateIntegrationTest {
             require main com.acme:mod-locked-mathlib:1.0.0
             """, StandardCharsets.UTF_8);
 
-        final String previous = System.getProperty("javan.maven.localRepository");
+        final Path home = tempDir.resolve("locked-home");
+        final Path cached = home.resolve(
+            "cache/dependencies/com/acme/mod-locked-mathlib/1.0.0/mod-locked-mathlib-1.0.0.jar"
+        );
+        final String previousRepository = System.getProperty("javan.maven.localRepository");
+        final String previousHome = System.getProperty("javan.home");
         System.setProperty("javan.maven.localRepository", repository.toString());
+        System.setProperty("javan.home", home.toString());
         try {
             final CliRun first = run(tempDir, "check", project.toString());
             final String lock = Files.readString(project.resolve("javan.lock"));
@@ -333,19 +340,20 @@ final class CliSharedStateIntegrationTest {
             final CliRun second = run(tempDir, "check", project.toString());
 
             assertThat(first.exitCode()).describedAs(first.stderr()).isZero();
-            assertThat(second.exitCode()).isEqualTo(1);
-            assertThat(second.stderr()).contains(
-                "error[JAVAN901]: Dependency lock checksum mismatch",
-                "com.acme:mod-locked-mathlib:1.0.0",
-                "change javan.mod to update the lock"
-            );
+            assertThat(second.exitCode()).describedAs(second.stderr()).isZero();
+            assertThat(Files.mismatch(cached, dependency)).isEqualTo(-1L);
             assertThat(Files.readString(project.resolve("javan.lock"))).isEqualTo(lock);
         } finally {
-            if (previous == null) {
-                System.clearProperty("javan.maven.localRepository");
-            } else {
-                System.setProperty("javan.maven.localRepository", previous);
-            }
+            restoreProperty("javan.maven.localRepository", previousRepository);
+            restoreProperty("javan.home", previousHome);
+        }
+    }
+
+    private static void restoreProperty(final String name, final String value) {
+        if (value == null) {
+            System.clearProperty(name);
+        } else {
+            System.setProperty(name, value);
         }
     }
 
