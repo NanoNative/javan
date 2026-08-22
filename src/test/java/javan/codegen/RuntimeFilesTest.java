@@ -2577,7 +2577,7 @@ final class RuntimeFilesTest {
         final Path source = Files.write(tempDir.resolve("raw.bin"), new byte[]{1});
 
         final String section = RuntimeSourceResourceSection.render(
-            List.of(new ResourceBundler.ResourceFile("assets/\u0001.bin", source, 1))
+            List.of(new ResourceBundler.ResourceFile("assets/\u0001.bin", source, 1, "unused"))
         );
 
         assertThat(section).contains("assets/\\001.bin");

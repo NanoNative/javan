@@ -115,6 +115,9 @@ Selecting a runtime class loader remains outside the static native model.
   module `uses` checks, iteration, `findFirst`, and `reload`. `loadInstalled` uses the platform
   loader view and therefore excludes application descriptors. Dynamic class-loader discovery
   and provider streams remain part of the broader loader and stream work.
+- Done: closed-world resource streams embed application and dependency-jar resources in app
+  and library outputs with application-first classpath precedence, SHA-256 report evidence,
+  missing-resource parity, and early rejection of URL-shaped lookup.
 - broader exception semantics and platform throwable transport
 - collections, streams, time, networking, files, and concurrency only with native/JVM parity
 - deterministic rejection for dynamic class definition, arbitrary loaders, proxies,

@@ -1,6 +1,7 @@
 package javan;
 
 import javan.testing.TestSuite.NativeTest;
+import javan.util.Sha256;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
@@ -8,6 +9,7 @@ import org.junit.jupiter.api.parallel.ResourceAccessMode;
 import org.junit.jupiter.api.parallel.ResourceLock;
 import org.junit.jupiter.api.parallel.Resources;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -20,6 +22,85 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @ResourceLock(value = Resources.SYSTEM_PROPERTIES, mode = ResourceAccessMode.READ)
 @NativeTest
 final class CliResourceRuntimeIntegrationTest extends CliIntegrationSupport {
+    @Test
+    void nativeBuildReadsResourceFromDependencyJar() throws Exception {
+        final Path dependency = addJarResource(
+            dependencyJar("resource-library", "dep.Library", """
+                package dep;
+
+                public final class Library {
+                    private Library() {
+                    }
+                }
+                """),
+            "dep/message.txt",
+            "dependency\n"
+        );
+        final Path project = project("resource-dependency");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.io.InputStream;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final InputStream stream = ClassLoader.getSystemResourceAsStream("dep/message.txt");
+                    final byte[] bytes = stream.readAllBytes();
+                    System.out.println(bytes.length);
+                    System.out.println(bytes[0]);
+                    stream.close();
+                }
+            }
+            """);
+        Files.writeString(project.resolve("javan.mod"), """
+            module com.acme.app
+            java 25
+            require main %s
+            """.formatted(pathForMod(project, dependency)), StandardCharsets.UTF_8);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main", List.of(dependency));
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/resource-dependency").toString())).stdout())
+            .isEqualTo(jvmOutput)
+            .isEqualTo("11\n100\n");
+        final Path bundled = project.resolve(".javan/dist/resources/dep/message.txt");
+        assertThat(bundled).hasContent("dependency\n");
+        assertThat(Files.readString(project.resolve(".javan/reports/resources.json")))
+            .contains("\"path\": \"dep/message.txt\"", "\"sha256\": \"" + Sha256.of(bundled) + "\"");
+    }
+
+    @Test
+    void urlResourceLookupFailsDuringCheckWithStreamAlternative() throws Exception {
+        final Path project = project("resource-url-rejected");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Main.class.getResource("/message.txt"));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains(
+            "java/lang/Class.getResource(Ljava/lang/String;)Ljava/net/URL;",
+            "not supported",
+            "getResourceAsStream"
+        );
+        assertThat(project.resolve(".javan/generated/runtime.c")).doesNotExist();
+    }
+
     @Test
     void nativeBuildReadsResourceRelativeToClass() throws Exception {
         final Path project = project("resource-relative");
