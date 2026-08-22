@@ -132,7 +132,7 @@ same executable and reports.
 
 Planned vertical slices:
 
-- locked direct dependencies with coordinates, checksums, repository origin, and licenses
+- strengthen direct-dependency locks with cryptographic checksums, repository origin, and licenses
 - separate production/test graphs used by `javan build` and `javan test`
 - offline replay from the Javan cache
 - Maven and Gradle convenience integrations with no second compiler path

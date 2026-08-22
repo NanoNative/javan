@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 
 @Execution(CONCURRENT)
@@ -23,6 +24,20 @@ final class JavanLockWriterTest {
 
         assertThat(lock).isEqualTo(tempDir.resolve("javan.lock"));
         assertThat(lock).doesNotExist();
+    }
+
+    @Test
+    void writeVerifiesPresentModuleWithoutDependencies() throws Exception {
+        final JavanModule module = new JavanModule(true, "com.acme.app", "25", List.of(), List.of());
+        final JavanLockWriter writer = new JavanLockWriter();
+
+        final Path lock = writer.write(tempDir, module);
+        writer.write(tempDir, module);
+
+        assertThat(Files.readString(lock)).contains(
+            "\"dependencyCount\": 0",
+            "\"dependencies\": []"
+        );
     }
 
     @Test
@@ -159,6 +174,66 @@ final class JavanLockWriterTest {
     }
 
     @Test
+    void writeRejectsChangedArtifactForUnchangedDeclaration() throws Exception {
+        final Path jar = tempDir.resolve("repo/com/acme/math/1.2.3/math-1.2.3.jar");
+        Files.createDirectories(jar.getParent());
+        Files.writeString(jar, "first");
+        final JavanModule module = new JavanModule(
+            true,
+            "com.acme.app",
+            "25",
+            List.of(new JavanDependency("main", "com.acme:math:1.2.3", "coordinate", Optional.of(jar), 3)),
+            List.of()
+        );
+        final JavanLockWriter writer = new JavanLockWriter();
+        final Path lock = writer.write(tempDir, module);
+        final String original = Files.readString(lock);
+        Files.writeString(jar, "second");
+
+        assertThatThrownBy(() -> writer.write(tempDir, module))
+            .isInstanceOf(java.io.IOException.class)
+            .hasMessageContaining("Dependency lock checksum mismatch")
+            .hasMessageContaining("com.acme:math:1.2.3")
+            .hasMessageContaining("Locked: fnv64:")
+            .hasMessageContaining("Found: fnv64:");
+        assertThat(Files.readString(lock)).isEqualTo(original);
+    }
+
+    @Test
+    void writeRegeneratesLockWhenDeclarationChanges() throws Exception {
+        final Path first = tempDir.resolve("repo/com/acme/math/1.2.3/math-1.2.3.jar");
+        final Path second = tempDir.resolve("repo/com/acme/math/2.0.0/math-2.0.0.jar");
+        Files.createDirectories(first.getParent());
+        Files.createDirectories(second.getParent());
+        Files.writeString(first, "first");
+        Files.writeString(second, "second");
+        final JavanLockWriter writer = new JavanLockWriter();
+        writer.write(tempDir, module("com.acme:math:1.2.3", first));
+
+        final Path lock = writer.write(tempDir, module("com.acme:math:2.0.0", second));
+
+        assertThat(Files.readString(lock))
+            .contains("\"notation\": \"com.acme:math:2.0.0\"")
+            .doesNotContain("\"notation\": \"com.acme:math:1.2.3\"");
+    }
+
+    @Test
+    void writeResolvesPreviouslyMissingArtifactWithoutChangingDeclaration() throws Exception {
+        final Path jar = tempDir.resolve("repo/com/acme/math/1.2.3/math-1.2.3.jar");
+        final JavanLockWriter writer = new JavanLockWriter();
+        writer.write(tempDir, module("com.acme:math:1.2.3", jar));
+        Files.createDirectories(jar.getParent());
+        Files.writeString(jar, "available");
+
+        final Path lock = writer.write(tempDir, module("com.acme:math:1.2.3", jar));
+
+        assertThat(Files.readString(lock)).contains(
+            "\"status\": \"present\"",
+            "\"checksumAlgorithm\": \"fnv64\""
+        );
+    }
+
+    @Test
     void writeRecordsMissingCoordinateState() throws Exception {
         final Path jar = tempDir.resolve("repo/com/acme/math/1.2.3/math-1.2.3.jar");
         final JavanModule module = new JavanModule(
@@ -176,6 +251,16 @@ final class JavanLockWriterTest {
             "\"status\": \"missing-coordinate\"",
             "\"artifactKind\": \"missing-jar\"",
             "\"checksumAlgorithm\": \"none\""
+        );
+    }
+
+    private static JavanModule module(final String notation, final Path jar) {
+        return new JavanModule(
+            true,
+            "com.acme.app",
+            "25",
+            List.of(new JavanDependency("main", notation, "coordinate", Optional.of(jar), 3)),
+            List.of()
         );
     }
 }

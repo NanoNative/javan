@@ -193,6 +193,70 @@ final class CliSharedStateIntegrationTest {
         }
     }
 
+    @Test
+    void unchangedCoordinateDeclarationRejectsChangedArtifactBeforeCompilation() throws Exception {
+        final Path dependency = dependencyJar("mod-locked-mathlib", "dep.LockedMath", """
+            package dep;
+
+            public final class LockedMath {
+                private LockedMath() {
+                }
+
+                public static int value() {
+                    return 23;
+                }
+            }
+            """);
+        final Path repository = tempDir.resolve("locked-local-maven-repository");
+        installMavenCoordinate(repository, "com.acme", "mod-locked-mathlib", "1.0.0", dependency);
+        final Path artifact = repository.resolve("com/acme/mod-locked-mathlib/1.0.0/mod-locked-mathlib-1.0.0.jar");
+        final Path project = project("javan-mod-locked-coordinate");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import dep.LockedMath;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(LockedMath.value());
+                }
+            }
+            """);
+        Files.writeString(project.resolve("javan.mod"), """
+            module com.acme.app
+            java 25
+            require main com.acme:mod-locked-mathlib:1.0.0
+            """, StandardCharsets.UTF_8);
+
+        final String previous = System.getProperty("javan.maven.localRepository");
+        System.setProperty("javan.maven.localRepository", repository.toString());
+        try {
+            final CliRun first = run(tempDir, "check", project.toString());
+            final String lock = Files.readString(project.resolve("javan.lock"));
+            Files.writeString(artifact, "changed artifact", StandardCharsets.UTF_8);
+
+            final CliRun second = run(tempDir, "check", project.toString());
+
+            assertThat(first.exitCode()).describedAs(first.stderr()).isZero();
+            assertThat(second.exitCode()).isEqualTo(1);
+            assertThat(second.stderr()).contains(
+                "error[JAVAN901]: Dependency lock checksum mismatch",
+                "com.acme:mod-locked-mathlib:1.0.0",
+                "change javan.mod to update the lock"
+            );
+            assertThat(Files.readString(project.resolve("javan.lock"))).isEqualTo(lock);
+        } finally {
+            if (previous == null) {
+                System.clearProperty("javan.maven.localRepository");
+            } else {
+                System.setProperty("javan.maven.localRepository", previous);
+            }
+        }
+    }
+
     private Path project(final String name) throws Exception {
         final Path project = tempDir.resolve(name);
         Files.createDirectories(project.resolve("src/main/java"));

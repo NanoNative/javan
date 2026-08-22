@@ -46,6 +46,8 @@ Rules today:
 - missing local Maven-cache coordinates fail clearly after writing lock metadata.
 - `javan.lock` records scope, notation, status, artifact kind, path, relative path, size,
   and `fnv64` content checksum metadata.
+- unchanged declarations verify their locked content checksum before compilation; changed
+  module or dependency declarations regenerate the lock deterministically.
 
 Current license rows inspect jar metadata first:
 
@@ -64,10 +66,12 @@ classes, and licenses are actually used by reachable native code.
 
 ## Module Files
 
-Planned files:
+Module files:
 
-- `javan.mod`: direct project dependencies, repositories, source dependencies, and policies
-- `javan.lock`: exact resolved artifacts, source revisions, checksums, licenses, and scopes
+- `javan.mod`: module identity, Java version, and direct main, test, or tool dependencies
+- `javan.lock`: resolved direct artifacts, scopes, paths, sizes, and content checksums
+
+Repositories, source revisions, and license policy remain future schema work.
 
 Dependency scopes:
 
