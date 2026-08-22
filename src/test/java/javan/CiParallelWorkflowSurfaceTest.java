@@ -112,20 +112,10 @@ final class CiParallelWorkflowSurfaceTest {
             .contains("timeout_minutes: ${{ inputs.bootstrap_generation == 3 && 90 || 60 }}")
             .doesNotContain("package_timeout_minutes:")
             .contains("package_scope: ${{ inputs.prepare_publication && matrix.enabled && 'full' || 'bootstrap' }}")
-            .contains("""
-                  - target: linux-x64
-                    os: ubuntu-24.04
-                    sanitizer-scope: platform-smoke
-                    label: package_linux_x64
-                    enabled: true
-                """.indent(8))
-            .contains("""
-                  - target: linux-aarch64
-                    os: ubuntu-24.04-arm
-                    sanitizer-scope: platform-smoke
-                    label: package_linux_arm64
-                    enabled: true
-                """.indent(8))
+            .contains("  linux-package-generation2:", "name: package_linux_x64")
+            .contains("if: inputs.bootstrap_generation == 2")
+            .contains("  linux-package-generation3:", "if: inputs.bootstrap_generation == 3")
+            .contains("  linux-package-arm64:", "name: package_linux_arm64")
             .doesNotContain("sanitizer-scope: ${{ inputs.prepare_publication && 'full' || 'platform-smoke' }}")
             .contains("enabled: ${{ inputs.prepare_publication }}");
         assertThat(Files.readString(Path.of(".github/workflows/native-proof.yml")))
@@ -340,22 +330,23 @@ final class CiParallelWorkflowSurfaceTest {
     }
 
     @Test
-    void macosGenerationThreeSeedDoesNotDelayOtherPackageTargets() throws Exception {
+    void armGenerationThreePackagesReuseLinuxX64GeneratedC() throws Exception {
         final String workflow = Files.readString(BUILD_COMMON);
-        final String sharedPackages = workflow.substring(
-            workflow.indexOf("  native-package-self-host:"),
-            workflow.indexOf("  macos-package-self-host:")
+        final String linuxArmPackage = workflow.substring(
+            workflow.indexOf("  linux-package-arm64:"),
+            workflow.indexOf("  native-package-self-host:")
         );
         final String macosPackage = workflow.substring(
             workflow.indexOf("  macos-package-self-host:"),
             workflow.indexOf("  platform-smoke:")
         );
 
-        assertThat(sharedPackages).doesNotContain("macos-package-seed");
-        assertThat(macosPackage)
-            .contains("- macos-package-seed")
-            .contains("bootstrap-seed-macos-aarch64")
-            .contains("timeout_minutes: 60");
+        for (final String packageJob : java.util.List.of(linuxArmPackage, macosPackage)) {
+            assertThat(packageJob)
+                .contains("- linux-package-generation3")
+                .contains("bootstrap-source-linux-x64")
+                .contains("timeout_minutes: 90");
+        }
     }
 
     @Test

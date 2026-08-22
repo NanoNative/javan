@@ -358,31 +358,67 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     }
 
     @Test
-    void generationThreeBuildCanContinueFromASecondGenerationSeed() throws Exception {
+    void generationThreeBuildCanCompilePortableGeneratedSourcesOnTheTargetHost() throws Exception {
         final String build = Files.readString(Path.of("scripts/build.sh"));
-        final String packageProof = Files.readString(VERIFY_CI_PACKAGE_SMOKE);
         final String workflow = Files.readString(NATIVE_PROOF);
 
         assertThat(build)
-            .contains("SEED=${JAVAN_BOOTSTRAP_SEED:-}")
-            .contains("JAVAN_BOOTSTRAP_SEED requires generation 3")
-            .contains("javan_timing_run bootstrap_gen3 \"$SEED\"")
-            .doesNotContain("JAVAN_BOOTSTRAP_SEED_GENERATION");
-        assertThat(packageProof)
-            .contains("JAVAN_BOOTSTRAP_TIMING_SEED")
-            .contains("cp \"$JAVAN_BOOTSTRAP_TIMING_SEED\" \"$JAVAN_TIMING_LOG\"");
+            .contains("SOURCE=${JAVAN_BOOTSTRAP_SOURCE:-}")
+            .contains("JAVAN_BOOTSTRAP_SOURCE requires generation 3")
+            .contains("for file in main.c javan_runtime.c javan_runtime.h")
+            .contains("cp \"$SOURCE/$file\" \"$GENERATED/$file\"")
+            .contains("$GENERATED/main.c", "$GENERATED/javan_runtime.c")
+            .contains("javan_timing_run bootstrap_gen3 \"$CC\"")
+            .doesNotContain("JAVAN_BOOTSTRAP_SEED", "JAVAN_BOOTSTRAP_TIMING_SEED");
         assertThat(workflow)
-            .contains("bootstrap_seed_artifact:")
-            .contains("inputs.proof == 'bootstrap-seed'")
-            .contains("name: bootstrap-seed-${{ inputs.target }}")
+            .contains("bootstrap_source_artifact:")
+            .contains("upload_bootstrap_source:")
+            .contains("name: bootstrap-source-${{ inputs.target }}")
+            .contains("include-hidden-files: true")
             .contains("uses: actions/download-artifact@")
-            .contains("JAVAN_BOOTSTRAP_SEED: ${{ inputs.bootstrap_seed_artifact != '' && 'target/bootstrap-seed/javan-bootstrap-seed'")
-            .contains("JAVAN_BOOTSTRAP_TIMING_SEED: ${{ inputs.bootstrap_seed_artifact != '' && 'target/bootstrap-seed/timings.tsv'");
+            .contains("path: target/.javan/generated")
+            .contains("JAVAN_BOOTSTRAP_SOURCE: ${{ inputs.bootstrap_source_artifact != '' && 'target/.javan/generated'")
+            .doesNotContain("proof == 'bootstrap-seed'", "JAVAN_BOOTSTRAP_TIMING_SEED");
         assertThat(Files.readString(Path.of(".github/workflows/build-common.yml")))
-            .contains("  macos-package-seed:")
-            .contains("label: seed_mac_arm64")
-            .contains("proof: bootstrap-seed")
-            .contains("bootstrap_seed_artifact: ${{ inputs.bootstrap_generation == 3");
+            .contains("  linux-package-generation3:")
+            .contains("upload_bootstrap_source: true")
+            .contains("bootstrap_source_artifact: ${{ inputs.bootstrap_generation == 3")
+            .doesNotContain("macos-package-seed", "bootstrap_seed_artifact");
+    }
+
+    @Test
+    void portableBootstrapSourcesFailBeforeCompilationWhenInvalid() throws Exception {
+        final Path source = Files.createDirectories(tempDir.resolve("bootstrap-source"));
+        final List<String> command = List.of(
+            "sh",
+            REPO_ROOT.resolve("scripts/build.sh").toString(),
+            tempDir.resolve("javan").toString()
+        );
+        final ProcessResult wrongGeneration = process(
+            REPO_ROOT,
+            command,
+            Duration.ofSeconds(20),
+            Map.of(
+                "JAVAN_BUILD_REUSE_TARGET", "true",
+                "JAVAN_BOOTSTRAP_GENERATION", "2",
+                "JAVAN_BOOTSTRAP_SOURCE", source.toString()
+            )
+        );
+        final ProcessResult missingSource = process(
+            REPO_ROOT,
+            command,
+            Duration.ofSeconds(20),
+            Map.of(
+                "JAVAN_BUILD_REUSE_TARGET", "true",
+                "JAVAN_BOOTSTRAP_GENERATION", "3",
+                "JAVAN_BOOTSTRAP_SOURCE", source.toString()
+            )
+        );
+
+        assertThat(wrongGeneration.exitCode()).isEqualTo(2);
+        assertThat(wrongGeneration.stderr()).contains("JAVAN_BOOTSTRAP_SOURCE requires generation 3.");
+        assertThat(missingSource.exitCode()).isEqualTo(1);
+        assertThat(missingSource.stderr()).contains("Missing generated bootstrap source:", "main.c");
     }
 
     @Test

@@ -45,10 +45,14 @@ on:
         required: false
         default: true
         type: boolean
-      bootstrap_seed_artifact:
+      bootstrap_source_artifact:
         required: false
         default: ''
         type: string
+      upload_bootstrap_source:
+        required: false
+        default: false
+        type: boolean
 
 permissions: {}
 
@@ -140,40 +144,12 @@ jobs:
         run: >-
           ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -DskipTests compile test-compile
 
-      - name: "📥 Seed [macos-aarch64]"
-        if: inputs.bootstrap_seed_artifact != ''
+      - name: "📥 Source [${{ inputs.target }}]"
+        if: inputs.bootstrap_source_artifact != ''
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: ${{ inputs.bootstrap_seed_artifact }}
-          path: target/bootstrap-seed
-
-      - name: "🔧 Seed [macos-aarch64]"
-        if: inputs.bootstrap_seed_artifact != ''
-        shell: sh
-        run: chmod +x target/bootstrap-seed/javan-bootstrap-seed
-
-      - name: "🌱 Seed [gen2_${{ inputs.target }}]"
-        if: inputs.proof == 'bootstrap-seed'
-        shell: sh
-        run: |
-          set -eu
-          mkdir -p target/bootstrap-seed
-          JAVAN_TIMING_LOG=target/bootstrap-seed/timings.tsv
-          export JAVAN_TIMING_LOG
-          : > "$JAVAN_TIMING_LOG"
-          JAVAN_BUILD_REUSE_TARGET=true JAVAN_BOOTSTRAP_GENERATION=2 \
-            sh scripts/build.sh target/bootstrap-seed/javan-bootstrap-seed
-
-      - name: "📤 Upload [seed_${{ inputs.target }}]"
-        if: inputs.proof == 'bootstrap-seed'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: bootstrap-seed-${{ inputs.target }}
-          retention-days: 1
-          if-no-files-found: error
-          path: |
-            target/bootstrap-seed/javan-bootstrap-seed
-            target/bootstrap-seed/timings.tsv
+          name: ${{ inputs.bootstrap_source_artifact }}
+          path: target/.javan/generated
 
       - name: "🧪 Acceptance [${{ inputs.target }}]"
         if: inputs.proof == 'acceptance'
@@ -204,10 +180,22 @@ jobs:
           JAVAN_PACKAGE_TARGET: ${{ inputs.target }}
           JAVAN_PACKAGE_SANITIZER_SCOPE: ${{ inputs.sanitizer_scope }}
           JAVAN_BOOTSTRAP_GENERATION: ${{ inputs.bootstrap_generation }}
-          JAVAN_BOOTSTRAP_SEED: ${{ inputs.bootstrap_seed_artifact != '' && 'target/bootstrap-seed/javan-bootstrap-seed' || '' }}
-          JAVAN_BOOTSTRAP_TIMING_SEED: ${{ inputs.bootstrap_seed_artifact != '' && 'target/bootstrap-seed/timings.tsv' || '' }}
+          JAVAN_BOOTSTRAP_SOURCE: ${{ inputs.bootstrap_source_artifact != '' && 'target/.javan/generated' || '' }}
           JAVAN_HEAP_LIMIT_BYTES: ${{ startsWith(inputs.target, 'macos-') && '1073741824' || '2147483648' }}
         run: sh .github/scripts/verify-ci-package-smoke.sh
+
+      - name: "📤 Source [${{ inputs.target }}]"
+        if: inputs.proof == 'package-self-host' && inputs.upload_bootstrap_source
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: bootstrap-source-${{ inputs.target }}
+          retention-days: 1
+          if-no-files-found: error
+          include-hidden-files: true
+          path: |
+            target/.javan/generated/main.c
+            target/.javan/generated/javan_runtime.c
+            target/.javan/generated/javan_runtime.h
 
       - name: "📤 Upload [${{ inputs.target }}]"
         if: inputs.proof == 'package-self-host' && inputs.upload_package
