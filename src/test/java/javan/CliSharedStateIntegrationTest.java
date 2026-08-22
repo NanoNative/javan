@@ -176,7 +176,7 @@ final class CliSharedStateIntegrationTest {
                 "\"kind\": \"coordinate\"",
                 "\"notation\": \"com.acme:mod-coordinate-mathlib:1.0.0\"",
                 "\"status\": \"present\"",
-                "\"checksumAlgorithm\": \"fnv64\""
+                "\"checksumAlgorithm\": \"sha256\""
             );
             assertThat(Files.readString(project.resolve(".javan/reports/dependencies.json"))).contains(
                 "\"source\": \"javan.mod\"",

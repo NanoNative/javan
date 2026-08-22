@@ -73,7 +73,8 @@ final class JavanLockWriterTest {
             "\"scope\": \"main\"",
             "\"artifactKind\": \"jar\"",
             "\"relativePath\": \"libs/app.jar\"",
-            "\"checksumAlgorithm\": \"fnv64\"",
+            "\"checksumAlgorithm\": \"sha256\"",
+            "\"checksum\": \"0163f1eea7894350060624d315234d40c508ab251ba121714e234503045faadd\"",
             "\"scope\": \"test\"",
             "\"artifactKind\": \"classes-directory\""
         );
@@ -107,6 +108,27 @@ final class JavanLockWriterTest {
             "\"status\": \"missing\"",
             "\"artifactKind\": \"missing\"",
             "\"checksumAlgorithm\": \"none\""
+        );
+    }
+
+    @Test
+    void writeUsesStandardSha256AcrossDigestBlocks() throws Exception {
+        final Path jar = tempDir.resolve("libs/vector.jar");
+        Files.createDirectories(jar.getParent());
+        Files.writeString(jar, "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq");
+        final JavanModule module = new JavanModule(
+            true,
+            "com.acme.app",
+            "25",
+            List.of(new JavanDependency("main", "libs/vector.jar", "local", Optional.of(jar), 3)),
+            List.of()
+        );
+
+        final Path lock = new JavanLockWriter().write(tempDir, module);
+
+        assertThat(Files.readString(lock)).contains(
+            "\"checksumAlgorithm\": \"sha256\"",
+            "\"checksum\": \"248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1\""
         );
     }
 
@@ -169,7 +191,7 @@ final class JavanLockWriterTest {
             "\"status\": \"present\"",
             "\"artifactKind\": \"jar\"",
             "\"relativePath\": \"repo/com/acme/math/1.2.3/math-1.2.3.jar\"",
-            "\"checksumAlgorithm\": \"fnv64\""
+            "\"checksumAlgorithm\": \"sha256\""
         );
     }
 
@@ -194,9 +216,51 @@ final class JavanLockWriterTest {
             .isInstanceOf(java.io.IOException.class)
             .hasMessageContaining("Dependency lock checksum mismatch")
             .hasMessageContaining("com.acme:math:1.2.3")
-            .hasMessageContaining("Locked: fnv64:")
-            .hasMessageContaining("Found: fnv64:");
+            .hasMessageContaining("Locked: sha256:")
+            .hasMessageContaining("Found: sha256:");
         assertThat(Files.readString(lock)).isEqualTo(original);
+    }
+
+    @Test
+    void writeUpgradesLegacyFnvLockToSha256() throws Exception {
+        final Path jar = tempDir.resolve("repo/com/acme/math/1.2.3/math-1.2.3.jar");
+        Files.createDirectories(jar.getParent());
+        Files.writeString(jar, "first");
+        final JavanLockWriter writer = new JavanLockWriter();
+        final Path lock = writer.write(tempDir, module("com.acme:math:1.2.3", jar));
+        Files.writeString(lock, Files.readString(lock)
+            .replace("\"checksumAlgorithm\": \"sha256\"", "\"checksumAlgorithm\": \"fnv64\"")
+            .replace("\"checksum\": \"a7937b64b8caa58f03721bb6bacf5c78cb235febe0e70b1b84cd99541461a08e\"",
+                "\"checksum\": \"89d7ed7f996f1d41\""));
+
+        writer.write(tempDir, module("com.acme:math:1.2.3", jar));
+
+        assertThat(Files.readString(lock))
+            .contains("\"checksumAlgorithm\": \"sha256\"")
+            .contains("\"checksum\": \"a7937b64b8caa58f03721bb6bacf5c78cb235febe0e70b1b84cd99541461a08e\"")
+            .doesNotContain("fnv64", "89d7ed7f996f1d41");
+    }
+
+    @Test
+    void writeRejectsChangedArtifactWhileUpgradingLegacyFnvLock() throws Exception {
+        final Path jar = tempDir.resolve("repo/com/acme/math/1.2.3/math-1.2.3.jar");
+        Files.createDirectories(jar.getParent());
+        Files.writeString(jar, "first");
+        final JavanLockWriter writer = new JavanLockWriter();
+        final Path lock = writer.write(tempDir, module("com.acme:math:1.2.3", jar));
+        final String legacy = Files.readString(lock)
+            .replace("\"checksumAlgorithm\": \"sha256\"", "\"checksumAlgorithm\": \"fnv64\"")
+            .replace("\"checksum\": \"a7937b64b8caa58f03721bb6bacf5c78cb235febe0e70b1b84cd99541461a08e\"",
+                "\"checksum\": \"89d7ed7f996f1d41\"");
+        Files.writeString(lock, legacy);
+        Files.writeString(jar, "second");
+
+        assertThatThrownBy(() -> writer.write(tempDir, module("com.acme:math:1.2.3", jar)))
+            .isInstanceOf(java.io.IOException.class)
+            .hasMessageContaining("Dependency lock checksum mismatch")
+            .hasMessageContaining("Locked: fnv64:89d7ed7f996f1d41")
+            .hasMessageContaining("Found: fnv64:a49985ef4cee20bd");
+        assertThat(Files.readString(lock)).isEqualTo(legacy);
     }
 
     @Test
@@ -229,7 +293,7 @@ final class JavanLockWriterTest {
 
         assertThat(Files.readString(lock)).contains(
             "\"status\": \"present\"",
-            "\"checksumAlgorithm\": \"fnv64\""
+            "\"checksumAlgorithm\": \"sha256\""
         );
     }
 

@@ -45,7 +45,8 @@ Rules today:
 - missing local declarations fail clearly.
 - missing local Maven-cache coordinates fail clearly after writing lock metadata.
 - `javan.lock` records scope, notation, status, artifact kind, path, relative path, size,
-  and `fnv64` content checksum metadata.
+  and SHA-256 content checksum metadata. Existing FNV64 locks upgrade automatically on
+  their next verified use.
 - unchanged declarations verify their locked content checksum before compilation; changed
   module or dependency declarations regenerate the lock deterministically.
 
