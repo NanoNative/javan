@@ -316,6 +316,27 @@ jobs:
       version: ${{ needs.build-info.outputs.resolved_version }}
     secrets: inherit
 
+  macos-package-seed:
+    name: seed_mac_arm64
+    needs:
+      - build-info
+    permissions:
+      contents: read
+    uses: ./.github/workflows/native-proof.yml
+    with:
+      ref: ${{ inputs.ref || github.sha }}
+      runner: macos-15
+      target: macos-aarch64
+      label: seed_mac_arm64
+      sanitizer_scope: platform-smoke
+      proof: bootstrap-seed
+      enabled: ${{ inputs.bootstrap_generation == 3 }}
+      version: ${{ needs.build-info.outputs.resolved_version }}
+      bootstrap_generation: 2
+      timeout_minutes: 60
+      upload_package: false
+    secrets: inherit
+
   native-package-self-host:
     name: ${{ matrix.label }}
     needs:
@@ -345,11 +366,6 @@ jobs:
             label: package_mac_x64
             enabled: false
             reason: historical slower architecture lane
-          - target: macos-aarch64
-            os: macos-15
-            sanitizer-scope: platform-smoke
-            label: package_mac_arm64
-            enabled: true
           - target: windows-x64
             os: windows-2025
             sanitizer-scope: platform-smoke
@@ -376,6 +392,30 @@ jobs:
       package_scope: ${{ inputs.prepare_publication && matrix.enabled && 'full' || 'bootstrap' }}
       # Generation three package proofs have measured at nearly an hour before the full ARM64 proof completes.
       timeout_minutes: ${{ inputs.bootstrap_generation == 3 && 90 || 60 }}
+    secrets: inherit
+
+  macos-package-self-host:
+    name: package_mac_arm64
+    needs:
+      - build-info
+      - macos-package-seed
+    if: ${{ always() && needs.build-info.result == 'success' && (needs.macos-package-seed.result == 'success' || needs.macos-package-seed.result == 'skipped') }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/native-proof.yml
+    with:
+      ref: ${{ inputs.ref || github.sha }}
+      runner: macos-15
+      target: macos-aarch64
+      label: package_mac_arm64
+      sanitizer_scope: platform-smoke
+      proof: package-self-host
+      enabled: true
+      version: ${{ needs.build-info.outputs.resolved_version }}
+      bootstrap_generation: ${{ inputs.bootstrap_generation }}
+      bootstrap_seed_artifact: ${{ inputs.bootstrap_generation == 3 && 'bootstrap-seed-macos-aarch64' || '' }}
+      package_scope: ${{ inputs.prepare_publication && 'full' || 'bootstrap' }}
+      timeout_minutes: 60
     secrets: inherit
 
   platform-smoke:
@@ -494,6 +534,7 @@ jobs:
       - native-acceptance
       - native-sanitizer
       - native-package-self-host
+      - macos-package-self-host
       - platform-smoke
       - windows-runtime-smoke
     if: inputs.prepare_publication

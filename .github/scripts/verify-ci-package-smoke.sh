@@ -56,7 +56,15 @@ mkdir -p "$TMP"
 mkdir -p target
 JAVAN_TIMING_LOG=target/javan-$PACKAGE_TARGET-timings.tsv
 export JAVAN_TIMING_LOG
-: > "$JAVAN_TIMING_LOG"
+if [ -n "${JAVAN_BOOTSTRAP_TIMING_SEED:-}" ]; then
+  if [ ! -f "$JAVAN_BOOTSTRAP_TIMING_SEED" ]; then
+    printf '%s\n' "Missing bootstrap timing seed: $JAVAN_BOOTSTRAP_TIMING_SEED" >&2
+    exit 1
+  fi
+  cp "$JAVAN_BOOTSTRAP_TIMING_SEED" "$JAVAN_TIMING_LOG"
+else
+  : > "$JAVAN_TIMING_LOG"
+fi
 TIMING_JSON=dist/release/javan-$PACKAGE_TARGET-timings.json
 TIMING_MARKDOWN=dist/release/javan-$PACKAGE_TARGET-timings.md
 
