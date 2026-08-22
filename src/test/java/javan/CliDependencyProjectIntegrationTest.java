@@ -333,7 +333,7 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
             "\"scope\": \"main\"",
             "\"notation\": " + Json.string(pathForMod(project, dependency)),
             "\"status\": \"present\"",
-            "\"checksumAlgorithm\": \"fnv64\""
+            "\"checksumAlgorithm\": \"sha256\""
         );
         assertThat(Files.readString(project.resolve(".javan/reports/dependencies.json"))).contains(
             Json.string(dependency.toAbsolutePath().normalize().toString()),

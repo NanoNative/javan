@@ -455,6 +455,52 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanWritesSha256DependencyLock() throws Exception {
+        final Path sourceProject = tempDir.resolve("selfhost-sha256-lock");
+        writeJava(sourceProject, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("sha256-lock");
+                }
+            }
+            """);
+        Files2.writeString(
+            sourceProject.resolve("deps/tool.jar"),
+            "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"
+        );
+        Files2.writeString(sourceProject.resolve("javan.mod"), """
+            module com.acme.app
+            java 25
+            require tool deps/tool.jar
+            """);
+
+        final ProcessResult nativeBuild = process(
+            tempDir,
+            List.of(
+                primitiveLiteralBootstrap.toString(),
+                "build",
+                sourceProject.toString(),
+                "--main",
+                "com.acme.Main",
+                "--output",
+                "selfhost-sha256-lock"
+            ),
+            Duration.ofSeconds(120)
+        );
+
+        assertThat(nativeBuild.exitCode()).as(nativeBuild.stderr()).isZero();
+        assertThat(Files.readString(sourceProject.resolve("javan.lock"))).contains(
+            "\"checksumAlgorithm\": \"sha256\"",
+            "\"checksum\": \"248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1\""
+        );
+    }
+
+    @Test
     void nativeBuiltJavanReadsFiniteJdkMethodMetadata() throws Exception {
         final Path probeProject = tempDir.resolve("selfhost-method-metadata");
         final Path probeClasses = probeProject.resolve("classes");
