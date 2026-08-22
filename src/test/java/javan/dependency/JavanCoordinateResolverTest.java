@@ -1,5 +1,6 @@
 package javan.dependency;
 
+import javan.util.Files2;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
@@ -586,6 +587,109 @@ final class JavanCoordinateResolverTest {
         final JavanDependency resolved = new JavanCoordinateResolver(List.of(tempDir.resolve("repo"))).resolve(dependency);
 
         assertThat(resolved).isSameAs(dependency);
+    }
+
+    @Test
+    void resolveCachesCompletePomClosureForOfflineReplay() throws Exception {
+        final Path repository = tempDir.resolve("repo");
+        final Path cache = tempDir.resolve("cache");
+        final Path app = artifact(repository, "com.acme", "app", "1.0.0");
+        artifact(repository, "com.acme", "library", "2.0.0");
+        Files.writeString(app.resolveSibling("app-1.0.0.pom"), pomDependency("library", "2.0.0"));
+
+        final JavanModule first = new JavanCoordinateResolver(List.of(repository), cache)
+            .resolve(module("com.acme:app:1.0.0"));
+
+        assertThat(first.dependencies()).extracting(JavanDependency::path).containsExactly(
+            Optional.of(cache.resolve("com/acme/app/1.0.0/app-1.0.0.jar").toAbsolutePath().normalize()),
+            Optional.of(cache.resolve("com/acme/library/2.0.0/library-2.0.0.jar").toAbsolutePath().normalize())
+        );
+        assertThat(cache.resolve("com/acme/app/1.0.0/app-1.0.0.jar.sha256")).isRegularFile();
+        assertThat(cache.resolve("com/acme/app/1.0.0/app-1.0.0.pom.sha256")).isRegularFile();
+        Files2.deleteRecursive(repository);
+
+        final JavanModule replayed = new JavanCoordinateResolver(List.of(repository), cache)
+            .resolve(module("com.acme:app:1.0.0"));
+
+        assertThat(replayed).isEqualTo(first);
+    }
+
+    @Test
+    void resolveRejectsTamperedCachedJar() throws Exception {
+        final Path repository = tempDir.resolve("repo");
+        final Path cache = tempDir.resolve("cache");
+        artifact(repository, "com.acme", "app", "1.0.0");
+        final JavanDependency dependency = module("com.acme:app:1.0.0").dependencies().getFirst();
+        final JavanCoordinateResolver resolver = new JavanCoordinateResolver(List.of(repository), cache);
+        final Path cached = resolver.resolve(dependency).path().orElseThrow();
+        Files.writeString(cached, "tampered");
+
+        assertThatThrownBy(() -> resolver.resolve(dependency))
+            .isInstanceOf(java.io.IOException.class)
+            .hasMessageContaining("Cached dependency checksum mismatch")
+            .hasMessageContaining("app-1.0.0.jar")
+            .hasMessageContaining("Delete the cached file");
+    }
+
+    @Test
+    void resolveKeepsCachedArtifactWhenRepositoryChanges() throws Exception {
+        final Path repository = tempDir.resolve("repo");
+        final Path cache = tempDir.resolve("cache");
+        final Path source = artifact(repository, "com.acme", "app", "1.0.0");
+        final JavanDependency dependency = module("com.acme:app:1.0.0").dependencies().getFirst();
+        final JavanCoordinateResolver resolver = new JavanCoordinateResolver(List.of(repository), cache);
+        final Path cached = resolver.resolve(dependency).path().orElseThrow();
+        Files.writeString(source, "changed-source");
+
+        assertThat(resolver.resolve(dependency).path()).contains(cached);
+        assertThat(cached).hasContent("app");
+    }
+
+    @Test
+    void resolveRejectsTamperedCachedPom() throws Exception {
+        final Path repository = tempDir.resolve("repo");
+        final Path cache = tempDir.resolve("cache");
+        final Path app = artifact(repository, "com.acme", "app", "1.0.0");
+        Files.writeString(app.resolveSibling("app-1.0.0.pom"), "<project/>");
+        final JavanCoordinateResolver resolver = new JavanCoordinateResolver(List.of(repository), cache);
+        resolver.resolve(module("com.acme:app:1.0.0"));
+        Files.writeString(cache.resolve("com/acme/app/1.0.0/app-1.0.0.pom"), "<project><broken/></project>");
+
+        assertThatThrownBy(() -> resolver.resolve(module("com.acme:app:1.0.0")))
+            .isInstanceOf(java.io.IOException.class)
+            .hasMessageContaining("Cached dependency checksum mismatch")
+            .hasMessageContaining("app-1.0.0.pom");
+    }
+
+    @Test
+    void resolveRepairsIncompleteCacheFromAvailableRepository() throws Exception {
+        final Path repository = tempDir.resolve("repo");
+        final Path cache = tempDir.resolve("cache");
+        artifact(repository, "com.acme", "app", "1.0.0");
+        final JavanDependency dependency = module("com.acme:app:1.0.0").dependencies().getFirst();
+        final JavanCoordinateResolver resolver = new JavanCoordinateResolver(List.of(repository), cache);
+        final Path cached = resolver.resolve(dependency).path().orElseThrow();
+        Files.delete(cached.resolveSibling("app-1.0.0.jar.sha256"));
+
+        assertThat(resolver.resolve(dependency).path()).contains(cached);
+        assertThat(cached.resolveSibling("app-1.0.0.jar.sha256")).isRegularFile();
+    }
+
+    @Test
+    void resolveRejectsIncompleteCacheWithoutRepository() throws Exception {
+        final Path repository = tempDir.resolve("repo");
+        final Path cache = tempDir.resolve("cache");
+        artifact(repository, "com.acme", "app", "1.0.0");
+        final JavanDependency dependency = module("com.acme:app:1.0.0").dependencies().getFirst();
+        final JavanCoordinateResolver resolver = new JavanCoordinateResolver(List.of(repository), cache);
+        final Path cached = resolver.resolve(dependency).path().orElseThrow();
+        Files.delete(cached.resolveSibling("app-1.0.0.jar.sha256"));
+        Files2.deleteRecursive(repository);
+
+        assertThatThrownBy(() -> resolver.resolve(dependency))
+            .isInstanceOf(java.io.IOException.class)
+            .hasMessageContaining("missing SHA-256 metadata")
+            .hasMessageContaining("app-1.0.0.jar");
     }
 
     private static Path artifact(

@@ -1,34 +1,48 @@
 package javan.dependency;
 
+import javan.toolchain.JavanHome;
+import javan.util.Files2;
+import javan.util.Sha256;
 import javan.util.Strings2;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 /**
- * Resolves deterministic local Maven-coordinate dependencies from {@code javan.mod}.
+ * Resolves deterministic Maven-coordinate dependencies through verified local storage.
  */
 public final class JavanCoordinateResolver {
     private final List<Path> repositories;
+    private final Path cache;
+    private final boolean cacheEnabled;
 
     /**
-     * Creates a resolver that checks configured local Maven repositories.
+     * Creates a resolver backed by the global Javan cache and configured local Maven repositories.
      */
     public JavanCoordinateResolver() {
-        this(defaultRepositories());
+        this(defaultRepositories(), JavanHome.resolve().resolve("cache/dependencies"));
     }
 
     /**
-     * Creates a resolver with explicit local repository roots.
+     * Creates a resolver with explicit local repository roots and no managed cache.
      *
      * @param repositories local Maven repository roots
      */
     public JavanCoordinateResolver(final List<Path> repositories) {
         this.repositories = normalized(repositories);
+        this.cache = Path.of(".").toAbsolutePath().normalize();
+        this.cacheEnabled = false;
+    }
+
+    JavanCoordinateResolver(final List<Path> repositories, final Path cache) {
+        this.repositories = normalized(repositories);
+        this.cache = cache.toAbsolutePath().normalize();
+        this.cacheEnabled = true;
     }
 
     /**
@@ -784,32 +798,85 @@ public final class JavanCoordinateResolver {
         );
     }
 
-    private Path pathFor(final MavenCoordinate coordinate) {
-        Path first = pathFor(Path.of(".").toAbsolutePath().normalize(), coordinate);
-        for (int index = 0; index < repositories.size(); index++) {
-            final Path candidate = pathFor(repositories.get(index), coordinate);
-            if (index == 0) {
-                first = candidate;
-            }
-            if (Files.isRegularFile(candidate)) {
-                return candidate;
-            }
-        }
-        return first;
+    private Path pathFor(final MavenCoordinate coordinate) throws IOException {
+        return artifactPath(coordinate, false);
     }
 
-    private Path pomPath(final MavenCoordinate coordinate) {
-        Path first = pomPath(Path.of(".").toAbsolutePath().normalize(), coordinate);
+    private Path pomPath(final MavenCoordinate coordinate) throws IOException {
+        return artifactPath(coordinate, true);
+    }
+
+    private Path artifactPath(final MavenCoordinate coordinate, final boolean pom) throws IOException {
+        final Path cached = pom ? pomPath(cache, coordinate) : pathFor(cache, coordinate);
+        if (cacheEnabled && Files.isRegularFile(cached)) {
+            if (Files.isRegularFile(checksumFile(cached))) {
+                verifyCached(cached);
+                return cached;
+            }
+        }
+        Path first = pom
+            ? pomPath(Path.of(".").toAbsolutePath().normalize(), coordinate)
+            : pathFor(Path.of(".").toAbsolutePath().normalize(), coordinate);
         for (int index = 0; index < repositories.size(); index++) {
-            final Path candidate = pomPath(repositories.get(index), coordinate);
+            final Path candidate = pom
+                ? pomPath(repositories.get(index), coordinate)
+                : pathFor(repositories.get(index), coordinate);
             if (index == 0) {
                 first = candidate;
             }
             if (Files.isRegularFile(candidate)) {
-                return candidate;
+                return cacheEnabled ? cache(candidate, cached) : candidate;
             }
         }
-        return first;
+        if (cacheEnabled && Files.isRegularFile(cached)) {
+            verifyCached(cached);
+        }
+        return cacheEnabled ? cached : first;
+    }
+
+    private static Path cache(final Path source, final Path target) throws IOException {
+        if (!Files2.createDirectoriesIfPossible(target.getParent())) {
+            throw new IOException(
+                "Cannot write dependency cache directory: " + target.getParent()
+                    + System.lineSeparator()
+                    + "Fix: Make javan.home writable or set -Djavan.home to a writable directory."
+            );
+        }
+        final String checksum = Sha256.of(source);
+        final Path staging = target.getParent().resolve(target.getFileName() + "." + checksum + ".part");
+        Files.copy(source, staging, StandardCopyOption.REPLACE_EXISTING);
+        if (!checksum.equals(Sha256.of(staging))) {
+            throw new IOException("Dependency changed while being cached: " + source);
+        }
+        Files.copy(staging, target, StandardCopyOption.REPLACE_EXISTING);
+        Files.deleteIfExists(staging);
+        Files2.writeString(checksumFile(target), checksum + System.lineSeparator());
+        verifyCached(target);
+        return target;
+    }
+
+    private static void verifyCached(final Path artifact) throws IOException {
+        final Path checksumFile = checksumFile(artifact);
+        if (!Files.isRegularFile(checksumFile)) {
+            throw invalidCache(artifact, "missing SHA-256 metadata");
+        }
+        final String expected = Strings2.trimAscii(Files.readString(checksumFile));
+        final String found = Sha256.of(artifact);
+        if (!expected.equals(found)) {
+            throw invalidCache(artifact, "expected " + expected + " but found " + found);
+        }
+    }
+
+    private static Path checksumFile(final Path artifact) {
+        return artifact.getParent().resolve(artifact.getFileName() + ".sha256");
+    }
+
+    private static IOException invalidCache(final Path artifact, final String reason) {
+        return new IOException(
+            "Cached dependency checksum mismatch for " + artifact + ": " + reason
+                + System.lineSeparator()
+                + "Fix: Delete the cached file and resolve it again from a trusted local Maven repository."
+        );
     }
 
     private static Path pathFor(final Path repository, final MavenCoordinate coordinate) {
