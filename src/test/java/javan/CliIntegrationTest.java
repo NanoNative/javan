@@ -1173,6 +1173,34 @@ final class CliIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nestedShortCircuitBooleanMatchesJvm() throws Exception {
+        assertNativeMatchesJvm("nested-short-circuit-boolean", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(select(true, true, false, false));
+                    System.out.println(select(true, false, true, true));
+                    System.out.println(select(true, false, true, false));
+                    System.out.println(select(false, false, false, false));
+                }
+
+                private static boolean select(
+                    final boolean first,
+                    final boolean second,
+                    final boolean third,
+                    final boolean fourth
+                ) {
+                    return first && second || third && fourth;
+                }
+            }
+            """);
+    }
+
+    @Test
     void intToCharNarrowingBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("int-to-char");
         writeJava(project, "com.acme.Main", """
