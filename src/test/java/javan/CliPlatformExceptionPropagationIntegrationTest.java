@@ -1878,7 +1878,7 @@ final class CliPlatformExceptionPropagationIntegrationTest extends CliIntegratio
     }
 
     @Test
-    void fiveDisjointTypedCatchRangesRemainRejected() throws Exception {
+    void fiveDisjointTypedCatchRangesMatchJvm() throws Exception {
         final Path project = project("platform-catch-five-disjoint-ranges");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -1890,7 +1890,7 @@ final class CliPlatformExceptionPropagationIntegrationTest extends CliIntegratio
                 }
 
                 public static void main(final String[] args) {
-                    final Optional<Value> value = Optional.of(new Value(1));
+                    final Optional<Value> value = Optional.of(new Value(-1));
                     int result = 0;
                     try {
                         result += Helper.increment(value.orElseThrow().number());
@@ -1940,7 +1940,9 @@ final class CliPlatformExceptionPropagationIntegrationTest extends CliIntegratio
             }
             """);
 
-        assertThat(run(tempDir, "check", project.toString()).stderr()).contains("error[JAVAN014]");
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        assertThat(nativeOutput(project)).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("5\n");
     }
 
     private String nativeOutput(final Path project) {

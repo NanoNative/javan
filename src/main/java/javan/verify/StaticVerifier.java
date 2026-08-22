@@ -1414,7 +1414,7 @@ public final class StaticVerifier {
         final CodeAttribute code
     ) {
         final List<CodeException> handlers = code.exceptionTable();
-        if (handlers.size() < 2 || handlers.size() > 4 || code.exceptionTableLength() != handlers.size()
+        if (handlers.size() < 2 || code.exceptionTableLength() != handlers.size()
             || code.maxStack() > 64 || code.maxLocals() > 256
             || !boundedHandlerEntriesAreIsolated(code, handlers)) {
             return false;
@@ -1479,14 +1479,14 @@ public final class StaticVerifier {
             if (handlerIndex < 0) {
                 return false;
             }
-            final int handlerTerminal = boundedHandlerTerminalOffset(instructions, handlerIndex);
-            if (handlerTerminal < 0) {
+            final int handlerEnd = boundedHandlerBodyEndOffset(code, handler, handlerIndex);
+            if (handlerEnd < 0) {
                 return false;
             }
             for (final Instruction instruction : instructions) {
                 final int target = boundedBranchTarget(instruction);
-                if ((instruction.offset() < handler.handlerPc() || instruction.offset() > handlerTerminal)
-                    && target >= handler.handlerPc() && target < handlerTerminal) {
+                if ((instruction.offset() < handler.handlerPc() || instruction.offset() >= handlerEnd)
+                    && target >= handler.handlerPc() && target < handlerEnd) {
                     return false;
                 }
             }

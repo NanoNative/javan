@@ -554,6 +554,9 @@ final class BytecodeToIRControlFlowSupport {
         if (!isValueConsumer(bytecode.get(doneIndex).opcode())) {
             return false;
         }
+        if (hasEarlierControlFlowEntry(bytecode, index, bytecode.get(index + 1).offset(), doneOffset)) {
+            return false;
+        }
         if (!hasOnlyTargetBranches(bytecode, index, jumpIndex, targetOffset)) {
             return false;
         }
@@ -1032,6 +1035,30 @@ final class BytecodeToIRControlFlowSupport {
             final Instruction instruction = bytecode.get(index);
             if (isSimpleBranch(instruction.opcode()) && branchTarget(instruction) == targetOffset) {
                 return true;
+            }
+        }
+        return false;
+    }
+
+    static boolean hasEarlierControlFlowEntry(
+        final List<Instruction> bytecode,
+        final int currentIndex,
+        final int startOffset,
+        final int endOffset
+    ) {
+        for (int index = 0; index < currentIndex; index++) {
+            final Instruction instruction = bytecode.get(index);
+            if (isSimpleBranch(instruction.opcode())) {
+                final int targetOffset = branchTarget(instruction);
+                if (targetOffset >= startOffset && targetOffset < endOffset) {
+                    return true;
+                }
+            } else if (instruction.opcode() == 170 || instruction.opcode() == 171) {
+                for (final SwitchEntry entry : switchEntries(instruction)) {
+                    if (entry.targetOffset() >= startOffset && entry.targetOffset() < endOffset) {
+                        return true;
+                    }
+                }
             }
         }
         return false;

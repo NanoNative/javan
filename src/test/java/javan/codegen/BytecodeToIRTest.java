@@ -9240,6 +9240,35 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void preservesEarlierEntryIntoNestedBooleanTrueArm() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(IIII)I",
+            4,
+            4,
+            plain(0, 26, "iload_0"),
+            plainOperands(1, 153, "ifeq", 0, 4),
+            plain(2, 27, "iload_1"),
+            plainOperands(3, 154, "ifne", 0, 7),
+            plain(5, 28, "iload_2"),
+            plainOperands(6, 153, "ifeq", 0, 7),
+            plain(7, 29, "iload_3"),
+            plainOperands(8, 153, "ifeq", 0, 5),
+            plain(10, 4, "iconst_1"),
+            plainOperands(11, 167, "goto", 0, 3),
+            plain(13, 3, "iconst_0"),
+            plain(14, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsSubsequence(
+            IrInstruction.label("label_10"),
+            IrInstruction.assignInt("branchValue0_8", IrExpression.intLiteral(1)),
+            IrInstruction.returnInt(IrExpression.intLocal("branchValue0_8"))
+        );
+    }
+
+    @Test
     void lowersGuardedValueSelectionWithStackPrefixIntoStore() {
         final IrFunction function = lowerMain(method(
             0x0008,
