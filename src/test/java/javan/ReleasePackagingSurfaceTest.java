@@ -358,6 +358,34 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     }
 
     @Test
+    void generationThreeBuildCanContinueFromASecondGenerationSeed() throws Exception {
+        final String build = Files.readString(Path.of("scripts/build.sh"));
+        final String packageProof = Files.readString(VERIFY_CI_PACKAGE_SMOKE);
+        final String workflow = Files.readString(NATIVE_PROOF);
+
+        assertThat(build)
+            .contains("SEED=${JAVAN_BOOTSTRAP_SEED:-}")
+            .contains("JAVAN_BOOTSTRAP_SEED requires generation 3")
+            .contains("javan_timing_run bootstrap_gen3 \"$SEED\"")
+            .doesNotContain("JAVAN_BOOTSTRAP_SEED_GENERATION");
+        assertThat(packageProof)
+            .contains("JAVAN_BOOTSTRAP_TIMING_SEED")
+            .contains("cp \"$JAVAN_BOOTSTRAP_TIMING_SEED\" \"$JAVAN_TIMING_LOG\"");
+        assertThat(workflow)
+            .contains("bootstrap_seed_artifact:")
+            .contains("inputs.proof == 'bootstrap-seed'")
+            .contains("name: bootstrap-seed-${{ inputs.target }}")
+            .contains("uses: actions/download-artifact@")
+            .contains("JAVAN_BOOTSTRAP_SEED: ${{ inputs.bootstrap_seed_artifact != '' && 'target/bootstrap-seed/javan-bootstrap-seed'")
+            .contains("JAVAN_BOOTSTRAP_TIMING_SEED: ${{ inputs.bootstrap_seed_artifact != '' && 'target/bootstrap-seed/timings.tsv'");
+        assertThat(Files.readString(Path.of(".github/workflows/build-common.yml")))
+            .contains("  macos-package-seed:")
+            .contains("label: seed_mac_arm64")
+            .contains("proof: bootstrap-seed")
+            .contains("bootstrap_seed_artifact: ${{ inputs.bootstrap_generation == 3");
+    }
+
+    @Test
     void packageProofPublishesComparableNativeTimingReports() throws Exception {
         final String script = Files.readString(VERIFY_CI_PACKAGE_SMOKE);
         final String workflow = Files.readString(NATIVE_PROOF);

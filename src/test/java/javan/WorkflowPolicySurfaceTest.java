@@ -204,7 +204,7 @@ final class WorkflowPolicySurfaceTest {
             .contains("target: windows-x64", "os: windows-2025")
             .contains("target: windows-aarch64", "os: windows-11-arm")
             .contains("historical slower architecture lane")
-            .contains("label: package_mac_arm64\n            enabled: true")
+            .contains("  macos-package-self-host:", "name: package_mac_arm64", "label: package_mac_arm64")
             .contains("enabled: false");
         assertThat(Files.readString(NATIVE_PROOF))
             .contains("JAVAN_HEAP_LIMIT_BYTES: ${{ startsWith(inputs.target, 'macos-') && '1073741824' || '2147483648' }}");

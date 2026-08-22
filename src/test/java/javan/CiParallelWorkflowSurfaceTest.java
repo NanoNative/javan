@@ -333,10 +333,29 @@ final class CiParallelWorkflowSurfaceTest {
             .contains("target: macos-x64", "target: macos-aarch64")
             .contains("target: windows-x64", "target: windows-aarch64")
             .contains("historical slower architecture lane")
-            .contains("label: package_mac_arm64\n            enabled: true")
+            .contains("  macos-package-self-host:", "name: package_mac_arm64", "label: package_mac_arm64")
             .contains("native linker and process runtime are incomplete")
             .contains("proof: package-self-host")
             .contains("enabled: ${{ matrix.enabled }}");
+    }
+
+    @Test
+    void macosGenerationThreeSeedDoesNotDelayOtherPackageTargets() throws Exception {
+        final String workflow = Files.readString(BUILD_COMMON);
+        final String sharedPackages = workflow.substring(
+            workflow.indexOf("  native-package-self-host:"),
+            workflow.indexOf("  macos-package-self-host:")
+        );
+        final String macosPackage = workflow.substring(
+            workflow.indexOf("  macos-package-self-host:"),
+            workflow.indexOf("  platform-smoke:")
+        );
+
+        assertThat(sharedPackages).doesNotContain("macos-package-seed");
+        assertThat(macosPackage)
+            .contains("- macos-package-seed")
+            .contains("bootstrap-seed-macos-aarch64")
+            .contains("timeout_minutes: 60");
     }
 
     @Test
