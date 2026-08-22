@@ -501,6 +501,86 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsWithLocalTransitiveCoordinate() throws Exception {
+        final Path direct = dependencyJar("selfhost-direct", "dep.Direct", """
+            package dep;
+
+            public final class Direct {
+                private Direct() {
+                }
+            }
+            """);
+        final Path transitive = dependencyJar("selfhost-transitive", "dep.Transitive", """
+            package dep;
+
+            public final class Transitive {
+                private Transitive() {
+                }
+
+                public static int value() {
+                    return 31;
+                }
+            }
+            """);
+        final Path home = tempDir.resolve("selfhost-home");
+        final Path repository = home.resolve(".m2/repository");
+        installMavenCoordinate(repository, "com.acme", "direct", "1.0.0", direct);
+        installMavenCoordinate(repository, "com.acme", "transitive", "2.0.0", transitive);
+        Files2.writeString(repository.resolve("com/acme/direct/1.0.0/direct-1.0.0.pom"), """
+            <project><dependencies><dependency>
+              <groupId>com.acme</groupId><artifactId>transitive</artifactId><version>2.0.0</version>
+              <scope>runtime</scope>
+            </dependency></dependencies></project>
+            """);
+        final Path sourceProject = tempDir.resolve("selfhost-transitive-coordinate");
+        writeJava(sourceProject, "com.acme.Main", """
+            package com.acme;
+
+            import dep.Transitive;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Transitive.value());
+                }
+            }
+            """);
+        Files2.writeString(sourceProject.resolve("javan.mod"), """
+            module com.acme.app
+            java 25
+            require main com.acme:direct:1.0.0
+            """);
+
+        final ProcessResult nativeBuild = process(
+            tempDir,
+            List.of(
+                primitiveLiteralBootstrap.toString(),
+                "build",
+                sourceProject.toString(),
+                "--main",
+                "com.acme.Main",
+                "--output",
+                "selfhost-transitive-coordinate"
+            ),
+            Duration.ofSeconds(120),
+            Map.of("HOME", home.toString())
+        );
+
+        assertThat(nativeBuild.exitCode()).as(nativeBuild.stderr()).isZero();
+        assertThat(process(
+            sourceProject,
+            List.of(sourceProject.resolve(".javan/bin/selfhost-transitive-coordinate").toString())
+        ).stdout()).isEqualTo("31\n");
+        assertThat(Files.readString(sourceProject.resolve("javan.lock"))).contains(
+            "\"notation\": \"com.acme:transitive:2.0.0\"",
+            "\"direct\": false",
+            "\"requestedBy\": \"com.acme:direct:1.0.0\""
+        );
+    }
+
+    @Test
     void nativeBuiltJavanWritesDependencyLicenseProvenance() throws Exception {
         final Path dependency = dependencyJarWithMavenLicense(
             "selfhost-provenance-tool",

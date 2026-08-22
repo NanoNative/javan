@@ -201,6 +201,91 @@ final class CliSharedStateIntegrationTest {
     }
 
     @Test
+    void javanModCoordinateDependencyCompilesWithLocalTransitiveRuntimeJar() throws Exception {
+        final Path direct = dependencyJar("mod-direct", "dep.DirectLibrary", """
+            package dep;
+
+            public final class DirectLibrary {
+                private DirectLibrary() {
+                }
+            }
+            """);
+        final Path transitive = dependencyJar("mod-transitive", "dep.TransitiveMath", """
+            package dep;
+
+            public final class TransitiveMath {
+                private TransitiveMath() {
+                }
+
+                public static int value() {
+                    return 29;
+                }
+            }
+            """);
+        final Path repository = tempDir.resolve("transitive-local-maven-repository");
+        installMavenCoordinate(repository, "com.acme", "direct", "1.0.0", direct);
+        installMavenCoordinate(repository, "com.acme", "transitive", "2.0.0", transitive);
+        Files.writeString(repository.resolve("com/acme/direct/1.0.0/direct-1.0.0.pom"), """
+            <project>
+              <dependencies>
+                <dependency>
+                  <groupId>com.acme</groupId>
+                  <artifactId>transitive</artifactId>
+                  <version>2.0.0</version>
+                  <scope>runtime</scope>
+                </dependency>
+              </dependencies>
+            </project>
+            """);
+        final Path project = project("javan-mod-transitive-coordinate");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import dep.TransitiveMath;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(TransitiveMath.value());
+                }
+            }
+            """);
+        Files.writeString(project.resolve("javan.mod"), """
+            module com.acme.app
+            java 25
+            require main com.acme:direct:1.0.0
+            """, StandardCharsets.UTF_8);
+
+        final String previous = System.getProperty("javan.maven.localRepository");
+        System.setProperty("javan.maven.localRepository", repository.toString());
+        try {
+            final CliRun run = run(tempDir, "check", project.toString());
+
+            assertThat(run.exitCode()).describedAs(run.stderr()).isZero();
+            assertThat(Files.readString(project.resolve("javan.lock"))).contains(
+                "\"notation\": \"com.acme:direct:1.0.0\"",
+                "\"direct\": true",
+                "\"notation\": \"com.acme:transitive:2.0.0\"",
+                "\"direct\": false",
+                "\"requestedBy\": \"com.acme:direct:1.0.0\""
+            );
+            assertThat(Files.readString(project.resolve(".javan/reports/dependencies.json"))).contains(
+                "\"coordinate\": \"com.acme:transitive:2.0.0\"",
+                "\"source\": \"javan.mod\"",
+                "\"reachableClasses\": [\"dep/TransitiveMath\"]"
+            );
+        } finally {
+            if (previous == null) {
+                System.clearProperty("javan.maven.localRepository");
+            } else {
+                System.setProperty("javan.maven.localRepository", previous);
+            }
+        }
+    }
+
+    @Test
     void unchangedCoordinateDeclarationRejectsChangedArtifactBeforeCompilation() throws Exception {
         final Path dependency = dependencyJar("mod-locked-mathlib", "dep.LockedMath", """
             package dep;

@@ -78,7 +78,9 @@ public final class DependencyReports {
                 declaredPath.scope(),
                 present ? "present" : "missing",
                 declaredPath.source(),
-                metadata.coordinate(),
+                Strings2.isBlank(metadata.coordinate()) ? declaredPath.coordinate() : metadata.coordinate(),
+                declaredPath.direct(),
+                declaredPath.requestedBy(),
                 entry.classNames(),
                 reachable,
                 metadata.license()
@@ -95,7 +97,14 @@ public final class DependencyReports {
         final List<DeclaredPath> result = new ArrayList<>();
         for (final JavanDependency dependency : module.dependencies()) {
             if (dependency.path().isPresent()) {
-                result.add(new DeclaredPath(dependency.path().orElseThrow(), dependency.scope(), "javan.mod"));
+                result.add(new DeclaredPath(
+                    dependency.path().orElseThrow(),
+                    dependency.scope(),
+                    "javan.mod",
+                    dependency.coordinate() ? dependency.notation() : "",
+                    dependency.direct(),
+                    dependency.requestedBy()
+                ));
             }
         }
         return List.copyOf(result);
@@ -108,7 +117,7 @@ public final class DependencyReports {
                 return declaredPath;
             }
         }
-        return new DeclaredPath(path, "main", "classpath");
+        return new DeclaredPath(path, "main", "classpath", "", true, "");
     }
 
     private static List<EntryClasses> entryClasses(final ProjectLayout layout) throws IOException {
@@ -224,6 +233,8 @@ public final class DependencyReports {
         appendText(json, "status", entry.status(), true, 6);
         appendText(json, "source", entry.source(), true, 6);
         appendText(json, "coordinate", entry.coordinate(), true, 6);
+        appendBoolean(json, "direct", entry.direct(), true, 6);
+        appendText(json, "requestedBy", entry.requestedBy(), true, 6);
         appendBoolean(json, "used", entry.used(), true, 6);
         appendNumber(json, "classCount", entry.classes().size(), true, 6);
         appendNumber(json, "reachableClassCount", entry.reachableClasses().size(), true, 6);
@@ -287,17 +298,18 @@ public final class DependencyReports {
         markdown.append("- used dependencies: `").append(summary.usedDependencies()).append("`\n");
         markdown.append("- unused dependencies: `").append(summary.unusedDependencies()).append("`\n");
         markdown.append("- reachable dependency classes: `").append(summary.reachableDependencyClasses()).append("`\n\n");
-        markdown.append("| Dependency | Kind | Scope | Status | Used | Classes | Reachable classes |\n");
-        markdown.append("| --- | --- | --- | --- | --- | ---: | ---: |\n");
+        markdown.append("| Dependency | Coordinate | Relation | Scope | Status | Used | Classes | Reachable classes |\n");
+        markdown.append("| --- | --- | --- | --- | --- | --- | ---: | ---: |\n");
         for (final DependencyEntry entry : entries) {
             markdown
-                .append("| `").append(path(entry.path())).append("` | `").append(entry.kind())
+                .append("| `").append(path(entry.path())).append("` | `").append(entry.coordinate())
+                .append("` | `").append(entry.direct() ? "direct" : "transitive")
                 .append("` | `").append(entry.scope()).append("` | `").append(entry.status())
                 .append("` | `").append(entry.used()).append("` | `").append(entry.classes().size())
                 .append("` | `").append(entry.reachableClasses().size()).append("` |\n");
         }
         if (entries.isEmpty()) {
-            markdown.append("| _none_ | - | - | - | - | `0` | `0` |\n");
+            markdown.append("| _none_ | - | - | - | - | - | `0` | `0` |\n");
         }
         return markdown.toString();
     }
@@ -496,7 +508,14 @@ public final class DependencyReports {
     private record EntryClasses(Path path, List<String> classNames) {
     }
 
-    private record DeclaredPath(Path path, String scope, String source) {
+    private record DeclaredPath(
+        Path path,
+        String scope,
+        String source,
+        String coordinate,
+        boolean direct,
+        String requestedBy
+    ) {
     }
 
     private record DependencyEntry(
@@ -507,6 +526,8 @@ public final class DependencyReports {
         String status,
         String source,
         String coordinate,
+        boolean direct,
+        String requestedBy,
         List<String> classes,
         List<String> reachableClasses,
         ArtifactMetadata.License license

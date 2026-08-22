@@ -381,6 +381,95 @@ final class ClasspathResolverTest {
         );
     }
 
+    @Test
+    void resolveDeclaredDependenciesRejectsMissingTransitiveCoordinate() throws Exception {
+        final Path root = tempDir.resolve("missing-transitive-project");
+        final Path repository = tempDir.resolve("repo");
+        final Path jar = repository.resolve("com/acme/app/1.0.0/app-1.0.0.jar");
+        Files.createDirectories(jar.getParent());
+        Files.writeString(jar, "app");
+        Files.writeString(jar.resolveSibling("app-1.0.0.pom"), """
+            <project><dependencies><dependency>
+              <groupId>com.acme</groupId><artifactId>missing</artifactId><version>2.0.0</version>
+            </dependency></dependencies></project>
+            """);
+        Files.createDirectories(root);
+        Files.writeString(root.resolve("javan.mod"), """
+            module com.acme.app
+            java 25
+            require main com.acme:app:1.0.0
+            """);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> resolverWithRepository(repository)
+            .resolveDeclaredDependencies(layout(root)))
+            .isInstanceOf(java.io.IOException.class)
+            .hasMessageContaining("Missing javan.mod dependency")
+            .hasMessageContaining("com.acme:missing:2.0.0");
+        assertThat(Files.readString(root.resolve("javan.lock"))).contains(
+            "\"notation\": \"com.acme:missing:2.0.0\"",
+            "\"direct\": false",
+            "\"requestedBy\": \"com.acme:app:1.0.0\"",
+            "\"status\": \"missing-coordinate\""
+        );
+    }
+
+    @Test
+    void resolveDeclaredDependenciesRejectsChangedTransitiveGraphForUnchangedModule() throws Exception {
+        final Path root = tempDir.resolve("changed-transitive-project");
+        final Path repository = tempDir.resolve("repo");
+        final Path jar = repository.resolve("com/acme/app/1.0.0/app-1.0.0.jar");
+        final Path first = repository.resolve("com/acme/library/1.0.0/library-1.0.0.jar");
+        final Path second = repository.resolve("com/acme/library/2.0.0/library-2.0.0.jar");
+        Files.createDirectories(jar.getParent());
+        Files.createDirectories(first.getParent());
+        Files.createDirectories(second.getParent());
+        Files.writeString(jar, "app");
+        Files.writeString(first, "first");
+        Files.writeString(second, "second");
+        final Path pom = jar.resolveSibling("app-1.0.0.pom");
+        Files.writeString(pom, pomWithDependency("1.0.0"));
+        Files.createDirectories(root);
+        Files.writeString(root.resolve("javan.mod"), """
+            module com.acme.app
+            java 25
+            require main com.acme:app:1.0.0
+            """);
+        resolverWithRepository(repository).resolveDeclaredDependencies(layout(root));
+        final String locked = Files.readString(root.resolve("javan.lock"));
+        Files.writeString(pom, pomWithDependency("2.0.0"));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> resolverWithRepository(repository)
+            .resolveDeclaredDependencies(layout(root)))
+            .isInstanceOf(java.io.IOException.class)
+            .hasMessageContaining("Dependency lock graph mismatch")
+            .hasMessageContaining("unchanged javan.mod");
+        assertThat(Files.readString(root.resolve("javan.lock"))).isEqualTo(locked);
+    }
+
+    private static ProjectLayout layout(final Path root) {
+        return new ProjectLayout(
+            root,
+            root,
+            InputKind.PROJECT_DIRECTORY,
+            BuildTool.JAVAC,
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            root.resolve(".javan"),
+            "demo",
+            List.of()
+        );
+    }
+
+    private static String pomWithDependency(final String version) {
+        return """
+            <project><dependencies><dependency>
+              <groupId>com.acme</groupId><artifactId>library</artifactId><version>%s</version>
+            </dependency></dependencies></project>
+            """.formatted(version);
+    }
+
     private static ClasspathResolver resolverWithRepository(final Path repository) {
         return new ClasspathResolver(
             new ProcessRunner(),

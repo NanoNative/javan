@@ -3,10 +3,10 @@
 Status: implemented slice plus roadmap. Javan now writes classpath dependency and
 license reports from resolved `--classpath`, Maven, and Gradle runtime classpaths during
 reachability-backed `check`, `build`, and `compat` flows. Javan also reads local
-`javan.mod` path dependencies, resolves direct coordinates from a configured local Maven
-repository or `~/.m2/repository`, and writes deterministic `javan.lock`. Network
-resolution, authenticated mirrors, direct/transitive truth, full test reachability, and
-license policy blocking remain roadmap work.
+`javan.mod` path dependencies, resolves direct and compile/runtime-transitive coordinates
+from a configured local Maven repository or `~/.m2/repository`, and writes deterministic
+`javan.lock`. Network resolution, authenticated mirrors, full test reachability, and license
+policy blocking remain roadmap work.
 
 ## Current Implementation
 
@@ -17,11 +17,10 @@ Generated today:
 - `.javan/reports/licenses.json`
 - `.javan/reports/licenses.md`
 
-Current dependency rows are based on the resolved classpath Javan actually scans. Each
-row includes path, classpath index, kind, `main` scope, present/missing status, class
-count, reachable dependency class count, reachable classes, Maven coordinate when packed
-in `META-INF/maven/**/pom.properties`, source (`classpath` or `javan.mod`), and
-used/unused classification.
+Current dependency rows are based on the resolved classpath Javan actually scans. Each row
+includes path, classpath index, kind, scope, direct/transitive origin, requesting coordinate,
+present/missing status, class count, reachable dependency class count, reachable classes,
+Maven coordinate, source (`classpath` or `javan.mod`), and used/unused classification.
 
 Current `javan.mod` syntax:
 
@@ -40,17 +39,21 @@ Rules today:
 - `main` local jar/classes dependencies are added before plain `javac` compilation.
 - direct `group:artifact:version` and `group:artifact version` coordinates are resolved
   from `-Djavan.maven.localRepository`, `-Dmaven.repo.local`, then `~/.m2/repository`.
+- sibling local POMs resolve compile/runtime transitives breadth-first with direct dependencies
+  taking precedence; optional, test, provided, and system dependencies stay out.
+- local POM properties, same-POM dependency management, and exclusions are honored.
 - `test` and `tool` local dependencies are recorded in `javan.lock` but not added to
   native app classpath.
 - missing local declarations fail clearly.
 - missing local Maven-cache coordinates fail clearly after writing lock metadata.
-- `javan.lock` records scope, notation, status, artifact kind, path, relative path, size,
+- `javan.lock` version 2 records scope, notation, direct/transitive origin, requesting
+  coordinate, status, artifact kind, path, relative path, size,
   SHA-256 content checksum, local repository origin, and detected license name, URL, source,
   and path. Existing FNV64 or checksum-only locks upgrade automatically on their next verified use.
 - unchanged declarations verify their locked content checksum before compilation; changed
   module or dependency declarations regenerate the lock deterministically.
-- unchanged declarations also reject repository or license metadata drift without rewriting
-  the lock.
+- unchanged declarations also reject dependency-graph, repository, or license metadata drift
+  without rewriting the lock. Version 1 locks verify their direct artifacts before upgrading.
 - jar extraction is content-addressed by SHA-256 and shared by lock, scan, and report generation.
 
 Current license rows inspect jar metadata first:
@@ -74,9 +77,10 @@ classes, and licenses are actually used by reachable native code.
 Module files:
 
 - `javan.mod`: module identity, Java version, and direct main, test, or tool dependencies
-- `javan.lock`: resolved direct artifacts, scopes, paths, sizes, and content checksums
+- `javan.lock`: resolved direct and transitive artifacts, scopes, paths, sizes, and content checksums
 
-Remote repositories, source revisions, and license policy remain future schema work.
+Parent-POM dependency management, imported BOMs, profile activation, classifiers, remote
+repositories, source revisions, and license policy remain future schema work.
 
 Dependency scopes:
 

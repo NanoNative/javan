@@ -70,7 +70,7 @@ final class JavanLockWriterTest {
 
         assertThat(first).isEqualTo(second);
         assertThat(first).contains(
-            "\"lockVersion\": 1",
+            "\"lockVersion\": 2",
             "\"module\": \"com.acme.app\"",
             "\"java\": \"25\"",
             "\"scope\": \"main\"",
@@ -289,6 +289,28 @@ final class JavanLockWriterTest {
     }
 
     @Test
+    void writeRejectsChangedMediationEvidenceForUnchangedDeclarations() throws Exception {
+        final Path jar = tempDir.resolve("repo/com/acme/math/1.2.3/math-1.2.3.jar");
+        Files.createDirectories(jar.getParent());
+        Files.writeString(jar, "math");
+        final JavanDependency dependency = new JavanDependency(
+            "main", "com.acme:math:1.2.3", "coordinate", Optional.of(jar), 3
+        );
+        final JavanLockWriter writer = new JavanLockWriter();
+        final Path lock = writer.write(tempDir, new JavanModule(
+            true, "com.acme.app", "25", List.of(dependency), List.of("first mediation")
+        ));
+        final String original = Files.readString(lock);
+
+        assertThatThrownBy(() -> writer.write(tempDir, new JavanModule(
+            true, "com.acme.app", "25", List.of(dependency), List.of("changed mediation")
+        )))
+            .isInstanceOf(java.io.IOException.class)
+            .hasMessageContaining("Dependency lock graph mismatch");
+        assertThat(Files.readString(lock)).isEqualTo(original);
+    }
+
+    @Test
     void writeUpgradesLegacyFnvLockToSha256() throws Exception {
         final Path jar = tempDir.resolve("repo/com/acme/math/1.2.3/math-1.2.3.jar");
         Files.createDirectories(jar.getParent());
@@ -306,6 +328,43 @@ final class JavanLockWriterTest {
             .contains("\"checksumAlgorithm\": \"sha256\"")
             .contains("\"checksum\": \"a7937b64b8caa58f03721bb6bacf5c78cb235febe0e70b1b84cd99541461a08e\"")
             .doesNotContain("fnv64", "89d7ed7f996f1d41");
+    }
+
+    @Test
+    void writeUpgradesVersionOneLockBeforeAddingResolvedTransitiveRows() throws Exception {
+        final Path direct = tempDir.resolve("repo/com/acme/app/1.0.0/app-1.0.0.jar");
+        final Path transitive = tempDir.resolve("repo/com/acme/library/2.0.0/library-2.0.0.jar");
+        Files.createDirectories(direct.getParent());
+        Files.createDirectories(transitive.getParent());
+        Files.writeString(direct, "direct");
+        Files.writeString(transitive, "transitive");
+        final JavanDependency directDependency = new JavanDependency(
+            "main", "com.acme:app:1.0.0", "coordinate", Optional.of(direct), 3
+        );
+        final JavanLockWriter writer = new JavanLockWriter();
+        final Path lock = writer.write(tempDir, new JavanModule(
+            true, "com.acme.app", "25", List.of(directDependency), List.of()
+        ));
+        Files.writeString(lock, Files.readString(lock)
+            .replace("\"lockVersion\": 2", "\"lockVersion\": 1")
+            .replaceAll("(?m)^      \"(direct|requestedBy)\":.*\\R", ""));
+        final JavanDependency transitiveDependency = directDependency
+            .transitive("com.acme:library:2.0.0")
+            .withPath(transitive);
+
+        writer.write(tempDir, new JavanModule(
+            true,
+            "com.acme.app",
+            "25",
+            List.of(directDependency, transitiveDependency),
+            List.of()
+        ));
+
+        assertThat(Files.readString(lock)).contains(
+            "\"lockVersion\": 2",
+            "\"notation\": \"com.acme:library:2.0.0\"",
+            "\"direct\": false"
+        );
     }
 
     @Test

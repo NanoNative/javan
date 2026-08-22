@@ -79,7 +79,7 @@ public final class JavanLockWriter {
     private static String render(final JavanModule module, final List<DependencyState> states) {
         final StringBuilder json = new StringBuilder();
         json.append("{\n");
-        json.append("  \"lockVersion\": 1,\n");
+        json.append("  \"lockVersion\": 2,\n");
         json.append("  \"module\": ").append(Json.string(module.moduleName())).append(",\n");
         json.append("  \"java\": ").append(Json.string(module.javaVersion())).append(",\n");
         json.append("  \"dependencyCount\": ").append(module.dependencies().size()).append(",\n");
@@ -109,6 +109,8 @@ public final class JavanLockWriter {
         appendText(json, "scope", dependency.scope(), true);
         appendText(json, "kind", dependency.kind(), true);
         appendText(json, "notation", dependency.notation(), true);
+        appendBoolean(json, "direct", dependency.direct(), true);
+        appendText(json, "requestedBy", dependency.requestedBy(), true);
         appendText(json, "status", state.status(), true);
         appendText(json, "artifactKind", state.artifactKind(), true);
         appendText(json, "path", state.path(), true);
@@ -131,26 +133,94 @@ public final class JavanLockWriter {
         final List<DependencyState> states,
         final String existing
     ) throws IOException {
-        if (!existing.contains("  \"lockVersion\": 1,")) {
-            throw new IOException("Unsupported or malformed javan.lock: expected lockVersion 1");
+        final boolean versionOne = existing.contains("  \"lockVersion\": 1,");
+        final boolean versionTwo = existing.contains("  \"lockVersion\": 2,");
+        if (!versionOne && !versionTwo) {
+            throw new IOException("Unsupported or malformed javan.lock: expected lockVersion 1 or 2");
         }
         if (!existing.contains("  \"module\": " + Json.string(module.moduleName()) + ",")
             || !existing.contains("  \"java\": " + Json.string(module.javaVersion()) + ",")) {
             return;
         }
         final List<String> blocks = dependencyBlocks(existing);
-        if (blocks.size() != module.dependencies().size()) {
+        if (versionOne) {
+            verifyVersionOne(module, states, blocks);
             return;
         }
-        for (int index = 0; index < blocks.size(); index++) {
-            if (!sameDeclaration(blocks.get(index), module.dependencies().get(index))) {
-                return;
-            }
+        if (!sameDirectDeclarations(blocks, module.dependencies())) {
+            return;
+        }
+        if (blocks.size() != module.dependencies().size()
+            || !sameDeclarations(blocks, module.dependencies())
+            || !existing.contains("  \"warnings\": " + Json.stringList(module.warnings()) + "\n")) {
+            throw new IOException(
+                "Dependency lock graph mismatch for unchanged javan.mod"
+                    + "\nFix: Restore the locked local Maven metadata or change javan.mod to update the lock."
+            );
         }
         for (int index = 0; index < blocks.size(); index++) {
             verifyChecksum(module.dependencies().get(index), states.get(index), blocks.get(index));
             verifyMetadata(module.dependencies().get(index), states.get(index), blocks.get(index));
         }
+    }
+
+    private static void verifyVersionOne(
+        final JavanModule module,
+        final List<DependencyState> states,
+        final List<String> blocks
+    ) throws IOException {
+        final List<JavanDependency> directDependencies = directDependencies(module.dependencies());
+        if (blocks.size() != directDependencies.size() || !sameDeclarations(blocks, directDependencies)) {
+            return;
+        }
+        int blockIndex = 0;
+        int stateIndex = 0;
+        for (final JavanDependency dependency : module.dependencies()) {
+            if (dependency.direct()) {
+                verifyChecksum(dependency, states.get(stateIndex), blocks.get(blockIndex));
+                verifyMetadata(dependency, states.get(stateIndex), blocks.get(blockIndex));
+                blockIndex++;
+            }
+            stateIndex++;
+        }
+    }
+
+    private static boolean sameDirectDeclarations(
+        final List<String> blocks,
+        final List<JavanDependency> dependencies
+    ) {
+        final List<String> directBlocks = new ArrayList<>();
+        for (final String block : blocks) {
+            if (!block.contains(Json.string("direct")) || hasBoolean(block, "direct", true)) {
+                directBlocks.add(block);
+            }
+        }
+        return sameDeclarations(directBlocks, directDependencies(dependencies));
+    }
+
+    private static List<JavanDependency> directDependencies(final List<JavanDependency> dependencies) {
+        final List<JavanDependency> result = new ArrayList<>();
+        for (final JavanDependency dependency : dependencies) {
+            if (dependency.direct()) {
+                result.add(dependency);
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private static boolean sameDeclarations(
+        final List<String> blocks,
+        final List<JavanDependency> dependencies
+    ) {
+        if (blocks.size() != dependencies.size()) {
+            return false;
+        }
+        for (int index = 0; index < blocks.size(); index++) {
+            if (!sameDeclaration(blocks.get(index), dependencies.get(index))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static void verifyMetadata(
@@ -215,7 +285,13 @@ public final class JavanLockWriter {
     private static boolean sameDeclaration(final String block, final JavanDependency dependency) {
         return hasText(block, "scope", dependency.scope())
             && hasText(block, "kind", dependency.kind())
-            && hasText(block, "notation", dependency.notation());
+            && hasText(block, "notation", dependency.notation())
+            && (!block.contains(Json.string("direct")) || hasBoolean(block, "direct", dependency.direct()))
+            && (!block.contains(Json.string("requestedBy")) || hasText(block, "requestedBy", dependency.requestedBy()));
+    }
+
+    private static boolean hasBoolean(final String block, final String name, final boolean value) {
+        return block.contains("      " + Json.string(name) + ": " + value);
     }
 
     private static void verifyChecksum(
@@ -503,6 +579,11 @@ public final class JavanLockWriter {
     }
 
     private static void appendNumber(final StringBuilder json, final String name, final long value, final boolean comma) {
+        json.append("      ").append(Json.string(name)).append(": ").append(value);
+        appendComma(json, comma);
+    }
+
+    private static void appendBoolean(final StringBuilder json, final String name, final boolean value, final boolean comma) {
         json.append("      ").append(Json.string(name)).append(": ").append(value);
         appendComma(json, comma);
     }
