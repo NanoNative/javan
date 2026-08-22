@@ -527,10 +527,31 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         installMavenCoordinate(repository, "com.acme", "direct", "1.0.0", direct);
         installMavenCoordinate(repository, "com.acme", "transitive", "2.0.0", transitive);
         Files2.writeString(repository.resolve("com/acme/direct/1.0.0/direct-1.0.0.pom"), """
-            <project><dependencies><dependency>
-              <groupId>com.acme</groupId><artifactId>transitive</artifactId><version>2.0.0</version>
-              <scope>runtime</scope>
-            </dependency></dependencies></project>
+            <project><parent>
+              <groupId>com.acme</groupId><artifactId>parent</artifactId><version>1.0.0</version>
+            </parent><artifactId>direct</artifactId></project>
+            """);
+        Files2.writeString(repository.resolve("com/acme/parent/1.0.0/parent-1.0.0.pom"), """
+            <project>
+              <groupId>com.acme</groupId><artifactId>parent</artifactId><version>1.0.0</version>
+              <dependencyManagement><dependencies><dependency>
+                <groupId>com.acme</groupId><artifactId>platform</artifactId><version>1.0.0</version>
+                <type>pom</type><scope>import</scope>
+              </dependency></dependencies></dependencyManagement>
+              <dependencies><dependency>
+                <groupId>com.acme</groupId><artifactId>transitive</artifactId><scope>runtime</scope>
+              </dependency></dependencies>
+            </project>
+            """);
+        Files2.writeString(repository.resolve("com/acme/platform/1.0.0/platform-1.0.0.pom"), """
+            <project>
+              <groupId>com.acme</groupId><artifactId>platform</artifactId><version>1.0.0</version>
+              <properties><transitive.version>2.0.0</transitive.version></properties>
+              <dependencyManagement><dependencies><dependency>
+                <groupId>com.acme</groupId><artifactId>transitive</artifactId>
+                <version>${transitive.version}</version>
+              </dependency></dependencies></dependencyManagement>
+            </project>
             """);
         final Path sourceProject = tempDir.resolve("selfhost-transitive-coordinate");
         writeJava(sourceProject, "com.acme.Main", """

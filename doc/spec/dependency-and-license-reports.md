@@ -41,7 +41,8 @@ Rules today:
   from `-Djavan.maven.localRepository`, `-Dmaven.repo.local`, then `~/.m2/repository`.
 - sibling local POMs resolve compile/runtime transitives breadth-first with direct dependencies
   taking precedence; optional, test, provided, and system dependencies stay out.
-- local POM properties, same-POM dependency management, and exclusions are honored.
+- local POM properties, parent inheritance, imported BOM and dependency-management versions,
+  and exclusions are honored; missing or cyclic parent/BOM metadata fails before compilation.
 - `test` and `tool` local dependencies are recorded in `javan.lock` but not added to
   native app classpath.
 - missing local declarations fail clearly.
@@ -79,8 +80,8 @@ Module files:
 - `javan.mod`: module identity, Java version, and direct main, test, or tool dependencies
 - `javan.lock`: resolved direct and transitive artifacts, scopes, paths, sizes, and content checksums
 
-Parent-POM dependency management, imported BOMs, profile activation, classifiers, remote
-repositories, source revisions, and license policy remain future schema work.
+Profile activation, classifiers, non-version dependency-management fields, remote repositories,
+source revisions, and license policy remain future schema work.
 
 Dependency scopes:
 
