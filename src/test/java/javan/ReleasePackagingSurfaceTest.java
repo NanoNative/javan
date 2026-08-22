@@ -366,12 +366,18 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             .contains("javan_timing_run package_verify")
             .contains("javan_timing_record package_self_check")
             .contains("javan_timing_run package_jar")
-            .contains("javan_timing_run package_native")
             .contains("javan_timing_run package_sanitizer")
+            .contains("JAVAN_SELF_HOST_REUSE_GENERATED=true")
             .contains("javan_timing_write_reports")
             .contains("target/javan-$PACKAGE_TARGET-timings.tsv")
             .contains("javan-$PACKAGE_TARGET-timings.json")
-            .contains("javan-$PACKAGE_TARGET-timings.md");
+            .contains("javan-$PACKAGE_TARGET-timings.md")
+            .doesNotContain(
+                "javan_timing_run package_native",
+                "rm -rf target/.javan"
+            );
+        assertThat(script.indexOf("if [ \"$PACKAGE_PROOF_SCOPE\" = \"bootstrap\" ]; then"))
+            .isLessThan(script.indexOf("tar -xzf \"$ARCHIVE\" -C \"$TMP\""));
         assertThat(Files.readString(Path.of(".github/scripts/sanitizer-self-host-smoke.sh")))
             .contains("javan_timing_record sanitizer_compile");
         assertThat(workflow)
@@ -590,12 +596,15 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     }
 
     @Test
-    void verifyCiPackageSmokeKeepsPackagedNativeSelfHostProof() throws Exception {
+    void verifyCiPackageSmokeComposesPackagedAndBootstrapSelfHostProof() throws Exception {
         final String script = Files.readString(VERIFY_CI_PACKAGE_SMOKE);
 
         assertThat(script)
-            .contains("build target/classes --main javan.Main --output javan-package-selfhost-smoke")
-            .contains("\"$SELFHOST_BIN\" --version | grep -F \"javan $PACKAGE_VERSION\"");
+            .contains(
+                "\"$PACKAGE_BIN\" check target/classes --main javan.Main",
+                "JAVAN_SELF_HOST_REUSE_GENERATED=true"
+            )
+            .doesNotContain("build target/classes --main javan.Main --output javan-package-selfhost-smoke");
     }
 
     @Test
