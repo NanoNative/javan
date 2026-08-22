@@ -112,13 +112,9 @@ final class CiParallelWorkflowSurfaceTest {
             .contains("timeout_minutes: ${{ inputs.bootstrap_generation == 3 && 90 || 60 }}")
             .doesNotContain("package_timeout_minutes:")
             .contains("package_scope: ${{ inputs.prepare_publication && matrix.enabled && 'full' || 'bootstrap' }}")
-            .contains("""
-                  - target: linux-x64
-                    os: ubuntu-24.04
-                    sanitizer-scope: platform-smoke
-                    label: package_linux_x64
-                    enabled: true
-                """.indent(8))
+            .contains("  linux-package-generation2:", "name: package_linux_x64")
+            .contains("if: inputs.bootstrap_generation == 2")
+            .contains("  linux-package-generation3:", "if: inputs.bootstrap_generation == 3")
             .contains("""
                   - target: linux-aarch64
                     os: ubuntu-24.04-arm
@@ -340,7 +336,7 @@ final class CiParallelWorkflowSurfaceTest {
     }
 
     @Test
-    void macosGenerationThreeSeedDoesNotDelayOtherPackageTargets() throws Exception {
+    void macosGenerationThreeUsesLinuxGeneratedCWithoutDelayingArmPackage() throws Exception {
         final String workflow = Files.readString(BUILD_COMMON);
         final String sharedPackages = workflow.substring(
             workflow.indexOf("  native-package-self-host:"),
@@ -351,11 +347,11 @@ final class CiParallelWorkflowSurfaceTest {
             workflow.indexOf("  platform-smoke:")
         );
 
-        assertThat(sharedPackages).doesNotContain("macos-package-seed");
+        assertThat(sharedPackages).doesNotContain("linux-package-generation3");
         assertThat(macosPackage)
-            .contains("- macos-package-seed")
-            .contains("bootstrap-seed-macos-aarch64")
-            .contains("timeout_minutes: 60");
+            .contains("- linux-package-generation3")
+            .contains("bootstrap-source-linux-x64")
+            .contains("timeout_minutes: 90");
     }
 
     @Test

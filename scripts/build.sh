@@ -8,7 +8,7 @@ cd "$ROOT"
 OUTPUT=${1:-dist/javan}
 VERSION=$(./mvnw -q help:evaluate -Dexpression=project.version -DforceStdout | tail -n 1)
 GENERATION=${JAVAN_BOOTSTRAP_GENERATION:-3}
-SEED=${JAVAN_BOOTSTRAP_SEED:-}
+SOURCE=${JAVAN_BOOTSTRAP_SOURCE:-}
 case "$GENERATION" in
   2|3) ;;
   *)
@@ -16,13 +16,17 @@ case "$GENERATION" in
     exit 2
     ;;
 esac
-if [ -n "$SEED" ] && [ "$GENERATION" != "3" ]; then
-  printf '%s\n' "JAVAN_BOOTSTRAP_SEED requires generation 3." >&2
+if [ -n "$SOURCE" ] && [ "$GENERATION" != "3" ]; then
+  printf '%s\n' "JAVAN_BOOTSTRAP_SOURCE requires generation 3." >&2
   exit 2
 fi
-if [ -n "$SEED" ] && [ ! -x "$SEED" ]; then
-  printf '%s\n' "Missing executable JAVAN_BOOTSTRAP_SEED: $SEED" >&2
-  exit 1
+if [ -n "$SOURCE" ]; then
+  for file in main.c javan_runtime.c javan_runtime.h; do
+    if [ ! -f "$SOURCE/$file" ]; then
+      printf '%s\n' "Missing generated bootstrap source: $SOURCE/$file" >&2
+      exit 1
+    fi
+  done
 fi
 
 REUSE_TARGET=${JAVAN_BUILD_REUSE_TARGET:-false}
@@ -45,11 +49,18 @@ if [ "$REUSE_TARGET" != "true" ] && [ ! -f "$JAR" ]; then
   exit 1
 fi
 mkdir -p "$(dirname -- "$OUTPUT")"
-if [ -n "$SEED" ]; then
-  javan_timing_run bootstrap_gen3 "$SEED" build target/classes \
-    --main javan.Main \
-    --output javan-bootstrap-verified
+if [ -n "$SOURCE" ]; then
   BUILT=target/.javan/bin/javan-bootstrap-verified
+  GENERATED=target/.javan/generated
+  mkdir -p "$(dirname -- "$BUILT")" "$GENERATED"
+  if [ "$SOURCE" != "$GENERATED" ]; then
+    for file in main.c javan_runtime.c javan_runtime.h; do
+      cp "$SOURCE/$file" "$GENERATED/$file"
+    done
+  fi
+  CC=${CC:-cc}
+  javan_timing_run bootstrap_gen3 "$CC" -pthread -Wno-parentheses \
+    "$GENERATED/main.c" "$GENERATED/javan_runtime.c" -o "$BUILT"
 else
   javan_timing_run bootstrap_jvm java -cp target/classes javan.Main build target/classes \
     --main javan.Main \

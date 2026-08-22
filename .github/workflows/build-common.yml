@@ -316,8 +316,9 @@ jobs:
       version: ${{ needs.build-info.outputs.resolved_version }}
     secrets: inherit
 
-  macos-package-seed:
-    name: seed_mac_arm64
+  linux-package-generation2:
+    name: package_linux_x64
+    if: inputs.bootstrap_generation == 2
     needs:
       - build-info
     permissions:
@@ -325,16 +326,37 @@ jobs:
     uses: ./.github/workflows/native-proof.yml
     with:
       ref: ${{ inputs.ref || github.sha }}
-      runner: macos-15
-      target: macos-aarch64
-      label: seed_mac_arm64
+      runner: ubuntu-24.04
+      target: linux-x64
+      label: package_linux_x64
       sanitizer_scope: platform-smoke
-      proof: bootstrap-seed
-      enabled: ${{ inputs.bootstrap_generation == 3 }}
+      proof: package-self-host
       version: ${{ needs.build-info.outputs.resolved_version }}
       bootstrap_generation: 2
       timeout_minutes: 60
-      upload_package: false
+      package_scope: ${{ inputs.prepare_publication && 'full' || 'bootstrap' }}
+    secrets: inherit
+
+  linux-package-generation3:
+    name: package_linux_x64
+    if: inputs.bootstrap_generation == 3
+    needs:
+      - build-info
+    permissions:
+      contents: read
+    uses: ./.github/workflows/native-proof.yml
+    with:
+      ref: ${{ inputs.ref || github.sha }}
+      runner: ubuntu-24.04
+      target: linux-x64
+      label: package_linux_x64
+      sanitizer_scope: platform-smoke
+      proof: package-self-host
+      version: ${{ needs.build-info.outputs.resolved_version }}
+      bootstrap_generation: 3
+      timeout_minutes: 90
+      package_scope: ${{ inputs.prepare_publication && 'full' || 'bootstrap' }}
+      upload_bootstrap_source: true
     secrets: inherit
 
   native-package-self-host:
@@ -350,11 +372,6 @@ jobs:
         include:
           # Full whole-Javan sanitizer coverage runs in sanitizer_selfhost_linux_x64.
           # This lane proves the packaged compiler with version and tiny-project probes.
-          - target: linux-x64
-            os: ubuntu-24.04
-            sanitizer-scope: platform-smoke
-            label: package_linux_x64
-            enabled: true
           - target: linux-aarch64
             os: ubuntu-24.04-arm
             sanitizer-scope: platform-smoke
@@ -398,8 +415,8 @@ jobs:
     name: package_mac_arm64
     needs:
       - build-info
-      - macos-package-seed
-    if: ${{ always() && needs.build-info.result == 'success' && (needs.macos-package-seed.result == 'success' || needs.macos-package-seed.result == 'skipped') }}
+      - linux-package-generation3
+    if: ${{ always() && needs.build-info.result == 'success' && (needs.linux-package-generation3.result == 'success' || needs.linux-package-generation3.result == 'skipped') }}
     permissions:
       contents: read
     uses: ./.github/workflows/native-proof.yml
@@ -413,9 +430,9 @@ jobs:
       enabled: true
       version: ${{ needs.build-info.outputs.resolved_version }}
       bootstrap_generation: ${{ inputs.bootstrap_generation }}
-      bootstrap_seed_artifact: ${{ inputs.bootstrap_generation == 3 && 'bootstrap-seed-macos-aarch64' || '' }}
+      bootstrap_source_artifact: ${{ inputs.bootstrap_generation == 3 && 'bootstrap-source-linux-x64' || '' }}
       package_scope: ${{ inputs.prepare_publication && 'full' || 'bootstrap' }}
-      timeout_minutes: 60
+      timeout_minutes: 90
     secrets: inherit
 
   platform-smoke:
@@ -533,6 +550,7 @@ jobs:
       - cli
       - native-acceptance
       - native-sanitizer
+      - linux-package-generation3
       - native-package-self-host
       - macos-package-self-host
       - platform-smoke
