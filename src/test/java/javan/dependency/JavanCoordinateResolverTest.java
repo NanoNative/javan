@@ -63,6 +63,202 @@ final class JavanCoordinateResolverTest {
     }
 
     @Test
+    void resolveIncludesLocalRuntimeTransitiveDependencies() throws Exception {
+        final Path repository = tempDir.resolve("repo");
+        final Path app = artifact(repository, "com.acme", "app", "1.0.0");
+        final Path library = artifact(repository, "com.acme", "library", "2.0.0");
+        Files.writeString(app.resolveSibling("app-1.0.0.pom"), """
+            <project>
+              <dependencies>
+                <dependency>
+                  <groupId>com.acme</groupId>
+                  <artifactId>library</artifactId>
+                  <version>2.0.0</version>
+                  <scope>runtime</scope>
+                </dependency>
+              </dependencies>
+            </project>
+            """);
+        final JavanModule module = new JavanModule(
+            true,
+            "com.acme.app",
+            "25",
+            List.of(new JavanDependency("main", "com.acme:app:1.0.0", "coordinate", Optional.empty(), 3)),
+            List.of()
+        );
+
+        final JavanModule resolved = new JavanCoordinateResolver(List.of(repository)).resolve(module);
+
+        assertThat(resolved.dependencies()).extracting(JavanDependency::notation)
+            .containsExactly("com.acme:app:1.0.0", "com.acme:library:2.0.0");
+        assertThat(resolved.dependencies()).extracting(JavanDependency::path)
+            .containsExactly(Optional.of(app), Optional.of(library));
+    }
+
+    @Test
+    void resolvePropagatesScopeAndHonorsOptionalExcludedAndNonRuntimeDependencies() throws Exception {
+        final Path repository = tempDir.resolve("repo");
+        final Path app = artifact(repository, "com.acme", "app", "1.0.0");
+        artifact(repository, "com.acme", "runtime", "1.0.0");
+        artifact(repository, "com.acme", "excluded", "1.0.0");
+        artifact(repository, "com.acme", "optional", "1.0.0");
+        artifact(repository, "com.acme", "test-only", "1.0.0");
+        Files.writeString(app.resolveSibling("app-1.0.0.pom"), """
+            <project>
+              <dependencies>
+                <dependency>
+                  <groupId>com.acme</groupId><artifactId>runtime</artifactId><version>1.0.0</version>
+                  <exclusions>
+                    <exclusion><groupId>com.acme</groupId><artifactId>excluded</artifactId></exclusion>
+                  </exclusions>
+                </dependency>
+                <dependency>
+                  <groupId>com.acme</groupId><artifactId>optional</artifactId><version>1.0.0</version>
+                  <optional>true</optional>
+                </dependency>
+                <dependency>
+                  <groupId>com.acme</groupId><artifactId>test-only</artifactId><version>1.0.0</version>
+                  <scope>test</scope>
+                </dependency>
+              </dependencies>
+            </project>
+            """);
+        Files.writeString(
+            repository.resolve("com/acme/runtime/1.0.0/runtime-1.0.0.pom"),
+            """
+                <project><dependencies><dependency>
+                  <groupId>com.acme</groupId><artifactId>excluded</artifactId><version>1.0.0</version>
+                </dependency></dependencies></project>
+                """
+        );
+        final JavanModule module = new JavanModule(
+            true,
+            "com.acme.app",
+            "25",
+            List.of(new JavanDependency("tool", "com.acme:app:1.0.0", "coordinate", Optional.empty(), 3)),
+            List.of()
+        );
+
+        final JavanModule resolved = new JavanCoordinateResolver(List.of(repository)).resolve(module);
+
+        assertThat(resolved.dependencies()).extracting(JavanDependency::notation)
+            .containsExactly("com.acme:app:1.0.0", "com.acme:runtime:1.0.0");
+        assertThat(resolved.dependencies()).extracting(JavanDependency::scope).containsOnly("tool");
+        assertThat(resolved.dependencies().get(1).direct()).isFalse();
+        assertThat(resolved.dependencies().get(1).requestedBy()).isEqualTo("com.acme:app:1.0.0");
+    }
+
+    @Test
+    void resolveUsesPomPropertiesAndLocalDependencyManagement() throws Exception {
+        final Path repository = tempDir.resolve("repo");
+        final Path app = artifact(repository, "com.acme", "app", "1.0.0");
+        artifact(repository, "com.acme", "library", "2.1.0");
+        Files.writeString(app.resolveSibling("app-1.0.0.pom"), """
+            <project>
+              <properties><library.version>2.1.0</library.version></properties>
+              <dependencyManagement><dependencies><dependency>
+                <groupId>com.acme</groupId><artifactId>library</artifactId>
+                <version>${library.version}</version>
+              </dependency></dependencies></dependencyManagement>
+              <dependencies><dependency>
+                <groupId>com.acme</groupId><artifactId>library</artifactId>
+              </dependency></dependencies>
+            </project>
+            """);
+        final JavanModule module = new JavanModule(
+            true,
+            "com.acme.app",
+            "25",
+            List.of(new JavanDependency("main", "com.acme:app:1.0.0", "coordinate", Optional.empty(), 3)),
+            List.of()
+        );
+
+        final JavanModule resolved = new JavanCoordinateResolver(List.of(repository)).resolve(module);
+
+        assertThat(resolved.dependencies()).extracting(JavanDependency::notation)
+            .containsExactly("com.acme:app:1.0.0", "com.acme:library:2.1.0");
+    }
+
+    @Test
+    void resolveIgnoresCommentedAndReportingDependencies() throws Exception {
+        final Path repository = tempDir.resolve("repo");
+        final Path app = artifact(repository, "com.acme", "app", "1.0.0");
+        artifact(repository, "com.acme", "ignored", "1.0.0");
+        Files.writeString(app.resolveSibling("app-1.0.0.pom"), """
+            <project>
+              <!-- <dependencies><dependency>
+                <groupId>com.acme</groupId><artifactId>ignored</artifactId><version>1.0.0</version>
+              </dependency></dependencies> -->
+              <reporting><plugins><plugin><dependencies><dependency>
+                <groupId>com.acme</groupId><artifactId>ignored</artifactId><version>1.0.0</version>
+              </dependency></dependencies></plugin></plugins></reporting>
+            </project>
+            """);
+        final JavanModule module = new JavanModule(
+            true,
+            "com.acme.app",
+            "25",
+            List.of(new JavanDependency("main", "com.acme:app:1.0.0", "coordinate", Optional.empty(), 3)),
+            List.of()
+        );
+
+        final JavanModule resolved = new JavanCoordinateResolver(List.of(repository)).resolve(module);
+
+        assertThat(resolved.dependencies()).extracting(JavanDependency::notation)
+            .containsExactly("com.acme:app:1.0.0");
+    }
+
+    @Test
+    void resolveKeepsNearestVersionAndReportsMediation() throws Exception {
+        final Path repository = tempDir.resolve("repo");
+        final Path app = artifact(repository, "com.acme", "app", "1.0.0");
+        final Path other = artifact(repository, "com.acme", "other", "1.0.0");
+        artifact(repository, "com.acme", "library", "1.0.0");
+        artifact(repository, "com.acme", "library", "2.0.0");
+        Files.writeString(app.resolveSibling("app-1.0.0.pom"), pomDependency("library", "1.0.0"));
+        Files.writeString(other.resolveSibling("other-1.0.0.pom"), pomDependency("library", "2.0.0"));
+        final JavanModule module = new JavanModule(
+            true,
+            "com.acme.app",
+            "25",
+            List.of(
+                new JavanDependency("main", "com.acme:app:1.0.0", "coordinate", Optional.empty(), 3),
+                new JavanDependency("main", "com.acme:other:1.0.0", "coordinate", Optional.empty(), 4)
+            ),
+            List.of()
+        );
+
+        final JavanModule resolved = new JavanCoordinateResolver(List.of(repository)).resolve(module);
+
+        assertThat(resolved.dependencies()).extracting(JavanDependency::notation)
+            .containsExactly("com.acme:app:1.0.0", "com.acme:other:1.0.0", "com.acme:library:1.0.0");
+        assertThat(resolved.warnings()).containsExactly(
+            "Dependency mediation kept com.acme:library:1.0.0 and omitted com.acme:library:2.0.0 requested by com.acme:other:1.0.0"
+        );
+    }
+
+    @Test
+    void resolveRejectsDuplicateDirectCoordinateFamily() throws Exception {
+        final Path repository = tempDir.resolve("repo");
+        final JavanModule module = new JavanModule(
+            true,
+            "com.acme.app",
+            "25",
+            List.of(
+                new JavanDependency("main", "com.acme:library:1.0.0", "coordinate", Optional.empty(), 3),
+                new JavanDependency("main", "com.acme:library:2.0.0", "coordinate", Optional.empty(), 4)
+            ),
+            List.of()
+        );
+
+        assertThatThrownBy(() -> new JavanCoordinateResolver(List.of(repository)).resolve(module))
+            .isInstanceOf(java.io.IOException.class)
+            .hasMessageContaining("Duplicate javan.mod coordinate family")
+            .hasMessageContaining("com.acme:library:1.0.0")
+            .hasMessageContaining("com.acme:library:2.0.0");
+    }
+
+    @Test
     void resolveUsesFirstRepositoryCandidateWhenArtifactIsMissing() throws Exception {
         final Path repository = tempDir.resolve("repo");
         final JavanDependency dependency = new JavanDependency("main", "com.acme:math:1.2.3", "coordinate", Optional.empty(), 4);
@@ -129,5 +325,30 @@ final class JavanCoordinateResolverTest {
         final JavanDependency resolved = new JavanCoordinateResolver(List.of(tempDir.resolve("repo"))).resolve(dependency);
 
         assertThat(resolved).isSameAs(dependency);
+    }
+
+    private static Path artifact(
+        final Path repository,
+        final String groupId,
+        final String artifactId,
+        final String version
+    ) throws Exception {
+        final Path jar = repository.resolve(groupId.replace('.', '/'))
+            .resolve(artifactId)
+            .resolve(version)
+            .resolve(artifactId + "-" + version + ".jar")
+            .toAbsolutePath()
+            .normalize();
+        Files.createDirectories(jar.getParent());
+        Files.writeString(jar, artifactId);
+        return jar;
+    }
+
+    private static String pomDependency(final String artifactId, final String version) {
+        return """
+            <project><dependencies><dependency>
+              <groupId>com.acme</groupId><artifactId>%s</artifactId><version>%s</version>
+            </dependency></dependencies></project>
+            """.formatted(artifactId, version);
     }
 }

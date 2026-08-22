@@ -1616,6 +1616,7 @@ public final class BytecodeToIR {
                 unaryDoubleNeg(classFile, method, stack);
                 break;
             case 132:
+                snapshotOperandStack(instructions, stack, locals, localDeclarations);
                 incrementInt(classFile, method, instructions, locals, localDeclarations, instruction);
                 break;
             case 133:

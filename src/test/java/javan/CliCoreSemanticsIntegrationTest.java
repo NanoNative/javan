@@ -886,6 +886,36 @@ final class CliCoreSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void postIncrementArgumentUsesValueBeforeIncrement() throws Exception {
+        final Path project = project("post-increment-argument");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<Integer> values = List.of(7, 9);
+                    int index = 0;
+                    System.out.println(values.get(index++));
+                    System.out.println(index);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/post-increment-argument").toString())).stdout())
+            .isEqualTo(jvmOutput)
+            .isEqualTo("7\n1\n");
+    }
+
+    @Test
     void whileLoopAccumulatorMatchesJvmOutput() throws Exception {
         final Path project = project("while-sum");
         writeJava(project, "com.acme.Main", """
