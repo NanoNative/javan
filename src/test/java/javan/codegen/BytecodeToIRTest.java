@@ -20055,11 +20055,12 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
-        assertThat(function.instructions()).containsExactly(
+        assertTransportedCall(function.instructions(),
             IrInstruction.assignInt(
                 "int0",
                 IrExpression.intCall("javan_files_delete_if_exists", List.of(IrExpression.objectLocal("arg0")))
             ),
+            "label_pending_continue_1",
             IrInstruction.returnInt(IrExpression.intLocal("int0"))
         );
     }
@@ -27553,11 +27554,12 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
-        assertThat(function.instructions()).containsExactly(
+        assertTransportedCall(function.instructions(),
             IrInstruction.assignObject(
                 "object0",
                 IrExpression.objectCall("javan_files_new_directory_stream", List.of(IrExpression.objectLocal("arg0")))
             ),
+            "label_pending_continue_1",
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
@@ -27605,7 +27607,7 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
-        assertThat(function.instructions()).containsExactly(
+        assertTransportedCall(function.instructions(),
             IrInstruction.assignObject(
                 "object0",
                 IrExpression.objectCall(
@@ -27613,6 +27615,7 @@ final class BytecodeToIRTest {
                     List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
                 )
             ),
+            "label_pending_continue_2",
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
@@ -28072,11 +28075,12 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
-        assertThat(function.instructions()).containsExactly(
+        assertTransportedCall(function.instructions(),
             IrInstruction.assignObject(
                 "object0",
                 IrExpression.objectCall("javan_files_read_string", List.of(IrExpression.objectLocal("arg0")))
             ),
+            "label_pending_continue_1",
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
@@ -28125,7 +28129,7 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
-        assertThat(function.instructions()).containsExactly(
+        assertTransportedCall(function.instructions(),
             IrInstruction.assignObject(
                 "object0",
                 IrExpression.objectCall(
@@ -28133,6 +28137,7 @@ final class BytecodeToIRTest {
                     List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("arg2"))
                 )
             ),
+            "label_pending_continue_3",
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
@@ -28181,7 +28186,7 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
-        assertThat(function.instructions()).containsExactly(
+        assertTransportedCall(function.instructions(),
             IrInstruction.assignObject(
                 "object0",
                 IrExpression.objectCall(
@@ -28189,6 +28194,7 @@ final class BytecodeToIRTest {
                     List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("arg2"))
                 )
             ),
+            "label_pending_continue_3",
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
@@ -28226,11 +28232,12 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
-        assertThat(function.instructions()).containsExactly(
+        assertTransportedCall(function.instructions(),
             IrInstruction.assignObject(
                 "object0",
                 IrExpression.objectCall("javan_files_read_all_bytes", List.of(IrExpression.objectLocal("arg0")))
             ),
+            "label_pending_continue_1",
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
@@ -28268,8 +28275,14 @@ final class BytecodeToIRTest {
             plain(2, 173, "lreturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnLong(IrExpression.longCall("javan_files_size", List.of(IrExpression.objectLocal("arg0"))))
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.LONG, "long0"));
+        assertTransportedCall(function.instructions(),
+            IrInstruction.assignLong(
+                "long0",
+                IrExpression.longCall("javan_files_size", List.of(IrExpression.objectLocal("arg0")))
+            ),
+            "label_pending_continue_1",
+            IrInstruction.returnLong(IrExpression.longLocal("long0"))
         );
     }
 
@@ -28311,7 +28324,7 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
-        assertThat(function.instructions()).containsExactly(
+        assertTransportedCall(function.instructions(),
             IrInstruction.assignObject(
                 "object0",
                 IrExpression.objectCall(
@@ -28319,6 +28332,7 @@ final class BytecodeToIRTest {
                     List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
                 )
             ),
+            "label_pending_continue_2",
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
@@ -28934,7 +28948,7 @@ final class BytecodeToIRTest {
         final IrExpression firstArgument,
         final String arrayBinaryName
     ) {
-        assertThat(function.instructions()).hasSize(3);
+        assertThat(function.instructions()).hasSize(6);
         final IrInstruction allocation = function.instructions().get(0);
         assertThat(allocation.op()).isEqualTo(IrInstruction.Op.ASSIGN_OBJECT);
         assertThat(allocation.expression()).contains(IrExpression.objectArrayAllocation(IrExpression.intLiteral(0), arrayBinaryName));
@@ -28946,7 +28960,34 @@ final class BytecodeToIRTest {
             List.of(firstArgument, IrExpression.objectLocal(arrayLocal))
         ));
         final String resultLocal = call.value().orElseThrow();
-        assertThat(function.instructions().get(2)).isEqualTo(IrInstruction.returnObject(IrExpression.objectLocal(resultLocal)));
+        assertTransportedCall(
+            function.instructions().subList(1, 6),
+            call,
+            "label_pending_continue_3",
+            IrInstruction.returnObject(IrExpression.objectLocal(resultLocal))
+        );
+    }
+
+    private static void assertTransportedCall(
+        final List<IrInstruction> instructions,
+        final IrInstruction call,
+        final String continueLabel,
+        final IrInstruction continuation
+    ) {
+        assertThat(instructions).containsExactly(
+            call,
+            IrInstruction.branchIf(
+                continueLabel,
+                IrExpression.intComparison(
+                    "==",
+                    IrExpression.intCall("javan_pending_has", List.of()),
+                    IrExpression.intLiteral(0)
+                )
+            ),
+            IrInstruction.propagatePending(),
+            IrInstruction.label(continueLabel),
+            continuation
+        );
     }
 
     private static void assertWrongCallArgument(

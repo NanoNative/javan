@@ -2209,6 +2209,7 @@ public final class StaticVerifier {
             || opcode >= 2 && opcode <= 17
             || opcode >= 21 && opcode <= 78
             || opcode == 87
+            || opcode == 88
             || opcode == 89
             || opcode == 117
             || opcode == 142;
@@ -2264,6 +2265,13 @@ public final class StaticVerifier {
         }
         if (opcode == 87) {
             return popEntryAnchoredCategoryOne(stack);
+        }
+        if (opcode == 88) {
+            if (stack.isEmpty()) {
+                return false;
+            }
+            final IrType top = stack.removeLast();
+            return top.slotWidth() == 2 || popEntryAnchoredCategoryOne(stack);
         }
         if (opcode == 89) {
             if (stack.isEmpty() || stack.getLast().slotWidth() == 2) {
@@ -3713,7 +3721,7 @@ public final class StaticVerifier {
         if (opcode == 20) {
             return true;
         }
-        if (opcode == 87) {
+        if (opcode == 87 || opcode == 88) {
             return true;
         }
         if (opcode == 89) {

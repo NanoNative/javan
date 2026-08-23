@@ -3317,6 +3317,19 @@ final class BytecodeToIRInvokeSupport {
         stack.add(StackValue.intExpression(IrExpression.intLocal(localName)));
     }
 
+    static void pushLongCall(
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final String symbol,
+        final List<IrExpression> arguments
+    ) {
+        final String localName = "long" + localDeclarations.size();
+        localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.LONG, localName));
+        instructions.add(IrInstruction.assignLong(localName, IrExpression.longCall(symbol, arguments)));
+        stack.add(StackValue.longExpression(IrExpression.longLocal(localName)));
+    }
+
     static void pushObjectCall(
         final List<IrInstruction> instructions,
         final List<StackValue> stack,
@@ -3963,7 +3976,7 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         if ("size".equals(methodRef.name()) && "(Ljava/nio/file/Path;)J".equals(methodRef.descriptor())) {
-            stack.add(StackValue.longExpression(IrExpression.longCall("javan_files_size", arguments)));
+            pushLongCall(instructions, stack, localDeclarations, "javan_files_size", arguments);
             return true;
         }
         if ("getLastModifiedTime".equals(methodRef.name())
