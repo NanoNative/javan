@@ -2069,10 +2069,6 @@ public final class StaticVerifier {
         if ("<init>".equals(target.name())) {
             return false;
         }
-        final MethodDescriptor descriptor = MethodDescriptor.parse(target.descriptor());
-        if (descriptor.returnType() == IrType.VOID) {
-            return false;
-        }
         final ClassFile owner = classes.get(target.owner());
         if (owner == null || !owner.application()) {
             return false;
@@ -3285,11 +3281,14 @@ public final class StaticVerifier {
             if (instruction.offset() == handler.handlerPc() && astoreLocalIndex(instruction) == throwableLocal) {
                 continue;
             }
-            if (instruction.opcode() == 191 || supportedGeneratedThrowableCall(classes, instruction)) {
+            if (instruction.opcode() == 191
+                || supportedGeneratedThrowableCall(classes, instruction)
+                || supportedTransportedJdkThrowableCall(instruction, "java/lang/Throwable")) {
                 hasThrowableTransport = 1;
             }
             if (!supportedExplicitThrowRangeInstruction(instruction)
                 && !supportedGeneratedThrowableCall(classes, instruction)
+                && !supportedTransportedJdkThrowableCall(instruction, "java/lang/Throwable")
                 && !supportedFinallyProtectedLocalInstruction(instruction)
                 && !supportedProtectedFinallyRethrowInstruction(classes, code, handler, throwableLocal, instruction)) {
                 return false;

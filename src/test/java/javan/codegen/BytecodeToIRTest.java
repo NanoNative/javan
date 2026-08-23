@@ -28024,6 +28024,16 @@ final class BytecodeToIRTest {
                     List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("arg2"))
                 )
             ),
+            IrInstruction.branchIf(
+                "label_pending_continue_3",
+                IrExpression.intComparison(
+                    "==",
+                    IrExpression.intCall("javan_pending_has", List.of()),
+                    IrExpression.intLiteral(0)
+                )
+            ),
+            IrInstruction.propagatePending(),
+            IrInstruction.label("label_pending_continue_3"),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }

@@ -4255,6 +4255,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void filesCopyTransportsIOException() {
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/nio/file/Files",
+            "copy",
+            "(Ljava/nio/file/Path;Ljava/nio/file/Path;[Ljava/nio/file/CopyOption;)Ljava/nio/file/Path;"
+        ))).containsExactly("java/io/IOException");
+    }
+
+    @Test
     void localeLowerCaseTransportsNullPointerException() {
         assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
             "java/lang/String",

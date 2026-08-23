@@ -670,13 +670,31 @@ final class RuntimeSourceIoSections {
             return access(javan_path_checked(path), X_OK) == 0;
         }
 
+        static void javan_files_copy_failure(const char* message) {
+            void* rooted_message = javan_string_from(message);
+            void** roots[] = { &rooted_message };
+            javan_root_frame_push(roots, 1);
+            javan_pending_throw(
+                "java/io/IOException",
+                rooted_message,
+                NULL,
+                NULL,
+                NULL,
+                -1,
+                -1,
+                NULL
+            );
+            javan_root_frame_pop(roots);
+        }
+
         void* javan_files_copy(void* source, void* target, void* options) {
             javan_copy_options_checked(options);
             const char* source_path = javan_path_checked(source);
             const char* target_path = javan_path_checked(target);
             FILE* input = fopen(source_path, "rb");
             if (input == NULL) {
-                javan_panic("file copy source open failed");
+                javan_files_copy_failure("file copy source open failed");
+                return NULL;
             }
             javan_native_resource_frame input_resource;
             javan_native_resource_push(&input_resource, input, javan_native_file_cleanup);
@@ -684,7 +702,8 @@ final class RuntimeSourceIoSections {
             if (output == NULL) {
                 javan_native_resource_pop(&input_resource);
                 fclose(input);
-                javan_panic("file copy target open failed");
+                javan_files_copy_failure("file copy target open failed");
+                return NULL;
             }
             javan_native_resource_frame output_resource;
             javan_native_resource_push(&output_resource, output, javan_native_file_cleanup);
@@ -696,7 +715,8 @@ final class RuntimeSourceIoSections {
                     fclose(output);
                     javan_native_resource_pop(&input_resource);
                     fclose(input);
-                    javan_panic("file copy write failed");
+                    javan_files_copy_failure("file copy write failed");
+                    return NULL;
                 }
             }
             if (ferror(input)) {
@@ -704,7 +724,8 @@ final class RuntimeSourceIoSections {
                 fclose(output);
                 javan_native_resource_pop(&input_resource);
                 fclose(input);
-                javan_panic("file copy read failed");
+                javan_files_copy_failure("file copy read failed");
+                return NULL;
             }
             javan_native_resource_pop(&output_resource);
             fclose(output);
