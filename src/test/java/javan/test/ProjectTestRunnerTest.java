@@ -10,6 +10,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -25,13 +26,12 @@ final class ProjectTestRunnerTest {
         assumeFalse(isWindows());
         final Path root = tempDir.resolve("maven-wrapper");
         Files.createDirectories(root);
-        Files.writeString(root.resolve("mvnw"), """
+        writeExecutable(root.resolve("mvnw"), """
             #!/bin/sh
             printf 'wrapper-stdout\\n'
             printf 'wrapper-stderr\\n' >&2
             exit 7
             """);
-        root.resolve("mvnw").toFile().setExecutable(true);
 
         final ByteArrayOutputStream output = new ByteArrayOutputStream();
         final int exitCode = new ProjectTestRunner().run(layout(root, BuildTool.MAVEN), new PrintStream(output));
@@ -50,12 +50,11 @@ final class ProjectTestRunnerTest {
         assumeFalse(isWindows());
         final Path root = tempDir.resolve("gradle-wrapper");
         Files.createDirectories(root);
-        Files.writeString(root.resolve("gradlew"), """
+        writeExecutable(root.resolve("gradlew"), """
             #!/bin/sh
             printf 'gradle-wrapper\\n'
             exit 0
             """);
-        root.resolve("gradlew").toFile().setExecutable(true);
 
         final ByteArrayOutputStream output = new ByteArrayOutputStream();
         final int exitCode = new ProjectTestRunner().run(layout(root, BuildTool.GRADLE), new PrintStream(output));
@@ -128,6 +127,15 @@ final class ProjectTestRunnerTest {
             "app",
             List.of()
         );
+    }
+
+    private static void writeExecutable(final Path target, final String content) throws Exception {
+        final Path staged = target.resolveSibling(target.getFileName() + ".staged");
+        Files.writeString(staged, content);
+        if (!staged.toFile().setExecutable(true)) {
+            throw new IllegalStateException("Cannot mark test wrapper executable");
+        }
+        Files.move(staged, target, StandardCopyOption.ATOMIC_MOVE);
     }
 
     private static boolean isWindows() {

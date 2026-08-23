@@ -197,6 +197,23 @@ final class WorkflowPolicySurfaceTest {
     }
 
     @Test
+    void publicationWaitsForEnabledProofsButAllowsTheDisabledPackageMatrix() throws Exception {
+        final String common = Files.readString(BUILD_COMMON);
+        final String publication = common.substring(common.indexOf("  prepare-publication:"));
+
+        assertThat(publication)
+            .contains(
+                "always()",
+                "needs.linux-package-generation3.result == 'success'",
+                "needs.linux-package-arm64.result == 'success'",
+                "needs.macos-package-self-host.result == 'success'",
+                "needs.native-package-self-host.result == 'success'",
+                "needs.native-package-self-host.result == 'skipped'"
+            )
+            .doesNotContain("if: inputs.prepare_publication");
+    }
+
+    @Test
     void nativePackagingEnablesMacArmAndKeepsUnsupportedRowsVisible() throws Exception {
         assertThat(Files.readString(BUILD_COMMON))
             .contains("target: macos-x64", "os: macos-15-intel")
