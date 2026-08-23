@@ -1896,6 +1896,18 @@ public final class JdkCallSupport {
         if (filesIoCall(methodRef)) {
             return List.of("java/io/IOException");
         }
+        if ("java/util/Optional".equals(methodRef.owner())
+            && "of".equals(methodRef.name())
+            && "(Ljava/lang/Object;)Ljava/util/Optional;".equals(methodRef.descriptor())) {
+            return List.of("java/lang/NullPointerException");
+        }
+        if ("java/util/Optional".equals(methodRef.owner())
+            && !"empty".equals(methodRef.name())
+            && !"of".equals(methodRef.name())
+            && !"ofNullable".equals(methodRef.name())
+            && isSupported(methodRef)) {
+            return List.of("java/lang/NullPointerException");
+        }
         if ("java/lang/Class".equals(methodRef.owner())
             && "forName".equals(methodRef.name())
             && "(Ljava/lang/String;)Ljava/lang/Class;".equals(methodRef.descriptor())) {

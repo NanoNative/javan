@@ -4281,6 +4281,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void optionalOfTransportsNullPointerException() {
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/util/Optional",
+            "of",
+            "(Ljava/lang/Object;)Ljava/util/Optional;"
+        ))).containsExactly("java/lang/NullPointerException");
+    }
+
+    @Test
+    void optionalInstanceCallTransportsNullPointerException() {
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/util/Optional",
+            "isPresent",
+            "()Z"
+        ))).containsExactly("java/lang/NullPointerException");
+    }
+
+    @Test
     void localeLowerCaseTransportsNullPointerException() {
         assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
             "java/lang/String",

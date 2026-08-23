@@ -23553,10 +23553,17 @@ final class BytecodeToIRTest {
             plain(2, 176, "areturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).extracting(IrInstruction::op).containsExactly(
+            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.THROW_PENDING,
+            IrInstruction.Op.LABEL,
+            IrInstruction.Op.RETURN_OBJECT
+        );
+        assertThat(function.instructions().getLast()).isEqualTo(
             IrInstruction.returnObject(IrExpression.objectCall(
                 "javan_optional_of",
-                List.of(IrExpression.objectLocal("arg0"))
+                List.of(IrExpression.objectLocal("object0"))
             ))
         );
     }

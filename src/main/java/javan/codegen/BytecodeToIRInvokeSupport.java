@@ -190,6 +190,7 @@ final class BytecodeToIRInvokeSupport {
         }
         final MethodRef target = instruction.methodRef().orElseThrow();
         if (!guardedMapGet(target)
+            && !guardedOptionalReceiver(target)
             && !(classes.containsKey(target.owner())
                 && classes.get(target.owner()).application()
                 && !"<init>".equals(target.name()))) {
@@ -267,6 +268,12 @@ final class BytecodeToIRInvokeSupport {
             && "get".equals(target.name())
             && "(Ljava/lang/Object;)Ljava/lang/Object;".equals(target.descriptor())
             && JdkCallSupport.supportedCall(target).isPresent();
+    }
+
+    private static boolean guardedOptionalReceiver(final MethodRef target) {
+        return "java/util/Optional".equals(target.owner())
+            && (JdkCallSupport.supportedCall(target).isPresent()
+                || JdkCallSupport.isContextLimitedOptionalOrElseThrowCall(target));
     }
 
     static void pushField(
@@ -2261,7 +2268,17 @@ final class BytecodeToIRInvokeSupport {
         if (lowerExecutorsStaticCall(classFile, method, instruction, methodRef, stack)) {
             return;
         }
-        if (lowerOptionalStaticCall(classFile, method, methodRef, stack)) {
+        if (lowerOptionalStaticCall(
+            classFile,
+            method,
+            instruction,
+            methodRef,
+            instructions,
+            stack,
+            localDeclarations,
+            pendingExceptionHandlerStacks,
+            sourceLines
+        )) {
             return;
         }
         if (!classes.containsKey(methodRef.owner())) {

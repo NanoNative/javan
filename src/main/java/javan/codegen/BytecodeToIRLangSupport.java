@@ -552,8 +552,13 @@ final class BytecodeToIRLangSupport {
     static boolean lowerOptionalStaticCall(
         final ClassFile classFile,
         final MethodInfo method,
+        final Instruction instruction,
         final MethodRef methodRef,
-        final List<StackValue> stack
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
     ) {
         if (!"java/util/Optional".equals(methodRef.owner()) || JdkCallSupport.supportedCall(methodRef).isEmpty()) {
             return false;
@@ -566,7 +571,18 @@ final class BytecodeToIRLangSupport {
         }
         final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
         if ("of".equals(name)) {
-            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_optional_of", arguments)));
+            final IrExpression value = guardOptionalValue(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                localDeclarations,
+                pendingExceptionHandlerStacks,
+                sourceLines,
+                arguments.getFirst()
+            );
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_optional_of", List.of(value))));
             return true;
         }
         if ("ofNullable".equals(name)) {
@@ -909,6 +925,46 @@ final class BytecodeToIRLangSupport {
         instructions.add(IrInstruction.label(endLabel));
         stack.addAll(preservedStack);
         stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
+    }
+
+    private static IrExpression guardOptionalValue(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines,
+        final IrExpression value
+    ) {
+        final String valueLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(valueLocal, value));
+        final List<StackValue> successStack = List.copyOf(stack);
+        final String successLabel = "label_optional_non_null_"
+            + instruction.offset() + "_" + localDeclarations.size();
+        instructions.add(IrInstruction.branchIf(
+            successLabel,
+            IrExpression.objectComparison(
+                "!=",
+                IrExpression.objectLocal(valueLocal),
+                IrExpression.objectNull()
+            )
+        ));
+        routePendingPlatformException(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            "java/lang/NullPointerException",
+            IrExpression.stringLiteral("value")
+        );
+        instructions.add(IrInstruction.label(successLabel));
+        stack.addAll(successStack);
+        return IrExpression.objectLocal(valueLocal);
     }
 
     private static Optional<String> supplierPlatformThrowableType(final DynamicLambda lambda) {
