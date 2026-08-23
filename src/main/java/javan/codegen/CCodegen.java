@@ -3562,9 +3562,14 @@ public final class CCodegen {
             case CALL_STATIC_VOID:
                 if (instruction.expression().isPresent()) {
                     final ExpressionPlan plan = new ExpressionPlan(objectResultSymbols, nativeWrapperSymbols);
-                    final String call = plan.expression(instruction.expression().orElseThrow());
+                    final IrExpression expression = instruction.expression().orElseThrow();
+                    final String call = plan.expression(expression);
                     final String indent = emitExpressionScopeStart(plan, c);
-                    c.append(indent).append(call).append(";").append(System.lineSeparator());
+                    c.append(indent);
+                    if (expression.type() != javan.ir.IrType.VOID) {
+                        c.append("(void) ");
+                    }
+                    c.append(call).append(";").append(System.lineSeparator());
                     emitExpressionScopeEnd(plan, c);
                 } else {
                     c.append("    ").append(nativeWrapperSymbols.resolve(instruction.value().orElseThrow())).append("();").append(System.lineSeparator());

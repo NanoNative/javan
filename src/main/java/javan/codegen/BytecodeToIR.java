@@ -2938,7 +2938,11 @@ public final class BytecodeToIR {
         if (value.expression().isPresent()) {
             final IrExpression expression = value.expression().orElseThrow();
             if (expression.kind() == IrExpression.Kind.CALL) {
-                instructions.add(IrInstruction.callStaticVoid(expression.value(), expression.arguments()));
+                if (expression.type() == IrType.OBJECT) {
+                    instructions.add(IrInstruction.discardCall(expression));
+                } else {
+                    instructions.add(IrInstruction.callStaticVoid(expression.value(), expression.arguments()));
+                }
             }
         }
     }

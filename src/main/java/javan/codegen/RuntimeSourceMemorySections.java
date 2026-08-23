@@ -1288,7 +1288,8 @@ final class RuntimeSourceMemorySections {
             node->size = size;
             node->kind = kind;
             node->type_id = type_id;
-            node->collectible = runtime_kind == JAVAN_RUNTIME_KIND_THROWABLE_STATE
+            node->collectible = runtime_kind == JAVAN_RUNTIME_KIND_STRING
+                || runtime_kind == JAVAN_RUNTIME_KIND_THROWABLE_STATE
                 || runtime_kind == JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE
                 || runtime_kind == JAVAN_RUNTIME_KIND_METHOD;
             node->runtime_kind = runtime_kind;
@@ -14203,14 +14204,20 @@ final class RuntimeSourceMemorySections {
             const char* source = value == NULL ? "null" : value;
             unsigned long length = strlen(source);
             void* source_root = (void*) source;
+            void* result_root = NULL;
             void** javan_string_copy_roots[] = {
-                (void**) &source_root
+                (void**) &source_root,
+                &result_root
             };
-            javan_root_frame_push(javan_string_copy_roots, 1);
-            char* result = javan_string_alloc(length + 1);
-            memcpy(result, (const char*) source_root, length + 1);
+            javan_root_frame_push(javan_string_copy_roots, 2);
+            (void) javan_alloc_runtime_rooted(
+                length + 1,
+                &result_root,
+                JAVAN_RUNTIME_KIND_STRING
+            );
+            memcpy((char*) result_root, (const char*) source_root, length + 1);
             javan_root_frame_pop(javan_string_copy_roots);
-            return result;
+            return result_root;
         }
 
         static void javan_string_validate_strict_utf8(const char* value) {
