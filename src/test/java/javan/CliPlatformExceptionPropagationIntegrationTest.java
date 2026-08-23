@@ -21,6 +21,37 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @NativeTest
 final class CliPlatformExceptionPropagationIntegrationTest extends CliIntegrationSupport {
     @Test
+    void checkcastFailureIsCaughtOutsideEntryAnchoredRange() throws Exception {
+        final Path project = project("platform-catch-checkcast");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(cast(7));
+                }
+
+                private static String cast(final Object value) {
+                    if (value == null) {
+                        return null;
+                    }
+                    try {
+                        return (String) value;
+                    } catch (final RuntimeException exception) {
+                        return "cast";
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        assertThat(nativeOutput(project)).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void generatedConstructorFailureIsCaughtAndWrapped() throws Exception {
         final Path project = project("platform-catch-generated-constructor");
         writeJava(project, "com.acme.Main", """

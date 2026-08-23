@@ -1836,6 +1836,9 @@ public final class StaticVerifier {
             if (instruction.opcode() == 191) {
                 hasThrowableTransport = 1;
             }
+            if (supportedCheckcastThrowable(instruction, catchType)) {
+                hasThrowableTransport = 1;
+            }
             if (supportedGeneratedThrowableCall(classes, instruction)) {
                 hasThrowableTransport = 1;
             }
@@ -1843,6 +1846,7 @@ public final class StaticVerifier {
                 hasThrowableTransport = 1;
             }
             if (!supportedInterruptedWaitProtectedInstruction(instruction)
+                && !supportedCheckcastThrowable(instruction, catchType)
                 && !supportedGeneratedThrowableCall(classes, instruction)
                 && !supportedTransportedJdkThrowableCall(instruction, catchType)
                 && !supportedThrowableWrapRangeInstruction(instruction)
@@ -1945,7 +1949,7 @@ public final class StaticVerifier {
     ) {
         if (instruction.opcode() == 192) {
             return instruction.className().isPresent()
-                && entryAnchoredCheckcastTarget(instruction.className().orElseThrow());
+                && supportedRuntimeCheckcastTarget(instruction.className().orElseThrow());
         }
         if (instruction.methodRef().isEmpty()) {
             return false;
@@ -2107,7 +2111,7 @@ public final class StaticVerifier {
         return targets > 0;
     }
 
-    private static boolean entryAnchoredCheckcastTarget(final String target) {
+    private static boolean supportedRuntimeCheckcastTarget(final String target) {
         return "java/lang/String".equals(target)
             || "java/lang/Object".equals(target);
     }
@@ -2594,7 +2598,13 @@ public final class StaticVerifier {
                     "java/lang/ClassCastException",
                     handler.catchType().orElseThrow()
                 )) {
-                return false;
+                if (!supportedCheckcastThrowable(
+                    instruction,
+                    handler.catchType().orElseThrow()
+                )) {
+                    return false;
+                }
+                continue;
             }
             if (supportedBoundedProtectedInstruction(
                 classes,
@@ -2625,6 +2635,19 @@ public final class StaticVerifier {
             return false;
         }
         return protectedInstructions > 0;
+    }
+
+    private static boolean supportedCheckcastThrowable(
+        final Instruction instruction,
+        final String catchType
+    ) {
+        return instruction.opcode() == 192
+            && instruction.className().isPresent()
+            && supportedRuntimeCheckcastTarget(instruction.className().orElseThrow())
+            && JdkCallSupport.isPlatformThrowableAssignable(
+                "java/lang/ClassCastException",
+                catchType
+            );
     }
 
     private static boolean supportedTransportedJdkThrowableCall(

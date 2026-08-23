@@ -450,9 +450,8 @@ final class CliOptionalOrElseThrowIntegrationTest extends CliIntegrationSupport 
     }
 
     @Test
-    void checkcastInsideOptionalProtectedRangeIsRejected() throws Exception {
-        final Path project = project("optional-or-else-throw-checkcast");
-        writeJava(project, "com.acme.Main", """
+    void checkcastInsideOptionalProtectedRangeIsCatchable() throws Exception {
+        assertNativeMatchesJvm("optional-or-else-throw-checkcast", """
             package com.acme;
 
             import java.util.Optional;
@@ -472,13 +471,6 @@ final class CliOptionalOrElseThrowIntegrationTest extends CliIntegrationSupport 
                 }
             }
             """);
-
-        final CliRun check = run(tempDir, "check", project.toString());
-
-        assertThat(List.of(
-            check.exitCode(),
-            check.stderr().contains("error[JAVAN014]")
-        )).containsExactly(2, true);
     }
 
     @Test
