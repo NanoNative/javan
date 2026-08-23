@@ -23724,12 +23724,16 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.assignObject(
-                "object0",
-                IrExpression.objectCall("javan_optional_or_else_throw", List.of(IrExpression.objectLocal("arg0")))
-            ),
-            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        assertThat(function.instructions().getFirst()).isEqualTo(IrInstruction.assignObject(
+            "object0",
+            IrExpression.objectCall("javan_optional_or_else_throw", List.of(IrExpression.objectLocal("arg0")))
+        ));
+        assertThat(function.instructions()).extracting(IrInstruction::op).containsExactly(
+            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.PROPAGATE_PENDING,
+            IrInstruction.Op.LABEL,
+            IrInstruction.Op.RETURN_OBJECT
         );
     }
 
@@ -23747,12 +23751,16 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.assignObject(
-                "object0",
-                IrExpression.objectCall("javan_optional_or_else_throw", List.of(IrExpression.objectLocal("arg0")))
-            ),
-            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        assertThat(function.instructions().getFirst()).isEqualTo(IrInstruction.assignObject(
+            "object0",
+            IrExpression.objectCall("javan_optional_or_else_throw", List.of(IrExpression.objectLocal("arg0")))
+        ));
+        assertThat(function.instructions()).extracting(IrInstruction::op).containsExactly(
+            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.PROPAGATE_PENDING,
+            IrInstruction.Op.LABEL,
+            IrInstruction.Op.RETURN_OBJECT
         );
     }
 

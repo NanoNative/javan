@@ -1906,6 +1906,13 @@ public final class JdkCallSupport {
             && !"of".equals(methodRef.name())
             && !"ofNullable".equals(methodRef.name())
             && isSupported(methodRef)) {
+            if (("get".equals(methodRef.name()) || "orElseThrow".equals(methodRef.name()))
+                && "()Ljava/lang/Object;".equals(methodRef.descriptor())) {
+                return List.of(
+                    "java/lang/NullPointerException",
+                    "java/util/NoSuchElementException"
+                );
+            }
             return List.of("java/lang/NullPointerException");
         }
         if ("java/lang/Class".equals(methodRef.owner())

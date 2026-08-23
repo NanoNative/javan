@@ -1849,6 +1849,7 @@ public final class StaticVerifier {
                 && !supportedCheckcastThrowable(instruction, catchType)
                 && !supportedGeneratedThrowableCall(classes, instruction)
                 && !supportedTransportedJdkThrowableCall(instruction, catchType)
+                && !supportedOptionalFactoryPreparation(instruction)
                 && !supportedThrowableWrapRangeInstruction(instruction)
                 && !(reflectiveInvocationRange && supportedMethodInvocationPreparationInstruction(instruction))
                 && !supportedCaughtThrowableCauseConstructor(code, instructions, instructionIndex, instruction)
@@ -2627,6 +2628,18 @@ public final class StaticVerifier {
             }
         }
         return false;
+    }
+
+    private static boolean supportedOptionalFactoryPreparation(final Instruction instruction) {
+        if (instruction.opcode() != 184 || instruction.methodRef().isEmpty()) {
+            return false;
+        }
+        final MethodRef target = instruction.methodRef().orElseThrow();
+        return "java/util/Optional".equals(target.owner())
+            && (("empty".equals(target.name())
+                && "()Ljava/util/Optional;".equals(target.descriptor()))
+                || (("of".equals(target.name()) || "ofNullable".equals(target.name()))
+                    && "(Ljava/lang/Object;)Ljava/util/Optional;".equals(target.descriptor())));
     }
 
     private static boolean supportedGeneratedThrowableCall(

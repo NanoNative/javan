@@ -471,6 +471,14 @@ public final class BytecodeToIR {
                 "(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;"
             ))
         );
+        result.put(
+            "javan_optional_or_else_throw",
+            JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+                "java/util/Optional",
+                "orElseThrow",
+                "()Ljava/lang/Object;"
+            ))
+        );
         addTransportedFilesCall(result, "javan_files_create_directories", "createDirectories",
             "(Ljava/nio/file/Path;[Ljava/nio/file/attribute/FileAttribute;)Ljava/nio/file/Path;");
         addTransportedFilesCall(result, "javan_files_copy", "copy",

@@ -1112,7 +1112,21 @@ final class RuntimeSourceIoSections {
         void* javan_optional_or_else_throw(void* value) {
             javan_optional* optional = javan_optional_checked(value);
             if (optional->present == 0) {
-                javan_panic("optional is empty");
+                void* rooted_message = javan_string_from("No value present");
+                void** roots[] = { &rooted_message };
+                javan_root_frame_push(roots, 1);
+                javan_pending_throw(
+                    "java/util/NoSuchElementException",
+                    rooted_message,
+                    NULL,
+                    NULL,
+                    NULL,
+                    -1,
+                    -1,
+                    NULL
+                );
+                javan_root_frame_pop(roots);
+                return NULL;
             }
             return optional->value;
         }

@@ -4299,6 +4299,20 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void optionalEmptyAccessTransportsNoSuchElementException() {
+        for (final String methodName : List.of("get", "orElseThrow")) {
+            assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+                "java/util/Optional",
+                methodName,
+                "()Ljava/lang/Object;"
+            ))).containsExactly(
+                "java/lang/NullPointerException",
+                "java/util/NoSuchElementException"
+            );
+        }
+    }
+
+    @Test
     void localeLowerCaseTransportsNullPointerException() {
         assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
             "java/lang/String",

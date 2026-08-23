@@ -10988,7 +10988,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void optionalEmptyOrElseThrowFailsAtRuntime() throws Exception {
+    void optionalEmptyOrElseThrowReportsNoSuchElementException() throws Exception {
         final Path project = project("optional-empty-or-else-throw");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -11011,7 +11011,10 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/optional-empty-or-else-throw").toString()));
 
         assertThat(nativeRun.exitCode()).isNotZero();
-        assertThat(nativeRun.stderr()).contains("optional is empty");
+        assertThat(nativeRun.stderr()).contains(
+            "java/util/NoSuchElementException",
+            "No value present"
+        );
     }
 
     @Test
