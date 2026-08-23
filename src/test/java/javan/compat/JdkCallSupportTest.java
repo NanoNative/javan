@@ -4255,12 +4255,29 @@ final class JdkCallSupportTest {
     }
 
     @Test
-    void filesCopyTransportsIOException() {
+    void supportedFilesCallsTransportIOException() {
+        final List<MethodRef> calls = List.of(
+            new MethodRef("java/nio/file/Files", "createDirectories", "(Ljava/nio/file/Path;[Ljava/nio/file/attribute/FileAttribute;)Ljava/nio/file/Path;"),
+            new MethodRef("java/nio/file/Files", "copy", "(Ljava/nio/file/Path;Ljava/nio/file/Path;[Ljava/nio/file/CopyOption;)Ljava/nio/file/Path;"),
+            new MethodRef("java/nio/file/Files", "readString", "(Ljava/nio/file/Path;)Ljava/lang/String;"),
+            new MethodRef("java/nio/file/Files", "writeString", "(Ljava/nio/file/Path;Ljava/lang/CharSequence;[Ljava/nio/file/OpenOption;)Ljava/nio/file/Path;"),
+            new MethodRef("java/nio/file/Files", "write", "(Ljava/nio/file/Path;[B[Ljava/nio/file/OpenOption;)Ljava/nio/file/Path;"),
+            new MethodRef("java/nio/file/Files", "readAllBytes", "(Ljava/nio/file/Path;)[B"),
+            new MethodRef("java/nio/file/Files", "deleteIfExists", "(Ljava/nio/file/Path;)Z"),
+            new MethodRef("java/nio/file/Files", "size", "(Ljava/nio/file/Path;)J"),
+            new MethodRef("java/nio/file/Files", "getLastModifiedTime", "(Ljava/nio/file/Path;[Ljava/nio/file/LinkOption;)Ljava/nio/file/attribute/FileTime;"),
+            new MethodRef("java/nio/file/Files", "newDirectoryStream", "(Ljava/nio/file/Path;)Ljava/nio/file/DirectoryStream;")
+        );
+
+        assertThat(calls).allSatisfy(call ->
+            assertThat(JdkCallSupport.transportedPlatformThrowableTypes(call))
+                .containsExactly("java/io/IOException")
+        );
         assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/nio/file/Files",
-            "copy",
-            "(Ljava/nio/file/Path;Ljava/nio/file/Path;[Ljava/nio/file/CopyOption;)Ljava/nio/file/Path;"
-        ))).containsExactly("java/io/IOException");
+            "readString",
+            "(Ljava/nio/file/Path;Ljava/nio/charset/Charset;)Ljava/lang/String;"
+        ))).isEmpty();
     }
 
     @Test

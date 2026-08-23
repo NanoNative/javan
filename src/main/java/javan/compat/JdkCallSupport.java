@@ -1893,10 +1893,7 @@ public final class JdkCallSupport {
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
-        if ("java/nio/file/Files".equals(methodRef.owner())
-            && "copy".equals(methodRef.name())
-            && "(Ljava/nio/file/Path;Ljava/nio/file/Path;[Ljava/nio/file/CopyOption;)Ljava/nio/file/Path;"
-                .equals(methodRef.descriptor())) {
+        if (filesIoCall(methodRef)) {
             return List.of("java/io/IOException");
         }
         if ("java/lang/Class".equals(methodRef.owner())
@@ -2025,6 +2022,36 @@ public final class JdkCallSupport {
             return List.of("java/util/NoSuchElementException");
         }
         return List.of();
+    }
+
+    private static boolean filesIoCall(final MethodRef methodRef) {
+        if (!"java/nio/file/Files".equals(methodRef.owner())) {
+            return false;
+        }
+        return switch (methodRef.name()) {
+            case "createDirectories" ->
+                "(Ljava/nio/file/Path;[Ljava/nio/file/attribute/FileAttribute;)Ljava/nio/file/Path;"
+                    .equals(methodRef.descriptor());
+            case "copy" ->
+                "(Ljava/nio/file/Path;Ljava/nio/file/Path;[Ljava/nio/file/CopyOption;)Ljava/nio/file/Path;"
+                    .equals(methodRef.descriptor());
+            case "readString" -> "(Ljava/nio/file/Path;)Ljava/lang/String;".equals(methodRef.descriptor());
+            case "writeString" ->
+                "(Ljava/nio/file/Path;Ljava/lang/CharSequence;[Ljava/nio/file/OpenOption;)Ljava/nio/file/Path;"
+                    .equals(methodRef.descriptor());
+            case "write" ->
+                "(Ljava/nio/file/Path;[B[Ljava/nio/file/OpenOption;)Ljava/nio/file/Path;"
+                    .equals(methodRef.descriptor());
+            case "readAllBytes" -> "(Ljava/nio/file/Path;)[B".equals(methodRef.descriptor());
+            case "deleteIfExists" -> "(Ljava/nio/file/Path;)Z".equals(methodRef.descriptor());
+            case "size" -> "(Ljava/nio/file/Path;)J".equals(methodRef.descriptor());
+            case "getLastModifiedTime" ->
+                "(Ljava/nio/file/Path;[Ljava/nio/file/LinkOption;)Ljava/nio/file/attribute/FileTime;"
+                    .equals(methodRef.descriptor());
+            case "newDirectoryStream" ->
+                "(Ljava/nio/file/Path;)Ljava/nio/file/DirectoryStream;".equals(methodRef.descriptor());
+            default -> false;
+        };
     }
 
     private static boolean methodMetadataAccessor(final MethodRef methodRef) {

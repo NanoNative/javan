@@ -471,15 +471,42 @@ public final class BytecodeToIR {
                 "(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;"
             ))
         );
+        addTransportedFilesCall(result, "javan_files_create_directories", "createDirectories",
+            "(Ljava/nio/file/Path;[Ljava/nio/file/attribute/FileAttribute;)Ljava/nio/file/Path;");
+        addTransportedFilesCall(result, "javan_files_copy", "copy",
+            "(Ljava/nio/file/Path;Ljava/nio/file/Path;[Ljava/nio/file/CopyOption;)Ljava/nio/file/Path;");
+        addTransportedFilesCall(result, "javan_files_read_string", "readString",
+            "(Ljava/nio/file/Path;)Ljava/lang/String;");
+        addTransportedFilesCall(result, "javan_files_write_string", "writeString",
+            "(Ljava/nio/file/Path;Ljava/lang/CharSequence;[Ljava/nio/file/OpenOption;)Ljava/nio/file/Path;");
+        addTransportedFilesCall(result, "javan_files_write_bytes", "write",
+            "(Ljava/nio/file/Path;[B[Ljava/nio/file/OpenOption;)Ljava/nio/file/Path;");
+        addTransportedFilesCall(result, "javan_files_read_all_bytes", "readAllBytes",
+            "(Ljava/nio/file/Path;)[B");
+        addTransportedFilesCall(result, "javan_files_delete_if_exists", "deleteIfExists",
+            "(Ljava/nio/file/Path;)Z");
+        addTransportedFilesCall(result, "javan_files_size", "size", "(Ljava/nio/file/Path;)J");
+        addTransportedFilesCall(result, "javan_files_get_last_modified_time", "getLastModifiedTime",
+            "(Ljava/nio/file/Path;[Ljava/nio/file/LinkOption;)Ljava/nio/file/attribute/FileTime;");
+        addTransportedFilesCall(result, "javan_files_new_directory_stream", "newDirectoryStream",
+            "(Ljava/nio/file/Path;)Ljava/nio/file/DirectoryStream;");
+        return Map.copyOf(result);
+    }
+
+    private static void addTransportedFilesCall(
+        final Map<String, List<String>> result,
+        final String symbol,
+        final String name,
+        final String descriptor
+    ) {
         result.put(
-            "javan_files_copy",
+            symbol,
             JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
                 "java/nio/file/Files",
-                "copy",
-                "(Ljava/nio/file/Path;Ljava/nio/file/Path;[Ljava/nio/file/CopyOption;)Ljava/nio/file/Path;"
+                name,
+                descriptor
             ))
         );
-        return Map.copyOf(result);
     }
 
     private static Map<EntryPoint, List<EntryPoint>> callCalleesByCaller(final CallGraph callGraph) {

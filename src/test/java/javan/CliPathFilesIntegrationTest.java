@@ -687,4 +687,132 @@ final class CliPathFilesIntegrationTest extends CliIntegrationSupport {
             .isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("cleanup\ncleanup\ncaught\ncleanup\ncaught\n");
     }
+
+    @Test
+    void filesFailuresAreCatchableAsIoExceptions() throws Exception {
+        final Path project = project("files-io-exceptions");
+        Files.writeString(project.resolve("file"), "content", StandardCharsets.UTF_8);
+        Files.createDirectories(project.resolve("directory/child"));
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.io.IOException;
+            import java.nio.file.Files;
+            import java.nio.file.LinkOption;
+            import java.nio.file.OpenOption;
+            import java.nio.file.Path;
+            import java.nio.file.attribute.FileAttribute;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    create(Path.of("file/child"), new FileAttribute[0]);
+                    readString(Path.of("missing"));
+                    writeString(Path.of("directory"), new OpenOption[0]);
+                    writeBytes(Path.of("directory"), new byte[] {1}, new OpenOption[0]);
+                    readBytes(Path.of("missing"));
+                    delete(Path.of("directory"));
+                    size(Path.of("missing"));
+                    modified(Path.of("missing"), new LinkOption[0]);
+                    list(Path.of("missing"));
+                }
+
+                private static void create(final Path path, final FileAttribute<?>[] attributes) {
+                    try {
+                        Files.createDirectories(path, attributes);
+                    } catch (final IOException exception) {
+                        System.out.println("create");
+                    }
+                }
+
+                private static void readString(final Path path) {
+                    try {
+                        Files.readString(path);
+                    } catch (final IOException exception) {
+                        System.out.println("readString");
+                    }
+                }
+
+                private static void writeString(final Path path, final OpenOption[] options) {
+                    try {
+                        Files.writeString(path, "value", options);
+                    } catch (final IOException exception) {
+                        System.out.println("writeString");
+                    }
+                }
+
+                private static void writeBytes(final Path path, final byte[] bytes, final OpenOption[] options) {
+                    try {
+                        Files.write(path, bytes, options);
+                    } catch (final IOException exception) {
+                        System.out.println("writeBytes");
+                    }
+                }
+
+                private static void readBytes(final Path path) {
+                    try {
+                        Files.readAllBytes(path);
+                    } catch (final IOException exception) {
+                        System.out.println("readBytes");
+                    }
+                }
+
+                private static void delete(final Path path) {
+                    try {
+                        Files.deleteIfExists(path);
+                    } catch (final IOException exception) {
+                        System.out.println("delete");
+                    }
+                }
+
+                private static void size(final Path path) {
+                    try {
+                        fileSize(path);
+                    } catch (final IOException exception) {
+                        System.out.println("size");
+                    }
+                }
+
+                private static long fileSize(final Path path) throws IOException {
+                    return Files.size(path);
+                }
+
+                private static void modified(final Path path, final LinkOption[] options) {
+                    try {
+                        Files.getLastModifiedTime(path, options);
+                    } catch (final IOException exception) {
+                        System.out.println("modified");
+                    }
+                }
+
+                private static void list(final Path path) {
+                    try {
+                        Files.newDirectoryStream(path);
+                    } catch (final IOException exception) {
+                        System.out.println("list");
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/files-io-exceptions").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("""
+            create
+            readString
+            writeString
+            writeBytes
+            readBytes
+            delete
+            size
+            modified
+            list
+            """);
+    }
 }
