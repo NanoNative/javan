@@ -134,6 +134,7 @@ final class CompatibilityReportsTest {
             "Real external project probes are tracked separately in `doc/status/real-project-readiness.md`.",
             "External project names do not belong in this matrix; this ledger stays compiler-owned and deterministic.",
             "| `try-catch` | pass |",
+            "| `application-runtime-exception-transport` | pass |",
             "| `try-finally` | scoped |",
             "| `boxed-primitive-gc` | pass |",
             "| `enum-basic` | pass |",

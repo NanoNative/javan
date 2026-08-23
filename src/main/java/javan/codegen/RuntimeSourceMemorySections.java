@@ -1380,7 +1380,11 @@ final class RuntimeSourceMemorySections {
                 javan_panic("invalid type descriptor inventory");
             }
             for (int index = 0; index < count; index++) {
-                if (descriptors[index].type_id == 0 || descriptors[index].name == NULL || descriptors[index].object_field_count < 0) {
+                if (descriptors[index].type_id == 0
+                    || descriptors[index].name == NULL
+                    || descriptors[index].jvm_name == NULL
+                    || descriptors[index].super_name == NULL
+                    || descriptors[index].object_field_count < 0) {
                     javan_runtime_lock_leave();
                     javan_panic("invalid type descriptor");
                 }
@@ -3106,6 +3110,7 @@ final class RuntimeSourceMemorySections {
 
         typedef struct {
             const char* pending_throwable_type;
+            void* pending_throwable_object;
             void* pending_throwable_message;
             void* pending_throwable_cause;
             const char* pending_throwable_class;
@@ -6425,6 +6430,7 @@ final class RuntimeSourceMemorySections {
 
         static void javan_pending_clear_state(javan_throwable_state* state) {
             state->pending_throwable_type = NULL;
+            state->pending_throwable_object = NULL;
             state->pending_throwable_message = NULL;
             state->pending_throwable_cause = NULL;
             state->pending_throwable_class = NULL;
@@ -6479,6 +6485,7 @@ final class RuntimeSourceMemorySections {
             javan_throwable_state* state = javan_thread_throwable_state(thread);
             javan_runtime_lock_enter();
             state->pending_throwable_type = throwable_type;
+            state->pending_throwable_object = NULL;
             state->pending_throwable_message = message;
             state->pending_throwable_cause = NULL;
             state->pending_throwable_class = class_name;
@@ -6502,6 +6509,94 @@ final class RuntimeSourceMemorySections {
             javan_runtime_lock_leave();
         }
 
+        """;
+
+    private static final String SOURCE_HEAP_ALLOC_EXCEPTIONS = """
+        static javan_caught_throwable* javan_generated_throwable_state(void* value) {
+            return (javan_caught_throwable*) javan_generated_object_runtime_state(
+                value,
+                JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE
+            );
+        }
+
+        void javan_generated_throwable_initialize(void* value, void* message) {
+            if (value == NULL) {
+                javan_panic("invalid generated throwable");
+            }
+            int type_id = javan_registered_type_id(value);
+            JavanTypeDescriptor* descriptor = javan_type_descriptor_for(type_id);
+            if (descriptor == NULL || descriptor->jvm_name == NULL || descriptor->jvm_name[0] == '\\0') {
+                javan_panic("invalid generated throwable type");
+            }
+            void* rooted_value = value;
+            void* rooted_message = message;
+            void* rooted_state = NULL;
+            void** roots[] = { &rooted_value, &rooted_message, &rooted_state };
+            javan_root_frame_push(roots, 3);
+            javan_alloc_runtime_rooted(
+                sizeof(javan_caught_throwable),
+                &rooted_state,
+                JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE
+            );
+            javan_caught_throwable* state = (javan_caught_throwable*) rooted_state;
+            state->throwable_type = descriptor->jvm_name;
+            state->throwable_message = rooted_message;
+            state->throwable_cause = NULL;
+            state->throwable_class = NULL;
+            state->throwable_method = NULL;
+            state->throwable_file = NULL;
+            state->throwable_line = -1;
+            state->throwable_bytecode_offset = -1;
+            state->throwable_source_line = NULL;
+            javan_generated_object_attach_runtime_state(
+                rooted_value,
+                rooted_state,
+                JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE
+            );
+            javan_root_frame_pop(roots);
+        }
+
+        void javan_pending_throw_object(
+            void* value,
+            const char* class_name,
+            const char* method,
+            const char* file,
+            int line,
+            int bytecode_offset,
+            const char* source_line
+        ) {
+            if (value == NULL) {
+                javan_pending_throw(
+                    "java/lang/NullPointerException",
+                    (void*) "Cannot throw null",
+                    class_name,
+                    method,
+                    file,
+                    line,
+                    bytecode_offset,
+                    source_line
+                );
+                return;
+            }
+            javan_caught_throwable* throwable = javan_generated_throwable_state(value);
+            if (throwable == NULL || throwable->throwable_type == NULL) {
+                javan_panic("invalid generated throwable state");
+            }
+            throwable->throwable_class = class_name;
+            throwable->throwable_method = method;
+            throwable->throwable_file = file;
+            throwable->throwable_line = line;
+            throwable->throwable_bytecode_offset = bytecode_offset;
+            throwable->throwable_source_line = source_line;
+            javan_pending_throw(throwable->throwable_type, throwable->throwable_message,
+                class_name, method, file, line, bytecode_offset, source_line);
+            javan_thread* thread = javan_current_thread_object();
+            javan_runtime_lock_enter();
+            thread->throwable_state->pending_throwable_object = value;
+            thread->throwable_state->pending_throwable_cause = throwable->throwable_cause;
+            javan_runtime_lock_leave();
+        }
+
         int javan_pending_has(void) {
             if (javan_current_thread_value == NULL) {
                 return 0;
@@ -6519,26 +6614,50 @@ final class RuntimeSourceMemorySections {
             return actual != NULL && strcmp(actual, (const char*) throwable_type) == 0;
         }
 
+        static const char* javan_throwable_parent(const char* throwable_type) {
+            const char* platform_parent = javan_platform_throwable_parent(throwable_type);
+            if (platform_parent[0] != '\\0' || strcmp(throwable_type, "java/lang/Throwable") == 0) {
+                return platform_parent;
+            }
+            for (int index = 0; index < javan_type_descriptor_count_value; index++) {
+                JavanTypeDescriptor* descriptor = &javan_type_descriptors_value[index];
+                if (strcmp(descriptor->jvm_name, throwable_type) == 0) {
+                    return descriptor->super_name;
+                }
+            }
+            return "";
+        }
+
+        static int javan_known_throwable_type(const char* throwable_type) {
+            const char* current = throwable_type;
+            for (int depth = 0; current != NULL && current[0] != '\\0'
+                && depth <= javan_type_descriptor_count_value + 64; depth++) {
+                if (strcmp(current, "java/lang/Throwable") == 0) {
+                    return 1;
+                }
+                current = javan_throwable_parent(current);
+            }
+            return 0;
+        }
+
         int javan_pending_type_assignable_to(void* catch_type) {
             if (catch_type == NULL || javan_current_thread_value == NULL) {
                 return 0;
             }
             const char* expected = (const char*) catch_type;
-            const char* expected_parent = javan_platform_throwable_parent(expected);
-            if (strcmp(expected, "java/lang/Throwable") != 0 && expected_parent[0] == '\\0') {
+            if (javan_known_throwable_type(expected) == 0) {
                 return 0;
             }
             javan_throwable_state* state = ((javan_thread*) javan_current_thread_value)->throwable_state;
             const char* current = state == NULL ? NULL : state->pending_throwable_type;
             while (current != NULL && current[0] != '\\0') {
-                const char* parent = javan_platform_throwable_parent(current);
-                if (strcmp(current, "java/lang/Throwable") != 0 && parent[0] == '\\0') {
+                if (javan_known_throwable_type(current) == 0) {
                     return 0;
                 }
                 if (strcmp(current, expected) == 0) {
                     return 1;
                 }
-                current = parent;
+                current = javan_throwable_parent(current);
             }
             return 0;
         }
@@ -6549,8 +6668,22 @@ final class RuntimeSourceMemorySections {
             }
             javan_runtime_lock_enter();
             javan_allocation_node* node = javan_find_allocation_locked(value, NULL);
-            if (node == NULL
-                || node->kind != JAVAN_HEAP_KIND_RUNTIME
+            if (node == NULL) {
+                javan_runtime_lock_leave();
+                javan_panic("invalid caught throwable");
+            }
+            if (node->kind == JAVAN_HEAP_KIND_OBJECT && node->type_id > 0) {
+                struct javan_object_header* header = (struct javan_object_header*) value;
+                if (header->_javan_runtime_kind != JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE
+                    || header->_javan_runtime_state == NULL) {
+                    javan_runtime_lock_leave();
+                    javan_panic("invalid caught throwable");
+                }
+                javan_caught_throwable* state = (javan_caught_throwable*) header->_javan_runtime_state;
+                javan_runtime_lock_leave();
+                return state;
+            }
+            if (node->kind != JAVAN_HEAP_KIND_RUNTIME
                 || node->runtime_kind != JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE) {
                 javan_runtime_lock_leave();
                 javan_panic("invalid caught throwable");
@@ -6559,8 +6692,21 @@ final class RuntimeSourceMemorySections {
             return (javan_caught_throwable*) value;
         }
 
-        void* javan_pending_catch(void) {
+        void javan_pending_catch_into(void** result) {
+            if (result == NULL) {
+                javan_panic("missing pending catch result");
+            }
             javan_thread* thread = javan_current_thread_object();
+            javan_runtime_lock_enter();
+            *result = NULL;
+            javan_throwable_state* pending = thread->throwable_state;
+            if (pending != NULL && pending->pending_throwable_object != NULL) {
+                *result = pending->pending_throwable_object;
+                javan_pending_clear_state(pending);
+                javan_runtime_lock_leave();
+                return;
+            }
+            javan_runtime_lock_leave();
             void* rooted_caught = NULL;
             void** roots[] = { &rooted_caught };
             javan_root_frame_push(roots, 1);
@@ -6587,9 +6733,9 @@ final class RuntimeSourceMemorySections {
             caught->throwable_bytecode_offset = state->pending_throwable_bytecode_offset;
             caught->throwable_source_line = state->pending_throwable_source_line;
             javan_pending_clear_state(state);
+            *result = rooted_caught;
             javan_runtime_lock_leave();
             javan_root_frame_pop(roots);
-            return rooted_caught;
         }
 
         void* javan_caught_throwable_message(void* value) {
@@ -6606,6 +6752,7 @@ final class RuntimeSourceMemorySections {
             javan_throwable_state* state = javan_thread_throwable_state(thread);
             javan_runtime_lock_enter();
             state->pending_throwable_type = caught->throwable_type;
+            state->pending_throwable_object = value;
             state->pending_throwable_message = caught->throwable_message;
             state->pending_throwable_cause = caught->throwable_cause;
             state->pending_throwable_class = caught->throwable_class;
@@ -8024,6 +8171,7 @@ final class RuntimeSourceMemorySections {
                 javan_gc_mark_value(result->stderr_value);
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_THROWABLE_STATE) {
                 javan_throwable_state* state = (javan_throwable_state*) value;
+                javan_gc_mark_value(state->pending_throwable_object);
                 javan_gc_mark_value(state->pending_throwable_message);
                 javan_gc_mark_value(state->pending_throwable_cause);
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE) {
@@ -14768,6 +14916,7 @@ final class RuntimeSourceMemorySections {
         result = result + SOURCE_HEAP_ALLOC_DATE_TIME;
         result = result + platformThrowableHierarchy();
         result = result + SOURCE_HEAP_ALLOC_TAIL;
+        result = result + SOURCE_HEAP_ALLOC_EXCEPTIONS;
         result = result + SOURCE_HEAP_ALLOC_SCHEDULE_FIXED_DELAY;
         result = result + SOURCE_HEAP_ALLOC_TAIL_CONTINUED;
         result = result + SOURCE_HEAP_ATOMIC_INTEGER;

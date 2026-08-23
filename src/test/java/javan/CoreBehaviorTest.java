@@ -15693,7 +15693,7 @@ final class CoreBehaviorTest {
             "(unsigned long) offsetof(struct javan_class_com_acme_Node, field_child),",
             "(unsigned long) offsetof(struct javan_class_com_acme_Node, field_items)",
             "static JavanTypeDescriptor javan_type_descriptors[] = {",
-            "{1, \"com.acme.Node\", 0, 2, javan_type_fields_com_acme_Node}",
+            "{1, \"com.acme.Node\", \"com/acme/Node\", \"java/lang/Object\", 0, 2, javan_type_fields_com_acme_Node}",
             "javan_register_type_descriptors(javan_type_descriptors, 1);",
             "javan_register_generated_type_descriptors();",
             "javan_gc_safe_point();"

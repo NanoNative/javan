@@ -6,6 +6,7 @@ import java.util.List;
  * Lowered class metadata used by generated native structs.
  *
  * @param jvmName JVM internal class name
+ * @param superName JVM internal superclass name, or an empty string for {@code java.lang.Object}
  * @param symbol C struct symbol
  * @param fields complete root-to-leaf instance layout for generated objects
  * @param staticFields lowered static field metadata
@@ -15,6 +16,7 @@ import java.util.List;
  */
 public record IrClass(
     String jvmName,
+    String superName,
     String symbol,
     List<IrField> fields,
     List<IrField> staticFields,
@@ -30,7 +32,7 @@ public record IrClass(
      * @param fields lowered field metadata
      */
     public IrClass(final String jvmName, final String symbol, final List<IrField> fields) {
-        this(jvmName, symbol, fields, List.of(), List.of(), false, false);
+        this(jvmName, "java/lang/Object", symbol, fields, List.of(), List.of(), false, false);
     }
 
     /**
@@ -42,7 +44,7 @@ public record IrClass(
      * @param staticFields lowered static field metadata
      */
     public IrClass(final String jvmName, final String symbol, final List<IrField> fields, final List<IrField> staticFields) {
-        this(jvmName, symbol, fields, staticFields, List.of(), false, false);
+        this(jvmName, "java/lang/Object", symbol, fields, staticFields, List.of(), false, false);
     }
 
     /**
@@ -61,7 +63,7 @@ public record IrClass(
         final List<IrField> staticFields,
         final List<String> enumConstants
     ) {
-        this(jvmName, symbol, fields, staticFields, enumConstants, !enumConstants.isEmpty(), false);
+        this(jvmName, "java/lang/Object", symbol, fields, staticFields, enumConstants, !enumConstants.isEmpty(), false);
     }
 
     /**
@@ -82,6 +84,19 @@ public record IrClass(
         final List<String> enumConstants,
         final boolean cloneable
     ) {
-        this(jvmName, symbol, fields, staticFields, enumConstants, !enumConstants.isEmpty(), cloneable);
+        this(jvmName, "java/lang/Object", symbol, fields, staticFields, enumConstants, !enumConstants.isEmpty(), cloneable);
+    }
+
+    /** Creates compatibility metadata without explicit superclass information. */
+    public IrClass(
+        final String jvmName,
+        final String symbol,
+        final List<IrField> fields,
+        final List<IrField> staticFields,
+        final List<String> enumConstants,
+        final boolean enumClass,
+        final boolean cloneable
+    ) {
+        this(jvmName, "java/lang/Object", symbol, fields, staticFields, enumConstants, enumClass, cloneable);
     }
 }

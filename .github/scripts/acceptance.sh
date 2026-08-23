@@ -676,6 +676,7 @@ accepts_jvm_equivalent_app "$NATIVE_PROFILE_PROJECTS/typed-catch-io-superclass"
 accepts_jvm_equivalent_app "$NATIVE_PROFILE_PROJECTS/typed-catch-util-runtime-superclass"
 accepts_jvm_equivalent_app "$NATIVE_PROFILE_PROJECTS/typed-catch-error-not-exception"
 accepts_jvm_equivalent_app "$NATIVE_PROFILE_PROJECTS/exception-default-message-null"
+accepts_jvm_equivalent_app_gc_stress "$NATIVE_PROFILE_PROJECTS/application-exception"
 accepts_jvm_equivalent_app "$NATIVE_PROFILE_PROJECTS/object-fields"
 accepts_jvm_equivalent_app "$NATIVE_PROFILE_PROJECTS/object-list"
 accepts_jvm_equivalent_app_env "$NATIVE_PROFILE_PROJECTS/runtime-container-live-roots" JAVAN_HEAP_LIMIT_BYTES 4096

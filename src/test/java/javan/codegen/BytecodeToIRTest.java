@@ -643,7 +643,7 @@ final class BytecodeToIRTest {
             IrInstruction.Op.PROPAGATE_PENDING,
             IrInstruction.Op.LABEL,
             IrInstruction.Op.LABEL,
-            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.CALL_STATIC_VOID,
             IrInstruction.Op.ASSIGN_OBJECT,
             IrInstruction.Op.RETURN_OBJECT
         );
@@ -672,9 +672,9 @@ final class BytecodeToIRTest {
         final IrFunction function = lowerMain(main);
 
         assertThat(function.instructions()).contains(
-            IrInstruction.assignObject(
-                "pendingException0",
-                IrExpression.objectCall("javan_pending_catch", List.of())
+            IrInstruction.callStaticVoid(
+                "javan_pending_catch_into",
+                List.of(IrExpression.objectLocalAddress("pendingException0"))
             )
         );
     }
@@ -729,7 +729,7 @@ final class BytecodeToIRTest {
             IrInstruction.Op.SET_PENDING,
             IrInstruction.Op.JUMP,
             IrInstruction.Op.LABEL,
-            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.CALL_STATIC_VOID,
             IrInstruction.Op.ASSIGN_OBJECT,
             IrInstruction.Op.RETURN_OBJECT
         );
@@ -831,7 +831,7 @@ final class BytecodeToIRTest {
             IrInstruction.Op.SET_PENDING,
             IrInstruction.Op.JUMP,
             IrInstruction.Op.LABEL,
-            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.CALL_STATIC_VOID,
             IrInstruction.Op.ASSIGN_OBJECT,
             IrInstruction.Op.CALL_STATIC_VOID,
             IrInstruction.Op.PROPAGATE_PENDING
@@ -1231,13 +1231,13 @@ final class BytecodeToIRTest {
             IrInstruction.Op.SET_PENDING,
             IrInstruction.Op.JUMP,
             IrInstruction.Op.LABEL,
-            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.CALL_STATIC_VOID,
             IrInstruction.Op.ASSIGN_OBJECT,
             IrInstruction.Op.CALL_STATIC_VOID,
             IrInstruction.Op.BRANCH_IF,
             IrInstruction.Op.BRANCH_IF,
             IrInstruction.Op.LABEL,
-            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.CALL_STATIC_VOID,
             IrInstruction.Op.ASSIGN_OBJECT,
             IrInstruction.Op.RETURN_OBJECT
         );
@@ -15000,9 +15000,9 @@ final class BytecodeToIRTest {
             IrInstruction.label("label_thread_wait_success_3_1"),
             IrInstruction.returnObject(IrExpression.stringLiteral("ok")),
             IrInstruction.label("label_6"),
-            IrInstruction.assignObject(
-                "pendingException2",
-                IrExpression.objectCall("javan_pending_catch", List.of())
+            IrInstruction.callStaticVoid(
+                "javan_pending_catch_into",
+                List.of(IrExpression.objectLocalAddress("pendingException2"))
             ),
             IrInstruction.assignObject("local0_object_3", IrExpression.objectLocal("pendingException2")),
             IrInstruction.returnObject(IrExpression.objectCall(
@@ -15061,9 +15061,9 @@ final class BytecodeToIRTest {
             IrInstruction.label("label_thread_wait_success_3_0"),
             IrInstruction.returnObject(IrExpression.stringLiteral("ok")),
             IrInstruction.label("label_6"),
-            IrInstruction.assignObject(
-                "pendingException1",
-                IrExpression.objectCall("javan_pending_catch", List.of())
+            IrInstruction.callStaticVoid(
+                "javan_pending_catch_into",
+                List.of(IrExpression.objectLocalAddress("pendingException1"))
             ),
             IrInstruction.assignObject("local1_object_2", IrExpression.objectLocal("pendingException1")),
             IrInstruction.returnObject(IrExpression.objectCall(
@@ -28706,7 +28706,7 @@ final class BytecodeToIRTest {
             IrInstruction.Op.BRANCH_IF,
             IrInstruction.Op.PROPAGATE_PENDING,
             IrInstruction.Op.LABEL,
-            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.CALL_STATIC_VOID,
             IrInstruction.Op.ASSIGN_OBJECT,
             IrInstruction.Op.RETURN_VOID
         );
@@ -29314,7 +29314,7 @@ final class BytecodeToIRTest {
             IrInstruction.Op.PROPAGATE_PENDING,
             IrInstruction.Op.LABEL,
             IrInstruction.Op.LABEL,
-            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.CALL_STATIC_VOID,
             IrInstruction.Op.ASSIGN_OBJECT,
             IrInstruction.Op.RETURN_VOID
         );

@@ -103,6 +103,16 @@ public record IrExpression(Kind kind, IrType type, String value, List<IrExpressi
     }
 
     /**
+     * Creates the address of an object local for a rooted runtime result handoff.
+     *
+     * @param name local name
+     * @return object-local address expression
+     */
+    public static IrExpression objectLocalAddress(final String name) {
+        return new IrExpression(Kind.LOCAL, IrType.OBJECT, "&" + name, List.of());
+    }
+
+    /**
      * Creates an object null literal.
      *
      * @return expression

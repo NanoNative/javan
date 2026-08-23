@@ -12128,7 +12128,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void entryAnchoredStoredThrowableFactoryIsRejectedBeforeNativeExecution() throws Exception {
+    void entryAnchoredStoredThrowableFactoryBuildsAndMatchesJvmOutput() throws Exception {
         assertThat(runTypedHandlerParity("entry-anchored-stored-throwable", """
             package com.acme;
 
@@ -12161,7 +12161,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                     return new UnsupportedOperationException("converted");
                 }
             }
-            """).buildStderr()).contains("exception handler needs a known thrown type");
+            """)).isEqualTo(typedHandlerParitySuccess("-2\n"));
     }
 
     @Test

@@ -197,6 +197,8 @@ final class RuntimeHeaderFile {
         typedef struct {
             int type_id;
             const char* name;
+            const char* jvm_name;
+            const char* super_name;
             int is_enum;
             int object_field_count;
             unsigned long* object_field_offsets;
@@ -958,10 +960,20 @@ final class RuntimeHeaderFile {
             const char* source_line
         );
         void javan_pending_throw_with_cause(const char* throwable_type, void* message, void* cause);
+        void javan_generated_throwable_initialize(void* value, void* message);
+        void javan_pending_throw_object(
+            void* value,
+            const char* class_name,
+            const char* method,
+            const char* file,
+            int line,
+            int bytecode_offset,
+            const char* source_line
+        );
         int javan_pending_has(void);
         int javan_pending_type_is(void* throwable_type);
         int javan_pending_type_assignable_to(void* catch_type);
-        void* javan_pending_catch(void);
+        void javan_pending_catch_into(void** result);
         void* javan_caught_throwable_message(void* value);
         void* javan_caught_throwable_cause(void* value);
         void javan_pending_rethrow(void* value);

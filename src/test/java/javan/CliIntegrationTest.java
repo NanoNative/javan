@@ -331,6 +331,404 @@ final class CliIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void applicationRuntimeExceptionExactCatchPreservesObjectIdentityAndState() throws Exception {
+        final Path project = project("application-exception-exact-catch");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Problem expected = new Problem("boom", 7);
+                    try {
+                        throw expected;
+                    } catch (final Problem actual) {
+                        System.out.println((actual == expected) + ":" + actual.getMessage() + ":" + actual.code());
+                    }
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Problem", """
+            package com.acme;
+
+            public final class Problem extends RuntimeException {
+                private final int code;
+
+                public Problem(final String message, final int code) {
+                    super(message);
+                    this.code = code;
+                }
+
+                public int code() {
+                    return code;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/application-exception-exact-catch").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true:boom:7\n");
+    }
+
+    @Test
+    void applicationRuntimeExceptionMatchesRuntimeExceptionAndThrowableCatches() throws Exception {
+        final Path project = project("application-exception-super-catch");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    try {
+                        fail("runtime");
+                    } catch (final RuntimeException exception) {
+                        System.out.println("runtime:" + exception.getMessage());
+                    }
+                    try {
+                        fail("throwable");
+                    } catch (final Throwable throwable) {
+                        System.out.println("throwable:" + throwable.getMessage());
+                    }
+                }
+
+                private static void fail(final String message) {
+                    throw new Problem(message, 1);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Problem", """
+            package com.acme;
+
+            public final class Problem extends RuntimeException {
+                private final int code;
+
+                public Problem(final String message, final int code) {
+                    super(message);
+                    this.code = code;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/application-exception-super-catch").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("runtime:runtime\nthrowable:throwable\n");
+    }
+
+    @Test
+    void applicationRuntimeExceptionPropagatesAndRethrowsAcrossMethods() throws Exception {
+        final Path project = project("application-exception-rethrow");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Problem expected = new Problem("propagated", 9);
+                    try {
+                        middle(expected);
+                    } catch (final Problem caught) {
+                        try {
+                            throw caught;
+                        } catch (final Throwable rethrown) {
+                            System.out.println((rethrown == expected) + ":" + rethrown.getMessage());
+                        }
+                    }
+                }
+
+                private static void middle(final Problem problem) {
+                    leaf(problem);
+                }
+
+                private static void leaf(final Problem problem) {
+                    throw problem;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Problem", """
+            package com.acme;
+
+            public final class Problem extends RuntimeException {
+                private final int code;
+
+                public Problem(final String message, final int code) {
+                    super(message);
+                    this.code = code;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/application-exception-rethrow").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true:propagated\n");
+    }
+
+    @Test
+    void applicationExceptionValuesKeepJavaSemanticsAcrossObjectBoundaries() throws Exception {
+        final Path project = project("application-exception-values");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private static Problem staticProblem;
+                private final Problem instanceProblem;
+
+                private Main(final Problem problem) {
+                    instanceProblem = problem;
+                }
+
+                public static void main(final String[] args) {
+                    final Problem expected = new Problem();
+                    final Main holder = new Main(expected);
+                    staticProblem = expected;
+                    try {
+                        throw holder.instanceProblem;
+                    } catch (final Problem caught) {
+                        printCaught(caught, expected, "instance");
+                    }
+                    try {
+                        throw staticProblem;
+                    } catch (final Problem caught) {
+                        printCaught(caught, expected, "static");
+                    }
+                    try {
+                        throw returned(expected);
+                    } catch (final Problem caught) {
+                        printCaught(caught, expected, "return");
+                    }
+                    try {
+                        throwValue(null);
+                    } catch (final NullPointerException caught) {
+                        System.out.println("null");
+                    }
+                }
+
+                private static Problem returned(final Problem problem) {
+                    return problem;
+                }
+
+                private static void printCaught(final Problem caught, final Problem expected, final String label) {
+                    System.out.println(label + ":" + (caught == expected) + ":" + caught.getMessage());
+                }
+
+                private static void throwValue(final Problem problem) {
+                    throw problem;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Problem", """
+            package com.acme;
+
+            public final class Problem extends RuntimeException {
+                public Problem() {
+                    super();
+                    new RuntimeException("separate");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/application-exception-values").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("instance:true:null\nstatic:true:null\nreturn:true:null\nnull\n");
+    }
+
+    @Test
+    void applicationExceptionCauseConstructorFailsAtVerification() throws Exception {
+        final Path project = project("application-exception-cause");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    throw new Problem(new RuntimeException("cause"));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Problem", """
+            package com.acme;
+
+            public final class Problem extends RuntimeException {
+                public Problem(final Throwable cause) {
+                    super(cause);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains(
+            "JAVAN031",
+            "java/lang/RuntimeException.<init>(Ljava/lang/Throwable;)V",
+            "has no native intrinsic, substitution, or supported runtime model yet"
+        );
+    }
+
+    @Test
+    void uncaughtApplicationRuntimeExceptionReportsTypeAndMessage() throws Exception {
+        final Path project = project("application-exception-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    throw new Problem("uncaught", 11);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Problem", """
+            package com.acme;
+
+            public final class Problem extends RuntimeException {
+                private final int code;
+
+                public Problem(final String message, final int code) {
+                    super(message);
+                    this.code = code;
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(
+            project,
+            List.of(project.resolve(".javan/bin/application-exception-uncaught").toString())
+        );
+        assertThat(nativeRun.exitCode()).isEqualTo(1);
+        assertThat(nativeRun.stdout()).isEmpty();
+        assertThat(nativeRun.stderr()).contains(
+            "[JAVAN-RUNTIME-PANIC] uncaught Java exception (com/acme/Problem)",
+            "com.acme.Main.main([Ljava/lang/String;)V(Main.java:",
+            "detail: uncaught"
+        );
+    }
+
+    @Test
+    void derivedApplicationExceptionKeepsItsDynamicTypeThroughBaseReference() throws Exception {
+        final Path project = project("application-exception-inheritance");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final BaseProblem expected = new SpecificProblem("derived");
+                    try {
+                        throwBase(expected);
+                    } catch (final BaseProblem actual) {
+                        System.out.println((actual == expected) + ":" + (actual instanceof SpecificProblem) + ":" + actual.getMessage());
+                    }
+                }
+
+                private static void throwBase(final BaseProblem problem) {
+                    throw problem;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.BaseProblem", """
+            package com.acme;
+
+            public class BaseProblem extends RuntimeException {
+                public BaseProblem(final String message) {
+                    super(message);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.SpecificProblem", """
+            package com.acme;
+
+            public final class SpecificProblem extends BaseProblem {
+                public SpecificProblem(final String message) {
+                    super(message);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/application-exception-inheritance").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true:true:derived\n");
+    }
+
+    @Test
+    void uncaughtApplicationExceptionRethrowKeepsOriginalSource() throws Exception {
+        final Path project = project("application-exception-uncaught-rethrow");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    try {
+                        throw new Problem("rethrown");
+                    } catch (final Problem problem) {
+                        throw problem;
+                    }
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Problem", """
+            package com.acme;
+
+            public final class Problem extends RuntimeException {
+                public Problem(final String message) {
+                    super(message);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(
+            project,
+            List.of(project.resolve(".javan/bin/application-exception-uncaught-rethrow").toString())
+        );
+        assertThat(nativeRun.exitCode()).isEqualTo(1);
+        assertThat(nativeRun.stderr()).contains(
+            "uncaught Java exception (com/acme/Problem)",
+            "com.acme.Main.main([Ljava/lang/String;)V(Main.java:9)",
+            "detail: rethrown"
+        );
+    }
+
+    @Test
     void reachableExplicitThrowFinallyCatchBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("try-finally");
         writeJava(project, "com.acme.Main", """

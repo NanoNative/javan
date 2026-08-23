@@ -451,6 +451,7 @@ public final class CompatibilityReports {
             pass("string-concat"),
             pass("exception-panic"),
             pass("try-catch"),
+            pass("application-runtime-exception-transport"),
             scoped("try-finally"),
             pass("enum-basic"),
             pass("enum-ordinal"),

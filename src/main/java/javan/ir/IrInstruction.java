@@ -673,6 +673,20 @@ public record IrInstruction(
         );
     }
 
+    /** Creates pending state backed by the original generated throwable object. */
+    public static IrInstruction setPendingObject(
+        final String throwableType,
+        final IrExpression throwable,
+        final IrSourceLocation sourceLocation
+    ) {
+        return new IrInstruction(
+            Op.SET_PENDING_OBJECT,
+            Optional.of(throwableType),
+            Optional.of(throwable),
+            Optional.of(sourceLocation)
+        );
+    }
+
     /**
      * Creates a pending-platform-throwable propagation instruction.
      *
@@ -790,6 +804,7 @@ public record IrInstruction(
         BRANCH_IF,
         PANIC,
         SET_PENDING,
+        SET_PENDING_OBJECT,
         THROW_PENDING,
         PROPAGATE_PENDING,
         RETURN_VOID,

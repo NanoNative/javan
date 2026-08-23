@@ -1810,7 +1810,7 @@ public final class StaticVerifier {
         if (handler.catchType().isEmpty()) {
             return false;
         }
-        if (!isPlatformThrowable(handler.catchType().orElseThrow())) {
+        if (!isThrowable(classes, handler.catchType().orElseThrow())) {
             return false;
         }
         if (supportsEntryAnchoredStraightLineTypedHandler(
@@ -1846,9 +1846,11 @@ public final class StaticVerifier {
                 hasThrowableTransport = 1;
             }
             if (!supportedInterruptedWaitProtectedInstruction(instruction)
+                && !supportedApplicationThrowableInstruction(classes, instruction)
                 && !supportedCheckcastThrowable(instruction, catchType)
                 && !supportedGeneratedThrowableCall(classes, instruction)
                 && !supportedTransportedJdkThrowableCall(instruction, catchType)
+                && !supportedThrowableFieldPreparation(classes, instruction)
                 && !supportedOptionalFactoryPreparation(instruction)
                 && !supportedThrowableWrapRangeInstruction(instruction)
                 && !(reflectiveInvocationRange && supportedMethodInvocationPreparationInstruction(instruction))
@@ -1891,7 +1893,7 @@ public final class StaticVerifier {
         final CodeAttribute code = method.code().orElseThrow();
         if (code.exceptionTableLength() != 1
             || handler.catchType().isEmpty()
-            || !JdkCallSupport.isPlatformThrowable(handler.catchType().orElseThrow())
+            || !isThrowable(classes, handler.catchType().orElseThrow())
             || handler.startPc() != 0
             || handler.endPc() <= handler.startPc()
             || handler.handlerPc() <= handler.endPc()
@@ -2642,6 +2644,20 @@ public final class StaticVerifier {
                     && "(Ljava/lang/Object;)Ljava/util/Optional;".equals(target.descriptor())));
     }
 
+    private static boolean supportedThrowableFieldPreparation(
+        final Map<String, ClassFile> classes,
+        final Instruction instruction
+    ) {
+        if ((instruction.opcode() != 178 && instruction.opcode() != 180) || instruction.fieldRef().isEmpty()) {
+            return false;
+        }
+        final String descriptor = instruction.fieldRef().orElseThrow().descriptor();
+        if (descriptor.length() < 3 || descriptor.charAt(0) != 'L' || descriptor.charAt(descriptor.length() - 1) != ';') {
+            return false;
+        }
+        return isThrowable(classes, descriptor.substring(1, descriptor.length() - 1));
+    }
+
     private static boolean supportedGeneratedThrowableCall(
         final Map<String, ClassFile> classes,
         final Instruction instruction
@@ -2960,36 +2976,45 @@ public final class StaticVerifier {
         final CodeAttribute code = targetMethod.orElseThrow().code().orElseThrow();
         final Set<String> result = new HashSet<>();
         final Set<String> allocatedTypes = new HashSet<>();
+        final Set<String> throwableParameters = applicationThrowableParameters(
+            classes,
+            targetMethod.orElseThrow().descriptor()
+        );
         for (final Instruction instruction : code.instructions()) {
             if (instruction.methodRef().isPresent()) {
                 final MethodRef called = instruction.methodRef().orElseThrow();
                 for (final String throwableType : JdkCallSupport.transportedPlatformThrowableTypes(called)) {
-                    if (!caughtByPlatformHandler(code, instruction.offset(), throwableType)) {
+                    if (!caughtByThrowableHandler(classes, code, instruction.offset(), throwableType)) {
                         result.add(throwableType);
                     }
                 }
                 for (final String throwableType : escapingPlatformExceptionTypes(classes, called, visiting)) {
-                    if (!caughtByPlatformHandler(code, instruction.offset(), throwableType)) {
+                    if (!caughtByThrowableHandler(classes, code, instruction.offset(), throwableType)) {
                         result.add(throwableType);
                     }
                 }
                 for (final String throwableType : escapingLambdaPlatformExceptionTypes(classes, called, visiting)) {
-                    if (!caughtByPlatformHandler(code, instruction.offset(), throwableType)) {
+                    if (!caughtByThrowableHandler(classes, code, instruction.offset(), throwableType)) {
                         result.add(throwableType);
                     }
                 }
             }
             if (instruction.opcode() == 187
                 && instruction.className().isPresent()
-                && JdkCallSupport.isPlatformThrowable(instruction.className().orElseThrow())) {
+                && isThrowable(classes, instruction.className().orElseThrow())) {
                 allocatedTypes.add(instruction.className().orElseThrow());
                 continue;
             }
             if (instruction.opcode() != 191) {
                 continue;
             }
+            allocatedTypes.addAll(throwableParameters);
+            if (!allocatedTypes.isEmpty()
+                && !caughtByThrowableHandler(classes, code, instruction.offset(), "java/lang/NullPointerException")) {
+                result.add("java/lang/NullPointerException");
+            }
             for (final String throwableType : allocatedTypes) {
-                if (!caughtByPlatformHandler(code, instruction.offset(), throwableType)) {
+                if (!caughtByThrowableHandler(classes, code, instruction.offset(), throwableType)) {
                     result.add(throwableType);
                 }
             }
@@ -2999,7 +3024,21 @@ public final class StaticVerifier {
         return Set.copyOf(result);
     }
 
-    private static boolean caughtByPlatformHandler(
+    private static Set<String> applicationThrowableParameters(
+        final Map<String, ClassFile> classes,
+        final String descriptor
+    ) {
+        final Set<String> result = new HashSet<>();
+        for (final String candidate : classes.keySet()) {
+            if (descriptor.contains("L" + candidate + ";") && isThrowable(classes, candidate)) {
+                result.add(candidate);
+            }
+        }
+        return result;
+    }
+
+    private static boolean caughtByThrowableHandler(
+        final Map<String, ClassFile> classes,
         final CodeAttribute code,
         final int offset,
         final String throwableType
@@ -3009,7 +3048,7 @@ public final class StaticVerifier {
                 continue;
             }
             if (handler.catchType().isEmpty()
-                || JdkCallSupport.isPlatformThrowableAssignable(throwableType, handler.catchType().orElseThrow())) {
+                || isThrowableAssignable(classes, throwableType, handler.catchType().orElseThrow())) {
                 return !handlerMayThrow(code, handler);
             }
         }
@@ -5199,6 +5238,49 @@ public final class StaticVerifier {
 
     private static boolean isPlatformThrowable(final String owner) {
         return JdkCallSupport.isPlatformThrowable(owner);
+    }
+
+    private static boolean isThrowable(final Map<String, ClassFile> classes, final String owner) {
+        return JdkCallSupport.isPlatformThrowable(owner)
+            || classes.containsKey(owner) && isThrowableAssignable(classes, owner, "java/lang/Throwable");
+    }
+
+    private static boolean isThrowableAssignable(
+        final Map<String, ClassFile> classes,
+        final String candidate,
+        final String expected
+    ) {
+        String current = candidate;
+        final Set<String> visited = new HashSet<>();
+        while (current != null && !current.isEmpty() && visited.add(current)) {
+            if (JdkCallSupport.isPlatformThrowableAssignable(current, expected)
+                || current.equals(expected)) {
+                return true;
+            }
+            final ClassFile classFile = classes.get(current);
+            if (classFile == null) {
+                return false;
+            }
+            current = classFile.superName();
+        }
+        return false;
+    }
+
+    private static boolean supportedApplicationThrowableInstruction(
+        final Map<String, ClassFile> classes,
+        final Instruction instruction
+    ) {
+        if (instruction.opcode() == 187 && instruction.className().isPresent()) {
+            return classes.containsKey(instruction.className().orElseThrow())
+                && isThrowable(classes, instruction.className().orElseThrow());
+        }
+        if (instruction.opcode() != 183 || instruction.methodRef().isEmpty()) {
+            return false;
+        }
+        final MethodRef target = instruction.methodRef().orElseThrow();
+        return "<init>".equals(target.name())
+            && classes.containsKey(target.owner())
+            && isThrowable(classes, target.owner());
     }
 
     private static boolean ignoredGeneratedEnumValueOfCall(

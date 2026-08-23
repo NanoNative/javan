@@ -137,7 +137,7 @@ public final class MethodEffectAnalyzer {
             case ASSIGN_ARRAY_OBJECT, ASSIGN_ARRAY_INT, ASSIGN_ARRAY_LONG, ASSIGN_ARRAY_FLOAT,
                  ASSIGN_ARRAY_DOUBLE, ASSIGN_ARRAY_BYTE, ASSIGN_ARRAY_SHORT, ASSIGN_ARRAY_CHAR ->
                 NONE.writing().throwing();
-            case PANIC, SET_PENDING, THROW_PENDING, PROPAGATE_PENDING -> NONE.throwing();
+            case PANIC, SET_PENDING, SET_PENDING_OBJECT, THROW_PENDING, PROPAGATE_PENDING -> NONE.throwing();
             default -> NONE;
         };
     }

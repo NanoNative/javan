@@ -28,6 +28,7 @@ import static javan.codegen.BytecodeToIR.*;
 
 final class BytecodeToIRControlFlowSupport {
     static void lowerThrow(
+        final Map<String, ClassFile> classes,
         final ClassFile classFile,
         final MethodInfo method,
         final Instruction instruction,
@@ -54,25 +55,45 @@ final class BytecodeToIRControlFlowSupport {
             );
         } else if (thrownValue.kind() == StackKind.CAUGHT_THROWABLE) {
             instructions.add(IrInstruction.callStaticVoid("javan_pending_rethrow", List.of(thrown)));
-            appendPendingExceptionDispatch(
-                method,
-                instruction,
-                instructions,
-                List.of("java/lang/Throwable"),
-                pendingExceptionHandlerStacks
-            );
+            if (thrownValue.throwableType().isPresent()) {
+                appendPendingExceptionDispatch(
+                    classes,
+                    method,
+                    instruction,
+                    instructions,
+                    List.of(thrownValue.throwableType().orElseThrow()),
+                    pendingExceptionHandlerStacks
+                );
+            } else {
+                appendPendingExceptionDispatch(
+                    method,
+                    instruction,
+                    instructions,
+                    List.of("java/lang/Throwable"),
+                    pendingExceptionHandlerStacks
+                );
+            }
         } else if (thrownValue.throwableType().isPresent()) {
             final String throwableType = thrownValue.throwableType().orElseThrow();
-            instructions.add(IrInstruction.setPending(
-                throwableType,
-                thrown,
-                sourceLocation(classFile, method, instruction, sourceLines)
-            ));
+            instructions.add(classes.containsKey(throwableType)
+                ? IrInstruction.setPendingObject(
+                    throwableType,
+                    thrown,
+                    sourceLocation(classFile, method, instruction, sourceLines)
+                )
+                : IrInstruction.setPending(
+                    throwableType,
+                    thrown,
+                    sourceLocation(classFile, method, instruction, sourceLines)
+                ));
             appendPendingExceptionDispatch(
+                classes,
                 method,
                 instruction,
                 instructions,
-                List.of(throwableType),
+                classes.containsKey(throwableType)
+                    ? List.of(throwableType, "java/lang/NullPointerException")
+                    : List.of(throwableType),
                 pendingExceptionHandlerStacks
             );
         } else {
@@ -112,6 +133,7 @@ final class BytecodeToIRControlFlowSupport {
     }
 
     static void appendPendingExceptionDispatch(
+        final Map<String, ClassFile> classes,
         final MethodInfo method,
         final Instruction instruction,
         final List<IrInstruction> instructions,
@@ -146,10 +168,28 @@ final class BytecodeToIRControlFlowSupport {
                 break;
             }
             final String catchType = handler.catchType().orElseThrow();
-            if (!JdkCallSupport.isPlatformThrowable(catchType)) {
+            if (!BytecodeToIR.isThrowable(classes, catchType)) {
                 continue;
             }
-            registerPendingHandlerStack(pendingExceptionHandlerStacks, handler.handlerPc());
+            String applicationType = null;
+            boolean hasPlatformType = false;
+            for (final String possibleType : possibleThrowableTypes) {
+                if (!BytecodeToIR.isAssignableThrowable(classes, possibleType, catchType)) {
+                    continue;
+                }
+                if (classes.containsKey(possibleType)) {
+                    if (applicationType == null) {
+                        applicationType = possibleType;
+                    }
+                } else {
+                    hasPlatformType = true;
+                }
+            }
+            registerPendingHandlerStack(
+                pendingExceptionHandlerStacks,
+                handler.handlerPc(),
+                hasPlatformType ? Optional.empty() : Optional.ofNullable(applicationType)
+            );
             instructions.add(IrInstruction.branchIf(
                 label(handler.handlerPc()),
                 IrExpression.intCall(
@@ -162,13 +202,37 @@ final class BytecodeToIRControlFlowSupport {
         instructions.add(IrInstruction.label(continueLabel));
     }
 
+    static void appendPendingExceptionDispatch(
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<String> possibleThrowableTypes,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks
+    ) {
+        appendPendingExceptionDispatch(Map.of(), method, instruction, instructions,
+            possibleThrowableTypes, pendingExceptionHandlerStacks);
+    }
+
     static void registerPendingHandlerStack(
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final int handlerOffset
     ) {
+        registerPendingHandlerStack(pendingExceptionHandlerStacks, handlerOffset, Optional.empty());
+    }
+
+    private static void registerPendingHandlerStack(
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final int handlerOffset,
+        final Optional<String> applicationThrowableType
+    ) {
         pendingExceptionHandlerStacks.putIfAbsent(
             handlerOffset,
-            StackValue.caughtThrowable(IrExpression.objectCall("javan_pending_catch", List.of()))
+            applicationThrowableType.isPresent()
+                ? StackValue.caughtThrowable(
+                    IrExpression.objectCall("javan_pending_catch", List.of()),
+                    applicationThrowableType.orElseThrow()
+                )
+                : StackValue.caughtThrowable(IrExpression.objectCall("javan_pending_catch", List.of()))
         );
     }
     static Optional<IrSourceLocation> generatedStatementSourceLocation(
@@ -247,6 +311,7 @@ final class BytecodeToIRControlFlowSupport {
         throw unsupported(classFile, method, instruction);
     }
     static Optional<Integer> exceptionHandler(
+        final Map<String, ClassFile> classes,
         final ClassFile classFile,
         final MethodInfo method,
         final Instruction instruction,
@@ -271,11 +336,21 @@ final class BytecodeToIRControlFlowSupport {
                 }
                 continue;
             }
-            if (JdkCallSupport.isPlatformThrowableAssignable(thrownType, handler.catchType().orElseThrow())) {
+            if (BytecodeToIR.isAssignableThrowable(classes, thrownType, handler.catchType().orElseThrow())) {
                 return Optional.of(handler.handlerPc());
             }
         }
         return Optional.empty();
+    }
+
+    static Optional<Integer> exceptionHandler(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final StackValue thrown,
+        final int offset
+    ) {
+        return exceptionHandler(Map.of(), classFile, method, instruction, thrown, offset);
     }
 
     static boolean supportedFinallyRethrowHandler(
