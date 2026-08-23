@@ -13,6 +13,8 @@ import java.util.concurrent.TimeUnit;
  * Runs child processes with captured output.
  */
 public class ProcessRunner {
+    private static final int START_ATTEMPTS = 10;
+    private static final long START_RETRY_MILLIS = 25L;
     private final long timeoutMillis;
 
     /**
@@ -57,7 +59,7 @@ public class ProcessRunner {
         builder.redirectOutput(stdoutFile.toFile());
         builder.redirectError(stderrFile.toFile());
         try {
-            final Process process = builder.start();
+            final Process process = start(builder);
             final boolean completed = process.waitFor(timeoutMillis, TimeUnit.MILLISECONDS);
             if (!completed) {
                 process.destroyForcibly();
@@ -77,6 +79,25 @@ public class ProcessRunner {
             Files.deleteIfExists(stdoutFile);
             Files.deleteIfExists(stderrFile);
         }
+    }
+
+    private static Process start(final ProcessBuilder builder) throws IOException, InterruptedException {
+        for (int attempt = 1; attempt <= START_ATTEMPTS; attempt++) {
+            try {
+                return builder.start();
+            } catch (final IOException exception) {
+                if (!textFileBusy(exception) || attempt == START_ATTEMPTS) {
+                    throw exception;
+                }
+                Thread.sleep(START_RETRY_MILLIS);
+            }
+        }
+        throw new IllegalStateException("Process start attempts exhausted");
+    }
+
+    private static boolean textFileBusy(final IOException exception) {
+        final String message = exception.getMessage();
+        return message != null && (message.contains("Text file busy") || message.contains("error=26"));
     }
 
     /**

@@ -4,8 +4,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
 
+import java.io.IOException;
+import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.List;
 
@@ -52,5 +56,32 @@ final class ProcessRunnerTest {
 
         assertThat(result.exitCode()).isEqualTo(124);
         assertThat(result.stderr()).contains("waiting", "Timed out after 0s: sh -c echo waiting >&2; sleep 1");
+    }
+
+    @Test
+    void retriesAProcessTemporarilyBlockedByAWriter() throws Exception {
+        final Path executable = tempDir.resolve("eventually-ready");
+        Files.writeString(executable, "#!/bin/sh\nprintf 'ready\\n'\n", StandardCharsets.UTF_8);
+        assertThat(executable.toFile().setExecutable(true)).isTrue();
+
+        final FileChannel writer = FileChannel.open(executable, StandardOpenOption.WRITE);
+        final Thread release = Thread.startVirtualThread(() -> {
+            try {
+                Thread.sleep(75L);
+                writer.close();
+            } catch (final IOException exception) {
+                throw new IllegalStateException(exception);
+            } catch (final InterruptedException exception) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        try {
+            final ProcessRunner.Result result = new ProcessRunner().run(tempDir, List.of("./eventually-ready"));
+
+            assertThat(result).isEqualTo(new ProcessRunner.Result(0, "ready\n", ""));
+        } finally {
+            writer.close();
+            release.join();
+        }
     }
 }
