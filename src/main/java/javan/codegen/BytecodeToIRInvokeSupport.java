@@ -357,7 +357,13 @@ final class BytecodeToIRInvokeSupport {
             case LONG -> stack.add(StackValue.longExpression(IrExpression.longStaticField(owner, fieldRef.name())));
             case FLOAT -> stack.add(StackValue.floatExpression(IrExpression.floatStaticField(owner, fieldRef.name())));
             case DOUBLE -> stack.add(StackValue.doubleExpression(IrExpression.doubleStaticField(owner, fieldRef.name())));
-            case OBJECT -> stack.add(StackValue.objectExpression(IrExpression.objectStaticField(owner, fieldRef.name())));
+            case OBJECT -> {
+                final IrExpression value = IrExpression.objectStaticField(owner, fieldRef.name());
+                final Optional<String> throwableType = BytecodeToIR.throwableTypeFromDescriptor(classes, fieldRef.descriptor());
+                stack.add(throwableType.isPresent()
+                    ? StackValue.platformThrowable(throwableType.orElseThrow(), value)
+                    : StackValue.objectExpression(value));
+            }
         }
     }
 
@@ -383,6 +389,7 @@ final class BytecodeToIRInvokeSupport {
     }
 
     static void pushInstanceField(
+        final Map<String, ClassFile> classes,
         final ClassFile classFile,
         final MethodInfo method,
         final Instruction instruction,
@@ -396,7 +403,13 @@ final class BytecodeToIRInvokeSupport {
             case LONG -> stack.add(StackValue.longExpression(IrExpression.longField(fieldRef.owner(), fieldRef.name(), receiver)));
             case FLOAT -> stack.add(StackValue.floatExpression(IrExpression.floatField(fieldRef.owner(), fieldRef.name(), receiver)));
             case DOUBLE -> stack.add(StackValue.doubleExpression(IrExpression.doubleField(fieldRef.owner(), fieldRef.name(), receiver)));
-            case OBJECT -> stack.add(StackValue.objectExpression(IrExpression.objectField(fieldRef.owner(), fieldRef.name(), receiver)));
+            case OBJECT -> {
+                final IrExpression value = IrExpression.objectField(fieldRef.owner(), fieldRef.name(), receiver);
+                final Optional<String> throwableType = BytecodeToIR.throwableTypeFromDescriptor(classes, fieldRef.descriptor());
+                stack.add(throwableType.isPresent()
+                    ? StackValue.platformThrowable(throwableType.orElseThrow(), value)
+                    : StackValue.objectExpression(value));
+            }
             case VOID -> throw new IllegalStateException("void instance field is invalid");
         }
     }
@@ -1173,6 +1186,8 @@ final class BytecodeToIRInvokeSupport {
         if (isPlatformThrowableGetMessage(methodRef)) {
             final StackValue receiver = popObjectValue(classFile, method, instruction, stack);
             final IrExpression message = receiver.kind() == StackKind.CAUGHT_THROWABLE
+                || (receiver.throwableType().isPresent()
+                    && classes.containsKey(receiver.throwableType().orElseThrow()))
                 ? IrExpression.objectCall(
                     "javan_caught_throwable_message",
                     List.of(receiver.expression().orElseThrow())
@@ -2072,6 +2087,20 @@ final class BytecodeToIRInvokeSupport {
                 methodRef = new MethodRef(entryPoint.className(), entryPoint.methodName(), entryPoint.descriptor());
             }
         }
+        if ("<init>".equals(method.name())
+            && BytecodeToIR.isThrowable(classes, classFile.name())
+            && isPlatformThrowableDefaultConstructor(methodRef)) {
+            final IrExpression receiver = popObject(classFile, method, stack);
+            if (isSelfReceiver(receiver)) {
+                instructions.add(IrInstruction.callStaticVoid(
+                    "javan_generated_throwable_initialize",
+                    List.of(receiver, IrExpression.objectNull())
+                ));
+            } else {
+                updatePendingThrowableMessage(stack, IrExpression.objectNull());
+            }
+            return;
+        }
         if (isZeroArgNoopPlatformConstructor(methodRef)) {
             popObject(classFile, method, stack);
             return;
@@ -2092,6 +2121,15 @@ final class BytecodeToIRInvokeSupport {
             : popArguments(classFile, method, stack, descriptor);
         final IrExpression receiver = popObject(classFile, method, stack);
         if (isPlatformThrowableStringConstructor(methodRef)) {
+            if ("<init>".equals(method.name())
+                && BytecodeToIR.isThrowable(classes, classFile.name())
+                && isSelfReceiver(receiver)) {
+                instructions.add(IrInstruction.callStaticVoid(
+                    "javan_generated_throwable_initialize",
+                    List.of(receiver, arguments.getFirst())
+                ));
+                return;
+            }
             updatePendingThrowableMessage(stack, arguments.getFirst());
             return;
         }
@@ -2150,7 +2188,15 @@ final class BytecodeToIRInvokeSupport {
         final List<IrExpression> callArguments = new ArrayList<>(arguments);
         callArguments.addFirst(receiver);
         final String symbol = symbol(new EntryPoint(methodRef.owner(), methodRef.name(), methodRef.descriptor()));
-        appendCallResult(instructions, stack, localDeclarations, descriptor.returnType(), symbol, callArguments);
+        appendCallResult(
+            instructions,
+            stack,
+            localDeclarations,
+            descriptor.returnType(),
+            symbol,
+            callArguments,
+            BytecodeToIR.throwableTypeFromDescriptor(classes, returnDescriptor(methodRef.descriptor()))
+        );
     }
 
     private static boolean isZeroArgNoopPlatformConstructor(final MethodRef methodRef) {
@@ -2161,6 +2207,14 @@ final class BytecodeToIRInvokeSupport {
             || "java/lang/Record".equals(methodRef.owner())
             || "java/security/SecureRandom".equals(methodRef.owner())
             || "java/util/concurrent/ThreadPoolExecutor$CallerRunsPolicy".equals(methodRef.owner());
+    }
+
+    private static boolean isSelfReceiver(final IrExpression receiver) {
+        return receiver.kind() == IrExpression.Kind.LOCAL && "self".equals(receiver.value());
+    }
+
+    private static String returnDescriptor(final String methodDescriptor) {
+        return methodDescriptor.substring(methodDescriptor.lastIndexOf(')') + 1);
     }
 
     static void lowerStaticCall(
@@ -2296,7 +2350,15 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.virtualThreadFactory(IrExpression.objectCall(symbol, arguments)));
             return;
         }
-        appendCallResult(instructions, stack, localDeclarations, descriptor.returnType(), symbol, arguments);
+        appendCallResult(
+            instructions,
+            stack,
+            localDeclarations,
+            descriptor.returnType(),
+            symbol,
+            arguments,
+            BytecodeToIR.throwableTypeFromDescriptor(classes, returnDescriptor(methodRef.descriptor()))
+        );
     }
 
     private static boolean applicationModule(final Map<String, ClassFile> classes, final ClassFile caller) {

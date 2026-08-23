@@ -392,7 +392,7 @@ public final class BytecodeToIR {
         for (final EntryPoint entryPoint : reachableMethods) {
             final ClassFile classFile = classes.get(entryPoint.className());
             final MethodInfo method = classFile.method(entryPoint.methodName(), entryPoint.descriptor()).orElseThrow();
-            typesByMethod.put(entryPoint, directEscapingThrowableTypes(method));
+            typesByMethod.put(entryPoint, directEscapingThrowableTypes(classes, method));
         }
         final Map<String, EntryPoint> entryPointsBySymbol = new HashMap<>();
         for (final EntryPoint entryPoint : reachableMethods) {
@@ -420,7 +420,7 @@ public final class BytecodeToIR {
                             continue;
                         }
                         for (final String throwableType : typesByMethod.getOrDefault(callee, Set.of())) {
-                            if (!caughtBy(method, instruction.offset(), throwableType) && callerTypes.add(throwableType)) {
+                            if (!caughtBy(classes, method, instruction.offset(), throwableType) && callerTypes.add(throwableType)) {
                                 changed = true;
                             }
                         }
@@ -434,7 +434,7 @@ public final class BytecodeToIR {
                             continue;
                         }
                         for (final String throwableType : typesByMethod.getOrDefault(implementation, Set.of())) {
-                            if (!caughtBy(method, instruction.offset(), throwableType)
+                            if (!caughtBy(classes, method, instruction.offset(), throwableType)
                                 && callerTypes.add(throwableType)) {
                                 changed = true;
                             }
@@ -595,35 +595,43 @@ public final class BytecodeToIR {
         return List.copyOf(result);
     }
 
-    private static Set<String> directEscapingThrowableTypes(final MethodInfo method) {
+    private static Set<String> directEscapingThrowableTypes(
+        final Map<String, ClassFile> classes,
+        final MethodInfo method
+    ) {
         if (method.code().isEmpty()) {
             return new LinkedHashSet<>();
         }
         final CodeAttribute code = method.code().orElseThrow();
         final Set<String> allocatedTypes = new LinkedHashSet<>();
         final Set<String> result = new LinkedHashSet<>();
+        final Set<String> throwableParameters = applicationThrowableParameters(classes, method.descriptor());
         for (final Instruction instruction : code.instructions()) {
             if (instruction.methodRef().isPresent()) {
                 for (final String throwableType : JdkCallSupport.transportedPlatformThrowableTypes(
                     instruction.methodRef().orElseThrow()
                 )) {
-                    if (!caughtBy(method, instruction.offset(), throwableType)) {
+                    if (!caughtBy(classes, method, instruction.offset(), throwableType)) {
                         result.add(throwableType);
                     }
                 }
             }
             if (instruction.opcode() == 187
                 && instruction.className().isPresent()
-                && JdkCallSupport.isPlatformThrowable(instruction.className().orElseThrow())) {
+                && isThrowable(classes, instruction.className().orElseThrow())) {
                 allocatedTypes.add(instruction.className().orElseThrow());
                 continue;
             }
             if (instruction.opcode() != 191) {
                 continue;
             }
+            allocatedTypes.addAll(throwableParameters);
             if (!allocatedTypes.isEmpty()) {
+                if (!caughtBy(classes, method, instruction.offset(), "java/lang/NullPointerException")) {
+                    result.add("java/lang/NullPointerException");
+                }
                 for (final String throwableType : allocatedTypes) {
-                    if (!caughtBy(method, instruction.offset(), throwableType)) {
+                    if (!caughtBy(classes, method, instruction.offset(), throwableType)) {
                         result.add(throwableType);
                     }
                 }
@@ -633,7 +641,25 @@ public final class BytecodeToIR {
         return result;
     }
 
-    private static boolean caughtBy(final MethodInfo method, final int offset, final String throwableType) {
+    private static Set<String> applicationThrowableParameters(
+        final Map<String, ClassFile> classes,
+        final String descriptor
+    ) {
+        final Set<String> result = new LinkedHashSet<>();
+        for (final String candidate : classes.keySet()) {
+            if (descriptor.contains("L" + candidate + ";") && isThrowable(classes, candidate)) {
+                result.add(candidate);
+            }
+        }
+        return result;
+    }
+
+    private static boolean caughtBy(
+        final Map<String, ClassFile> classes,
+        final MethodInfo method,
+        final int offset,
+        final String throwableType
+    ) {
         if (method.code().isEmpty()) {
             return false;
         }
@@ -642,12 +668,75 @@ public final class BytecodeToIR {
                 continue;
             }
             if (handler.catchType().isEmpty()
-                || JdkCallSupport.isPlatformThrowableAssignable(throwableType, handler.catchType().orElseThrow())) {
+                || isAssignableThrowable(classes, throwableType, handler.catchType().orElseThrow())) {
                 return !BytecodeToIRControlFlowSupport.handlerMayThrow(
                     method.code().orElseThrow(),
                     handler
                 );
             }
+        }
+        return false;
+    }
+
+    static boolean isThrowable(final Map<String, ClassFile> classes, final String candidate) {
+        return JdkCallSupport.isPlatformThrowable(candidate)
+            || (classes.containsKey(candidate)
+                && isAssignableThrowable(classes, candidate, "java/lang/Throwable"));
+    }
+
+    static Optional<String> throwableTypeFromDescriptor(
+        final Map<String, ClassFile> classes,
+        final String descriptor
+    ) {
+        if (descriptor.length() < 3 || descriptor.charAt(0) != 'L' || descriptor.charAt(descriptor.length() - 1) != ';') {
+            return Optional.empty();
+        }
+        final String candidate = descriptor.substring(1, descriptor.length() - 1);
+        return isThrowable(classes, candidate) ? Optional.of(candidate) : Optional.empty();
+    }
+
+    private static void bindThrowableParameters(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final MethodDescriptor descriptor,
+        final Map<Integer, String> objectLocalThrowableTypes
+    ) {
+        int slot = 0;
+        if (!method.isStatic()) {
+            if (isThrowable(classes, classFile.name())) {
+                objectLocalThrowableTypes.put(slot, classFile.name());
+            }
+            slot++;
+        }
+        final List<String> parameterDescriptors = BytecodeToIRDynamicSupport.parameterDescriptors(method.descriptor())
+            .orElseThrow();
+        for (int index = 0; index < descriptor.parameterTypes().size(); index++) {
+            final Optional<String> throwableType = throwableTypeFromDescriptor(classes, parameterDescriptors.get(index));
+            if (throwableType.isPresent()) {
+                objectLocalThrowableTypes.put(slot, throwableType.orElseThrow());
+            }
+            slot += descriptor.parameterTypes().get(index).slotWidth();
+        }
+    }
+
+    static boolean isAssignableThrowable(
+        final Map<String, ClassFile> classes,
+        final String candidate,
+        final String expected
+    ) {
+        String current = candidate;
+        final Set<String> visited = new LinkedHashSet<>();
+        while (current != null && !current.isEmpty() && visited.add(current)) {
+            if (JdkCallSupport.isPlatformThrowableAssignable(current, expected)
+                || current.equals(expected)) {
+                return true;
+            }
+            final ClassFile classFile = classes.get(current);
+            if (classFile == null) {
+                return false;
+            }
+            current = classFile.superName();
         }
         return false;
     }
@@ -740,6 +829,7 @@ public final class BytecodeToIR {
         final List<Integer> skippedOffsets = new ArrayList<>();
         final List<Integer> replacementLabelOffsets = new ArrayList<>();
         BytecodeToIRMetadataSupport.bindParameters(method, descriptor, parameters, locals);
+        bindThrowableParameters(classes, classFile, method, descriptor, objectLocalThrowableTypes);
         for (int index = 0; index < bytecode.size(); index++) {
             final Instruction instruction = bytecode.get(index);
             if (instruction.offset() <= enumBootstrapEndOffset) {
@@ -796,6 +886,7 @@ public final class BytecodeToIR {
                 replacementLabelOffsets
             )) {
                 appendPendingExceptionTransport(
+                    classes,
                     method,
                     instruction,
                     instructions,
@@ -830,6 +921,7 @@ public final class BytecodeToIR {
                 replacementLabelOffsets
             )) {
                 appendPendingExceptionTransport(
+                    classes,
                     method,
                     instruction,
                     instructions,
@@ -864,6 +956,7 @@ public final class BytecodeToIR {
                 lastMaterializingDuplicateOffset
             );
             appendPendingExceptionTransport(
+                classes,
                 method,
                 instruction,
                 instructions,
@@ -965,11 +1058,20 @@ public final class BytecodeToIR {
             Integer.MIN_VALUE + localDeclarations.size(),
             new IrLocal(IrType.OBJECT, localName)
         );
-        instructions.add(IrInstruction.assignObject(localName, pendingException.expression().orElseThrow()));
-        return StackValue.caughtThrowable(IrExpression.objectLocal(localName));
+        instructions.add(IrInstruction.callStaticVoid(
+            "javan_pending_catch_into",
+            List.of(IrExpression.objectLocalAddress(localName))
+        ));
+        return pendingException.throwableType().isPresent()
+            ? StackValue.caughtThrowable(
+                IrExpression.objectLocal(localName),
+                pendingException.throwableType().orElseThrow()
+            )
+            : StackValue.caughtThrowable(IrExpression.objectLocal(localName));
     }
 
     private static void appendPendingExceptionTransport(
+        final Map<String, ClassFile> classes,
         final MethodInfo method,
         final Instruction bytecodeInstruction,
         final List<IrInstruction> instructions,
@@ -1002,6 +1104,7 @@ public final class BytecodeToIR {
             return;
         }
         BytecodeToIRControlFlowSupport.appendPendingExceptionDispatch(
+            classes,
             method,
             bytecodeInstruction,
             instructions,
@@ -1766,7 +1869,7 @@ public final class BytecodeToIR {
                 BytecodeToIRDynamicSupport.pushConstant(classes, classFile, method, instruction, stack);
                 break;
             case 180:
-                BytecodeToIRInvokeSupport.pushInstanceField(classFile, method, instruction, stack);
+                BytecodeToIRInvokeSupport.pushInstanceField(classes, classFile, method, instruction, stack);
                 break;
             case 181:
                 BytecodeToIRInvokeSupport.assignInstanceField(classFile, method, instruction, instructions, stack);
@@ -1861,7 +1964,8 @@ public final class BytecodeToIR {
                 arrayLength(classFile, method, stack);
                 break;
             case 191:
-                BytecodeToIRControlFlowSupport.lowerThrow(classFile, method, instruction, instructions, stack, pendingExceptionHandlerStacks, sourceLines);
+                BytecodeToIRControlFlowSupport.lowerThrow(classes, classFile, method, instruction, instructions, stack,
+                    pendingExceptionHandlerStacks, sourceLines);
                 break;
             case 192:
                 if (BytecodeToIRInvokeSupport.lowerSupportedCheckcast(
@@ -2616,7 +2720,7 @@ public final class BytecodeToIR {
         final List<StackValue> stack
     ) {
         final StackValue value = popObjectValue(classFile, method, instruction, stack);
-        if (value.kind() == StackKind.CAUGHT_THROWABLE) {
+        if (value.kind() == StackKind.CAUGHT_THROWABLE && value.throwableType().isEmpty()) {
             throw unsupportedCaughtThrowableEscape(classFile, method, instruction);
         }
         return stackValueExpression(value);
@@ -3109,7 +3213,10 @@ public final class BytecodeToIR {
         final IrExpression expression = local(classFile, method, locals, slot, IrType.OBJECT);
         final StackKind kind = objectLocalKinds.getOrDefault(slot, StackKind.OBJECT);
         if (kind == StackKind.CAUGHT_THROWABLE) {
-            return StackValue.caughtThrowable(expression);
+            final String throwableType = objectLocalThrowableTypes.get(slot);
+            return throwableType == null
+                ? StackValue.caughtThrowable(expression)
+                : StackValue.caughtThrowable(expression, throwableType);
         }
         if (kind == StackKind.OBJECT) {
             final String throwableType = objectLocalThrowableTypes.get(slot);
@@ -4397,6 +4504,15 @@ public final class BytecodeToIR {
 
         static StackValue caughtThrowable(final IrExpression expression) {
             return new StackValue(StackKind.CAUGHT_THROWABLE, Optional.empty(), Optional.of(expression), Optional.empty());
+        }
+
+        static StackValue caughtThrowable(final IrExpression expression, final String throwableType) {
+            return new StackValue(
+                StackKind.CAUGHT_THROWABLE,
+                Optional.of(throwableType),
+                Optional.of(expression),
+                Optional.empty()
+            );
         }
 
         static StackValue platformThrowable(final String throwableType, final IrExpression message) {

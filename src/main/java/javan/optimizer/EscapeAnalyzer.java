@@ -431,7 +431,7 @@ public final class EscapeAnalyzer {
             case RETURN_OBJECT, ASSIGN_STATIC_FIELD_OBJECT ->
                 consume(expression, GLOBAL_ESCAPE_RANK, state, ids, escapes, parameterEscapes);
             case PRINTLN_OBJECT, PRINTLN_ERROR_OBJECT, PRINT_OBJECT, PRINT_ERROR_OBJECT,
-                 PANIC, SET_PENDING, THROW_PENDING ->
+                 PANIC, SET_PENDING, SET_PENDING_OBJECT, THROW_PENDING ->
                 consume(expression, ARGUMENT_ESCAPE_RANK, state, ids, escapes, parameterEscapes);
             default -> value(expression, state, ids, escapes, parameterEscapes);
         }

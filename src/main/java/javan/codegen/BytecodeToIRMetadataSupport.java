@@ -41,6 +41,7 @@ final class BytecodeToIRMetadataSupport {
         for (final ClassFile classFile : sorted) {
             result.add(new IrClass(
                 classFile.name(),
+                classFile.superName() == null ? "" : classFile.superName(),
                 classSymbol(classFile.name()),
                 instanceFields(classes, classFile),
                 fields(classFile, true),

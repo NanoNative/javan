@@ -262,7 +262,8 @@ final class RuntimeFilesTest {
                     javan_free(values[index]);
                 }
                 javan_pending_throw("java/lang/Throwable", NULL, "", "", "", -1, -1, "");
-                (void) javan_pending_catch();
+                void* caught = NULL;
+                javan_pending_catch_into(&caught);
                 javan_pending_clear();
                 javan_gc_collect();
                 javan_validate_heap_metadata();
@@ -2009,7 +2010,8 @@ final class RuntimeFilesTest {
                     4,
                     "throw value;"
                 );
-                void* caught = javan_pending_catch();
+                void* caught = NULL;
+                javan_pending_catch_into(&caught);
                 javan_pending_rethrow(caught);
                 printf("%d\\n", javan_pending_type_is((void*) "java/lang/NullPointerException"));
                 return 0;
@@ -2044,7 +2046,7 @@ final class RuntimeFilesTest {
                 javan_root_frame_push(roots, 2);
                 message = javan_string_from("dynamic");
                 javan_pending_throw("java/lang/IllegalArgumentException", message, "", "", "", -1, -1, "");
-                caught = javan_pending_catch();
+                javan_pending_catch_into(&caught);
                 javan_root_frame_pop(roots);
                 message = 0;
                 caught = 0;
@@ -9068,7 +9070,7 @@ final class RuntimeFilesTest {
     void runtimeClassLiteralRejectsDescriptorNameConflict() throws Exception {
         final String panic = runRuntimePanicProbe(
             """
-            JavanTypeDescriptor descriptors[] = {{17, \"com.acme.A\", 0, 0, NULL}};
+            JavanTypeDescriptor descriptors[] = {{17, \"com.acme.A\", \"com/acme/A\", \"java/lang/Object\", 0, 0, NULL}};
             javan_register_static_roots(0, 0);
             javan_register_type_descriptors(descriptors, 1);
             """,
@@ -9117,7 +9119,7 @@ final class RuntimeFilesTest {
             #include <stdio.h>
 
             int main(void) {
-                JavanTypeDescriptor descriptors[] = {{17, "com.acme.Mode", 1, 0, NULL}};
+                JavanTypeDescriptor descriptors[] = {{17, "com.acme.Mode", "com/acme/Mode", "java/lang/Object", 1, 0, NULL}};
                 javan_register_static_roots(0, 0);
                 void* unknown = javan_runtime_class_literal("com.acme.Mode", 0, 0, 0, 0);
                 javan_register_type_descriptors(descriptors, 1);
@@ -9136,8 +9138,8 @@ final class RuntimeFilesTest {
     void runtimeClassLiteralRejectsDescriptorEnumDemotion() throws Exception {
         final String panic = runRuntimePanicProbe(
             """
-            JavanTypeDescriptor enum_descriptor[] = {{17, "com.acme.Mode", 1, 0, NULL}};
-            JavanTypeDescriptor class_descriptor[] = {{17, "com.acme.Mode", 0, 0, NULL}};
+            JavanTypeDescriptor enum_descriptor[] = {{17, "com.acme.Mode", "com/acme/Mode", "java/lang/Object", 1, 0, NULL}};
+            JavanTypeDescriptor class_descriptor[] = {{17, "com.acme.Mode", "com/acme/Mode", "java/lang/Object", 0, 0, NULL}};
             javan_register_static_roots(0, 0);
             javan_register_type_descriptors(enum_descriptor, 1);
             (void) javan_runtime_class_literal("com.acme.Mode", 17, 1, 0, 1, 17);

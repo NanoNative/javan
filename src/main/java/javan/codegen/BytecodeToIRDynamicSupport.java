@@ -84,7 +84,15 @@ final class BytecodeToIRDynamicSupport {
         arguments.addFirst(receiver);
         final String dispatchSymbol = dispatchSymbol(methodRef);
         dispatches.putIfAbsent(dispatchSymbol, virtualDispatch(classes, dispatchSymbol, descriptor, targets));
-        appendCallResult(instructions, stack, localDeclarations, descriptor.returnType(), dispatchSymbol, arguments);
+        appendCallResult(
+            instructions,
+            stack,
+            localDeclarations,
+            descriptor.returnType(),
+            dispatchSymbol,
+            arguments,
+            BytecodeToIR.throwableTypeFromDescriptor(classes, returnDescriptor(methodRef.descriptor()))
+        );
     }
 
     static void appendCallResult(
@@ -94,6 +102,18 @@ final class BytecodeToIRDynamicSupport {
         final IrType returnType,
         final String symbol,
         final List<IrExpression> arguments
+    ) {
+        appendCallResult(instructions, stack, localDeclarations, returnType, symbol, arguments, Optional.empty());
+    }
+
+    static void appendCallResult(
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final IrType returnType,
+        final String symbol,
+        final List<IrExpression> arguments,
+        final Optional<String> throwableType
     ) {
         if (returnType == IrType.VOID) {
             instructions.add(IrInstruction.callStaticVoid(symbol, arguments));
@@ -133,10 +153,16 @@ final class BytecodeToIRDynamicSupport {
         } else if (returnType == IrType.DOUBLE) {
             stack.add(StackValue.doubleExpression(localExpression));
         } else if (returnType == IrType.OBJECT) {
-            stack.add(StackValue.objectExpression(localExpression));
+            stack.add(throwableType.isPresent()
+                ? StackValue.platformThrowable(throwableType.orElseThrow(), localExpression)
+                : StackValue.objectExpression(localExpression));
         } else {
             throw new IllegalStateException("Unsupported call result type.");
         }
+    }
+
+    private static String returnDescriptor(final String methodDescriptor) {
+        return methodDescriptor.substring(methodDescriptor.lastIndexOf(')') + 1);
     }
 
     static IrDispatch dispatch(final String symbol, final MethodDescriptor descriptor, final List<EntryPoint> targets) {
@@ -1658,6 +1684,14 @@ final class BytecodeToIRDynamicSupport {
         final String owner = instruction.className().orElseThrow();
         if (isKnownPlatformThrowable(owner)) {
             stack.add(StackValue.platformThrowable(owner, IrExpression.stringLiteral(owner)));
+            return;
+        }
+        if (BytecodeToIR.isThrowable(classes, owner)) {
+            final String localName = "object" + localDeclarations.size();
+            localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
+            final IrExpression local = IrExpression.objectLocal(localName);
+            instructions.add(IrInstruction.assignObject(localName, IrExpression.objectAllocation(owner)));
+            stack.add(StackValue.platformThrowable(owner, local));
             return;
         }
         if ("java/lang/String".equals(owner)) {

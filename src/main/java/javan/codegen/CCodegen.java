@@ -629,6 +629,10 @@ public final class CCodegen {
                     .append(ids.get(classInfo.jvmName()).intValue())
                     .append(", \"")
                     .append(escapeCString(displayClassName(classInfo.jvmName())))
+                    .append("\", \"")
+                    .append(escapeCString(classInfo.jvmName()))
+                    .append("\", \"")
+                    .append(escapeCString(classInfo.superName()))
                     .append("\", ")
                     .append(classInfo.enumClass() ? 1 : 0)
                     .append(", ")
@@ -1357,7 +1361,7 @@ public final class CCodegen {
             }
             emitReflectiveCall(c, reflected, targetSymbol, staticMethod);
             c.append("        if (javan_pending_has() != 0) {").append(System.lineSeparator());
-            c.append("            invocation_cause = javan_pending_catch();").append(System.lineSeparator());
+            c.append("            javan_pending_catch_into(&invocation_cause);").append(System.lineSeparator());
             c.append("            javan_pending_throw_with_cause(\"java/lang/reflect/InvocationTargetException\", NULL, invocation_cause);")
                 .append(System.lineSeparator());
             c.append("        }").append(System.lineSeparator());
@@ -3712,6 +3716,9 @@ public final class CCodegen {
             case SET_PENDING:
                 emitSetPending(instruction, objectResultSymbols, nativeWrapperSymbols, c);
                 break;
+            case SET_PENDING_OBJECT:
+                emitSetPendingObject(instruction, objectResultSymbols, nativeWrapperSymbols, c);
+                break;
             case THROW_PENDING:
                 emitThrowPending(
                     instruction,
@@ -3796,6 +3803,37 @@ public final class CCodegen {
             .append(emitCStringLiteral(instruction.value().orElseThrow()))
             .append(", (void*) ")
             .append(message)
+            .append(", ")
+            .append(emitCStringLiteral(displayClassName(location.className())))
+            .append(", ")
+            .append(emitCStringLiteral(location.methodName() + location.descriptor()))
+            .append(", ")
+            .append(emitCStringLiteral(location.sourceFile().orElse("")))
+            .append(", ")
+            .append(sourceLineNumber(location))
+            .append(", ")
+            .append(location.bytecodeOffset())
+            .append(", ")
+            .append(emitCStringLiteral(location.sourceLine().orElse("")))
+            .append(");")
+            .append(System.lineSeparator());
+        emitExpressionScopeEnd(plan, c);
+    }
+
+    private static void emitSetPendingObject(
+        final IrInstruction instruction,
+        final List<String> objectResultSymbols,
+        final NativeWrapperSymbols nativeWrapperSymbols,
+        final StringBuilder c
+    ) {
+        final ExpressionPlan plan = new ExpressionPlan(objectResultSymbols, nativeWrapperSymbols);
+        final String throwable = plan.expression(instruction.expression().orElseThrow());
+        final String indent = emitExpressionScopeStart(plan, c);
+        final IrSourceLocation location = instruction.sourceLocation().orElseThrow();
+        c.append(indent)
+            .append("javan_pending_throw_object(")
+            .append("(void*) ")
+            .append(throwable)
             .append(", ")
             .append(emitCStringLiteral(displayClassName(location.className())))
             .append(", ")
