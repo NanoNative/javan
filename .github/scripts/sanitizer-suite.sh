@@ -361,6 +361,7 @@ if runs_scope failure_exceptions; then
   run_gc_smoke 4096 typed-catch-error-not-exception
   run_gc_smoke 4096 exception-default-message-null
   run_gc_smoke 8192 application-exception
+  run_gc_smoke 8192 try-finally-exception
   run_heap_smoke 4096 allocation-path-gc
   run_failure 1 boom exception-panic
   run_failure 1 "javan panic" exception-default-panic

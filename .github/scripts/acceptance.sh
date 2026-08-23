@@ -422,7 +422,7 @@ accepts_runtime_contract_report() {
   assert_contains "$full_project/.javan/reports/runtime.json" "\"threadLifecycleInventory\": true"
   assert_contains "$full_project/.javan/reports/runtime.json" "\"threadLifecycleInventoryScope\": \"heap-thread-object-thread-root-registry-started-completed-active-non-current-target-current-root-and-completed-target-release-counters\""
   assert_contains "$full_project/.javan/reports/runtime.json" "\"javaHeapAllocationsManaged\": false"
-  assert_contains "$full_project/.javan/reports/runtime.json" "\"exceptions\": \"panic-and-limited-same-method-catch\""
+  assert_contains "$full_project/.javan/reports/runtime.json" "\"exceptions\": \"panic-and-supported-handler-slice\""
   assert_contains "$full_project/.javan/reports/runtime.json" "\"threads\": \"current-thread-interrupt-state-isalive-isvirtual-entry-interrupted-sleep-start-startvirtualthread-builderstart-builderunstarted-factory-executor-threadlocal-park-parknanos-parkuntil-unpark-parallel-host-thread-bootstrap-join-same-method-catch-thread-construction-duplicate-start-rejection-current-join-rejection-and-runnable-target-no-virtual-scheduler\""
   assert_contains "$full_project/.javan/reports/runtime.json" "\"sanitizerInstrumentation\": \"not-built\""
   assert_contains "$full_project/.javan/reports/runtime.json" "\"sanitizers\": \"not-enabled\""
@@ -677,6 +677,7 @@ accepts_jvm_equivalent_app "$NATIVE_PROFILE_PROJECTS/typed-catch-util-runtime-su
 accepts_jvm_equivalent_app "$NATIVE_PROFILE_PROJECTS/typed-catch-error-not-exception"
 accepts_jvm_equivalent_app "$NATIVE_PROFILE_PROJECTS/exception-default-message-null"
 accepts_jvm_equivalent_app_gc_stress "$NATIVE_PROFILE_PROJECTS/application-exception"
+accepts_jvm_equivalent_app_gc_stress "$NATIVE_PROFILE_PROJECTS/try-finally-exception"
 accepts_jvm_equivalent_app "$NATIVE_PROFILE_PROJECTS/object-fields"
 accepts_jvm_equivalent_app "$NATIVE_PROFILE_PROJECTS/object-list"
 accepts_jvm_equivalent_app_env "$NATIVE_PROFILE_PROJECTS/runtime-container-live-roots" JAVAN_HEAP_LIMIT_BYTES 4096

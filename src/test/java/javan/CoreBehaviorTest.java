@@ -6835,7 +6835,7 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void staticVerifierRejectsCatchAllWithUnreachableAliasRethrow() {
+    void staticVerifierAcceptsCatchAllReturnBeforeUnreachableRethrow() {
         final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
             classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
             instruction(1, 89, "dup"),
@@ -6848,9 +6848,7 @@ final class CoreBehaviorTest {
             instruction(8, 191, "athrow")
         ), new CodeException(0, 5, 5, Optional.empty()));
 
-        assertThat(diagnostics).singleElement()
-            .extracting(Diagnostic::code)
-            .isEqualTo("JAVAN014");
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test
@@ -7042,7 +7040,7 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void staticVerifierRejectsCatchAllLoopWithoutRethrow() {
+    void staticVerifierAcceptsNonTerminatingCatchAllLoop() {
         final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
             classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
             instruction(1, 89, "dup"),
@@ -7053,7 +7051,7 @@ final class CoreBehaviorTest {
             instructionOperands(6, 167, "goto", 0, 0)
         ), new CodeException(0, 5, 5, Optional.empty()));
 
-        assertThat(diagnostics).extracting(Diagnostic::code).containsExactly("JAVAN014");
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test

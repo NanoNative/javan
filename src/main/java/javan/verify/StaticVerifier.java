@@ -1523,6 +1523,12 @@ public final class StaticVerifier {
                     || instruction.offset() >= handlerEnd)
                     && target >= handler.handlerPc()
                     && target < handlerEnd) {
+                    final Optional<CaughtThrowableRethrowAnalysis.FinallyFlow> finallyFlow =
+                        CaughtThrowableRethrowAnalysis.analyzeFinally(code, handler);
+                    if (finallyFlow.isPresent()
+                        && finallyFlow.orElseThrow().handlerOffsets().contains(Integer.valueOf(instruction.offset()))) {
+                        continue;
+                    }
                     return true;
                 }
             }
@@ -1688,26 +1694,7 @@ public final class StaticVerifier {
         final Instruction instruction,
         final String catchType
     ) {
-        if (instruction.methodRef().isEmpty()) {
-            return false;
-        }
-        final MethodRef target = instruction.methodRef().orElseThrow();
-        for (final String throwableType : JdkCallSupport.transportedPlatformThrowableTypes(target)) {
-            if (JdkCallSupport.isPlatformThrowableAssignable(throwableType, catchType)) {
-                return true;
-            }
-        }
-        for (final String throwableType : escapingPlatformExceptionTypes(classes, target, new HashSet<>())) {
-            if (JdkCallSupport.isPlatformThrowableAssignable(throwableType, catchType)) {
-                return true;
-            }
-        }
-        for (final String throwableType : escapingLambdaPlatformExceptionTypes(classes, target, new HashSet<>())) {
-            if (JdkCallSupport.isPlatformThrowableAssignable(throwableType, catchType)) {
-                return true;
-            }
-        }
-        return false;
+        return supportedTransportedThrowableCall(classes, instruction, catchType);
     }
 
     private static boolean boundedDynamicTransportsTo(
@@ -1731,7 +1718,7 @@ public final class StaticVerifier {
             resolved.orElseThrow().implementation(),
             new HashSet<>()
         )) {
-            if (JdkCallSupport.isPlatformThrowableAssignable(throwableType, catchType)) {
+            if (isThrowableAssignable(classes, throwableType, catchType)) {
                 return true;
             }
         }
@@ -1796,7 +1783,7 @@ public final class StaticVerifier {
         if (supportedMathExactHandler(code, handler)) {
             return true;
         }
-        if (supportedFinallyHandler(classes, code, handler)) {
+        if (supportedFinallyHandler(classes, method, code, handler)) {
             return true;
         }
         if (supportsImmediateOptionalOrElseThrowSupplierHandler(
@@ -1842,14 +1829,14 @@ public final class StaticVerifier {
             if (supportedGeneratedThrowableCall(classes, instruction)) {
                 hasThrowableTransport = 1;
             }
-            if (supportedTransportedJdkThrowableCall(instruction, catchType)) {
+            if (supportedTransportedThrowableCall(classes, instruction, catchType)) {
                 hasThrowableTransport = 1;
             }
             if (!supportedInterruptedWaitProtectedInstruction(instruction)
                 && !supportedApplicationThrowableInstruction(classes, instruction)
                 && !supportedCheckcastThrowable(instruction, catchType)
                 && !supportedGeneratedThrowableCall(classes, instruction)
-                && !supportedTransportedJdkThrowableCall(instruction, catchType)
+                && !supportedTransportedThrowableCall(classes, instruction, catchType)
                 && !supportedThrowableFieldPreparation(classes, instruction)
                 && !supportedOptionalFactoryPreparation(instruction)
                 && !supportedThrowableWrapRangeInstruction(instruction)
@@ -2615,17 +2602,27 @@ public final class StaticVerifier {
             );
     }
 
-    private static boolean supportedTransportedJdkThrowableCall(
+    private static boolean supportedTransportedThrowableCall(
+        final Map<String, ClassFile> classes,
         final Instruction instruction,
         final String catchType
     ) {
         if (instruction.methodRef().isEmpty()) {
             return false;
         }
-        for (final String throwableType : JdkCallSupport.transportedPlatformThrowableTypes(
-            instruction.methodRef().orElseThrow()
-        )) {
-            if (JdkCallSupport.isPlatformThrowableAssignable(throwableType, catchType)) {
+        final MethodRef target = instruction.methodRef().orElseThrow();
+        for (final String throwableType : JdkCallSupport.transportedPlatformThrowableTypes(target)) {
+            if (isThrowableAssignable(classes, throwableType, catchType)) {
+                return true;
+            }
+        }
+        for (final String throwableType : escapingPlatformExceptionTypes(classes, target, new HashSet<>())) {
+            if (isThrowableAssignable(classes, throwableType, catchType)) {
+                return true;
+            }
+        }
+        for (final String throwableType : escapingLambdaPlatformExceptionTypes(classes, target, new HashSet<>())) {
+            if (isThrowableAssignable(classes, throwableType, catchType)) {
                 return true;
             }
         }
@@ -2975,6 +2972,7 @@ public final class StaticVerifier {
         }
         final CodeAttribute code = targetMethod.orElseThrow().code().orElseThrow();
         final Set<String> result = new HashSet<>();
+        result.addAll(finallyReplacementThrowableTypes(classes, code));
         final Set<String> allocatedTypes = new HashSet<>();
         final Set<String> throwableParameters = applicationThrowableParameters(
             classes,
@@ -3022,6 +3020,56 @@ public final class StaticVerifier {
         }
         visiting.remove(target);
         return Set.copyOf(result);
+    }
+
+    private static Set<String> finallyReplacementThrowableTypes(
+        final Map<String, ClassFile> classes,
+        final CodeAttribute code
+    ) {
+        final Set<String> result = new HashSet<>();
+        final List<Instruction> instructions = code.instructions();
+        for (final CodeException handler : code.exceptionTable()) {
+            if (handler.catchType().isPresent()) {
+                continue;
+            }
+            final Optional<CaughtThrowableRethrowAnalysis.FinallyFlow> flow =
+                CaughtThrowableRethrowAnalysis.analyzeFinally(code, handler);
+            if (flow.isEmpty()) {
+                continue;
+            }
+            for (final CaughtThrowableRethrowAnalysis.ReplacementThrow replacement : flow.orElseThrow().replacements()) {
+                result.add(replacement.throwableType());
+            }
+            for (final int throwOffset : flow.orElseThrow().replacementValueOffsets()) {
+                final Optional<String> type = directThrowableValueType(classes, instructions, throwOffset);
+                if (type.isPresent()) {
+                    result.add(type.orElseThrow());
+                }
+            }
+        }
+        return Set.copyOf(result);
+    }
+
+    private static Optional<String> directThrowableValueType(
+        final Map<String, ClassFile> classes,
+        final List<Instruction> instructions,
+        final int throwOffset
+    ) {
+        for (int index = 1; index < instructions.size(); index++) {
+            if (instructions.get(index).offset() != throwOffset) {
+                continue;
+            }
+            final Instruction source = instructions.get(index - 1);
+            if (source.fieldRef().isPresent()) {
+                return throwableDescriptorType(classes, source.fieldRef().orElseThrow().descriptor());
+            }
+            if (source.methodRef().isPresent()) {
+                final String descriptor = source.methodRef().orElseThrow().descriptor();
+                return throwableDescriptorType(classes, descriptor.substring(descriptor.indexOf(')') + 1));
+            }
+            return Optional.empty();
+        }
+        return Optional.empty();
     }
 
     private static Set<String> applicationThrowableParameters(
@@ -3304,19 +3352,36 @@ public final class StaticVerifier {
 
     private static boolean supportedFinallyHandler(
         final Map<String, ClassFile> classes,
+        final MethodInfo method,
         final CodeAttribute code,
         final CodeException handler
     ) {
         if (handler.catchType().isPresent()) {
             return false;
         }
-        if (!handlerRethrowsCaughtThrowable(code, handler)
-            && supportedReplacementThrowOffset(code, handler).isEmpty()) {
+        final Optional<CaughtThrowableRethrowAnalysis.FinallyFlow> flow =
+            CaughtThrowableRethrowAnalysis.analyzeFinally(code, handler);
+        if (flow.isEmpty()) {
             return false;
+        }
+        final CaughtThrowableRethrowAnalysis.FinallyFlow result = flow.orElseThrow();
+        for (final CaughtThrowableRethrowAnalysis.ReplacementThrow replacement : result.replacements()) {
+            if (!isThrowable(classes, replacement.throwableType())) {
+                return false;
+            }
+        }
+        for (final int local : result.replacementLocals()) {
+            if (!declaredThrowableParameter(classes, method, local)) {
+                return false;
+            }
+        }
+        for (final int offset : result.replacementValueOffsets()) {
+            if (!directThrowableValue(classes, code, offset)) {
+                return false;
+            }
         }
         final Optional<Instruction> first = instructionAtOffset(code, handler.handlerPc());
         final int throwableLocal = astoreLocalIndex(first.orElseThrow());
-        int hasThrowableTransport = 0;
         for (final Instruction instruction : code.instructions()) {
             if (instruction.offset() < handler.startPc()) {
                 continue;
@@ -3327,25 +3392,121 @@ public final class StaticVerifier {
             if (instruction.offset() == handler.handlerPc() && astoreLocalIndex(instruction) == throwableLocal) {
                 continue;
             }
-            if (instruction.opcode() == 191
-                || supportedGeneratedThrowableCall(classes, instruction)
-                || supportedTransportedJdkThrowableCall(instruction, "java/lang/Throwable")) {
-                hasThrowableTransport = 1;
-            }
             if (!supportedExplicitThrowRangeInstruction(instruction)
+                && !supportedApplicationThrowableInstruction(classes, instruction)
                 && !supportedGeneratedThrowableCall(classes, instruction)
-                && !supportedTransportedJdkThrowableCall(instruction, "java/lang/Throwable")
+                && !supportedTransportedThrowableCall(classes, instruction, "java/lang/Throwable")
+                && !supportedInterruptedWaitProtectedInstruction(instruction)
                 && !supportedFinallyProtectedLocalInstruction(instruction)
+                && !supportedFinallyProtectedControlInstruction(instruction)
+                && !supportedFinallyCleanupInstruction(classes, instruction)
                 && !supportedProtectedFinallyRethrowInstruction(classes, code, handler, throwableLocal, instruction)) {
                 return false;
             }
         }
-        return hasThrowableTransport != 0;
+        return true;
+    }
+
+    private static boolean supportedFinallyHandler(
+        final Map<String, ClassFile> classes,
+        final CodeAttribute code,
+        final CodeException handler
+    ) {
+        final Optional<CaughtThrowableRethrowAnalysis.FinallyFlow> flow =
+            CaughtThrowableRethrowAnalysis.analyzeFinally(code, handler);
+        if (flow.isEmpty()) {
+            return false;
+        }
+        final CaughtThrowableRethrowAnalysis.FinallyFlow result = flow.orElseThrow();
+        if (!result.replacementLocals().isEmpty() || !result.replacementValueOffsets().isEmpty()) {
+            return false;
+        }
+        for (final CaughtThrowableRethrowAnalysis.ReplacementThrow replacement : result.replacements()) {
+            if (!isThrowable(classes, replacement.throwableType())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean declaredThrowableParameter(
+        final Map<String, ClassFile> classes,
+        final MethodInfo method,
+        final int local
+    ) {
+        int slot = method.isStatic() ? 0 : 1;
+        final String descriptor = method.descriptor();
+        for (int index = 1; descriptor.charAt(index) != ')';) {
+            final int start = index;
+            while (descriptor.charAt(index) == '[') {
+                index++;
+            }
+            final char type = descriptor.charAt(index);
+            if (type == 'L') {
+                index = descriptor.indexOf(';', index);
+                if (index < 0) {
+                    return false;
+                }
+                index++;
+            } else {
+                index++;
+            }
+            if (slot == local) {
+                return descriptor.charAt(start) == 'L'
+                    && isThrowable(classes, descriptor.substring(start + 1, index - 1));
+            }
+            slot += type == 'J' || type == 'D' ? 2 : 1;
+        }
+        return false;
+    }
+
+    private static boolean directThrowableValue(
+        final Map<String, ClassFile> classes,
+        final CodeAttribute code,
+        final int throwOffset
+    ) {
+        final List<Instruction> instructions = code.instructions();
+        for (int index = 1; index < instructions.size(); index++) {
+            if (instructions.get(index).offset() != throwOffset) {
+                continue;
+            }
+            final Instruction source = instructions.get(index - 1);
+            if (source.fieldRef().isPresent()) {
+                return throwableDescriptor(classes, source.fieldRef().orElseThrow().descriptor());
+            }
+            if (source.methodRef().isPresent()) {
+                final String descriptor = source.methodRef().orElseThrow().descriptor();
+                return throwableDescriptor(classes, descriptor.substring(descriptor.indexOf(')') + 1));
+            }
+            return false;
+        }
+        return false;
+    }
+
+    private static boolean throwableDescriptor(final Map<String, ClassFile> classes, final String descriptor) {
+        return throwableDescriptorType(classes, descriptor).isPresent();
+    }
+
+    private static Optional<String> throwableDescriptorType(
+        final Map<String, ClassFile> classes,
+        final String descriptor
+    ) {
+        if (descriptor.length() <= 2 || descriptor.charAt(0) != 'L'
+            || descriptor.charAt(descriptor.length() - 1) != ';') {
+            return Optional.empty();
+        }
+        final String type = descriptor.substring(1, descriptor.length() - 1);
+        return isThrowable(classes, type) ? Optional.of(type) : Optional.empty();
     }
 
     private static boolean supportedFinallyProtectedLocalInstruction(final Instruction instruction) {
         final int opcode = instruction.opcode();
         return (opcode >= 21 && opcode <= 45) || (opcode >= 54 && opcode <= 78);
+    }
+
+    private static boolean supportedFinallyProtectedControlInstruction(final Instruction instruction) {
+        final int opcode = instruction.opcode();
+        return (opcode >= 153 && opcode <= 167) || opcode == 198 || opcode == 199 || opcode == 200;
     }
 
     private static boolean handlerRethrowsCaughtThrowable(
@@ -3393,7 +3554,7 @@ public final class StaticVerifier {
         final int throwableLocal,
         final Instruction instruction
     ) {
-        final Optional<Integer> throwOffset = finallyThrowOffset(code, handler, throwableLocal);
+        final Optional<Integer> throwOffset = finallyThrowOffset(classes, code, handler, throwableLocal);
         if (throwOffset.isEmpty()) {
             return false;
         }
@@ -3403,15 +3564,21 @@ public final class StaticVerifier {
         if (supportedFinallyProtectedLocalInstruction(instruction)) {
             return true;
         }
+        if (supportedFinallyProtectedControlInstruction(instruction)) {
+            return true;
+        }
         if (instruction.opcode() == 191) {
             return true;
         }
         return supportedExplicitThrowRangeInstruction(instruction)
-            || supportedFinallyCleanupInstruction(instruction)
+            || supportedApplicationThrowableInstruction(classes, instruction)
+            || supportedInterruptedWaitProtectedInstruction(instruction)
+            || supportedFinallyCleanupInstruction(classes, instruction)
             || supportedGeneratedThrowableCall(classes, instruction);
     }
 
     private static Optional<Integer> finallyThrowOffset(
+        final Map<String, ClassFile> classes,
         final CodeAttribute code,
         final CodeException handler,
         final int throwableLocal
@@ -3423,17 +3590,18 @@ public final class StaticVerifier {
         final Optional<Integer> rethrow = caughtThrowableRethrowOffset(code, handler);
         return rethrow.isPresent()
             ? rethrow
-            : supportedReplacementThrowOffset(code, handler);
+            : supportedReplacementThrowOffset(classes, code, handler);
     }
 
     private static Optional<Integer> supportedReplacementThrowOffset(
+        final Map<String, ClassFile> classes,
         final CodeAttribute code,
         final CodeException handler
     ) {
         final Optional<CaughtThrowableRethrowAnalysis.ReplacementThrow> replacement =
             CaughtThrowableRethrowAnalysis.replacementThrow(code, handler);
         if (replacement.isEmpty()
-            || !JdkCallSupport.isPlatformThrowable(replacement.orElseThrow().throwableType())) {
+            || !isThrowable(classes, replacement.orElseThrow().throwableType())) {
             return Optional.empty();
         }
         return Optional.of(replacement.orElseThrow().offset());
@@ -3850,7 +4018,23 @@ public final class StaticVerifier {
         return false;
     }
 
-    private static boolean supportedFinallyCleanupInstruction(final Instruction instruction) {
+    private static boolean supportedFinallyCleanupInstruction(
+        final Map<String, ClassFile> classes,
+        final Instruction instruction
+    ) {
+        if (instruction.opcode() == 187 && instruction.className().isPresent()) {
+            return classes.containsKey(instruction.className().orElseThrow());
+        }
+        if (instruction.opcode() == 183 && instruction.methodRef().isPresent()) {
+            final MethodRef target = instruction.methodRef().orElseThrow();
+            return classes.containsKey(target.owner()) && "<init>".equals(target.name());
+        }
+        if ((instruction.opcode() == 178 || instruction.opcode() == 179
+            || instruction.opcode() == 180 || instruction.opcode() == 181)
+            && instruction.fieldRef().isPresent()
+            && classes.containsKey(instruction.fieldRef().orElseThrow().owner())) {
+            return true;
+        }
         if (instruction.opcode() == 178) {
             final Optional<FieldRef> fieldRef = instruction.fieldRef();
             if (fieldRef.isEmpty()) {
