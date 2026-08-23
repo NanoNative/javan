@@ -13626,7 +13626,7 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.callStaticVoid("javan_virtual_thread_builder_new", List.of()),
+            IrInstruction.discardCall(IrExpression.objectCall("javan_virtual_thread_builder_new", List.of())),
             IrInstruction.returnVoid()
         );
     }
@@ -13647,13 +13647,13 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.callStaticVoid(
+            IrInstruction.discardCall(IrExpression.objectCall(
                 "javan_virtual_thread_builder_name",
                 List.of(
                     IrExpression.objectCall("javan_virtual_thread_builder_new", List.of()),
                     IrExpression.stringLiteral("x")
                 )
-            ),
+            )),
             IrInstruction.returnVoid()
         );
     }
@@ -13673,10 +13673,10 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.callStaticVoid(
+            IrInstruction.discardCall(IrExpression.objectCall(
                 "javan_virtual_thread_builder_factory",
                 List.of(IrExpression.objectCall("javan_virtual_thread_builder_new", List.of()))
-            ),
+            )),
             IrInstruction.returnVoid()
         );
     }
@@ -22679,6 +22679,29 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).containsExactly(
             IrInstruction.returnObject(IrExpression.objectCall("javan_string_value_of_long", List.of(IrExpression.longLocal("arg0"))))
+        );
+    }
+
+    @Test
+    void preservesDiscardedObjectCallTypeForGcSafeCodeGeneration() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(J)V",
+            2,
+            2,
+            plain(0, 30, "lload_0"),
+            invokeStatic(1, new MethodRef("java/lang/Long", "toString", "(J)Ljava/lang/String;")),
+            plain(2, 87, "pop"),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.discardCall(IrExpression.objectCall(
+                "javan_string_value_of_long",
+                List.of(IrExpression.longLocal("arg0"))
+            )),
+            IrInstruction.returnVoid()
         );
     }
 

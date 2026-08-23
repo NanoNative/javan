@@ -217,6 +217,19 @@ public record IrInstruction(
     }
 
     /**
+     * Creates a call whose result is intentionally discarded.
+     *
+     * @param expression call expression
+     * @return IR instruction retaining the call's result type
+     */
+    public static IrInstruction discardCall(final IrExpression expression) {
+        if (expression.kind() != IrExpression.Kind.CALL) {
+            throw new IllegalArgumentException("discarded expression must be a call");
+        }
+        return new IrInstruction(Op.CALL_STATIC_VOID, Optional.of(expression.value()), Optional.of(expression));
+    }
+
+    /**
      * Creates a lazy JVM class-initialization trigger.
      *
      * @param owner class or interface to initialize

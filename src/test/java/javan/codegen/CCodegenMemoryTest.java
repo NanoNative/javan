@@ -1846,6 +1846,29 @@ final class CCodegenMemoryTest {
     }
 
     @Test
+    void rootsDiscardedObjectCallResultUntilTheCallCompletes() throws Exception {
+        final IrProgram program = new IrProgram(
+            List.of(nodeClass()),
+            List.of(mainWithInstruction(IrInstruction.discardCall(IrExpression.objectCall(
+                "javan_string_value_of_long",
+                List.of(IrExpression.longLiteral(8L))
+            )))),
+            "main_symbol"
+        );
+
+        final String generated = Files.readString(new CCodegen().generate(program, tempDir));
+
+        assertThat(generated).contains(
+            "void* javan_expr_tmp_0 = 0;",
+            "void** javan_expr_roots[] = {",
+            "javan_root_frame_push(javan_expr_roots, 1);",
+            "javan_string_value_of_long_into((void**) &javan_expr_tmp_0, 8LL);",
+            "(void) javan_expr_tmp_0;",
+            "javan_root_frame_pop(javan_expr_roots);"
+        );
+    }
+
+    @Test
     void rootsObjectReturnOperandArgumentsBeforeReturnRoot() throws Exception {
         final IrProgram program = new IrProgram(
             List.of(nodeClass()),

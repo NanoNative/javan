@@ -157,8 +157,10 @@ accepts_jvm_equivalent_app_gc_stress() {
   run_cmd "$build_name-build" "$JAVAN_BIN" build "$full_project"
   java -cp "$full_project/.javan/classes" "$main_class" >"$TMP/$build_name.jvm" 2>"$TMP/$build_name.jvm.err" \
     || fail "$project JVM reference run"
-  JAVAN_GC_SAFEPOINT_INTERVAL=1 "$full_project/.javan/bin/$name" >"$TMP/$build_name.native" 2>"$TMP/$build_name.native.err" \
-    || fail "$project native GC stress run"
+  if ! JAVAN_GC_SAFEPOINT_INTERVAL=1 "$full_project/.javan/bin/$name" >"$TMP/$build_name.native" 2>"$TMP/$build_name.native.err"; then
+    cat "$TMP/$build_name.native.err" >&2
+    fail "$project native GC stress run"
+  fi
   cmp "$TMP/$build_name.jvm" "$TMP/$build_name.native" >/dev/null \
     || fail "$project native GC stress output differs from JVM"
   pass "$project matches JVM output under GC safe-point stress"
