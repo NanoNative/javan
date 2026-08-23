@@ -577,7 +577,23 @@ jobs:
       - macos-package-self-host
       - platform-smoke
       - windows-runtime-smoke
-    if: inputs.prepare_publication
+    if: >-
+      ${{
+        always()
+        && inputs.prepare_publication
+        && needs.build-info.result == 'success'
+        && needs.verify-core.result == 'success'
+        && needs.cli.result == 'success'
+        && needs.native-acceptance.result == 'success'
+        && needs.native-sanitizer.result == 'success'
+        && needs.linux-package-generation3.result == 'success'
+        && needs.linux-package-arm64.result == 'success'
+        && (needs.native-package-self-host.result == 'success'
+          || needs.native-package-self-host.result == 'skipped')
+        && needs.macos-package-self-host.result == 'success'
+        && needs.platform-smoke.result == 'success'
+        && needs.windows-runtime-smoke.result == 'success'
+      }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
