@@ -20,6 +20,51 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @NativeTest
 final class CliOptionalOrElseThrowIntegrationTest extends CliIntegrationSupport {
     @Test
+    void emptyGetThrowsCatchableNoSuchElementException() throws Exception {
+        assertNativeMatchesJvm("optional-empty-get", """
+            package com.acme;
+
+            import java.util.NoSuchElementException;
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    try {
+                        Optional.empty().get();
+                    } catch (final NoSuchElementException exception) {
+                        System.out.println("empty");
+                    }
+                }
+            }
+            """);
+    }
+
+    @Test
+    void emptyOrElseThrowReachesSuperclassCatch() throws Exception {
+        assertNativeMatchesJvm("optional-empty-or-else-throw", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    try {
+                        Optional.empty().orElseThrow();
+                    } catch (final RuntimeException exception) {
+                        System.out.println("empty");
+                    }
+                }
+            }
+            """);
+    }
+
+    @Test
     void presentOptionalSkipsCapturedExceptionSupplier() throws Exception {
         assertNativeMatchesJvm("optional-or-else-throw-present", """
             package com.acme;
