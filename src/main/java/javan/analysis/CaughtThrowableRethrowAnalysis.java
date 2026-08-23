@@ -3,6 +3,7 @@ package javan.analysis;
 import javan.classfile.CodeAttribute;
 import javan.classfile.CodeException;
 import javan.classfile.Instruction;
+import javan.classfile.MethodRef;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -11,7 +12,7 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Finds a reachable rethrow of the throwable stored by a catch-all handler.
+ * Analyzes catch-all handlers that rethrow or replace the caught throwable.
  */
 public final class CaughtThrowableRethrowAnalysis {
     private static final int MAX_ANALYSIS_STATES = 8_192;
@@ -154,6 +155,82 @@ public final class CaughtThrowableRethrowAnalysis {
         return rethrowOffset < 0 ? Optional.empty() : Optional.of(rethrowOffset);
     }
 
+    /**
+     * Finds javac's straight-line catch-all handler that discards the caught throwable and throws
+     * a newly constructed supported platform exception instead.
+     *
+     * @param code decoded method code
+     * @param handler catch-all handler to inspect
+     * @return replacement throwable type and {@code athrow} offset
+     */
+    public static Optional<ReplacementThrow> replacementThrow(
+        final CodeAttribute code,
+        final CodeException handler
+    ) {
+        if (handler.catchType().isPresent()) {
+            return Optional.empty();
+        }
+        final List<Instruction> instructions = code.instructions();
+        final int handlerIndex = instructionIndex(instructions, handler.handlerPc());
+        if (handlerIndex < 0) {
+            return Optional.empty();
+        }
+        final int throwableLocal = astoreLocalIndex(instructions.get(handlerIndex));
+        if (throwableLocal < 0) {
+            return Optional.empty();
+        }
+        int index = handlerIndex + 1;
+        while (validInstructionIndex(instructions, index) && instructions.get(index).opcode() != 187) {
+            final Instruction instruction = instructions.get(index);
+            final int opcode = instruction.opcode();
+            if (aloadLocalIndex(instruction) == throwableLocal
+                || opcode >= 153 && opcode <= 177
+                || opcode >= 191 && opcode <= 201) {
+                return Optional.empty();
+            }
+            index++;
+        }
+        if (!validInstructionIndex(instructions, index)
+            || instructions.get(index).className().isEmpty()) {
+            return Optional.empty();
+        }
+        final String throwableType = instructions.get(index).className().orElseThrow();
+        index++;
+        if (!validInstructionIndex(instructions, index) || instructions.get(index).opcode() != 89) {
+            return Optional.empty();
+        }
+        index++;
+        final int messageOpcode = validInstructionIndex(instructions, index)
+            ? instructions.get(index).opcode()
+            : -1;
+        final int messageLocal = validInstructionIndex(instructions, index)
+            ? aloadLocalIndex(instructions.get(index))
+            : -1;
+        final boolean hasMessage = messageOpcode == 1
+            || messageOpcode == 18
+            || messageOpcode == 19
+            || messageLocal >= 0 && messageLocal != throwableLocal;
+        if (hasMessage) {
+            index++;
+        }
+        if (!validInstructionIndex(instructions, index) || instructions.get(index).methodRef().isEmpty()) {
+            return Optional.empty();
+        }
+        final MethodRef constructor = instructions.get(index).methodRef().orElseThrow();
+        if (instructions.get(index).opcode() != 183
+            || !throwableType.equals(constructor.owner())
+            || !"<init>".equals(constructor.name())
+            || !(hasMessage && "(Ljava/lang/String;)V".equals(constructor.descriptor())
+                || !hasMessage && "()V".equals(constructor.descriptor()))) {
+            return Optional.empty();
+        }
+        index++;
+        if (!validInstructionIndex(instructions, index) || instructions.get(index).opcode() != 191) {
+            return Optional.empty();
+        }
+        return Optional.of(new ReplacementThrow(throwableType, instructions.get(index).offset()));
+    }
+
     private static boolean validInstructionIndex(final List<Instruction> instructions, final int index) {
         return index < instructions.size();
     }
@@ -219,6 +296,15 @@ public final class CaughtThrowableRethrowAnalysis {
             index++;
         }
         values.add(index, value);
+    }
+
+    /**
+     * A straight-line catch-all replacement throw.
+     *
+     * @param throwableType JVM internal replacement throwable type
+     * @param offset replacement {@code athrow} bytecode offset
+     */
+    public record ReplacementThrow(String throwableType, int offset) {
     }
 
     private record AnalysisState(int instructionIndex, List<Integer> aliases, int throwableStackCopies) {

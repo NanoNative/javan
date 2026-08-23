@@ -1945,6 +1945,76 @@ final class CliPlatformExceptionPropagationIntegrationTest extends CliIntegratio
         assertThat(jvmOutput).isEqualTo("5\n");
     }
 
+    @Test
+    void finallyExceptionReplacesPendingIOException() throws Exception {
+        final Path project = project("finally-replaces-pending-exception");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.io.IOException;
+            import java.nio.file.CopyOption;
+            import java.nio.file.Files;
+            import java.nio.file.LinkOption;
+            import java.nio.file.OpenOption;
+            import java.nio.file.Path;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws IOException {
+                    final Path source = Path.of("source");
+                    final Path target = Path.of("copy");
+                    Files.deleteIfExists(target);
+                    Files.writeString(source, "value", new OpenOption[0]);
+                    System.out.println(result(source, target, new CopyOption[0]));
+                    System.out.println(Files.exists(target, new LinkOption[0]));
+                    System.out.println(result(
+                        Path.of("missing"),
+                        Path.of("missing-copy"),
+                        new CopyOption[0]
+                    ));
+                }
+
+                private static String result(
+                    final Path source,
+                    final Path target,
+                    final CopyOption[] options
+                ) throws IOException {
+                    try {
+                        copy(source, target, options);
+                        return "wrong";
+                    } catch (final IllegalStateException exception) {
+                        return exception.getMessage();
+                    }
+                }
+
+                private static void copy(
+                    final Path source,
+                    final Path target,
+                    final CopyOption[] options
+                ) throws IOException {
+                    try {
+                        Files.copy(source, target, options);
+                    } finally {
+                        System.out.println("cleanup");
+                        throw new IllegalStateException("replacement");
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        assertThat(nativeOutput(project)).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("""
+            cleanup
+            replacement
+            true
+            cleanup
+            replacement
+            """);
+    }
+
     private String nativeOutput(final Path project) {
         return nativeOutput(project, Map.of());
     }

@@ -1796,7 +1796,7 @@ public final class StaticVerifier {
         if (supportedMathExactHandler(code, handler)) {
             return true;
         }
-        if (supportedFinallyRethrowHandler(classes, code, handler)) {
+        if (supportedFinallyHandler(classes, code, handler)) {
             return true;
         }
         if (supportsImmediateOptionalOrElseThrowSupplierHandler(
@@ -3265,7 +3265,7 @@ public final class StaticVerifier {
         return opcode == 88 || opcode == 133;
     }
 
-    private static boolean supportedFinallyRethrowHandler(
+    private static boolean supportedFinallyHandler(
         final Map<String, ClassFile> classes,
         final CodeAttribute code,
         final CodeException handler
@@ -3273,7 +3273,8 @@ public final class StaticVerifier {
         if (handler.catchType().isPresent()) {
             return false;
         }
-        if (!handlerRethrowsCaughtThrowable(code, handler)) {
+        if (!handlerRethrowsCaughtThrowable(code, handler)
+            && supportedReplacementThrowOffset(code, handler).isEmpty()) {
             return false;
         }
         final Optional<Instruction> first = instructionAtOffset(code, handler.handlerPc());
@@ -3330,7 +3331,7 @@ public final class StaticVerifier {
         final Instruction instruction
     ) {
         for (final CodeException handler : code.exceptionTable()) {
-            if (handler.catchType().isPresent() || !supportedFinallyRethrowHandler(classes, code, handler)) {
+            if (handler.catchType().isPresent() || !supportedFinallyHandler(classes, code, handler)) {
                 continue;
             }
             final Optional<Instruction> first = instructionAtOffset(code, handler.handlerPc());
@@ -3355,11 +3356,11 @@ public final class StaticVerifier {
         final int throwableLocal,
         final Instruction instruction
     ) {
-        final Optional<Integer> rethrowOffset = finallyRethrowThrowOffset(code, handler, throwableLocal);
-        if (rethrowOffset.isEmpty()) {
+        final Optional<Integer> throwOffset = finallyThrowOffset(code, handler, throwableLocal);
+        if (throwOffset.isEmpty()) {
             return false;
         }
-        if (instruction.offset() < handler.handlerPc() || instruction.offset() > rethrowOffset.orElseThrow()) {
+        if (instruction.offset() < handler.handlerPc() || instruction.offset() > throwOffset.orElseThrow()) {
             return false;
         }
         if (supportedFinallyProtectedLocalInstruction(instruction)) {
@@ -3368,11 +3369,12 @@ public final class StaticVerifier {
         if (instruction.opcode() == 191) {
             return true;
         }
-        return supportedFinallyCleanupInstruction(instruction)
+        return supportedExplicitThrowRangeInstruction(instruction)
+            || supportedFinallyCleanupInstruction(instruction)
             || supportedGeneratedThrowableCall(classes, instruction);
     }
 
-    private static Optional<Integer> finallyRethrowThrowOffset(
+    private static Optional<Integer> finallyThrowOffset(
         final CodeAttribute code,
         final CodeException handler,
         final int throwableLocal
@@ -3381,7 +3383,23 @@ public final class StaticVerifier {
         if (first.isEmpty() || astoreLocalIndex(first.orElseThrow()) != throwableLocal) {
             return Optional.empty();
         }
-        return caughtThrowableRethrowOffset(code, handler);
+        final Optional<Integer> rethrow = caughtThrowableRethrowOffset(code, handler);
+        return rethrow.isPresent()
+            ? rethrow
+            : supportedReplacementThrowOffset(code, handler);
+    }
+
+    private static Optional<Integer> supportedReplacementThrowOffset(
+        final CodeAttribute code,
+        final CodeException handler
+    ) {
+        final Optional<CaughtThrowableRethrowAnalysis.ReplacementThrow> replacement =
+            CaughtThrowableRethrowAnalysis.replacementThrow(code, handler);
+        if (replacement.isEmpty()
+            || !JdkCallSupport.isPlatformThrowable(replacement.orElseThrow().throwableType())) {
+            return Optional.empty();
+        }
+        return Optional.of(replacement.orElseThrow().offset());
     }
 
     private static boolean supportedEnumSwitchMapHandler(

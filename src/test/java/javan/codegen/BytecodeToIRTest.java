@@ -1,6 +1,7 @@
 package javan.codegen;
 
 import javan.analysis.CallGraph;
+import javan.analysis.CaughtThrowableRethrowAnalysis;
 import javan.analysis.EntryPoint;
 import javan.analysis.FunctionValueFlow;
 import javan.analysis.InstantiatedTypeAnalysis;
@@ -1115,6 +1116,87 @@ final class BytecodeToIRTest {
             code,
             code.exceptionTable().getFirst()
         )).isFalse();
+    }
+
+    @Test
+    void catchAllHandlerRecognizesStraightLineReplacementThrow() {
+        final CodeAttribute code = new CodeAttribute(
+            3,
+            1,
+            new byte[0],
+            0,
+            List.of(new CodeException(0, 1, 1, Optional.empty())),
+            List.of(),
+            List.of(
+                plain(0, 177, "return"),
+                plain(1, 75, "astore_0"),
+                classInstruction(2, 187, "new", "java/lang/IllegalStateException"),
+                plain(3, 89, "dup"),
+                stringConstant(4, "replacement"),
+                invokeSpecial(5, new MethodRef(
+                    "java/lang/IllegalStateException",
+                    "<init>",
+                    "(Ljava/lang/String;)V"
+                )),
+                plain(6, 191, "athrow")
+            )
+        );
+
+        assertThat(CaughtThrowableRethrowAnalysis.replacementThrow(
+            code,
+            code.exceptionTable().getFirst()
+        )).contains(new CaughtThrowableRethrowAnalysis.ReplacementThrow(
+            "java/lang/IllegalStateException",
+            6
+        ));
+    }
+
+    @Test
+    void catchAllReplacementRejectsReadingOriginalThrowable() {
+        final CodeAttribute code = new CodeAttribute(
+            3,
+            1,
+            new byte[0],
+            0,
+            List.of(new CodeException(0, 1, 1, Optional.empty())),
+            List.of(),
+            List.of(
+                plain(0, 177, "return"),
+                plain(1, 75, "astore_0"),
+                plain(2, 42, "aload_0"),
+                classInstruction(3, 187, "new", "java/lang/IllegalStateException"),
+                plain(4, 89, "dup"),
+                invokeSpecial(5, new MethodRef("java/lang/IllegalStateException", "<init>", "()V")),
+                plain(6, 191, "athrow")
+            )
+        );
+
+        assertThat(CaughtThrowableRethrowAnalysis.replacementThrow(
+            code,
+            code.exceptionTable().getFirst()
+        )).isEmpty();
+
+        final CodeAttribute branching = new CodeAttribute(
+            3,
+            1,
+            new byte[0],
+            0,
+            List.of(new CodeException(0, 1, 1, Optional.empty())),
+            List.of(),
+            List.of(
+                plain(0, 177, "return"),
+                plain(1, 75, "astore_0"),
+                plain(2, 167, "goto"),
+                classInstruction(3, 187, "new", "java/lang/IllegalStateException"),
+                plain(4, 89, "dup"),
+                invokeSpecial(5, new MethodRef("java/lang/IllegalStateException", "<init>", "()V")),
+                plain(6, 191, "athrow")
+            )
+        );
+        assertThat(CaughtThrowableRethrowAnalysis.replacementThrow(
+            branching,
+            branching.exceptionTable().getFirst()
+        )).isEmpty();
     }
 
     @Test
