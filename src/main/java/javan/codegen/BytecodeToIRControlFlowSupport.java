@@ -135,7 +135,7 @@ final class BytecodeToIRControlFlowSupport {
                 continue;
             }
             if (handler.catchType().isEmpty()) {
-                if (!supportedFinallyRethrowHandler(method.code().orElseThrow(), handler)) {
+                if (!supportedFinallyHandler(method.code().orElseThrow(), handler)) {
                     continue;
                 }
                 registerPendingHandlerStack(
@@ -266,7 +266,7 @@ final class BytecodeToIRControlFlowSupport {
                 continue;
             }
             if (handler.catchType().isEmpty()) {
-                if (supportedFinallyRethrowHandler(method.code().orElseThrow(), handler)) {
+                if (supportedFinallyHandler(method.code().orElseThrow(), handler)) {
                     return Optional.of(handler.handlerPc());
                 }
                 continue;
@@ -286,6 +286,19 @@ final class BytecodeToIRControlFlowSupport {
             return false;
         }
         return handlerRethrowsCaughtThrowable(code, handler);
+    }
+
+    private static boolean supportedFinallyHandler(
+        final CodeAttribute code,
+        final javan.classfile.CodeException handler
+    ) {
+        if (supportedFinallyRethrowHandler(code, handler)) {
+            return true;
+        }
+        final Optional<CaughtThrowableRethrowAnalysis.ReplacementThrow> replacement =
+            CaughtThrowableRethrowAnalysis.replacementThrow(code, handler);
+        return replacement.isPresent()
+            && JdkCallSupport.isPlatformThrowable(replacement.orElseThrow().throwableType());
     }
 
     static boolean handlerMayThrow(
