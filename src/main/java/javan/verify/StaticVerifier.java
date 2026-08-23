@@ -2534,47 +2534,9 @@ public final class StaticVerifier {
                     || !isImmediateOptionalOrElseThrowSupplier(classes, instructions, index)) {
                     return false;
                 }
-                if (JdkCallSupport.isPlatformThrowableAssignable(
-                    "java/lang/NullPointerException",
-                    handler.catchType().orElseThrow()
-                ) && !hasProvablyNonNullImmediateOptionalReceiver(instructions, index)) {
-                    return false;
-                }
             }
         }
         return optionalCalls == 1;
-    }
-
-    private static boolean hasProvablyNonNullImmediateOptionalReceiver(
-        final List<Instruction> instructions,
-        final int terminalIndex
-    ) {
-        final int dynamicIndex = terminalIndex - 1;
-        if (dynamicIndex < 0 || instructions.get(dynamicIndex).dynamicRef().isEmpty()) {
-            return false;
-        }
-        final Optional<LambdaMetafactoryCall> resolved = LambdaMetafactoryCall.resolve(
-            instructions.get(dynamicIndex).dynamicRef().orElseThrow()
-        );
-        if (resolved.isEmpty()) {
-            return false;
-        }
-        final int receiverIndex = dynamicIndex
-            - resolved.orElseThrow().capturedParameterDescriptors().size()
-            - 1;
-        if (receiverIndex < 0) {
-            return false;
-        }
-        final Instruction receiver = instructions.get(receiverIndex);
-        if (receiver.opcode() != 184
-            || !"invokestatic".equals(receiver.mnemonic())
-            || receiver.methodRef().isEmpty()) {
-            return false;
-        }
-        final MethodRef target = receiver.methodRef().orElseThrow();
-        return "java/util/Optional".equals(target.owner())
-            && ("empty".equals(target.name()) || "ofNullable".equals(target.name()))
-            && target.descriptor().endsWith(")Ljava/util/Optional;");
     }
 
     private static boolean supportedOptionalSupplierProtectedRange(

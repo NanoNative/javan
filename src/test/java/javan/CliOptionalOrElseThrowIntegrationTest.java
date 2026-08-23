@@ -474,9 +474,8 @@ final class CliOptionalOrElseThrowIntegrationTest extends CliIntegrationSupport 
     }
 
     @Test
-    void nullableLocalReceiverUnderNullPointerCatchIsRejected() throws Exception {
-        final Path project = project("optional-or-else-throw-nullable-local");
-        writeJava(project, "com.acme.Main", """
+    void nullableLocalReceiverThrowsCatchableNullPointerException() throws Exception {
+        assertNativeMatchesJvm("optional-or-else-throw-nullable-local", """
             package com.acme;
 
             import java.util.Optional;
@@ -497,19 +496,11 @@ final class CliOptionalOrElseThrowIntegrationTest extends CliIntegrationSupport 
                 }
             }
             """);
-
-        final CliRun check = run(tempDir, "check", project.toString());
-
-        assertThat(List.of(
-            check.exitCode(),
-            check.stderr().contains("error[JAVAN014]")
-        )).containsExactly(2, true);
     }
 
     @Test
-    void nullableOptionalFactoryUnderNullPointerCatchIsRejected() throws Exception {
-        final Path project = project("optional-or-else-throw-nullable-factory");
-        writeJava(project, "com.acme.Main", """
+    void nullableOptionalFactoryThrowsCatchableNullPointerException() throws Exception {
+        assertNativeMatchesJvm("optional-or-else-throw-nullable-factory", """
             package com.acme;
 
             import java.util.Optional;
@@ -520,22 +511,36 @@ final class CliOptionalOrElseThrowIntegrationTest extends CliIntegrationSupport 
 
                 public static void main(final String[] args) {
                     try {
-                        Optional.of(null).orElseThrow(
-                            () -> new IllegalArgumentException("missing")
-                        );
+                        Optional.of(null);
                     } catch (final NullPointerException exception) {
                         System.out.println("caught");
                     }
                 }
             }
             """);
+    }
 
-        final CliRun check = run(tempDir, "check", project.toString());
+    @Test
+    void nullableReceiverForSupportedOperationThrowsCatchableNullPointerException() throws Exception {
+        assertNativeMatchesJvm("optional-nullable-is-present", """
+            package com.acme;
 
-        assertThat(List.of(
-            check.exitCode(),
-            check.stderr().contains("error[JAVAN014]")
-        )).containsExactly(2, true);
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Optional<String> value = null;
+                    try {
+                        value.isPresent();
+                    } catch (final NullPointerException exception) {
+                        System.out.println("caught");
+                    }
+                }
+            }
+            """);
     }
 
     @Test
