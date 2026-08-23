@@ -2,6 +2,7 @@ package javan.codegen;
 
 import javan.analysis.CallGraph;
 import javan.analysis.ClassInitializationGraph;
+import javan.analysis.CaughtThrowableRethrowAnalysis;
 import javan.analysis.CMethodSymbols;
 import javan.analysis.EntryPoint;
 import javan.analysis.FunctionValueFlow;
@@ -605,6 +606,7 @@ public final class BytecodeToIR {
         final CodeAttribute code = method.code().orElseThrow();
         final Set<String> allocatedTypes = new LinkedHashSet<>();
         final Set<String> result = new LinkedHashSet<>();
+        result.addAll(finallyReplacementThrowableTypes(classes, code));
         final Set<String> throwableParameters = applicationThrowableParameters(classes, method.descriptor());
         for (final Instruction instruction : code.instructions()) {
             if (instruction.methodRef().isPresent()) {
@@ -639,6 +641,56 @@ public final class BytecodeToIR {
             }
         }
         return result;
+    }
+
+    private static Set<String> finallyReplacementThrowableTypes(
+        final Map<String, ClassFile> classes,
+        final CodeAttribute code
+    ) {
+        final Set<String> result = new LinkedHashSet<>();
+        final List<Instruction> instructions = code.instructions();
+        for (final javan.classfile.CodeException handler : code.exceptionTable()) {
+            if (handler.catchType().isPresent()) {
+                continue;
+            }
+            final Optional<CaughtThrowableRethrowAnalysis.FinallyFlow> flow =
+                CaughtThrowableRethrowAnalysis.analyzeFinally(code, handler);
+            if (flow.isEmpty()) {
+                continue;
+            }
+            for (final CaughtThrowableRethrowAnalysis.ReplacementThrow replacement : flow.orElseThrow().replacements()) {
+                result.add(replacement.throwableType());
+            }
+            for (final int throwOffset : flow.orElseThrow().replacementValueOffsets()) {
+                final Optional<String> type = directThrowableValueType(classes, instructions, throwOffset);
+                if (type.isPresent()) {
+                    result.add(type.orElseThrow());
+                }
+            }
+        }
+        return result;
+    }
+
+    private static Optional<String> directThrowableValueType(
+        final Map<String, ClassFile> classes,
+        final List<Instruction> instructions,
+        final int throwOffset
+    ) {
+        for (int index = 1; index < instructions.size(); index++) {
+            if (instructions.get(index).offset() != throwOffset) {
+                continue;
+            }
+            final Instruction source = instructions.get(index - 1);
+            if (source.fieldRef().isPresent()) {
+                return throwableTypeFromDescriptor(classes, source.fieldRef().orElseThrow().descriptor());
+            }
+            if (source.methodRef().isPresent()) {
+                final String descriptor = source.methodRef().orElseThrow().descriptor();
+                return throwableTypeFromDescriptor(classes, descriptor.substring(descriptor.indexOf(')') + 1));
+            }
+            return Optional.empty();
+        }
+        return Optional.empty();
     }
 
     private static Set<String> applicationThrowableParameters(
@@ -852,7 +904,7 @@ public final class BytecodeToIR {
                     BytecodeToIRControlFlowSupport.clearStack(stack);
                     stack.add(materializePendingHandlerException(pendingException, instructions, localDeclarations));
                 } else if (stack.isEmpty()) {
-                    stack.add(StackValue.objectExpression(IrExpression.objectNull()));
+                    stack.add(StackValue.caughtThrowable(IrExpression.objectNull()));
                 }
             }
             if (shouldSkipOffset(ignoredHandlerOffsets, skippedOffsets, instruction.offset())) {
@@ -882,6 +934,8 @@ public final class BytecodeToIR {
                 functionOrNullTargetIds,
                 materializedLambdaMethods,
                 functionValueFlow,
+                pendingExceptionHandlerStacks,
+                sourceLines,
                 skippedOffsets,
                 replacementLabelOffsets
             )) {

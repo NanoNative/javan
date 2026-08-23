@@ -157,7 +157,7 @@ final class BytecodeToIRControlFlowSupport {
                 continue;
             }
             if (handler.catchType().isEmpty()) {
-                if (!supportedFinallyHandler(method.code().orElseThrow(), handler)) {
+                if (!supportedFinallyHandler(classes, method, method.code().orElseThrow(), handler)) {
                     continue;
                 }
                 registerPendingHandlerStack(
@@ -331,7 +331,7 @@ final class BytecodeToIRControlFlowSupport {
                 continue;
             }
             if (handler.catchType().isEmpty()) {
-                if (supportedFinallyHandler(method.code().orElseThrow(), handler)) {
+                if (supportedFinallyHandler(classes, method, method.code().orElseThrow(), handler)) {
                     return Optional.of(handler.handlerPc());
                 }
                 continue;
@@ -364,16 +364,73 @@ final class BytecodeToIRControlFlowSupport {
     }
 
     private static boolean supportedFinallyHandler(
+        final Map<String, ClassFile> classes,
+        final MethodInfo method,
         final CodeAttribute code,
         final javan.classfile.CodeException handler
     ) {
-        if (supportedFinallyRethrowHandler(code, handler)) {
-            return true;
+        final Optional<CaughtThrowableRethrowAnalysis.FinallyFlow> flow =
+            CaughtThrowableRethrowAnalysis.analyzeFinally(code, handler);
+        if (flow.isEmpty()) {
+            return false;
         }
-        final Optional<CaughtThrowableRethrowAnalysis.ReplacementThrow> replacement =
-            CaughtThrowableRethrowAnalysis.replacementThrow(code, handler);
-        return replacement.isPresent()
-            && JdkCallSupport.isPlatformThrowable(replacement.orElseThrow().throwableType());
+        final CaughtThrowableRethrowAnalysis.FinallyFlow result = flow.orElseThrow();
+        for (final CaughtThrowableRethrowAnalysis.ReplacementThrow replacement : result.replacements()) {
+            if (!isThrowable(classes, replacement.throwableType())) {
+                return false;
+            }
+        }
+        for (final int local : result.replacementLocals()) {
+            if (!declaredThrowableParameter(classes, method, local)) {
+                return false;
+            }
+        }
+        for (final int offset : result.replacementValueOffsets()) {
+            if (!directThrowableValue(classes, code, offset)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean declaredThrowableParameter(
+        final Map<String, ClassFile> classes,
+        final MethodInfo method,
+        final int local
+    ) {
+        int slot = method.isStatic() ? 0 : 1;
+        final List<String> parameters = BytecodeToIRDynamicSupport.parameterDescriptors(method.descriptor()).orElseThrow();
+        final List<IrType> types = MethodDescriptor.parse(method.descriptor()).parameterTypes();
+        for (int index = 0; index < parameters.size(); index++) {
+            if (slot == local) {
+                return throwableTypeFromDescriptor(classes, parameters.get(index)).isPresent();
+            }
+            slot += types.get(index).slotWidth();
+        }
+        return false;
+    }
+
+    private static boolean directThrowableValue(
+        final Map<String, ClassFile> classes,
+        final CodeAttribute code,
+        final int throwOffset
+    ) {
+        final List<Instruction> instructions = code.instructions();
+        for (int index = 1; index < instructions.size(); index++) {
+            if (instructions.get(index).offset() != throwOffset) {
+                continue;
+            }
+            final Instruction source = instructions.get(index - 1);
+            if (source.fieldRef().isPresent()) {
+                return throwableTypeFromDescriptor(classes, source.fieldRef().orElseThrow().descriptor()).isPresent();
+            }
+            if (source.methodRef().isPresent()) {
+                final String descriptor = source.methodRef().orElseThrow().descriptor();
+                return throwableTypeFromDescriptor(classes, descriptor.substring(descriptor.indexOf(')') + 1)).isPresent();
+            }
+            return false;
+        }
+        return false;
     }
 
     static boolean handlerMayThrow(
@@ -474,6 +531,8 @@ final class BytecodeToIRControlFlowSupport {
         final Map<String, Integer> functionOrNullTargetIds,
         final Map<String, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final FunctionValueFlow.Result functionValueFlow,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines,
         final List<Integer> skippedOffsets,
         final List<Integer> replacementLabelOffsets
     ) {
@@ -498,6 +557,8 @@ final class BytecodeToIRControlFlowSupport {
             functionOrNullTargetIds,
             materializedLambdaMethods,
             functionValueFlow,
+            pendingExceptionHandlerStacks,
+            sourceLines,
             skippedOffsets,
             instruction
         )) {
@@ -528,6 +589,8 @@ final class BytecodeToIRControlFlowSupport {
         final List<StackValue> prefix = List.copyOf(conditionStack);
         final int originalLocalDeclarationCount = localDeclarations.size();
         final Map<Integer, IrLocal> workingDeclarations = copyLocalDeclarations(localDeclarations);
+        final Map<Integer, StackValue> workingPendingExceptionHandlerStacks =
+            new HashMap<>(pendingExceptionHandlerStacks);
         final BlockResult elseBlock = lowerLinearBlock(
             classes,
             classFile,
@@ -544,7 +607,9 @@ final class BytecodeToIRControlFlowSupport {
             dispatches,
             functionOrNullTargetIds,
             materializedLambdaMethods,
-            functionValueFlow
+            functionValueFlow,
+            workingPendingExceptionHandlerStacks,
+            sourceLines
         );
         final BlockResult targetBlock = lowerLinearBlock(
             classes,
@@ -562,7 +627,9 @@ final class BytecodeToIRControlFlowSupport {
             dispatches,
             functionOrNullTargetIds,
             materializedLambdaMethods,
-            functionValueFlow
+            functionValueFlow,
+            workingPendingExceptionHandlerStacks,
+            sourceLines
         );
         if (!hasSelectedValue(prefix, elseBlock.stack()) || !hasSelectedValue(prefix, targetBlock.stack())) {
             return false;
@@ -573,6 +640,7 @@ final class BytecodeToIRControlFlowSupport {
             throw unsupportedBranchValueMerge(classFile, method, instruction);
         }
         appendNewLocalDeclarations(localDeclarations, workingDeclarations, originalLocalDeclarationCount);
+        pendingExceptionHandlerStacks.putAll(workingPendingExceptionHandlerStacks);
         branchCondition(classFile, method, instruction, stack);
         final StackKind valueKind = targetValue.kind();
         final IrType valueType = stackKindType(valueKind);
@@ -615,6 +683,8 @@ final class BytecodeToIRControlFlowSupport {
         final Map<String, Integer> functionOrNullTargetIds,
         final Map<String, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final FunctionValueFlow.Result functionValueFlow,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines,
         final List<Integer> skippedOffsets,
         final Instruction instruction
     ) {
@@ -658,6 +728,8 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, StackKind> workingObjectLocalKinds = copyObjectLocalKinds(objectLocalKinds);
         final Map<Integer, String> workingObjectLocalThrowableTypes = copyObjectLocalThrowableTypes(objectLocalThrowableTypes);
         final Map<Integer, DynamicLambda> workingObjectLocalLambdas = copyObjectLocalLambdas(objectLocalLambdas);
+        final Map<Integer, StackValue> workingPendingExceptionHandlerStacks =
+            new HashMap<>(pendingExceptionHandlerStacks);
         final List<IrInstruction> mergedInstructions = new ArrayList<>();
         final List<StackValue> workingStack = new ArrayList<>(stack);
         final int lastMaterializingDuplicateOffset = BytecodeToIR.lastMaterializingDuplicateOffset(bytecode);
@@ -682,7 +754,7 @@ final class BytecodeToIRControlFlowSupport {
                     current,
                     mergedInstructions,
                     workingStack,
-                    new HashMap<>(),
+                    workingPendingExceptionHandlerStacks,
                     workingLocals,
                     workingObjectLocalKinds,
                     workingObjectLocalThrowableTypes,
@@ -692,7 +764,7 @@ final class BytecodeToIRControlFlowSupport {
                     functionOrNullTargetIds,
                     materializedLambdaMethods,
                     functionValueFlow,
-                    SourceLineIndex.empty(),
+                    sourceLines,
                     lastMaterializingDuplicateOffset
                 );
             }
@@ -720,7 +792,9 @@ final class BytecodeToIRControlFlowSupport {
             dispatches,
             functionOrNullTargetIds,
             materializedLambdaMethods,
-            functionValueFlow
+            functionValueFlow,
+            workingPendingExceptionHandlerStacks,
+            sourceLines
         );
         if (!hasSelectedValue(prefix, targetBlock.stack())) {
             return false;
@@ -736,6 +810,7 @@ final class BytecodeToIRControlFlowSupport {
             throw unsupportedBranchValueMerge(classFile, method, instruction);
         }
         appendNewLocalDeclarations(localDeclarations, workingDeclarations, originalLocalDeclarationCount);
+        pendingExceptionHandlerStacks.putAll(workingPendingExceptionHandlerStacks);
         final StackKind valueKind = targetValue.kind();
         final IrType valueType = stackKindType(valueKind);
         final String localName = "branchValue" + localDeclarations.size() + "_" + instruction.offset();

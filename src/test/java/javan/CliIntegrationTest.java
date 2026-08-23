@@ -481,6 +481,936 @@ final class CliIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void applicationRuntimeExceptionCrossingFinallyPreservesIdentity() throws Exception {
+        final Path project = project("application-exception-finally");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Problem expected = new Problem("boom");
+                    try {
+                        middle(expected);
+                    } catch (final Problem actual) {
+                        System.out.println((actual == expected) + ":" + actual.getMessage());
+                    }
+                }
+
+                private static void middle(final Problem problem) {
+                    try {
+                        leaf(problem);
+                    } finally {
+                        System.out.println("cleanup");
+                    }
+                }
+
+                private static void leaf(final Problem problem) {
+                    throw problem;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Problem", """
+            package com.acme;
+
+            public final class Problem extends RuntimeException {
+                public Problem(final String message) {
+                    super(message);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/application-exception-finally").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("cleanup\ntrue:boom\n");
+    }
+
+    @Test
+    void applicationRuntimeExceptionFinallyCanReplaceThePendingException() throws Exception {
+        final Path project = project("application-exception-finally-replacement");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    try {
+                        middle();
+                    } catch (final Replacement actual) {
+                        System.out.println(actual.getMessage());
+                    }
+                }
+
+                private static void middle() {
+                    try {
+                        leaf();
+                    } finally {
+                        throw new Replacement("replacement");
+                    }
+                }
+
+                private static void leaf() {
+                    throw new Original("original");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Original", """
+            package com.acme;
+
+            public final class Original extends RuntimeException {
+                public Original(final String message) {
+                    super(message);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Replacement", """
+            package com.acme;
+
+            public final class Replacement extends RuntimeException {
+                public Replacement(final String message) {
+                    super(message);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/application-exception-finally-replacement").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("replacement\n");
+    }
+
+    @Test
+    void applicationRuntimeExceptionRunsNestedFinallyBlocksAndNormalReturnCleanup() throws Exception {
+        final Path project = project("application-exception-nested-finally");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    try {
+                        nested(true);
+                    } catch (final Problem exception) {
+                        System.out.println(exception.getMessage());
+                    }
+                    System.out.println(nested(false));
+                }
+
+                private static String nested(final boolean fail) {
+                    try {
+                        try {
+                            if (fail) {
+                                leaf();
+                            }
+                            return "value";
+                        } finally {
+                            System.out.println("inner");
+                        }
+                    } finally {
+                        System.out.println("outer");
+                    }
+                }
+
+                private static void leaf() {
+                    throw new Problem("boom");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Problem", """
+            package com.acme;
+
+            public final class Problem extends RuntimeException {
+                public Problem(final String message) {
+                    super(message);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/application-exception-nested-finally").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("inner\nouter\nboom\ninner\nouter\nvalue\n");
+    }
+
+    @Test
+    void applicationRuntimeExceptionFinallyCanAllocateAndStoreCleanupState() throws Exception {
+        final Path project = project("application-exception-finally-state");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Worker worker = new Worker();
+                    try {
+                        worker.run(7);
+                    } catch (final Problem exception) {
+                        System.out.println(worker.marker.value + ":" + exception.getMessage());
+                    }
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Worker", """
+            package com.acme;
+
+            public final class Worker {
+                Marker marker;
+
+                void run(final int index) {
+                    try {
+                        throw new Problem("boom");
+                    } finally {
+                        marker = new Marker(index);
+                    }
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Marker", """
+            package com.acme;
+
+            public final class Marker {
+                final int value;
+
+                Marker(final int value) {
+                    this.value = value;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Problem", """
+            package com.acme;
+
+            public final class Problem extends RuntimeException {
+                Problem(final String message) {
+                    super(message);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/application-exception-finally-state").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("7:boom\n");
+    }
+
+    @Test
+    void uncaughtApplicationRuntimeExceptionThroughFinallyKeepsTypeMessageAndSource() throws Exception {
+        final Path project = project("application-exception-finally-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    try {
+                        leaf();
+                    } finally {
+                        System.out.println("cleanup");
+                    }
+                }
+
+                private static void leaf() {
+                    throw new Problem("uncaught");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Problem", """
+            package com.acme;
+
+            public final class Problem extends RuntimeException {
+                public Problem(final String message) {
+                    super(message);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(
+            project,
+            List.of(project.resolve(".javan/bin/application-exception-finally-uncaught").toString())
+        );
+        assertThat(nativeRun.exitCode()).isEqualTo(1);
+        assertThat(nativeRun.stdout()).isEqualTo("cleanup\n");
+        assertThat(nativeRun.stderr()).contains(
+            "uncaught Java exception (com/acme/Problem)",
+            "com.acme.Main.leaf()V(Main.java:16)",
+            "detail: uncaught"
+        );
+    }
+
+    @Test
+    void finallyControlTransferSuppressesThePendingException() throws Exception {
+        final Path project = project("application-exception-finally-control-transfer");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(returned());
+                    System.out.println(broken());
+                    System.out.println(continued());
+                    System.out.println(labeledBreak());
+                    System.out.println(labeledContinue());
+                    System.out.println(conditionalReturn(true));
+                    try {
+                        conditionalReturn(false);
+                    } catch (final Problem exception) {
+                        System.out.println(exception.getMessage());
+                    }
+                    System.out.println(conditionalBreak(true));
+                    try {
+                        conditionalBreak(false);
+                    } catch (final Problem exception) {
+                        System.out.println(exception.getMessage());
+                    }
+                    System.out.println(conditionalContinue(true));
+                    try {
+                        conditionalContinue(false);
+                    } catch (final Problem exception) {
+                        System.out.println(exception.getMessage());
+                    }
+                    try {
+                        loopRethrow();
+                    } catch (final Problem exception) {
+                        System.out.println(exception.getMessage());
+                    }
+                    System.out.println(loopReturn(true));
+                    try {
+                        loopReturn(false);
+                    } catch (final Problem exception) {
+                        System.out.println(exception.getMessage());
+                    }
+                    System.out.println(loopBreak(true));
+                    try {
+                        loopBreak(false);
+                    } catch (final Problem exception) {
+                        System.out.println(exception.getMessage());
+                    }
+                    System.out.println(loopContinue(true));
+                    try {
+                        loopContinue(false);
+                    } catch (final Problem exception) {
+                        System.out.println(exception.getMessage());
+                    }
+                }
+
+                private static int returned() {
+                    try {
+                        throw new Problem("return");
+                    } finally {
+                        return 7;
+                    }
+                }
+
+                private static int broken() {
+                    int value = 0;
+                    for (int index = 0; index < 3; index++) {
+                        try {
+                            if (index == 1) {
+                                throw new Problem("break");
+                            }
+                        } finally {
+                            if (index == 1) {
+                                break;
+                            }
+                        }
+                        value++;
+                    }
+                    return value;
+                }
+
+                private static int continued() {
+                    int value = 0;
+                    for (int index = 0; index < 3; index++) {
+                        try {
+                            if (index == 1) {
+                                throw new Problem("continue");
+                            }
+                        } finally {
+                            if (index == 1) {
+                                continue;
+                            }
+                        }
+                        value++;
+                    }
+                    return value;
+                }
+
+                private static int labeledBreak() {
+                    int value = 0;
+                    outer: for (int outer = 0; outer < 2; outer++) {
+                        for (int inner = 0; inner < 2; inner++) {
+                            try {
+                                if (outer == 0 && inner == 0) {
+                                    throw new Problem("labeled break");
+                                }
+                            } finally {
+                                if (outer == 0 && inner == 0) {
+                                    break outer;
+                                }
+                            }
+                            value++;
+                        }
+                    }
+                    return value;
+                }
+
+                private static int labeledContinue() {
+                    int value = 0;
+                    outer: for (int outer = 0; outer < 2; outer++) {
+                        for (int inner = 0; inner < 2; inner++) {
+                            try {
+                                if (inner == 0) {
+                                    throw new Problem("labeled continue");
+                                }
+                            } finally {
+                                if (inner == 0) {
+                                    continue outer;
+                                }
+                            }
+                            value++;
+                        }
+                    }
+                    return value;
+                }
+
+                private static int conditionalReturn(final boolean suppress) {
+                    try {
+                        throw new Problem("return rethrow");
+                    } finally {
+                        if (suppress) {
+                            return 8;
+                        }
+                    }
+                }
+
+                private static int conditionalBreak(final boolean suppress) {
+                    int value = 0;
+                    for (int index = 0; index < 2; index++) {
+                        try {
+                            if (index == 0) {
+                                throw new Problem("break rethrow");
+                            }
+                        } finally {
+                            if (suppress) {
+                                break;
+                            }
+                        }
+                    }
+                    return value;
+                }
+
+                private static int conditionalContinue(final boolean suppress) {
+                    int value = 0;
+                    for (int index = 0; index < 2; index++) {
+                        try {
+                            if (index == 0) {
+                                throw new Problem("continue rethrow");
+                            }
+                        } finally {
+                            if (suppress) {
+                                continue;
+                            }
+                        }
+                        value++;
+                    }
+                    return value;
+                }
+
+                private static void loopRethrow() {
+                    try {
+                        throw new Problem("loop rethrow");
+                    } finally {
+                        for (int index = 0; index < 2; index++) {
+                            System.out.println("cleanup " + index);
+                        }
+                    }
+                }
+
+                private static int loopReturn(final boolean suppress) {
+                    try {
+                        throw new Problem("loop return rethrow");
+                    } finally {
+                        for (int index = 0; index < 2; index++) {
+                            if (suppress) {
+                                return 9;
+                            }
+                        }
+                    }
+                }
+
+                private static int loopBreak(final boolean suppress) {
+                    int value = 0;
+                    outer: for (int index = 0; index < 2; index++) {
+                        try {
+                            if (index == 0) {
+                                throw new Problem("loop break rethrow");
+                            }
+                        } finally {
+                            for (int cleanup = 0; cleanup < 2; cleanup++) {
+                                if (suppress) {
+                                    break outer;
+                                }
+                            }
+                        }
+                        value++;
+                    }
+                    return value;
+                }
+
+                private static int loopContinue(final boolean suppress) {
+                    int value = 0;
+                    outer: for (int index = 0; index < 2; index++) {
+                        try {
+                            if (index == 0) {
+                                throw new Problem("loop continue rethrow");
+                            }
+                        } finally {
+                            for (int cleanup = 0; cleanup < 2; cleanup++) {
+                                if (suppress) {
+                                    continue outer;
+                                }
+                            }
+                        }
+                        value++;
+                    }
+                    return value;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Problem", """
+            package com.acme;
+
+            public final class Problem extends RuntimeException {
+                Problem(final String message) {
+                    super(message);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/application-exception-finally-control-transfer").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("""
+            7
+            1
+            2
+            0
+            0
+            8
+            return rethrow
+            0
+            break rethrow
+            0
+            continue rethrow
+            cleanup 0
+            cleanup 1
+            loop rethrow
+            9
+            loop return rethrow
+            0
+            loop break rethrow
+            0
+            loop continue rethrow
+            """);
+    }
+
+    @Test
+    void nonTerminatingFinallyBuildsWithoutRunningTheProgram() throws Exception {
+        final Path project = project("application-exception-finally-infinite-loop");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    try {
+                        throw new Problem("unreachable");
+                    } finally {
+                        while (true) {
+                        }
+                    }
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Problem", """
+            package com.acme;
+
+            public final class Problem extends RuntimeException {
+                Problem(final String message) {
+                    super(message);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+    }
+
+    @Test
+    void finallyCanReplaceWithADeclaredThrowableParameterOrConditionalConstruction() throws Exception {
+        final Path project = project("application-exception-finally-replacement-flow");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Replacement parameter = new Replacement("parameter");
+                    try {
+                        replaceWithParameter(new Original("original"), parameter);
+                    } catch (final Replacement exception) {
+                        System.out.println((exception == parameter) + ":" + exception.getMessage());
+                    }
+                    try {
+                        conditionalReplacement(false);
+                    } catch (final Original exception) {
+                        System.out.println(exception.getMessage());
+                    }
+                    try {
+                        conditionalReplacement(true);
+                    } catch (final Replacement exception) {
+                        System.out.println(exception.getMessage());
+                    }
+                    instanceFieldCase();
+                    staticFieldCase();
+                    factoryCase();
+                }
+
+                private static void replaceWithParameter(final Original original, final Replacement replacement) {
+                    try {
+                        throw original;
+                    } finally {
+                        throw replacement;
+                    }
+                }
+
+                private static void conditionalReplacement(final boolean replace) {
+                    try {
+                        throw new Original("original");
+                    } finally {
+                        if (replace) {
+                            throw new Replacement("conditional");
+                        }
+                    }
+                }
+
+                private static void replaceWithInstanceField(final Original original, final Holder holder) {
+                    try {
+                        throw original;
+                    } finally {
+                        throw holder.replacement;
+                    }
+                }
+
+                private static void replaceWithStaticField(final Original original) {
+                    try {
+                        throw original;
+                    } finally {
+                        throw replacement;
+                    }
+                }
+
+                private static void replaceWithFactory(final Original original, final Replacement replacement) {
+                    try {
+                        throw original;
+                    } finally {
+                        throw factory(replacement);
+                    }
+                }
+
+                private static Replacement factory(final Replacement replacement) {
+                    return replacement;
+                }
+
+                private static void instanceFieldCase() {
+                    final Replacement value = new Replacement("instance");
+                    final Holder holder = new Holder(value);
+                    try {
+                        replaceWithInstanceField(new Original("original"), holder);
+                    } catch (final Replacement exception) {
+                        System.out.println((exception == value) + ":" + exception.getMessage());
+                    }
+                }
+
+                private static void staticFieldCase() {
+                    final Replacement value = new Replacement("static");
+                    replacement = value;
+                    try {
+                        replaceWithStaticField(new Original("original"));
+                    } catch (final Replacement exception) {
+                        System.out.println((exception == value) + ":" + exception.getMessage());
+                    }
+                }
+
+                private static void factoryCase() {
+                    final Replacement value = new Replacement("factory");
+                    try {
+                        replaceWithFactory(new Original("original"), value);
+                    } catch (final Replacement exception) {
+                        System.out.println((exception == value) + ":" + exception.getMessage());
+                    }
+                }
+
+                private static Replacement replacement;
+            }
+            """);
+        writeJava(project, "com.acme.Original", """
+            package com.acme;
+
+            public final class Original extends RuntimeException {
+                Original(final String message) {
+                    super(message);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Replacement", """
+            package com.acme;
+
+            public final class Replacement extends RuntimeException {
+                Replacement(final String message) {
+                    super(message);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Holder", """
+            package com.acme;
+
+            public final class Holder {
+                final Replacement replacement;
+
+                Holder(final Replacement replacement) {
+                    this.replacement = replacement;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/application-exception-finally-replacement-flow").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("""
+            true:parameter
+            original
+            conditional
+            true:instance
+            true:static
+            true:factory
+            """);
+    }
+
+    @Test
+    void branchValueCallsThroughFinallyRunCleanupAndPreserveTheOriginalException() throws Exception {
+        final Path project = project("application-exception-finally-guarded-value");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    try {
+                        System.out.println(branch(true));
+                    } catch (final ArithmeticException exception) {
+                        System.out.println(exception.getMessage());
+                    }
+                    try {
+                        System.out.println(guarded(""));
+                    } catch (final Problem exception) {
+                        System.out.println(exception.getMessage());
+                    }
+                }
+
+                private static int branch(final boolean selected) {
+                    try {
+                        return selected ? Math.addExact(Integer.MAX_VALUE, 1) : 0;
+                    } finally {
+                        System.out.println("cleanup");
+                    }
+                }
+
+                private static String guarded(final String value) {
+                    try {
+                        return value != null && value.isEmpty() ? fail() : "safe";
+                    } finally {
+                        System.out.println("cleanup");
+                    }
+                }
+
+                private static String fail() {
+                    throw new Problem("original");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Problem", """
+            package com.acme;
+
+            public final class Problem extends RuntimeException {
+                Problem(final String message) {
+                    super(message);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/application-exception-finally-guarded-value").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("cleanup\ninteger overflow\ncleanup\noriginal\n");
+    }
+
+    @Test
+    void platformRuntimeExceptionThrownByHelperCanBeCaughtByCaller() throws Exception {
+        final Path project = project("platform-exception-helper-catch");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    try {
+                        leaf();
+                    } catch (final IllegalStateException exception) {
+                        System.out.println(exception.getMessage());
+                    }
+                }
+
+                private static void leaf() {
+                    throw new IllegalStateException("helper");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/platform-exception-helper-catch").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("helper\n");
+    }
+
+    @Test
+    void nestedFinallyBlocksKeepJvmOrder() throws Exception {
+        final Path project = project("nested-finally-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    try {
+                        outer();
+                    } catch (final IllegalStateException exception) {
+                        System.out.println(exception.getMessage());
+                    }
+                }
+
+                private static void outer() {
+                    try {
+                        inner();
+                    } finally {
+                        System.out.println("outer");
+                    }
+                }
+
+                private static void inner() {
+                    try {
+                        throw new IllegalStateException("boom");
+                    } finally {
+                        System.out.println("inner");
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/nested-finally-order").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("inner\nouter\nboom\n");
+    }
+
+    @Test
+    void returnInsideTryStillRunsFinally() throws Exception {
+        final Path project = project("return-inside-try-finally");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(value());
+                }
+
+                private static int value() {
+                    try {
+                        return 7;
+                    } finally {
+                        System.out.println("cleanup");
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/return-inside-try-finally").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("cleanup\n7\n");
+    }
+
+    @Test
     void applicationExceptionValuesKeepJavaSemanticsAcrossObjectBoundaries() throws Exception {
         final Path project = project("application-exception-values");
         writeJava(project, "com.acme.Main", """

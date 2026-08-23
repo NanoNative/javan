@@ -915,7 +915,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void exceptionHandlerSkipsUnsupportedCatchAllFinallyShape() {
+    void exceptionHandlerUsesCatchAllFinallyReturn() {
         final MethodInfo main = methodWithHandlers(
             0x0008,
             "main",
@@ -934,11 +934,11 @@ final class BytecodeToIRTest {
             plain(0, 191, "athrow"),
             BytecodeToIR.StackValue.platformThrowable("java/lang/NullPointerException", IrExpression.stringLiteral("boom")),
             0
-        )).isEmpty();
+        )).contains(1);
     }
 
     @Test
-    void exceptionHandlerPrefersTypedCatchAfterUnsupportedCatchAllFinallyShape() {
+    void exceptionHandlerRunsCatchAllFinallyBeforeTypedCatch() {
         final MethodInfo main = methodWithHandlers(
             0x0008,
             "main",
@@ -961,7 +961,7 @@ final class BytecodeToIRTest {
             plain(0, 191, "athrow"),
             BytecodeToIR.StackValue.platformThrowable("java/lang/NullPointerException", IrExpression.stringLiteral("boom")),
             0
-        )).contains(3);
+        )).contains(1);
     }
 
     @Test
@@ -1116,6 +1116,53 @@ final class BytecodeToIRTest {
             code,
             code.exceptionTable().getFirst()
         )).isFalse();
+    }
+
+    @Test
+    void finallyFlowAcceptsDiamondPathsThatBothRethrowTheCaughtThrowable() {
+        final CodeAttribute code = new CodeAttribute(
+            1,
+            1,
+            new byte[0],
+            0,
+            List.of(new CodeException(0, 1, 1, Optional.empty())),
+            List.of(),
+            List.of(
+                plain(0, 177, "return"),
+                plain(1, 75, "astore_0"),
+                plain(2, 3, "iconst_0"),
+                plainOperands(3, 153, "ifeq", 0, 4),
+                plainOperands(6, 167, "goto", 0, 1),
+                plain(7, 42, "aload_0"),
+                plain(8, 191, "athrow")
+            )
+        );
+
+        assertThat(CaughtThrowableRethrowAnalysis.analyzeFinally(code, code.exceptionTable().getFirst())).isPresent();
+    }
+
+    @Test
+    void finallyFlowRejectsAReachableUnknownThrowBranch() {
+        final CodeAttribute code = new CodeAttribute(
+            1,
+            1,
+            new byte[0],
+            0,
+            List.of(new CodeException(0, 1, 1, Optional.empty())),
+            List.of(),
+            List.of(
+                plain(0, 177, "return"),
+                plain(1, 75, "astore_0"),
+                plain(2, 3, "iconst_0"),
+                plainOperands(3, 153, "ifeq", 0, 5),
+                plain(6, 42, "aload_0"),
+                plain(7, 191, "athrow"),
+                plain(8, 1, "aconst_null"),
+                plain(9, 191, "athrow")
+            )
+        );
+
+        assertThat(CaughtThrowableRethrowAnalysis.analyzeFinally(code, code.exceptionTable().getFirst())).isEmpty();
     }
 
     @Test

@@ -285,7 +285,7 @@ public final class RuntimeContractReports {
         field(result, "javaHeapAllocationsManaged", "false", true);
         field(result, "cAllocationOwnership", Json.string("explicit-free-for-runtime-temporaries-and-ffi-results"), true);
         field(result, "ffiMemory", Json.string("returned strings and byte arrays are javan-owned and released with javan_free"), true);
-        field(result, "exceptions", Json.string("panic-and-limited-same-method-catch"), true);
+        field(result, "exceptions", Json.string("panic-and-supported-handler-slice"), true);
         field(result, "threads", Json.string("current-thread-interrupt-state-isalive-isvirtual-entry-interrupted-sleep-start-startvirtualthread-builderstart-builderunstarted-factory-executor-threadlocal-park-parknanos-parkuntil-unpark-parallel-host-thread-bootstrap-join-same-method-catch-thread-construction-duplicate-start-rejection-current-join-rejection-and-runnable-target-no-virtual-scheduler"), true);
         field(result, "sanitizerInstrumentation", Json.string("not-built"), true);
         field(result, "sanitizers", Json.string("not-enabled"), false);
@@ -349,7 +349,7 @@ public final class RuntimeContractReports {
         result.append("- thread lifecycle inventory scope: `heap-thread-object-thread-root-registry-started-completed-active-non-current-target-current-root-and-completed-target-release-counters`\n");
         result.append("- Java heap allocations managed: `false`\n");
         result.append("- FFI memory: returned strings and byte arrays are javan-owned and released with `javan_free`\n");
-        result.append("- exceptions: `panic-and-limited-same-method-catch`\n");
+        result.append("- exceptions: `panic-and-supported-handler-slice`\n");
         result.append("- threads: `current-thread-interrupt-state-isalive-isvirtual-entry-interrupted-sleep-start-startvirtualthread-builderstart-builderunstarted-factory-executor-threadlocal-park-parknanos-parkuntil-unpark-parallel-host-thread-bootstrap-join-same-method-catch-thread-construction-duplicate-start-rejection-current-join-rejection-and-runnable-target-no-virtual-scheduler`\n");
         result.append("- sanitizer instrumentation: `not-built`\n");
         result.append("- sanitizers: `not-enabled`\n\n");

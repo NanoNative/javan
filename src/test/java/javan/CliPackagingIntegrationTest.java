@@ -1030,7 +1030,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "\"byteArrayOwnership\": \"input-copied-gc-managed-output-javan-owned-data-free-with-javan_free\"",
             "\"objectHandleOwnership\": \"opaque-refcounted-gc-rooted-c-handle-release-with-javan_object_handle_release\"",
             "\"errorResultAbi\": \"abi-v2-c-owned-javanresult-try-wrappers-v1-direct-exports-compatible\"",
-            "\"exceptionMapping\": \"caught-runtime-panic-to-last-error-limited-same-method-catch\"",
+            "\"exceptionMapping\": \"caught-runtime-panic-to-last-error-supported-handler-slice\"",
             "\"threadRuntimeRules\": \"parallel-host-thread-bootstrap-current-thread-interrupt-isalive-sleep-start-join-runnable-target-plus-startvirtualthread-builderstart-builderunstarted-factory-executor-threadlocal-park-parknanos-parkuntil-unpark-and-isvirtual-no-virtual-scheduler\"",
             "\"generatedAbiTests\": \"c-header-compile-test\""
         );
