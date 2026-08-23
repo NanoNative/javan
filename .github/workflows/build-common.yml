@@ -450,10 +450,9 @@ jobs:
       version: ${{ needs.build-info.outputs.resolved_version }}
       bootstrap_generation: ${{ inputs.bootstrap_generation }}
       bootstrap_source_artifact: ${{ inputs.bootstrap_generation == 3 && 'bootstrap-source-linux-x64' || '' }}
-      # Keep macOS packaging proof at the artifact boundary. The heavier full
-      # self-host package proof is already covered on Linux and has repeatedly
-      # left the hosted macOS runner stuck in GitHub's finalization phase.
-      package_scope: bootstrap
+      # Snapshot publication needs the native artifact proof. Keep the heavier
+      # full self-host proof for manual releases, where every target is gated.
+      package_scope: ${{ inputs.snapshot && 'bootstrap' || inputs.prepare_publication && 'full' || 'bootstrap' }}
       timeout_minutes: 90
     secrets: inherit
 
