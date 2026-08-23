@@ -422,7 +422,7 @@ accepts_runtime_contract_report() {
   assert_contains "$full_project/.javan/reports/runtime.json" "\"threadLifecycleInventory\": true"
   assert_contains "$full_project/.javan/reports/runtime.json" "\"threadLifecycleInventoryScope\": \"heap-thread-object-thread-root-registry-started-completed-active-non-current-target-current-root-and-completed-target-release-counters\""
   assert_contains "$full_project/.javan/reports/runtime.json" "\"javaHeapAllocationsManaged\": false"
-  assert_contains "$full_project/.javan/reports/runtime.json" "\"exceptions\": \"panic-and-limited-same-method-catch\""
+  assert_contains "$full_project/.javan/reports/runtime.json" "\"exceptions\": \"panic-and-supported-handler-slice\""
   assert_contains "$full_project/.javan/reports/runtime.json" "\"threads\": \"current-thread-interrupt-state-isalive-isvirtual-entry-interrupted-sleep-start-startvirtualthread-builderstart-builderunstarted-factory-executor-threadlocal-park-parknanos-parkuntil-unpark-parallel-host-thread-bootstrap-join-same-method-catch-thread-construction-duplicate-start-rejection-current-join-rejection-and-runnable-target-no-virtual-scheduler\""
   assert_contains "$full_project/.javan/reports/runtime.json" "\"sanitizerInstrumentation\": \"not-built\""
   assert_contains "$full_project/.javan/reports/runtime.json" "\"sanitizers\": \"not-enabled\""
