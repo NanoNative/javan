@@ -118,6 +118,11 @@ final class CiParallelWorkflowSurfaceTest {
             .contains("  linux-package-arm64:", "name: package_linux_arm64")
             .doesNotContain("sanitizer-scope: ${{ inputs.prepare_publication && 'full' || 'platform-smoke' }}")
             .contains("enabled: ${{ inputs.prepare_publication }}");
+        final String macPackage = Files.readString(BUILD_COMMON).substring(
+            Files.readString(BUILD_COMMON).indexOf("  macos-package-self-host:"),
+            Files.readString(BUILD_COMMON).indexOf("  platform-smoke:")
+        );
+        assertThat(macPackage).contains("package_scope: bootstrap");
         assertThat(Files.readString(Path.of(".github/workflows/native-proof.yml")))
             .contains("JAVAN_BOOTSTRAP_GENERATION: ${{ inputs.bootstrap_generation }}")
             .contains("JAVAN_PACKAGE_PROOF_SCOPE: ${{ inputs.package_scope }}");
