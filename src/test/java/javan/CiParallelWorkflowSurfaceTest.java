@@ -97,6 +97,7 @@ final class CiParallelWorkflowSurfaceTest {
 
     @Test
     void pullRequestsUseGenerationTwoWhileSnapshotsAndReleasesUseGenerationThree() throws Exception {
+        final String common = Files.readString(BUILD_COMMON);
         assertThat(Files.readString(BUILD_PR))
             .contains("bootstrap_generation: 2")
             .doesNotContain("package_timeout_minutes:");
@@ -106,7 +107,7 @@ final class CiParallelWorkflowSurfaceTest {
         assertThat(Files.readString(RELEASE))
             .contains("bootstrap_generation: 3")
             .doesNotContain("package_timeout_minutes:");
-        assertThat(Files.readString(BUILD_COMMON))
+        assertThat(common)
             .contains("bootstrap_generation:")
             .contains("bootstrap_generation: ${{ inputs.bootstrap_generation }}")
             .contains("timeout_minutes: ${{ inputs.bootstrap_generation == 3 && 90 || 60 }}")
@@ -118,6 +119,13 @@ final class CiParallelWorkflowSurfaceTest {
             .contains("  linux-package-arm64:", "name: package_linux_arm64")
             .doesNotContain("sanitizer-scope: ${{ inputs.prepare_publication && 'full' || 'platform-smoke' }}")
             .contains("enabled: ${{ inputs.prepare_publication }}");
+        final String macPackage = common.substring(
+            common.indexOf("  macos-package-self-host:"),
+            common.indexOf("  platform-smoke:")
+        );
+        assertThat(macPackage).contains(
+            "package_scope: ${{ inputs.snapshot && 'bootstrap' || inputs.prepare_publication && 'full' || 'bootstrap' }}"
+        );
         assertThat(Files.readString(Path.of(".github/workflows/native-proof.yml")))
             .contains("JAVAN_BOOTSTRAP_GENERATION: ${{ inputs.bootstrap_generation }}")
             .contains("JAVAN_PACKAGE_PROOF_SCOPE: ${{ inputs.package_scope }}");
