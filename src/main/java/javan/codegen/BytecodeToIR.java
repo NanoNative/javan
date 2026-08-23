@@ -471,6 +471,14 @@ public final class BytecodeToIR {
                 "(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;"
             ))
         );
+        result.put(
+            "javan_files_copy",
+            JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+                "java/nio/file/Files",
+                "copy",
+                "(Ljava/nio/file/Path;Ljava/nio/file/Path;[Ljava/nio/file/CopyOption;)Ljava/nio/file/Path;"
+            ))
+        );
         return Map.copyOf(result);
     }
 

@@ -86,7 +86,7 @@ final class CompatibilityReportsTest {
         final int scoped = jsonInt(matrix, "scoped");
         final int target = jsonInt(matrix, "target");
         final int rejected = jsonInt(matrix, "rejected");
-        final int accounted = pass + scoped + rejected;
+        final int accounted = pass + rejected;
 
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 2, \"constructors\": 1, \"methods\": 3, \"callables\": 4, \"totalCallables\": 6, \"leftCallables\": 2, \"coveragePercent\": \"66.6\"}",
@@ -134,7 +134,7 @@ final class CompatibilityReportsTest {
             "Real external project probes are tracked separately in `doc/status/real-project-readiness.md`.",
             "External project names do not belong in this matrix; this ledger stays compiler-owned and deterministic.",
             "| `try-catch` | pass |",
-            "| `try-finally` | pass |",
+            "| `try-finally` | scoped |",
             "| `boxed-primitive-gc` | pass |",
             "| `enum-basic` | pass |",
             "| `enum-ordinal` | pass |",

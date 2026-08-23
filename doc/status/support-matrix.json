@@ -12,8 +12,8 @@
   },
   "counts": {
     "rows": 314,
-    "pass": 314,
-    "scoped": 0,
+    "pass": 313,
+    "scoped": 1,
     "target": 0,
     "rejected": 0
   },
@@ -34,7 +34,7 @@
     {"feature": "string-concat", "jdk25": "pass"},
     {"feature": "exception-panic", "jdk25": "pass"},
     {"feature": "try-catch", "jdk25": "pass"},
-    {"feature": "try-finally", "jdk25": "pass"},
+    {"feature": "try-finally", "jdk25": "scoped"},
     {"feature": "enum-basic", "jdk25": "pass"},
     {"feature": "enum-ordinal", "jdk25": "pass"},
     {"feature": "enum-values", "jdk25": "pass"},

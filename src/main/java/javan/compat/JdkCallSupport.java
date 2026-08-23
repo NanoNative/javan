@@ -1893,6 +1893,12 @@ public final class JdkCallSupport {
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
+        if ("java/nio/file/Files".equals(methodRef.owner())
+            && "copy".equals(methodRef.name())
+            && "(Ljava/nio/file/Path;Ljava/nio/file/Path;[Ljava/nio/file/CopyOption;)Ljava/nio/file/Path;"
+                .equals(methodRef.descriptor())) {
+            return List.of("java/io/IOException");
+        }
         if ("java/lang/Class".equals(methodRef.owner())
             && "forName".equals(methodRef.name())
             && "(Ljava/lang/String;)Ljava/lang/Class;".equals(methodRef.descriptor())) {

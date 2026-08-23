@@ -636,4 +636,55 @@ final class CliPathFilesIntegrationTest extends CliIntegrationSupport {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/files-copy").toString())).stdout()).isEqualTo(jvmOutput);
     }
+
+    @Test
+    void filesCopyRunsFinallyAndTransportsFailures() throws Exception {
+        final Path project = project("files-copy-finally");
+        Files.writeString(project.resolve("source.txt"), "source", StandardCharsets.UTF_8);
+        Files.createDirectory(project.resolve("target"));
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.io.IOException;
+            import java.nio.file.CopyOption;
+            import java.nio.file.Files;
+            import java.nio.file.Path;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    catchCopy(Path.of("source.txt"), Path.of("copied.txt"), new CopyOption[0]);
+                    catchCopy(Path.of("missing.txt"), Path.of("target.txt"), new CopyOption[0]);
+                    catchCopy(Path.of("source.txt"), Path.of("target"), new CopyOption[0]);
+                }
+
+                private static void catchCopy(final Path source, final Path target, final CopyOption[] options) {
+                    try {
+                        copy(source, target, options);
+                    } catch (final IOException exception) {
+                        System.out.println("caught");
+                    }
+                }
+
+                private static void copy(final Path source, final Path target, final CopyOption[] options)
+                    throws IOException {
+                    try {
+                        Files.copy(source, target, options);
+                    } finally {
+                        System.out.println("cleanup");
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/files-copy-finally").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("cleanup\ncleanup\ncaught\ncleanup\ncaught\n");
+    }
 }

@@ -136,7 +136,6 @@ same executable and reports.
 Planned vertical slices:
 
 - separate production/test graphs used by `javan build` and `javan test`
-- offline replay from the Javan cache
 - Maven and Gradle convenience integrations with no second compiler path
 - IDE diagnostics through stable report links and the installed JDK facade
 - additional managed JDK providers only behind verified catalog/checksum handling

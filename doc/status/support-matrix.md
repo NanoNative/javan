@@ -10,8 +10,8 @@ External project names do not belong in this matrix; this ledger stays compiler-
 | Measure | Count |
 | --- | ---: |
 | rows | 314 |
-| pass | 314 |
-| scoped | 0 |
+| pass | 313 |
+| scoped | 1 |
 | target | 0 |
 | rejected | 0 |
 
@@ -42,7 +42,7 @@ Status mapping:
 | `string-concat` | pass |
 | `exception-panic` | pass |
 | `try-catch` | pass |
-| `try-finally` | pass |
+| `try-finally` | scoped |
 | `enum-basic` | pass |
 | `enum-ordinal` | pass |
 | `enum-values` | pass |
