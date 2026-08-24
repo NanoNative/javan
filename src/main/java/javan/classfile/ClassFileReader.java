@@ -355,27 +355,29 @@ public final class ClassFileReader {
         final Set<Integer> instructionOffsets
     ) throws IOException {
         final int tag = in.u1();
-        return switch (tag) {
-            case 0, 1, 2, 5, 6 -> FrameValue.other(1);
-            case 3, 4 -> FrameValue.other(2);
-            case 7 -> {
-                final int classIndex = in.u2();
-                if (!constantPool.containsIndex(classIndex)
-                    || constantPool.entryTag(classIndex).orElse(-1) != 7) {
-                    throw new IOException("Invalid StackMapTable object type index " + classIndex);
-                }
-                yield FrameValue.object(constantPool.className(classIndex));
+        if (tag == 0 || tag == 1 || tag == 2 || tag == 5 || tag == 6) {
+            return FrameValue.other(1);
+        }
+        if (tag == 3 || tag == 4) {
+            return FrameValue.other(2);
+        }
+        if (tag == 7) {
+            final int classIndex = in.u2();
+            if (!constantPool.containsIndex(classIndex)
+                || constantPool.entryTag(classIndex).orElse(-1) != 7) {
+                throw new IOException("Invalid StackMapTable object type index " + classIndex);
             }
-            case 8 -> {
-                final int offset = in.u2();
-                if (!instructionOffsets.contains(Integer.valueOf(offset))
-                    || unsigned(bytecode[offset]) != 187) {
-                    throw new IOException("Invalid StackMapTable uninitialized offset " + offset);
-                }
-                yield FrameValue.other(1);
+            return FrameValue.object(constantPool.className(classIndex));
+        }
+        if (tag == 8) {
+            final int offset = in.u2();
+            if (!instructionOffsets.contains(Integer.valueOf(offset))
+                || unsigned(bytecode[offset]) != 187) {
+                throw new IOException("Invalid StackMapTable uninitialized offset " + offset);
             }
-            default -> throw new IOException("Invalid StackMapTable verification type " + tag);
-        };
+            return FrameValue.other(1);
+        }
+        throw new IOException("Invalid StackMapTable verification type " + tag);
     }
 
     private static List<FrameValue> initialFrameLocals(
