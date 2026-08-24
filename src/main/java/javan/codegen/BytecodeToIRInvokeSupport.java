@@ -232,7 +232,7 @@ final class BytecodeToIRInvokeSupport {
             receiverIndex,
             new StackValue(
                 receiver.kind(),
-                receiver.throwableType(),
+                receiver.throwable(),
                 Optional.of(materialized),
                 receiver.dynamicLambda()
             )
@@ -361,7 +361,7 @@ final class BytecodeToIRInvokeSupport {
                 final IrExpression value = IrExpression.objectStaticField(owner, fieldRef.name());
                 final Optional<String> throwableType = BytecodeToIR.throwableTypeFromDescriptor(classes, fieldRef.descriptor());
                 stack.add(throwableType.isPresent()
-                    ? StackValue.platformThrowable(throwableType.orElseThrow(), value)
+                    ? throwableValue(classes, owner, throwableType.orElseThrow(), value)
                     : StackValue.objectExpression(value));
             }
         }
@@ -407,11 +407,25 @@ final class BytecodeToIRInvokeSupport {
                 final IrExpression value = IrExpression.objectField(fieldRef.owner(), fieldRef.name(), receiver);
                 final Optional<String> throwableType = BytecodeToIR.throwableTypeFromDescriptor(classes, fieldRef.descriptor());
                 stack.add(throwableType.isPresent()
-                    ? StackValue.platformThrowable(throwableType.orElseThrow(), value)
+                    ? throwableValue(classes, fieldRef.owner(), throwableType.orElseThrow(), value)
                     : StackValue.objectExpression(value));
             }
             case VOID -> throw new IllegalStateException("void instance field is invalid");
         }
+    }
+
+    private static StackValue throwableValue(
+        final Map<String, ClassFile> classes,
+        final String owner,
+        final String throwableType,
+        final IrExpression value
+    ) {
+        if (classes.containsKey(throwableType)) {
+            return StackValue.applicationThrowable(throwableType, value);
+        }
+        return classes.containsKey(owner)
+            ? StackValue.objectExpression(value)
+            : StackValue.platformThrowable(throwableType, value);
     }
 
     static void assignInstanceField(
@@ -2195,7 +2209,7 @@ final class BytecodeToIRInvokeSupport {
             descriptor.returnType(),
             symbol,
             callArguments,
-            BytecodeToIR.throwableTypeFromDescriptor(classes, returnDescriptor(methodRef.descriptor()))
+            BytecodeToIR.throwableValueFromMethod(classes, methodRef, instruction.opcode() == 183)
         );
     }
 
@@ -2357,7 +2371,7 @@ final class BytecodeToIRInvokeSupport {
             descriptor.returnType(),
             symbol,
             arguments,
-            BytecodeToIR.throwableTypeFromDescriptor(classes, returnDescriptor(methodRef.descriptor()))
+            BytecodeToIR.throwableValueFromMethod(classes, methodRef, true)
         );
     }
 

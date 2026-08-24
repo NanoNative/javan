@@ -1296,8 +1296,11 @@ final class BytecodeToIRTest {
         locals.put(0, IrExpression.objectLocal("local0"));
         final Map<Integer, BytecodeToIR.StackKind> objectLocalKinds = new HashMap<>();
         objectLocalKinds.put(0, BytecodeToIR.StackKind.OBJECT);
-        final Map<Integer, String> objectLocalThrowableTypes = new HashMap<>();
-        objectLocalThrowableTypes.put(0, "java/lang/NullPointerException");
+        final Map<Integer, BytecodeToIR.ThrowableValue> objectLocalThrowableTypes = new HashMap<>();
+        objectLocalThrowableTypes.put(0, BytecodeToIR.ThrowableValue.exact(
+            "java/lang/NullPointerException",
+            false
+        ));
 
         final BytecodeToIR.StackValue value = BytecodeToIR.localObjectValue(
             classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of()),
@@ -4518,8 +4521,11 @@ final class BytecodeToIRTest {
     void storeObjectClearsThrowableTypeWhenPlainObjectOverwritesThrowableLocal() {
         final Map<Integer, IrExpression> locals = new HashMap<>();
         final Map<Integer, BytecodeToIR.StackKind> objectLocalKinds = new HashMap<>();
-        final Map<Integer, String> objectLocalThrowableTypes = new HashMap<>();
-        objectLocalThrowableTypes.put(0, "java/lang/NullPointerException");
+        final Map<Integer, BytecodeToIR.ThrowableValue> objectLocalThrowableTypes = new HashMap<>();
+        objectLocalThrowableTypes.put(0, BytecodeToIR.ThrowableValue.exact(
+            "java/lang/NullPointerException",
+            false
+        ));
         final Map<Integer, IrLocal> localDeclarations = new LinkedHashMap<>();
         final List<IrInstruction> instructions = new ArrayList<>();
         final List<BytecodeToIR.StackValue> stack = new ArrayList<>();

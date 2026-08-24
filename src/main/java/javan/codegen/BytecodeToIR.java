@@ -7,6 +7,7 @@ import javan.analysis.CMethodSymbols;
 import javan.analysis.EntryPoint;
 import javan.analysis.FunctionValueFlow;
 import javan.analysis.InstantiatedTypeAnalysis;
+import javan.analysis.ThrowableReturnAnalysis;
 import javan.build.NativeInteropConfig;
 import javan.classfile.ClassFile;
 import javan.classfile.CodeAttribute;
@@ -38,6 +39,7 @@ import javan.verify.DiagnosticException;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
@@ -661,6 +663,15 @@ public final class BytecodeToIR {
             for (final CaughtThrowableRethrowAnalysis.ReplacementThrow replacement : flow.orElseThrow().replacements()) {
                 result.add(replacement.throwableType());
             }
+            for (final int local : flow.orElseThrow().replacementLocals()) {
+                final Optional<String> type = code.objectLocalTypeAt(handler.handlerPc(), local);
+                if (type.isPresent() && isThrowable(classes, type.orElseThrow())) {
+                    result.add(type.orElseThrow());
+                }
+            }
+            if (!flow.orElseThrow().replacementLocals().isEmpty()) {
+                result.addAll(throwableValueTypesBefore(classes, instructions, handler.handlerPc()));
+            }
             for (final int throwOffset : flow.orElseThrow().replacementValueOffsets()) {
                 final Optional<String> type = directThrowableValueType(classes, instructions, throwOffset);
                 if (type.isPresent()) {
@@ -669,6 +680,43 @@ public final class BytecodeToIR {
             }
         }
         return result;
+    }
+
+    private static Set<String> throwableValueTypesBefore(
+        final Map<String, ClassFile> classes,
+        final List<Instruction> instructions,
+        final int endOffset
+    ) {
+        final Set<String> result = new LinkedHashSet<>();
+        for (final Instruction instruction : instructions) {
+            if (instruction.offset() >= endOffset) {
+                break;
+            }
+            if (instruction.className().isPresent()
+                && isThrowable(classes, instruction.className().orElseThrow())) {
+                result.add(instruction.className().orElseThrow());
+            }
+            if (instruction.fieldRef().isPresent()) {
+                final Optional<String> fieldType = throwableTypeFromDescriptor(
+                    classes,
+                    instruction.fieldRef().orElseThrow().descriptor()
+                );
+                if (fieldType.isPresent()) {
+                    result.add(fieldType.orElseThrow());
+                }
+            }
+            if (instruction.methodRef().isPresent()) {
+                final Optional<ThrowableReturnAnalysis.Result> returned = ThrowableReturnAnalysis.analyze(
+                    classes,
+                    instruction.methodRef().orElseThrow(),
+                    instruction.opcode() == 183 || instruction.opcode() == 184
+                );
+                if (returned.isPresent()) {
+                    result.addAll(returned.orElseThrow().possibleTypes());
+                }
+            }
+        }
+        return Collections.unmodifiableSet(result);
     }
 
     private static Optional<String> directThrowableValueType(
@@ -747,17 +795,43 @@ public final class BytecodeToIR {
         return isThrowable(classes, candidate) ? Optional.of(candidate) : Optional.empty();
     }
 
+    static Optional<ThrowableValue> throwableValueFromDescriptor(
+        final Map<String, ClassFile> classes,
+        final String descriptor
+    ) {
+        final Optional<String> type = throwableTypeFromDescriptor(classes, descriptor);
+        return type.isEmpty()
+            ? Optional.empty()
+            : Optional.of(ThrowableValue.exact(type.orElseThrow(), classes.containsKey(type.orElseThrow())));
+    }
+
+    static Optional<ThrowableValue> throwableValueFromMethod(
+        final Map<String, ClassFile> classes,
+        final MethodRef methodRef,
+        final boolean staticallyBound
+    ) {
+        final Optional<ThrowableReturnAnalysis.Result> result =
+            ThrowableReturnAnalysis.analyze(classes, methodRef, staticallyBound);
+        return result.isEmpty()
+            ? Optional.empty()
+            : Optional.of(new ThrowableValue(
+                result.orElseThrow().upperBound(),
+                result.orElseThrow().possibleTypes(),
+                result.orElseThrow().generatedObject()
+            ));
+    }
+
     private static void bindThrowableParameters(
         final Map<String, ClassFile> classes,
         final ClassFile classFile,
         final MethodInfo method,
         final MethodDescriptor descriptor,
-        final Map<Integer, String> objectLocalThrowableTypes
+        final Map<Integer, ThrowableValue> objectLocalThrowableTypes
     ) {
         int slot = 0;
         if (!method.isStatic()) {
             if (isThrowable(classes, classFile.name())) {
-                objectLocalThrowableTypes.put(slot, classFile.name());
+                objectLocalThrowableTypes.put(slot, ThrowableValue.exact(classFile.name(), true));
             }
             slot++;
         }
@@ -766,7 +840,8 @@ public final class BytecodeToIR {
         for (int index = 0; index < descriptor.parameterTypes().size(); index++) {
             final Optional<String> throwableType = throwableTypeFromDescriptor(classes, parameterDescriptors.get(index));
             if (throwableType.isPresent()) {
-                objectLocalThrowableTypes.put(slot, throwableType.orElseThrow());
+                final String type = throwableType.orElseThrow();
+                objectLocalThrowableTypes.put(slot, ThrowableValue.exact(type, classes.containsKey(type)));
             }
             slot += descriptor.parameterTypes().get(index).slotWidth();
         }
@@ -867,7 +942,7 @@ public final class BytecodeToIR {
         final List<StackValue> stack = new ArrayList<>();
         final Map<Integer, IrExpression> locals = new HashMap<>();
         final Map<Integer, StackKind> objectLocalKinds = new HashMap<>();
-        final Map<Integer, String> objectLocalThrowableTypes = new HashMap<>();
+        final Map<Integer, ThrowableValue> objectLocalThrowableTypes = new HashMap<>();
         final Map<Integer, DynamicLambda> objectLocalLambdas = new HashMap<>();
         final Map<Integer, IrLocal> localDeclarations = new LinkedHashMap<>();
         final Map<Integer, StackValue> pendingExceptionHandlerStacks = new HashMap<>();
@@ -1425,7 +1500,7 @@ public final class BytecodeToIR {
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final Map<Integer, IrExpression> locals,
         final Map<Integer, StackKind> objectLocalKinds,
-        final Map<Integer, String> objectLocalThrowableTypes,
+        final Map<Integer, ThrowableValue> objectLocalThrowableTypes,
         final Map<Integer, DynamicLambda> objectLocalLambdas,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
@@ -1472,7 +1547,7 @@ public final class BytecodeToIR {
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final Map<Integer, IrExpression> locals,
         final Map<Integer, StackKind> objectLocalKinds,
-        final Map<Integer, String> objectLocalThrowableTypes,
+        final Map<Integer, ThrowableValue> objectLocalThrowableTypes,
         final Map<Integer, DynamicLambda> objectLocalLambdas,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
@@ -2367,7 +2442,7 @@ public final class BytecodeToIR {
         final List<StackValue> stack,
         final Map<Integer, IrExpression> locals,
         final Map<Integer, StackKind> objectLocalKinds,
-        final Map<Integer, String> objectLocalThrowableTypes,
+        final Map<Integer, ThrowableValue> objectLocalThrowableTypes,
         final Map<Integer, IrLocal> localDeclarations,
         final int slot
     ) {
@@ -2394,7 +2469,7 @@ public final class BytecodeToIR {
         final List<StackValue> stack,
         final Map<Integer, IrExpression> locals,
         final Map<Integer, StackKind> objectLocalKinds,
-        final Map<Integer, String> objectLocalThrowableTypes,
+        final Map<Integer, ThrowableValue> objectLocalThrowableTypes,
         final Map<Integer, DynamicLambda> objectLocalLambdas,
         final Map<Integer, IrLocal> localDeclarations,
         final int slot
@@ -2420,7 +2495,7 @@ public final class BytecodeToIR {
         instructions.add(IrInstruction.assignObject(target.value(), stackValueExpression(value)));
         updateObjectLocalKind(objectLocalKinds, slot, value.kind());
         if (value.throwableType().isPresent()) {
-            objectLocalThrowableTypes.put(slot, value.throwableType().orElseThrow());
+            objectLocalThrowableTypes.put(slot, value.throwable().orElseThrow());
         } else {
             objectLocalThrowableTypes.put(slot, null);
         }
@@ -3129,7 +3204,7 @@ public final class BytecodeToIR {
         if (value.kind() == StackKind.PRINT_STREAM || value.kind() == StackKind.ERROR_PRINT_STREAM) {
             return StackValue.objectExpression(materializedExpression);
         }
-        return new StackValue(value.kind(), value.throwableType(), Optional.of(materializedExpression), value.dynamicLambda());
+        return new StackValue(value.kind(), value.throwable(), Optional.of(materializedExpression), value.dynamicLambda());
     }
 
     private static void snapshotOperandStack(
@@ -3231,7 +3306,7 @@ public final class BytecodeToIR {
         final MethodInfo method,
         final Map<Integer, IrExpression> locals,
         final Map<Integer, StackKind> objectLocalKinds,
-        final Map<Integer, String> objectLocalThrowableTypes,
+        final Map<Integer, ThrowableValue> objectLocalThrowableTypes,
         final int slot
     ) {
         return localObjectValue(
@@ -3250,7 +3325,7 @@ public final class BytecodeToIR {
         final MethodInfo method,
         final Map<Integer, IrExpression> locals,
         final Map<Integer, StackKind> objectLocalKinds,
-        final Map<Integer, String> objectLocalThrowableTypes,
+        final Map<Integer, ThrowableValue> objectLocalThrowableTypes,
         final Map<Integer, DynamicLambda> objectLocalLambdas,
         final int slot
     ) {
@@ -3271,15 +3346,25 @@ public final class BytecodeToIR {
         final IrExpression expression = local(classFile, method, locals, slot, IrType.OBJECT);
         final StackKind kind = objectLocalKinds.getOrDefault(slot, StackKind.OBJECT);
         if (kind == StackKind.CAUGHT_THROWABLE) {
-            final String throwableType = objectLocalThrowableTypes.get(slot);
-            return throwableType == null
+            final ThrowableValue throwable = objectLocalThrowableTypes.get(slot);
+            return throwable == null
                 ? StackValue.caughtThrowable(expression)
-                : StackValue.caughtThrowable(expression, throwableType);
+                : new StackValue(
+                    StackKind.CAUGHT_THROWABLE,
+                    Optional.of(throwable),
+                    Optional.of(expression),
+                    Optional.empty()
+                );
         }
         if (kind == StackKind.OBJECT) {
-            final String throwableType = objectLocalThrowableTypes.get(slot);
-            if (throwableType != null) {
-                return StackValue.platformThrowable(throwableType, expression);
+            final ThrowableValue throwable = objectLocalThrowableTypes.get(slot);
+            if (throwable != null) {
+                return new StackValue(
+                    StackKind.OBJECT,
+                    Optional.of(throwable),
+                    Optional.of(expression),
+                    Optional.empty()
+                );
             }
         }
         return BytecodeToIRControlFlowSupport.stackValue(kind, expression);
@@ -4369,7 +4454,12 @@ public final class BytecodeToIR {
         if (!stack.isEmpty()) {
             final StackValue current = stack.getLast();
             if (current.throwableType().isPresent()) {
-                stack.set(stack.size() - 1, StackValue.platformThrowable(current.throwableType().orElseThrow(), message));
+                stack.set(stack.size() - 1, new StackValue(
+                    current.kind(),
+                    current.throwable(),
+                    Optional.of(message),
+                    current.dynamicLambda()
+                ));
                 return;
             }
             stack.set(stack.size() - 1, StackValue.objectExpression(message));
@@ -4478,12 +4568,37 @@ public final class BytecodeToIR {
         }
     }
 
+    record ThrowableValue(String upperBound, List<String> possibleTypes, boolean generatedObject) {
+        ThrowableValue {
+            possibleTypes = List.copyOf(possibleTypes);
+            if (possibleTypes.isEmpty()) {
+                throw new IllegalArgumentException("Throwable value needs at least one possible type");
+            }
+        }
+
+        static ThrowableValue exact(final String type, final boolean generatedObject) {
+            return new ThrowableValue(type, List.of(type), generatedObject);
+        }
+    }
+
     record StackValue(
         StackKind kind,
-        Optional<String> throwableType,
+        Optional<ThrowableValue> throwable,
         Optional<IrExpression> expression,
         Optional<DynamicLambda> dynamicLambda
     ) {
+        Optional<String> throwableType() {
+            return throwable.isEmpty() ? Optional.empty() : Optional.of(throwable.orElseThrow().upperBound());
+        }
+
+        List<String> possibleThrowableTypes() {
+            return throwable.isEmpty() ? List.of() : throwable.orElseThrow().possibleTypes();
+        }
+
+        boolean generatedThrowableObject() {
+            return throwable.isPresent() && throwable.orElseThrow().generatedObject();
+        }
+
         static StackValue virtualThreadBuilder() {
             return new StackValue(StackKind.VIRTUAL_THREAD_BUILDER, Optional.empty(), Optional.of(IrExpression.objectNull()), Optional.empty());
         }
@@ -4567,14 +4682,32 @@ public final class BytecodeToIR {
         static StackValue caughtThrowable(final IrExpression expression, final String throwableType) {
             return new StackValue(
                 StackKind.CAUGHT_THROWABLE,
-                Optional.of(throwableType),
+                Optional.of(ThrowableValue.exact(throwableType, false)),
                 Optional.of(expression),
                 Optional.empty()
             );
         }
 
         static StackValue platformThrowable(final String throwableType, final IrExpression message) {
-            return new StackValue(StackKind.OBJECT, Optional.of(throwableType), Optional.of(message), Optional.empty());
+            return throwable(throwableType, List.of(throwableType), false, message);
+        }
+
+        static StackValue applicationThrowable(final String throwableType, final IrExpression value) {
+            return throwable(throwableType, List.of(throwableType), true, value);
+        }
+
+        static StackValue throwable(
+            final String upperBound,
+            final List<String> possibleTypes,
+            final boolean generatedObject,
+            final IrExpression expression
+        ) {
+            return new StackValue(
+                StackKind.OBJECT,
+                Optional.of(new ThrowableValue(upperBound, possibleTypes, generatedObject)),
+                Optional.of(expression),
+                Optional.empty()
+            );
         }
     }
 }

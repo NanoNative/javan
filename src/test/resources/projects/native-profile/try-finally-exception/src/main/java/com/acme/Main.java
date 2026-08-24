@@ -29,12 +29,20 @@ public final class Main {
         }
     }
 
-    private static void replace(final Problem problem) {
+    private static void replace(final Problem problem, final int index) {
+        final RuntimeException replacement = replacement(index);
         try {
             fail(problem);
         } finally {
-            throw new Replacement("replacement");
+            Long.toString(index);
+            throw replacement;
         }
+    }
+
+    private static RuntimeException replacement(final int index) {
+        return (index & 1) == 0
+            ? new Replacement("replacement")
+            : new AlternateReplacement("alternate");
     }
 
     private static int preserveOnce(final int base, final int index) {
@@ -55,10 +63,15 @@ public final class Main {
     private static int replaceOnce(final int base, final int index) {
         final Problem original = new Problem("original", base + index);
         try {
-            replace(original);
+            replace(original, index);
             return -1;
         } catch (final Replacement replacement) {
-            if (!"replacement".equals(replacement.getMessage())) {
+            if ((index & 1) != 0 || !"replacement".equals(replacement.getMessage())) {
+                return -1;
+            }
+            return index;
+        } catch (final AlternateReplacement replacement) {
+            if ((index & 1) == 0 || !"alternate".equals(replacement.getMessage())) {
                 return -1;
             }
             return index;

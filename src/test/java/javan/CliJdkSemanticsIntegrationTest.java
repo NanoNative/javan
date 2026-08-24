@@ -12152,12 +12152,12 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                     try {
                         return Long.parseLong(value);
                     } catch (final RuntimeException exception) {
-                        final UnsupportedOperationException converted = unsupported();
+                        final RuntimeException converted = unsupported();
                         throw converted;
                     }
                 }
 
-                private static UnsupportedOperationException unsupported() {
+                private static RuntimeException unsupported() {
                     return new UnsupportedOperationException("converted");
                 }
             }

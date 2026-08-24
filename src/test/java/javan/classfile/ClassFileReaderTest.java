@@ -185,6 +185,174 @@ final class ClassFileReaderTest {
     }
 
     @Test
+    void readerParsesJavacStackMapObjectLocalsWithoutDebugMetadata() throws Exception {
+        final Path source = tempDir.resolve("TypedLocal.java");
+        final Path classes = tempDir.resolve("classes");
+        Files.writeString(source, """
+            public final class TypedLocal {
+                static final class First extends RuntimeException {
+                }
+
+                static final class Second extends RuntimeException {
+                }
+
+                static void run(final boolean first) {
+                    final RuntimeException replacement = first ? new First() : new Second();
+                    try {
+                        throw new First();
+                    } finally {
+                        throw replacement;
+                    }
+                }
+            }
+            """);
+        Files.createDirectories(classes);
+        final int result = ToolProvider.getSystemJavaCompiler().run(
+            null, null, null, "-g:none", "-d", classes.toString(), source.toString()
+        );
+
+        assertThat(result).isZero();
+        final CodeAttribute code = new ClassFileReader()
+            .read(Files.readAllBytes(classes.resolve("TypedLocal.class")), source)
+            .method("run", "(Z)V")
+            .orElseThrow()
+            .code()
+            .orElseThrow();
+        final int handlerOffset = code.exceptionTable().getFirst().handlerPc();
+
+        assertThat(code.objectLocalTypeAt(handlerOffset, 1)).contains("java/lang/RuntimeException");
+        assertThat(code.singleStackObjectTypeAt(handlerOffset)).contains("java/lang/Throwable");
+        assertThat(code.objectLocalTypeAt(handlerOffset, 0)).isEmpty();
+        assertThat(code.objectLocalTypeAt(handlerOffset + 1, 1)).isEmpty();
+        assertThatThrownBy(() -> code.stackMapFrames().getLast().objectLocals().put(9, "java/lang/Object"))
+            .isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> code.stackMapFrames().getLast().stackTypes().add(Optional.empty()))
+            .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void readerRejectsReservedStackMapFrameType() {
+        assertThatThrownBy(() -> new ClassFileReader().read(
+            classfileWithStackMapAttributes(new byte[]{0, 1, (byte) 128}), SOURCE
+        )).isInstanceOf(IOException.class).hasMessage("Invalid StackMapTable frame type 128");
+    }
+
+    @Test
+    void readerParsesEveryModernStackMapFrameForm() throws Exception {
+        final byte[] frames = new byte[]{
+            0, 7,
+            0,
+            64, 1,
+            (byte) 247, 0, 0, 7, 0, 4,
+            (byte) 248, 0, 0,
+            (byte) 251, 0, 0,
+            (byte) 254, 0, 0, 1, 4, 7, 0, 4,
+            (byte) 255, 0, 0, 0, 1, 7, 0, 4, 0, 0
+        };
+        final byte[] bytecode = new byte[]{0, 0, 0, 0, 0, 0, (byte) 177};
+
+        final CodeAttribute code = new ClassFileReader().read(
+            classfileWithStackMapAttributes(
+                "(Ljava/lang/Object;JLjava/lang/Object;)V",
+                bytecode,
+                frames
+            ),
+            SOURCE
+        ).method("demo", "(Ljava/lang/Object;JLjava/lang/Object;)V").orElseThrow().code().orElseThrow();
+
+        assertThat(code.stackMapFrames()).extracting(StackMapFrame::offset)
+            .containsExactly(0, 1, 2, 3, 4, 5, 6);
+        assertThat(code.objectLocalTypeAt(0, 0)).contains("java/lang/Object");
+        assertThat(code.objectLocalTypeAt(0, 3)).contains("java/lang/Object");
+        assertThat(code.objectLocalTypeAt(3, 0)).isEmpty();
+        assertThat(code.objectLocalTypeAt(5, 3)).contains("java/lang/Object");
+        assertThat(code.objectLocalTypeAt(6, 0)).contains("java/lang/Object");
+    }
+
+    @Test
+    void readerRejectsTruncatedStackMapFrame() {
+        assertThatThrownBy(() -> new ClassFileReader().read(
+            classfileWithStackMapAttributes(new byte[]{0, 1, (byte) 255}), SOURCE
+        )).isInstanceOf(IOException.class).hasMessage("Unexpected end of class file");
+    }
+
+    @Test
+    void readerRejectsDuplicateStackMapTable() {
+        assertThatThrownBy(() -> new ClassFileReader().read(
+            classfileWithStackMapAttributes(new byte[]{0, 0}, new byte[]{0, 0}), SOURCE
+        )).isInstanceOf(IOException.class).hasMessage("Duplicate StackMapTable attribute");
+    }
+
+    @Test
+    void readerRejectsStackMapFrameOutsideInstructionBoundary() {
+        assertThatThrownBy(() -> new ClassFileReader().read(
+            classfileWithStackMapAttributes("()V", new byte[]{16, 0, (byte) 177}, new byte[]{0, 1, 1}),
+            SOURCE
+        )).isInstanceOf(IOException.class).hasMessage("Invalid StackMapTable frame offset 1");
+    }
+
+    @Test
+    void readerRejectsUninitializedStackMapValueThatDoesNotTargetNew() {
+        assertThatThrownBy(() -> new ClassFileReader().read(
+            classfileWithStackMapAttributes(new byte[]{0, 1, 64, 8, 0, 0}), SOURCE
+        )).isInstanceOf(IOException.class).hasMessage("Invalid StackMapTable uninitialized offset 0");
+    }
+
+    @Test
+    void readerRejectsUninitializedStackMapValueThatTargetsAnOperandByte() {
+        assertThatThrownBy(() -> new ClassFileReader().read(
+            classfileWithStackMapAttributes(
+                "()V", new byte[]{16, (byte) 187, (byte) 177}, new byte[]{0, 1, 64, 8, 0, 1}
+            ),
+            SOURCE
+        )).isInstanceOf(IOException.class).hasMessage("Invalid StackMapTable uninitialized offset 1");
+    }
+
+    @Test
+    void readerRejectsInitialStackMapLocalsBeyondMaxLocals() {
+        assertThatThrownBy(() -> new ClassFileReader().read(
+            classfileWithStackMapAttributes(
+                "(J)V", new byte[]{(byte) 177}, 0, 1, new int[0], new byte[]{0, 0}
+            ),
+            SOURCE
+        )).isInstanceOf(IOException.class).hasMessage("StackMapTable locals exceed max_locals");
+    }
+
+    @Test
+    void readerRejectsFrameLocalsBeyondMaxLocals() {
+        final byte[] fullFrameWithLongLocal = new byte[]{
+            0, 1, (byte) 255, 0, 0, 0, 1, 4, 0, 0
+        };
+
+        assertThatThrownBy(() -> new ClassFileReader().read(
+            classfileWithStackMapAttributes(
+                "()V", new byte[]{(byte) 177}, 0, 1, new int[0], fullFrameWithLongLocal
+            ),
+            SOURCE
+        )).isInstanceOf(IOException.class).hasMessage("StackMapTable locals exceed max_locals");
+    }
+
+    @Test
+    void readerRejectsFrameStackBeyondMaxStack() {
+        assertThatThrownBy(() -> new ClassFileReader().read(
+            classfileWithStackMapAttributes(
+                "()V", new byte[]{(byte) 177}, 1, 0, new int[0], new byte[]{0, 1, 64, 4}
+            ),
+            SOURCE
+        )).isInstanceOf(IOException.class).hasMessage("StackMapTable stack exceeds max_stack");
+    }
+
+    @Test
+    void readerRejectsHandlerFrameWithoutOneObjectStackEntry() {
+        assertThatThrownBy(() -> new ClassFileReader().read(
+            classfileWithStackMapAttributes(
+                "()V", new byte[]{0, (byte) 177}, 1, 0, new int[]{0, 1, 1, 0}, new byte[]{0, 1, 1}
+            ),
+            SOURCE
+        )).isInstanceOf(IOException.class).hasMessage("Invalid StackMapTable stack for exception handler 1");
+    }
+
+    @Test
     void readerRejectsNonClassFile() {
         assertThatThrownBy(() -> new ClassFileReader().read(new byte[]{0, 1, 2, 3}, SOURCE))
             .isInstanceOf(IOException.class)
@@ -1133,6 +1301,75 @@ final class ClassFileReaderTest {
             .u2(11)
             .u4(2)
             .u2(12)
+            .toByteArray();
+    }
+
+    private static byte[] classfileWithStackMapAttributes(final byte[]... attributes) {
+        return classfileWithStackMapAttributes("()V", new byte[]{(byte) 177}, attributes);
+    }
+
+    private static byte[] classfileWithStackMapAttributes(
+        final String descriptor,
+        final byte[] bytecode,
+        final byte[]... attributes
+    ) {
+        return classfileWithStackMapAttributes(descriptor, bytecode, 1, 4, new int[0], attributes);
+    }
+
+    private static byte[] classfileWithStackMapAttributes(
+        final String descriptor,
+        final byte[] bytecode,
+        final int maxStack,
+        final int maxLocals,
+        final int[] handler,
+        final byte[]... attributes
+    ) {
+        final int handlerCount = handler.length == 0 ? 0 : 1;
+        int codeLength = 13 + handlerCount * 8;
+        for (final byte[] attribute : attributes) {
+            codeLength += 6 + attribute.length;
+        }
+        codeLength += bytecode.length - 1;
+        final Bytes result = new Bytes()
+            .u4(0xCAFEBABEL)
+            .u2(0)
+            .u2(65)
+            .u2(9)
+            .utf8("stackmap/Demo")
+            .classInfo(1)
+            .utf8("java/lang/Object")
+            .classInfo(3)
+            .utf8("demo")
+            .utf8(descriptor)
+            .utf8("Code")
+            .utf8("StackMapTable")
+            .u2(0x0021)
+            .u2(2)
+            .u2(4)
+            .u2(0)
+            .u2(0)
+            .u2(1)
+            .u2(0x0009)
+            .u2(5)
+            .u2(6)
+            .u2(1)
+            .u2(7)
+            .u4(codeLength)
+            .u2(maxStack)
+            .u2(maxLocals)
+            .u4(bytecode.length)
+            .bytes(bytecode)
+            .u2(handlerCount)
+            .optionalU2(handler, 0)
+            .optionalU2(handler, 1)
+            .optionalU2(handler, 2)
+            .optionalU2(handler, 3)
+            .u2(attributes.length);
+        for (final byte[] attribute : attributes) {
+            result.u2(8).u4(attribute.length).bytes(attribute);
+        }
+        return result
+            .u2(0)
             .toByteArray();
     }
 

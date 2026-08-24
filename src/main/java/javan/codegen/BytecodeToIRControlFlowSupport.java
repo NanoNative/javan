@@ -61,7 +61,7 @@ final class BytecodeToIRControlFlowSupport {
                     method,
                     instruction,
                     instructions,
-                    List.of(thrownValue.throwableType().orElseThrow()),
+                    thrownValue.possibleThrowableTypes(),
                     pendingExceptionHandlerStacks
                 );
             } else {
@@ -75,7 +75,9 @@ final class BytecodeToIRControlFlowSupport {
             }
         } else if (thrownValue.throwableType().isPresent()) {
             final String throwableType = thrownValue.throwableType().orElseThrow();
-            instructions.add(classes.containsKey(throwableType)
+            final boolean generatedObject = thrownValue.generatedThrowableObject()
+                || classes.containsKey(throwableType);
+            instructions.add(generatedObject
                 ? IrInstruction.setPendingObject(
                     throwableType,
                     thrown,
@@ -91,9 +93,7 @@ final class BytecodeToIRControlFlowSupport {
                 method,
                 instruction,
                 instructions,
-                classes.containsKey(throwableType)
-                    ? List.of(throwableType, "java/lang/NullPointerException")
-                    : List.of(throwableType),
+                throwableDispatchTypes(thrownValue, generatedObject),
                 pendingExceptionHandlerStacks
             );
         } else {
@@ -104,6 +104,17 @@ final class BytecodeToIRControlFlowSupport {
             instructions.add(IrInstruction.panic(thrown, sourceLocation(classFile, method, instruction, sourceLines)));
         }
         clearStack(stack);
+    }
+
+    private static List<String> throwableDispatchTypes(
+        final StackValue thrownValue,
+        final boolean generatedObject
+    ) {
+        final List<String> result = new ArrayList<>(thrownValue.possibleThrowableTypes());
+        if (generatedObject && !result.contains("java/lang/NullPointerException")) {
+            result.add("java/lang/NullPointerException");
+        }
+        return List.copyOf(result);
     }
 
     private static boolean insideExceptionHandlerBody(
@@ -381,7 +392,8 @@ final class BytecodeToIRControlFlowSupport {
             }
         }
         for (final int local : result.replacementLocals()) {
-            if (!declaredThrowableParameter(classes, method, local)) {
+            if (!declaredThrowableParameter(classes, method, local)
+                && !handlerThrowableLocal(classes, code, handler, local)) {
                 return false;
             }
         }
@@ -391,6 +403,20 @@ final class BytecodeToIRControlFlowSupport {
             }
         }
         return true;
+    }
+
+    private static boolean handlerThrowableLocal(
+        final Map<String, ClassFile> classes,
+        final CodeAttribute code,
+        final javan.classfile.CodeException handler,
+        final int local
+    ) {
+        final Optional<String> type = code.objectLocalTypeAt(handler.handlerPc(), local);
+        final Optional<String> handlerStack = code.singleStackObjectTypeAt(handler.handlerPc());
+        return type.isPresent()
+            && handlerStack.isPresent()
+            && isThrowable(classes, type.orElseThrow())
+            && isThrowable(classes, handlerStack.orElseThrow());
     }
 
     private static boolean declaredThrowableParameter(
@@ -524,7 +550,7 @@ final class BytecodeToIRControlFlowSupport {
         final List<StackValue> stack,
         final Map<Integer, IrExpression> locals,
         final Map<Integer, StackKind> objectLocalKinds,
-        final Map<Integer, String> objectLocalThrowableTypes,
+        final Map<Integer, ThrowableValue> objectLocalThrowableTypes,
         final Map<Integer, DynamicLambda> objectLocalLambdas,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
@@ -660,7 +686,12 @@ final class BytecodeToIRControlFlowSupport {
         instructions.addAll(targetBlock.instructions());
         instructions.add(assignLocal(valueKind, localName, targetValue.expression().orElseThrow()));
         instructions.add(IrInstruction.label(doneLabel));
-        stack.add(stackValue(valueKind, localExpression(valueType, new IrLocal(valueType, localName))));
+        stack.add(mergedValue(
+            classes,
+            elseValue,
+            targetValue,
+            localExpression(valueType, new IrLocal(valueType, localName))
+        ));
         addInt(skippedOffsets, jumpInstruction.offset());
         addInstructionOffsets(bytecode, index + 1, jumpIndex, skippedOffsets);
         addInstructionOffsets(bytecode, targetIndex, doneIndex, skippedOffsets);
@@ -676,7 +707,7 @@ final class BytecodeToIRControlFlowSupport {
         final List<StackValue> stack,
         final Map<Integer, IrExpression> locals,
         final Map<Integer, StackKind> objectLocalKinds,
-        final Map<Integer, String> objectLocalThrowableTypes,
+        final Map<Integer, ThrowableValue> objectLocalThrowableTypes,
         final Map<Integer, DynamicLambda> objectLocalLambdas,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
@@ -726,7 +757,7 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, IrLocal> workingDeclarations = copyLocalDeclarations(localDeclarations);
         final Map<Integer, IrExpression> workingLocals = copyExpressionLocals(locals);
         final Map<Integer, StackKind> workingObjectLocalKinds = copyObjectLocalKinds(objectLocalKinds);
-        final Map<Integer, String> workingObjectLocalThrowableTypes = copyObjectLocalThrowableTypes(objectLocalThrowableTypes);
+        final Map<Integer, ThrowableValue> workingObjectLocalThrowableTypes = copyObjectLocalThrowableTypes(objectLocalThrowableTypes);
         final Map<Integer, DynamicLambda> workingObjectLocalLambdas = copyObjectLocalLambdas(objectLocalLambdas);
         final Map<Integer, StackValue> workingPendingExceptionHandlerStacks =
             new HashMap<>(pendingExceptionHandlerStacks);
@@ -826,10 +857,87 @@ final class BytecodeToIRControlFlowSupport {
             stack.removeLast();
         }
         stack.addAll(prefix);
-        stack.add(stackValue(valueKind, localExpression(valueType, new IrLocal(valueType, localName))));
+        stack.add(mergedValue(
+            classes,
+            elseValue,
+            targetValue,
+            localExpression(valueType, new IrLocal(valueType, localName))
+        ));
         addInstructionOffsets(bytecode, index + 1, doneIndex, skippedOffsets);
         return true;
     }
+
+    private static StackValue mergedValue(
+        final Map<String, ClassFile> classes,
+        final StackValue first,
+        final StackValue second,
+        final IrExpression expression
+    ) {
+        if (first.throwable().isEmpty() || second.throwable().isEmpty()) {
+            return stackValue(first.kind(), expression);
+        }
+        final ThrowableValue firstThrowable = first.throwable().orElseThrow();
+        final ThrowableValue secondThrowable = second.throwable().orElseThrow();
+        if (firstThrowable.generatedObject() != secondThrowable.generatedObject()) {
+            return stackValue(first.kind(), expression);
+        }
+        final String upperBound = commonThrowableType(
+            classes,
+            firstThrowable.upperBound(),
+            secondThrowable.upperBound()
+        );
+        if (upperBound == null) {
+            return stackValue(first.kind(), expression);
+        }
+        final List<String> possibleTypes = new ArrayList<>(firstThrowable.possibleTypes());
+        for (final String type : secondThrowable.possibleTypes()) {
+            if (!possibleTypes.contains(type)) {
+                possibleTypes.add(type);
+            }
+        }
+        return StackValue.throwable(
+            upperBound,
+            possibleTypes,
+            firstThrowable.generatedObject(),
+            expression
+        );
+    }
+
+    private static String commonThrowableType(
+        final Map<String, ClassFile> classes,
+        final String first,
+        final String second
+    ) {
+        if (BytecodeToIR.isAssignableThrowable(classes, first, second)) {
+            return second;
+        }
+        if (BytecodeToIR.isAssignableThrowable(classes, second, first)) {
+            return first;
+        }
+        String candidate = first;
+        final List<String> visited = new ArrayList<>();
+        while (candidate != null && !candidate.isEmpty() && !visited.contains(candidate)) {
+            visited.add(candidate);
+            final ClassFile applicationClass = classes.get(candidate);
+            candidate = applicationClass == null
+                ? platformThrowableParent(candidate)
+                : applicationClass.superName();
+            if (candidate != null && BytecodeToIR.isAssignableThrowable(classes, second, candidate)) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private static String platformThrowableParent(final String type) {
+        for (final JdkCallSupport.PlatformThrowableParent parent : JdkCallSupport.platformThrowableParents()) {
+            if (parent.type().equals(type)) {
+                return parent.parent();
+            }
+        }
+        return null;
+    }
+
     static BlockResult lowerLinearBlock(
         final Map<String, ClassFile> classes,
         final ClassFile classFile,
@@ -840,7 +948,7 @@ final class BytecodeToIRControlFlowSupport {
         final List<StackValue> stackPrefix,
         final Map<Integer, IrExpression> locals,
         final Map<Integer, StackKind> objectLocalKinds,
-        final Map<Integer, String> objectLocalThrowableTypes,
+        final Map<Integer, ThrowableValue> objectLocalThrowableTypes,
         final Map<Integer, DynamicLambda> objectLocalLambdas,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
@@ -879,7 +987,7 @@ final class BytecodeToIRControlFlowSupport {
         final List<StackValue> stackPrefix,
         final Map<Integer, IrExpression> locals,
         final Map<Integer, StackKind> objectLocalKinds,
-        final Map<Integer, String> objectLocalThrowableTypes,
+        final Map<Integer, ThrowableValue> objectLocalThrowableTypes,
         final Map<Integer, DynamicLambda> objectLocalLambdas,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
@@ -893,7 +1001,7 @@ final class BytecodeToIRControlFlowSupport {
         final List<StackValue> blockStack = new ArrayList<>(stackPrefix);
         final Map<Integer, IrExpression> blockLocals = copyExpressionLocals(locals);
         final Map<Integer, StackKind> blockObjectLocalKinds = copyObjectLocalKinds(objectLocalKinds);
-        final Map<Integer, String> blockObjectLocalThrowableTypes = copyObjectLocalThrowableTypes(objectLocalThrowableTypes);
+        final Map<Integer, ThrowableValue> blockObjectLocalThrowableTypes = copyObjectLocalThrowableTypes(objectLocalThrowableTypes);
         final Map<Integer, DynamicLambda> blockObjectLocalLambdas = copyObjectLocalLambdas(objectLocalLambdas);
         final int lastMaterializingDuplicateOffset = BytecodeToIR.lastMaterializingDuplicateOffset(bytecode);
         for (int index = startIndex; index < endIndex; index++) {
@@ -945,7 +1053,7 @@ final class BytecodeToIRControlFlowSupport {
         final List<StackValue> stack,
         final Map<Integer, IrExpression> locals,
         final Map<Integer, StackKind> objectLocalKinds,
-        final Map<Integer, String> objectLocalThrowableTypes,
+        final Map<Integer, ThrowableValue> objectLocalThrowableTypes,
         final Map<Integer, DynamicLambda> objectLocalLambdas,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
@@ -1280,11 +1388,11 @@ final class BytecodeToIRControlFlowSupport {
         }
         return result;
     }
-    static Map<Integer, String> copyObjectLocalThrowableTypes(final Map<Integer, String> source) {
-        final Map<Integer, String> result = new HashMap<>();
+    static Map<Integer, ThrowableValue> copyObjectLocalThrowableTypes(final Map<Integer, ThrowableValue> source) {
+        final Map<Integer, ThrowableValue> result = new HashMap<>();
         int slot = 0;
         while (slot < 512) {
-            final String value = source.get(slot);
+            final ThrowableValue value = source.get(slot);
             if (value != null) {
                 result.put(slot, value);
             }

@@ -1237,6 +1237,299 @@ final class CliIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void finallyCanReplaceWithABranchMergedThrowableLocal() throws Exception {
+        final Path project = project("application-exception-finally-local-replacement");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private static RuntimeException expected;
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    try {
+                        replace(true, true);
+                    } catch (final First exception) {
+                        System.out.println((exception == expected) + ":" + exception.getMessage());
+                    }
+                    try {
+                        replace(false, true);
+                    } catch (final Second exception) {
+                        System.out.println((exception == expected) + ":" + exception.getMessage());
+                    }
+                    try {
+                        replace(true, false);
+                    } catch (final Original exception) {
+                        System.out.println(exception.getMessage());
+                    }
+                }
+
+                private static void replace(final boolean first, final boolean replace) {
+                    final RuntimeException replacement = replacement(first);
+                    expected = replacement;
+                    try {
+                        throw new Original("original");
+                    } finally {
+                        if (replace) {
+                            throw replacement;
+                        }
+                    }
+                }
+
+                private static RuntimeException replacement(final boolean first) {
+                    return first ? new First("first") : new Second("second");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Original", """
+            package com.acme;
+
+            public final class Original extends RuntimeException {
+                Original(final String message) {
+                    super(message);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.First", """
+            package com.acme;
+
+            public final class First extends RuntimeException {
+                First(final String message) {
+                    super(message);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Second", """
+            package com.acme;
+
+            public final class Second extends RuntimeException {
+                Second(final String message) {
+                    super(message);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(
+            ".javan/bin/application-exception-finally-local-replacement"
+        ).toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("""
+            true:first
+            true:second
+            original
+            """);
+    }
+
+    @Test
+    void finallyRejectsMixedThrowableRepresentationsFromABroadFactory() throws Exception {
+        final Path project = project("application-exception-finally-mixed-local-replacement");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    replace(args.length == 0);
+                }
+
+                private static void replace(final boolean application) {
+                    final RuntimeException replacement = replacement(application);
+                    try {
+                        throw new First("original");
+                    } finally {
+                        throw replacement;
+                    }
+                }
+
+                private static RuntimeException replacement(final boolean application) {
+                    return application
+                        ? new First("application")
+                        : new IllegalArgumentException("platform");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.First", """
+            package com.acme;
+
+            public final class First extends RuntimeException {
+                First(final String message) {
+                    super(message);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains("error[JAVAN014]");
+    }
+
+    @Test
+    void finallyRejectsMultiplePlatformTypesFromABroadFactory() throws Exception {
+        final Path project = project("platform-exception-finally-broad-local-replacement");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final RuntimeException replacement = replacement(args.length == 0);
+                    try {
+                        throw new IllegalStateException("original");
+                    } finally {
+                        throw replacement;
+                    }
+                }
+
+                private static RuntimeException replacement(final boolean first) {
+                    return first
+                        ? new UnsupportedOperationException("first")
+                        : new IllegalArgumentException("second");
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains("error[JAVAN014]");
+    }
+
+    @Test
+    void finallyRejectsUnprovenParameterAndFieldFactoryReturns() throws Exception {
+        record FactoryCase(String name, String declaration, String call, String factory) {
+        }
+        final List<FactoryCase> cases = List.of(
+            new FactoryCase(
+                "parameter",
+                "",
+                "replacement(new First(\"value\"))",
+                """
+                    private static RuntimeException replacement(final RuntimeException value) {
+                        new First("ignored");
+                        return value;
+                    }
+                    """
+            ),
+            new FactoryCase(
+                "field",
+                "private static RuntimeException stored = new First(\"stored\");",
+                "replacement()",
+                """
+                    private static RuntimeException replacement() {
+                        return stored;
+                    }
+                    """
+            )
+        );
+        for (final FactoryCase factoryCase : cases) {
+            final Path project = project("application-exception-finally-unproven-" + factoryCase.name());
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                public final class Main {
+                    %s
+
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) {
+                        final RuntimeException replacement = %s;
+                        try {
+                            throw new First("original");
+                        } finally {
+                            throw replacement;
+                        }
+                    }
+
+                    %s
+                }
+                """.formatted(factoryCase.declaration(), factoryCase.call(), factoryCase.factory()));
+            writeJava(project, "com.acme.First", """
+                package com.acme;
+
+                public final class First extends RuntimeException {
+                    First(final String message) {
+                        super(message);
+                    }
+                }
+                """);
+
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(factoryCase.name()).isEqualTo(2);
+            assertThat(run.stderr()).contains("error[JAVAN014]");
+        }
+    }
+
+    @Test
+    void finallyRejectsBroadThrowableReturnsThroughVirtualDispatch() throws Exception {
+        final Path project = project("application-exception-finally-virtual-local-replacement");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Base source = new Child();
+                    final RuntimeException replacement = source.replacement();
+                    try {
+                        throw new First("original");
+                    } finally {
+                        throw replacement;
+                    }
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Base", """
+            package com.acme;
+
+            public class Base {
+                RuntimeException replacement() {
+                    return new First("application");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Child", """
+            package com.acme;
+
+            public final class Child extends Base {
+                @Override
+                RuntimeException replacement() {
+                    return new IllegalArgumentException("platform");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.First", """
+            package com.acme;
+
+            public final class First extends RuntimeException {
+                First(final String message) {
+                    super(message);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains("error[JAVAN014]");
+    }
+
+    @Test
     void branchValueCallsThroughFinallyRunCleanupAndPreserveTheOriginalException() throws Exception {
         final Path project = project("application-exception-finally-guarded-value");
         writeJava(project, "com.acme.Main", """
