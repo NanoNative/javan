@@ -67,7 +67,7 @@ final class CliEscapeClassificationIntegrationTest extends CliIntegrationSupport
             "\"globalEscape\":",
             "\"stackAllocated\":"
         );
-        assertThat(Files.readString(project.resolve(".javan/generated/main.c"))).contains(
+        assertThat(generatedProgramSource(project)).contains(
             "JAVAN_ARRAY_KIND_INT",
             "= (void*) &javan_stack_array_"
         );
@@ -281,7 +281,7 @@ final class CliEscapeClassificationIntegrationTest extends CliIntegrationSupport
         assertThat(result.stdout()).isEqualTo("false\n34\n0\n42\n0\n84\ntrue\n");
         assertThat(Files.readString(project.resolve(".javan/reports/optimizations.json")))
             .contains("\"stackAllocated\": 3");
-        assertThat(Files.readString(project.resolve(".javan/generated/main.c"))).contains(
+        assertThat(generatedProgramSource(project)).contains(
             "javan_stack_object_",
             "(void**) &javan_stack_object_",
             ".field_value"

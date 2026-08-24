@@ -264,7 +264,7 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
         assertThat(run.exitCode()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/dependency-reports").toString())).stdout())
             .isEqualTo("7\n");
-        assertThat(Files.readString(project.resolve(".javan/generated/main.c")))
+        assertThat(generatedProgramSource(project))
             .contains("javan_class_dep_Used", "\"dep.Used\"")
             .doesNotContain("javan_class_unused_Unused", "\"unused.Unused\"");
         final String dependencies = Files.readString(project.resolve(".javan/reports/dependencies.json"));

@@ -3,12 +3,21 @@ package javan.util;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 
 @Execution(CONCURRENT)
 final class Strings2Test {
+    @Test
+    void sortedIndexesKeepAsciiOrderAndEqualKeyStability() {
+        assertThat(Strings2.sortedIndexes(List.of("beta", "alpha", "beta", "Alpha")))
+            .containsExactly(3, 1, 0, 2);
+        assertThat(Strings2.sortedIndexes(List.of())).isEmpty();
+    }
+
     @Test
     void executableNameUsesLastClassToken() {
         assertThat(Strings2.executableName("com.acme.HelloTool")).isEqualTo("hellotool");

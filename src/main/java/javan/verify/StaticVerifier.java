@@ -2977,7 +2977,7 @@ public final class StaticVerifier {
         final Set<String> allocatedTypes = new HashSet<>();
         final Set<String> throwableParameters = applicationThrowableParameters(
             classes,
-            targetMethod.orElseThrow().descriptor()
+            targetMethod.orElseThrow()
         );
         for (final Instruction instruction : code.instructions()) {
             if (instruction.methodRef().isPresent()) {
@@ -3121,11 +3121,11 @@ public final class StaticVerifier {
 
     private static Set<String> applicationThrowableParameters(
         final Map<String, ClassFile> classes,
-        final String descriptor
+        final MethodInfo method
     ) {
         final Set<String> result = new HashSet<>();
-        for (final String candidate : classes.keySet()) {
-            if (descriptor.contains("L" + candidate + ";") && isThrowable(classes, candidate)) {
+        for (final String candidate : method.referencedParameterTypes()) {
+            if (isThrowable(classes, candidate)) {
                 result.add(candidate);
             }
         }

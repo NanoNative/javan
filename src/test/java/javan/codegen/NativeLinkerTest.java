@@ -268,6 +268,59 @@ final class NativeLinkerTest {
     }
 
     @Test
+    void cachedLinkCompilesOrderedProgramUnitsAndInvalidatesTheirSharedHeader() throws Exception {
+        final Path generated = Files.createDirectories(tempDir.resolve("generated"));
+        final Path units = Files.createDirectories(generated.resolve("units"));
+        final Path runtimeHeader = Files.writeString(generated.resolve("javan_runtime.h"), "\n");
+        final Path programHeader = Files.writeString(
+            generated.resolve("javan_program.h"), "#include \"javan_runtime.h\"\nint value(void);\n"
+        );
+        final Path main = Files.writeString(
+            generated.resolve("main.c"), "#include \"javan_program.h\"\nint main(void) { return value(); }\n"
+        );
+        final Path unit = Files.writeString(
+            units.resolve("functions-00.c"), "#include \"javan_program.h\"\nint value(void) { return 0; }\n"
+        );
+        final Path runtime = Files.writeString(generated.resolve("javan_runtime.c"), "\n");
+        final Path cache = tempDir.resolve("cache");
+        final NativeLinker linker = new NativeLinker();
+
+        final NativeLinker.CacheLinkResult initial = linker.linkCached(
+            tempDir, List.of(main, unit), List.of(programHeader, runtimeHeader), runtime,
+            tempDir.resolve("out/initial"), cache, NativeLinkInputs.empty(), List.of()
+        );
+        final NativeLinker.CacheLinkResult reused = linker.linkCached(
+            tempDir, List.of(main, unit), List.of(programHeader, runtimeHeader), runtime,
+            tempDir.resolve("out/reused"), cache, NativeLinkInputs.empty(), List.of()
+        );
+        Files.writeString(unit, "#include \"javan_program.h\"\nint value(void) { return 1; }\n");
+        final NativeLinker.CacheLinkResult changedUnit = linker.linkCached(
+            tempDir, List.of(main, unit), List.of(programHeader, runtimeHeader), runtime,
+            tempDir.resolve("out/changed-unit"), cache, NativeLinkInputs.empty(), List.of()
+        );
+        Files.writeString(programHeader, "#include \"javan_runtime.h\"\nint value(void);\n/* changed */\n");
+        final NativeLinker.CacheLinkResult changedHeader = linker.linkCached(
+            tempDir, List.of(main, unit), List.of(programHeader, runtimeHeader), runtime,
+            tempDir.resolve("out/changed-header"), cache, NativeLinkInputs.empty(), List.of()
+        );
+        Files.writeString(runtimeHeader, "/* changed runtime contract */\n");
+        final NativeLinker.CacheLinkResult changedRuntimeHeader = linker.linkCached(
+            tempDir, List.of(main, unit), List.of(programHeader, runtimeHeader), runtime,
+            tempDir.resolve("out/changed-runtime-header"), cache, NativeLinkInputs.empty(), List.of()
+        );
+
+        assertThat(initial.objects()).extracting(NativeLinker.CacheEntry::source)
+            .containsExactly("main.c", "units/functions-00.c", "javan_runtime.c");
+        assertThat(initial.objects()).allSatisfy(entry -> assertThat(entry.reused()).isFalse());
+        assertThat(reused.objects()).allSatisfy(entry -> assertThat(entry.reused()).isTrue());
+        assertThat(changedUnit.objects()).extracting(NativeLinker.CacheEntry::reused)
+            .containsExactly(true, false, true);
+        assertThat(changedHeader.objects()).extracting(NativeLinker.CacheEntry::reused)
+            .containsExactly(false, false, true);
+        assertThat(changedRuntimeHeader.objects()).allSatisfy(entry -> assertThat(entry.reused()).isFalse());
+    }
+
+    @Test
     void legacyAppOverloadMatchesExplicitEmptyInputs() throws Exception {
         final RecordingProcessRunner runner = new RecordingProcessRunner(
             new ProcessRunner.Result(0, "", ""),

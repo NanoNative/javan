@@ -354,6 +354,8 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             .contains("javan_timing_run bootstrap_jvm")
             .contains("javan_timing_run bootstrap_gen2")
             .contains("javan_timing_run bootstrap_gen3")
+            .contains("javan_copy_generated_sources target/.javan/generated \"$GEN2_SOURCES\"")
+            .contains("javan_compare_generated_sources \"$GEN2_SOURCES\" target/.javan/generated")
             .contains("cp \"$BUILT\" \"$OUTPUT\"");
     }
 
@@ -365,16 +367,18 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         assertThat(build)
             .contains("SOURCE=${JAVAN_BOOTSTRAP_SOURCE:-}")
             .contains("JAVAN_BOOTSTRAP_SOURCE requires generation 3")
-            .contains("for file in main.c javan_runtime.c javan_runtime.h")
-            .contains("cp \"$SOURCE/$file\" \"$GENERATED/$file\"")
-            .contains("$GENERATED/main.c", "$GENERATED/javan_runtime.c")
-            .contains("javan_timing_run bootstrap_gen3 \"$CC\"")
+            .contains("for file in javan_program.h javan_program.sources javan_runtime.c javan_runtime.h")
+            .contains("javan_copy_generated_sources \"$SOURCE\" \"$GENERATED\"")
+            .contains("javan_generated_sources \"$SOURCE\"")
+            .contains("javan_timing_run bootstrap_gen3 sh -c")
             .doesNotContain("JAVAN_BOOTSTRAP_SEED", "JAVAN_BOOTSTRAP_TIMING_SEED");
         assertThat(workflow)
             .contains("bootstrap_source_artifact:")
             .contains("upload_bootstrap_source:")
             .contains("name: bootstrap-source-${{ inputs.target }}")
             .contains("include-hidden-files: true")
+            .contains("target/.javan/generated/javan_program.sources")
+            .contains("target/.javan/generated/units/*.c")
             .contains("uses: actions/download-artifact@")
             .contains("path: target/.javan/generated")
             .contains("JAVAN_BOOTSTRAP_SOURCE: ${{ inputs.bootstrap_source_artifact != '' && 'target/.javan/generated'")
@@ -418,7 +422,85 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         assertThat(wrongGeneration.exitCode()).isEqualTo(2);
         assertThat(wrongGeneration.stderr()).contains("JAVAN_BOOTSTRAP_SOURCE requires generation 3.");
         assertThat(missingSource.exitCode()).isEqualTo(1);
-        assertThat(missingSource.stderr()).contains("Missing generated bootstrap source:", "main.c");
+        assertThat(missingSource.stderr()).contains("Missing generated bootstrap source:", "javan_program.h");
+    }
+
+    @Test
+    void generatedSourceManifestRejectsUnsafeOrIncompleteInventories() throws Exception {
+        final Path generated = Files.createDirectories(tempDir.resolve("generated sources"));
+        Files.writeString(generated.resolve("main.c"), "int main(void) { return 0; }\n");
+        Files.writeString(generated.resolve("javan_program.sources"),
+            "javan-generated-sources-v1\nmain.c\n");
+        final Path runner = tempDir.resolve("manifest-test.sh");
+        Files.writeString(runner, """
+            set -eu
+            . "$1"
+            javan_generated_sources "$2"
+            """);
+        final List<String> command = List.of(
+            "sh",
+            runner.toString(),
+            REPO_ROOT.resolve(".github/scripts/generated-sources.sh").toString(),
+            generated.toString()
+        );
+
+        final ProcessResult valid = process(REPO_ROOT, command, Duration.ofSeconds(20), Map.of());
+        assertThat(valid.exitCode()).isZero();
+        assertThat(valid.stdout()).isEqualTo("main.c\n");
+
+        Files.writeString(generated.resolve("javan_program.sources"),
+            "javan-generated-sources-v1\nmain.c\n../escape.c\n");
+        final ProcessResult traversal = process(REPO_ROOT, command, Duration.ofSeconds(20), Map.of());
+        assertThat(traversal.exitCode()).isEqualTo(1);
+        assertThat(traversal.stderr()).contains("Invalid generated source entry: ../escape.c");
+
+        Files.writeString(generated.resolve("javan_program.sources"),
+            "javan-generated-sources-v1\nmain.c\nmain.c\n");
+        final ProcessResult duplicate = process(REPO_ROOT, command, Duration.ofSeconds(20), Map.of());
+        assertThat(duplicate.exitCode()).isEqualTo(1);
+        assertThat(duplicate.stderr()).contains("Duplicate generated source entry: main.c");
+    }
+
+    @Test
+    void generatedSourceCopyDoesNotFollowDestinationLinks() throws Exception {
+        final Path source = Files.createDirectories(tempDir.resolve("source"));
+        Files.createDirectories(source.resolve("units"));
+        Files.writeString(source.resolve("main.c"), "int main(void) { return 0; }\n");
+        Files.writeString(source.resolve("units/functions-00.c"), "void value(void) {}\n");
+        Files.writeString(source.resolve("javan_program.h"), "/* program */\n");
+        Files.writeString(source.resolve("javan_runtime.c"), "/* runtime */\n");
+        Files.writeString(source.resolve("javan_runtime.h"), "/* runtime */\n");
+        Files.writeString(source.resolve("javan_program.sources"),
+            "javan-generated-sources-v1\nmain.c\nunits/functions-00.c\n");
+        final Path outside = Files.createDirectories(tempDir.resolve("outside"));
+        final Path sentinel = Files.writeString(outside.resolve("functions-00.c"), "outside\n");
+        final Path target = Files.createDirectories(tempDir.resolve("target"));
+        try {
+            Files.createSymbolicLink(target.resolve("units"), outside);
+            Files.createSymbolicLink(target.resolve("javan_program.h"), sentinel);
+        } catch (final UnsupportedOperationException | java.io.IOException | SecurityException exception) {
+            org.junit.jupiter.api.Assumptions.assumeTrue(false,
+                "symbolic links are unavailable: " + exception.getMessage());
+        }
+        final Path runner = tempDir.resolve("copy-test.sh");
+        Files.writeString(runner, """
+            set -eu
+            . "$1"
+            javan_copy_generated_sources "$2" "$3"
+            """);
+
+        final ProcessResult copied = process(REPO_ROOT, List.of(
+            "sh",
+            runner.toString(),
+            REPO_ROOT.resolve(".github/scripts/generated-sources.sh").toString(),
+            source.toString(),
+            target.toString()
+        ), Duration.ofSeconds(20), Map.of());
+
+        assertThat(copied.exitCode()).as(copied.stderr()).isZero();
+        assertThat(Files.readString(sentinel)).isEqualTo("outside\n");
+        assertThat(target.resolve("units")).isDirectory();
+        assertThat(target.resolve("javan_program.h")).isRegularFile();
     }
 
     @Test

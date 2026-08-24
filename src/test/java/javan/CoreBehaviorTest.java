@@ -15457,7 +15457,7 @@ final class CoreBehaviorTest {
         final Path generated = new CCodegen().generate(program, tempDir);
 
         assertThat(Files.readString(generated)).contains(
-            "int main(int argc, char** argv) {",
+            "int JAVAN_PROGRAM_MAIN(int argc, char** argv) {",
             "static void helper_symbol(void);",
             "helper_symbol();",
             "line\\nquote\\\"slash\\\\tab\\tcarriage\\rcontrol\\001"
@@ -15480,7 +15480,7 @@ final class CoreBehaviorTest {
 
         final String generated = Files.readString(new CCodegen().generate(program, tempDir));
 
-        assertThat(generated).contains("int main(int argc, char** argv) {");
+        assertThat(generated).contains("int JAVAN_PROGRAM_MAIN(int argc, char** argv) {");
         assertThat(generated).doesNotContain("static void main_symbol(void)");
         assertThat(generated).contains("static void helper_symbol(void);", "static void helper_symbol(void) {");
     }
@@ -16542,7 +16542,7 @@ final class CoreBehaviorTest {
         ));
 
         assertThat(lookupGenerated).contains(
-            "static void* javan_generated_class_for_name(void* name_value) {",
+            "JAVAN_PROGRAM_LINKAGE void* javan_generated_class_for_name(void* name_value) {",
             "javan_string_equals(name, \"com.acme.Main\")",
             "return javan_runtime_class_for_name_known(name_value);"
         );
@@ -16614,7 +16614,7 @@ final class CoreBehaviorTest {
         assertThat(lookupGenerated).contains(
             "static const JavanMethodMetadata javan_method_metadata_0 = ",
             "{JAVAN_METHOD_METADATA_MAGIC, 0, 9, 1, 1, 0, NULL, \"main\", \"com.acme.Main\", \"com.acme.Main\", \"void\", NULL}",
-            "static void* javan_generated_class_get_declared_method("
+            "JAVAN_PROGRAM_LINKAGE void* javan_generated_class_get_declared_method("
         ).doesNotContain("javan_generated_class_get_method");
 
         final IrMethodMetadata inherited = new IrMethodMetadata(
@@ -16653,7 +16653,7 @@ final class CoreBehaviorTest {
             "static const char* javan_method_parameter_types_0[] = {\"int\"};",
             "static const JavanMethodMetadata javan_method_metadata_0 = ",
             "{JAVAN_METHOD_METADATA_MAGIC, 1, 1, 1, 1, 0, NULL, \"work\", \"com.acme.Base\", \"com.acme.Base\", \"[Ljava.lang.String;\", javan_method_parameter_types_0}",
-            "static void* javan_generated_class_get_method("
+            "JAVAN_PROGRAM_LINKAGE void* javan_generated_class_get_method("
         ).doesNotContain("javan_generated_class_get_declared_method");
     }
 }

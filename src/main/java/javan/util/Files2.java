@@ -3,6 +3,7 @@ package javan.util;
 import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -75,7 +76,7 @@ public final class Files2 {
      * @throws IOException when deletion fails
      */
     public static Path deleteRecursive(final Path path) throws IOException {
-        if (!Files.exists(path)) {
+        if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
             return path;
         }
         final List<Path> files = new ArrayList<>();
@@ -107,7 +108,7 @@ public final class Files2 {
 
     private static void collectTree(final Path path, final List<Path> result) throws IOException {
         result.add(path);
-        if (!Files.isDirectory(path)) {
+        if (!Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
             return;
         }
         final DirectoryStream<Path> children = Files.newDirectoryStream(path);

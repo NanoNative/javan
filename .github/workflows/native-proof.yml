@@ -194,6 +194,9 @@ jobs:
           include-hidden-files: true
           path: |
             target/.javan/generated/main.c
+            target/.javan/generated/javan_program.h
+            target/.javan/generated/javan_program.sources
+            target/.javan/generated/units/*.c
             target/.javan/generated/javan_runtime.c
             target/.javan/generated/javan_runtime.h
 

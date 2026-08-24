@@ -1,5 +1,7 @@
 package javan.util;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -7,6 +9,49 @@ import java.util.Objects;
  */
 public final class Strings2 {
     private Strings2() {
+    }
+
+    /**
+     * Returns stable indexes ordered by their corresponding ASCII keys.
+     *
+     * @param keys keys to order without copying their associated values
+     * @return immutable indexes in stable ASCII order
+     */
+    public static List<Integer> sortedIndexes(final List<String> keys) {
+        final List<Integer> indexes = new ArrayList<>();
+        final List<Integer> scratch = new ArrayList<>();
+        for (int index = 0; index < keys.size(); index++) {
+            indexes.add(index);
+            scratch.add(0);
+        }
+        sortIndexes(indexes, scratch, keys, 0, indexes.size());
+        return List.copyOf(indexes);
+    }
+
+    private static void sortIndexes(
+        final List<Integer> indexes,
+        final List<Integer> scratch,
+        final List<String> keys,
+        final int from,
+        final int to
+    ) {
+        if (to - from < 2) return;
+        final int middle = from + (to - from) / 2;
+        sortIndexes(indexes, scratch, keys, from, middle);
+        sortIndexes(indexes, scratch, keys, middle, to);
+        int left = from;
+        int right = middle;
+        int target = from;
+        while (left < middle && right < to) {
+            if (compareAscii(keys.get(indexes.get(left)), keys.get(indexes.get(right))) <= 0) {
+                scratch.set(target++, indexes.get(left++));
+            } else {
+                scratch.set(target++, indexes.get(right++));
+            }
+        }
+        while (left < middle) scratch.set(target++, indexes.get(left++));
+        while (right < to) scratch.set(target++, indexes.get(right++));
+        for (int index = from; index < to; index++) indexes.set(index, scratch.get(index));
     }
 
     /**

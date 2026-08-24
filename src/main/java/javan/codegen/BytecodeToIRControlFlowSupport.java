@@ -878,7 +878,8 @@ final class BytecodeToIRControlFlowSupport {
         }
         final ThrowableValue firstThrowable = first.throwable().orElseThrow();
         final ThrowableValue secondThrowable = second.throwable().orElseThrow();
-        if (firstThrowable.generatedObject() != secondThrowable.generatedObject()) {
+        if (firstThrowable.generatedObject() != secondThrowable.generatedObject()
+            || firstThrowable.arrayDepth() != secondThrowable.arrayDepth()) {
             return stackValue(first.kind(), expression);
         }
         final String upperBound = commonThrowableType(
@@ -895,12 +896,20 @@ final class BytecodeToIRControlFlowSupport {
                 possibleTypes.add(type);
             }
         }
-        return StackValue.throwable(
-            upperBound,
-            possibleTypes,
-            firstThrowable.generatedObject(),
-            expression
-        );
+        if (firstThrowable.arrayDepth() > 0) {
+            return new StackValue(
+                first.kind(),
+                Optional.of(new ThrowableValue(
+                    upperBound,
+                    possibleTypes,
+                    firstThrowable.generatedObject(),
+                    firstThrowable.arrayDepth()
+                )),
+                Optional.of(expression),
+                Optional.empty()
+            );
+        }
+        return StackValue.throwable(upperBound, possibleTypes, firstThrowable.generatedObject(), expression);
     }
 
     private static String commonThrowableType(

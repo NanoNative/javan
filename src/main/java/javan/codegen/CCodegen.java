@@ -23,15 +23,24 @@ import javan.util.Files2;
 import javan.util.Strings2;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 /**
  * Emits portable C for the initial javan IR profile.
  */
 public final class CCodegen {
+    private static final int PROGRAM_UNIT_BUCKETS = 64;
+    private static final String PROGRAM_HEADER = "javan_program.h";
+    private static final String PROGRAM_MANIFEST = "javan_program.sources";
+    private static final String PROGRAM_MANIFEST_VERSION = "javan-generated-sources-v1";
     private static final String GENERATED_METHOD_INVOKE_SYMBOL = "javan_generated_method_invoke";
     private static final String RUNNABLE_RUN_DISPATCH_SYMBOL = BytecodeToIR.dispatchSymbol(new MethodRef("java/lang/Runnable", "run", "()V"));
     private static final String MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL = "javan_materialized_lambda_apply_object";
@@ -113,9 +122,11 @@ public final class CCodegen {
         validateImportedNativeDescriptors(nativeInterop);
         final NativeWrapperSymbols nativeWrapperSymbols = NativeWrapperSymbols.create(nativeInterop);
         final CodegenFeatures features = codegenFeatures(program);
-        final List<String> objectResultSymbols = objectResultSymbols(program);
+        final List<String> objectResultSymbols = objectResultSymbols(program, features);
         final StringBuilder c = new StringBuilder();
         c.append("#include \"javan_runtime.h\"").append(System.lineSeparator());
+        c.append("#define JAVAN_PROGRAM_LINKAGE static").append(System.lineSeparator());
+        c.append("#define JAVAN_PROGRAM_MAIN main").append(System.lineSeparator());
         if (features.nonFiniteFloatingLiteral()) {
             c.append("#include <math.h>").append(System.lineSeparator());
         }
@@ -211,6 +222,291 @@ public final class CCodegen {
     }
 
     /**
+     * Writes a generated application as deterministic C translation units.
+     *
+     * <p>Application builds use this inventory directly so compilation, caching, portable-source
+     * transfer, and fixed-point verification share the same source order.</p>
+     *
+     * @param program IR program
+     * @param generatedDirectory output directory
+     * @param nativeInterop declared native imports
+     * @param stackAllocations proven release stack allocations
+     * @return immutable generated-source inventory
+     * @throws IOException when writing fails
+     */
+    public GeneratedC generateProgram(
+        final IrProgram program,
+        final Path generatedDirectory,
+        final NativeInteropConfig nativeInterop,
+        final EscapeAnalyzer.StackAllocationPlan stackAllocations
+    ) throws IOException {
+        validateNativeWrapperNamespace(program, nativeInterop);
+        validateImportedNativeDescriptors(nativeInterop);
+        final Path manifestPath = generatedDirectory.resolve(PROGRAM_MANIFEST);
+        Files.deleteIfExists(manifestPath);
+        final NativeWrapperSymbols nativeWrapperSymbols = NativeWrapperSymbols.create(nativeInterop);
+        final CodegenFeatures features = codegenFeatures(program);
+        final List<String> objectResultSymbols = objectResultSymbols(program, features);
+
+        final StringBuilder header = new StringBuilder();
+        emitProgramHeader(program, nativeInterop, nativeWrapperSymbols, features, header);
+
+        final StringBuilder core = new StringBuilder();
+        core.append("#include \"").append(PROGRAM_HEADER).append("\"")
+            .append(System.lineSeparator()).append(System.lineSeparator());
+        emitProgramCore(program, nativeInterop, nativeWrapperSymbols, features, core);
+        for (final IrFunction function : program.functions()) {
+            if (function.symbol().equals(program.entryFunction())) {
+                emitFunction(program, function, objectResultSymbols, nativeWrapperSymbols, stackAllocations, core, true);
+            }
+        }
+
+        final Path unitsDirectory = generatedDirectory.resolve("units");
+        Files2.deleteRecursive(unitsDirectory);
+        final List<List<IrFunction>> buckets = functionBuckets(program, features);
+        final List<Path> relativeSources = new ArrayList<>();
+        relativeSources.add(Path.of("main.c"));
+        for (int bucket = 0; bucket < buckets.size(); bucket++) {
+            final List<IrFunction> functions = buckets.get(bucket);
+            if (functions.isEmpty()) {
+                continue;
+            }
+            final String unit = (bucket < 10 ? "0" : "") + bucket;
+            final Path relative = Path.of("units", "functions-" + unit + ".c");
+            final StringBuilder source = new StringBuilder();
+            source.append("#include \"../").append(PROGRAM_HEADER).append("\"")
+                .append(System.lineSeparator()).append(System.lineSeparator());
+            for (final IrFunction function : functions) {
+                emitFunction(program, function, objectResultSymbols, nativeWrapperSymbols, stackAllocations, source, false, false);
+            }
+            Files2.writeString(generatedDirectory.resolve(relative), source.toString());
+            relativeSources.add(relative);
+        }
+
+        header.append("#endif").append(System.lineSeparator());
+        final Path headerPath = Files2.writeString(generatedDirectory.resolve(PROGRAM_HEADER), header.toString());
+        final Path mainPath = Files2.writeString(generatedDirectory.resolve("main.c"), core.toString());
+        final StringBuilder manifest = new StringBuilder(PROGRAM_MANIFEST_VERSION).append('\n');
+        for (final Path relative : relativeSources) {
+            manifest.append(validatedRelativeSource(relative)).append('\n');
+        }
+        Files2.writeString(manifestPath, manifest.toString());
+        final List<Path> sources = new ArrayList<>(relativeSources.size());
+        for (final Path relative : relativeSources) {
+            sources.add(generatedDirectory.resolve(relative));
+        }
+        return new GeneratedC(mainPath, headerPath, sources, manifestPath);
+    }
+
+    private static void emitProgramHeader(
+        final IrProgram program,
+        final NativeInteropConfig nativeInterop,
+        final NativeWrapperSymbols nativeWrapperSymbols,
+        final CodegenFeatures features,
+        final StringBuilder header
+    ) {
+        header.append("#ifndef JAVAN_PROGRAM_H").append(System.lineSeparator());
+        header.append("#define JAVAN_PROGRAM_H").append(System.lineSeparator());
+        header.append("#define JAVAN_PROGRAM_LINKAGE").append(System.lineSeparator());
+        header.append("#ifndef JAVAN_PROGRAM_MAIN").append(System.lineSeparator());
+        header.append("#define JAVAN_PROGRAM_MAIN main").append(System.lineSeparator());
+        header.append("#endif").append(System.lineSeparator());
+        header.append("#include \"javan_runtime.h\"").append(System.lineSeparator());
+        if (features.nonFiniteFloatingLiteral()) {
+            header.append("#include <math.h>").append(System.lineSeparator());
+        }
+        header.append("#include <stddef.h>").append(System.lineSeparator());
+        header.append("#include <stdio.h>").append(System.lineSeparator()).append(System.lineSeparator());
+        emitObjectHeader(header);
+        for (final IrClass classInfo : program.classes()) {
+            emitStruct(classInfo, header);
+        }
+        header.append(System.lineSeparator());
+        for (final IrClass classInfo : program.classes()) {
+            header.append("void* ").append(allocatorSymbol(classInfo.jvmName())).append("(void);")
+                .append(System.lineSeparator());
+            for (final javan.ir.IrField field : classInfo.staticFields()) {
+                header.append("extern ").append(field.type().cName()).append(' ')
+                    .append(staticFieldSymbol(classInfo.jvmName(), field.name())).append(';')
+                    .append(System.lineSeparator());
+            }
+        }
+        for (final IrFunction function : program.functions()) {
+            emitSignature(function, header, false);
+            header.append(';').append(System.lineSeparator());
+        }
+        for (final IrClass classInfo : program.classes()) {
+            if (!classInfo.enumConstants().isEmpty()) {
+                header.append("int ").append(enumOrdinalSymbol(classInfo.jvmName()))
+                    .append("(void* value);").append(System.lineSeparator());
+            }
+        }
+        emitImportedNativeSignatures(nativeInterop, nativeWrapperSymbols, header, false);
+        for (final IrDispatch dispatch : program.dispatches()) {
+            emitDispatchSignature(dispatch, header, false);
+            header.append(';').append(System.lineSeparator());
+        }
+        emitClassInitializationPrototypes(program, header, false);
+        emitRuntimeHelperPrototypes(features, header, false);
+        emitProgramHelperPrototypes(program, features, header);
+    }
+
+    private static void emitProgramHelperPrototypes(
+        final IrProgram program,
+        final CodegenFeatures features,
+        final StringBuilder header
+    ) {
+        header.append("void* javan_generated_object_get_class(void* value);\n");
+        if (features.classForName()) {
+            header.append("void* javan_generated_class_for_name(void* name_value);\n");
+        }
+        if (features.declaredMethodMetadata()) {
+            header.append("void* javan_generated_class_get_declared_method(void* class_value, void* name_value, void* parameter_types);\n");
+        }
+        if (features.publicMethodMetadata()) {
+            header.append("void* javan_generated_class_get_method(void* class_value, void* name_value, void* parameter_types);\n");
+        }
+        if (features.methodInvocation()) {
+            header.append("void ").append(GENERATED_METHOD_INVOKE_SYMBOL)
+                .append("(void** result, void* method, void* target, void* arguments, void* caller, void* caller_nest);\n");
+        }
+        emitServiceLoaderPrototypes(features, header);
+        header.append("void* ").append(EXACT_ENUM_LOOKUP_SYMBOL).append("(void* value, void* class_value);\n");
+        header.append("void ").append(EXACT_CATCH_NULL_APPLY_SYMBOL).append("(void** result, void* self, void* arg);\n");
+        header.append("void* ").append(EXACT_TEMPORAL_OF_UNSUPPORTED_SYMBOL).append("(void* class_value, void* text, void* function);\n");
+        header.append("void* ").append(EXACT_TEMPORAL_STRING_BRIDGE_UNSUPPORTED_SYMBOL).append("(void* text, void* target_name);\n");
+        header.append("void* ").append(EXACT_CALENDAR_OF_MILLIS_UNSUPPORTED_SYMBOL).append("(long long value);\n");
+        header.append("void* ").append(EXACT_CALENDAR_OF_DATE_UNSUPPORTED_SYMBOL).append("(void* value);\n");
+        header.append("void* ").append(EXACT_CALENDAR_OF_LOCAL_TIME_UNSUPPORTED_SYMBOL).append("(void* value);\n");
+        header.append("void* ").append(EXACT_THROWABLE_STRING_OF_UNSUPPORTED_SYMBOL).append("(void* value);\n");
+        header.append("void* ").append(TEMPORAL_CONVERSION_LAMBDA_UNSUPPORTED_SYMBOL).append("(void* method_display);\n");
+        if (!program.materializedLambdaTargets().isEmpty()) {
+            header.append("void ").append(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL).append("(void** result, void* self, void* arg);\n");
+            header.append("void ").append(MATERIALIZED_LAMBDA_LONG_OBJECT_APPLY_SYMBOL).append("(void** result, void* self, int64_t arg);\n");
+            header.append("void ").append(MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL).append("(void** result, void* self, void* first_arg, void* second_arg);\n");
+            header.append("void ").append(MATERIALIZED_LAMBDA_SUPPLIER_APPLY_SYMBOL).append("(void** result, void* self);\n");
+            header.append("int ").append(MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL).append("(void* self, void* arg);\n");
+            header.append("void ").append(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL).append("(void* self, void* arg);\n");
+            header.append("void ").append(MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL).append("(void* self, void* first_arg, void* second_arg);\n");
+        }
+    }
+
+    private static void emitServiceLoaderPrototypes(final CodegenFeatures features, final StringBuilder header) {
+        final String[] symbols = {
+            "javan_generated_service_loader_load",
+            "javan_generated_service_loader_load_module",
+            "javan_generated_service_loader_load_installed",
+            "javan_generated_service_loader_load_installed_module"
+        };
+        for (final String symbol : symbols) {
+            if (features.calls(symbol)) {
+                header.append("void* ").append(symbol).append("(void* service);\n");
+            }
+        }
+    }
+
+    private static void emitProgramCore(
+        final IrProgram program,
+        final NativeInteropConfig nativeInterop,
+        final NativeWrapperSymbols nativeWrapperSymbols,
+        final CodegenFeatures features,
+        final StringBuilder core
+    ) {
+        emitTypeDescriptors(program, core);
+        core.append(System.lineSeparator());
+        if (features.methodMetadata()) {
+            emitMethodMetadata(program, core);
+            core.append(System.lineSeparator());
+        }
+        emitStaticFields(program, core, false);
+        emitStaticRootInventory(program, core);
+        core.append(System.lineSeparator());
+        emitAllocators(program, core, false);
+        emitGeneratedObjectHelpers(program, features, core);
+        if (features.classForName()) {
+            emitClassForNameHelper(program, core);
+        }
+        if (features.declaredMethodMetadata()) {
+            emitMethodLookupHelper(program, core, true);
+        }
+        if (features.publicMethodMetadata()) {
+            emitMethodLookupHelper(program, core, false);
+        }
+        if (features.methodInvocation()) {
+            emitMethodInvocationHelper(program, core);
+        }
+        emitRecordShapeExactTypeHelper(program, core);
+        emitEnumOrdinalHelpers(program, core);
+        emitGeneratedEnumOrdinalHelper(program, core);
+        emitExactEnumLookupHelpers(program, core);
+        emitExactFunctionOrNullHelpers(program, core);
+        emitExactTemporalBridgeHelpers(core);
+        emitThreadHelpers(program, core);
+        emitMaterializedLambdaHelpers(program, nativeWrapperSymbols, core);
+        emitImportedNativeWrappers(nativeInterop, nativeWrapperSymbols, core);
+        emitClassInitializationWrappers(program, nativeWrapperSymbols, core, false);
+        for (final IrDispatch dispatch : program.dispatches()) {
+            emitDispatch(program, dispatch, core, false);
+        }
+    }
+
+    private static List<List<IrFunction>> functionBuckets(final IrProgram program, final CodegenFeatures features) {
+        final List<List<IrFunction>> buckets = new ArrayList<>(PROGRAM_UNIT_BUCKETS);
+        for (int index = 0; index < PROGRAM_UNIT_BUCKETS; index++) {
+            buckets.add(new ArrayList<>());
+        }
+        for (final IrFunction function : program.functions()) {
+            if (function.symbol().equals(program.entryFunction()) && !features.methodInvocation()) {
+                continue;
+            }
+            buckets.get(ownerBucket(function.owner())).add(function);
+        }
+        final List<List<IrFunction>> immutable = new ArrayList<>(buckets.size());
+        for (final List<IrFunction> bucket : buckets) {
+            immutable.add(List.copyOf(bucket));
+        }
+        return List.copyOf(immutable);
+    }
+
+    private static int ownerBucket(final String owner) {
+        long hash = -3750763034362895579L;
+        for (int index = 0; index < owner.length(); index++) {
+            hash = (hash ^ (owner.charAt(index) & 255)) * 1099511628211L;
+            hash = (hash ^ (owner.charAt(index) >>> 8)) * 1099511628211L;
+        }
+        return (int) (hash & (PROGRAM_UNIT_BUCKETS - 1));
+    }
+
+    private static String validatedRelativeSource(final Path source) {
+        final Path normalized = source.normalize();
+        if (source.isAbsolute() || !source.equals(normalized) || source.getNameCount() == 0
+            || containsParentSegment(source) || !source.toString().endsWith(".c")) {
+            throw new IllegalArgumentException("Invalid generated C source path: " + source);
+        }
+        return source.toString().replace('\\', '/');
+    }
+
+    private static boolean containsParentSegment(final Path source) {
+        for (int index = 0; index < source.getNameCount(); index++) {
+            if ("..".equals(source.getName(index).toString())) return true;
+        }
+        return false;
+    }
+
+    /** Generated application source inventory in deterministic compilation order. */
+    public record GeneratedC(Path main, Path header, List<Path> sources, Path manifest) {
+        public GeneratedC {
+            main = Objects.requireNonNull(main, "main");
+            header = Objects.requireNonNull(header, "header");
+            sources = List.copyOf(Objects.requireNonNull(sources, "sources"));
+            manifest = Objects.requireNonNull(manifest, "manifest");
+            if (sources.isEmpty() || !sources.getFirst().equals(main)) {
+                throw new IllegalArgumentException("Generated sources must start with main.c");
+            }
+        }
+    }
+
+    /**
      * Writes generated C for a native library.
      *
      * @param program IR program
@@ -276,9 +572,10 @@ public final class CCodegen {
         validateImportedNativeDescriptors(nativeInterop);
         final NativeWrapperSymbols nativeWrapperSymbols = NativeWrapperSymbols.create(nativeInterop);
         final CodegenFeatures features = codegenFeatures(program);
-        final List<String> objectResultSymbols = objectResultSymbols(program);
+        final List<String> objectResultSymbols = objectResultSymbols(program, features);
         final StringBuilder c = new StringBuilder();
         c.append("#include \"javan_runtime.h\"").append(System.lineSeparator());
+        c.append("#define JAVAN_PROGRAM_LINKAGE static").append(System.lineSeparator());
         if (features.nonFiniteFloatingLiteral()) {
             c.append("#include <math.h>").append(System.lineSeparator());
         }
@@ -377,17 +674,42 @@ public final class CCodegen {
     }
 
     private static CodegenFeatures codegenFeatures(final IrProgram program) {
+        final Set<String> calls = new LinkedHashSet<>();
+        boolean nonFiniteFloatingLiteral = false;
+        final List<IrFunction> functions = program.functions();
+        for (int functionIndex = 0; functionIndex < functions.size(); functionIndex++) {
+            final List<IrInstruction> instructions = functions.get(functionIndex).instructions();
+            for (int instructionIndex = 0; instructionIndex < instructions.size(); instructionIndex++) {
+                final IrInstruction instruction = instructions.get(instructionIndex);
+                if (instruction.expression().isPresent()
+                    && collectCodegenFeatures(instruction.expression().orElseThrow(), calls)) {
+                    nonFiniteFloatingLiteral = true;
+                }
+            }
+        }
         return new CodegenFeatures(
-            usesGeneratedObjectClone(program),
-            usesCall(program, "javan_generated_class_for_name"),
-            usesCall(program, "javan_generated_class_get_declared_method"),
-            usesCall(program, "javan_generated_class_get_method"),
-            usesCall(program, GENERATED_METHOD_INVOKE_SYMBOL),
-            usesNonFiniteFloatingLiteral(program)
+            Set.copyOf(calls),
+            nonFiniteFloatingLiteral
         );
     }
 
-    private static List<String> objectResultSymbols(final IrProgram program) {
+    private static boolean collectCodegenFeatures(final IrExpression expression, final Set<String> calls) {
+        if (expression.kind() == IrExpression.Kind.CALL) {
+            calls.add(expression.value());
+        }
+        boolean nonFiniteFloatingLiteral = isNonFiniteFloatingLiteral(expression.value())
+            && (expression.kind() == IrExpression.Kind.FLOAT_LITERAL
+                || expression.kind() == IrExpression.Kind.DOUBLE_LITERAL);
+        final List<IrExpression> arguments = expression.arguments();
+        for (int index = 0; index < arguments.size(); index++) {
+            if (collectCodegenFeatures(arguments.get(index), calls)) {
+                nonFiniteFloatingLiteral = true;
+            }
+        }
+        return nonFiniteFloatingLiteral;
+    }
+
+    private static List<String> objectResultSymbols(final IrProgram program, final CodegenFeatures features) {
         final List<String> result = new java.util.ArrayList<>();
         for (final IrFunction function : program.functions()) {
             if (function.returnType() == javan.ir.IrType.OBJECT) {
@@ -399,7 +721,7 @@ public final class CCodegen {
                 result.add(dispatch.symbol());
             }
         }
-        if (usesCall(program, GENERATED_METHOD_INVOKE_SYMBOL)) {
+        if (features.methodInvocation()) {
             result.add(GENERATED_METHOD_INVOKE_SYMBOL);
         }
         result.add(EXACT_CATCH_NULL_APPLY_SYMBOL);
@@ -413,9 +735,18 @@ public final class CCodegen {
     }
 
     private static void emitRuntimeHelperPrototypes(final CodegenFeatures features, final StringBuilder c) {
+        emitRuntimeHelperPrototypes(features, c, true);
+    }
+
+    private static void emitRuntimeHelperPrototypes(
+        final CodegenFeatures features,
+        final StringBuilder c,
+        final boolean isStatic
+    ) {
         c.append("void javan_thread_run_target(void* target);").append(System.lineSeparator());
         if (features.generatedObjectClone()) {
-            c.append("static void ")
+            if (isStatic) c.append("static ");
+            c.append("void ")
                 .append(GENERATED_OBJECT_CLONE_SYMBOL)
                 .append("(void** result, void* value);")
                 .append(System.lineSeparator());
@@ -428,17 +759,21 @@ public final class CCodegen {
         final StringBuilder c
     ) {
         emitGeneratedObjectClassHelpers(program, c);
-        emitServiceLoaderHelpers(program, c);
+        emitServiceLoaderHelpers(program, features, c);
         if (features.generatedObjectClone()) {
             emitGeneratedObjectCloneHelpers(program, c);
         }
     }
 
-    private static void emitServiceLoaderHelpers(final IrProgram program, final StringBuilder c) {
-        final boolean regular = usesCall(program, "javan_generated_service_loader_load");
-        final boolean module = usesCall(program, "javan_generated_service_loader_load_module");
-        final boolean installed = usesCall(program, "javan_generated_service_loader_load_installed");
-        final boolean installedModule = usesCall(program, "javan_generated_service_loader_load_installed_module");
+    private static void emitServiceLoaderHelpers(
+        final IrProgram program,
+        final CodegenFeatures features,
+        final StringBuilder c
+    ) {
+        final boolean regular = features.calls("javan_generated_service_loader_load");
+        final boolean module = features.calls("javan_generated_service_loader_load_module");
+        final boolean installed = features.calls("javan_generated_service_loader_load_installed");
+        final boolean installedModule = features.calls("javan_generated_service_loader_load_installed_module");
         if (!regular && !module && !installed && !installedModule) {
             return;
         }
@@ -500,7 +835,7 @@ public final class CCodegen {
         c.append("    }").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
         if (regular) {
-            c.append("static void* javan_generated_service_loader_load(void* service) {")
+            c.append("JAVAN_PROGRAM_LINKAGE void* javan_generated_service_loader_load(void* service) {")
                 .append(System.lineSeparator());
             c.append("    return javan_service_loader_new(service, javan_generated_service_provider, ")
                 .append("javan_generated_service_provider_count);")
@@ -514,7 +849,7 @@ public final class CCodegen {
             c.append("    return 0;").append(System.lineSeparator());
             c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
             if (installed) {
-                c.append("static void* javan_generated_service_loader_load_installed(void* service) {")
+                c.append("JAVAN_PROGRAM_LINKAGE void* javan_generated_service_loader_load_installed(void* service) {")
                     .append(System.lineSeparator());
                 c.append("    return javan_service_loader_new(service, javan_generated_service_provider, ")
                     .append("javan_generated_service_provider_count_installed);")
@@ -552,7 +887,7 @@ public final class CCodegen {
         final String symbol,
         final String counter
     ) {
-        c.append("static void* ").append(symbol).append("(void* service) {").append(System.lineSeparator());
+        c.append("JAVAN_PROGRAM_LINKAGE void* ").append(symbol).append("(void* service) {").append(System.lineSeparator());
         c.append("    if (javan_generated_service_loader_module_uses(javan_class_exact_type_id(service)) == 0) {")
             .append(System.lineSeparator());
         c.append("        javan_pending_throw(\"java/util/ServiceConfigurationError\", ")
@@ -674,11 +1009,19 @@ public final class CCodegen {
     }
 
     private static boolean emitStaticFields(final IrProgram program, final StringBuilder c) {
+        return emitStaticFields(program, c, true);
+    }
+
+    private static boolean emitStaticFields(
+        final IrProgram program,
+        final StringBuilder c,
+        final boolean isStatic
+    ) {
         boolean emitted = false;
         for (final IrClass classInfo : program.classes()) {
             for (final javan.ir.IrField field : classInfo.staticFields()) {
-                c.append("static ")
-                    .append(field.type().cName())
+                if (isStatic) c.append("static ");
+                c.append(field.type().cName())
                     .append(' ')
                     .append(staticFieldSymbol(classInfo.jvmName(), field.name()))
                     .append(" = 0;")
@@ -727,9 +1070,14 @@ public final class CCodegen {
     }
 
     private static void emitAllocators(final IrProgram program, final StringBuilder c) {
+        emitAllocators(program, c, true);
+    }
+
+    private static void emitAllocators(final IrProgram program, final StringBuilder c, final boolean isStatic) {
         final java.util.Map<String, Integer> typeIds = typeIds(program);
         for (final IrClass classInfo : program.classes()) {
-            c.append("static void* ")
+            if (isStatic) c.append("static ");
+            c.append("void* ")
                 .append(allocatorSymbol(classInfo.jvmName()))
                 .append("(void) {")
                 .append(System.lineSeparator());
@@ -762,7 +1110,7 @@ public final class CCodegen {
             if (classInfo.enumConstants().isEmpty()) {
                 continue;
             }
-            c.append("static int ")
+            c.append("JAVAN_PROGRAM_LINKAGE int ")
                 .append(enumOrdinalSymbol(classInfo.jvmName()))
                 .append("(void* value) {")
                 .append(System.lineSeparator());
@@ -908,7 +1256,7 @@ public final class CCodegen {
         c.append("    }").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
 
-        c.append("static void* ").append(EXACT_ENUM_LOOKUP_SYMBOL).append("(void* value, void* class_value) {").append(System.lineSeparator());
+        c.append("JAVAN_PROGRAM_LINKAGE void* ").append(EXACT_ENUM_LOOKUP_SYMBOL).append("(void* value, void* class_value) {").append(System.lineSeparator());
         c.append("    if (javan_is_supported_number(value) != 0) {").append(System.lineSeparator());
         c.append("        return ").append(GENERATED_ENUM_BY_ORDINAL_SYMBOL)
             .append("(class_value, javan_number_int_value(value));")
@@ -939,7 +1287,7 @@ public final class CCodegen {
             }
             concreteTargets.add(function);
         }
-        c.append("static void ").append(EXACT_CATCH_NULL_APPLY_SYMBOL).append("(void** result, void* self, void* arg) {").append(System.lineSeparator());
+        c.append("JAVAN_PROGRAM_LINKAGE void ").append(EXACT_CATCH_NULL_APPLY_SYMBOL).append("(void** result, void* self, void* arg) {").append(System.lineSeparator());
         c.append("    if (result == 0) {").append(System.lineSeparator());
         c.append("        javan_panic(\"invalid catch-null function result\");").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
@@ -999,7 +1347,7 @@ public final class CCodegen {
     }
 
     private static void emitExactTemporalBridgeHelpers(final StringBuilder c) {
-        c.append("static void* ").append(EXACT_TEMPORAL_OF_UNSUPPORTED_SYMBOL)
+        c.append("JAVAN_PROGRAM_LINKAGE void* ").append(EXACT_TEMPORAL_OF_UNSUPPORTED_SYMBOL)
             .append("(void* class_value, void* text, void* function) {").append(System.lineSeparator());
         c.append("    (void) text;").append(System.lineSeparator());
         c.append("    (void) function;").append(System.lineSeparator());
@@ -1014,7 +1362,7 @@ public final class CCodegen {
         c.append("    return 0;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
 
-        c.append("static void* ").append(EXACT_TEMPORAL_STRING_BRIDGE_UNSUPPORTED_SYMBOL)
+        c.append("JAVAN_PROGRAM_LINKAGE void* ").append(EXACT_TEMPORAL_STRING_BRIDGE_UNSUPPORTED_SYMBOL)
             .append("(void* text, void* target_name) {").append(System.lineSeparator());
         c.append("    (void) text;").append(System.lineSeparator());
         c.append("    const char* target = (const char*) javan_printable_object_string(target_name);").append(System.lineSeparator());
@@ -1028,35 +1376,35 @@ public final class CCodegen {
         c.append("    return 0;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
 
-        c.append("static void* ").append(EXACT_CALENDAR_OF_MILLIS_UNSUPPORTED_SYMBOL)
+        c.append("JAVAN_PROGRAM_LINKAGE void* ").append(EXACT_CALENDAR_OF_MILLIS_UNSUPPORTED_SYMBOL)
             .append("(long long value) {").append(System.lineSeparator());
         c.append("    (void) value;").append(System.lineSeparator());
         c.append("    javan_panic(\"unsupported exact Calendar conversion runtime from epoch millis\");").append(System.lineSeparator());
         c.append("    return 0;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
 
-        c.append("static void* ").append(EXACT_CALENDAR_OF_DATE_UNSUPPORTED_SYMBOL)
+        c.append("JAVAN_PROGRAM_LINKAGE void* ").append(EXACT_CALENDAR_OF_DATE_UNSUPPORTED_SYMBOL)
             .append("(void* value) {").append(System.lineSeparator());
         c.append("    (void) value;").append(System.lineSeparator());
         c.append("    javan_panic(\"unsupported exact Calendar conversion runtime from java.util.Date\");").append(System.lineSeparator());
         c.append("    return 0;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
 
-        c.append("static void* ").append(EXACT_CALENDAR_OF_LOCAL_TIME_UNSUPPORTED_SYMBOL)
+        c.append("JAVAN_PROGRAM_LINKAGE void* ").append(EXACT_CALENDAR_OF_LOCAL_TIME_UNSUPPORTED_SYMBOL)
             .append("(void* value) {").append(System.lineSeparator());
         c.append("    (void) value;").append(System.lineSeparator());
         c.append("    javan_panic(\"unsupported exact Calendar conversion runtime from java.time.LocalTime\");").append(System.lineSeparator());
         c.append("    return 0;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
 
-        c.append("static void* ").append(EXACT_THROWABLE_STRING_OF_UNSUPPORTED_SYMBOL)
+        c.append("JAVAN_PROGRAM_LINKAGE void* ").append(EXACT_THROWABLE_STRING_OF_UNSUPPORTED_SYMBOL)
             .append("(void* value) {").append(System.lineSeparator());
         c.append("    (void) value;").append(System.lineSeparator());
         c.append("    javan_panic(\"unsupported exact Throwable string rendering runtime\");").append(System.lineSeparator());
         c.append("    return 0;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
 
-        c.append("static void* ").append(TEMPORAL_CONVERSION_LAMBDA_UNSUPPORTED_SYMBOL)
+        c.append("JAVAN_PROGRAM_LINKAGE void* ").append(TEMPORAL_CONVERSION_LAMBDA_UNSUPPORTED_SYMBOL)
             .append("(void* method_display) {").append(System.lineSeparator());
         c.append("    char message[512];").append(System.lineSeparator());
         c.append("    const char* method_text = (const char*) javan_printable_object_string(method_display);").append(System.lineSeparator());
@@ -1165,7 +1513,7 @@ public final class CCodegen {
 
     private static void emitClassForNameHelper(final IrProgram program, final StringBuilder c) {
         final java.util.Map<String, Integer> typeIds = typeIds(program);
-        c.append("static void* javan_generated_class_for_name(void* name_value) {")
+        c.append("JAVAN_PROGRAM_LINKAGE void* javan_generated_class_for_name(void* name_value) {")
             .append(System.lineSeparator());
         c.append("    if (name_value == NULL) {").append(System.lineSeparator());
         c.append("        return NULL;").append(System.lineSeparator());
@@ -1263,7 +1611,7 @@ public final class CCodegen {
         final StringBuilder c,
         final boolean declared
     ) {
-        c.append("static void* ")
+        c.append("JAVAN_PROGRAM_LINKAGE void* ")
             .append(declared ? "javan_generated_class_get_declared_method" : "javan_generated_class_get_method")
             .append("(")
             .append("void* class_value, void* name_value, void* parameter_types) {")
@@ -1309,7 +1657,7 @@ public final class CCodegen {
 
     private static void emitMethodInvocationHelper(final IrProgram program, final StringBuilder c) {
         final Map<IrMethodMetadata, Integer> symbols = methodMetadataSymbols(program);
-        c.append("static void ").append(GENERATED_METHOD_INVOKE_SYMBOL)
+        c.append("JAVAN_PROGRAM_LINKAGE void ").append(GENERATED_METHOD_INVOKE_SYMBOL)
             .append("(void** result, void* method, void* target, void* arguments, void* caller, void* caller_nest) {")
             .append(System.lineSeparator());
         c.append("    const JavanMethodMetadata* metadata = javan_method_metadata(method);")
@@ -1546,8 +1894,17 @@ public final class CCodegen {
         final IrDispatch dispatch,
         final StringBuilder c
     ) {
+        emitDispatch(program, dispatch, c, true);
+    }
+
+    private static void emitDispatch(
+        final IrProgram program,
+        final IrDispatch dispatch,
+        final StringBuilder c,
+        final boolean isStatic
+    ) {
         final java.util.Map<String, Integer> typeIds = typeIds(program);
-        emitDispatchSignature(dispatch, c);
+        emitDispatchSignature(dispatch, c, isStatic);
         c.append(" {").append(System.lineSeparator());
         c.append("    if (self == 0) {").append(System.lineSeparator());
         c.append("        javan_panic(\"null dispatch\");").append(System.lineSeparator());
@@ -1624,7 +1981,7 @@ public final class CCodegen {
         if (program.materializedLambdaTargets().isEmpty()) {
             return;
         }
-        c.append("static void ").append(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL).append("(void** result, void* self, void* arg) {")
+        c.append("JAVAN_PROGRAM_LINKAGE void ").append(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL).append("(void** result, void* self, void* arg) {")
             .append(System.lineSeparator());
         c.append("    switch (javan_materialized_lambda_target_id(self)) {").append(System.lineSeparator());
         for (final IrMaterializedLambdaTarget target : program.materializedLambdaTargets()) {
@@ -1643,7 +2000,7 @@ public final class CCodegen {
         c.append("    return;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
 
-        c.append("static void ").append(MATERIALIZED_LAMBDA_LONG_OBJECT_APPLY_SYMBOL).append("(void** result, void* self, int64_t arg) {")
+        c.append("JAVAN_PROGRAM_LINKAGE void ").append(MATERIALIZED_LAMBDA_LONG_OBJECT_APPLY_SYMBOL).append("(void** result, void* self, int64_t arg) {")
             .append(System.lineSeparator());
         c.append("    switch (javan_materialized_lambda_target_id(self)) {").append(System.lineSeparator());
         for (final IrMaterializedLambdaTarget target : program.materializedLambdaTargets()) {
@@ -1659,7 +2016,7 @@ public final class CCodegen {
         c.append("    return;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
 
-        c.append("static void ").append(MATERIALIZED_LAMBDA_SUPPLIER_APPLY_SYMBOL).append("(void** result, void* self) {")
+        c.append("JAVAN_PROGRAM_LINKAGE void ").append(MATERIALIZED_LAMBDA_SUPPLIER_APPLY_SYMBOL).append("(void** result, void* self) {")
             .append(System.lineSeparator());
         c.append("    switch (javan_materialized_lambda_target_id(self)) {").append(System.lineSeparator());
         for (final IrMaterializedLambdaTarget target : program.materializedLambdaTargets()) {
@@ -1680,7 +2037,7 @@ public final class CCodegen {
         c.append("    return;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
 
-        c.append("static void ").append(MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL).append("(void** result, void* self, void* first_arg, void* second_arg) {")
+        c.append("JAVAN_PROGRAM_LINKAGE void ").append(MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL).append("(void** result, void* self, void* first_arg, void* second_arg) {")
             .append(System.lineSeparator());
         c.append("    switch (javan_materialized_lambda_target_id(self)) {").append(System.lineSeparator());
         for (final IrMaterializedLambdaTarget target : program.materializedLambdaTargets()) {
@@ -1699,7 +2056,7 @@ public final class CCodegen {
         c.append("    return;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
 
-        c.append("static int ").append(MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL).append("(void* self, void* arg) {")
+        c.append("JAVAN_PROGRAM_LINKAGE int ").append(MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL).append("(void* self, void* arg) {")
             .append(System.lineSeparator());
         c.append("    switch (javan_materialized_lambda_target_id(self)) {").append(System.lineSeparator());
         for (final IrMaterializedLambdaTarget target : program.materializedLambdaTargets()) {
@@ -1718,7 +2075,7 @@ public final class CCodegen {
         c.append("    return 0;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
 
-        c.append("static void ").append(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL).append("(void* self, void* arg) {")
+        c.append("JAVAN_PROGRAM_LINKAGE void ").append(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL).append("(void* self, void* arg) {")
             .append(System.lineSeparator());
         c.append("    switch (javan_materialized_lambda_target_id(self)) {").append(System.lineSeparator());
         for (final IrMaterializedLambdaTarget target : program.materializedLambdaTargets()) {
@@ -1736,7 +2093,7 @@ public final class CCodegen {
         c.append("    }").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
 
-        c.append("static void ").append(MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL).append("(void* self, void* first_arg, void* second_arg) {")
+        c.append("JAVAN_PROGRAM_LINKAGE void ").append(MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL).append("(void* self, void* first_arg, void* second_arg) {")
             .append(System.lineSeparator());
         c.append("    switch (javan_materialized_lambda_target_id(self)) {").append(System.lineSeparator());
         for (final IrMaterializedLambdaTarget target : program.materializedLambdaTargets()) {
@@ -1810,9 +2167,22 @@ public final class CCodegen {
         final StringBuilder c,
         final boolean emitMain
     ) {
+        emitFunction(program, function, objectResultSymbols, nativeWrapperSymbols, stackAllocations, c, emitMain, true);
+    }
+
+    private static void emitFunction(
+        final IrProgram program,
+        final IrFunction function,
+        final List<String> objectResultSymbols,
+        final NativeWrapperSymbols nativeWrapperSymbols,
+        final EscapeAnalyzer.StackAllocationPlan stackAllocations,
+        final StringBuilder c,
+        final boolean emitMain,
+        final boolean functionStatic
+    ) {
         final boolean entry = appEntry(emitMain, function, program);
         if (entry) {
-            c.append("int main(int argc, char** argv) {").append(System.lineSeparator());
+            c.append("int JAVAN_PROGRAM_MAIN(int argc, char** argv) {").append(System.lineSeparator());
             c.append("    javan_runtime_set_executable_path(argc > 0 ? argv[0] : NULL);").append(System.lineSeparator());
             c.append("    javan_runtime_validate_floating_layout();").append(System.lineSeparator());
             c.append("    javan_runtime_profile_consume_args(&argc, &argv);").append(System.lineSeparator());
@@ -1820,7 +2190,7 @@ public final class CCodegen {
             c.append("    (void) argv;").append(System.lineSeparator());
             emitEntryParameters(function, c);
         } else {
-            emitSignature(function, c, true);
+            emitSignature(function, c, functionStatic);
             c.append(" {").append(System.lineSeparator());
         }
         for (final javan.ir.IrLocal local : function.locals()) {
@@ -4169,11 +4539,20 @@ public final class CCodegen {
         final NativeWrapperSymbols nativeWrapperSymbols,
         final StringBuilder c
     ) {
+        emitImportedNativeSignatures(nativeInterop, nativeWrapperSymbols, c, true);
+    }
+
+    private static void emitImportedNativeSignatures(
+        final NativeInteropConfig nativeInterop,
+        final NativeWrapperSymbols nativeWrapperSymbols,
+        final StringBuilder c,
+        final boolean wrappersStatic
+    ) {
         for (final NativeInteropConfig.ImportBinding binding : nativeInterop.imports()) {
             final ImportedNativeSignature signature = importedNativeSignature(binding);
             emitImportedNativeExternalSignature(binding, signature, c);
             c.append(';').append(System.lineSeparator());
-            emitImportedNativeWrapperSignature(binding, signature, nativeWrapperSymbols, c);
+            emitImportedNativeWrapperSignature(binding, signature, nativeWrapperSymbols, c, wrappersStatic);
             c.append(';').append(System.lineSeparator());
         }
     }
@@ -4239,8 +4618,18 @@ public final class CCodegen {
         final NativeWrapperSymbols nativeWrapperSymbols,
         final StringBuilder c
     ) {
-        c.append("static ")
-            .append(signature.returnType().wrapperCName())
+        emitImportedNativeWrapperSignature(binding, signature, nativeWrapperSymbols, c, true);
+    }
+
+    private static void emitImportedNativeWrapperSignature(
+        final NativeInteropConfig.ImportBinding binding,
+        final ImportedNativeSignature signature,
+        final NativeWrapperSymbols nativeWrapperSymbols,
+        final StringBuilder c,
+        final boolean isStatic
+    ) {
+        if (isStatic) c.append("JAVAN_PROGRAM_LINKAGE ");
+        c.append(signature.returnType().wrapperCName())
             .append(' ')
             .append(nativeWrapperSymbols.wrapper(binding))
             .append('(');
@@ -4403,8 +4792,17 @@ public final class CCodegen {
     }
 
     private static void emitDispatchSignature(final IrDispatch dispatch, final StringBuilder c) {
+        emitDispatchSignature(dispatch, c, true);
+    }
+
+    private static void emitDispatchSignature(
+        final IrDispatch dispatch,
+        final StringBuilder c,
+        final boolean isStatic
+    ) {
         final boolean objectResult = dispatch.returnType() == javan.ir.IrType.OBJECT;
-        c.append("static ").append(objectResult ? "void" : dispatch.returnType().cName()).append(' ').append(dispatch.symbol()).append('(');
+        if (isStatic) c.append("static ");
+        c.append(objectResult ? "void" : dispatch.returnType().cName()).append(' ').append(dispatch.symbol()).append('(');
         if (objectResult) {
             c.append("void** result");
         }
@@ -4458,8 +4856,17 @@ public final class CCodegen {
     }
 
     private static void emitClassInitializationPrototypes(final IrProgram program, final StringBuilder c) {
+        emitClassInitializationPrototypes(program, c, true);
+    }
+
+    private static void emitClassInitializationPrototypes(
+        final IrProgram program,
+        final StringBuilder c,
+        final boolean isStatic
+    ) {
         for (final String owner : program.classInitializationDependencies().keySet()) {
-            c.append("static void ")
+            if (isStatic) c.append("static ");
+            c.append("void ")
                 .append(classInitializationSymbol(owner))
                 .append("(void);")
                 .append(System.lineSeparator());
@@ -4471,6 +4878,15 @@ public final class CCodegen {
         final NativeWrapperSymbols nativeWrapperSymbols,
         final StringBuilder c
     ) {
+        emitClassInitializationWrappers(program, nativeWrapperSymbols, c, true);
+    }
+
+    private static void emitClassInitializationWrappers(
+        final IrProgram program,
+        final NativeWrapperSymbols nativeWrapperSymbols,
+        final StringBuilder c,
+        final boolean isStatic
+    ) {
         for (final IrClass classInfo : program.classes()) {
             final List<String> dependencies = program.classInitializationDependencies().get(classInfo.jvmName());
             if (dependencies == null) {
@@ -4480,7 +4896,8 @@ public final class CCodegen {
             final String symbol = classInitializationSymbol(owner);
             c.append("static int ").append(symbol).append("_state = 0;").append(System.lineSeparator());
             c.append("static void* ").append(symbol).append("_owner = NULL;").append(System.lineSeparator());
-            c.append("static void ").append(symbol).append("(void) {").append(System.lineSeparator());
+            if (isStatic) c.append("static ");
+            c.append("void ").append(symbol).append("(void) {").append(System.lineSeparator());
             c.append("    if (!javan_class_initialization_enter(&")
                 .append(symbol).append("_state, &").append(symbol).append("_owner)) {")
                 .append(System.lineSeparator());
@@ -4748,54 +5165,6 @@ public final class CCodegen {
         result.append((char) ('0' + (value & 7)));
     }
 
-    private static boolean usesGeneratedObjectClone(final IrProgram program) {
-        for (final IrFunction function : program.functions()) {
-            for (final IrInstruction instruction : function.instructions()) {
-                if (instruction.expression().isPresent()
-                    && usesGeneratedObjectClone(instruction.expression().orElseThrow())) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    private static boolean usesCall(final IrProgram program, final String symbol) {
-        for (final IrFunction function : program.functions()) {
-            for (final IrInstruction instruction : function.instructions()) {
-                if (instruction.expression().isPresent()
-                    && usesCall(instruction.expression().orElseThrow(), symbol)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    private static boolean usesCall(final IrExpression expression, final String symbol) {
-        if (expression.kind() == IrExpression.Kind.CALL && symbol.equals(expression.value())) {
-            return true;
-        }
-        for (final IrExpression argument : expression.arguments()) {
-            if (usesCall(argument, symbol)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean usesGeneratedObjectClone(final IrExpression expression) {
-        if (expression.kind() == IrExpression.Kind.CALL && GENERATED_OBJECT_CLONE_SYMBOL.equals(expression.value())) {
-            return true;
-        }
-        for (final IrExpression argument : expression.arguments()) {
-            if (usesGeneratedObjectClone(argument)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private static boolean usesRootedResultCall(final IrExpression expression) {
         if (expression.kind() != IrExpression.Kind.CALL || expression.type() != javan.ir.IrType.OBJECT) {
             return false;
@@ -4935,7 +5304,7 @@ public final class CCodegen {
         final java.util.Map<String, Integer> typeIds,
         final StringBuilder c
     ) {
-        c.append("static void ")
+        c.append("JAVAN_PROGRAM_LINKAGE void ")
             .append(GENERATED_OBJECT_CLONE_SYMBOL)
             .append("(void** result, void* value) {")
             .append(System.lineSeparator());
@@ -4977,30 +5346,6 @@ public final class CCodegen {
             .append(System.lineSeparator());
     }
 
-    private static boolean usesNonFiniteFloatingLiteral(final IrProgram program) {
-        for (final IrFunction function : program.functions()) {
-            for (final IrInstruction instruction : function.instructions()) {
-                final java.util.Optional<IrExpression> expression = instruction.expression();
-                if (expression.isPresent() && usesNonFiniteFloatingLiteral(expression.get())) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    private static boolean usesNonFiniteFloatingLiteral(final IrExpression expression) {
-        if (isNonFiniteFloatingLiteral(expression.value()) && (expression.kind() == IrExpression.Kind.FLOAT_LITERAL || expression.kind() == IrExpression.Kind.DOUBLE_LITERAL)) {
-            return true;
-        }
-        for (final IrExpression argument : expression.arguments()) {
-            if (usesNonFiniteFloatingLiteral(argument)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private static boolean isNonFiniteFloatingLiteral(final String value) {
         return "Infinity".equals(value) || "-Infinity".equals(value) || "NaN".equals(value);
     }
@@ -5018,16 +5363,37 @@ public final class CCodegen {
         return value;
     }
 
-    private record CodegenFeatures(
-        boolean generatedObjectClone,
-        boolean classForName,
-        boolean declaredMethodMetadata,
-        boolean publicMethodMetadata,
-        boolean methodInvocation,
-        boolean nonFiniteFloatingLiteral
-    ) {
+    private record CodegenFeatures(Set<String> calledSymbols, boolean nonFiniteFloatingLiteral) {
+        private CodegenFeatures {
+            calledSymbols = Set.copyOf(calledSymbols);
+        }
+
+        private boolean calls(final String symbol) {
+            return calledSymbols.contains(symbol);
+        }
+
+        private boolean generatedObjectClone() {
+            return calls(GENERATED_OBJECT_CLONE_SYMBOL);
+        }
+
+        private boolean classForName() {
+            return calls("javan_generated_class_for_name");
+        }
+
+        private boolean declaredMethodMetadata() {
+            return calls("javan_generated_class_get_declared_method");
+        }
+
+        private boolean publicMethodMetadata() {
+            return calls("javan_generated_class_get_method");
+        }
+
+        private boolean methodInvocation() {
+            return calls(GENERATED_METHOD_INVOKE_SYMBOL);
+        }
+
         private boolean methodMetadata() {
-            return declaredMethodMetadata || publicMethodMetadata;
+            return declaredMethodMetadata() || publicMethodMetadata();
         }
     }
 }

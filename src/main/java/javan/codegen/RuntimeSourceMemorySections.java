@@ -1698,30 +1698,39 @@ final class RuntimeSourceMemorySections {
         }
 
         static void* javan_generated_object_runtime_state(void* value, int runtime_kind) {
+            javan_runtime_lock_enter();
             struct javan_object_header* header = javan_generated_object_header(value);
             if (header == NULL || header->_javan_runtime_state == NULL) {
+                javan_runtime_lock_leave();
                 return NULL;
             }
             if (header->_javan_runtime_kind != runtime_kind) {
+                javan_runtime_lock_leave();
                 javan_panic("invalid generated object runtime attachment");
             }
-            return header->_javan_runtime_state;
+            void* runtime_state = header->_javan_runtime_state;
+            javan_runtime_lock_leave();
+            return runtime_state;
         }
 
         static void javan_generated_object_attach_runtime_state(void* value, void* runtime_state, int runtime_kind) {
+            javan_runtime_lock_enter();
             struct javan_object_header* header = javan_generated_object_header(value);
             if (header == NULL) {
+                javan_runtime_lock_leave();
                 javan_panic("unsupported generated object runtime attachment");
             }
-            javan_allocation_metadata snapshot;
-            if (javan_find_allocation(runtime_state, &snapshot) == 0
-                || snapshot.kind != JAVAN_HEAP_KIND_RUNTIME
-                || snapshot.runtime_kind != runtime_kind) {
+            javan_allocation_node* runtime_node = javan_find_allocation_locked(runtime_state, NULL);
+            if (runtime_node == NULL
+                || runtime_node->kind != JAVAN_HEAP_KIND_RUNTIME
+                || runtime_node->runtime_kind != runtime_kind) {
+                javan_runtime_lock_leave();
                 javan_panic("invalid generated object runtime attachment");
             }
             header->_javan_runtime_state = runtime_state;
             header->_javan_runtime_kind = runtime_kind;
             header->_javan_runtime_reserved = 0;
+            javan_runtime_lock_leave();
         }
 
         static void javan_validate_runtime_managed_reference(void* value) {
@@ -6452,6 +6461,7 @@ final class RuntimeSourceMemorySections {
             void* rooted_allocated = NULL;
             void** roots[] = { &rooted_allocated };
             javan_root_frame_push(roots, 1);
+            javan_runtime_lock_enter();
             javan_alloc_runtime_rooted(
                 sizeof(javan_throwable_state),
                 &rooted_allocated,
@@ -6459,7 +6469,6 @@ final class RuntimeSourceMemorySections {
             );
             javan_throwable_state* allocated = (javan_throwable_state*) rooted_allocated;
             javan_pending_clear_state(allocated);
-            javan_runtime_lock_enter();
             if (thread->throwable_state == NULL) {
                 thread->throwable_state = allocated;
             }
@@ -6534,6 +6543,7 @@ final class RuntimeSourceMemorySections {
             void* rooted_state = NULL;
             void** roots[] = { &rooted_value, &rooted_message, &rooted_state };
             javan_root_frame_push(roots, 3);
+            javan_runtime_lock_enter();
             javan_alloc_runtime_rooted(
                 sizeof(javan_caught_throwable),
                 &rooted_state,
@@ -6554,6 +6564,7 @@ final class RuntimeSourceMemorySections {
                 rooted_state,
                 JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE
             );
+            javan_runtime_lock_leave();
             javan_root_frame_pop(roots);
         }
 

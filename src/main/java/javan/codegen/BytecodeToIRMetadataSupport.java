@@ -580,15 +580,10 @@ final class BytecodeToIRMetadataSupport {
         }
     }
     static List<EntryPoint> sortedEntryPoints(final List<EntryPoint> entries) {
+        final List<String> symbols = new ArrayList<>();
+        for (final EntryPoint entry : entries) symbols.add(symbol(entry));
         final List<EntryPoint> result = new ArrayList<>();
-        for (final EntryPoint entry : entries) {
-            int index = 0;
-            final String value = symbol(entry);
-            while (index < result.size() && Strings2.compareAscii(symbol(result.get(index)), value) <= 0) {
-                index++;
-            }
-            result.add(index, entry);
-        }
+        for (final int index : Strings2.sortedIndexes(symbols)) result.add(entries.get(index));
         return List.copyOf(result);
     }
 

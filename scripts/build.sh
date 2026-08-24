@@ -4,6 +4,7 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT"
 . .github/scripts/timing-report.sh
+. .github/scripts/generated-sources.sh
 
 OUTPUT=${1:-dist/javan}
 VERSION=$(./mvnw -q help:evaluate -Dexpression=project.version -DforceStdout | tail -n 1)
@@ -21,12 +22,13 @@ if [ -n "$SOURCE" ] && [ "$GENERATION" != "3" ]; then
   exit 2
 fi
 if [ -n "$SOURCE" ]; then
-  for file in main.c javan_runtime.c javan_runtime.h; do
+  for file in javan_program.h javan_program.sources javan_runtime.c javan_runtime.h; do
     if [ ! -f "$SOURCE/$file" ]; then
       printf '%s\n' "Missing generated bootstrap source: $SOURCE/$file" >&2
       exit 1
     fi
   done
+  javan_generated_sources "$SOURCE" >/dev/null
 fi
 
 REUSE_TARGET=${JAVAN_BUILD_REUSE_TARGET:-false}
@@ -54,13 +56,15 @@ if [ -n "$SOURCE" ]; then
   GENERATED=target/.javan/generated
   mkdir -p "$(dirname -- "$BUILT")" "$GENERATED"
   if [ "$SOURCE" != "$GENERATED" ]; then
-    for file in main.c javan_runtime.c javan_runtime.h; do
-      cp "$SOURCE/$file" "$GENERATED/$file"
-    done
+    javan_copy_generated_sources "$SOURCE" "$GENERATED"
   fi
+  GENERATED_SOURCES=$(javan_generated_sources "$GENERATED")
   CC=${CC:-cc}
-  javan_timing_run bootstrap_gen3 "$CC" -pthread -Wno-parentheses \
-    "$GENERATED/main.c" "$GENERATED/javan_runtime.c" -o "$BUILT"
+  # Generated source paths are manifest-validated and cannot contain shell separators or whitespace.
+  # shellcheck disable=SC2086
+  javan_timing_run bootstrap_gen3 sh -c \
+    'cd "$1" && shift && exec "$1" -pthread -Wno-parentheses -I . $2 javan_runtime.c -o "$3"' \
+    sh "$GENERATED" "$CC" "$GENERATED_SOURCES" "$ROOT/$BUILT"
 else
   javan_timing_run bootstrap_jvm java -cp target/classes javan.Main build target/classes \
     --main javan.Main \
@@ -70,9 +74,12 @@ else
     --output javan-bootstrap-rebuilt
   BUILT=target/.javan/bin/javan-bootstrap-rebuilt
   if [ "$GENERATION" = "3" ]; then
+    GEN2_SOURCES=target/.javan/generated-gen2-proof
+    javan_copy_generated_sources target/.javan/generated "$GEN2_SOURCES"
     javan_timing_run bootstrap_gen3 target/.javan/bin/javan-bootstrap-rebuilt build target/classes \
       --main javan.Main \
       --output javan-bootstrap-verified
+    javan_compare_generated_sources "$GEN2_SOURCES" target/.javan/generated
     BUILT=target/.javan/bin/javan-bootstrap-verified
   fi
 fi
