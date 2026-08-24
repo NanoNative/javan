@@ -79,16 +79,16 @@ partial JaCoCo artifacts nor print partial job summaries.
 
 ## CI Matrix
 
-The CI platform-contract matrix runs these rows in parallel:
+The CI platform-contract matrix defines these rows; enabled rows run in parallel:
 
 | Target | Runner | Status | Proof |
 | --- | --- | --- | --- |
-| `linux-x64` | `ubuntu-24.04` | In progress | Java build and compiler/platform contracts |
-| `linux-arm64` | `ubuntu-24.04-arm` | In progress | Java build and compiler/platform contracts |
-| `macos-x64` | `macos-15-intel` | In progress | Java build and compiler/platform contracts |
-| `macos-arm64` | `macos-15` | In progress | Java build and compiler/platform contracts |
-| `windows-x64` | `windows-2025` | In progress | Java build and compiler/platform contracts |
-| `windows-arm64` | `windows-11-arm` | In progress | Java build and compiler/platform contracts |
+| `linux-x64` | `ubuntu-24.04` | Done | Remote Java build and compiler/platform contracts |
+| `linux-arm64` | `ubuntu-24.04-arm` | Done | Remote Java build and compiler/platform contracts |
+| `macos-x64` | `macos-15-intel` | Done | Remote Java build and compiler/platform contracts |
+| `macos-arm64` | `macos-15` | Done | Remote Java build and compiler/platform contracts |
+| `windows-x64` | `windows-2025` | Done | Remote Java build and compiler/platform contracts |
+| `windows-arm64` | `windows-11-arm` | Blocked | Temurin 25 is unavailable on the GitHub-hosted runner |
 
 These rows are explicit in `.github/workflows/build-common.yml`, including their `enabled`
 flags. A problematic Windows row or a disproportionately slow secondary Linux/macOS
@@ -100,17 +100,19 @@ Native artifact rows:
 
 | Target | Runner | Status |
 | --- | --- | --- |
-| `linux-x64` | `ubuntu-24.04` | In progress; enabled pending remote evidence |
-| `linux-aarch64` | `ubuntu-24.04-arm` | In progress; enabled pending remote evidence |
+| `linux-x64` | `ubuntu-24.04` | Done; remote package-backed self-host sanitizer proof passed |
+| `linux-aarch64` | `ubuntu-24.04-arm` | Done; remote package-backed self-host sanitizer proof passed |
 | `macos-x64` | `macos-15-intel` | Blocked; slower architecture row retained with `enabled: false` |
-| `macos-aarch64` | `macos-15` | Enabled; verified host-native package and platform proof |
+| `macos-aarch64` | `macos-15` | Done; remote package-backed self-host sanitizer proof passed |
 | `windows-x64` | `windows-2025` | Blocked; row retained with `enabled: false` |
 | `windows-aarch64` | `windows-11-arm` | Blocked; row retained with `enabled: false` |
 
-The slower macOS x64 package row remains disabled; macOS ARM64 is enabled. Windows package
-rows remain disabled until native linker, process
-execution, and `.exe` package proof work on the matching host. The separate six-row
-platform-contract matrix stays enabled because it does not claim native package support.
+The [accepted Snapshot run 32689384718](https://github.com/NanoNative/javan/actions/runs/32689384718)
+proves every currently enabled platform-contract and package row. The slower macOS x64
+package row remains disabled. Windows package rows remain disabled until native linker,
+process execution, and `.exe` package proof work on the matching host; Windows ARM64
+platform proof is also blocked until the hosted runner supplies Temurin 25. The platform
+matrix does not itself claim native package support.
 
 The common workflow runs the Maven, acceptance, sanitizer, platform, and package proofs as
 independent jobs. Manual releases call that same common workflow and download its verified
@@ -121,8 +123,8 @@ against the showcase, runs packaged `bin/javan check` and `javan report` on Java
 class files, uses the packaged binary to build a second native Javan smoke binary that
 must start with the same version, and runs package-backed self-host sanitizer proof. The
 package-backed sanitizer leg reuses the generated self-host C output from the immediately
-preceding packaged self-build. Remote rows remain `In progress` until their first accepted
-workflow run supplies timing and package evidence.
+preceding packaged self-build. The accepted Snapshot run supplies timing and package evidence
+for every currently enabled package row.
 
 ## Maven Central
 
