@@ -2803,6 +2803,10 @@ final class RuntimeFilesTest {
             "value = getenv(\"JAVAN_HEAP_LIMIT_BYTES\");",
             "if (value != NULL && value[0] != '\\0') {",
             "javan_heap_limit_bytes = limit;",
+            "#define JAVAN_ADAPTIVE_GC_MIN_BYTES 134217728UL",
+            "#define JAVAN_ADAPTIVE_GC_MIN_ALLOCATIONS 1048576UL",
+            "static int javan_adaptive_gc_allocation_exceeded(unsigned long size)",
+            "static void javan_adaptive_gc_rearm(void)",
             "static void javan_check_allocation_size(unsigned long size)",
             "static void javan_prepare_allocation(unsigned long size)",
             "static void javan_prepare_reallocation(unsigned long old_size, unsigned long new_size)",
@@ -9415,7 +9419,9 @@ final class RuntimeFilesTest {
                     && javan_runtime_classes.capacity == 0
                     && javan_heap_live_allocations() == 0
                     && javan_heap_live_bytes() == 0
-                    && javan_heap_total_allocations() == 0;
+                    && javan_heap_total_allocations() == 0
+                    && javan_adaptive_gc_next_bytes == JAVAN_ADAPTIVE_GC_MIN_BYTES
+                    && javan_adaptive_gc_next_allocations == JAVAN_ADAPTIVE_GC_MIN_ALLOCATIONS;
                 void* reused = javan_runtime_class_literal("com.acme.Cleanup", 17, 0, 0, 0);
                 return reset != 0
                     && reused != NULL
@@ -10361,6 +10367,94 @@ final class RuntimeFilesTest {
 
         assertThat(stdout).isEqualTo("1:0\n");
         assertThat(tempDir.resolve("managed/jdks/temurin")).isDirectory();
+    }
+
+    @Test
+    void runtimeRunsAutomaticGcWithoutExplicitHeapLimit() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_alloc(1);
+                (void) javan_alloc(134217728);
+                printf("collections=%d\\n", javan_heap_gc_collections() > 0);
+                return 0;
+            }
+            """,
+            "",
+            Map.of(),
+            java.time.Duration.ofSeconds(180)
+        );
+
+        assertThat(stdout).isEqualTo("collections=1\n");
+    }
+
+    @Test
+    void runtimeAdaptiveGcReclaimsByAllocationCountAndPreservesRoots() throws Exception {
+        new RuntimeFiles().write(tempDir);
+        final Path main = tempDir.resolve("adaptive-gc-probe.c");
+        Files.writeString(main, """
+            #define JAVAN_ADAPTIVE_GC_MIN_BYTES 1073741824UL
+            #define JAVAN_ADAPTIVE_GC_MIN_ALLOCATIONS 4UL
+            #include "javan_runtime.c"
+
+            int main(int argc, char** argv) {
+                javan_register_static_roots(0, 0);
+                if (argc > 1) {
+                    for (int index = 0; index < 10; index++) {
+                        (void) javan_string_from("temporary");
+                    }
+                    printf("suppressed=%d\\n", javan_heap_gc_collections() == 0);
+                    return 0;
+                }
+
+                void* survivor = javan_string_from("survivor");
+                void** roots[] = {(void**) &survivor};
+                javan_root_frame_push(roots, 1);
+                for (int index = 0; index < 8; index++) {
+                    (void) javan_string_from("temporary");
+                }
+                printf("collections=%d\\n", javan_heap_gc_collections() >= 2);
+                printf("collected=%d\\n", javan_heap_gc_collected_allocations() >= 7);
+                printf("survivor=%d\\n", strcmp((const char*) survivor, "survivor") == 0);
+                printf("live=%d\\n", javan_heap_live_allocations() == 2);
+                javan_root_frame_pop(roots);
+                return 0;
+            }
+            """);
+        final Path emptyRuntime = tempDir.resolve("empty-runtime.c");
+        Files.writeString(emptyRuntime, "");
+        final Path binary = new NativeLinker().link(
+            tempDir,
+            main,
+            emptyRuntime,
+            tempDir.resolve("adaptive-gc-probe"),
+            NativeLinkInputs.empty(),
+            List.of()
+        );
+
+        final TestProcesses.Result adaptive = TestProcesses.run(
+            tempDir,
+            List.of(binary.toString()),
+            java.time.Duration.ofSeconds(30),
+            Map.of("JAVAN_HEAP_LIMIT_BYTES", "")
+        );
+        assertThat(adaptive.exitCode()).describedAs(adaptive.stderr()).isZero();
+        assertThat(adaptive.stdout()).isEqualTo(
+            "collections=1\ncollected=1\nsurvivor=1\nlive=1\n"
+        );
+
+        final TestProcesses.Result explicitLimit = TestProcesses.run(
+            tempDir,
+            List.of(binary.toString(), "explicit"),
+            java.time.Duration.ofSeconds(30),
+            Map.of("JAVAN_HEAP_LIMIT_BYTES", "1048576")
+        );
+        assertThat(explicitLimit.exitCode()).describedAs(explicitLimit.stderr()).isZero();
+        assertThat(explicitLimit.stdout()).isEqualTo("suppressed=1\n");
     }
 
     @Test
