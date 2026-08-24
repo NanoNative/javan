@@ -536,6 +536,12 @@ final class RuntimeSourceMemorySections {
         };
 
         #define JAVAN_ROOT_FRAME_CACHE_LIMIT 32
+        #ifndef JAVAN_ADAPTIVE_GC_MIN_BYTES
+        #define JAVAN_ADAPTIVE_GC_MIN_BYTES 134217728UL
+        #endif
+        #ifndef JAVAN_ADAPTIVE_GC_MIN_ALLOCATIONS
+        #define JAVAN_ADAPTIVE_GC_MIN_ALLOCATIONS 1048576UL
+        #endif
 
         typedef void (*javan_native_resource_cleanup)(void* value);
 
@@ -576,6 +582,8 @@ final class RuntimeSourceMemorySections {
         static unsigned long javan_total_allocated_bytes_value = 0;
         static unsigned long javan_live_allocated_bytes_value = 0;
         static unsigned long javan_peak_live_allocated_bytes_value = 0;
+        static unsigned long javan_adaptive_gc_next_bytes = JAVAN_ADAPTIVE_GC_MIN_BYTES;
+        static unsigned long javan_adaptive_gc_next_allocations = JAVAN_ADAPTIVE_GC_MIN_ALLOCATIONS;
         static JavanTypeDescriptor* javan_type_descriptors_value = NULL;
         static int javan_type_descriptor_count_value = 0;
         static int (*javan_record_object_equals_resolver_value)(void*, void*) = NULL;
@@ -768,9 +776,13 @@ final class RuntimeSourceMemorySections {
         }
 
         static void javan_account_allocation(unsigned long size) {
-            javan_total_allocations_value++;
+            if (javan_total_allocations_value < ULONG_MAX) {
+                javan_total_allocations_value++;
+            }
             javan_live_allocations_value++;
-            javan_total_allocated_bytes_value += size;
+            javan_total_allocated_bytes_value = size > ULONG_MAX - javan_total_allocated_bytes_value
+                ? ULONG_MAX
+                : javan_total_allocated_bytes_value + size;
             javan_live_allocated_bytes_value += size;
             if (javan_live_allocated_bytes_value > javan_peak_live_allocated_bytes_value) {
                 javan_peak_live_allocated_bytes_value = javan_live_allocated_bytes_value;
@@ -791,7 +803,10 @@ final class RuntimeSourceMemorySections {
             }
             javan_live_allocated_bytes_value = javan_live_allocated_bytes_value - old_size + new_size;
             if (new_size > old_size) {
-                javan_total_allocated_bytes_value += new_size - old_size;
+                unsigned long growth = new_size - old_size;
+                javan_total_allocated_bytes_value = growth > ULONG_MAX - javan_total_allocated_bytes_value
+                    ? ULONG_MAX
+                    : javan_total_allocated_bytes_value + growth;
             }
             if (javan_live_allocated_bytes_value > javan_peak_live_allocated_bytes_value) {
                 javan_peak_live_allocated_bytes_value = javan_live_allocated_bytes_value;
@@ -1047,6 +1062,8 @@ final class RuntimeSourceMemorySections {
             }
             javan_live_allocations_value = 0;
             javan_live_allocated_bytes_value = 0;
+            javan_adaptive_gc_next_bytes = JAVAN_ADAPTIVE_GC_MIN_BYTES;
+            javan_adaptive_gc_next_allocations = JAVAN_ADAPTIVE_GC_MIN_ALLOCATIONS;
             javan_allocator_cleaning = 0;
         }
 
@@ -2416,6 +2433,40 @@ final class RuntimeSourceMemorySections {
             return javan_live_allocated_bytes_value + growth > javan_heap_limit_bytes;
         }
 
+        static unsigned long javan_adaptive_gc_next_threshold(unsigned long live, unsigned long minimum) {
+            unsigned long growth = live > minimum ? live : minimum;
+            return growth > ULONG_MAX - live ? ULONG_MAX : live + growth;
+        }
+
+        static void javan_adaptive_gc_rearm(void) {
+            javan_adaptive_gc_next_bytes = javan_adaptive_gc_next_threshold(
+                javan_live_allocated_bytes_value,
+                JAVAN_ADAPTIVE_GC_MIN_BYTES
+            );
+            javan_adaptive_gc_next_allocations = javan_adaptive_gc_next_threshold(
+                javan_live_allocations_value,
+                JAVAN_ADAPTIVE_GC_MIN_ALLOCATIONS
+            );
+        }
+
+        static int javan_adaptive_gc_allocation_exceeded(unsigned long size) {
+            javan_allocation_limit_init();
+            if (javan_heap_limit_bytes != 0 || javan_gc_enabled_value == 0
+                || javan_gc_collecting != 0 || javan_allocator_cleaning != 0) {
+                return 0;
+            }
+            return size > ULONG_MAX - javan_live_allocated_bytes_value
+                || javan_live_allocated_bytes_value + size > javan_adaptive_gc_next_bytes
+                || javan_live_allocations_value >= javan_adaptive_gc_next_allocations;
+        }
+
+        static int javan_adaptive_gc_reallocation_exceeded(unsigned long old_size, unsigned long new_size) {
+            if (new_size <= old_size) {
+                return 0;
+            }
+            return javan_adaptive_gc_allocation_exceeded(new_size - old_size);
+        }
+
         static void javan_prepare_allocation(unsigned long size) {
             javan_check_allocation_size(size);
             if (javan_heap_limit_exceeded(size)) {
@@ -2423,6 +2474,12 @@ final class RuntimeSourceMemorySections {
                 if (javan_heap_limit_exceeded(size)) {
                     javan_panic("out of memory");
                 }
+            } else if (javan_adaptive_gc_allocation_exceeded(size)) {
+                javan_gc_collect();
+            }
+            if (javan_live_allocations_value == ULONG_MAX
+                || size > ULONG_MAX - javan_live_allocated_bytes_value) {
+                javan_panic("out of memory");
             }
         }
 
@@ -2433,6 +2490,12 @@ final class RuntimeSourceMemorySections {
                 if (javan_heap_limit_growth_exceeded(old_size, new_size)) {
                     javan_panic("out of memory");
                 }
+            } else if (javan_adaptive_gc_reallocation_exceeded(old_size, new_size)) {
+                javan_gc_collect();
+            }
+            if (new_size > old_size
+                && new_size - old_size > ULONG_MAX - javan_live_allocated_bytes_value) {
+                javan_panic("out of memory");
             }
         }
 
@@ -8371,6 +8434,7 @@ final class RuntimeSourceMemorySections {
             javan_gc_mark_frame_roots();
             javan_gc_drain_marks();
             javan_gc_sweep_unmarked();
+            javan_adaptive_gc_rearm();
             javan_gc_collecting = 0;
             javan_heap_maybe_validate();
             javan_runtime_lock_leave();
