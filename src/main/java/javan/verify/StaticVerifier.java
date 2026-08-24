@@ -1,6 +1,7 @@
 package javan.verify;
 
 import javan.analysis.CaughtThrowableRethrowAnalysis;
+import javan.analysis.ThrowableReturnAnalysis;
 import javan.analysis.EntryPoint;
 import javan.analysis.GeneratedObjectCloneSupport;
 import javan.analysis.VirtualThreadInvokePatterns;
@@ -3040,10 +3041,56 @@ public final class StaticVerifier {
             for (final CaughtThrowableRethrowAnalysis.ReplacementThrow replacement : flow.orElseThrow().replacements()) {
                 result.add(replacement.throwableType());
             }
+            for (final int local : flow.orElseThrow().replacementLocals()) {
+                final Optional<String> type = code.objectLocalTypeAt(handler.handlerPc(), local);
+                if (type.isPresent() && isThrowable(classes, type.orElseThrow())) {
+                    result.add(type.orElseThrow());
+                }
+            }
+            if (!flow.orElseThrow().replacementLocals().isEmpty()) {
+                result.addAll(throwableValueTypesBefore(classes, instructions, handler.handlerPc()));
+            }
             for (final int throwOffset : flow.orElseThrow().replacementValueOffsets()) {
                 final Optional<String> type = directThrowableValueType(classes, instructions, throwOffset);
                 if (type.isPresent()) {
                     result.add(type.orElseThrow());
+                }
+            }
+        }
+        return Set.copyOf(result);
+    }
+
+    private static Set<String> throwableValueTypesBefore(
+        final Map<String, ClassFile> classes,
+        final List<Instruction> instructions,
+        final int endOffset
+    ) {
+        final Set<String> result = new HashSet<>();
+        for (final Instruction instruction : instructions) {
+            if (instruction.offset() >= endOffset) {
+                break;
+            }
+            if (instruction.className().isPresent()
+                && isThrowable(classes, instruction.className().orElseThrow())) {
+                result.add(instruction.className().orElseThrow());
+            }
+            if (instruction.fieldRef().isPresent()) {
+                final Optional<String> fieldType = throwableDescriptorType(
+                    classes,
+                    instruction.fieldRef().orElseThrow().descriptor()
+                );
+                if (fieldType.isPresent()) {
+                    result.add(fieldType.orElseThrow());
+                }
+            }
+            if (instruction.methodRef().isPresent()) {
+                final Optional<ThrowableReturnAnalysis.Result> returned = ThrowableReturnAnalysis.analyze(
+                    classes,
+                    instruction.methodRef().orElseThrow(),
+                    instruction.opcode() == 183 || instruction.opcode() == 184
+                );
+                if (returned.isPresent()) {
+                    result.addAll(returned.orElseThrow().possibleTypes());
                 }
             }
         }
@@ -3371,7 +3418,8 @@ public final class StaticVerifier {
             }
         }
         for (final int local : result.replacementLocals()) {
-            if (!declaredThrowableParameter(classes, method, local)) {
+            if (!declaredThrowableParameter(classes, method, local)
+                && !handlerThrowableLocal(classes, code, handler, local)) {
                 return false;
             }
         }
@@ -3418,8 +3466,13 @@ public final class StaticVerifier {
             return false;
         }
         final CaughtThrowableRethrowAnalysis.FinallyFlow result = flow.orElseThrow();
-        if (!result.replacementLocals().isEmpty() || !result.replacementValueOffsets().isEmpty()) {
+        if (!result.replacementValueOffsets().isEmpty()) {
             return false;
+        }
+        for (final int local : result.replacementLocals()) {
+            if (!handlerThrowableLocal(classes, code, handler, local)) {
+                return false;
+            }
         }
         for (final CaughtThrowableRethrowAnalysis.ReplacementThrow replacement : result.replacements()) {
             if (!isThrowable(classes, replacement.throwableType())) {
@@ -3427,6 +3480,20 @@ public final class StaticVerifier {
             }
         }
         return true;
+    }
+
+    private static boolean handlerThrowableLocal(
+        final Map<String, ClassFile> classes,
+        final CodeAttribute code,
+        final CodeException handler,
+        final int local
+    ) {
+        final Optional<String> type = code.objectLocalTypeAt(handler.handlerPc(), local);
+        final Optional<String> handlerStack = code.singleStackObjectTypeAt(handler.handlerPc());
+        return type.isPresent()
+            && handlerStack.isPresent()
+            && isThrowable(classes, type.orElseThrow())
+            && isThrowable(classes, handlerStack.orElseThrow());
     }
 
     private static boolean declaredThrowableParameter(

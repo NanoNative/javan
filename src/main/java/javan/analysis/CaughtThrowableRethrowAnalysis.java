@@ -318,12 +318,31 @@ public final class CaughtThrowableRethrowAnalysis {
         if (terminalStates.isEmpty() && !hasCycle(edges)) {
             return Optional.empty();
         }
+        for (final int local : replacementLocals) {
+            if (handlerWritesLocal(instructions, handlerOffsets, local)) {
+                return Optional.empty();
+            }
+        }
         return Optional.of(new FinallyFlow(
             replacements,
             replacementLocals,
             replacementValueOffsets,
             handlerOffsets
         ));
+    }
+
+    private static boolean handlerWritesLocal(
+        final List<Instruction> instructions,
+        final Set<Integer> handlerOffsets,
+        final int local
+    ) {
+        for (final Instruction instruction : instructions) {
+            if (handlerOffsets.contains(Integer.valueOf(instruction.offset()))
+                && astoreLocalIndex(instruction) == local) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean normalCleanupContinuation(

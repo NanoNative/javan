@@ -73,6 +73,7 @@ final class LegacySubroutineNormalizer {
                 handlers.size(),
                 handlers,
                 lineNumbers(offsets),
+                List.of(),
                 normalized
             );
         }
