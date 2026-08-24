@@ -3,6 +3,7 @@ set -eu
 
 ROOT=$(CDPATH= cd "$(dirname "$0")/../.." && pwd)
 . "$ROOT/.github/scripts/sanitizer-common.sh"
+. "$ROOT/.github/scripts/generated-sources.sh"
 TMP=${TMPDIR:-/tmp}/javan-sanitizer-$$
 PROJECT=${1:-src/test/resources/projects/native-profile/memory-soak}
 FULL_PROJECT=$ROOT/$PROJECT
@@ -184,9 +185,7 @@ if [ "$COUNTER_CHECK" = "true" ]; then
 #include <stdio.h>
 #include <stdlib.h>
 
-#define main javan_generated_main
-#include "main.c"
-#undef main
+int javan_generated_main(int argc, char** argv);
 
 static unsigned long javan_sanitizer_counter_limit(const char* name, unsigned long fallback) {
     const char* value = getenv(name);
@@ -322,24 +321,22 @@ int main(int argc, char** argv) {
     return 0;
 }
 EOF
+  PROGRAM_SOURCES=$(javan_generated_sources "$FULL_PROJECT/.javan/generated")
   set +e
   # shellcheck disable=SC2086
-  "$CC" $SANITIZER_FLAGS \
-    -I "$FULL_PROJECT/.javan/generated" \
-    "$TMP/counter-wrapper.c" \
-    "$FULL_PROJECT/.javan/generated/javan_runtime.c" \
-    -o "$TMP/javan-sanitizer-probe" \
+  (cd "$FULL_PROJECT/.javan/generated" && "$CC" $SANITIZER_FLAGS \
+    -DJAVAN_PROGRAM_MAIN=javan_generated_main -I . \
+    "$TMP/counter-wrapper.c" $PROGRAM_SOURCES javan_runtime.c \
+    -o "$TMP/javan-sanitizer-probe") \
     >"$TMP/cc.out" 2>"$TMP/cc.err"
   compile_code=$?
   set -e
 else
+  PROGRAM_SOURCES=$(javan_generated_sources "$FULL_PROJECT/.javan/generated")
   set +e
   # shellcheck disable=SC2086
-  "$CC" $SANITIZER_FLAGS \
-    -I "$FULL_PROJECT/.javan/generated" \
-    "$FULL_PROJECT/.javan/generated/main.c" \
-    "$FULL_PROJECT/.javan/generated/javan_runtime.c" \
-    -o "$TMP/javan-sanitizer-probe" \
+  (cd "$FULL_PROJECT/.javan/generated" && "$CC" $SANITIZER_FLAGS \
+    -I . $PROGRAM_SOURCES javan_runtime.c -o "$TMP/javan-sanitizer-probe") \
     >"$TMP/cc.out" 2>"$TMP/cc.err"
   compile_code=$?
   set -e
@@ -426,11 +423,9 @@ fi
 
 if [ "${LEAK_SANITIZER_STATUS:-}" = "leak detection unsupported on this platform" ] && command -v leaks >/dev/null 2>&1; then
   set +e
-  "$CC" \
-    -I "$FULL_PROJECT/.javan/generated" \
-    "$FULL_PROJECT/.javan/generated/main.c" \
-    "$FULL_PROJECT/.javan/generated/javan_runtime.c" \
-    -o "$TMP/javan-leak-probe" \
+  # shellcheck disable=SC2086
+  (cd "$FULL_PROJECT/.javan/generated" && "$CC" \
+    -I . $PROGRAM_SOURCES javan_runtime.c -o "$TMP/javan-leak-probe") \
     >"$TMP/leak-cc.out" 2>"$TMP/leak-cc.err"
   leak_compile_code=$?
   set -e

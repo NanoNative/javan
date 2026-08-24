@@ -55,7 +55,7 @@ final class CliCoreSemanticsIntegrationTest extends CliIntegrationSupport {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/reachable-class-metadata").toString())).stdout())
             .isEqualTo("com.acme.Used\n");
-        assertThat(Files.readString(project.resolve(".javan/generated/main.c")))
+        assertThat(generatedProgramSource(project))
             .contains("javan_class_com_acme_Used", "\"com.acme.Used\"")
             .doesNotContain("javan_class_com_acme_AlphaUnused", "\"com.acme.AlphaUnused\"");
     }
@@ -137,13 +137,13 @@ final class CliCoreSemanticsIntegrationTest extends CliIntegrationSupport {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/static-fields").toString())).stdout()).isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("42\n84\nready\n");
-        final String generated = Files.readString(project.resolve(".javan/generated/main.c"));
+        final String generated = generatedProgramSource(project);
         assertThat(generated).contains(
             "static void** javan_static_roots[] = {",
             "(void**) &javan_static_com_acme_State_field_label",
             "javan_register_static_roots(javan_static_roots, 1);"
         );
-        final int mainStart = generated.indexOf("int main");
+        final int mainStart = generated.indexOf("int JAVAN_PROGRAM_MAIN");
         assertThat(generated.indexOf("    javan_register_generated_roots();", mainStart))
             .isLessThan(generated.indexOf("    javan_initialize_com_acme_State();", mainStart));
     }

@@ -310,12 +310,15 @@ public final class Javan {
     )
         throws IOException, InterruptedException {
         final List<ResourceBundler.ResourceFile> resources = resourceBundler.bundle(check.layout());
-        final Path mainC = cCodegen.generate(program, generated, nativeInterop, stackAllocations);
+        final CCodegen.GeneratedC generatedC = cCodegen.generateProgram(
+            program, generated, nativeInterop, stackAllocations
+        );
         final Path runtimeC = runtimeFiles.write(generated, resources);
         final Path output = check.layout().outputDirectory().resolve("bin").resolve(check.layout().outputName());
         final NativeLinker.CacheLinkResult linked = nativeLinker.linkCached(
             check.layout().root(),
-            mainC,
+            generatedC.sources(),
+            List.of(generatedC.header(), generated.resolve("javan_runtime.h")),
             runtimeC,
             output,
             check.layout().outputDirectory().resolve("cache").resolve("native"),

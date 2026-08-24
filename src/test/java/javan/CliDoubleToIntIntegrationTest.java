@@ -144,7 +144,7 @@ final class CliDoubleToIntIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void generatedSourceContainsExpectedDoubleToIntCalls() throws Exception {
-        assertThat(Files.readString(project.resolve(".javan/generated/main.c")).split("javan_double_to_int\\(", -1).length - 1)
+        assertThat(generatedProgramSource(project).split("javan_double_to_int\\(", -1).length - 1)
             .isEqualTo(24);
     }
 

@@ -1,5 +1,7 @@
 package javan.classfile;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -17,6 +19,62 @@ public record MethodInfo(int accessFlags, String name, String descriptor, Option
     private static final int ACC_STATIC = 0x0008;
     private static final int ACC_NATIVE = 0x0100;
     private static final int ACC_SYNTHETIC = 0x1000;
+
+    /**
+     * Returns the internal class names referenced by object and object-array parameters.
+     *
+     * <p>Primitive arrays are omitted. Object-array component types are retained because bytecode may
+     * load and throw an element.</p>
+     *
+     * @return immutable reference parameter names in declaration order
+     * @throws IllegalStateException when the parsed method descriptor is malformed
+     */
+    public List<String> referencedParameterTypes() {
+        final List<String> result = new ArrayList<>();
+        int index = 1;
+        while (index < descriptor.length() && descriptor.charAt(index) != ')') {
+            final char type = descriptor.charAt(index);
+            if ("BCDFIJSZ".indexOf(type) >= 0) {
+                index++;
+                continue;
+            }
+            if (type == 'L') {
+                final int end = descriptor.indexOf(';', index);
+                if (end < 0) {
+                    throw new IllegalStateException("Malformed method descriptor: " + descriptor);
+                }
+                result.add(descriptor.substring(index + 1, end));
+                index = end + 1;
+                continue;
+            }
+            if (type == '[') {
+                do {
+                    index++;
+                } while (index < descriptor.length() && descriptor.charAt(index) == '[');
+                if (index >= descriptor.length()) {
+                    throw new IllegalStateException("Malformed method descriptor: " + descriptor);
+                }
+                if (descriptor.charAt(index) == 'L') {
+                    final int end = descriptor.indexOf(';', index);
+                    if (end < 0) {
+                        throw new IllegalStateException("Malformed method descriptor: " + descriptor);
+                    }
+                    result.add(descriptor.substring(index + 1, end));
+                    index = end + 1;
+                } else if ("BCDFIJSZ".indexOf(descriptor.charAt(index)) >= 0) {
+                    index++;
+                } else {
+                    throw new IllegalStateException("Malformed method descriptor: " + descriptor);
+                }
+                continue;
+            }
+            throw new IllegalStateException("Malformed method descriptor: " + descriptor);
+        }
+        if (!descriptor.startsWith("(") || index >= descriptor.length()) {
+            throw new IllegalStateException("Malformed method descriptor: " + descriptor);
+        }
+        return List.copyOf(result);
+    }
 
     /**
      * Returns true when this method is {@code public static void main(String[])}.

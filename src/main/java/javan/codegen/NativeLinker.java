@@ -184,18 +184,80 @@ public final class NativeLinker {
         final NativeLinkInputs linkInputs,
         final List<String> importedSymbols
     ) throws IOException, InterruptedException {
+        final Path generated = Objects.requireNonNull(mainC.getParent(), "main C parent");
+        final Path runtimeHeader = generated.resolve("javan_runtime.h");
+        return linkCached(
+            root,
+            List.of(mainC),
+            Files.isRegularFile(runtimeHeader) ? List.of(runtimeHeader) : List.of(),
+            runtimeC,
+            output,
+            cacheDirectory,
+            linkInputs,
+            importedSymbols
+        );
+    }
+
+    /**
+     * Links ordered generated application sources while reusing verified object files.
+     *
+     * @param root working directory
+     * @param programSources ordered generated program sources
+     * @param programHeaders headers shared by every generated program source
+     * @param runtimeC runtime source
+     * @param output output binary
+     * @param cacheDirectory project-local native object cache
+     * @param linkInputs validated native link inputs
+     * @param importedSymbols immutable native import symbol names
+     * @return linked artifact and one cache decision per source
+     * @throws IOException when compilation, cache validation, or linking fails
+     * @throws InterruptedException when interrupted while compiling or linking
+     */
+    public CacheLinkResult linkCached(
+        final Path root,
+        final List<Path> programSources,
+        final List<Path> programHeaders,
+        final Path runtimeC,
+        final Path output,
+        final Path cacheDirectory,
+        final NativeLinkInputs linkInputs,
+        final List<String> importedSymbols
+    ) throws IOException, InterruptedException {
         final NativeLinkInputs inputs = Objects.requireNonNull(linkInputs, "linkInputs");
         final List<String> symbols = List.copyOf(Objects.requireNonNull(importedSymbols, "importedSymbols"));
+        final List<Path> sources = List.copyOf(Objects.requireNonNull(programSources, "programSources"));
+        final List<Path> headers = List.copyOf(Objects.requireNonNull(programHeaders, "programHeaders"));
+        if (sources.isEmpty()) {
+            throw new IllegalArgumentException("Generated program needs at least one C source");
+        }
         rejectUnsupportedFrameworks(inputs, System.getProperty("os.name", ""));
         final String compiler = requiredExecutable(compilerCandidates(), "No C compiler found. Install gcc, clang, or cc.");
         final String compilerIdentity = compilerIdentity(root, compiler);
         Files.createDirectories(output.getParent());
-        final CachedObject mainObject = cachedObject(root, compiler, compilerIdentity, mainC, cacheDirectory);
-        final CachedObject runtimeObject = cachedObject(root, compiler, compilerIdentity, runtimeC, cacheDirectory);
+        final Path generated = Objects.requireNonNull(runtimeC.getParent(), "runtime C parent");
+        final List<CachedObject> programObjects = new ArrayList<>();
+        for (final Path source : sources) {
+            programObjects.add(cachedObject(
+                root, compiler, compilerIdentity, source, headers, List.of(generated), cacheDirectory, generated
+            ));
+        }
+        final Path runtimeHeader = generated.resolve("javan_runtime.h");
+        final CachedObject runtimeObject = cachedObject(
+            root,
+            compiler,
+            compilerIdentity,
+            runtimeC,
+            Files.isRegularFile(runtimeHeader) ? List.of(runtimeHeader) : List.of(),
+            List.of(),
+            cacheDirectory,
+            generated
+        );
         final List<String> command = new ArrayList<>();
         command.add(compiler);
         command.addAll(compilerFlags());
-        command.add(mainObject.linkObject().toString());
+        for (final CachedObject object : programObjects) {
+            command.add(object.linkObject().toString());
+        }
         command.add(runtimeObject.linkObject().toString());
         appendDirectLinkInputs(command, inputs, runtimeC.getParent());
         command.addAll(platformLinkFlags());
@@ -205,7 +267,12 @@ public final class NativeLinker {
         if (result.exitCode() != 0) {
             throw linkFailure("Native link failed", result, symbols);
         }
-        return new CacheLinkResult(output, List.of(mainObject.entry(), runtimeObject.entry()));
+        final List<CacheEntry> entries = new ArrayList<>();
+        for (final CachedObject object : programObjects) {
+            entries.add(object.entry());
+        }
+        entries.add(runtimeObject.entry());
+        return new CacheLinkResult(output, entries);
     }
 
     /**
@@ -560,23 +627,26 @@ public final class NativeLinker {
         final String compiler,
         final String compilerIdentity,
         final Path source,
-        final Path cacheDirectory
+        final List<Path> dependencies,
+        final List<Path> includeDirectories,
+        final Path cacheDirectory,
+        final Path displayRoot
     ) throws IOException, InterruptedException {
-        final String fingerprint = objectFingerprint(compiler, compilerIdentity, source);
+        final String fingerprint = objectFingerprint(compiler, compilerIdentity, source, dependencies);
         final Path object = cacheDirectory.resolve(fingerprint + ".o");
         final Path checksum = cacheDirectory.resolve(fingerprint + ".fnv64");
         if (Files.isRegularFile(object) && Files.isRegularFile(checksum)
             && objectChecksum(object).equals(Files.readString(checksum).trim())) {
-            return new CachedObject(new CacheEntry(source.getFileName().toString(), object, true), object);
+            return new CachedObject(new CacheEntry(sourceName(displayRoot, source), object, true), object);
         }
         Files.createDirectories(cacheDirectory);
         final Path sourceDirectory = Objects.requireNonNull(source.getParent(), "source parent");
         final Path staging = sourceDirectory.resolve(source.getFileName().toString() + ".object");
-        compileObject(root, compiler, source, staging);
+        compileObject(root, compiler, source, staging, includeDirectories);
         final String objectChecksum = objectChecksum(staging);
         Files.write(object, Files.readAllBytes(staging));
         Files.writeString(checksum, objectChecksum + System.lineSeparator());
-        return new CachedObject(new CacheEntry(source.getFileName().toString(), object, false), staging);
+        return new CachedObject(new CacheEntry(sourceName(displayRoot, source), object, false), staging);
     }
 
     private String compilerIdentity(final Path root, final String compiler) throws IOException, InterruptedException {
@@ -584,7 +654,12 @@ public final class NativeLinker {
         return result.exitCode() + "\n" + result.stdout() + "\n" + result.stderr();
     }
 
-    private static String objectFingerprint(final String compiler, final String compilerIdentity, final Path source) throws IOException {
+    private static String objectFingerprint(
+        final String compiler,
+        final String compilerIdentity,
+        final Path source,
+        final List<Path> dependencies
+    ) throws IOException {
         long hash = FNV_OFFSET_BASIS;
         hash = fingerprint(hash, "javan-native-object-v2");
         hash = fingerprint(hash, System.getProperty("os.name", ""));
@@ -602,13 +677,19 @@ public final class NativeLinker {
         }
         hash = fingerprint(hash, "-fPIC");
         hash = fingerprint(hash, Files.readAllBytes(source));
-        final Path directory = source.getParent();
-        final Path header = directory == null ? source : directory.resolve("javan_runtime.h");
-        if (Files.isRegularFile(header)) {
-            hash = fingerprint(hash, header.getFileName().toString());
-            hash = fingerprint(hash, Files.readAllBytes(header));
+        for (final Path dependency : dependencies) {
+            hash = fingerprint(hash, dependency.getFileName().toString());
+            hash = fingerprint(hash, Files.readAllBytes(dependency));
         }
         return Long.toString(hash);
+    }
+
+    private static String sourceName(final Path root, final Path source) {
+        final Path normalizedRoot = root.toAbsolutePath().normalize();
+        final Path normalizedSource = source.toAbsolutePath().normalize();
+        return normalizedSource.startsWith(normalizedRoot)
+            ? normalizedRoot.relativize(normalizedSource).toString().replace('\\', '/')
+            : source.getFileName().toString();
     }
 
     private static String objectChecksum(final Path object) throws IOException {

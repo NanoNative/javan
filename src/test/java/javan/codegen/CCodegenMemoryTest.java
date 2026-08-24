@@ -904,17 +904,27 @@ final class CCodegenMemoryTest {
             java.util.Map.of()
         );
 
-        final String generated = Files.readString(new CCodegen().generate(program, tempDir));
+        final CCodegen.GeneratedC generatedProgram = new CCodegen().generateProgram(
+            program,
+            tempDir,
+            javan.build.NativeInteropConfig.empty(),
+            new EscapeAnalyzer.StackAllocationPlan(List.of())
+        );
+        final StringBuilder generatedText = new StringBuilder(Files.readString(generatedProgram.header()));
+        for (final Path source : generatedProgram.sources()) {
+            generatedText.append(Files.readString(source));
+        }
+        final String generated = generatedText.toString();
 
         assertThat(generated).contains(
-            "static void javan_materialized_lambda_apply_object(void** result, void* self, void* arg);",
-            "static void javan_materialized_lambda_apply_object(void** result, void* self, void* arg) {",
-            "static void javan_materialized_lambda_apply_long_object(void** result, void* self, int64_t arg);",
-            "static void javan_materialized_lambda_apply_long_object(void** result, void* self, int64_t arg) {",
-            "static void javan_materialized_lambda_apply_object2(void** result, void* self, void* first_arg, void* second_arg);",
-            "static void javan_materialized_lambda_apply_object2(void** result, void* self, void* first_arg, void* second_arg) {",
-            "static void javan_materialized_lambda_apply_supplier(void** result, void* self);",
-            "static void javan_materialized_lambda_apply_supplier(void** result, void* self) {",
+            "void javan_materialized_lambda_apply_object(void** result, void* self, void* arg);",
+            "JAVAN_PROGRAM_LINKAGE void javan_materialized_lambda_apply_object(void** result, void* self, void* arg) {",
+            "void javan_materialized_lambda_apply_long_object(void** result, void* self, int64_t arg);",
+            "JAVAN_PROGRAM_LINKAGE void javan_materialized_lambda_apply_long_object(void** result, void* self, int64_t arg) {",
+            "void javan_materialized_lambda_apply_object2(void** result, void* self, void* first_arg, void* second_arg);",
+            "JAVAN_PROGRAM_LINKAGE void javan_materialized_lambda_apply_object2(void** result, void* self, void* first_arg, void* second_arg) {",
+            "void javan_materialized_lambda_apply_supplier(void** result, void* self);",
+            "JAVAN_PROGRAM_LINKAGE void javan_materialized_lambda_apply_supplier(void** result, void* self) {",
             "case 7: lambda_target_symbol(result, arg); return;",
             "case 8: long_target_symbol(result, arg); return;",
             "case 9: object2_target_symbol(result, first_arg, second_arg); return;",
@@ -924,7 +934,7 @@ final class CCodegenMemoryTest {
             "javan_materialized_lambda_apply_object2((void**) &javan_expr_tmp_0, lambda, argument, argument);",
             "javan_materialized_lambda_apply_supplier((void**) &javan_expr_tmp_0, lambda);",
             "bridge_symbol((void**) &javan_expr_tmp_0, lambda, argument);",
-            "static void javan_exact_catch_null_apply(void** result, void* self, void* arg) {",
+            "JAVAN_PROGRAM_LINKAGE void javan_exact_catch_null_apply(void** result, void* self, void* arg) {",
             "javan_exact_catch_null_apply((void**) &javan_expr_tmp_0, self, arg);",
             "javan_root_frame_push(javan_function_or_null_roots, 1);",
             "javan_materialized_lambda_apply_object((void**) &javan_function_or_null_result, self, arg);",

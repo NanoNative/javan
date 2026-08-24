@@ -481,6 +481,66 @@ final class CliIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void applicationRuntimeExceptionEscapesFromAnArrayParameter() throws Exception {
+        final Path project = project("application-exception-array-parameter");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Problem expected = new Problem("array", 9);
+                    final Problem[] problems = new Problem[]{expected};
+                    try {
+                        fail(problems);
+                    } catch (final Problem caught) {
+                        System.out.println((caught == expected) + ":" + caught.getMessage());
+                    }
+                    final Problem nested = new Problem("nested", 10);
+                    final Problem[][] nestedProblems = new Problem[][]{{nested}};
+                    try {
+                        failNested(nestedProblems);
+                    } catch (final Problem caught) {
+                        System.out.println((caught == nested) + ":" + caught.getMessage());
+                    }
+                }
+
+                private static void fail(final Problem[] problems) {
+                    final Problem[] alias = problems;
+                    throw alias[0];
+                }
+
+                private static void failNested(final Problem[][] problems) {
+                    throw problems[0][0];
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Problem", """
+            package com.acme;
+
+            public final class Problem extends RuntimeException {
+                private final int code;
+
+                public Problem(final String message, final int code) {
+                    super(message);
+                    this.code = code;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(
+            project.resolve(".javan/bin/application-exception-array-parameter").toString()
+        )).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true:array\ntrue:nested\n");
+    }
+
+    @Test
     void applicationRuntimeExceptionCrossingFinallyPreservesIdentity() throws Exception {
         final Path project = project("application-exception-finally");
         writeJava(project, "com.acme.Main", """

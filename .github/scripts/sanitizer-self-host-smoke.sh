@@ -4,6 +4,7 @@ set -eu
 ROOT=$(CDPATH= cd "$(dirname "$0")/../.." && pwd)
 . "$ROOT/.github/scripts/timing-report.sh"
 . "$ROOT/.github/scripts/sanitizer-common.sh"
+. "$ROOT/.github/scripts/generated-sources.sh"
 TMP=${TMPDIR:-/tmp}/javan-self-host-sanitizer-$$
 CC=${CC:-cc}
 SANITIZER_FLAGS=${SANITIZER_FLAGS:-"-fsanitize=address,undefined -fno-omit-frame-pointer"}
@@ -360,10 +361,11 @@ else
   printf '%s\n' "Building self-host generated output for $TARGET_CLASSES"
   "$JAVAN" build "$TARGET_CLASSES" --main javan.Main --output "$OUTPUT_NAME" >/dev/null
 fi
-if [ ! -f "$GENERATED/main.c" ] || [ ! -f "$GENERATED/javan_runtime.c" ]; then
+if [ ! -f "$GENERATED/javan_program.h" ] || [ ! -f "$GENERATED/javan_runtime.c" ]; then
   printf '%s\n' "Missing generated self-host C output in $GENERATED" >&2
   exit 1
 fi
+PROGRAM_SOURCES=$(javan_generated_sources "$GENERATED")
 
 cat >"$TMP/self-host-counter-wrapper.c" <<'EOF'
 #include "javan_runtime.h"
@@ -372,9 +374,7 @@ cat >"$TMP/self-host-counter-wrapper.c" <<'EOF'
 #include <stdio.h>
 #include <stdlib.h>
 
-#define main javan_generated_main
-#include "main.c"
-#undef main
+int javan_generated_main(int argc, char** argv);
 
 static unsigned long javan_self_host_counter_limit(const char* name, unsigned long fallback) {
     const char* value = getenv(name);
@@ -472,11 +472,11 @@ EOF
 set +e
 # shellcheck disable=SC2086
 sanitizer_compile_started=$(javan_timing_now)
-"$CC" $SANITIZER_FLAGS \
-  -I "$GENERATED" \
-  "$TMP/self-host-counter-wrapper.c" \
-  "$GENERATED/javan_runtime.c" \
-  -o "$TMP/javan-self-host-sanitizer-probe" \
+# shellcheck disable=SC2086
+(cd "$GENERATED" && "$CC" $SANITIZER_FLAGS \
+  -DJAVAN_PROGRAM_MAIN=javan_generated_main -I . \
+  "$TMP/self-host-counter-wrapper.c" $PROGRAM_SOURCES javan_runtime.c \
+  -o "$TMP/javan-self-host-sanitizer-probe") \
   >"$TMP/cc.out" 2>"$TMP/cc.err"
 compile_code=$?
 compile_status=pass
@@ -516,11 +516,11 @@ if [ "$probe_run_code" -eq 88 ] || grep -F "detect_leaks is not supported" "$TMP
   LEAK_STATUS="leak detection unsupported on this platform"
   if command -v leaks >/dev/null 2>&1; then
     set +e
-    "$CC" \
-      -I "$GENERATED" \
-      "$TMP/self-host-counter-wrapper.c" \
-      "$GENERATED/javan_runtime.c" \
-      -o "$TMP/javan-self-host-leak-probe" \
+    # shellcheck disable=SC2086
+    (cd "$GENERATED" && "$CC" \
+      -DJAVAN_PROGRAM_MAIN=javan_generated_main -I . \
+      "$TMP/self-host-counter-wrapper.c" $PROGRAM_SOURCES javan_runtime.c \
+      -o "$TMP/javan-self-host-leak-probe") \
       >"$TMP/leak-cc.out" 2>"$TMP/leak-cc.err"
     leak_compile_code=$?
     set -e

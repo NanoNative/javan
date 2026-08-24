@@ -840,7 +840,7 @@ public final class ProjectReports {
         for (final EntryPoint entry : entries) {
             keys.add(entry.display());
         }
-        return reorder(entries, sortedIndexes(keys));
+        return reorder(entries, Strings2.sortedIndexes(keys));
     }
 
     private static List<CallEdge> sortedEdges(final List<CallEdge> edges) {
@@ -848,7 +848,7 @@ public final class ProjectReports {
         for (final CallEdge edge : edges) {
             keys.add(edgeKey(edge));
         }
-        return reorder(edges, sortedIndexes(keys));
+        return reorder(edges, Strings2.sortedIndexes(keys));
     }
 
     private static String edgeKey(final CallEdge edge) {
@@ -918,7 +918,7 @@ public final class ProjectReports {
         for (final Diagnostic diagnostic : diagnostics) {
             keys.add(diagnosticKey(diagnostic));
         }
-        return reorder(diagnostics, sortedIndexes(keys));
+        return reorder(diagnostics, Strings2.sortedIndexes(keys));
     }
 
     private static <T> List<T> reorder(final List<T> values, final List<Integer> indexes) {
@@ -927,59 +927,6 @@ public final class ProjectReports {
             result.add(values.get(index));
         }
         return List.copyOf(result);
-    }
-
-    private static List<Integer> sortedIndexes(final List<String> keys) {
-        final List<Integer> indexes = new ArrayList<>();
-        final List<Integer> scratch = new ArrayList<>();
-        for (int index = 0; index < keys.size(); index++) {
-            indexes.add(index);
-            scratch.add(0);
-        }
-        sortIndexes(indexes, scratch, keys, 0, indexes.size());
-        return List.copyOf(indexes);
-    }
-
-    private static void sortIndexes(
-        final List<Integer> indexes,
-        final List<Integer> scratch,
-        final List<String> keys,
-        final int from,
-        final int to
-    ) {
-        if (to - from < 2) {
-            return;
-        }
-        final int middle = from + (to - from) / 2;
-        sortIndexes(indexes, scratch, keys, from, middle);
-        sortIndexes(indexes, scratch, keys, middle, to);
-        int left = from;
-        int right = middle;
-        int target = from;
-        while (left < middle && right < to) {
-            if (Strings2.compareAscii(keys.get(indexes.get(left)), keys.get(indexes.get(right))) <= 0) {
-                scratch.set(target, indexes.get(left));
-                target++;
-                left++;
-            } else {
-                scratch.set(target, indexes.get(right));
-                target++;
-                right++;
-            }
-        }
-        while (left < middle) {
-            scratch.set(target, indexes.get(left));
-            target++;
-            left++;
-        }
-        while (right < to) {
-            scratch.set(target, indexes.get(right));
-            target++;
-            right++;
-        }
-        for (int index = from; index < to; index++) {
-            indexes.set(index, scratch.get(index));
-        }
     }
 
     private static String diagnosticKey(final Diagnostic diagnostic) {

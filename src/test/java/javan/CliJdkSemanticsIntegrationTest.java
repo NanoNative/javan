@@ -8292,7 +8292,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        assertThat(Files.readString(project.resolve(".javan/generated/main.c")))
+        assertThat(generatedProgramSource(project))
             .contains("{JAVAN_METHOD_METADATA_MAGIC, 1, 1, 1, 1, 0, NULL, \"substring\", \"java.lang.String\", \"java.lang.String\", \"java.lang.String\"")
             .contains("{JAVAN_METHOD_METADATA_MAGIC, 0, 1, 1, 1, 0, NULL, \"size\", \"java.util.ArrayList\", \"java.util.ArrayList\", \"int\", NULL}")
             .contains("static const char* javan_method_parameter_types_")
@@ -8486,7 +8486,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        assertThat(Files.readString(project.resolve(".javan/generated/main.c")))
+        assertThat(generatedProgramSource(project))
             .contains("static const char* javan_method_override_callers_", "\"com.other.Loader\"");
         final ProcessResult nativeRun = process(
             project,
@@ -8953,8 +8953,8 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        assertThat(Files.readString(project.resolve(".javan/generated/main.c")))
-            .contains("static void* javan_generated_class_get_method(")
+        assertThat(generatedProgramSource(project))
+            .contains("void* javan_generated_class_get_method(")
             .contains("JAVAN_METHOD_METADATA_MAGIC, 1, 1, 1, 1, 0, NULL, \"containsAll\", \"java.util.AbstractCollection\", \"java.util.AbstractCollection\"");
         final ProcessResult nativeRun = process(
             project,
@@ -11782,7 +11782,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
 
         final CliRun run = run(tempDir, "build", project.toString());
         final String source = run.exitCode() == 0
-            ? Files.readString(project.resolve(".javan/generated/main.c"))
+            ? generatedProgramSource(project)
             : "";
 
         assertThat(source.split("javan_set_equals\\(", -1).length - 1).isEqualTo(1);

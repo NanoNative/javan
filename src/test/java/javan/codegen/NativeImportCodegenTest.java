@@ -41,7 +41,7 @@ final class NativeImportCodegenTest {
 
         assertThat(generated).contains(
             "int native_primitive_int(int arg0, long long arg1, float arg2, double arg3);",
-            "static int " + wrapper(0)
+            "JAVAN_PROGRAM_LINKAGE int " + wrapper(0)
                 + "(int arg0, long long arg1, float arg2, double arg3)",
             "return native_primitive_int(arg0, arg1, arg2, arg3);"
         );
@@ -55,7 +55,7 @@ final class NativeImportCodegenTest {
 
         assertThat(generated).contains(
             "long long native_primitive_long(void);",
-            "static long long " + wrapper(0) + "(void)",
+            "JAVAN_PROGRAM_LINKAGE long long " + wrapper(0) + "(void)",
             "return native_primitive_long();"
         );
     }
@@ -68,7 +68,7 @@ final class NativeImportCodegenTest {
 
         assertThat(generated).contains(
             "float native_primitive_float(void);",
-            "static float " + wrapper(0) + "(void)",
+            "JAVAN_PROGRAM_LINKAGE float " + wrapper(0) + "(void)",
             "return native_primitive_float();"
         );
     }
@@ -81,7 +81,7 @@ final class NativeImportCodegenTest {
 
         assertThat(generated).contains(
             "double native_primitive_double(void);",
-            "static double " + wrapper(0) + "(void)",
+            "JAVAN_PROGRAM_LINKAGE double " + wrapper(0) + "(void)",
             "return native_primitive_double();"
         );
     }
@@ -94,7 +94,7 @@ final class NativeImportCodegenTest {
 
         assertThat(generated).contains(
             "int native_consume(JavanNativeImportedByteArray arg0);",
-            "static int " + wrapper(0) + "(void* arg0)",
+            "JAVAN_PROGRAM_LINKAGE int " + wrapper(0) + "(void* arg0)",
             "JavanNativeImportedByteArray arg0_native = javan_native_import_byte_array(arg0);",
             "return native_consume(arg0_native);"
         );
@@ -174,7 +174,7 @@ final class NativeImportCodegenTest {
 
         assertThat(generated).contains(
             "void native_notify(int arg0);",
-            "static void " + wrapper(0) + "(int arg0) {\n"
+            "JAVAN_PROGRAM_LINKAGE void " + wrapper(0) + "(int arg0) {\n"
                 + "    native_notify(arg0);\n"
                 + "    return;\n"
                 + "}"
@@ -192,11 +192,11 @@ final class NativeImportCodegenTest {
 
         assertThat(generated).containsSubsequence(
             "int native_zeta(void);",
-            "static int " + wrapper(0) + "(void);",
+            "JAVAN_PROGRAM_LINKAGE int " + wrapper(0) + "(void);",
             "int native_alpha(void);",
-            "static int " + wrapper(1) + "(void);",
-            "static int " + wrapper(0) + "(void) {",
-            "static int " + wrapper(1) + "(void) {"
+            "JAVAN_PROGRAM_LINKAGE int " + wrapper(1) + "(void);",
+            "JAVAN_PROGRAM_LINKAGE int " + wrapper(0) + "(void) {",
+            "JAVAN_PROGRAM_LINKAGE int " + wrapper(1) + "(void) {"
         );
     }
 
@@ -286,7 +286,7 @@ final class NativeImportCodegenTest {
 
         assertThat(generated).contains(
             "long long native_measure(float arg0);",
-            "static long long " + wrapper(0) + "(float arg0) {",
+            "JAVAN_PROGRAM_LINKAGE long long " + wrapper(0) + "(float arg0) {",
             "return native_measure(arg0);"
         );
     }

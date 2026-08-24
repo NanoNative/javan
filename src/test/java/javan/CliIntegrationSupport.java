@@ -61,6 +61,16 @@ abstract class CliIntegrationSupport {
         return Files.writeString(file, source, StandardCharsets.UTF_8);
     }
 
+    protected static String generatedProgramSource(final Path project) throws IOException {
+        final Path generated = project.resolve(".javan/generated");
+        final StringBuilder source = new StringBuilder(Files.readString(generated.resolve("javan_program.h")));
+        final List<String> manifest = Files.readAllLines(generated.resolve("javan_program.sources"));
+        for (int index = 1; index < manifest.size(); index++) {
+            source.append(Files.readString(generated.resolve(manifest.get(index))));
+        }
+        return source.toString();
+    }
+
     protected static String runJvmWithResources(final Path project, final String mainClass) throws Exception {
         final Path output = project.resolve("jvm-classes");
         final Path sourceRoot = project.resolve("src/main/java");

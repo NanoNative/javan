@@ -6091,9 +6091,9 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
         );
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        final String generated = Files.readString(project.resolve(".javan/generated/main.c"));
+        final String generated = generatedProgramSource(project);
         assertThat(generated).contains(
-            "static void javan_exact_catch_null_apply(void** result, void* self, void* arg) {",
+            "void javan_exact_catch_null_apply(void** result, void* self, void* arg) {",
             "JavanPanicScope javan_function_or_null_scope;",
             "javan_panic_scope_push(&javan_function_or_null_scope, &javan_function_or_null_target);",
             "if (setjmp(javan_function_or_null_target) != 0) {",

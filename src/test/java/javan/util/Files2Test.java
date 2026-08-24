@@ -10,6 +10,7 @@ import java.nio.file.attribute.FileTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 
 @Execution(CONCURRENT)
@@ -128,5 +129,23 @@ final class Files2Test {
         Files2.deleteRecursive(tempDir.resolve("a"));
 
         assertThat(tempDir.resolve("a")).doesNotExist();
+    }
+
+    @Test
+    void deleteRecursiveDeletesSymlinkWithoutFollowingItsTarget() throws Exception {
+        final Path target = tempDir.resolve("outside");
+        final Path retained = Files2.writeString(target.resolve("retained.txt"), "retained");
+        final Path tree = Files.createDirectories(tempDir.resolve("tree"));
+        final Path link = tree.resolve("linked");
+        try {
+            Files.createSymbolicLink(link, target);
+        } catch (final UnsupportedOperationException | java.io.IOException | SecurityException exception) {
+            assumeTrue(false, "symbolic links are unavailable: " + exception.getMessage());
+        }
+
+        Files2.deleteRecursive(tree);
+
+        assertThat(tree).doesNotExist();
+        assertThat(retained).hasContent("retained");
     }
 }

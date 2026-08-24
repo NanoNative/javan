@@ -28,6 +28,28 @@ final class ClassFileReaderTest {
     private static final Path SOURCE = Path.of("Modified.class");
 
     @Test
+    void exposesDirectReferenceParametersWithoutScanningTheClassPath() {
+        final MethodInfo method = new MethodInfo(
+            0,
+            "accept",
+            "(ILcom/acme/Problem;[Lcom/acme/Problem;Ljava/lang/String;J)V",
+            Optional.empty()
+        );
+
+        assertThat(method.referencedParameterTypes())
+            .containsExactly("com/acme/Problem", "com/acme/Problem", "java/lang/String");
+    }
+
+    @Test
+    void rejectsMalformedReferenceParameterDescriptors() {
+        final MethodInfo method = new MethodInfo(0, "accept", "(Lcom/acme/Problem)V", Optional.empty());
+
+        assertThatThrownBy(method::referencedParameterTypes)
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("Malformed method descriptor");
+    }
+
+    @Test
     void normalizesLegacySubroutinesBeforeAnalysis() throws Exception {
         final ClassFile classFile = new ClassFileReader().read(legacySubroutineClassfile(), SOURCE);
         final MethodInfo method = classFile.method("value", "()I").orElseThrow();
