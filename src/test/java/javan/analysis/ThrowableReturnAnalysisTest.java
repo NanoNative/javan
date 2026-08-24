@@ -17,6 +17,81 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 final class ThrowableReturnAnalysisTest {
     @Test
+    void staticallyBoundPlatformThrowableFactoryKeepsPlatformRepresentation() {
+        final MethodRef factory = new MethodRef(
+            "com/acme/Main",
+            "factory",
+            "()Ljava/lang/RuntimeException;"
+        );
+        final ClassFile owner = classFile(
+            factory.owner(),
+            "java/lang/Object",
+            new MethodInfo(0x0008, factory.name(), factory.descriptor(), Optional.of(new CodeAttribute(
+                2,
+                0,
+                new byte[0],
+                0,
+                List.of(
+                    classInstruction(0, 187, "new", "java/lang/UnsupportedOperationException"),
+                    instruction(3, 89, "dup"),
+                    methodInstruction(4, 183, "invokespecial", new MethodRef(
+                        "java/lang/UnsupportedOperationException",
+                        "<init>",
+                        "()V"
+                    )),
+                    instruction(7, 176, "areturn")
+                )
+            )))
+        );
+
+        assertThat(ThrowableReturnAnalysis.analyze(Map.of(owner.name(), owner), factory, true))
+            .contains(new ThrowableReturnAnalysis.Result(
+                "java/lang/UnsupportedOperationException",
+                List.of("java/lang/UnsupportedOperationException"),
+                false
+            ));
+    }
+
+    @Test
+    void broadPlatformFactoryWithMultipleConcreteTypesRemainsUnknown() {
+        final MethodRef factory = new MethodRef(
+            "com/acme/Main",
+            "factory",
+            "()Ljava/lang/RuntimeException;"
+        );
+        final ClassFile owner = classFile(
+            factory.owner(),
+            "java/lang/Object",
+            new MethodInfo(0x0008, factory.name(), factory.descriptor(), Optional.of(new CodeAttribute(
+                2,
+                0,
+                new byte[0],
+                0,
+                List.of(
+                    classInstruction(0, 187, "new", "java/lang/UnsupportedOperationException"),
+                    instruction(3, 89, "dup"),
+                    methodInstruction(4, 183, "invokespecial", new MethodRef(
+                        "java/lang/UnsupportedOperationException",
+                        "<init>",
+                        "()V"
+                    )),
+                    instruction(7, 87, "pop"),
+                    classInstruction(8, 187, "new", "java/lang/IllegalArgumentException"),
+                    instruction(11, 89, "dup"),
+                    methodInstruction(12, 183, "invokespecial", new MethodRef(
+                        "java/lang/IllegalArgumentException",
+                        "<init>",
+                        "()V"
+                    )),
+                    instruction(15, 176, "areturn")
+                )
+            )))
+        );
+
+        assertThat(ThrowableReturnAnalysis.analyze(Map.of(owner.name(), owner), factory, true)).isEmpty();
+    }
+
+    @Test
     void wideReferenceLoadsCannotMasqueradeAsGeneratedThrowableReturns() {
         final MethodRef factory = new MethodRef(
             "com/acme/Main",

@@ -62,6 +62,8 @@ public final class ThrowableReturnAnalysis {
         }
 
         final Set<String> possibleTypes = new LinkedHashSet<>();
+        boolean hasGeneratedType = false;
+        boolean hasPlatformType = false;
         boolean returnsValue = false;
         for (final Instruction instruction : method.orElseThrow().code().orElseThrow().instructions()) {
             if (instruction.opcode() == 176) {
@@ -70,11 +72,16 @@ public final class ThrowableReturnAnalysis {
             }
             if (instruction.opcode() == 187) {
                 if (instruction.className().isEmpty()
-                    || !classes.containsKey(instruction.className().orElseThrow())
                     || !assignableTo(classes, instruction.className().orElseThrow(), upperBound)) {
                     return Optional.empty();
                 }
                 final String type = instruction.className().orElseThrow();
+                final boolean generatedType = classes.containsKey(type);
+                hasGeneratedType |= generatedType;
+                hasPlatformType |= !generatedType;
+                if (hasGeneratedType && hasPlatformType) {
+                    return Optional.empty();
+                }
                 possibleTypes.add(type);
                 continue;
             }
@@ -84,7 +91,19 @@ public final class ThrowableReturnAnalysis {
         }
         return !returnsValue || possibleTypes.isEmpty()
             ? Optional.empty()
-            : Optional.of(new Result(upperBound, List.copyOf(possibleTypes), true));
+            : result(upperBound, possibleTypes, hasGeneratedType);
+    }
+
+    private static Optional<Result> result(
+        final String upperBound,
+        final Set<String> possibleTypes,
+        final boolean generatedObject
+    ) {
+        if (!generatedObject && possibleTypes.size() != 1) {
+            return Optional.empty();
+        }
+        final List<String> types = List.copyOf(possibleTypes);
+        return Optional.of(new Result(generatedObject ? upperBound : types.getFirst(), types, generatedObject));
     }
 
     private static boolean unprovenReferenceSource(final Instruction instruction) {

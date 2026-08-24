@@ -1374,6 +1374,39 @@ final class CliIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void finallyRejectsMultiplePlatformTypesFromABroadFactory() throws Exception {
+        final Path project = project("platform-exception-finally-broad-local-replacement");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final RuntimeException replacement = replacement(args.length == 0);
+                    try {
+                        throw new IllegalStateException("original");
+                    } finally {
+                        throw replacement;
+                    }
+                }
+
+                private static RuntimeException replacement(final boolean first) {
+                    return first
+                        ? new UnsupportedOperationException("first")
+                        : new IllegalArgumentException("second");
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains("error[JAVAN014]");
+    }
+
+    @Test
     void finallyRejectsUnprovenParameterAndFieldFactoryReturns() throws Exception {
         record FactoryCase(String name, String declaration, String call, String factory) {
         }
