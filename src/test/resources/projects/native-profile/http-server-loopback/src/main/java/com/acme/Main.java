@@ -8,25 +8,28 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 
 public final class Main {
-    private static final int PORT = 18437;
+    private static final int FIRST_PORT = 18437;
+    private static final int REQUESTS = 8;
 
     private Main() {
     }
 
     public static void main(final String[] args) throws Exception {
-        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", PORT), 0);
-        server.createContext("/health", new HealthHandler(server));
-        server.start();
-        final Socket socket = new Socket("127.0.0.1", PORT);
-        socket.getOutputStream().write(new byte[] {
-            71, 69, 84, 32, 47, 104, 101, 97, 108, 116, 104, 32, 72, 84, 84, 80, 47, 49, 46, 49, 13, 10,
-            72, 111, 115, 116, 58, 32, 108, 111, 99, 97, 108, 104, 111, 115, 116, 13, 10, 13, 10
-        });
-        socket.getOutputStream().flush();
-        while (socket.getInputStream().read() != -1) {
+        for (int request = 0; request < REQUESTS; request++) {
+            final int port = FIRST_PORT + request;
+            final HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
+            server.createContext("/health", new HealthHandler(server));
+            server.start();
+            final Socket socket = new Socket("127.0.0.1", port);
+            socket.getOutputStream().write(new byte[] {
+                71, 69, 84, 32, 47, 104, 101, 97, 108, 116, 104, 32, 72, 84, 84, 80, 47, 49, 46, 49, 13, 10,
+                72, 111, 115, 116, 58, 32, 108, 111, 99, 97, 108, 104, 111, 115, 116, 13, 10, 13, 10
+            });
+            socket.getOutputStream().flush();
+            while (socket.getInputStream().read() != -1) {
+            }
+            socket.close();
         }
-        socket.close();
-        server = null;
     }
 
     private static final class HealthHandler implements HttpHandler {

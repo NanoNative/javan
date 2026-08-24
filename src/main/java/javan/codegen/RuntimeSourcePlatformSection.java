@@ -2015,6 +2015,7 @@ final class RuntimeSourcePlatformSection {
             javan_socket_populate_options(fd, &tcp_no_delay, &keep_alive, &reuse_address, &oob_inline, &traffic_class);
             receive_buffer_size = javan_socket_getsockopt_buffer_size(fd, SO_RCVBUF, "socket SO_RCVBUF lookup failed");
             send_buffer_size = javan_socket_getsockopt_buffer_size(fd, SO_SNDBUF, "socket SO_SNDBUF lookup failed");
+            javan_runtime_lock_enter();
             javan_socket* socket = javan_socket_checked(socket_root);
             socket->fd = fd;
             socket->connected = 1;
@@ -2034,6 +2035,7 @@ final class RuntimeSourcePlatformSection {
             socket->send_buffer_size = send_buffer_size <= 0 ? socket->send_buffer_size : send_buffer_size;
             socket->local_address = (javan_inet_address*) local_address;
             socket->remote_address = (javan_inet_address*) remote_address;
+            javan_runtime_lock_leave();
             javan_root_frame_pop(javan_socket_assign_roots);
         #endif
         }
