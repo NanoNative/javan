@@ -29,6 +29,11 @@ import static javan.codegen.BytecodeToIRMetadataSupport.*;
 
 final class BytecodeToIRThreadSupport {
     private static final MethodRef RUNNABLE_RUN = new MethodRef("java/lang/Runnable", "run", "()V");
+    private static final MethodRef HTTP_HANDLER_HANDLE = new MethodRef(
+        "com/sun/net/httpserver/HttpHandler",
+        "handle",
+        "(Lcom/sun/net/httpserver/HttpExchange;)V"
+    );
 
     private BytecodeToIRThreadSupport() {
     }
@@ -198,6 +203,60 @@ final class BytecodeToIRThreadSupport {
 
     static MethodRef runnableRunMethodRef() {
         return RUNNABLE_RUN;
+    }
+
+    static MethodRef httpHandlerHandleMethodRef() {
+        return HTTP_HANDLER_HANDLE;
+    }
+
+    static List<EntryPoint> httpServerHandlerTargets(
+        final Map<String, ClassFile> classes,
+        final List<EntryPoint> reachableMethods
+    ) {
+        if (!containsReachableHttpServerStart(classes, reachableMethods)) {
+            return List.of();
+        }
+        final List<EntryPoint> result = new ArrayList<>();
+        for (final EntryPoint reachable : reachableMethods) {
+            final ClassFile owner = classes.get(reachable.className());
+            if (owner != null
+                && !owner.isInterface()
+                && HTTP_HANDLER_HANDLE.name().equals(reachable.methodName())
+                && HTTP_HANDLER_HANDLE.descriptor().equals(reachable.descriptor())
+                && isAssignableTo(classes, owner.name(), HTTP_HANDLER_HANDLE.owner())) {
+                result.add(reachable);
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private static boolean containsReachableHttpServerStart(
+        final Map<String, ClassFile> classes,
+        final List<EntryPoint> reachableMethods
+    ) {
+        for (final EntryPoint reachable : reachableMethods) {
+            final ClassFile owner = classes.get(reachable.className());
+            if (owner == null) {
+                continue;
+            }
+            final Optional<MethodInfo> method = owner.method(reachable.methodName(), reachable.descriptor());
+            if (method.isEmpty() || method.orElseThrow().code().isEmpty()) {
+                continue;
+            }
+            for (final Instruction instruction : method.orElseThrow().code().orElseThrow().instructions()) {
+                final Optional<MethodRef> methodRef = instruction.methodRef();
+                if (methodRef.isPresent() && isHttpServerStart(methodRef.orElseThrow())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean isHttpServerStart(final MethodRef methodRef) {
+        return "com/sun/net/httpserver/HttpServer".equals(methodRef.owner())
+            && "start".equals(methodRef.name())
+            && "()V".equals(methodRef.descriptor());
     }
 
     static List<EntryPoint> runnableThreadTargets(

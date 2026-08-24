@@ -252,6 +252,15 @@ assert_json_number_at_least "$CONCURRENT_HANDOFF_REPORT" actualTotalAllocations 
 assert_json_number_at_least "$CONCURRENT_HANDOFF_REPORT" actualGcCollections 1
 assert_json_number_at_least "$CONCURRENT_HANDOFF_REPORT" actualGcCollectedAllocations 4000
 
+JAVAN_HEAP_LIMIT_BYTES=65536 \
+JAVAN_SANITIZER_COUNTER_CHECK=true \
+JAVAN_SANITIZER_MAX_LIVE_ALLOCATIONS=0 \
+JAVAN_SANITIZER_MAX_LIVE_BYTES=0 \
+JAVAN_GC_STRESS=1 \
+JAVAN_GC_SAFEPOINT_INTERVAL=1 \
+  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/http-server-loopback
+assert_thread_sanitizer_summary src/test/resources/projects/native-profile/http-server-loopback
+
 assert_library_sanitizer_summary
 fi
 

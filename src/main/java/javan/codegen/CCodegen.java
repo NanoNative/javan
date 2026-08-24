@@ -43,6 +43,9 @@ public final class CCodegen {
     private static final String PROGRAM_MANIFEST_VERSION = "javan-generated-sources-v1";
     private static final String GENERATED_METHOD_INVOKE_SYMBOL = "javan_generated_method_invoke";
     private static final String RUNNABLE_RUN_DISPATCH_SYMBOL = BytecodeToIR.dispatchSymbol(new MethodRef("java/lang/Runnable", "run", "()V"));
+    private static final String HTTP_HANDLER_HANDLE_DISPATCH_SYMBOL = BytecodeToIR.dispatchSymbol(
+        new MethodRef("com/sun/net/httpserver/HttpHandler", "handle", "(Lcom/sun/net/httpserver/HttpExchange;)V")
+    );
     private static final String MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL = "javan_materialized_lambda_apply_object";
     private static final String MATERIALIZED_LAMBDA_LONG_OBJECT_APPLY_SYMBOL = "javan_materialized_lambda_apply_long_object";
     private static final String MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL = "javan_materialized_lambda_apply_object2";
@@ -206,6 +209,7 @@ public final class CCodegen {
         emitExactFunctionOrNullHelpers(program, c);
         emitExactTemporalBridgeHelpers(c);
         emitThreadHelpers(program, c);
+        emitHttpServerHelpers(program, c);
         emitMaterializedLambdaHelpers(program, nativeWrapperSymbols, c);
         emitImportedNativeWrappers(nativeInterop, nativeWrapperSymbols, c);
         emitClassInitializationWrappers(program, nativeWrapperSymbols, c);
@@ -652,6 +656,7 @@ public final class CCodegen {
         emitExactEnumLookupHelpers(program, c);
         emitExactFunctionOrNullHelpers(program, c);
         emitThreadHelpers(program, c);
+        emitHttpServerHelpers(program, c);
         emitMaterializedLambdaHelpers(program, nativeWrapperSymbols, c);
         emitImportedNativeWrappers(nativeInterop, nativeWrapperSymbols, c);
         emitClassInitializationWrappers(program, nativeWrapperSymbols, c);
@@ -1966,6 +1971,22 @@ public final class CCodegen {
             c.append("    ").append(RUNNABLE_RUN_DISPATCH_SYMBOL).append("(target);").append(System.lineSeparator());
         } else {
             c.append("    javan_panic(\"Thread.start with Runnable target has no closed-world Runnable.run implementation\");").append(System.lineSeparator());
+        }
+        c.append("    if (javan_pending_has() != 0) {").append(System.lineSeparator());
+        c.append("        javan_pending_panic();").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+    }
+
+    private static void emitHttpServerHelpers(final IrProgram program, final StringBuilder c) {
+        c.append("void javan_http_server_handle(void* handler, void* exchange) {").append(System.lineSeparator());
+        c.append("    if (handler == 0 || exchange == 0) {").append(System.lineSeparator());
+        c.append("        javan_panic(\"HttpServer handler or exchange is null\");").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        if (hasDispatch(program, HTTP_HANDLER_HANDLE_DISPATCH_SYMBOL)) {
+            c.append("    ").append(HTTP_HANDLER_HANDLE_DISPATCH_SYMBOL).append("(handler, exchange);").append(System.lineSeparator());
+        } else {
+            c.append("    javan_panic(\"HttpServer.start has no closed-world HttpHandler.handle implementation\");").append(System.lineSeparator());
         }
         c.append("    if (javan_pending_has() != 0) {").append(System.lineSeparator());
         c.append("        javan_pending_panic();").append(System.lineSeparator());
