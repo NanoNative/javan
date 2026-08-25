@@ -446,6 +446,7 @@ public final class CCodegen {
         emitExactFunctionOrNullHelpers(program, core);
         emitExactTemporalBridgeHelpers(core);
         emitThreadHelpers(program, core);
+        emitHttpServerHelpers(program, core);
         emitMaterializedLambdaHelpers(program, nativeWrapperSymbols, core);
         emitImportedNativeWrappers(nativeInterop, nativeWrapperSymbols, core);
         emitClassInitializationWrappers(program, nativeWrapperSymbols, core, false);
