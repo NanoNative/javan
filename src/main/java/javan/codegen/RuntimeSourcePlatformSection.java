@@ -1257,8 +1257,9 @@ final class RuntimeSourcePlatformSection {
         """;
 
     private static final String SOURCE_TAIL_B = """
-        static int javan_socket_getsockopt_int(int fd, int level, int option_name, const char* message);
-        static int javan_socket_getsockopt_buffer_size(int fd, int option_name, const char* message);
+        static int javan_socket_getsockopt_int(javan_socket_handle fd, int level, int option_name, const char* message);
+        static int javan_socket_getsockopt_buffer_size(javan_socket_handle fd, int option_name, const char* message);
+        static const char* javan_socket_inet_ntop(int family, const void* source, char* destination, unsigned long destination_size);
         static javan_socket* javan_socket_checked(void* value);
         static javan_server_socket* javan_server_socket_checked(void* value);
 
@@ -1298,7 +1299,7 @@ final class RuntimeSourcePlatformSection {
             }
             address.sin_family = AF_INET;
             if (inet_pton(AF_INET, host_value, &address.sin_addr) == 1) {
-                if (inet_ntop(AF_INET, (const void*) &address.sin_addr, host_address, (socklen_t) host_address_size) == NULL) {
+                if (javan_socket_inet_ntop(AF_INET, (const void*) &address.sin_addr, host_address, host_address_size) == NULL) {
                     javan_panic("inet address conversion failed");
                 }
                 if (loopback_out != NULL && strcmp(host_address, "127.0.0.1") == 0) {
@@ -1536,33 +1537,235 @@ final class RuntimeSourcePlatformSection {
             return result;
         }
 
-        static int javan_socket_native_close(int fd) {
+        """;
+
+    private static final String SOURCE_TAIL_SOCKET = """
+        static int javan_socket_handle_is_open(javan_socket_handle fd) {
+            return fd != JAVAN_SOCKET_INVALID;
+        }
+
+        #if defined(_WIN32)
+        static INIT_ONCE javan_socket_runtime_once = INIT_ONCE_STATIC_INIT;
+        static int javan_socket_runtime_startup_result = WSASYSNOTREADY;
+
+        static BOOL CALLBACK javan_socket_runtime_startup(PINIT_ONCE once, PVOID parameter, PVOID* context) {
+            (void) once;
+            (void) parameter;
+            (void) context;
+            WSADATA data;
+            javan_socket_runtime_startup_result = WSAStartup(MAKEWORD(2, 2), &data);
+            return TRUE;
+        }
+        #endif
+
+        static void javan_socket_runtime_initialize(void) {
+        #if defined(_WIN32)
+            if (InitOnceExecuteOnce(&javan_socket_runtime_once, javan_socket_runtime_startup, NULL, NULL) == 0
+                || javan_socket_runtime_startup_result != 0) {
+                javan_panic("Winsock startup failed");
+            }
+        #endif
+        }
+
+        static javan_socket_handle javan_socket_native_open(int family) {
+            javan_socket_runtime_initialize();
+        #if defined(_WIN32)
+            return (javan_socket_handle) socket(family, SOCK_STREAM, IPPROTO_TCP);
+        #else
+            return (javan_socket_handle) socket(family, SOCK_STREAM, 0);
+        #endif
+        }
+
+        static int javan_socket_native_close(javan_socket_handle fd) {
         #if defined(_WIN32)
             return closesocket((SOCKET) fd);
         #else
-            return close(fd);
+            return close((int) fd);
         #endif
         }
 
-        static void javan_socket_runtime_unsupported(void) {
-            javan_panic("tcp sockets are not supported on this host yet");
+        static int javan_socket_native_bind(javan_socket_handle fd, const struct sockaddr* address, javan_socket_length address_length) {
+        #if defined(_WIN32)
+            return bind((SOCKET) fd, address, address_length);
+        #else
+            return bind((int) fd, address, address_length);
+        #endif
+        }
+
+        static int javan_socket_native_connect(javan_socket_handle fd, const struct sockaddr* address, javan_socket_length address_length) {
+        #if defined(_WIN32)
+            return connect((SOCKET) fd, address, address_length);
+        #else
+            return connect((int) fd, address, address_length);
+        #endif
+        }
+
+        static int javan_socket_native_listen(javan_socket_handle fd, int backlog) {
+        #if defined(_WIN32)
+            return listen((SOCKET) fd, backlog);
+        #else
+            return listen((int) fd, backlog);
+        #endif
+        }
+
+        static javan_socket_handle javan_socket_native_accept(javan_socket_handle fd) {
+        #if defined(_WIN32)
+            return (javan_socket_handle) accept((SOCKET) fd, NULL, NULL);
+        #else
+            return (javan_socket_handle) accept((int) fd, NULL, NULL);
+        #endif
+        }
+
+        static int javan_socket_native_get_name(
+            javan_socket_handle fd,
+            int peer,
+            struct sockaddr* address,
+            javan_socket_length* address_length
+        ) {
+        #if defined(_WIN32)
+            return peer != 0
+                ? getpeername((SOCKET) fd, address, address_length)
+                : getsockname((SOCKET) fd, address, address_length);
+        #else
+            return peer != 0
+                ? getpeername((int) fd, address, address_length)
+                : getsockname((int) fd, address, address_length);
+        #endif
+        }
+
+        static int javan_socket_native_get_option(
+            javan_socket_handle fd,
+            int level,
+            int option_name,
+            void* value,
+            javan_socket_length* length
+        ) {
+        #if defined(_WIN32)
+            return getsockopt((SOCKET) fd, level, option_name, (char*) value, length);
+        #else
+            return getsockopt((int) fd, level, option_name, value, length);
+        #endif
+        }
+
+        static int javan_socket_native_set_option(
+            javan_socket_handle fd,
+            int level,
+            int option_name,
+            const void* value,
+            javan_socket_length length
+        ) {
+        #if defined(_WIN32)
+            return setsockopt((SOCKET) fd, level, option_name, (const char*) value, length);
+        #else
+            return setsockopt((int) fd, level, option_name, value, length);
+        #endif
+        }
+
+        static int javan_socket_native_receive(javan_socket_handle fd, void* bytes, int length) {
+        #if defined(_WIN32)
+            return recv((SOCKET) fd, (char*) bytes, length, 0);
+        #else
+            return (int) recv((int) fd, bytes, (size_t) length, 0);
+        #endif
+        }
+
+        static int javan_socket_native_send(javan_socket_handle fd, const void* bytes, int length, int flags) {
+        #if defined(_WIN32)
+            return send((SOCKET) fd, (const char*) bytes, length, flags);
+        #else
+            return (int) send((int) fd, bytes, (size_t) length, flags);
+        #endif
+        }
+
+        static int javan_socket_native_shutdown(javan_socket_handle fd, int input) {
+        #if defined(_WIN32)
+            return shutdown((SOCKET) fd, input != 0 ? SD_RECEIVE : SD_SEND);
+        #else
+            return shutdown((int) fd, input != 0 ? SHUT_RD : SHUT_WR);
+        #endif
+        }
+
+        static int javan_socket_native_select(
+            javan_socket_handle fd,
+            fd_set* read_set,
+            fd_set* write_set,
+            struct timeval* timeout
+        ) {
+        #if defined(_WIN32)
+            (void) fd;
+            return select(0, read_set, write_set, NULL, timeout);
+        #else
+            return select((int) fd + 1, read_set, write_set, NULL, timeout);
+        #endif
+        }
+
+        static int javan_socket_last_error_is_would_block(void) {
+        #if defined(_WIN32)
+            const int error = WSAGetLastError();
+            return error == WSAEWOULDBLOCK || error == WSAETIMEDOUT;
+        #else
+            return errno == EAGAIN || errno == EWOULDBLOCK;
+        #endif
+        }
+
+        static int javan_socket_last_error_is_interrupted(void) {
+        #if defined(_WIN32)
+            return WSAGetLastError() == WSAEINTR;
+        #else
+            return errno == EINTR;
+        #endif
+        }
+
+        static int javan_socket_last_error_is_connecting(void) {
+        #if defined(_WIN32)
+            const int error = WSAGetLastError();
+            return error == WSAEINPROGRESS || error == WSAEWOULDBLOCK;
+        #else
+            return errno == EINPROGRESS;
+        #endif
+        }
+
+        static int javan_socket_native_begin_nonblocking(javan_socket_handle fd, int* restore_state) {
+        #if defined(_WIN32)
+            u_long enabled = 1UL;
+            *restore_state = 0;
+            return ioctlsocket((SOCKET) fd, FIONBIO, &enabled);
+        #else
+            const int flags = fcntl((int) fd, F_GETFL, 0);
+            if (flags < 0) {
+                return -1;
+            }
+            *restore_state = flags;
+            return fcntl((int) fd, F_SETFL, flags | O_NONBLOCK);
+        #endif
+        }
+
+        static int javan_socket_native_restore_blocking(javan_socket_handle fd, int restore_state) {
+        #if defined(_WIN32)
+            u_long disabled = 0UL;
+            (void) restore_state;
+            return ioctlsocket((SOCKET) fd, FIONBIO, &disabled);
+        #else
+            return fcntl((int) fd, F_SETFL, restore_state);
+        #endif
+        }
+
+        static const char* javan_socket_inet_ntop(int family, const void* source, char* destination, unsigned long destination_size) {
+        #if defined(_WIN32)
+            return InetNtopA(family, (PVOID) source, destination, (DWORD) destination_size);
+        #else
+            return inet_ntop(family, source, destination, (socklen_t) destination_size);
+        #endif
         }
 
         static int javan_socket_default_buffer_size(int option_name, const char* message) {
-        #if defined(_WIN32)
-            (void) option_name;
-            (void) message;
-            javan_socket_runtime_unsupported();
-            return 8192;
-        #else
-            int fd = socket(AF_INET, SOCK_STREAM, 0);
-            if (fd < 0) {
+            const javan_socket_handle fd = javan_socket_native_open(AF_INET);
+            if (javan_socket_handle_is_open(fd) == 0) {
                 javan_panic(message);
             }
-            int value = javan_socket_getsockopt_buffer_size(fd, option_name, message);
+            const int value = javan_socket_getsockopt_buffer_size(fd, option_name, message);
             javan_socket_native_close(fd);
             return value <= 0 ? 8192 : value;
-        #endif
         }
 
         static int javan_server_socket_backlog_checked(int backlog) {
@@ -1572,7 +1775,7 @@ final class RuntimeSourcePlatformSection {
             return backlog;
         }
 
-        static void javan_socket_host_checked(const char* host, struct sockaddr_storage* address, socklen_t* address_length, int port) {
+        static void javan_socket_host_checked(const char* host, struct sockaddr_storage* address, javan_socket_length* address_length, int port) {
             if (port < 0 || port > 65535) {
                 javan_panic("socket port out of range");
             }
@@ -1610,7 +1813,7 @@ final class RuntimeSourcePlatformSection {
             int remote_family,
             const char* host,
             struct sockaddr_storage* address,
-            socklen_t* address_length,
+            javan_socket_length* address_length,
             int port
         ) {
             if (port < 0 || port > 65535) {
@@ -1643,7 +1846,7 @@ final class RuntimeSourcePlatformSection {
             if (address->sa_family == AF_INET) {
                 const struct sockaddr_in* address4 = (const struct sockaddr_in*) address;
                 char host[INET_ADDRSTRLEN];
-                if (inet_ntop(AF_INET, (const void*) &address4->sin_addr, host, sizeof(host)) == NULL) {
+                if (javan_socket_inet_ntop(AF_INET, (const void*) &address4->sin_addr, host, sizeof(host)) == NULL) {
                     javan_panic("socket address conversion failed");
                 }
                 const char* name = strcmp(host, "127.0.0.1") == 0 ? "localhost" : host;
@@ -1671,26 +1874,26 @@ final class RuntimeSourcePlatformSection {
             return 0;
         }
 
-        static int javan_socket_getsockopt_flag(int fd, int level, int option_name, const char* message) {
+        static int javan_socket_getsockopt_flag(javan_socket_handle fd, int level, int option_name, const char* message) {
             int value = 0;
-            socklen_t length = (socklen_t) sizeof(value);
-            if (getsockopt(fd, level, option_name, (void*) &value, &length) != 0) {
+            javan_socket_length length = (javan_socket_length) sizeof(value);
+            if (javan_socket_native_get_option(fd, level, option_name, (void*) &value, &length) != 0) {
                 javan_panic(message);
             }
             return value == 0 ? 0 : 1;
         }
 
-        static void javan_socket_setsockopt_flag(int fd, int level, int option_name, int enabled, const char* message) {
+        static void javan_socket_setsockopt_flag(javan_socket_handle fd, int level, int option_name, int enabled, const char* message) {
             int value = enabled == 0 ? 0 : 1;
-            if (setsockopt(fd, level, option_name, (const void*) &value, (socklen_t) sizeof(value)) != 0) {
+            if (javan_socket_native_set_option(fd, level, option_name, (const void*) &value, (javan_socket_length) sizeof(value)) != 0) {
                 javan_panic(message);
             }
         }
 
-        static int javan_socket_getsockopt_int(int fd, int level, int option_name, const char* message) {
+        static int javan_socket_getsockopt_int(javan_socket_handle fd, int level, int option_name, const char* message) {
             int value = 0;
-            socklen_t length = (socklen_t) sizeof(value);
-            if (getsockopt(fd, level, option_name, (void*) &value, &length) != 0) {
+            javan_socket_length length = (javan_socket_length) sizeof(value);
+            if (javan_socket_native_get_option(fd, level, option_name, (void*) &value, &length) != 0) {
                 javan_panic(message);
             }
             if (value < 0) {
@@ -1710,7 +1913,7 @@ final class RuntimeSourcePlatformSection {
             return value;
         }
 
-        static int javan_socket_getsockopt_buffer_size(int fd, int option_name, const char* message) {
+        static int javan_socket_getsockopt_buffer_size(javan_socket_handle fd, int option_name, const char* message) {
             return javan_socket_normalize_buffer_size(option_name, javan_socket_getsockopt_int(fd, SOL_SOCKET, option_name, message));
         }
 
@@ -1721,8 +1924,8 @@ final class RuntimeSourcePlatformSection {
             return size;
         }
 
-        static void javan_socket_setsockopt_int(int fd, int level, int option_name, int value, const char* message) {
-            if (setsockopt(fd, level, option_name, (const void*) &value, (socklen_t) sizeof(value)) != 0) {
+        static void javan_socket_setsockopt_int(javan_socket_handle fd, int level, int option_name, int value, const char* message) {
+            if (javan_socket_native_set_option(fd, level, option_name, (const void*) &value, (javan_socket_length) sizeof(value)) != 0) {
                 javan_panic(message);
             }
         }
@@ -1744,12 +1947,12 @@ final class RuntimeSourcePlatformSection {
             return linger_seconds;
         }
 
-        static int javan_socket_getsockopt_linger(int fd, const char* message) {
+        static int javan_socket_getsockopt_linger(javan_socket_handle fd, const char* message) {
             struct linger value;
             long long linger;
-            socklen_t length = (socklen_t) sizeof(value);
+            javan_socket_length length = (javan_socket_length) sizeof(value);
             memset(&value, 0, sizeof(value));
-            if (getsockopt(fd, SOL_SOCKET, SO_LINGER, (void*) &value, &length) != 0) {
+            if (javan_socket_native_get_option(fd, SOL_SOCKET, SO_LINGER, (void*) &value, &length) != 0) {
                 javan_panic(message);
             }
             if (value.l_onoff == 0) {
@@ -1762,19 +1965,19 @@ final class RuntimeSourcePlatformSection {
             return linger > 65535 ? 65535 : (int) linger;
         }
 
-        static void javan_socket_setsockopt_linger(int fd, int enabled, int linger_seconds, const char* message) {
+        static void javan_socket_setsockopt_linger(javan_socket_handle fd, int enabled, int linger_seconds, const char* message) {
             struct linger value;
             value.l_onoff = enabled == 0 ? 0 : 1;
             value.l_linger = enabled == 0 ? 0 : linger_seconds;
-            if (setsockopt(fd, SOL_SOCKET, SO_LINGER, (const void*) &value, (socklen_t) sizeof(value)) != 0) {
+            if (javan_socket_native_set_option(fd, SOL_SOCKET, SO_LINGER, (const void*) &value, (javan_socket_length) sizeof(value)) != 0) {
                 javan_panic(message);
             }
         }
 
-        static int javan_socket_traffic_class_level(int fd, int* option_name_out) {
+        static int javan_socket_traffic_class_level(javan_socket_handle fd, int* option_name_out) {
             struct sockaddr_storage local_address;
-            socklen_t local_length = sizeof(local_address);
-            if (getsockname(fd, (struct sockaddr*) &local_address, &local_length) != 0) {
+            javan_socket_length local_length = (javan_socket_length) sizeof(local_address);
+            if (javan_socket_native_get_name(fd, 0, (struct sockaddr*) &local_address, &local_length) != 0) {
                 javan_panic("socket local address lookup failed");
             }
             if (((struct sockaddr*) &local_address)->sa_family == AF_INET) {
@@ -1800,7 +2003,7 @@ final class RuntimeSourcePlatformSection {
             return traffic_class;
         }
 
-        static int javan_socket_getsockopt_traffic_class(int fd, const char* message) {
+        static int javan_socket_getsockopt_traffic_class(javan_socket_handle fd, const char* message) {
             int option_name = 0;
             int level = javan_socket_traffic_class_level(fd, &option_name);
             int value = javan_socket_getsockopt_int(fd, level, option_name, message);
@@ -1812,36 +2015,29 @@ final class RuntimeSourcePlatformSection {
             return value;
         }
 
-        static void javan_socket_setsockopt_traffic_class(int fd, int traffic_class, const char* message) {
+        static void javan_socket_setsockopt_traffic_class(javan_socket_handle fd, int traffic_class, const char* message) {
             int option_name = 0;
             int level = javan_socket_traffic_class_level(fd, &option_name);
             javan_socket_setsockopt_int(fd, level, option_name, traffic_class, message);
         }
 
-        static void javan_socket_apply_receive_timeout(int fd, int timeout_millis, const char* message) {
+        static void javan_socket_apply_receive_timeout(javan_socket_handle fd, int timeout_millis, const char* message) {
         #if defined(_WIN32)
-            (void) fd;
-            (void) timeout_millis;
-            (void) message;
-            javan_socket_runtime_unsupported();
+            const int timeout = timeout_millis;
+            if (javan_socket_native_set_option(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, (javan_socket_length) sizeof(timeout)) != 0) {
+                javan_panic(message);
+            }
         #else
             struct timeval timeout;
             timeout.tv_sec = (time_t) (timeout_millis / 1000);
             timeout.tv_usec = (long) ((timeout_millis % 1000) * 1000);
-            if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, (const void*) &timeout, (socklen_t) sizeof(timeout)) != 0) {
+            if (javan_socket_native_set_option(fd, SOL_SOCKET, SO_RCVTIMEO, (const void*) &timeout, (javan_socket_length) sizeof(timeout)) != 0) {
                 javan_panic(message);
             }
         #endif
         }
 
-        static void javan_socket_wait_readable(int fd, int timeout_millis, const char* timeout_message, const char* wait_message) {
-        #if defined(_WIN32)
-            (void) fd;
-            (void) timeout_millis;
-            (void) timeout_message;
-            (void) wait_message;
-            javan_socket_runtime_unsupported();
-        #else
+        static void javan_socket_wait_readable(javan_socket_handle fd, int timeout_millis, const char* timeout_message, const char* wait_message) {
             if (timeout_millis <= 0) {
                 return;
             }
@@ -1851,25 +2047,24 @@ final class RuntimeSourcePlatformSection {
             struct timeval timeout;
             timeout.tv_sec = (time_t) (timeout_millis / 1000);
             timeout.tv_usec = (long) ((timeout_millis % 1000) * 1000);
-            int ready = select(fd + 1, &read_set, NULL, NULL, &timeout);
+            int ready = javan_socket_native_select(fd, &read_set, NULL, &timeout);
             if (ready == 0) {
                 javan_panic(timeout_message);
             }
             if (ready < 0) {
                 javan_panic(wait_message);
             }
-        #endif
         }
 
-        static void javan_socket_populate_names(int fd, void** local_address_out, int* local_port_out, void** remote_address_out, int* remote_port_out) {
+        static void javan_socket_populate_names(javan_socket_handle fd, void** local_address_out, int* local_port_out, void** remote_address_out, int* remote_port_out) {
             struct sockaddr_storage local_address;
-            socklen_t local_length = sizeof(local_address);
-            if (getsockname(fd, (struct sockaddr*) &local_address, &local_length) != 0) {
+            javan_socket_length local_length = (javan_socket_length) sizeof(local_address);
+            if (javan_socket_native_get_name(fd, 0, (struct sockaddr*) &local_address, &local_length) != 0) {
                 javan_panic("socket local address lookup failed");
             }
             struct sockaddr_storage remote_address;
-            socklen_t remote_length = sizeof(remote_address);
-            if (getpeername(fd, (struct sockaddr*) &remote_address, &remote_length) != 0) {
+            javan_socket_length remote_length = (javan_socket_length) sizeof(remote_address);
+            if (javan_socket_native_get_name(fd, 1, (struct sockaddr*) &remote_address, &remote_length) != 0) {
                 javan_panic("socket remote address lookup failed");
             }
             *local_address_out = javan_inet_address_from_sockaddr((const struct sockaddr*) &local_address);
@@ -1878,7 +2073,7 @@ final class RuntimeSourcePlatformSection {
             *remote_port_out = javan_socket_port_from_sockaddr((const struct sockaddr*) &remote_address);
         }
 
-        static void javan_socket_populate_options(int fd, int* tcp_no_delay_out, int* keep_alive_out, int* reuse_address_out, int* oob_inline_out, int* traffic_class_out) {
+        static void javan_socket_populate_options(javan_socket_handle fd, int* tcp_no_delay_out, int* keep_alive_out, int* reuse_address_out, int* oob_inline_out, int* traffic_class_out) {
             *tcp_no_delay_out = javan_socket_getsockopt_flag(fd, IPPROTO_TCP, TCP_NODELAY, "socket TCP_NODELAY lookup failed");
             *keep_alive_out = javan_socket_getsockopt_flag(fd, SOL_SOCKET, SO_KEEPALIVE, "socket SO_KEEPALIVE lookup failed");
             *reuse_address_out = javan_socket_getsockopt_flag(fd, SOL_SOCKET, SO_REUSEADDR, "socket SO_REUSEADDR lookup failed");
@@ -1887,6 +2082,7 @@ final class RuntimeSourcePlatformSection {
         }
 
         void* javan_socket_new(void) {
+            javan_socket_runtime_initialize();
             void* local_address = javan_inet_address_new(NULL, NULL, NULL);
             void* local_address_root = local_address;
             void** javan_socket_new_roots[] = {
@@ -1902,7 +2098,7 @@ final class RuntimeSourcePlatformSection {
             javan_root_frame_push(javan_socket_new_owner_roots, 2);
             socket = (javan_socket*) socket_root;
             socket->magic = JAVAN_SOCKET_MAGIC;
-            socket->fd = -1;
+            socket->fd = JAVAN_SOCKET_INVALID;
             socket->connected = 0;
             socket->closed = 0;
             socket->bound = 0;
@@ -1927,31 +2123,26 @@ final class RuntimeSourcePlatformSection {
             return socket;
         }
 
-        static void javan_socket_connect_native_timeout(int fd, const struct sockaddr* address, socklen_t address_length, int timeout_millis) {
-        #if defined(_WIN32)
-            (void) fd;
-            (void) address;
-            (void) address_length;
-            (void) timeout_millis;
-            javan_socket_runtime_unsupported();
-        #else
-            int timeout = javan_socket_timeout_checked(timeout_millis);
+        static void javan_socket_connect_native_timeout(
+            javan_socket_handle fd,
+            const struct sockaddr* address,
+            javan_socket_length address_length,
+            int timeout_millis
+        ) {
+            const int timeout = javan_socket_timeout_checked(timeout_millis);
             if (timeout == 0) {
-                if (connect(fd, address, address_length) != 0) {
+                if (javan_socket_native_connect(fd, address, address_length) != 0) {
                     javan_panic("socket connect failed");
                 }
                 return;
             }
-            int flags = fcntl(fd, F_GETFL, 0);
-            if (flags < 0) {
-                javan_panic("socket connect flags lookup failed");
-            }
-            if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) != 0) {
+            int restore_state = 0;
+            if (javan_socket_native_begin_nonblocking(fd, &restore_state) != 0) {
                 javan_panic("socket connect nonblocking setup failed");
             }
-            int result = connect(fd, address, address_length);
-            if (result != 0 && errno != EINPROGRESS) {
-                fcntl(fd, F_SETFL, flags);
+            const int result = javan_socket_native_connect(fd, address, address_length);
+            if (result != 0 && javan_socket_last_error_is_connecting() == 0) {
+                javan_socket_native_restore_blocking(fd, restore_state);
                 javan_panic("socket connect failed");
             }
             if (result != 0) {
@@ -1961,38 +2152,32 @@ final class RuntimeSourcePlatformSection {
                 struct timeval timeout_value;
                 timeout_value.tv_sec = (time_t) (timeout / 1000);
                 timeout_value.tv_usec = (long) ((timeout % 1000) * 1000);
-                int ready = select(fd + 1, NULL, &write_set, NULL, &timeout_value);
+                const int ready = javan_socket_native_select(fd, NULL, &write_set, &timeout_value);
                 if (ready == 0) {
-                    fcntl(fd, F_SETFL, flags);
+                    javan_socket_native_restore_blocking(fd, restore_state);
                     javan_panic("socket connect timed out");
                 }
                 if (ready < 0) {
-                    fcntl(fd, F_SETFL, flags);
+                    javan_socket_native_restore_blocking(fd, restore_state);
                     javan_panic("socket connect wait failed");
                 }
                 int error = 0;
-                socklen_t error_length = (socklen_t) sizeof(error);
-                if (getsockopt(fd, SOL_SOCKET, SO_ERROR, (void*) &error, &error_length) != 0) {
-                    fcntl(fd, F_SETFL, flags);
+                javan_socket_length error_length = (javan_socket_length) sizeof(error);
+                if (javan_socket_native_get_option(fd, SOL_SOCKET, SO_ERROR, (void*) &error, &error_length) != 0) {
+                    javan_socket_native_restore_blocking(fd, restore_state);
                     javan_panic("socket connect state lookup failed");
                 }
                 if (error != 0) {
-                    fcntl(fd, F_SETFL, flags);
+                    javan_socket_native_restore_blocking(fd, restore_state);
                     javan_panic("socket connect failed");
                 }
             }
-            if (fcntl(fd, F_SETFL, flags) != 0) {
+            if (javan_socket_native_restore_blocking(fd, restore_state) != 0) {
                 javan_panic("socket connect blocking restore failed");
             }
-        #endif
         }
 
-        static void javan_socket_assign_connected_fd(void* socket_value, int fd) {
-        #if defined(_WIN32)
-            (void) socket_value;
-            (void) fd;
-            javan_socket_runtime_unsupported();
-        #else
+        static void javan_socket_assign_connected_fd(void* socket_value, javan_socket_handle fd) {
             void* local_address = NULL;
             void* remote_address = NULL;
             int local_port = 0;
@@ -2037,15 +2222,9 @@ final class RuntimeSourcePlatformSection {
             socket->remote_address = (javan_inet_address*) remote_address;
             javan_runtime_lock_leave();
             javan_root_frame_pop(javan_socket_assign_roots);
-        #endif
         }
 
-        static void* javan_socket_wrap_connected_fd(int fd) {
-        #if defined(_WIN32)
-            (void) fd;
-            javan_socket_runtime_unsupported();
-            return NULL;
-        #else
+        static void* javan_socket_wrap_connected_fd(javan_socket_handle fd) {
             void* socket = javan_socket_new();
             void* socket_root = socket;
             void** javan_socket_wrap_roots[] = {
@@ -2055,7 +2234,6 @@ final class RuntimeSourcePlatformSection {
             javan_socket_assign_connected_fd(socket_root, fd);
             javan_root_frame_pop(javan_socket_wrap_roots);
             return socket_root;
-        #endif
         }
 
         static javan_socket* javan_socket_checked(void* value) {
@@ -2104,7 +2282,7 @@ final class RuntimeSourcePlatformSection {
 
         static javan_socket* javan_socket_open_checked(void* value) {
             javan_socket* socket = javan_socket_checked(value);
-            if (socket->closed != 0 || socket->fd < 0) {
+            if (socket->closed != 0 || javan_socket_handle_is_open(socket->fd) == 0) {
                 javan_panic("socket is closed");
             }
             return socket;
@@ -2157,69 +2335,46 @@ final class RuntimeSourcePlatformSection {
         }
 
         void* javan_socket_connect_host(void* host_value, int port) {
-        #if defined(_WIN32)
-            (void) host_value;
-            (void) port;
-            javan_socket_runtime_unsupported();
-            return NULL;
-        #else
             const char* host = host_value == NULL ? "localhost" : (const char*) host_value;
             struct sockaddr_storage address;
-            socklen_t address_length = 0;
+            javan_socket_length address_length = 0;
             javan_socket_host_checked(host, &address, &address_length, port);
-            int fd = socket(((struct sockaddr*) &address)->sa_family, SOCK_STREAM, 0);
-            if (fd < 0) {
+            javan_socket_handle fd = javan_socket_native_open(((struct sockaddr*) &address)->sa_family);
+            if (javan_socket_handle_is_open(fd) == 0) {
                 javan_panic("socket open failed");
             }
             javan_socket_connect_native_timeout(fd, (struct sockaddr*) &address, address_length, 0);
             return javan_socket_wrap_connected_fd(fd);
-        #endif
         }
 
         static void* javan_socket_connect_host_timeout(void* host_value, int port, int timeout_millis) {
-        #if defined(_WIN32)
-            (void) host_value;
-            (void) port;
-            (void) timeout_millis;
-            javan_socket_runtime_unsupported();
-            return NULL;
-        #else
             const char* host = host_value == NULL ? "localhost" : (const char*) host_value;
             struct sockaddr_storage address;
-            socklen_t address_length = 0;
+            javan_socket_length address_length = 0;
             javan_socket_host_checked(host, &address, &address_length, port);
-            int fd = socket(((struct sockaddr*) &address)->sa_family, SOCK_STREAM, 0);
-            if (fd < 0) {
+            javan_socket_handle fd = javan_socket_native_open(((struct sockaddr*) &address)->sa_family);
+            if (javan_socket_handle_is_open(fd) == 0) {
                 javan_panic("socket open failed");
             }
             javan_socket_connect_native_timeout(fd, (struct sockaddr*) &address, address_length, timeout_millis);
             return javan_socket_wrap_connected_fd(fd);
-        #endif
         }
 
         void* javan_socket_connect_host_config(void* host_value, int port, void* local_address_value, int local_port) {
-        #if defined(_WIN32)
-            (void) host_value;
-            (void) port;
-            (void) local_address_value;
-            (void) local_port;
-            javan_socket_runtime_unsupported();
-            return NULL;
-        #else
             const char* host = host_value == NULL ? "localhost" : (const char*) host_value;
             const char* local_host = local_address_value == NULL
                 ? NULL
                 : (const char*) javan_inet_address_checked(local_address_value)->host_address;
             struct sockaddr_storage remote_address;
-            socklen_t remote_length = 0;
+            javan_socket_length remote_length = 0;
             javan_socket_host_checked(host, &remote_address, &remote_length, port);
-            int fd = socket(((struct sockaddr*) &remote_address)->sa_family, SOCK_STREAM, 0);
-            if (fd < 0) {
+            javan_socket_handle fd = javan_socket_native_open(((struct sockaddr*) &remote_address)->sa_family);
+            if (javan_socket_handle_is_open(fd) == 0) {
                 javan_panic("socket open failed");
             }
             if (local_host != NULL || local_port != 0) {
                 struct sockaddr_storage local_address;
-                socklen_t local_length = 0;
+                javan_socket_length local_length = 0;
                 javan_socket_local_bind_checked(
                     ((struct sockaddr*) &remote_address)->sa_family,
                     local_host,
@@ -2227,31 +2382,21 @@ final class RuntimeSourcePlatformSection {
                     &local_length,
                     local_port
                 );
-                if (bind(fd, (struct sockaddr*) &local_address, local_length) != 0) {
+                if (javan_socket_native_bind(fd, (struct sockaddr*) &local_address, local_length) != 0) {
                     javan_socket_native_close(fd);
                     javan_panic("socket local bind failed");
                 }
             }
             javan_socket_connect_native_timeout(fd, (struct sockaddr*) &remote_address, remote_length, 0);
             return javan_socket_wrap_connected_fd(fd);
-        #endif
         }
 
         void* javan_socket_connect_address_config(void* remote_address_value, int port, void* local_address_value, int local_port) {
-        #if defined(_WIN32)
-            (void) remote_address_value;
-            (void) port;
-            (void) local_address_value;
-            (void) local_port;
-            javan_socket_runtime_unsupported();
-            return NULL;
-        #else
             if (remote_address_value == NULL) {
                 javan_panic("null inet address");
             }
             void* remote_host = javan_inet_address_checked(remote_address_value)->host_address;
             return javan_socket_connect_host_config(remote_host, port, local_address_value, local_port);
-        #endif
         }
 
         void javan_socket_connect_socket_address(void* value, void* address) {
@@ -2324,21 +2469,15 @@ final class RuntimeSourcePlatformSection {
         }
 
         void javan_socket_set_so_timeout(void* value, int timeout_millis) {
-        #if defined(_WIN32)
-            (void) value;
-            (void) timeout_millis;
-            javan_socket_runtime_unsupported();
-        #else
             javan_socket* socket = javan_socket_checked(value);
             if (socket->closed != 0) {
                 javan_panic("socket is closed");
             }
             int timeout = javan_socket_timeout_checked(timeout_millis);
-            if (socket->fd >= 0) {
+            if (javan_socket_handle_is_open(socket->fd) != 0) {
                 javan_socket_apply_receive_timeout(socket->fd, timeout, "socket SO_RCVTIMEO update failed");
             }
             socket->so_timeout = timeout;
-        #endif
         }
 
         int javan_socket_get_so_linger(void* value) {
@@ -2346,29 +2485,22 @@ final class RuntimeSourcePlatformSection {
         }
 
         void javan_socket_set_so_linger(void* value, int enabled, int linger_seconds) {
-        #if defined(_WIN32)
-            (void) value;
-            (void) enabled;
-            (void) linger_seconds;
-            javan_socket_runtime_unsupported();
-        #else
             javan_socket* socket = javan_socket_checked(value);
             if (socket->closed != 0) {
                 javan_panic("socket is closed");
             }
             if (enabled == 0) {
-                if (socket->fd >= 0) {
+                if (javan_socket_handle_is_open(socket->fd) != 0) {
                     javan_socket_setsockopt_linger(socket->fd, 0, 0, "socket SO_LINGER update failed");
                 }
                 socket->so_linger = -1;
                 return;
             }
             int checked = javan_socket_linger_checked(linger_seconds);
-            if (socket->fd >= 0) {
+            if (javan_socket_handle_is_open(socket->fd) != 0) {
                 javan_socket_setsockopt_linger(socket->fd, 1, checked, "socket SO_LINGER update failed");
             }
             socket->so_linger = checked;
-        #endif
         }
 
         int javan_socket_get_oob_inline(void* value) {
@@ -2376,20 +2508,14 @@ final class RuntimeSourcePlatformSection {
         }
 
         void javan_socket_set_oob_inline(void* value, int enabled) {
-        #if defined(_WIN32)
-            (void) value;
-            (void) enabled;
-            javan_socket_runtime_unsupported();
-        #else
             javan_socket* socket = javan_socket_checked(value);
             if (socket->closed != 0) {
                 javan_panic("socket is closed");
             }
-            if (socket->fd >= 0) {
+            if (javan_socket_handle_is_open(socket->fd) != 0) {
                 javan_socket_setsockopt_flag(socket->fd, SOL_SOCKET, SO_OOBINLINE, enabled, "socket SO_OOBINLINE update failed");
             }
             socket->oob_inline = enabled == 0 ? 0 : 1;
-        #endif
         }
 
         int javan_socket_get_traffic_class(void* value) {
@@ -2397,23 +2523,17 @@ final class RuntimeSourcePlatformSection {
         }
 
         void javan_socket_set_traffic_class(void* value, int traffic_class) {
-        #if defined(_WIN32)
-            (void) value;
-            (void) traffic_class;
-            javan_socket_runtime_unsupported();
-        #else
             javan_socket* socket = javan_socket_checked(value);
             if (socket->closed != 0) {
                 javan_panic("socket is closed");
             }
             int checked = javan_socket_traffic_class_checked(traffic_class);
-            if (socket->fd >= 0) {
+            if (javan_socket_handle_is_open(socket->fd) != 0) {
                 javan_socket_setsockopt_traffic_class(socket->fd, checked, "socket traffic class update failed");
                 socket->traffic_class = javan_socket_getsockopt_traffic_class(socket->fd, "socket traffic class lookup failed");
                 return;
             }
             socket->traffic_class = checked;
-        #endif
         }
 
         int javan_socket_get_tcp_no_delay(void* value) {
@@ -2421,20 +2541,14 @@ final class RuntimeSourcePlatformSection {
         }
 
         void javan_socket_set_tcp_no_delay(void* value, int enabled) {
-        #if defined(_WIN32)
-            (void) value;
-            (void) enabled;
-            javan_socket_runtime_unsupported();
-        #else
             javan_socket* socket = javan_socket_checked(value);
             if (socket->closed != 0) {
                 javan_panic("socket is closed");
             }
-            if (socket->fd >= 0) {
+            if (javan_socket_handle_is_open(socket->fd) != 0) {
                 javan_socket_setsockopt_flag(socket->fd, IPPROTO_TCP, TCP_NODELAY, enabled, "socket TCP_NODELAY update failed");
             }
             socket->tcp_no_delay = enabled == 0 ? 0 : 1;
-        #endif
         }
 
         int javan_socket_get_keep_alive(void* value) {
@@ -2442,20 +2556,14 @@ final class RuntimeSourcePlatformSection {
         }
 
         void javan_socket_set_keep_alive(void* value, int enabled) {
-        #if defined(_WIN32)
-            (void) value;
-            (void) enabled;
-            javan_socket_runtime_unsupported();
-        #else
             javan_socket* socket = javan_socket_checked(value);
             if (socket->closed != 0) {
                 javan_panic("socket is closed");
             }
-            if (socket->fd >= 0) {
+            if (javan_socket_handle_is_open(socket->fd) != 0) {
                 javan_socket_setsockopt_flag(socket->fd, SOL_SOCKET, SO_KEEPALIVE, enabled, "socket SO_KEEPALIVE update failed");
             }
             socket->keep_alive = enabled == 0 ? 0 : 1;
-        #endif
         }
 
         int javan_socket_get_reuse_address(void* value) {
@@ -2463,90 +2571,60 @@ final class RuntimeSourcePlatformSection {
         }
 
         void javan_socket_set_reuse_address(void* value, int enabled) {
-        #if defined(_WIN32)
-            (void) value;
-            (void) enabled;
-            javan_socket_runtime_unsupported();
-        #else
             javan_socket* socket = javan_socket_checked(value);
             if (socket->closed != 0) {
                 javan_panic("socket is closed");
             }
-            if (socket->fd >= 0) {
+            if (javan_socket_handle_is_open(socket->fd) != 0) {
                 javan_socket_setsockopt_flag(socket->fd, SOL_SOCKET, SO_REUSEADDR, enabled, "socket SO_REUSEADDR update failed");
             }
             socket->reuse_address = enabled == 0 ? 0 : 1;
-        #endif
         }
 
         int javan_socket_get_receive_buffer_size(void* value) {
-        #if defined(_WIN32)
-            (void) value;
-            javan_socket_runtime_unsupported();
-            return 0;
-        #else
             javan_socket* socket = javan_socket_checked(value);
             if (socket->closed != 0) {
                 javan_panic("socket is closed");
             }
-            if (socket->fd < 0) {
+            if (javan_socket_handle_is_open(socket->fd) == 0) {
                 return socket->receive_buffer_size;
             }
             return javan_socket_getsockopt_buffer_size(socket->fd, SO_RCVBUF, "socket SO_RCVBUF lookup failed");
-        #endif
         }
 
         void javan_socket_set_receive_buffer_size(void* value, int size) {
-        #if defined(_WIN32)
-            (void) value;
-            (void) size;
-            javan_socket_runtime_unsupported();
-        #else
             javan_socket* socket = javan_socket_checked(value);
             if (socket->closed != 0) {
                 javan_panic("socket is closed");
             }
             int checked = javan_socket_buffer_size_checked(size);
-            if (socket->fd >= 0) {
+            if (javan_socket_handle_is_open(socket->fd) != 0) {
                 javan_socket_setsockopt_int(socket->fd, SOL_SOCKET, SO_RCVBUF, checked, "socket SO_RCVBUF update failed");
             }
             socket->receive_buffer_size = checked;
-        #endif
         }
 
         int javan_socket_get_send_buffer_size(void* value) {
-        #if defined(_WIN32)
-            (void) value;
-            javan_socket_runtime_unsupported();
-            return 0;
-        #else
             javan_socket* socket = javan_socket_checked(value);
             if (socket->closed != 0) {
                 javan_panic("socket is closed");
             }
-            if (socket->fd < 0) {
+            if (javan_socket_handle_is_open(socket->fd) == 0) {
                 return socket->send_buffer_size;
             }
             return javan_socket_getsockopt_buffer_size(socket->fd, SO_SNDBUF, "socket SO_SNDBUF lookup failed");
-        #endif
         }
 
         void javan_socket_set_send_buffer_size(void* value, int size) {
-        #if defined(_WIN32)
-            (void) value;
-            (void) size;
-            javan_socket_runtime_unsupported();
-        #else
             javan_socket* socket = javan_socket_checked(value);
             if (socket->closed != 0) {
                 javan_panic("socket is closed");
             }
             int checked = javan_socket_buffer_size_checked(size);
-            if (socket->fd >= 0) {
+            if (javan_socket_handle_is_open(socket->fd) != 0) {
                 javan_socket_setsockopt_int(socket->fd, SOL_SOCKET, SO_SNDBUF, checked, "socket SO_SNDBUF update failed");
             }
             socket->send_buffer_size = checked;
-        #endif
         }
 
         void* javan_socket_get_local_address(void* value) {
@@ -2588,11 +2666,6 @@ final class RuntimeSourcePlatformSection {
         }
 
         int javan_socket_input_stream_read(void* value) {
-        #if defined(_WIN32)
-            (void) value;
-            javan_socket_runtime_unsupported();
-            return 0;
-        #else
             javan_socket_input_stream_value* stream = javan_socket_input_stream_checked(value);
             javan_socket* socket = javan_socket_open_checked((void*) stream->socket);
             if (socket->input_shutdown != 0) {
@@ -2600,9 +2673,9 @@ final class RuntimeSourcePlatformSection {
             }
             javan_socket_wait_readable(socket->fd, socket->so_timeout, "socket read timed out", "socket read wait failed");
             unsigned char byte = 0;
-            ssize_t result = recv(socket->fd, &byte, 1, 0);
+            int result = javan_socket_native_receive(socket->fd, &byte, 1);
             if (result < 0) {
-                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                if (javan_socket_last_error_is_would_block() != 0) {
                     javan_panic("socket read timed out");
                 }
                 javan_panic("socket read failed");
@@ -2611,7 +2684,6 @@ final class RuntimeSourcePlatformSection {
                 return -1;
             }
             return byte;
-        #endif
         }
 
         int javan_socket_input_stream_read_bytes(void* value, void* bytes_value) {
@@ -2621,14 +2693,6 @@ final class RuntimeSourcePlatformSection {
         }
 
         int javan_socket_input_stream_read_bytes_range(void* value, void* bytes_value, int offset, int length) {
-        #if defined(_WIN32)
-            (void) value;
-            (void) bytes_value;
-            (void) offset;
-            (void) length;
-            javan_socket_runtime_unsupported();
-            return 0;
-        #else
             javan_byte_array* bytes = (javan_byte_array*) javan_array_checked(bytes_value);
             javan_array_kind_checked((javan_array_header*) bytes, JAVAN_ARRAY_KIND_BYTE);
             javan_socket_stream_range_checked(bytes, offset, length);
@@ -2641,9 +2705,9 @@ final class RuntimeSourcePlatformSection {
                 javan_panic("socket input is shutdown");
             }
             javan_socket_wait_readable(socket->fd, socket->so_timeout, "socket read timed out", "socket read wait failed");
-            ssize_t result = recv(socket->fd, bytes->values + offset, (size_t) length, 0);
+            int result = javan_socket_native_receive(socket->fd, bytes->values + offset, length);
             if (result < 0) {
-                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                if (javan_socket_last_error_is_would_block() != 0) {
                     javan_panic("socket read timed out");
                 }
                 javan_panic("socket read failed");
@@ -2651,24 +2715,18 @@ final class RuntimeSourcePlatformSection {
             if (result == 0) {
                 return -1;
             }
-            return (int) result;
-        #endif
+            return result;
         }
 
         void javan_socket_shutdown_input(void* value) {
-        #if defined(_WIN32)
-            (void) value;
-            javan_socket_runtime_unsupported();
-        #else
             javan_socket* socket = javan_socket_open_checked(value);
             if (socket->input_shutdown != 0) {
                 javan_panic("socket input is already shutdown");
             }
-            if (shutdown(socket->fd, SHUT_RD) != 0) {
+            if (javan_socket_native_shutdown(socket->fd, 1) != 0) {
                 javan_panic("socket shutdown input failed");
             }
             socket->input_shutdown = 1;
-        #endif
         }
 
         void javan_socket_input_stream_close(void* value) {
@@ -2677,22 +2735,16 @@ final class RuntimeSourcePlatformSection {
         }
 
         void javan_socket_output_stream_write(void* value, int byte_value) {
-        #if defined(_WIN32)
-            (void) value;
-            (void) byte_value;
-            javan_socket_runtime_unsupported();
-        #else
             javan_socket_output_stream_value* stream = javan_socket_output_stream_checked(value);
             javan_socket* socket = javan_socket_open_checked((void*) stream->socket);
             if (socket->output_shutdown != 0) {
                 javan_panic("socket output is shutdown");
             }
             unsigned char byte = (unsigned char) (byte_value & 0xff);
-            ssize_t written = send(socket->fd, &byte, 1, 0);
+            int written = javan_socket_native_send(socket->fd, &byte, 1, 0);
             if (written != 1) {
                 javan_panic("socket write failed");
             }
-        #endif
         }
 
         void javan_socket_output_stream_write_bytes(void* value, void* bytes_value) {
@@ -2702,13 +2754,6 @@ final class RuntimeSourcePlatformSection {
         }
 
         void javan_socket_output_stream_write_bytes_range(void* value, void* bytes_value, int offset, int length) {
-        #if defined(_WIN32)
-            (void) value;
-            (void) bytes_value;
-            (void) offset;
-            (void) length;
-            javan_socket_runtime_unsupported();
-        #else
             javan_byte_array* bytes = (javan_byte_array*) javan_array_checked(bytes_value);
             javan_array_kind_checked((javan_array_header*) bytes, JAVAN_ARRAY_KIND_BYTE);
             javan_socket_stream_range_checked(bytes, offset, length);
@@ -2722,13 +2767,12 @@ final class RuntimeSourcePlatformSection {
             }
             int written = 0;
             while (written < length) {
-                ssize_t chunk = send(socket->fd, bytes->values + offset + written, (size_t) (length - written), 0);
+                int chunk = javan_socket_native_send(socket->fd, bytes->values + offset + written, length - written, 0);
                 if (chunk <= 0) {
                     javan_panic("socket write failed");
                 }
-                written += (int) chunk;
+                written += chunk;
             }
-        #endif
         }
 
         void javan_socket_output_stream_flush(void* value) {
@@ -2736,19 +2780,14 @@ final class RuntimeSourcePlatformSection {
         }
 
         void javan_socket_shutdown_output(void* value) {
-        #if defined(_WIN32)
-            (void) value;
-            javan_socket_runtime_unsupported();
-        #else
             javan_socket* socket = javan_socket_open_checked(value);
             if (socket->output_shutdown != 0) {
                 javan_panic("socket output is already shutdown");
             }
-            if (shutdown(socket->fd, SHUT_WR) != 0) {
+            if (javan_socket_native_shutdown(socket->fd, 0) != 0) {
                 javan_panic("socket shutdown output failed");
             }
             socket->output_shutdown = 1;
-        #endif
         }
 
         void javan_socket_output_stream_close(void* value) {
@@ -2758,9 +2797,9 @@ final class RuntimeSourcePlatformSection {
 
         void javan_socket_close(void* value) {
             javan_socket* socket = javan_socket_checked(value);
-            if (socket->fd >= 0) {
+            if (javan_socket_handle_is_open(socket->fd) != 0) {
                 javan_socket_native_close(socket->fd);
-                socket->fd = -1;
+                socket->fd = JAVAN_SOCKET_INVALID;
             }
             if (socket->bound != 0) {
                 socket->input_shutdown = 1;
@@ -2770,9 +2809,10 @@ final class RuntimeSourcePlatformSection {
         }
 
         void* javan_server_socket_new(void) {
+            javan_socket_runtime_initialize();
             javan_server_socket* socket = (javan_server_socket*) javan_alloc(sizeof(javan_server_socket));
             socket->magic = JAVAN_SERVER_SOCKET_MAGIC;
-            socket->fd = -1;
+            socket->fd = JAVAN_SOCKET_INVALID;
             socket->bound = 0;
             socket->closed = 0;
             socket->local_port = -1;
@@ -2789,33 +2829,26 @@ final class RuntimeSourcePlatformSection {
         }
 
         void* javan_server_socket_bind_config(void* host_value, int port, int backlog) {
-        #if defined(_WIN32)
-            (void) host_value;
-            (void) port;
-            (void) backlog;
-            javan_socket_runtime_unsupported();
-            return NULL;
-        #else
             const char* host = host_value == NULL ? "localhost" : (const char*) host_value;
             struct sockaddr_storage address;
-            socklen_t address_length = 0;
+            javan_socket_length address_length = 0;
             javan_socket_host_checked(host, &address, &address_length, port);
-            int fd = socket(((struct sockaddr*) &address)->sa_family, SOCK_STREAM, 0);
-            if (fd < 0) {
+            javan_socket_handle fd = javan_socket_native_open(((struct sockaddr*) &address)->sa_family);
+            if (javan_socket_handle_is_open(fd) == 0) {
                 javan_panic("server socket open failed");
             }
             javan_socket_setsockopt_flag(fd, SOL_SOCKET, SO_REUSEADDR, 1, "server socket SO_REUSEADDR update failed");
-            if (bind(fd, (struct sockaddr*) &address, address_length) != 0) {
+            if (javan_socket_native_bind(fd, (struct sockaddr*) &address, address_length) != 0) {
                 javan_socket_native_close(fd);
                 javan_panic("server socket bind failed");
             }
-            if (listen(fd, javan_server_socket_backlog_checked(backlog)) != 0) {
+            if (javan_socket_native_listen(fd, javan_server_socket_backlog_checked(backlog)) != 0) {
                 javan_socket_native_close(fd);
                 javan_panic("server socket listen failed");
             }
             struct sockaddr_storage bound;
-            socklen_t bound_length = sizeof(bound);
-            if (getsockname(fd, (struct sockaddr*) &bound, &bound_length) != 0) {
+            javan_socket_length bound_length = (javan_socket_length) sizeof(bound);
+            if (javan_socket_native_get_name(fd, 0, (struct sockaddr*) &bound, &bound_length) != 0) {
                 javan_socket_native_close(fd);
                 javan_panic("server socket local address lookup failed");
             }
@@ -2845,7 +2878,6 @@ final class RuntimeSourcePlatformSection {
             javan_root_frame_pop(javan_server_socket_owner_roots);
             javan_root_frame_pop(javan_server_socket_roots);
             return socket;
-        #endif
         }
 
         void javan_server_socket_bind_socket_address(void* value, void* address) {
@@ -2895,21 +2927,15 @@ final class RuntimeSourcePlatformSection {
         }
 
         void javan_server_socket_set_so_timeout(void* value, int timeout_millis) {
-        #if defined(_WIN32)
-            (void) value;
-            (void) timeout_millis;
-            javan_socket_runtime_unsupported();
-        #else
             javan_server_socket* socket = javan_server_socket_checked(value);
             if (socket->closed != 0) {
                 javan_panic("server socket is closed");
             }
             int timeout = javan_socket_timeout_checked(timeout_millis);
-            if (socket->fd >= 0) {
+            if (javan_socket_handle_is_open(socket->fd) != 0) {
                 javan_socket_apply_receive_timeout(socket->fd, timeout, "server socket SO_RCVTIMEO update failed");
             }
             socket->so_timeout = timeout;
-        #endif
         }
 
         void* javan_server_socket_get_inet_address(void* value) {
@@ -2921,55 +2947,37 @@ final class RuntimeSourcePlatformSection {
         }
 
         void javan_server_socket_set_reuse_address(void* value, int enabled) {
-        #if defined(_WIN32)
-            (void) value;
-            (void) enabled;
-            javan_socket_runtime_unsupported();
-        #else
             javan_server_socket* socket = javan_server_socket_checked(value);
             if (socket->closed != 0) {
                 javan_panic("server socket is closed");
             }
-            if (socket->fd >= 0) {
+            if (javan_socket_handle_is_open(socket->fd) != 0) {
                 javan_socket_setsockopt_flag(socket->fd, SOL_SOCKET, SO_REUSEADDR, enabled, "server socket SO_REUSEADDR update failed");
             }
             socket->reuse_address = enabled == 0 ? 0 : 1;
-        #endif
         }
 
         int javan_server_socket_get_receive_buffer_size(void* value) {
-        #if defined(_WIN32)
-            (void) value;
-            javan_socket_runtime_unsupported();
-            return 0;
-        #else
             javan_server_socket* socket = javan_server_socket_checked(value);
             if (socket->closed != 0) {
                 javan_panic("server socket is closed");
             }
-            if (socket->fd < 0) {
+            if (javan_socket_handle_is_open(socket->fd) == 0) {
                 return socket->receive_buffer_size;
             }
             return javan_socket_getsockopt_buffer_size(socket->fd, SO_RCVBUF, "server socket SO_RCVBUF lookup failed");
-        #endif
         }
 
         void javan_server_socket_set_receive_buffer_size(void* value, int size) {
-        #if defined(_WIN32)
-            (void) value;
-            (void) size;
-            javan_socket_runtime_unsupported();
-        #else
             javan_server_socket* socket = javan_server_socket_checked(value);
             if (socket->closed != 0) {
                 javan_panic("server socket is closed");
             }
             int checked = javan_socket_buffer_size_checked(size);
-            if (socket->fd >= 0) {
+            if (javan_socket_handle_is_open(socket->fd) != 0) {
                 javan_socket_setsockopt_int(socket->fd, SOL_SOCKET, SO_RCVBUF, checked, "server socket SO_RCVBUF update failed");
             }
             socket->receive_buffer_size = checked;
-        #endif
         }
 
         void* javan_server_socket_get_local_socket_address(void* value) {
@@ -2986,35 +2994,29 @@ final class RuntimeSourcePlatformSection {
         }
 
         void* javan_server_socket_accept(void* value) {
-        #if defined(_WIN32)
-            (void) value;
-            javan_socket_runtime_unsupported();
-            return NULL;
-        #else
             javan_server_socket* server = javan_server_socket_checked(value);
             if (server->closed != 0) {
                 javan_panic("server socket is closed");
             }
-            if (server->fd < 0 || server->bound == 0) {
+            if (javan_socket_handle_is_open(server->fd) == 0 || server->bound == 0) {
                 javan_panic("server socket is not bound");
             }
             javan_socket_wait_readable(server->fd, server->so_timeout, "server socket accept timed out", "server socket accept wait failed");
-            int accepted = accept(server->fd, NULL, NULL);
-            if (accepted < 0) {
-                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            javan_socket_handle accepted = javan_socket_native_accept(server->fd);
+            if (javan_socket_handle_is_open(accepted) == 0) {
+                if (javan_socket_last_error_is_would_block() != 0) {
                     javan_panic("server socket accept timed out");
                 }
                 javan_panic("server socket accept failed");
             }
             return javan_socket_wrap_connected_fd(accepted);
-        #endif
         }
 
         void javan_server_socket_close(void* value) {
             javan_server_socket* socket = javan_server_socket_checked(value);
-            if (socket->fd >= 0) {
+            if (javan_socket_handle_is_open(socket->fd) != 0) {
                 javan_socket_native_close(socket->fd);
-                socket->fd = -1;
+                socket->fd = JAVAN_SOCKET_INVALID;
             }
             socket->closed = 1;
         }
@@ -3064,18 +3066,12 @@ final class RuntimeSourcePlatformSection {
         }
 
         static void javan_http_server_write_all(javan_socket* socket, const char* bytes, int length) {
-        #if defined(_WIN32)
-            (void) socket;
-            (void) bytes;
-            (void) length;
-            javan_socket_runtime_unsupported();
-        #else
         if (length < 0) {
             javan_panic("invalid HTTP response length");
         }
         #if defined(SO_NOSIGPIPE)
         int no_sigpipe = 1;
-        if (setsockopt(socket->fd, SOL_SOCKET, SO_NOSIGPIPE, &no_sigpipe, sizeof(no_sigpipe)) != 0) {
+        if (javan_socket_native_set_option(socket->fd, SOL_SOCKET, SO_NOSIGPIPE, &no_sigpipe, (javan_socket_length) sizeof(no_sigpipe)) != 0) {
             javan_panic("HTTP response signal configuration failed");
         }
         #endif
@@ -3085,13 +3081,12 @@ final class RuntimeSourcePlatformSection {
             #if defined(MSG_NOSIGNAL)
             flags = MSG_NOSIGNAL;
             #endif
-            ssize_t chunk = send(socket->fd, bytes + written, (size_t) (length - written), flags);
+            int chunk = javan_socket_native_send(socket->fd, bytes + written, length - written, flags);
             if (chunk <= 0) {
                 javan_panic("HTTP response write failed");
             }
-            written += (int) chunk;
+            written += chunk;
         }
-        #endif
         }
 
         static void javan_http_server_write_not_found(javan_socket* socket) {
@@ -3100,12 +3095,6 @@ final class RuntimeSourcePlatformSection {
         }
 
         void* javan_http_server_create(void* address_value, int backlog) {
-        #if defined(_WIN32)
-            (void) address_value;
-            (void) backlog;
-            javan_socket_runtime_unsupported();
-            return NULL;
-        #else
             javan_inet_socket_address* address = javan_inet_socket_address_checked(address_value);
             void* listener = NULL;
             void* server_value = NULL;
@@ -3126,7 +3115,6 @@ final class RuntimeSourcePlatformSection {
             javan_update_runtime_allocation_kind(server_value, JAVAN_RUNTIME_KIND_HTTP_SERVER);
             javan_root_frame_pop(roots);
             return server_value;
-        #endif
         }
 
         void* javan_http_server_create_context(void* value, void* path, void* handler) {
@@ -3160,10 +3148,6 @@ final class RuntimeSourcePlatformSection {
         }
 
         void javan_http_server_start(void* value) {
-        #if defined(_WIN32)
-            (void) value;
-            javan_socket_runtime_unsupported();
-        #else
             javan_http_server_value* server = javan_http_server_checked(value);
             void* worker = NULL;
             void* server_root = value;
@@ -3185,7 +3169,6 @@ final class RuntimeSourcePlatformSection {
             javan_runtime_lock_leave();
             javan_thread_start(worker);
             javan_root_frame_pop(roots);
-        #endif
         }
 
         static void javan_http_exchange_abort(void* value);
@@ -3226,14 +3209,10 @@ final class RuntimeSourcePlatformSection {
             }
         }
 
-        static int javan_http_server_accept(javan_http_server_value* server) {
-        #if defined(_WIN32)
-            (void) server;
-            return -1;
-        #else
+        static javan_socket_handle javan_http_server_accept(javan_http_server_value* server) {
             javan_server_socket* listener = server->socket;
-            if (listener == NULL || listener->fd < 0) {
-                return -1;
+            if (listener == NULL || javan_socket_handle_is_open(listener->fd) == 0) {
+                return JAVAN_SOCKET_INVALID;
             }
             fd_set readable;
             FD_ZERO(&readable);
@@ -3241,34 +3220,28 @@ final class RuntimeSourcePlatformSection {
             struct timeval timeout;
             timeout.tv_sec = 0;
             timeout.tv_usec = 100000;
-            int selected = select(listener->fd + 1, &readable, NULL, NULL, &timeout);
-            if (selected == 0 || (selected < 0 && errno == EINTR)) {
-                return -1;
+            int selected = javan_socket_native_select(listener->fd, &readable, NULL, &timeout);
+            if (selected == 0 || (selected < 0 && javan_socket_last_error_is_interrupted() != 0)) {
+                return JAVAN_SOCKET_INVALID;
             }
             if (selected < 0) {
                 javan_panic("HttpServer accept wait failed");
             }
-            int accepted = accept(listener->fd, NULL, NULL);
-            if (accepted < 0) {
-                if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) {
-                    return -1;
+            javan_socket_handle accepted = javan_socket_native_accept(listener->fd);
+            if (javan_socket_handle_is_open(accepted) == 0) {
+                if (javan_socket_last_error_is_interrupted() != 0 || javan_socket_last_error_is_would_block() != 0) {
+                    return JAVAN_SOCKET_INVALID;
                 }
                 javan_panic("HttpServer accept failed");
             }
             return accepted;
-        #endif
         }
 
         static int javan_http_server_matches_context(javan_socket* socket, const char* path) {
-        #if defined(_WIN32)
-            (void) socket;
-            (void) path;
-            return 0;
-        #else
             char request[8192];
             int length = 0;
             while (length < (int) sizeof(request) - 1) {
-                ssize_t read = recv(socket->fd, request + length, sizeof(request) - (size_t) length - 1U, 0);
+                int read = javan_socket_native_receive(socket->fd, request + length, (int) sizeof(request) - length - 1);
                 if (read <= 0) {
                     return 0;
                 }
@@ -3304,7 +3277,6 @@ final class RuntimeSourcePlatformSection {
                 actual++;
             }
             return actual == expected && strncmp(target, path, (size_t) expected) == 0;
-        #endif
         }
 
         static javan_http_exchange_value* javan_http_exchange_new(javan_socket* socket) {
@@ -3324,10 +3296,6 @@ final class RuntimeSourcePlatformSection {
         }
 
         void javan_http_server_run(void* value) {
-        #if defined(_WIN32)
-            (void) value;
-            javan_socket_runtime_unsupported();
-        #else
             javan_http_server_value* server = javan_http_server_checked(value);
             void* server_root = value;
             void* socket_value = NULL;
@@ -3335,8 +3303,8 @@ final class RuntimeSourcePlatformSection {
             void** roots[] = { &server_root, &socket_value, &exchange_value };
             javan_root_frame_push(roots, 3);
             while (javan_http_server_stopped(server) == 0) {
-                int accepted = javan_http_server_accept(server);
-                if (accepted < 0) {
+                javan_socket_handle accepted = javan_http_server_accept(server);
+                if (javan_socket_handle_is_open(accepted) == 0) {
                     continue;
                 }
                 socket_value = javan_socket_wrap_connected_fd(accepted);
@@ -3364,16 +3332,9 @@ final class RuntimeSourcePlatformSection {
             }
             javan_server_socket_close((void*) server->socket);
             javan_root_frame_pop(roots);
-        #endif
         }
 
         void javan_http_exchange_send_response_headers(void* value, int status_code, long long response_length) {
-        #if defined(_WIN32)
-            (void) value;
-            (void) status_code;
-            (void) response_length;
-            javan_socket_runtime_unsupported();
-        #else
             javan_http_exchange_value* exchange = javan_http_exchange_checked(value);
             if (status_code < 100 || status_code > 999 || response_length < -1LL) {
                 javan_panic("invalid HttpExchange response headers");
@@ -3413,7 +3374,6 @@ final class RuntimeSourcePlatformSection {
             if (socket_value != NULL) {
                 javan_socket_close(socket_value);
             }
-        #endif
         }
 
         void* javan_http_exchange_output_stream(void* value) {
@@ -3595,6 +3555,6 @@ final class RuntimeSourcePlatformSection {
     }
 
     static String tail() {
-        return SOURCE_TAIL_A.concat(SOURCE_TAIL_B).concat(SOURCE_TAIL_C);
+        return SOURCE_TAIL_A.concat(SOURCE_TAIL_B).concat(SOURCE_TAIL_SOCKET).concat(SOURCE_TAIL_C);
     }
 }

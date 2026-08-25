@@ -388,10 +388,12 @@ final class RuntimeSourceIoSections {
             return handler;
         }
 
-        static void javan_http_send_all(int fd, const char* bytes, unsigned long length) {
+        static void javan_http_send_all(javan_socket_handle fd, const char* bytes, unsigned long length) {
             unsigned long offset = 0;
             while (offset < length) {
-                ssize_t sent = send(fd, bytes + offset, (size_t) (length - offset), 0);
+                unsigned long remaining = length - offset;
+                int chunk_length = remaining > (unsigned long) INT_MAX ? INT_MAX : (int) remaining;
+                int sent = javan_socket_native_send(fd, bytes + offset, chunk_length, 0);
                 if (sent <= 0) {
                     javan_panic("http request write failed");
                 }
@@ -399,7 +401,7 @@ final class RuntimeSourceIoSections {
             }
         }
 
-        static char* javan_http_read_all(int fd, unsigned long* length_out) {
+        static char* javan_http_read_all(javan_socket_handle fd, unsigned long* length_out) {
             unsigned long capacity = 1024;
             unsigned long length = 0;
             char* buffer = (char*) malloc(capacity + 1UL);
@@ -408,7 +410,13 @@ final class RuntimeSourceIoSections {
             }
             while (1) {
                 if (length == capacity) {
-                    unsigned long next_capacity = capacity * 2UL;
+                    if (capacity >= (unsigned long) INT_MAX) {
+                        free(buffer);
+                        javan_panic("http response exceeds Java array size limit");
+                    }
+                    unsigned long next_capacity = capacity > (unsigned long) INT_MAX / 2UL
+                        ? (unsigned long) INT_MAX
+                        : capacity * 2UL;
                     char* next = (char*) realloc(buffer, next_capacity + 1UL);
                     if (next == NULL) {
                         free(buffer);
@@ -417,7 +425,9 @@ final class RuntimeSourceIoSections {
                     buffer = next;
                     capacity = next_capacity;
                 }
-                ssize_t received = recv(fd, buffer + length, (size_t) (capacity - length), 0);
+                unsigned long remaining = capacity - length;
+                int chunk_length = remaining > (unsigned long) INT_MAX ? INT_MAX : (int) remaining;
+                int received = javan_socket_native_receive(fd, buffer + length, chunk_length);
                 if (received < 0) {
                     free(buffer);
                     javan_panic("http response read failed");
@@ -487,13 +497,6 @@ final class RuntimeSourceIoSections {
         }
 
         void* javan_http_client_send(void* client_value, void* request_value, void* body_handler_value) {
-        #if defined(_WIN32)
-            (void) client_value;
-            (void) request_value;
-            (void) body_handler_value;
-            javan_socket_runtime_unsupported();
-            return NULL;
-        #else
             void** javan_http_send_roots[] = {
                 (void**) &client_value,
                 (void**) &request_value,
@@ -511,13 +514,13 @@ final class RuntimeSourceIoSections {
             javan_uri_value* uri = javan_uri_checked((void*) request->uri);
             javan_http_body_publisher_value* body_publisher = request->body == NULL ? NULL : javan_http_body_publisher_checked(request->body);
             struct sockaddr_storage address;
-            socklen_t address_length = 0;
+            javan_socket_length address_length = 0;
             javan_socket_host_checked(uri->host, &address, &address_length, uri->port);
-            int fd = socket(((struct sockaddr*) &address)->sa_family, SOCK_STREAM, 0);
-            if (fd < 0) {
+            javan_socket_handle fd = javan_socket_native_open(((struct sockaddr*) &address)->sa_family);
+            if (javan_socket_handle_is_open(fd) == 0) {
                 javan_panic("http socket open failed");
             }
-            if (connect(fd, (struct sockaddr*) &address, address_length) != 0) {
+            if (javan_socket_native_connect(fd, (struct sockaddr*) &address, address_length) != 0) {
                 javan_socket_native_close(fd);
                 javan_panic("http connect failed");
             }
@@ -636,7 +639,6 @@ final class RuntimeSourceIoSections {
             javan_root_frame_pop(javan_http_response_roots);
             javan_root_frame_pop(javan_http_send_roots);
             return response_root;
-        #endif
         }
 
         int javan_http_response_status_code(void* response) {

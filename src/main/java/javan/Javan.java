@@ -5,6 +5,7 @@ import javan.analysis.ClassInitializationGraph;
 import javan.analysis.EntryPoint;
 import javan.analysis.ReachabilityAnalyzer;
 import javan.build.BindingGenerator;
+import javan.build.BuildKind;
 import javan.build.BuildInvoker;
 import javan.build.DeduplicationPlanner;
 import javan.build.ExportedMethod;
@@ -314,7 +315,7 @@ public final class Javan {
             program, generated, nativeInterop, stackAllocations
         );
         final Path runtimeC = runtimeFiles.write(generated, resources);
-        final Path output = check.layout().outputDirectory().resolve("bin").resolve(check.layout().outputName());
+        final Path output = BuildKind.APP.artifactPath(check.layout().outputDirectory(), check.layout().outputName());
         final NativeLinker.CacheLinkResult linked = nativeLinker.linkCached(
             check.layout().root(),
             generatedC.sources(),
@@ -549,7 +550,7 @@ public final class Javan {
         printText(out, "Classes: ", pathListText(layout.classFolders()));
         printText(out, "Sources: ", pathListText(layout.sourceFolders()));
         printText(out, "Resources: ", pathListText(layout.resourceFolders()));
-        printText(out, "Output:  ", layout.outputDirectory().resolve("bin").resolve(layout.outputName()).toString());
+        printText(out, "Output:  ", BuildKind.APP.artifactPath(layout.outputDirectory(), layout.outputName()).toString());
         for (final String warning : layout.warnings()) {
             printText(out, "warning: ", warning);
         }

@@ -320,7 +320,7 @@ final class RuntimeSourceMemorySections {
 
         typedef struct {
             int magic;
-            int fd;
+            javan_socket_handle fd;
             int connected;
             int closed;
             int bound;
@@ -343,7 +343,7 @@ final class RuntimeSourceMemorySections {
 
         typedef struct {
             int magic;
-            int fd;
+            javan_socket_handle fd;
             int bound;
             int closed;
             int local_port;
@@ -2010,7 +2010,6 @@ final class RuntimeSourceMemorySections {
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_SOCKET) {
                 javan_socket* socket = (javan_socket*) node->value;
                 if (socket->magic != JAVAN_SOCKET_MAGIC
-                    || socket->fd < -1
                     || (socket->connected != 0 && socket->connected != 1)
                     || (socket->closed != 0 && socket->closed != 1)
                     || (socket->bound != 0 && socket->bound != 1)
@@ -2033,7 +2032,6 @@ final class RuntimeSourceMemorySections {
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_SERVER_SOCKET) {
                 javan_server_socket* socket = (javan_server_socket*) node->value;
                 if (socket->magic != JAVAN_SERVER_SOCKET_MAGIC
-                    || socket->fd < -1
                     || (socket->bound != 0 && socket->bound != 1)
                     || (socket->closed != 0 && socket->closed != 1)
                     || socket->local_port < -1
@@ -2835,16 +2833,16 @@ final class RuntimeSourceMemorySections {
                 }
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_SOCKET) {
                 javan_socket* socket = (javan_socket*) node->value;
-                if (socket != NULL && socket->fd >= 0) {
+                if (socket != NULL && socket->fd != JAVAN_SOCKET_INVALID) {
                     javan_socket_native_close(socket->fd);
-                    socket->fd = -1;
+                    socket->fd = JAVAN_SOCKET_INVALID;
                     socket->closed = 1;
                 }
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_SERVER_SOCKET) {
                 javan_server_socket* socket = (javan_server_socket*) node->value;
-                if (socket != NULL && socket->fd >= 0) {
+                if (socket != NULL && socket->fd != JAVAN_SOCKET_INVALID) {
                     javan_socket_native_close(socket->fd);
-                    socket->fd = -1;
+                    socket->fd = JAVAN_SOCKET_INVALID;
                     socket->closed = 1;
                 }
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_HTTP_SERVER) {

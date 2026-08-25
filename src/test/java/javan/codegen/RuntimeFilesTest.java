@@ -2586,20 +2586,22 @@ final class RuntimeFilesTest {
     }
 
     @Test
-    void writeGuardsSocketTimeoutHelpersBehindWindowsUnsupportedBranches() throws Exception {
+    void writeEmitsPortableSocketTimeoutHelpers() throws Exception {
         final Path runtime = new RuntimeFiles().write(tempDir);
 
-        assertThat(Files.readString(runtime)).contains(
-            "static void javan_socket_apply_receive_timeout(int fd, int timeout_millis, const char* message) {",
+        final String source = Files.readString(runtime);
+        assertThat(source).contains(
+            "typedef uintptr_t javan_socket_handle;",
+            "#define JAVAN_SOCKET_INVALID ((javan_socket_handle) -1)",
+            "static void javan_socket_apply_receive_timeout(javan_socket_handle fd, int timeout_millis, const char* message) {",
             "#if defined(_WIN32)",
-            "javan_socket_runtime_unsupported();",
-            "#else",
+            "const int timeout = timeout_millis;",
             "timeout.tv_usec = (long) ((timeout_millis % 1000) * 1000);",
-            "static void javan_socket_wait_readable(int fd, int timeout_millis, const char* timeout_message, const char* wait_message) {",
-            "static void javan_socket_connect_native_timeout(int fd, const struct sockaddr* address, socklen_t address_length, int timeout_millis) {",
-            "int flags = fcntl(fd, F_GETFL, 0);",
+            "static void javan_socket_wait_readable(javan_socket_handle fd, int timeout_millis, const char* timeout_message, const char* wait_message) {",
+            "static int javan_socket_native_begin_nonblocking(javan_socket_handle fd, int* restore_state) {",
+            "return ioctlsocket((SOCKET) fd, FIONBIO, &enabled);",
             "timeout_value.tv_usec = (long) ((timeout % 1000) * 1000);"
-        );
+        ).doesNotContain("tcp sockets are not supported on this host yet");
     }
 
     @Test
@@ -7543,8 +7545,8 @@ final class RuntimeFilesTest {
             "int tcp_no_delay;",
             "int keep_alive;",
             "int reuse_address;",
-            "static int javan_socket_getsockopt_flag(int fd, int level, int option_name, const char* message)",
-            "static void javan_socket_setsockopt_flag(int fd, int level, int option_name, int enabled, const char* message)",
+            "static int javan_socket_getsockopt_flag(javan_socket_handle fd, int level, int option_name, const char* message)",
+            "static void javan_socket_setsockopt_flag(javan_socket_handle fd, int level, int option_name, int enabled, const char* message)",
             "socket->tcp_no_delay = tcp_no_delay;",
             "socket->keep_alive = keep_alive;",
             "socket->reuse_address = javan_socket_getsockopt_flag(fd, SOL_SOCKET, SO_REUSEADDR, \"server socket SO_REUSEADDR lookup failed\");",
@@ -7575,6 +7577,11 @@ final class RuntimeFilesTest {
             "javan_http_body_publisher_length",
             "javan_http_body_publisher_bytes",
             "Content-Length: %lu\\r\\n",
+            "static void javan_http_send_all(javan_socket_handle fd, const char* bytes, unsigned long length)",
+            "static char* javan_http_read_all(javan_socket_handle fd, unsigned long* length_out)",
+            "javan_socket_native_send(fd, bytes + offset, chunk_length, 0)",
+            "javan_socket_native_receive(fd, buffer + length, chunk_length)",
+            "javan_panic(\"http response exceeds Java array size limit\")",
             "javan_byte_array_from((const signed char*) body_start, (int) response_body_length);"
         );
     }
