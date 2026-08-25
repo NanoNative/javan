@@ -145,7 +145,7 @@ exceptions, and concrete instance calls.
 Known blockers before broader real-project coverage:
 
 - broader dependency-jar surface beyond the current smoke slices, especially deeper class-initialization graphs, richer collection/map helpers, additional atomics, more functional-interface shapes, and wider string/temporal helper families
-- broader service runtime coverage, especially HTTP server APIs above the current raw loopback responder slices, HTTPS/TLS, certificates, long-lived service thread ownership, and resource-heavy app packaging
+- broader service runtime coverage, especially multiple `HttpServer` contexts, `HttpContext` accessors, request inspection/bodies, executor-backed handlers, `HttpHandler` lambdas, HTTPS/TLS, certificates, and resource-heavy app packaging
 - richer Java semantic coverage, especially general try/catch/finally lowering, broader dynamic-call sites, wider enum/class-introspection edges, and full UTF-16 string semantics
 - more dependency-version variance proof, because reproducible bundled smoke is not the same as broad upstream-version compatibility
 
@@ -164,6 +164,6 @@ Next gates before claiming broader external-service compatibility:
 2. done: add negative diagnostics for `Socket`, `ServerSocket`, `HttpClient`, and external `HttpServer`-shaped services
 3. done: report reachable `network`, `socket`, and `http` usage even while unsupported
 4. implement TCP loopback support with close/ownership and sanitizer proof
-5. done partially: implement plain HTTP client loopback support for GET/string, POST+headers/byte[], and PUT byte[], plus raw loopback responder slices over `ServerSocket`/`Socket` for `GET /hello -> 200 pong`, unmatched-route `404`, POST body handling via `Content-Length`, sequential two-connection lifetime, method-plus-path dispatch, multi-class route-handler dispatch, request-header matching, response-header emission, and a request/response object model over router and service classes
+5. done partially: implement plain HTTP client loopback support for GET/string, POST+headers/byte[], and PUT byte[], raw loopback responder slices over `ServerSocket`/`Socket`, and one concrete-class `HttpServer` context with `404` path matching, owned worker shutdown, fixed-length/chunked/bodyless responses, and forced-GC sanitizer proof; native socket service support remains unavailable on Windows
 6. run a broader external service example without dev console or reflection-heavy paths as a native service
 7. add HTTPS/TLS/certificates after plain HTTP is stable

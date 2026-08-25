@@ -302,7 +302,7 @@ final class CiParallelWorkflowSurfaceTest {
                 projects.add(Path.of(command.substring(command.lastIndexOf(' ') + 1)));
             }
         }
-        assertThat(projects).hasSize(80).doesNotHaveDuplicates().allMatch(Files::isDirectory);
+        assertThat(projects).hasSize(81).doesNotHaveDuplicates().allMatch(Files::isDirectory);
         assertThat(lines.stream().filter(line -> line.contains("sanitizer-self-host-smoke.sh")))
             .hasSize(1);
     }

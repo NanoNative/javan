@@ -32,6 +32,11 @@ import java.util.Set;
  */
 public final class ReachabilityAnalyzer {
     private static final MethodRef RUNNABLE_RUN = new MethodRef("java/lang/Runnable", "run", "()V");
+    private static final MethodRef HTTP_HANDLER_HANDLE = new MethodRef(
+        "com/sun/net/httpserver/HttpHandler",
+        "handle",
+        "(Lcom/sun/net/httpserver/HttpExchange;)V"
+    );
 
     /**
      * Analyzes reachability from a main class.
@@ -410,7 +415,13 @@ public final class ReachabilityAnalyzer {
                     }
                 }
             }
-            if (!enqueueRunnableThreadTargets(classes, reachable, reachableSet, work, workSet, callEdges, entryPoints, methodRefFacts)) {
+            final boolean runnableTargetsAdded = enqueueRunnableThreadTargets(
+                classes, reachable, reachableSet, work, workSet, callEdges, entryPoints, methodRefFacts
+            );
+            final boolean httpHandlerTargetsAdded = enqueueHttpServerHandlerTargets(
+                classes, reachable, reachableSet, work, workSet, callEdges, entryPoints
+            );
+            if (!runnableTargetsAdded && !httpHandlerTargetsAdded) {
                 break;
             }
         }
@@ -2286,6 +2297,30 @@ public final class ReachabilityAnalyzer {
         return added;
     }
 
+    private static boolean enqueueHttpServerHandlerTargets(
+        final Map<String, ClassFile> classes,
+        final List<EntryPoint> reachable,
+        final EntryPointMembership reachableSet,
+        final List<EntryPoint> work,
+        final EntryPointMembership workSet,
+        final CallEdgeTracker callEdges,
+        final EntryPointPool entryPoints
+    ) {
+        final List<EntryPoint> targets = httpServerHandlerTargets(classes, reachable, entryPoints);
+        final List<EntryPoint> starters = httpServerStartMethods(classes, reachable);
+        boolean added = false;
+        for (final EntryPoint target : targets) {
+            if (!reachableSet.contains(target) && workSet.add(target)) {
+                work.add(target);
+                added = true;
+            }
+        }
+        for (final EntryPoint starter : starters) {
+            addEdges(callEdges, starter, targets, CallEdge.Kind.THREAD_START_TASK);
+        }
+        return added;
+    }
+
     private static List<EntryPoint> virtualThreadTargets(
         final Map<String, ClassFile> classes,
         final EntryPoint current,
@@ -2656,6 +2691,135 @@ public final class ReachabilityAnalyzer {
             return List.copyOf(exactTargets);
         }
         return allRunnableThreadTargets(classes, entryPoints);
+    }
+
+    private static List<EntryPoint> httpServerHandlerTargets(
+        final Map<String, ClassFile> classes,
+        final List<EntryPoint> reachable,
+        final EntryPointPool entryPoints
+    ) {
+        if (httpServerStartMethods(classes, reachable).isEmpty()) {
+            return List.of();
+        }
+        boolean sawContext = false;
+        boolean unknownHandler = false;
+        final List<EntryPoint> exactTargets = new ArrayList<>();
+        final EntryPointMembership exactTargetSet = new EntryPointMembership();
+        for (final EntryPoint reachableMethod : reachable) {
+            final Optional<MethodInfo> method = method(classes, reachableMethod);
+            if (method.isEmpty() || method.orElseThrow().code().isEmpty()) {
+                continue;
+            }
+            final List<Instruction> instructions = method.orElseThrow().code().orElseThrow().instructions();
+            for (int index = 0; index < instructions.size(); index++) {
+                final Optional<MethodRef> methodRef = instructions.get(index).methodRef();
+                if (methodRef.isEmpty() || !isHttpServerCreateContext(methodRef.orElseThrow())) {
+                    continue;
+                }
+                sawContext = true;
+                final Optional<EntryPoint> inferredTarget = inferHttpServerHandlerTarget(classes, instructions, index, entryPoints);
+                if (inferredTarget.isPresent()) {
+                    final EntryPoint target = inferredTarget.orElseThrow();
+                    if (exactTargetSet.add(target)) {
+                        exactTargets.add(target);
+                    }
+                } else {
+                    unknownHandler = true;
+                }
+            }
+        }
+        if (!sawContext) {
+            return List.of();
+        }
+        if (!unknownHandler && !exactTargets.isEmpty()) {
+            return List.copyOf(exactTargets);
+        }
+        return allHttpServerHandlerTargets(classes, entryPoints);
+    }
+
+    private static Optional<EntryPoint> inferHttpServerHandlerTarget(
+        final Map<String, ClassFile> classes,
+        final List<Instruction> instructions,
+        final int createContextIndex,
+        final EntryPointPool entryPoints
+    ) {
+        if (createContextIndex < 3) {
+            return Optional.empty();
+        }
+        final Instruction constructor = instructions.get(createContextIndex - 1);
+        final Optional<MethodRef> constructorRef = constructor.methodRef();
+        if (constructorRef.isEmpty()
+            || !"<init>".equals(constructorRef.orElseThrow().name())
+            || !isAssignableTo(classes, constructorRef.orElseThrow().owner(), HTTP_HANDLER_HANDLE.owner())
+            || instructions.get(createContextIndex - 2).opcode() != 89) {
+            return Optional.empty();
+        }
+        final Instruction allocation = instructions.get(createContextIndex - 3);
+        final Optional<String> allocatedClass = allocation.className();
+        if (allocation.opcode() != 187
+            || allocatedClass.isEmpty()
+            || !allocatedClass.orElseThrow().equals(constructorRef.orElseThrow().owner())) {
+            return Optional.empty();
+        }
+        return lowerableResolvedVirtualTarget(
+            classes,
+            constructorRef.orElseThrow().owner(),
+            HTTP_HANDLER_HANDLE,
+            entryPoints
+        );
+    }
+
+    private static List<EntryPoint> allHttpServerHandlerTargets(
+        final Map<String, ClassFile> classes,
+        final EntryPointPool entryPoints
+    ) {
+        final List<EntryPoint> targets = new ArrayList<>();
+        final EntryPointMembership targetSet = new EntryPointMembership();
+        for (final ClassFile candidate : classes.values()) {
+            if (candidate.isInterface() || !isAssignableTo(classes, candidate.name(), HTTP_HANDLER_HANDLE.owner())) {
+                continue;
+            }
+            final Optional<EntryPoint> resolved = lowerableResolvedVirtualTarget(
+                classes, candidate.name(), HTTP_HANDLER_HANDLE, entryPoints
+            );
+            if (resolved.isPresent() && targetSet.add(resolved.orElseThrow())) {
+                targets.add(resolved.orElseThrow());
+            }
+        }
+        return List.copyOf(targets);
+    }
+
+    private static List<EntryPoint> httpServerStartMethods(
+        final Map<String, ClassFile> classes,
+        final List<EntryPoint> reachable
+    ) {
+        final List<EntryPoint> result = new ArrayList<>();
+        for (final EntryPoint reachableMethod : reachable) {
+            final Optional<MethodInfo> method = method(classes, reachableMethod);
+            if (method.isEmpty() || method.orElseThrow().code().isEmpty()) {
+                continue;
+            }
+            for (final Instruction instruction : method.orElseThrow().code().orElseThrow().instructions()) {
+                final Optional<MethodRef> methodRef = instruction.methodRef();
+                if (methodRef.isPresent() && isHttpServerStart(methodRef.orElseThrow())) {
+                    result.add(reachableMethod);
+                    break;
+                }
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private static boolean isHttpServerCreateContext(final MethodRef target) {
+        return "com/sun/net/httpserver/HttpServer".equals(target.owner())
+            && "createContext".equals(target.name())
+            && "(Ljava/lang/String;Lcom/sun/net/httpserver/HttpHandler;)Lcom/sun/net/httpserver/HttpContext;".equals(target.descriptor());
+    }
+
+    private static boolean isHttpServerStart(final MethodRef target) {
+        return "com/sun/net/httpserver/HttpServer".equals(target.owner())
+            && "start".equals(target.name())
+            && "()V".equals(target.descriptor());
     }
 
     private static boolean containsReachableThreadStart(

@@ -1063,7 +1063,7 @@ final class BytecodeToIRInvokeSupport {
         if (lowerStringBuilderCall(classFile, method, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
-        if (lowerJdkHttpVirtualCall(classFile, method, instruction, methodRef, stack)) {
+        if (lowerJdkHttpVirtualCall(classFile, method, instruction, methodRef, instructions, stack)) {
             return;
         }
         if (lowerJdkThreadInstanceCall(
@@ -1258,6 +1258,13 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_uri_create", arguments)));
             return true;
         }
+        if ("com/sun/net/httpserver/HttpServer".equals(methodRef.owner())
+            && "create".equals(methodRef.name())
+            && "(Ljava/net/InetSocketAddress;I)Lcom/sun/net/httpserver/HttpServer;".equals(methodRef.descriptor())) {
+            final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_http_server_create", arguments)));
+            return true;
+        }
         if ("java/net/http/HttpClient".equals(methodRef.owner())
             && "newHttpClient".equals(methodRef.name())
             && "()Ljava/net/http/HttpClient;".equals(methodRef.descriptor())) {
@@ -1308,8 +1315,60 @@ final class BytecodeToIRInvokeSupport {
         final MethodInfo method,
         final Instruction instruction,
         final MethodRef methodRef,
+        final List<IrInstruction> instructions,
         final List<StackValue> stack
     ) {
+        if ("com/sun/net/httpserver/HttpServer".equals(methodRef.owner())) {
+            final boolean createContext = "createContext".equals(methodRef.name())
+                && "(Ljava/lang/String;Lcom/sun/net/httpserver/HttpHandler;)Lcom/sun/net/httpserver/HttpContext;".equals(methodRef.descriptor());
+            final boolean start = "start".equals(methodRef.name()) && "()V".equals(methodRef.descriptor());
+            final boolean stop = "stop".equals(methodRef.name()) && "(I)V".equals(methodRef.descriptor());
+            if (!createContext && !start && !stop) {
+                return false;
+            }
+            final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
+            final IrExpression receiver = popObject(classFile, method, instruction, stack);
+            final List<IrExpression> callArguments = new ArrayList<>();
+            callArguments.add(receiver);
+            callArguments.addAll(arguments);
+            if (createContext) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_http_server_create_context", callArguments)));
+                return true;
+            }
+            if (start) {
+                instructions.add(IrInstruction.callStaticVoid("javan_http_server_start", callArguments));
+                return true;
+            }
+            if (stop) {
+                instructions.add(IrInstruction.callStaticVoid("javan_http_server_stop", callArguments));
+                return true;
+            }
+        }
+        if ("com/sun/net/httpserver/HttpExchange".equals(methodRef.owner())) {
+            final boolean sendResponseHeaders = "sendResponseHeaders".equals(methodRef.name()) && "(IJ)V".equals(methodRef.descriptor());
+            final boolean getResponseBody = "getResponseBody".equals(methodRef.name()) && "()Ljava/io/OutputStream;".equals(methodRef.descriptor());
+            final boolean close = "close".equals(methodRef.name()) && "()V".equals(methodRef.descriptor());
+            if (!sendResponseHeaders && !getResponseBody && !close) {
+                return false;
+            }
+            final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
+            final IrExpression receiver = popObject(classFile, method, instruction, stack);
+            final List<IrExpression> callArguments = new ArrayList<>();
+            callArguments.add(receiver);
+            callArguments.addAll(arguments);
+            if (sendResponseHeaders) {
+                instructions.add(IrInstruction.callStaticVoid("javan_http_exchange_send_response_headers", callArguments));
+                return true;
+            }
+            if (getResponseBody) {
+                stack.add(StackValue.httpExchangeOutputStream(IrExpression.objectCall("javan_http_exchange_output_stream", callArguments)));
+                return true;
+            }
+            if (close) {
+                instructions.add(IrInstruction.callStaticVoid("javan_http_exchange_close", callArguments));
+                return true;
+            }
+        }
         if ("java/net/http/HttpClient".equals(methodRef.owner())
             && "send".equals(methodRef.name())
             && "(Ljava/net/http/HttpRequest;Ljava/net/http/HttpResponse$BodyHandler;)Ljava/net/http/HttpResponse;".equals(methodRef.descriptor())) {
@@ -1460,28 +1519,31 @@ final class BytecodeToIRInvokeSupport {
         }
         final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
         final StackValue receiver = popObjectValue(classFile, method, instruction, stack);
-        if (receiver.kind() != StackKind.SOCKET_OUTPUT_STREAM) {
+        if (receiver.kind() != StackKind.SOCKET_OUTPUT_STREAM && receiver.kind() != StackKind.HTTP_EXCHANGE_OUTPUT_STREAM) {
             throw unsupportedSpecializedStreamReceiver(classFile, method, methodRef);
         }
+        final String prefix = receiver.kind() == StackKind.HTTP_EXCHANGE_OUTPUT_STREAM
+            ? "javan_http_exchange_output_stream"
+            : "javan_socket_output_stream";
         if ("write".equals(methodRef.name()) && "(I)V".equals(methodRef.descriptor())) {
-            instructions.add(IrInstruction.callStaticVoid("javan_socket_output_stream_write", List.of(receiver.expression().orElseThrow(), arguments.getFirst())));
+            instructions.add(IrInstruction.callStaticVoid(prefix + "_write", List.of(receiver.expression().orElseThrow(), arguments.getFirst())));
             return true;
         }
         if ("write".equals(methodRef.name()) && "([B)V".equals(methodRef.descriptor())) {
-            instructions.add(IrInstruction.callStaticVoid("javan_socket_output_stream_write_bytes", List.of(receiver.expression().orElseThrow(), arguments.getFirst())));
+            instructions.add(IrInstruction.callStaticVoid(prefix + "_write_bytes", List.of(receiver.expression().orElseThrow(), arguments.getFirst())));
             return true;
         }
         if ("write".equals(methodRef.name()) && "([BII)V".equals(methodRef.descriptor())) {
-            instructions.add(IrInstruction.callStaticVoid("javan_socket_output_stream_write_bytes_range",
+            instructions.add(IrInstruction.callStaticVoid(prefix + "_write_bytes_range",
                 List.of(receiver.expression().orElseThrow(), arguments.get(0), arguments.get(1), arguments.get(2))));
             return true;
         }
         if ("flush".equals(methodRef.name()) && "()V".equals(methodRef.descriptor())) {
-            instructions.add(IrInstruction.callStaticVoid("javan_socket_output_stream_flush", List.of(receiver.expression().orElseThrow())));
+            instructions.add(IrInstruction.callStaticVoid(prefix + "_flush", List.of(receiver.expression().orElseThrow())));
             return true;
         }
         if ("close".equals(methodRef.name()) && "()V".equals(methodRef.descriptor())) {
-            instructions.add(IrInstruction.callStaticVoid("javan_socket_output_stream_close", List.of(receiver.expression().orElseThrow())));
+            instructions.add(IrInstruction.callStaticVoid(prefix + "_close", List.of(receiver.expression().orElseThrow())));
             return true;
         }
         return false;

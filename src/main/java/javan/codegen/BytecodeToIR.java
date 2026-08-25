@@ -234,6 +234,7 @@ public final class BytecodeToIR {
             ? callGraph.functionValueFlow()
             : FunctionValueFlow.analyze(classes, reachableMethods, nativeInterop.nativeEntryPoints());
         final List<EntryPoint> runnableThreadTargets = BytecodeToIRThreadSupport.runnableThreadTargets(classes, reachableMethods);
+        final List<EntryPoint> httpServerHandlerTargets = BytecodeToIRThreadSupport.httpServerHandlerTargets(classes, reachableMethods);
         final Map<String, List<String>> transportedThrowableTypes =
             transportedThrowableTypes(classes, callGraph, reachableMethods, materializedLambdaTargets);
         if (!runnableThreadTargets.isEmpty()) {
@@ -245,6 +246,18 @@ public final class BytecodeToIR {
                     dispatchSymbol,
                     MethodDescriptor.parse(runnableRun.descriptor()),
                     runnableThreadTargets
+                )
+            );
+        }
+        if (!httpServerHandlerTargets.isEmpty()) {
+            final MethodRef httpHandlerHandle = BytecodeToIRThreadSupport.httpHandlerHandleMethodRef();
+            final String dispatchSymbol = dispatchSymbol(httpHandlerHandle);
+            dispatches.putIfAbsent(
+                dispatchSymbol,
+                BytecodeToIRDynamicSupport.dispatch(
+                    dispatchSymbol,
+                    MethodDescriptor.parse(httpHandlerHandle.descriptor()),
+                    httpServerHandlerTargets
                 )
             );
         }
@@ -3445,6 +3458,7 @@ public final class BytecodeToIR {
             || kind == StackKind.SOCKET_INPUT_STREAM
             || kind == StackKind.RESOURCE_INPUT_STREAM
             || kind == StackKind.SOCKET_OUTPUT_STREAM
+            || kind == StackKind.HTTP_EXCHANGE_OUTPUT_STREAM
             || kind == StackKind.VIRTUAL_THREAD_BUILDER
             || kind == StackKind.VIRTUAL_THREAD_FACTORY
             || kind == StackKind.VIRTUAL_THREAD_EXECUTOR
@@ -4589,6 +4603,7 @@ public final class BytecodeToIR {
         SOCKET_INPUT_STREAM,
         RESOURCE_INPUT_STREAM,
         SOCKET_OUTPUT_STREAM,
+        HTTP_EXCHANGE_OUTPUT_STREAM,
         INT,
         LONG,
         FLOAT,
@@ -4721,6 +4736,10 @@ public final class BytecodeToIR {
 
         static StackValue socketOutputStream(final IrExpression expression) {
             return new StackValue(StackKind.SOCKET_OUTPUT_STREAM, Optional.empty(), Optional.of(expression), Optional.empty());
+        }
+
+        static StackValue httpExchangeOutputStream(final IrExpression expression) {
+            return new StackValue(StackKind.HTTP_EXCHANGE_OUTPUT_STREAM, Optional.empty(), Optional.of(expression), Optional.empty());
         }
 
         static StackValue intExpression(final IrExpression expression) {

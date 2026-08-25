@@ -3459,6 +3459,197 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void httpServerLoopbackBuildsServesAndStopsCleanly() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("http-server-loopback");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import com.sun.net.httpserver.HttpServer;
+            import java.net.InetSocketAddress;
+
+            public final class Main {
+                static HttpServer server;
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    server = HttpServer.create(new InetSocketAddress("127.0.0.1", %d), 0);
+                    server.createContext("/hello", new HelloHandler());
+                    server.start();
+                }
+            }
+            """.formatted(port));
+        writeJava(project, "com.acme.HelloHandler", """
+            package com.acme;
+
+            import com.sun.net.httpserver.HttpExchange;
+            import com.sun.net.httpserver.HttpHandler;
+
+            public final class HelloHandler implements HttpHandler {
+                @Override
+                public void handle(final HttpExchange exchange) throws java.io.IOException {
+                    final byte[] body = new byte[] {112, 111, 110, 103};
+                    exchange.sendResponseHeaders(200, body.length);
+                    exchange.getResponseBody().write(body);
+                    exchange.close();
+                    Main.server.stop(0);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Process process = new ProcessBuilder(project.resolve(".javan/bin/http-server-loopback").toString())
+            .directory(project.toFile())
+            .start();
+        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
+        final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+        final java.net.http.HttpRequest missingRequest = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/missing"))
+            .GET()
+            .build();
+        final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/hello"))
+            .GET()
+            .build();
+        java.net.http.HttpResponse<String> response = awaitLoopbackResponse(client, missingRequest);
+        assertThat(response.statusCode()).isEqualTo(404);
+        assertThat(response.body()).isEmpty();
+        response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).isEqualTo("pong");
+        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(process.exitValue()).isZero();
+        assertThat(readStream(process.getInputStream())).isEmpty();
+        assertThat(stderr.join()).isEmpty();
+    }
+
+    @Test
+    void httpServerCreateContextReturnsAContextObject() throws Exception {
+        final Path project = project("http-server-context");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import com.sun.net.httpserver.HttpServer;
+            import java.net.InetSocketAddress;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+                    System.out.println(server.createContext("/health", new HealthHandler()) != null);
+                    server.stop(0);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.HealthHandler", """
+            package com.acme;
+
+            import com.sun.net.httpserver.HttpExchange;
+            import com.sun.net.httpserver.HttpHandler;
+
+            public final class HealthHandler implements HttpHandler {
+                @Override
+                public void handle(final HttpExchange exchange) {
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/http-server-context").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void httpServerStopsWithConfiguredDelayFromOutsideTheHandler() throws Exception {
+        final Path project = project("http-server-delayed-stop");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import com.sun.net.httpserver.HttpServer;
+            import java.net.InetSocketAddress;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+                    server.createContext("/health", new HealthHandler());
+                    server.start();
+                    server.stop(1);
+                    System.out.println("stopped");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.HealthHandler", """
+            package com.acme;
+
+            import com.sun.net.httpserver.HttpExchange;
+            import com.sun.net.httpserver.HttpHandler;
+
+            public final class HealthHandler implements HttpHandler {
+                @Override
+                public void handle(final HttpExchange exchange) {
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/http-server-delayed-stop").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void httpServerLoopbackReusesItsResponseBodyStream() throws Exception {
+        assertHttpServerResponse(
+            "http-server-response-body-stream",
+            """
+                exchange.sendResponseHeaders(200, 4L);
+                if (exchange.getResponseBody() == exchange.getResponseBody()) {
+                    exchange.getResponseBody().write(112);
+                    exchange.getResponseBody().write(new byte[] {111, 110, 103}, 0, 3);
+                    exchange.getResponseBody().flush();
+                    exchange.getResponseBody().close();
+                }
+                """,
+            200,
+            "pong"
+        );
+    }
+
+    @Test
+    void httpServerLoopbackStreamsChunkedResponse() throws Exception {
+        assertHttpServerResponse(
+            "http-server-chunked-response",
+            """
+                final byte[] body = new byte[] {112, 111, 110, 103};
+                exchange.sendResponseHeaders(200, 0L);
+                exchange.getResponseBody().write(body);
+                """,
+            200,
+            "pong"
+        );
+    }
+
+    @Test
+    void httpServerLoopbackSendsBodylessResponse() throws Exception {
+        assertHttpServerResponse(
+            "http-server-bodyless-response",
+            "exchange.sendResponseHeaders(204, -1L);",
+            204,
+            ""
+        );
+    }
+
+    @Test
     void httpClientPostStringAndReadByteArrayBuildsAndMatchesJvmOutput() throws Exception {
         final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
             new java.net.InetSocketAddress("127.0.0.1", 0),
@@ -4567,6 +4758,85 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
         } catch (final Exception exception) {
             return false;
         }
+    }
+
+    private void assertHttpServerResponse(
+        final String name,
+        final String response,
+        final int expectedStatus,
+        final String expectedBody
+    ) throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project(name);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import com.sun.net.httpserver.HttpServer;
+            import java.net.InetSocketAddress;
+
+            public final class Main {
+                static HttpServer server;
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    server = HttpServer.create(new InetSocketAddress("127.0.0.1", %d), 0);
+                    server.createContext("/hello", new HelloHandler());
+                    server.start();
+                }
+            }
+            """.formatted(port));
+        writeJava(project, "com.acme.HelloHandler", """
+            package com.acme;
+
+            import com.sun.net.httpserver.HttpExchange;
+            import com.sun.net.httpserver.HttpHandler;
+
+            public final class HelloHandler implements HttpHandler {
+                @Override
+                public void handle(final HttpExchange exchange) throws java.io.IOException {
+            %s
+                    exchange.close();
+                    Main.server.stop(0);
+                }
+            }
+            """.formatted(response.indent(8)));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Process process = new ProcessBuilder(project.resolve(".javan/bin").resolve(name).toString())
+            .directory(project.toFile())
+            .start();
+        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
+        final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+        final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/hello"))
+            .GET()
+            .build();
+        final java.net.http.HttpResponse<String> nativeResponse = awaitLoopbackResponse(client, request);
+
+        assertThat(nativeResponse.statusCode()).isEqualTo(expectedStatus);
+        assertThat(nativeResponse.body()).isEqualTo(expectedBody);
+        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(process.exitValue()).isZero();
+        assertThat(readStream(process.getInputStream())).isEmpty();
+        assertThat(stderr.join()).isEmpty();
+    }
+
+    private static java.net.http.HttpResponse<String> awaitLoopbackResponse(
+        final java.net.http.HttpClient client,
+        final java.net.http.HttpRequest request
+    ) throws Exception {
+        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (System.nanoTime() < deadline) {
+            try {
+                return client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+            } catch (final java.net.ConnectException exception) {
+                Thread.sleep(25L);
+            }
+        }
+        throw new AssertionError("Native HttpServer did not accept a loopback request within five seconds");
     }
 
 }

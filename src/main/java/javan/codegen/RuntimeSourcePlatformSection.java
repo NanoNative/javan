@@ -1211,35 +1211,32 @@ final class RuntimeSourcePlatformSection {
             const char* address_value = host_address == NULL ? "0.0.0.0" : host_address;
             const char* name_value = host_name == NULL ? address_value : host_name;
             const char* canonical_value = canonical_host_name == NULL ? name_value : canonical_host_name;
-            void* address_root = (void*) address_value;
-            void* name_root = (void*) name_value;
-            void* canonical_root = (void*) canonical_value;
-            void** javan_inet_address_roots[] = {
-                (void**) &address_root,
-                (void**) &name_root,
-                (void**) &canonical_root
-            };
-            javan_root_frame_push(javan_inet_address_roots, 3);
-            javan_inet_address* address = (javan_inet_address*) javan_alloc(sizeof(javan_inet_address));
-            void* object_root = (void*) address;
+            void* host_address_copy = NULL;
+            void* host_name_copy = NULL;
+            void* canonical_host_name_copy = NULL;
+            void* object_root = NULL;
             void** javan_inet_address_object_roots[] = {
-                (void**) &address_root,
-                (void**) &name_root,
-                (void**) &canonical_root,
+                (void**) &host_address_copy,
+                (void**) &host_name_copy,
+                (void**) &canonical_host_name_copy,
                 (void**) &object_root
             };
             javan_root_frame_push(javan_inet_address_object_roots, 4);
+            host_address_copy = javan_string_copy(address_value);
+            host_name_copy = javan_string_copy(name_value);
+            canonical_host_name_copy = javan_string_copy(canonical_value);
+            javan_inet_address* address = (javan_inet_address*) javan_alloc(sizeof(javan_inet_address));
+            object_root = (void*) address;
             address->magic = JAVAN_INET_ADDRESS_MAGIC;
             address->reserved0 = 0;
             address->reserved1 = 0;
             address->reserved2 = 0;
-            address->host_address = (char*) javan_string_copy((const char*) address_root);
-            address->host_name = (char*) javan_string_copy((const char*) name_root);
-            address->canonical_host_name = (char*) javan_string_copy((const char*) canonical_root);
-            javan_update_runtime_allocation_kind((void*) address, JAVAN_RUNTIME_KIND_INET_ADDRESS);
+            address->host_address = (char*) host_address_copy;
+            address->host_name = (char*) host_name_copy;
+            address->canonical_host_name = (char*) canonical_host_name_copy;
+            javan_update_runtime_allocation_kind(object_root, JAVAN_RUNTIME_KIND_INET_ADDRESS);
             javan_root_frame_pop(javan_inet_address_object_roots);
-            javan_root_frame_pop(javan_inet_address_roots);
-            return address;
+            return object_root;
         }
 
         void* javan_inet_address_loopback(void) {
@@ -2018,6 +2015,7 @@ final class RuntimeSourcePlatformSection {
             javan_socket_populate_options(fd, &tcp_no_delay, &keep_alive, &reuse_address, &oob_inline, &traffic_class);
             receive_buffer_size = javan_socket_getsockopt_buffer_size(fd, SO_RCVBUF, "socket SO_RCVBUF lookup failed");
             send_buffer_size = javan_socket_getsockopt_buffer_size(fd, SO_SNDBUF, "socket SO_SNDBUF lookup failed");
+            javan_runtime_lock_enter();
             javan_socket* socket = javan_socket_checked(socket_root);
             socket->fd = fd;
             socket->connected = 1;
@@ -2037,6 +2035,7 @@ final class RuntimeSourcePlatformSection {
             socket->send_buffer_size = send_buffer_size <= 0 ? socket->send_buffer_size : send_buffer_size;
             socket->local_address = (javan_inet_address*) local_address;
             socket->remote_address = (javan_inet_address*) remote_address;
+            javan_runtime_lock_leave();
             javan_root_frame_pop(javan_socket_assign_roots);
         #endif
         }
@@ -3019,12 +3018,583 @@ final class RuntimeSourcePlatformSection {
             }
             socket->closed = 1;
         }
+
+        """;
+
+    private static final String SOURCE_TAIL_C = """
+
+        static javan_http_server_value* javan_http_server_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("null HttpServer");
+            }
+            javan_http_server_value* server = (javan_http_server_value*) value;
+            if (server->magic != JAVAN_HTTP_SERVER_MAGIC || server->socket == NULL) {
+                javan_panic("invalid HttpServer state");
+            }
+            return server;
+        }
+
+        static javan_http_exchange_value* javan_http_exchange_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("null HttpExchange");
+            }
+            javan_http_exchange_value* exchange = (javan_http_exchange_value*) value;
+            if (exchange->magic != JAVAN_HTTP_EXCHANGE_MAGIC || exchange->socket == NULL) {
+                javan_panic("invalid HttpExchange state");
+            }
+            return exchange;
+        }
+
+        static javan_http_exchange_output_stream_value* javan_http_exchange_output_stream_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("null HttpExchange response body");
+            }
+            javan_http_exchange_output_stream_value* stream = (javan_http_exchange_output_stream_value*) value;
+            if (stream->magic != JAVAN_HTTP_EXCHANGE_OUTPUT_STREAM_MAGIC || stream->exchange == NULL) {
+                javan_panic("invalid HttpExchange response body");
+            }
+            return stream;
+        }
+
+        static int javan_http_server_stopped(javan_http_server_value* server) {
+            javan_runtime_lock_enter();
+            int stopped = server->stopped;
+            javan_runtime_lock_leave();
+            return stopped;
+        }
+
+        static void javan_http_server_write_all(javan_socket* socket, const char* bytes, int length) {
+        #if defined(_WIN32)
+            (void) socket;
+            (void) bytes;
+            (void) length;
+            javan_socket_runtime_unsupported();
+        #else
+        if (length < 0) {
+            javan_panic("invalid HTTP response length");
+        }
+        #if defined(SO_NOSIGPIPE)
+        int no_sigpipe = 1;
+        if (setsockopt(socket->fd, SOL_SOCKET, SO_NOSIGPIPE, &no_sigpipe, sizeof(no_sigpipe)) != 0) {
+            javan_panic("HTTP response signal configuration failed");
+        }
+        #endif
+        int written = 0;
+        while (written < length) {
+            int flags = 0;
+            #if defined(MSG_NOSIGNAL)
+            flags = MSG_NOSIGNAL;
+            #endif
+            ssize_t chunk = send(socket->fd, bytes + written, (size_t) (length - written), flags);
+            if (chunk <= 0) {
+                javan_panic("HTTP response write failed");
+            }
+            written += (int) chunk;
+        }
+        #endif
+        }
+
+        static void javan_http_server_write_not_found(javan_socket* socket) {
+            static const char response[] = "HTTP/1.1 404 Not Found\\r\\nContent-Length: 0\\r\\nConnection: close\\r\\n\\r\\n";
+            javan_http_server_write_all(socket, response, (int) (sizeof(response) - 1U));
+        }
+
+        void* javan_http_server_create(void* address_value, int backlog) {
+        #if defined(_WIN32)
+            (void) address_value;
+            (void) backlog;
+            javan_socket_runtime_unsupported();
+            return NULL;
+        #else
+            javan_inet_socket_address* address = javan_inet_socket_address_checked(address_value);
+            void* listener = NULL;
+            void* server_value = NULL;
+            void** roots[] = { &address_value, &listener, &server_value };
+            javan_root_frame_push(roots, 3);
+            listener = javan_server_socket_bind_config((void*) address->address->host_address, address->port, backlog);
+            javan_http_server_value* server = (javan_http_server_value*) javan_alloc(sizeof(javan_http_server_value));
+            server_value = (void*) server;
+            server->magic = JAVAN_HTTP_SERVER_MAGIC;
+            server->started = 0;
+            server->stopped = 0;
+            server->context_registered = 0;
+            server->socket = (javan_server_socket*) listener;
+            server->path = NULL;
+            server->handler = NULL;
+            server->worker = NULL;
+            server->active_exchange = NULL;
+            javan_update_runtime_allocation_kind(server_value, JAVAN_RUNTIME_KIND_HTTP_SERVER);
+            javan_root_frame_pop(roots);
+            return server_value;
+        #endif
+        }
+
+        void* javan_http_server_create_context(void* value, void* path, void* handler) {
+            javan_http_server_value* server = javan_http_server_checked(value);
+            if (path == NULL || handler == NULL || ((const char*) path)[0] != '/') {
+                javan_panic("HttpServer context requires a path and handler");
+            }
+            void* server_root = value;
+            void* path_root = path;
+            void* handler_root = handler;
+            void* context_value = NULL;
+            void** roots[] = { &server_root, &path_root, &handler_root, &context_value };
+            javan_root_frame_push(roots, 4);
+            javan_runtime_lock_enter();
+            if (server->started != 0 || server->stopped != 0 || server->context_registered != 0) {
+                javan_runtime_lock_leave();
+                javan_root_frame_pop(roots);
+                javan_panic("HttpServer supports exactly one context before start");
+            }
+            server->path = (char*) path_root;
+            server->handler = handler_root;
+            server->context_registered = 1;
+            javan_runtime_lock_leave();
+            javan_http_context_value* context = (javan_http_context_value*) javan_alloc(sizeof(javan_http_context_value));
+            context_value = (void*) context;
+            context->magic = JAVAN_HTTP_CONTEXT_MAGIC;
+            context->server = server;
+            javan_update_runtime_allocation_kind(context_value, JAVAN_RUNTIME_KIND_HTTP_CONTEXT);
+            javan_root_frame_pop(roots);
+            return context_value;
+        }
+
+        void javan_http_server_start(void* value) {
+        #if defined(_WIN32)
+            (void) value;
+            javan_socket_runtime_unsupported();
+        #else
+            javan_http_server_value* server = javan_http_server_checked(value);
+            void* worker = NULL;
+            void* server_root = value;
+            void** roots[] = { &server_root, &worker };
+            javan_root_frame_push(roots, 2);
+            javan_runtime_lock_enter();
+            if (server->started != 0 || server->stopped != 0 || server->context_registered == 0) {
+                javan_runtime_lock_leave();
+                javan_root_frame_pop(roots);
+                javan_panic("HttpServer requires one context and may only start once");
+            }
+            server->started = 1;
+            javan_runtime_lock_leave();
+            javan_thread_new_into(&worker);
+            javan_thread_set_native_http_server(worker, server_root);
+            javan_runtime_lock_enter();
+            server = javan_http_server_checked(server_root);
+            server->worker = worker;
+            javan_runtime_lock_leave();
+            javan_thread_start(worker);
+            javan_root_frame_pop(roots);
+        #endif
+        }
+
+        static void javan_http_exchange_abort(void* value);
+
+        static void javan_http_server_wait_for_worker(void* worker, int delay_seconds) {
+            long long deadline = javan_system_nano_time() + (long long) delay_seconds * 1000000000LL;
+            while (javan_thread_is_alive(worker) != 0 && javan_system_nano_time() < deadline) {
+                javan_sleep_micros(5000UL);
+            }
+        }
+
+        void javan_http_server_stop(void* value, int delay_seconds) {
+            if (delay_seconds < 0) {
+                javan_panic("negative HttpServer.stop delay");
+            }
+            javan_http_server_value* server = javan_http_server_checked(value);
+            void* worker = NULL;
+            javan_runtime_lock_enter();
+            server->stopped = 1;
+            worker = server->worker;
+            javan_runtime_lock_leave();
+            if (worker == NULL) {
+                javan_server_socket_close((void*) server->socket);
+            } else if (worker != javan_current_thread_object()) {
+                if (delay_seconds > 0) {
+                    javan_http_server_wait_for_worker(worker, delay_seconds);
+                }
+                void* active_exchange = NULL;
+                void** roots[] = { &active_exchange };
+                javan_root_frame_push(roots, 1);
+                javan_runtime_lock_enter();
+                active_exchange = server->active_exchange;
+                javan_runtime_lock_leave();
+                if (active_exchange != NULL) {
+                    javan_http_exchange_abort(active_exchange);
+                }
+                javan_root_frame_pop(roots);
+            }
+        }
+
+        static int javan_http_server_accept(javan_http_server_value* server) {
+        #if defined(_WIN32)
+            (void) server;
+            return -1;
+        #else
+            javan_server_socket* listener = server->socket;
+            if (listener == NULL || listener->fd < 0) {
+                return -1;
+            }
+            fd_set readable;
+            FD_ZERO(&readable);
+            FD_SET(listener->fd, &readable);
+            struct timeval timeout;
+            timeout.tv_sec = 0;
+            timeout.tv_usec = 100000;
+            int selected = select(listener->fd + 1, &readable, NULL, NULL, &timeout);
+            if (selected == 0 || (selected < 0 && errno == EINTR)) {
+                return -1;
+            }
+            if (selected < 0) {
+                javan_panic("HttpServer accept wait failed");
+            }
+            int accepted = accept(listener->fd, NULL, NULL);
+            if (accepted < 0) {
+                if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) {
+                    return -1;
+                }
+                javan_panic("HttpServer accept failed");
+            }
+            return accepted;
+        #endif
+        }
+
+        static int javan_http_server_matches_context(javan_socket* socket, const char* path) {
+        #if defined(_WIN32)
+            (void) socket;
+            (void) path;
+            return 0;
+        #else
+            char request[8192];
+            int length = 0;
+            while (length < (int) sizeof(request) - 1) {
+                ssize_t read = recv(socket->fd, request + length, sizeof(request) - (size_t) length - 1U, 0);
+                if (read <= 0) {
+                    return 0;
+                }
+                length += (int) read;
+                int complete = 0;
+                for (int index = 3; index < length; index++) {
+                    if (request[index - 3] == '\\r'
+                        && request[index - 2] == '\\n'
+                        && request[index - 1] == '\\r'
+                        && request[index] == '\\n') {
+                        length = index + 1;
+                        complete = 1;
+                        break;
+                    }
+                }
+                if (complete != 0) {
+                    break;
+                }
+            }
+            request[length] = '\\0';
+            const char* first_space = strchr(request, ' ');
+            if (first_space == NULL) {
+                return 0;
+            }
+            const char* target = first_space + 1;
+            const char* target_end = strchr(target, ' ');
+            if (target_end == NULL) {
+                return 0;
+            }
+            int expected = (int) strlen(path);
+            int actual = 0;
+            while (target + actual < target_end && target[actual] != '?') {
+                actual++;
+            }
+            return actual == expected && strncmp(target, path, (size_t) expected) == 0;
+        #endif
+        }
+
+        static javan_http_exchange_value* javan_http_exchange_new(javan_socket* socket) {
+            javan_http_exchange_value* exchange = (javan_http_exchange_value*) javan_alloc(sizeof(javan_http_exchange_value));
+            exchange->magic = JAVAN_HTTP_EXCHANGE_MAGIC;
+            exchange->response_headers_sent = 0;
+            exchange->closed = 0;
+            exchange->chunked = 0;
+            exchange->write_active = 0;
+            exchange->close_requested = 0;
+            exchange->response_length = -2LL;
+            exchange->response_written = 0LL;
+            exchange->socket = socket;
+            exchange->response_body = NULL;
+            javan_update_runtime_allocation_kind((void*) exchange, JAVAN_RUNTIME_KIND_HTTP_EXCHANGE);
+            return exchange;
+        }
+
+        void javan_http_server_run(void* value) {
+        #if defined(_WIN32)
+            (void) value;
+            javan_socket_runtime_unsupported();
+        #else
+            javan_http_server_value* server = javan_http_server_checked(value);
+            void* server_root = value;
+            void* socket_value = NULL;
+            void* exchange_value = NULL;
+            void** roots[] = { &server_root, &socket_value, &exchange_value };
+            javan_root_frame_push(roots, 3);
+            while (javan_http_server_stopped(server) == 0) {
+                int accepted = javan_http_server_accept(server);
+                if (accepted < 0) {
+                    continue;
+                }
+                socket_value = javan_socket_wrap_connected_fd(accepted);
+                javan_socket* socket = (javan_socket*) socket_value;
+                if (javan_http_server_stopped(server) != 0) {
+                    javan_socket_close(socket_value);
+                } else if (javan_http_server_matches_context(socket, server->path) != 0) {
+                    exchange_value = (void*) javan_http_exchange_new(socket);
+                    javan_runtime_lock_enter();
+                    server->active_exchange = exchange_value;
+                    javan_runtime_lock_leave();
+                    if (javan_http_server_stopped(server) == 0) {
+                        javan_http_server_handle(server->handler, exchange_value);
+                    }
+                    javan_http_exchange_close(exchange_value);
+                    javan_runtime_lock_enter();
+                    server->active_exchange = NULL;
+                    javan_runtime_lock_leave();
+                } else {
+                    javan_http_server_write_not_found(socket);
+                    javan_socket_close(socket_value);
+                }
+                socket_value = NULL;
+                exchange_value = NULL;
+            }
+            javan_server_socket_close((void*) server->socket);
+            javan_root_frame_pop(roots);
+        #endif
+        }
+
+        void javan_http_exchange_send_response_headers(void* value, int status_code, long long response_length) {
+        #if defined(_WIN32)
+            (void) value;
+            (void) status_code;
+            (void) response_length;
+            javan_socket_runtime_unsupported();
+        #else
+            javan_http_exchange_value* exchange = javan_http_exchange_checked(value);
+            if (status_code < 100 || status_code > 999 || response_length < -1LL) {
+                javan_panic("invalid HttpExchange response headers");
+            }
+            const char* reason = status_code == 200 ? "OK" : status_code == 404 ? "Not Found" : "Response";
+            char headers[256];
+            int written = response_length > 0LL
+                ? snprintf(headers, sizeof(headers), "HTTP/1.1 %d %s\\r\\nContent-Length: %lld\\r\\nConnection: close\\r\\n\\r\\n", status_code, reason, response_length)
+                : response_length == 0LL
+                    ? snprintf(headers, sizeof(headers), "HTTP/1.1 %d %s\\r\\nTransfer-Encoding: chunked\\r\\nConnection: close\\r\\n\\r\\n", status_code, reason)
+                    : snprintf(headers, sizeof(headers), "HTTP/1.1 %d %s\\r\\nContent-Length: 0\\r\\nConnection: close\\r\\n\\r\\n", status_code, reason);
+            if (written < 0 || written >= (int) sizeof(headers)) {
+                javan_panic("HTTP response header overflow");
+            }
+            void* socket_value = NULL;
+            javan_runtime_lock_enter();
+            if (exchange->closed != 0 || exchange->close_requested != 0 || exchange->write_active != 0 || exchange->response_headers_sent != 0) {
+                javan_runtime_lock_leave();
+                javan_panic("invalid HttpExchange response headers");
+            }
+            exchange->response_headers_sent = 1;
+            exchange->chunked = response_length == 0LL ? 1 : 0;
+            exchange->response_length = response_length;
+            exchange->write_active = 1;
+            socket_value = (void*) exchange->socket;
+            javan_runtime_lock_leave();
+            javan_http_server_write_all((javan_socket*) socket_value, headers, written);
+            javan_runtime_lock_enter();
+            exchange->write_active = 0;
+            if (exchange->close_requested != 0 && exchange->closed == 0) {
+                exchange->closed = 1;
+                socket_value = (void*) exchange->socket;
+            } else {
+                socket_value = NULL;
+            }
+            javan_runtime_lock_leave();
+            if (socket_value != NULL) {
+                javan_socket_close(socket_value);
+            }
+        #endif
+        }
+
+        void* javan_http_exchange_output_stream(void* value) {
+            javan_http_exchange_value* exchange = javan_http_exchange_checked(value);
+            javan_runtime_lock_enter();
+            int unavailable = exchange->closed != 0
+                || exchange->close_requested != 0
+                || exchange->response_headers_sent == 0
+                || exchange->response_length < 0LL;
+            void* existing = exchange->response_body;
+            javan_runtime_lock_leave();
+            if (unavailable != 0) {
+                javan_panic("HttpExchange response body is unavailable");
+            }
+            if (existing != NULL) {
+                return existing;
+            }
+            void* exchange_root = value;
+            void* result = NULL;
+            void** roots[] = { &exchange_root, &result };
+            javan_root_frame_push(roots, 2);
+            javan_http_exchange_output_stream_value* stream =
+                (javan_http_exchange_output_stream_value*) javan_alloc(sizeof(javan_http_exchange_output_stream_value));
+            result = (void*) stream;
+            stream->magic = JAVAN_HTTP_EXCHANGE_OUTPUT_STREAM_MAGIC;
+            stream->reserved0 = 0;
+            stream->reserved1 = 0;
+            stream->reserved2 = 0;
+            stream->exchange = exchange;
+            javan_update_runtime_allocation_kind(result, JAVAN_RUNTIME_KIND_HTTP_EXCHANGE_OUTPUT_STREAM);
+            javan_runtime_lock_enter();
+            if (exchange->closed != 0 || exchange->close_requested != 0) {
+                javan_runtime_lock_leave();
+                javan_root_frame_pop(roots);
+                javan_panic("HttpExchange response body is unavailable");
+            }
+            if (exchange->response_body == NULL) {
+                exchange->response_body = result;
+            } else {
+                result = exchange->response_body;
+            }
+            javan_runtime_lock_leave();
+            javan_root_frame_pop(roots);
+            return result;
+        }
+
+        static void javan_http_exchange_write_bytes(javan_http_exchange_value* exchange, const char* bytes, int length) {
+            if (length < 0) {
+                javan_panic("invalid HttpExchange response body write");
+            }
+            void* socket_value = NULL;
+            int chunked = 0;
+            javan_runtime_lock_enter();
+            if (exchange->closed != 0 || exchange->close_requested != 0 || exchange->write_active != 0 || exchange->response_headers_sent == 0) {
+                javan_runtime_lock_leave();
+                javan_panic("invalid HttpExchange response body write");
+            }
+            if (exchange->response_length > 0LL && exchange->response_written + (long long) length > exchange->response_length) {
+                javan_runtime_lock_leave();
+                javan_panic("HttpExchange response exceeds declared length");
+            }
+            if (exchange->response_length < 0LL && length > 0) {
+                javan_runtime_lock_leave();
+                javan_panic("HttpExchange response has no body");
+            }
+            exchange->response_written += (long long) length;
+            exchange->write_active = 1;
+            chunked = exchange->chunked;
+            socket_value = (void*) exchange->socket;
+            javan_runtime_lock_leave();
+            if (chunked != 0 && length > 0) {
+                char prefix[32];
+                int prefix_length = snprintf(prefix, sizeof(prefix), "%x\\r\\n", (unsigned int) length);
+                if (prefix_length < 0 || prefix_length >= (int) sizeof(prefix)) {
+                    javan_panic("HTTP chunk header overflow");
+                }
+                javan_http_server_write_all((javan_socket*) socket_value, prefix, prefix_length);
+                javan_http_server_write_all((javan_socket*) socket_value, bytes, length);
+                javan_http_server_write_all((javan_socket*) socket_value, "\\r\\n", 2);
+            } else if (length > 0) {
+                javan_http_server_write_all((javan_socket*) socket_value, bytes, length);
+            }
+            javan_runtime_lock_enter();
+            exchange->write_active = 0;
+            if (exchange->close_requested != 0 && exchange->closed == 0) {
+                exchange->closed = 1;
+                socket_value = (void*) exchange->socket;
+            } else {
+                socket_value = NULL;
+            }
+            javan_runtime_lock_leave();
+            if (socket_value != NULL) {
+                javan_socket_close(socket_value);
+            }
+        }
+
+        void javan_http_exchange_output_stream_write(void* value, int byte_value) {
+            javan_http_exchange_output_stream_value* stream = javan_http_exchange_output_stream_checked(value);
+            char byte = (char) (byte_value & 0xff);
+            javan_http_exchange_write_bytes(stream->exchange, &byte, 1);
+        }
+
+        void javan_http_exchange_output_stream_write_bytes(void* value, void* bytes_value) {
+            javan_byte_array* bytes = (javan_byte_array*) javan_array_checked(bytes_value);
+            javan_array_kind_checked((javan_array_header*) bytes, JAVAN_ARRAY_KIND_BYTE);
+            javan_http_exchange_output_stream_write_bytes_range(value, bytes_value, 0, bytes->length);
+        }
+
+        void javan_http_exchange_output_stream_write_bytes_range(void* value, void* bytes_value, int offset, int length) {
+            javan_http_exchange_output_stream_value* stream = javan_http_exchange_output_stream_checked(value);
+            javan_byte_array* bytes = (javan_byte_array*) javan_array_checked(bytes_value);
+            javan_array_kind_checked((javan_array_header*) bytes, JAVAN_ARRAY_KIND_BYTE);
+            javan_socket_stream_range_checked(bytes, offset, length);
+            javan_http_exchange_write_bytes(stream->exchange, (const char*) bytes->values + offset, length);
+        }
+
+        void javan_http_exchange_output_stream_flush(void* value) {
+            (void) javan_http_exchange_output_stream_checked(value);
+        }
+
+        void javan_http_exchange_output_stream_close(void* value) {
+            javan_http_exchange_output_stream_value* stream = javan_http_exchange_output_stream_checked(value);
+            javan_http_exchange_close((void*) stream->exchange);
+        }
+
+        static void javan_http_exchange_abort(void* value) {
+            javan_http_exchange_value* exchange = javan_http_exchange_checked(value);
+            void* socket_value = NULL;
+            javan_runtime_lock_enter();
+            if (exchange->closed == 0) {
+                exchange->close_requested = 1;
+                if (exchange->write_active == 0) {
+                    exchange->closed = 1;
+                    socket_value = (void*) exchange->socket;
+                }
+            }
+            javan_runtime_lock_leave();
+            if (socket_value != NULL) {
+                javan_socket_close(socket_value);
+            }
+        }
+
+        void javan_http_exchange_close(void* value) {
+            javan_http_exchange_value* exchange = javan_http_exchange_checked(value);
+            void* socket_value = NULL;
+            int chunked = 0;
+            javan_runtime_lock_enter();
+            if (exchange->closed != 0) {
+                javan_runtime_lock_leave();
+                return;
+            }
+            if (exchange->write_active != 0) {
+                exchange->close_requested = 1;
+                javan_runtime_lock_leave();
+                return;
+            }
+            if (exchange->response_headers_sent != 0) {
+                if (exchange->chunked == 0 && exchange->response_length > 0LL && exchange->response_written != exchange->response_length) {
+                    javan_runtime_lock_leave();
+                    javan_panic("HttpExchange response does not match declared length");
+                }
+                chunked = exchange->chunked;
+            }
+            exchange->closed = 1;
+            exchange->write_active = 1;
+            socket_value = (void*) exchange->socket;
+            javan_runtime_lock_leave();
+            if (chunked != 0) {
+                javan_http_server_write_all((javan_socket*) socket_value, "0\\r\\n\\r\\n", 5);
+            }
+            javan_socket_close(socket_value);
+            javan_runtime_lock_enter();
+            exchange->write_active = 0;
+            javan_runtime_lock_leave();
+        }
         """;
 
     private RuntimeSourcePlatformSection() {
     }
 
     static String tail() {
-        return SOURCE_TAIL_A.concat(SOURCE_TAIL_B);
+        return SOURCE_TAIL_A.concat(SOURCE_TAIL_B).concat(SOURCE_TAIL_C);
     }
 }
