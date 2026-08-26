@@ -797,6 +797,7 @@ final class CoreBehaviorTest {
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/http/HttpResponse", "statusCode", "()I"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/http/HttpResponse", "body", "()Ljava/lang/Object;"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("com/sun/net/httpserver/HttpServer", "create", "(Ljava/net/InetSocketAddress;I)Lcom/sun/net/httpserver/HttpServer;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("com/sun/net/httpserver/HttpServer", "getAddress", "()Ljava/net/InetSocketAddress;"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("com/sun/net/httpserver/HttpServer", "createContext", "(Ljava/lang/String;Lcom/sun/net/httpserver/HttpHandler;)Lcom/sun/net/httpserver/HttpContext;"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("com/sun/net/httpserver/HttpServer", "start", "()V"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("com/sun/net/httpserver/HttpServer", "stop", "(I)V"))).isTrue();
