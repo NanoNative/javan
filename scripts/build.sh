@@ -6,7 +6,16 @@ cd "$ROOT"
 . .github/scripts/timing-report.sh
 . .github/scripts/generated-sources.sh
 
-OUTPUT=${1:-dist/javan}
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*)
+    BOOTSTRAP_SUFFIX=.exe
+    ;;
+  *)
+    BOOTSTRAP_SUFFIX=
+    ;;
+esac
+
+OUTPUT=${1:-dist/javan$BOOTSTRAP_SUFFIX}
 VERSION=$(./mvnw -q help:evaluate -Dexpression=project.version -DforceStdout | tail -n 1)
 GENERATION=${JAVAN_BOOTSTRAP_GENERATION:-3}
 SOURCE=${JAVAN_BOOTSTRAP_SOURCE:-}
@@ -52,7 +61,7 @@ if [ "$REUSE_TARGET" != "true" ] && [ ! -f "$JAR" ]; then
 fi
 mkdir -p "$(dirname -- "$OUTPUT")"
 if [ -n "$SOURCE" ]; then
-  BUILT=target/.javan/bin/javan-bootstrap-verified
+  BUILT=target/.javan/bin/javan-bootstrap-verified$BOOTSTRAP_SUFFIX
   GENERATED=target/.javan/generated
   mkdir -p "$(dirname -- "$BUILT")" "$GENERATED"
   if [ "$SOURCE" != "$GENERATED" ]; then
@@ -69,18 +78,18 @@ else
   javan_timing_run bootstrap_jvm java -cp target/classes javan.Main build target/classes \
     --main javan.Main \
     --output javan-bootstrap-from-jvm
-  javan_timing_run bootstrap_gen2 target/.javan/bin/javan-bootstrap-from-jvm build target/classes \
+  javan_timing_run bootstrap_gen2 target/.javan/bin/javan-bootstrap-from-jvm$BOOTSTRAP_SUFFIX build target/classes \
     --main javan.Main \
     --output javan-bootstrap-rebuilt
-  BUILT=target/.javan/bin/javan-bootstrap-rebuilt
+  BUILT=target/.javan/bin/javan-bootstrap-rebuilt$BOOTSTRAP_SUFFIX
   if [ "$GENERATION" = "3" ]; then
     GEN2_SOURCES=target/.javan/generated-gen2-proof
     javan_copy_generated_sources target/.javan/generated "$GEN2_SOURCES"
-    javan_timing_run bootstrap_gen3 target/.javan/bin/javan-bootstrap-rebuilt build target/classes \
+    javan_timing_run bootstrap_gen3 target/.javan/bin/javan-bootstrap-rebuilt$BOOTSTRAP_SUFFIX build target/classes \
       --main javan.Main \
       --output javan-bootstrap-verified
     javan_compare_generated_sources "$GEN2_SOURCES" target/.javan/generated
-    BUILT=target/.javan/bin/javan-bootstrap-verified
+    BUILT=target/.javan/bin/javan-bootstrap-verified$BOOTSTRAP_SUFFIX
   fi
 fi
 "$BUILT" --version >/dev/null
