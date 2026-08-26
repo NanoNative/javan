@@ -1352,9 +1352,10 @@ final class BytecodeToIRInvokeSupport {
         }
         if ("com/sun/net/httpserver/HttpExchange".equals(methodRef.owner())) {
             final boolean sendResponseHeaders = "sendResponseHeaders".equals(methodRef.name()) && "(IJ)V".equals(methodRef.descriptor());
+            final boolean getRequestMethod = "getRequestMethod".equals(methodRef.name()) && "()Ljava/lang/String;".equals(methodRef.descriptor());
             final boolean getResponseBody = "getResponseBody".equals(methodRef.name()) && "()Ljava/io/OutputStream;".equals(methodRef.descriptor());
             final boolean close = "close".equals(methodRef.name()) && "()V".equals(methodRef.descriptor());
-            if (!sendResponseHeaders && !getResponseBody && !close) {
+            if (!sendResponseHeaders && !getRequestMethod && !getResponseBody && !close) {
                 return false;
             }
             final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
@@ -1364,6 +1365,10 @@ final class BytecodeToIRInvokeSupport {
             callArguments.addAll(arguments);
             if (sendResponseHeaders) {
                 instructions.add(IrInstruction.callStaticVoid("javan_http_exchange_send_response_headers", callArguments));
+                return true;
+            }
+            if (getRequestMethod) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_http_exchange_get_request_method", callArguments)));
                 return true;
             }
             if (getResponseBody) {
