@@ -109,6 +109,23 @@ final class RuntimeSourceCoreSection {
             return result;
         }
 
+        static char* javan_windows_wide_to_utf8_copy(const wchar_t* value) {
+            if (value == NULL) {
+                return NULL;
+            }
+            int length = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value, -1, NULL, 0, NULL, NULL);
+            if (length <= 0) {
+                return NULL;
+            }
+            char* result = (char*) malloc((unsigned long) length);
+            if (result == NULL
+                || WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value, -1, result, length, NULL, NULL) == 0) {
+                free(result);
+                return NULL;
+            }
+            return result;
+        }
+
         static FILE* javan_file_open(const char* path, const char* mode) {
             wchar_t* wide_path = javan_windows_utf8_to_wide_copy(path);
             wchar_t* wide_mode = javan_windows_utf8_to_wide_copy(mode);
@@ -157,19 +174,11 @@ final class RuntimeSourceCoreSection {
                 return;
             }
             for (int index = 0; index < count; index++) {
-                int length = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide_values[index], -1, NULL, 0, NULL, NULL);
-                if (length <= 0) {
-                    LocalFree(wide_values);
-                    javan_windows_release_command_line_values(values, owned_values, index);
-                    javan_panic("Windows command line is not valid Unicode");
-                    return;
-                }
-                owned_values[index] = (char*) malloc((unsigned long) length);
-                if (owned_values[index] == NULL
-                    || WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide_values[index], -1, owned_values[index], length, NULL, NULL) == 0) {
+                owned_values[index] = javan_windows_wide_to_utf8_copy(wide_values[index]);
+                if (owned_values[index] == NULL) {
                     LocalFree(wide_values);
                     javan_windows_release_command_line_values(values, owned_values, index + 1);
-                    javan_panic("Windows command line conversion failed");
+                    javan_panic("Windows command line is not valid Unicode");
                     return;
                 }
                 values[index] = owned_values[index];
@@ -265,10 +274,17 @@ final class RuntimeSourceCoreSection {
                 return;
             }
         #if defined(_WIN32)
-            DWORD length = GetModuleFileNameA(NULL, javan_runtime_executable_path, (DWORD) sizeof(javan_runtime_executable_path));
-            if (length == 0 || length >= sizeof(javan_runtime_executable_path)) {
+            wchar_t wide_path[4096];
+            DWORD length = GetModuleFileNameW(NULL, wide_path, (DWORD) (sizeof(wide_path) / sizeof(wide_path[0])));
+            char* utf8_path = length == 0 || length >= sizeof(wide_path) / sizeof(wide_path[0])
+                ? NULL
+                : javan_windows_wide_to_utf8_copy(wide_path);
+            if (utf8_path == NULL || strlen(utf8_path) >= sizeof(javan_runtime_executable_path)) {
                 javan_copy_error_field(javan_runtime_executable_path, sizeof(javan_runtime_executable_path), argv0);
+            } else {
+                javan_copy_error_field(javan_runtime_executable_path, sizeof(javan_runtime_executable_path), utf8_path);
             }
+            free(utf8_path);
         #else
             if (argv0[0] == '/') {
                 javan_copy_error_field(javan_runtime_executable_path, sizeof(javan_runtime_executable_path), argv0);

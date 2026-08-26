@@ -237,6 +237,7 @@ final class CiParallelWorkflowSurfaceTest {
                 "writeProvidesNativeWindowsProcessExecution",
                 "runtimeWindowsProcessUsesUtf8WorkingDirectoryUnderGcStress",
                 "runtimeWindowsPathsPreserveDriveRootsAndSeparators",
+                "runtimeWindowsPathToAbsoluteUsesUtf8CurrentDirectory",
                 "generatedRuntimeCrossCompilesToWindowsPeWhenMinGwIsAvailable",
                 "generatedRuntimeExecutesBasicWindowsProbeWhenHostCompilerIsAvailable",
                 "secureRandomFillsByteArraysFromOsEntropy",

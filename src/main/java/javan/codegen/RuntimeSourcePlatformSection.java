@@ -1014,11 +1014,26 @@ final class RuntimeSourcePlatformSection {
             if (javan_path_is_absolute_text(path)) {
                 return javan_string_copy(path);
             }
+            #if defined(_WIN32)
+            wchar_t wide_cwd[4096];
+            DWORD length = GetCurrentDirectoryW((DWORD) (sizeof(wide_cwd) / sizeof(wide_cwd[0])), wide_cwd);
+            if (length == 0 || length >= sizeof(wide_cwd) / sizeof(wide_cwd[0])) {
+                javan_panic("toAbsolutePath failed");
+            }
+            char* cwd = javan_windows_wide_to_utf8_copy(wide_cwd);
+            if (cwd == NULL) {
+                javan_panic("toAbsolutePath failed");
+            }
+            void* result = javan_path_resolve(cwd, (void*) path);
+            free(cwd);
+            return result;
+            #else
             char cwd[4096];
             if (getcwd(cwd, sizeof(cwd)) == NULL) {
                 javan_panic("toAbsolutePath failed");
             }
             return javan_path_resolve(cwd, (void*) path);
+            #endif
         }
 
         void* javan_path_normalize(void* path_value) {

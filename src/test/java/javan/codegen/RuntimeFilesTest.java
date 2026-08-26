@@ -3442,12 +3442,13 @@ final class RuntimeFilesTest {
             "GetTempFileNameW(temporary_directory, L\"jvo\"",
             "CreateFileW(",
             "_wfopen(path, L\"rb\")",
-            "GetModuleFileNameA(NULL, javan_runtime_executable_path",
+            "GetModuleFileNameW(NULL, wide_path",
+            "GetCurrentDirectoryW((DWORD) (sizeof(wide_cwd) / sizeof(wide_cwd[0])), wide_cwd)",
             "wchar_t stdout_path[MAX_PATH + 1] = {0};",
             "wchar_t stderr_path[MAX_PATH + 1] = {0};",
             "if (stdout_path[0] != L'\\0') {",
             "process wait failed"
-        ).doesNotContain("CreateProcessA(", "GetTempPathA(", "GetTempFileNameA(", "CreateFileA(");
+        ).doesNotContain("CreateProcessA(", "GetTempPathA(", "GetTempFileNameA(", "CreateFileA(", "GetModuleFileNameA(");
     }
 
     @Test
@@ -10499,6 +10500,50 @@ final class RuntimeFilesTest {
         assertThat(stdout).isEqualTo(windows
             ? "1|1|C:\\work\\output|C:\\work\\output\\child|0|C:\\rooted|C:\\work|output|2\n"
             : "not-windows\n");
+    }
+
+    @Test
+    @WindowsCompatibilityProof
+    void runtimeWindowsPathToAbsoluteUsesUtf8CurrentDirectory() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+            #include <string.h>
+            #if defined(_WIN32)
+            #include <windows.h>
+            #endif
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                #if defined(_WIN32)
+                wchar_t original[MAX_PATH + 1];
+                DWORD original_length = GetCurrentDirectoryW(MAX_PATH, original);
+                if (original_length == 0 || original_length >= MAX_PATH
+                    || (CreateDirectoryW(L"javan-\\x00E4", NULL) == 0 && GetLastError() != ERROR_ALREADY_EXISTS)
+                    || SetCurrentDirectoryW(L"javan-\\x00E4") == 0) {
+                    return 1;
+                }
+                void* path = javan_string_from("child");
+                void* absolute = javan_path_to_absolute(path);
+                printf(
+                    "%d:%d\\n",
+                    javan_path_is_absolute(absolute),
+                    strstr((char*) absolute, "javan-\\xC3\\xA4\\\\child") != NULL
+                );
+                SetCurrentDirectoryW(original);
+                RemoveDirectoryW(L"javan-\\x00E4");
+                #else
+                printf("not-windows\\n");
+                #endif
+                return 0;
+            }
+            """,
+            "512"
+        );
+
+        final boolean windows = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
+        assertThat(stdout).isEqualTo(windows ? "1:1\n" : "not-windows\n");
     }
 
     @Test
