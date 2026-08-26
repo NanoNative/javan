@@ -92,6 +92,37 @@ final class RuntimeSourceCoreSection {
         static char javan_runtime_executable_path[4096];
 
         #if defined(_WIN32)
+        static wchar_t* javan_windows_utf8_to_wide_copy(const char* value) {
+            if (value == NULL) {
+                return NULL;
+            }
+            int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value, -1, NULL, 0);
+            if (length <= 0 || (unsigned long) length > ULONG_MAX / sizeof(wchar_t)) {
+                return NULL;
+            }
+            wchar_t* result = (wchar_t*) malloc((unsigned long) length * sizeof(wchar_t));
+            if (result == NULL
+                || MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value, -1, result, length) == 0) {
+                free(result);
+                return NULL;
+            }
+            return result;
+        }
+
+        static FILE* javan_file_open(const char* path, const char* mode) {
+            wchar_t* wide_path = javan_windows_utf8_to_wide_copy(path);
+            wchar_t* wide_mode = javan_windows_utf8_to_wide_copy(mode);
+            if (wide_path == NULL || wide_mode == NULL) {
+                free(wide_path);
+                free(wide_mode);
+                return NULL;
+            }
+            FILE* result = _wfopen(wide_path, wide_mode);
+            free(wide_path);
+            free(wide_mode);
+            return result;
+        }
+
         static char** javan_windows_command_line_values = NULL;
         static char** javan_windows_command_line_owned_values = NULL;
         static int javan_windows_command_line_count = 0;
@@ -162,6 +193,10 @@ final class RuntimeSourceCoreSection {
             javan_windows_command_line_count = 0;
         }
         #else
+        static FILE* javan_file_open(const char* path, const char* mode) {
+            return fopen(path, mode);
+        }
+
         void javan_runtime_prepare_command_line_args(int* argc, char*** argv) {
             (void) argc;
             (void) argv;

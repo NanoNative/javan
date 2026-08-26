@@ -1185,7 +1185,7 @@ final class RuntimeSourceMemorySections {
             }
             javan_runtime_lock_leave();
             if (json_path != NULL && json_path[0] != '\\0') {
-                FILE* json = fopen(json_path, "w");
+                FILE* json = javan_file_open(json_path, "w");
                 if (json != NULL) {
                     fprintf(json, "{\\n");
                     fprintf(json, "  \\"schemaVersion\\": 1,\\n");
@@ -1218,7 +1218,7 @@ final class RuntimeSourceMemorySections {
                 }
             }
             if (markdown_path != NULL && markdown_path[0] != '\\0') {
-                FILE* markdown = fopen(markdown_path, "w");
+                FILE* markdown = javan_file_open(markdown_path, "w");
                 if (markdown != NULL) {
                     fprintf(markdown, "# Runtime Profiling\\n\\n");
                     fprintf(markdown, "- status: `collected`\\n");
@@ -14527,6 +14527,18 @@ final class RuntimeSourceMemorySections {
     private static final String SOURCE_COLLECTIONS_PROCESS = """
 
         #if defined(_WIN32)
+        static int javan_windows_command_line_requires_quotes(const char* value) {
+            if (value[0] == '\\0') {
+                return 1;
+            }
+            for (unsigned long index = 0; value[index] != '\\0'; index++) {
+                if (value[index] == ' ' || value[index] == '\\t' || value[index] == '"') {
+                    return 1;
+                }
+            }
+            return 0;
+        }
+
         static char* javan_windows_command_line(javan_object_list* command, void** root_slot) {
             unsigned long capacity = 2;
             for (int index = 0; index < command->length; index++) {
@@ -14544,7 +14556,10 @@ final class RuntimeSourceMemorySections {
                 if (index > 0) {
                     *write++ = ' ';
                 }
-                *write++ = '"';
+                const int quoted = javan_windows_command_line_requires_quotes(value);
+                if (quoted != 0) {
+                    *write++ = '"';
+                }
                 unsigned long slashes = 0;
                 for (unsigned long position = 0; value[position] != '\\0'; position++) {
                     char character = value[position];
@@ -14566,10 +14581,12 @@ final class RuntimeSourceMemorySections {
                     slashes = 0;
                     *write++ = character;
                 }
-                for (unsigned long escaped = 0; escaped < slashes * 2; escaped++) {
+                for (unsigned long trailing = 0; trailing < slashes * (quoted != 0 ? 2UL : 1UL); trailing++) {
                     *write++ = '\\\\';
                 }
-                *write++ = '"';
+                if (quoted != 0) {
+                    *write++ = '"';
+                }
             }
             *write = '\\0';
             return result;

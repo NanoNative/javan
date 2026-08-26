@@ -694,13 +694,13 @@ final class RuntimeSourceIoSections {
             javan_copy_options_checked(options);
             const char* source_path = javan_path_checked(source);
             const char* target_path = javan_path_checked(target);
-            FILE* input = fopen(source_path, "rb");
+            FILE* input = javan_file_open(source_path, "rb");
             if (input == NULL) {
                 return javan_files_io_failure("file copy source open failed");
             }
             javan_native_resource_frame input_resource;
             javan_native_resource_push(&input_resource, input, javan_native_file_cleanup);
-            FILE* output = fopen(target_path, "wb");
+            FILE* output = javan_file_open(target_path, "wb");
             if (output == NULL) {
                 javan_native_resource_pop(&input_resource);
                 fclose(input);
@@ -744,14 +744,8 @@ final class RuntimeSourceIoSections {
             if (path == NULL || path[0] == '\\0') {
                 return 1;
             }
-            int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, NULL, 0);
-            if (length <= 0 || (unsigned long) length > ULONG_MAX / sizeof(wchar_t)) {
-                return 0;
-            }
-            wchar_t* wide_path = (wchar_t*) malloc((unsigned long) length * sizeof(wchar_t));
-            if (wide_path == NULL
-                || MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, wide_path, length) == 0) {
-                free(wide_path);
+            wchar_t* wide_path = javan_windows_utf8_to_wide_copy(path);
+            if (wide_path == NULL) {
                 return 0;
             }
             if (CreateDirectoryW(wide_path, NULL) != 0) {
@@ -848,7 +842,7 @@ final class RuntimeSourceIoSections {
 
         void* javan_files_read_string(void* path_value) {
             const char* path = javan_path_checked(path_value);
-            FILE* file = fopen(path, "rb");
+            FILE* file = javan_file_open(path, "rb");
             if (file == NULL) {
                 return javan_files_io_failure("readString failed");
             }
@@ -901,7 +895,7 @@ final class RuntimeSourceIoSections {
             javan_empty_options_checked(options);
             const char* path = javan_path_checked(path_value);
             const char* text = value == NULL ? "" : (const char*) value;
-            FILE* file = fopen(path, "wb");
+            FILE* file = javan_file_open(path, "wb");
             if (file == NULL) {
                 return javan_files_io_failure("writeString failed");
             }
@@ -924,7 +918,7 @@ final class RuntimeSourceIoSections {
             const char* path = javan_path_checked(path_value);
             javan_byte_array* bytes = (javan_byte_array*) javan_array_checked(bytes_value);
             javan_array_kind_checked((javan_array_header*) bytes, JAVAN_ARRAY_KIND_BYTE);
-            FILE* file = fopen(path, "wb");
+            FILE* file = javan_file_open(path, "wb");
             if (file == NULL) {
                 return javan_files_io_failure("write bytes failed");
             }
@@ -945,7 +939,7 @@ final class RuntimeSourceIoSections {
 
         void* javan_files_read_all_bytes(void* path_value) {
             const char* path = javan_path_checked(path_value);
-            FILE* file = fopen(path, "rb");
+            FILE* file = javan_file_open(path, "rb");
             if (file == NULL) {
                 return javan_files_io_failure("readAllBytes failed");
             }
