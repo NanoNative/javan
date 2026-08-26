@@ -828,12 +828,32 @@ final class RuntimeSourcePlatformSection {
         static int javan_stat_path(const char* path, int no_follow, struct stat* info) {
         #if defined(_WIN32)
             (void) no_follow;
-            return stat(path, info);
+            wchar_t* wide_path = javan_windows_utf8_to_wide_copy(path);
+            if (wide_path == NULL) {
+                return -1;
+            }
+            int result = _wstat(wide_path, info);
+            free(wide_path);
+            return result;
         #else
             if (no_follow) {
                 return lstat(path, info);
             }
             return stat(path, info);
+        #endif
+        }
+
+        static int javan_access_path(const char* path, int mode) {
+        #if defined(_WIN32)
+            wchar_t* wide_path = javan_windows_utf8_to_wide_copy(path);
+            if (wide_path == NULL) {
+                return -1;
+            }
+            int result = _waccess(wide_path, mode);
+            free(wide_path);
+            return result;
+        #else
+            return access(path, mode);
         #endif
         }
 

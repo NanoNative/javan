@@ -669,7 +669,7 @@ final class RuntimeSourceIoSections {
         }
 
         int javan_files_is_executable(void* path) {
-            return access(javan_path_checked(path), X_OK) == 0;
+            return javan_access_path(javan_path_checked(path), X_OK) == 0;
         }
 
         static void* javan_files_io_failure(const char* message) {
@@ -833,11 +833,7 @@ final class RuntimeSourceIoSections {
             if (!javan_mkdirs_if_possible(path)) {
                 return 0;
             }
-            #if defined(_WIN32)
-            return _access(path, 2) == 0;
-            #else
-            return access(path, W_OK) == 0;
-            #endif
+            return javan_access_path(path, W_OK) == 0;
         }
 
         void* javan_files_read_string(void* path_value) {
@@ -989,7 +985,7 @@ final class RuntimeSourceIoSections {
 
         long long javan_files_size(void* path_value) {
             struct stat info;
-            if (stat(javan_path_checked(path_value), &info) != 0) {
+            if (javan_stat_path(javan_path_checked(path_value), 0, &info) != 0) {
                 javan_files_io_failure("Files.size failed");
                 return 0;
             }

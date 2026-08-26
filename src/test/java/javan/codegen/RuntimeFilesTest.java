@@ -10526,10 +10526,13 @@ final class RuntimeFilesTest {
                 }
                 void* path = javan_string_from("child");
                 void* absolute = javan_path_to_absolute(path);
+                void* directory = javan_string_from("..\\javan-\\xC3\\xA4");
+                void* options = javan_object_array_new(0, "[Ljava.nio.file.LinkOption;");
                 printf(
-                    "%d:%d\\n",
+                    "%d:%d:%d\\n",
                     javan_path_is_absolute(absolute),
-                    strstr((char*) absolute, "javan-\\xC3\\xA4\\\\child") != NULL
+                    strstr((char*) absolute, "javan-\\xC3\\xA4\\\\child") != NULL,
+                    javan_files_is_directory(directory, options)
                 );
                 SetCurrentDirectoryW(original);
                 RemoveDirectoryW(L"javan-\\x00E4");
@@ -10543,7 +10546,7 @@ final class RuntimeFilesTest {
         );
 
         final boolean windows = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
-        assertThat(stdout).isEqualTo(windows ? "1:1\n" : "not-windows\n");
+        assertThat(stdout).isEqualTo(windows ? "1:1:1\n" : "not-windows\n");
     }
 
     @Test
