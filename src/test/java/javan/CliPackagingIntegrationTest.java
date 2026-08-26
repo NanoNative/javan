@@ -425,7 +425,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     @Test
     @WindowsCompatibilityProof
     void nativeBuiltJavanBuildsPlainSourceProject() throws Exception {
-        final Path sourceProject = tempDir.resolve("selfhost-source-project");
+        final Path sourceProject = tempDir.resolve("selfhost-source-pr\u00f6ject");
         writeJava(sourceProject, "com.acme.Main", """
             package com.acme;
 

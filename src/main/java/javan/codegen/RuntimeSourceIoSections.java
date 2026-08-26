@@ -739,15 +739,42 @@ final class RuntimeSourceIoSections {
             return (void*) target_path;
         }
 
+        #if defined(_WIN32)
+        static int javan_windows_mkdir_if_needed(const char* path) {
+            if (path == NULL || path[0] == '\\0') {
+                return 1;
+            }
+            int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, NULL, 0);
+            if (length <= 0 || (unsigned long) length > ULONG_MAX / sizeof(wchar_t)) {
+                return 0;
+            }
+            wchar_t* wide_path = (wchar_t*) malloc((unsigned long) length * sizeof(wchar_t));
+            if (wide_path == NULL
+                || MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, wide_path, length) == 0) {
+                free(wide_path);
+                return 0;
+            }
+            if (CreateDirectoryW(wide_path, NULL) != 0) {
+                free(wide_path);
+                return 1;
+            }
+            DWORD error = GetLastError();
+            DWORD attributes = GetFileAttributesW(wide_path);
+            free(wide_path);
+            return error == ERROR_ALREADY_EXISTS
+                && attributes != INVALID_FILE_ATTRIBUTES
+                && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+        }
+        #endif
+
         static int javan_mkdir_if_needed(const char* path) {
             if (path[0] == '\\0') {
                 return 1;
             }
             #if defined(_WIN32)
-            if (mkdir(path) == 0) {
+            return javan_windows_mkdir_if_needed(path);
             #else
             if (mkdir(path, 0777) == 0) {
-            #endif
                 return 1;
             }
             if (errno == EEXIST) {
@@ -757,6 +784,7 @@ final class RuntimeSourceIoSections {
                 }
             }
             return 0;
+            #endif
         }
 
         static char* javan_directory_creation_start(char* path) {

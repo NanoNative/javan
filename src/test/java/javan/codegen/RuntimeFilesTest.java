@@ -10360,6 +10360,9 @@ final class RuntimeFilesTest {
             """
             #include "javan_runtime.h"
             #include <stdio.h>
+            #if defined(_WIN32)
+            #include <windows.h>
+            #endif
 
             int main(void) {
                 javan_register_static_roots(0, 0);
