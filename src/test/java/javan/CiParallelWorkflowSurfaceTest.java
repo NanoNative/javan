@@ -236,6 +236,7 @@ final class CiParallelWorkflowSurfaceTest {
                 "writeEmitsPlatformRecursiveRuntimeLockForSharedHeapState",
                 "writeProvidesNativeWindowsProcessExecution",
                 "runtimeWindowsProcessUsesUtf8WorkingDirectoryUnderGcStress",
+                "runtimeWindowsPathsPreserveDriveRootsAndSeparators",
                 "generatedRuntimeCrossCompilesToWindowsPeWhenMinGwIsAvailable",
                 "generatedRuntimeExecutesBasicWindowsProbeWhenHostCompilerIsAvailable",
                 "secureRandomFillsByteArraysFromOsEntropy",

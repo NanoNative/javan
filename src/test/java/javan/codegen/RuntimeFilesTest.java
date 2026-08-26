@@ -10420,13 +10420,15 @@ final class RuntimeFilesTest {
                 (void) javan_arraylist_add(command, (void*) "cmd.exe");
                 (void) javan_arraylist_add(command, (void*) "/d");
                 (void) javan_arraylist_add(command, (void*) "/c");
-                (void) javan_arraylist_add(command, (void*) "exit /b 0");
+                (void) javan_arraylist_add(command, (void*) "echo ready > marker.txt");
                 void* working_directory = javan_string_from("javan-\\xC3\\xA4");
                 void* result = javan_process_run(working_directory, command, 10000);
-                printf("%d\\n", javan_process_result_exit_code(result));
+                DWORD marker = GetFileAttributesW(L"javan-\\x00E4\\\\marker.txt");
+                printf("%d:%d:%s\\n", javan_process_result_exit_code(result), marker != INVALID_FILE_ATTRIBUTES, (char*) javan_process_result_stderr(result));
                 javan_free(result);
                 javan_free(working_directory);
                 javan_free(command);
+                DeleteFileW(L"javan-\\x00E4\\\\marker.txt");
                 RemoveDirectoryW(directory);
                 #else
                 printf("not-windows\\n");
@@ -10439,7 +10441,53 @@ final class RuntimeFilesTest {
         );
 
         final boolean windows = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
-        assertThat(stdout).isEqualTo(windows ? "0\n" : "not-windows\n");
+        assertThat(stdout).isEqualTo(windows ? "0:1:\n" : "not-windows\n");
+    }
+
+    @Test
+    @WindowsCompatibilityProof
+    void runtimeWindowsPathsPreserveDriveRootsAndSeparators() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                #if defined(_WIN32)
+                void* path = javan_string_from("C:\\\\work\\\\src\\\\..\\\\output");
+                void* child = javan_string_from("child");
+                void* root_relative = javan_string_from("\\\\rooted");
+                void* normalized = javan_path_normalize(path);
+                void* resolved = javan_path_resolve(normalized, child);
+                void* rooted = javan_path_resolve(path, root_relative);
+                void* parent = javan_path_get_parent(normalized);
+                void* name = javan_path_get_file_name(normalized);
+                printf(
+                    "%d|%d|%s|%s|%d|%s|%s|%s|%d\\n",
+                    javan_path_is_absolute(path),
+                    javan_path_is_absolute(normalized),
+                    (char*) normalized,
+                    (char*) resolved,
+                    javan_path_is_absolute(root_relative),
+                    (char*) rooted,
+                    (char*) parent,
+                    (char*) name,
+                    javan_path_get_name_count(normalized)
+                );
+                #else
+                printf("not-windows\\n");
+                #endif
+                return 0;
+            }
+            """,
+            "512"
+        );
+
+        final boolean windows = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
+        assertThat(stdout).isEqualTo(windows
+            ? "1|1|C:\\work\\output|C:\\work\\output\\child|0|C:\\rooted|C:\\work|output|2\n"
+            : "not-windows\n");
     }
 
     @Test

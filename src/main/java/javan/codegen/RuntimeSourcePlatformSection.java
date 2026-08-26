@@ -849,13 +849,66 @@ final class RuntimeSourcePlatformSection {
             }
         }
 
+        static int javan_path_is_separator(const char value) {
+            #if defined(_WIN32)
+            return value == '/' || value == '\\\\';
+            #else
+            return value == '/';
+            #endif
+        }
+
+        static int javan_path_is_absolute_text(const char* path) {
+            if (path == NULL || path[0] == '\\0') {
+                return 0;
+            }
+            #if defined(_WIN32)
+            if (javan_path_is_separator(path[0]) && javan_path_is_separator(path[1])) {
+                return 1;
+            }
+            return ((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z'))
+                && path[1] == ':'
+                && javan_path_is_separator(path[2]);
+            #else
+            return path[0] == '/';
+            #endif
+        }
+
+        static unsigned long javan_path_root_length(const char* path) {
+            if (path == NULL || path[0] == '\\0') {
+                return 0;
+            }
+            #if defined(_WIN32)
+            if (((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z')) && path[1] == ':') {
+                return javan_path_is_separator(path[2]) ? 3 : 0;
+            }
+            if (javan_path_is_separator(path[0])) {
+                return javan_path_is_separator(path[1]) ? 2 : 1;
+            }
+            return 0;
+            #else
+            return path[0] == '/' ? 1 : 0;
+            #endif
+        }
+
+        static char javan_path_output_separator(const char* path) {
+            #if defined(_WIN32)
+            for (const char* cursor = path; *cursor != '\\0'; cursor++) {
+                if (*cursor == '\\\\') {
+                    return '\\\\';
+                }
+            }
+            #endif
+            return '/';
+        }
+
         static unsigned long javan_path_joined_length(const char* first, javan_object_array* more) {
             unsigned long length = strlen(first);
             char last = length == 0 ? '\\0' : first[length - 1];
             for (int index = 0; index < more->length; index++) {
                 const char* part = javan_path_checked(more->values[index]);
                 unsigned long part_length = strlen(part);
-                if (length > 0 && last != '/' && part_length > 0 && part[0] != '/') {
+                if (length > 0 && !javan_path_is_separator(last)
+                    && part_length > 0 && !javan_path_is_separator(part[0])) {
                     length++;
                 }
                 length += part_length;
@@ -887,8 +940,10 @@ final class RuntimeSourcePlatformSection {
             for (int index = 0; index < more->length; index++) {
                 const char* part = javan_path_checked(more->values[index]);
                 unsigned long current = strlen(result);
-                if (current > 0 && result[current - 1] != '/' && part[0] != '\\0' && part[0] != '/') {
-                    strcat(result, "/");
+                if (current > 0 && !javan_path_is_separator(result[current - 1])
+                    && part[0] != '\\0' && !javan_path_is_separator(part[0])) {
+                    result[current] = javan_path_output_separator(first);
+                    result[current + 1] = '\\0';
                 }
                 strcat(result, part);
             }
@@ -899,15 +954,36 @@ final class RuntimeSourcePlatformSection {
         void* javan_path_resolve(void* path_value, void* child_value) {
             const char* path = javan_path_checked(path_value);
             const char* child = javan_path_checked(child_value);
-            if (child[0] == '/') {
+            if (javan_path_is_absolute_text(child)) {
                 return javan_string_copy(child);
             }
+            #if defined(_WIN32)
+            if (javan_path_root_length(child) == 1
+                && ((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z'))
+                && path[1] == ':' && javan_path_is_separator(path[2])) {
+                unsigned long child_length = strlen(child);
+                void* path_root = path_value;
+                void* child_root = child_value;
+                void** javan_path_root_relative_roots[] = {
+                    (void**) &path_root,
+                    (void**) &child_root
+                };
+                javan_root_frame_push(javan_path_root_relative_roots, 2);
+                path = javan_path_checked(path_root);
+                child = javan_path_checked(child_root);
+                char* result = javan_string_alloc(child_length + 3);
+                memcpy(result, path, 2);
+                memcpy(result + 2, child, child_length + 1);
+                javan_root_frame_pop(javan_path_root_relative_roots);
+                return result;
+            }
+            #endif
             if (path[0] == '\\0') {
                 return javan_string_copy(child);
             }
             unsigned long path_length = strlen(path);
             unsigned long child_length = strlen(child);
-            int slash = path[path_length - 1] == '/' || child[0] == '\\0' ? 0 : 1;
+            int slash = javan_path_is_separator(path[path_length - 1]) || child[0] == '\\0' ? 0 : 1;
             void* path_root = path_value;
             void* child_root = child_value;
             void** javan_path_resolve_roots[] = {
@@ -921,7 +997,7 @@ final class RuntimeSourcePlatformSection {
             memcpy(result, path, path_length);
             unsigned long offset = path_length;
             if (slash != 0) {
-                result[offset] = '/';
+                result[offset] = javan_path_output_separator(path);
                 offset++;
             }
             memcpy(result + offset, child, child_length + 1);
@@ -930,13 +1006,12 @@ final class RuntimeSourcePlatformSection {
         }
 
         int javan_path_is_absolute(void* path_value) {
-            const char* path = javan_path_checked(path_value);
-            return path[0] == '/';
+            return javan_path_is_absolute_text(javan_path_checked(path_value));
         }
 
         void* javan_path_to_absolute(void* path_value) {
             const char* path = javan_path_checked(path_value);
-            if (path[0] == '/') {
+            if (javan_path_is_absolute_text(path)) {
                 return javan_string_copy(path);
             }
             char cwd[4096];
@@ -949,6 +1024,7 @@ final class RuntimeSourcePlatformSection {
         void* javan_path_normalize(void* path_value) {
             const char* path = javan_path_checked(path_value);
             unsigned long length = strlen(path);
+            unsigned long root_length = javan_path_root_length(path);
             void* path_root = path_value;
             void** javan_path_normalize_roots[] = {
                 (void**) &path_root
@@ -962,15 +1038,15 @@ final class RuntimeSourcePlatformSection {
                 free(lengths);
                 javan_panic("Path.normalize allocation failed");
             }
-            int absolute = length > 0 && path[0] == '/';
+            int absolute = root_length > 0;
             unsigned long count = 0;
-            unsigned long index = 0;
+            unsigned long index = root_length;
             while (index < length) {
-                while (index < length && path[index] == '/') {
+                while (index < length && javan_path_is_separator(path[index])) {
                     index++;
                 }
                 unsigned long start = index;
-                while (index < length && path[index] != '/') {
+                while (index < length && !javan_path_is_separator(path[index])) {
                     index++;
                 }
                 unsigned long segment_length = index - start;
@@ -994,35 +1070,22 @@ final class RuntimeSourcePlatformSection {
                 lengths[count] = segment_length;
                 count++;
             }
-            unsigned long out_length = 0;
-            if (absolute != 0 && count == 0) {
-                out_length = 1;
-            } else if (absolute != 0 && count > 0) {
-                out_length = 1;
-                for (unsigned long part = 0; part < count; part++) {
-                    out_length += lengths[part];
-                    if (part + 1 < count) {
-                        out_length++;
-                    }
+            unsigned long out_length = root_length;
+            for (unsigned long part = 0; part < count; part++) {
+                if (out_length > root_length) {
+                    out_length++;
                 }
-            } else {
-                out_length = 0;
-                for (unsigned long part = 0; part < count; part++) {
-                    out_length += lengths[part];
-                    if (part + 1 < count) {
-                        out_length++;
-                    }
-                }
+                out_length += lengths[part];
             }
             char* result = javan_string_alloc(out_length + 1);
             unsigned long out = 0;
-            if (absolute != 0) {
-                result[out] = '/';
-                out++;
+            if (root_length > 0) {
+                memcpy(result, path, root_length);
+                out = root_length;
             }
             for (unsigned long part = 0; part < count; part++) {
-                if (out > 0 && result[out - 1] != '/') {
-                    result[out] = '/';
+                if (out > root_length && !javan_path_is_separator(result[out - 1])) {
+                    result[out] = javan_path_output_separator(path);
                     out++;
                 }
                 memcpy(result + out, starts[part], lengths[part]);
@@ -1038,18 +1101,32 @@ final class RuntimeSourcePlatformSection {
         void* javan_path_get_parent(void* path_value) {
             const char* path = javan_path_checked(path_value);
             unsigned long length = strlen(path);
-            while (length > 1 && path[length - 1] == '/') {
+            unsigned long root_length = javan_path_root_length(path);
+            while (length > root_length && javan_path_is_separator(path[length - 1])) {
                 length--;
             }
-            unsigned long slash = length;
-            while (slash > 0 && path[slash - 1] != '/') {
-                slash--;
-            }
-            if (slash == 0) {
+            if (length <= root_length) {
                 return NULL;
             }
-            if (slash == 1) {
-                return javan_string_copy("/");
+            unsigned long start = length;
+            while (start > root_length && !javan_path_is_separator(path[start - 1])) {
+                start--;
+            }
+            if (start <= root_length) {
+                if (root_length == 0) {
+                    return NULL;
+                }
+                void* path_root = path_value;
+                void** javan_path_parent_root_roots[] = {
+                    (void**) &path_root
+                };
+                javan_root_frame_push(javan_path_parent_root_roots, 1);
+                path = javan_path_checked(path_root);
+                char* result = javan_string_alloc(root_length + 1);
+                memcpy(result, path, root_length);
+                result[root_length] = '\\0';
+                javan_root_frame_pop(javan_path_parent_root_roots);
+                return result;
             }
             void* path_root = path_value;
             void** javan_path_parent_roots[] = {
@@ -1057,9 +1134,9 @@ final class RuntimeSourcePlatformSection {
             };
             javan_root_frame_push(javan_path_parent_roots, 1);
             path = javan_path_checked(path_root);
-            char* result = javan_string_alloc(slash);
-            memcpy(result, path, slash - 1);
-            result[slash - 1] = '\\0';
+            char* result = javan_string_alloc(start);
+            memcpy(result, path, start - 1);
+            result[start - 1] = '\\0';
             javan_root_frame_pop(javan_path_parent_roots);
             return result;
         }
@@ -1067,11 +1144,15 @@ final class RuntimeSourcePlatformSection {
         void* javan_path_get_file_name(void* path_value) {
             const char* path = javan_path_checked(path_value);
             unsigned long length = strlen(path);
-            while (length > 1 && path[length - 1] == '/') {
+            unsigned long root_length = javan_path_root_length(path);
+            while (length > root_length && javan_path_is_separator(path[length - 1])) {
                 length--;
             }
+            if (length <= root_length) {
+                return NULL;
+            }
             unsigned long start = length;
-            while (start > 0 && path[start - 1] != '/') {
+            while (start > root_length && !javan_path_is_separator(path[start - 1])) {
                 start--;
             }
             unsigned long size = length - start;
@@ -1102,7 +1183,9 @@ final class RuntimeSourcePlatformSection {
             if (strncmp(path, prefix, prefix_length) != 0) {
                 return 0;
             }
-            return path[prefix_length] == '\\0' || path[prefix_length] == '/' || (prefix_length > 0 && prefix[prefix_length - 1] == '/');
+            return path[prefix_length] == '\\0'
+                || javan_path_is_separator(path[prefix_length])
+                || (prefix_length > 0 && javan_path_is_separator(prefix[prefix_length - 1]));
         }
 
         void* javan_path_relativize(void* path_value, void* child_value) {
@@ -1113,7 +1196,7 @@ final class RuntimeSourcePlatformSection {
                 if (child[path_length] == '\\0') {
                     return javan_string_copy("");
                 }
-                if (child[path_length] == '/') {
+                if (javan_path_is_separator(child[path_length])) {
                     void* child_root = child_value;
                     void** javan_path_relativize_roots[] = {
                         (void**) &child_root
@@ -1135,8 +1218,8 @@ final class RuntimeSourcePlatformSection {
             const char* path = javan_path_checked(path_value);
             int count = 0;
             int in_name = 0;
-            for (const char* cursor = path; *cursor != '\\0'; cursor++) {
-                if (*cursor == '/') {
+            for (const char* cursor = path + javan_path_root_length(path); *cursor != '\\0'; cursor++) {
+                if (javan_path_is_separator(*cursor)) {
                     in_name = 0;
                 } else if (in_name == 0) {
                     count++;
@@ -1153,8 +1236,8 @@ final class RuntimeSourcePlatformSection {
             const char* path = javan_path_checked(path_value);
             int current = -1;
             const char* start = NULL;
-            for (const char* cursor = path; ; cursor++) {
-                if (*cursor == '/' || *cursor == '\\0') {
+            for (const char* cursor = path + javan_path_root_length(path); ; cursor++) {
+                if (javan_path_is_separator(*cursor) || *cursor == '\\0') {
                     if (start != NULL) {
                         if (current == index) {
                             unsigned long size = (unsigned long) (cursor - start);
