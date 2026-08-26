@@ -14519,7 +14519,7 @@ final class RuntimeSourceMemorySections {
     private static final String SOURCE_COLLECTIONS_PROCESS = """
 
         #if defined(_WIN32)
-        static char* javan_windows_command_line(javan_object_list* command) {
+        static char* javan_windows_command_line(javan_object_list* command, void** root_slot) {
             unsigned long capacity = 2;
             for (int index = 0; index < command->length; index++) {
                 const char* value = command->values[index] == NULL ? "" : (const char*) command->values[index];
@@ -14529,7 +14529,7 @@ final class RuntimeSourceMemorySections {
                 }
                 capacity += length * 2 + 3;
             }
-            char* result = (char*) javan_alloc(capacity);
+            char* result = (char*) javan_alloc_rooted(capacity, root_slot);
             char* write = result;
             for (int index = 0; index < command->length; index++) {
                 const char* value = command->values[index] == NULL ? "" : (const char*) command->values[index];
@@ -14567,8 +14567,25 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
-        static char* javan_windows_process_file_text(const char* path) {
-            FILE* file = fopen(path, "rb");
+        static wchar_t* javan_windows_utf8_to_wide(const char* value, void** root_slot) {
+            if (value == NULL || root_slot == NULL) {
+                return NULL;
+            }
+            int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value, -1, NULL, 0);
+            if (length <= 0 || (unsigned long) length > ULONG_MAX / sizeof(wchar_t)) {
+                return NULL;
+            }
+            wchar_t* result = (wchar_t*) javan_alloc_rooted((unsigned long) length * sizeof(wchar_t), root_slot);
+            if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value, -1, result, length) == 0) {
+                javan_free(result);
+                *root_slot = NULL;
+                return NULL;
+            }
+            return result;
+        }
+
+        static char* javan_windows_process_file_text(const wchar_t* path) {
+            FILE* file = _wfopen(path, L"rb");
             if (file == NULL) {
                 return (char*) javan_string_copy("");
             }
@@ -14584,25 +14601,56 @@ final class RuntimeSourceMemorySections {
             }
             void* cwd_root = cwd;
             void* command_root = command_value;
+            void* command_line_root = NULL;
+            void* command_line_wide_root = NULL;
+            void* cwd_wide_root = NULL;
             void** roots[] = {
                 (void**) &cwd_root,
-                (void**) &command_root
+                (void**) &command_root,
+                &command_line_root,
+                &command_line_wide_root,
+                &cwd_wide_root
             };
-            javan_root_frame_push(roots, 2);
-            char* command_line = javan_windows_command_line(command);
+            javan_root_frame_push(roots, 5);
+            char* command_line = javan_windows_command_line(command, &command_line_root);
             if (command_line == NULL) {
                 javan_root_frame_pop(roots);
                 return javan_process_result_new(127, "", "process command is too large");
             }
+            wchar_t* command_line_wide = javan_windows_utf8_to_wide(command_line, &command_line_wide_root);
+            wchar_t* cwd_wide = cwd_root == NULL
+                ? NULL
+                : javan_windows_utf8_to_wide((const char*) cwd_root, &cwd_wide_root);
+            if (command_line_wide == NULL || (cwd_root != NULL && cwd_wide == NULL)) {
+                javan_free(command_line_root);
+                command_line_root = NULL;
+                if (command_line_wide_root != NULL) {
+                    javan_free(command_line_wide_root);
+                    command_line_wide_root = NULL;
+                }
+                if (cwd_wide_root != NULL) {
+                    javan_free(cwd_wide_root);
+                    cwd_wide_root = NULL;
+                }
+                javan_root_frame_pop(roots);
+                return javan_process_result_new(127, "", "process path is not valid UTF-8");
+            }
 
-            char temporary_directory[MAX_PATH + 1];
-            char stdout_path[MAX_PATH + 1] = {0};
-            char stderr_path[MAX_PATH + 1] = {0};
-            DWORD temporary_length = GetTempPathA(MAX_PATH, temporary_directory);
+            wchar_t temporary_directory[MAX_PATH + 1];
+            wchar_t stdout_path[MAX_PATH + 1] = {0};
+            wchar_t stderr_path[MAX_PATH + 1] = {0};
+            DWORD temporary_length = GetTempPathW(MAX_PATH, temporary_directory);
             if (temporary_length == 0 || temporary_length >= MAX_PATH
-                || GetTempFileNameA(temporary_directory, "jvo", 0, stdout_path) == 0
-                || GetTempFileNameA(temporary_directory, "jve", 0, stderr_path) == 0) {
-                javan_free(command_line);
+                || GetTempFileNameW(temporary_directory, L"jvo", 0, stdout_path) == 0
+                || GetTempFileNameW(temporary_directory, L"jve", 0, stderr_path) == 0) {
+                javan_free(command_line_root);
+                command_line_root = NULL;
+                javan_free(command_line_wide_root);
+                command_line_wide_root = NULL;
+                if (cwd_wide_root != NULL) {
+                    javan_free(cwd_wide_root);
+                    cwd_wide_root = NULL;
+                }
                 javan_root_frame_pop(roots);
                 return javan_process_result_new(127, "", "process output capture failed");
             }
@@ -14610,7 +14658,7 @@ final class RuntimeSourceMemorySections {
             attributes.nLength = sizeof(attributes);
             attributes.lpSecurityDescriptor = NULL;
             attributes.bInheritHandle = TRUE;
-            HANDLE stdout_handle = CreateFileA(
+            HANDLE stdout_handle = CreateFileW(
                 stdout_path,
                 GENERIC_WRITE,
                 FILE_SHARE_READ | FILE_SHARE_WRITE,
@@ -14619,7 +14667,7 @@ final class RuntimeSourceMemorySections {
                 FILE_ATTRIBUTE_TEMPORARY,
                 NULL
             );
-            HANDLE stderr_handle = CreateFileA(
+            HANDLE stderr_handle = CreateFileW(
                 stderr_path,
                 GENERIC_WRITE,
                 FILE_SHARE_READ | FILE_SHARE_WRITE,
@@ -14635,17 +14683,24 @@ final class RuntimeSourceMemorySections {
                 if (stderr_handle != INVALID_HANDLE_VALUE) {
                     CloseHandle(stderr_handle);
                 }
-                if (stdout_path[0] != '\\0') {
-                    DeleteFileA(stdout_path);
+                if (stdout_path[0] != L'\\0') {
+                    DeleteFileW(stdout_path);
                 }
-                if (stderr_path[0] != '\\0') {
-                    DeleteFileA(stderr_path);
+                if (stderr_path[0] != L'\\0') {
+                    DeleteFileW(stderr_path);
                 }
-                javan_free(command_line);
+                javan_free(command_line_root);
+                command_line_root = NULL;
+                javan_free(command_line_wide_root);
+                command_line_wide_root = NULL;
+                if (cwd_wide_root != NULL) {
+                    javan_free(cwd_wide_root);
+                    cwd_wide_root = NULL;
+                }
                 javan_root_frame_pop(roots);
                 return javan_process_result_new(127, "", "process output capture failed");
             }
-            STARTUPINFOA startup;
+            STARTUPINFOW startup;
             PROCESS_INFORMATION process;
             memset(&startup, 0, sizeof(startup));
             memset(&process, 0, sizeof(process));
@@ -14654,25 +14709,32 @@ final class RuntimeSourceMemorySections {
             startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
             startup.hStdOutput = stdout_handle;
             startup.hStdError = stderr_handle;
-            BOOL started = CreateProcessA(
+            BOOL started = CreateProcessW(
                 NULL,
-                command_line,
+                command_line_wide,
                 NULL,
                 NULL,
                 TRUE,
                 0,
                 NULL,
-                cwd_root == NULL ? NULL : (const char*) cwd_root,
+                cwd_wide,
                 &startup,
                 &process
             );
-            javan_free(command_line);
+            javan_free(command_line_root);
+            command_line_root = NULL;
+            javan_free(command_line_wide_root);
+            command_line_wide_root = NULL;
+            if (cwd_wide_root != NULL) {
+                javan_free(cwd_wide_root);
+                cwd_wide_root = NULL;
+            }
             javan_root_frame_pop(roots);
             CloseHandle(stdout_handle);
             CloseHandle(stderr_handle);
             if (started == 0) {
-                DeleteFileA(stdout_path);
-                DeleteFileA(stderr_path);
+                DeleteFileW(stdout_path);
+                DeleteFileW(stderr_path);
                 return javan_process_result_new(127, "", "process start failed");
             }
             long long timeout = timeout_millis <= 0 ? 300000LL : timeout_millis;
@@ -14697,8 +14759,8 @@ final class RuntimeSourceMemorySections {
             javan_root_frame_push(stdout_roots, 1);
             char* stderr_text = javan_windows_process_file_text(stderr_path);
             javan_root_frame_pop(stdout_roots);
-            DeleteFileA(stdout_path);
-            DeleteFileA(stderr_path);
+            DeleteFileW(stdout_path);
+            DeleteFileW(stderr_path);
             int exit_code = status > INT_MAX ? 127 : (int) status;
             javan_process_result* result = timed_out != 0
                 ? javan_process_result_new(124, stdout_text, "Timed out")

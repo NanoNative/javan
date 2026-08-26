@@ -1,7 +1,9 @@
 package javan;
 
 import javan.testing.TestSuite.PackagingTest;
+import javan.testing.TestSuite.WindowsCompatibilityProof;
 
+import javan.build.BuildKind;
 import javan.cli.Cli;
 import javan.cli.Version;
 import javan.reporting.RuntimeFootprintReports;
@@ -282,7 +284,9 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         );
         assertThat(bootstrapBuild.exitCode()).as(bootstrapBuild.stderr()).isZero();
 
-        primitiveLiteralBootstrap = root.resolve("target/.javan/bin/javan-bootstrap-primitive-literals");
+        primitiveLiteralBootstrap = BuildKind.APP.artifactPath(
+            root.resolve("target/.javan"), "javan-bootstrap-primitive-literals"
+        );
         assertThat(primitiveLiteralBootstrap).isExecutable();
     }
 
@@ -419,6 +423,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    @WindowsCompatibilityProof
     void nativeBuiltJavanBuildsPlainSourceProject() throws Exception {
         final Path sourceProject = tempDir.resolve("selfhost-source-project");
         writeJava(sourceProject, "com.acme.Main", """
@@ -449,7 +454,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         );
 
         assertThat(nativeBuild.exitCode()).as(nativeBuild.stderr()).isZero();
-        final Path probeBinary = sourceProject.resolve(".javan/bin/selfhost-source-project");
+        final Path probeBinary = BuildKind.APP.artifactPath(sourceProject.resolve(".javan"), "selfhost-source-project");
         assertThat(probeBinary).isExecutable();
         assertThat(process(tempDir, List.of(probeBinary.toString())).stdout()).isEqualTo("source-project\n");
     }

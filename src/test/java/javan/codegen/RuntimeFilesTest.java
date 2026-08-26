@@ -3430,16 +3430,21 @@ final class RuntimeFilesTest {
         assertThat(Files.readString(runtime)).contains(
             "static void javan_sleep_micros(unsigned long micros) {",
             "Sleep(millis);",
-            "CreateProcessA(",
+            "MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS",
+            "CreateProcessW(",
             "WaitForSingleObject(process.hProcess, wait_timeout)",
             "TerminateProcess(process.hProcess, 124)",
             "javan_windows_command_line",
+            "GetTempPathW(MAX_PATH, temporary_directory)",
+            "GetTempFileNameW(temporary_directory, L\"jvo\"",
+            "CreateFileW(",
+            "_wfopen(path, L\"rb\")",
             "GetModuleFileNameA(NULL, javan_runtime_executable_path",
-            "char stdout_path[MAX_PATH + 1] = {0};",
-            "char stderr_path[MAX_PATH + 1] = {0};",
-            "if (stdout_path[0] != '\\0') {",
+            "wchar_t stdout_path[MAX_PATH + 1] = {0};",
+            "wchar_t stderr_path[MAX_PATH + 1] = {0};",
+            "if (stdout_path[0] != L'\\0') {",
             "process wait failed"
-        );
+        ).doesNotContain("CreateProcessA(", "GetTempPathA(", "GetTempFileNameA(", "CreateFileA(");
     }
 
     @Test
@@ -10346,6 +10351,48 @@ final class RuntimeFilesTest {
         );
 
         assertThat(stdout).isEqualTo("127:empty command:4\nafter-result=1\nafter-all=0\n");
+    }
+
+    @Test
+    @WindowsCompatibilityProof
+    void runtimeWindowsProcessUsesUtf8WorkingDirectoryUnderGcStress() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                #if defined(_WIN32)
+                const wchar_t* directory = L"javan-\\x00E4";
+                if (CreateDirectoryW(directory, NULL) == 0 && GetLastError() != ERROR_ALREADY_EXISTS) {
+                    return 1;
+                }
+                void* command = javan_arraylist_new();
+                (void) javan_arraylist_add(command, (void*) "cmd");
+                (void) javan_arraylist_add(command, (void*) "/d");
+                (void) javan_arraylist_add(command, (void*) "/s");
+                (void) javan_arraylist_add(command, (void*) "/c");
+                (void) javan_arraylist_add(command, (void*) "exit 0");
+                void* working_directory = javan_string_from("javan-\\xC3\\xA4");
+                void* result = javan_process_run(working_directory, command, 10000);
+                printf("%d\\n", javan_process_result_exit_code(result));
+                javan_free(result);
+                javan_free(working_directory);
+                javan_free(command);
+                RemoveDirectoryW(directory);
+                #else
+                printf("not-windows\\n");
+                #endif
+                return 0;
+            }
+            """,
+            "512",
+            Map.of("JAVAN_GC_STRESS", "1")
+        );
+
+        final boolean windows = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
+        assertThat(stdout).isEqualTo(windows ? "0\n" : "not-windows\n");
     }
 
     @Test
