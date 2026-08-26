@@ -3630,6 +3630,25 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    @WindowsCompatibilityProof
+    void httpServerLoopbackHandlerReadsRequestMethod() throws Exception {
+        assertHttpServerResponse(
+            "http-server-request-method",
+            """
+                if ("GET".equals(exchange.getRequestMethod())) {
+                    final byte[] body = new byte[] {103, 101, 116};
+                    exchange.sendResponseHeaders(200, body.length);
+                    exchange.getResponseBody().write(body);
+                } else {
+                    exchange.sendResponseHeaders(405, -1L);
+                }
+                """,
+            200,
+            "get"
+        );
+    }
+
+    @Test
     void httpServerLoopbackStreamsChunkedResponse() throws Exception {
         assertHttpServerResponse(
             "http-server-chunked-response",
@@ -4815,9 +4834,11 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        final Process process = new ProcessBuilder(nativeBinary(project, name).toString())
-            .directory(project.toFile())
-            .start();
+        final ProcessBuilder nativeCommand = new ProcessBuilder(nativeBinary(project, name).toString())
+            .directory(project.toFile());
+        nativeCommand.environment().put("JAVAN_GC_STRESS", "1");
+        nativeCommand.environment().put("JAVAN_GC_SAFEPOINT_INTERVAL", "1");
+        final Process process = nativeCommand.start();
         final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
         final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
         final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/hello"))

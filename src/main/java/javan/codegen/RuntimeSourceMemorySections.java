@@ -464,6 +464,7 @@ final class RuntimeSourceMemorySections {
             long long response_length;
             long long response_written;
             javan_socket* socket;
+            void* request_method;
             void* response_body;
         } javan_http_exchange_value;
 
@@ -2137,10 +2138,12 @@ final class RuntimeSourceMemorySections {
                     || (exchange->close_requested != 0 && exchange->close_requested != 1)
                     || exchange->response_length < -2LL
                     || exchange->response_written < 0LL
-                    || exchange->socket == NULL) {
+                    || exchange->socket == NULL
+                    || exchange->request_method == NULL) {
                     javan_panic("invalid runtime http exchange metadata");
                 }
                 javan_validate_runtime_managed_reference((void*) exchange->socket);
+                javan_validate_runtime_managed_reference(exchange->request_method);
                 javan_validate_runtime_managed_reference(exchange->response_body);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_HTTP_CONTEXT) {
                 javan_http_context_value* context = (javan_http_context_value*) node->value;
@@ -8382,6 +8385,7 @@ final class RuntimeSourceMemorySections {
                 javan_http_exchange_value* exchange = (javan_http_exchange_value*) value;
                 if (exchange != NULL && exchange->magic == JAVAN_HTTP_EXCHANGE_MAGIC) {
                     javan_gc_mark_value((void*) exchange->socket);
+                    javan_gc_mark_value(exchange->request_method);
                     javan_gc_mark_value(exchange->response_body);
                 }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_HTTP_CONTEXT) {
