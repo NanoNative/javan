@@ -3443,6 +3443,17 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void runtimeHttpServerRootsAcceptedSocketBeforeConcurrentCollection() throws Exception {
+        final String source = Files.readString(new RuntimeFiles().write(tempDir));
+
+        assertThat(source).contains(
+            "static void javan_socket_wrap_connected_fd_into(void** result, javan_socket_handle fd)",
+            "javan_socket* socket = (javan_socket*) javan_alloc_rooted(sizeof(javan_socket), result);",
+            "javan_socket_wrap_connected_fd_into(&socket_value, accepted);"
+        );
+    }
+
+    @Test
     @WindowsCompatibilityProof
     void generatedRuntimeCrossCompilesToWindowsPeWhenMinGwIsAvailable() throws Exception {
         final Path compiler = findFirstExecutableOnPath("x86_64-w64-mingw32-gcc");
