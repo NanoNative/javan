@@ -78,14 +78,14 @@ else
   javan_timing_run bootstrap_jvm java -cp target/classes javan.Main build target/classes \
     --main javan.Main \
     --output javan-bootstrap-from-jvm
-  javan_timing_run bootstrap_gen2 target/.javan/bin/javan-bootstrap-from-jvm build target/classes \
+  javan_timing_run bootstrap_gen2 target/.javan/bin/javan-bootstrap-from-jvm$BOOTSTRAP_SUFFIX build target/classes \
     --main javan.Main \
     --output javan-bootstrap-rebuilt
   BUILT=target/.javan/bin/javan-bootstrap-rebuilt$BOOTSTRAP_SUFFIX
   if [ "$GENERATION" = "3" ]; then
     GEN2_SOURCES=target/.javan/generated-gen2-proof
     javan_copy_generated_sources target/.javan/generated "$GEN2_SOURCES"
-    javan_timing_run bootstrap_gen3 target/.javan/bin/javan-bootstrap-rebuilt build target/classes \
+    javan_timing_run bootstrap_gen3 target/.javan/bin/javan-bootstrap-rebuilt$BOOTSTRAP_SUFFIX build target/classes \
       --main javan.Main \
       --output javan-bootstrap-verified
     javan_compare_generated_sources "$GEN2_SOURCES" target/.javan/generated

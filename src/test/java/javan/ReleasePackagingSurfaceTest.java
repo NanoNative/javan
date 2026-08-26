@@ -349,6 +349,8 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             .contains("MINGW*|MSYS*|CYGWIN*)")
             .contains("BOOTSTRAP_SUFFIX=.exe")
             .contains("OUTPUT=${1:-dist/javan$BOOTSTRAP_SUFFIX}")
+            .contains("javan-bootstrap-from-jvm$BOOTSTRAP_SUFFIX build target/classes")
+            .contains("javan-bootstrap-rebuilt$BOOTSTRAP_SUFFIX build target/classes")
             .contains("javan-bootstrap-rebuilt$BOOTSTRAP_SUFFIX")
             .contains("javan-bootstrap-verified$BOOTSTRAP_SUFFIX")
             .contains("GENERATION=${JAVAN_BOOTSTRAP_GENERATION:-3}")
