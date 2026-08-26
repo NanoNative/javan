@@ -9734,9 +9734,17 @@ final class RuntimeSourceMemorySections {
         void* javan_string_array_from_args(int argc, char** argv) {
             int length = argc > 0 ? argc - 1 : 0;
             void* result = javan_object_array_new(length, "[Ljava.lang.String;");
+            void* value = NULL;
+            void** roots[] = {
+                (void**) &result,
+                (void**) &value
+            };
+            javan_root_frame_push(roots, 2);
             for (int index = 0; index < length; index++) {
-                javan_object_array_set(result, index, argv[index + 1]);
+                value = javan_string_from(argv[index + 1]);
+                javan_object_array_set(result, index, value);
             }
+            javan_root_frame_pop(roots);
             return result;
         }
 

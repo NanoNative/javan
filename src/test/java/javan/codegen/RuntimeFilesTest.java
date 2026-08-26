@@ -8217,6 +8217,45 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void runtimeArgumentArrayOwnsCopiesOfBorrowedNativeArguments() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                char executable[] = "native-app";
+                char first[] = "Yuna";
+                char second[] = "Javan";
+                char* native_arguments[] = {executable, first, second};
+                void* arguments = NULL;
+                void** roots[] = {(void**) &arguments};
+                javan_root_frame_push(roots, 1);
+                arguments = javan_string_array_from_args(3, native_arguments);
+                first[0] = 'L';
+                second[0] = 'N';
+                javan_gc_collect();
+                printf(
+                    "%d:%s:%s\\n",
+                    javan_array_length(arguments),
+                    (char*) javan_object_array_get(arguments, 0),
+                    (char*) javan_object_array_get(arguments, 1)
+                );
+                javan_root_frame_pop(roots);
+                arguments = NULL;
+                javan_gc_collect();
+                printf("live=%lu\\n", javan_heap_live_allocations());
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("2:Yuna:Javan\nlive=0\n");
+    }
+
+    @Test
     void runtimeByteArrayExportRootsArrayAcrossExportAllocation() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
