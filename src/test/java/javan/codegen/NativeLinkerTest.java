@@ -37,7 +37,7 @@ final class NativeLinkerTest {
     @Test
     void windowsHostAddsWinsockLibraryDuringLink() {
         assertThat(NativeLinker.platformLinkFlagsForOs("Windows 11"))
-            .containsExactly("-lws2_32");
+            .containsExactly("-lws2_32", "-lshell32");
     }
 
     @Test
@@ -195,7 +195,7 @@ final class NativeLinkerTest {
 
         assertThat(runner.commands()).singleElement().satisfies(command -> {
             assertThat(Path.of(command.getFirst()).getFileName().toString()).isEqualTo("gcc");
-            assertThat(command).contains("-lws2_32", "-o", tempDir.resolve("out/app.exe").toString());
+            assertThat(command).contains("-lws2_32", "-lshell32", "-o", tempDir.resolve("out/app.exe").toString());
             assertThat(command).doesNotContain("-pthread");
         });
     }

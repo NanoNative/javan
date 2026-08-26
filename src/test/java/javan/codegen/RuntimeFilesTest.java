@@ -3431,6 +3431,9 @@ final class RuntimeFilesTest {
             "static void javan_sleep_micros(unsigned long micros) {",
             "Sleep(millis);",
             "MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS",
+            "CommandLineToArgvW(GetCommandLineW(), &count)",
+            "javan_runtime_prepare_command_line_args",
+            "javan_runtime_release_command_line_args",
             "CreateProcessW(",
             "WaitForSingleObject(process.hProcess, wait_timeout)",
             "TerminateProcess(process.hProcess, 124)",
@@ -3477,6 +3480,7 @@ final class RuntimeFilesTest {
                 main.toString(),
                 runtime.toString(),
                 "-lws2_32",
+                "-lshell32",
                 "-o",
                 output.toString()
             ),
@@ -3516,6 +3520,7 @@ final class RuntimeFilesTest {
                 main.toString(),
                 runtime.toString(),
                 "-lws2_32",
+                "-lshell32",
                 "-o",
                 tempDir.resolve("windows-double-to-float-probe.exe").toString()
             ),
@@ -3557,6 +3562,7 @@ final class RuntimeFilesTest {
                 main.toString(),
                 runtime.toString(),
                 "-lws2_32",
+                "-lshell32",
                 "-o",
                 output.toString()
             ),
@@ -10372,11 +10378,10 @@ final class RuntimeFilesTest {
                     return 1;
                 }
                 void* command = javan_arraylist_new();
-                (void) javan_arraylist_add(command, (void*) "cmd");
+                (void) javan_arraylist_add(command, (void*) "cmd.exe");
                 (void) javan_arraylist_add(command, (void*) "/d");
-                (void) javan_arraylist_add(command, (void*) "/s");
                 (void) javan_arraylist_add(command, (void*) "/c");
-                (void) javan_arraylist_add(command, (void*) "exit 0");
+                (void) javan_arraylist_add(command, (void*) "exit /b 0");
                 void* working_directory = javan_string_from("javan-\\xC3\\xA4");
                 void* result = javan_process_run(working_directory, command, 10000);
                 printf("%d\\n", javan_process_result_exit_code(result));

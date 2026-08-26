@@ -19,6 +19,7 @@ final class RuntimeSourceCoreSection {
         #include <winsock2.h>
         #include <ws2tcpip.h>
         #include <windows.h>
+        #include <shellapi.h>
         #include <process.h>
         #include <io.h>
         #include <sys/time.h>
@@ -89,6 +90,86 @@ final class RuntimeSourceCoreSection {
         static JAVAN_THREAD_LOCAL jmp_buf* javan_panic_target = NULL;
         static JAVAN_THREAD_LOCAL JavanSourceContext* javan_source_context_top = NULL;
         static char javan_runtime_executable_path[4096];
+
+        #if defined(_WIN32)
+        static char** javan_windows_command_line_values = NULL;
+        static char** javan_windows_command_line_owned_values = NULL;
+        static int javan_windows_command_line_count = 0;
+
+        static void javan_windows_release_command_line_values(char** values, char** owned_values, int count) {
+            for (int index = 0; index < count; index++) {
+                free(owned_values == NULL ? NULL : owned_values[index]);
+            }
+            free(values);
+            free(owned_values);
+        }
+
+        void javan_runtime_prepare_command_line_args(int* argc, char*** argv) {
+            if (argc == NULL || argv == NULL) {
+                return;
+            }
+            int count = 0;
+            wchar_t** wide_values = CommandLineToArgvW(GetCommandLineW(), &count);
+            if (wide_values == NULL || count <= 0) {
+                if (wide_values != NULL) {
+                    LocalFree(wide_values);
+                }
+                javan_panic("Windows command line conversion failed");
+                return;
+            }
+            char** values = (char**) calloc((unsigned long) count + 1UL, sizeof(char*));
+            char** owned_values = (char**) calloc((unsigned long) count, sizeof(char*));
+            if (values == NULL || owned_values == NULL) {
+                javan_windows_release_command_line_values(values, owned_values, 0);
+                LocalFree(wide_values);
+                javan_panic("Windows command line allocation failed");
+                return;
+            }
+            for (int index = 0; index < count; index++) {
+                int length = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide_values[index], -1, NULL, 0, NULL, NULL);
+                if (length <= 0) {
+                    LocalFree(wide_values);
+                    javan_windows_release_command_line_values(values, owned_values, index);
+                    javan_panic("Windows command line is not valid Unicode");
+                    return;
+                }
+                owned_values[index] = (char*) malloc((unsigned long) length);
+                if (owned_values[index] == NULL
+                    || WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide_values[index], -1, owned_values[index], length, NULL, NULL) == 0) {
+                    LocalFree(wide_values);
+                    javan_windows_release_command_line_values(values, owned_values, index + 1);
+                    javan_panic("Windows command line conversion failed");
+                    return;
+                }
+                values[index] = owned_values[index];
+            }
+            LocalFree(wide_values);
+            javan_windows_command_line_values = values;
+            javan_windows_command_line_owned_values = owned_values;
+            javan_windows_command_line_count = count;
+            *argc = count;
+            *argv = values;
+        }
+
+        void javan_runtime_release_command_line_args(void) {
+            javan_windows_release_command_line_values(
+                javan_windows_command_line_values,
+                javan_windows_command_line_owned_values,
+                javan_windows_command_line_count
+            );
+            javan_windows_command_line_values = NULL;
+            javan_windows_command_line_owned_values = NULL;
+            javan_windows_command_line_count = 0;
+        }
+        #else
+        void javan_runtime_prepare_command_line_args(int* argc, char*** argv) {
+            (void) argc;
+            (void) argv;
+        }
+
+        void javan_runtime_release_command_line_args(void) {
+        }
+        #endif
 
         static void javan_sleep_micros(unsigned long micros) {
             if (micros == 0UL) {

@@ -2205,12 +2205,14 @@ public final class CCodegen {
         final boolean entry = appEntry(emitMain, function, program);
         if (entry) {
             c.append("int JAVAN_PROGRAM_MAIN(int argc, char** argv) {").append(System.lineSeparator());
+            c.append("    javan_runtime_prepare_command_line_args(&argc, &argv);").append(System.lineSeparator());
             c.append("    javan_runtime_set_executable_path(argc > 0 ? argv[0] : NULL);").append(System.lineSeparator());
             c.append("    javan_runtime_validate_floating_layout();").append(System.lineSeparator());
             c.append("    javan_runtime_profile_consume_args(&argc, &argv);").append(System.lineSeparator());
             c.append("    (void) argc;").append(System.lineSeparator());
             c.append("    (void) argv;").append(System.lineSeparator());
             emitEntryParameters(function, c);
+            c.append("    javan_runtime_release_command_line_args();").append(System.lineSeparator());
         } else {
             emitSignature(function, c, functionStatic);
             c.append(" {").append(System.lineSeparator());
