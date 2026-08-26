@@ -1321,9 +1321,11 @@ final class BytecodeToIRInvokeSupport {
         if ("com/sun/net/httpserver/HttpServer".equals(methodRef.owner())) {
             final boolean createContext = "createContext".equals(methodRef.name())
                 && "(Ljava/lang/String;Lcom/sun/net/httpserver/HttpHandler;)Lcom/sun/net/httpserver/HttpContext;".equals(methodRef.descriptor());
+            final boolean getAddress = "getAddress".equals(methodRef.name())
+                && "()Ljava/net/InetSocketAddress;".equals(methodRef.descriptor());
             final boolean start = "start".equals(methodRef.name()) && "()V".equals(methodRef.descriptor());
             final boolean stop = "stop".equals(methodRef.name()) && "(I)V".equals(methodRef.descriptor());
-            if (!createContext && !start && !stop) {
+            if (!createContext && !getAddress && !start && !stop) {
                 return false;
             }
             final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
@@ -1333,6 +1335,10 @@ final class BytecodeToIRInvokeSupport {
             callArguments.addAll(arguments);
             if (createContext) {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_http_server_create_context", callArguments)));
+                return true;
+            }
+            if (getAddress) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_http_server_get_address", callArguments)));
                 return true;
             }
             if (start) {

@@ -3127,6 +3127,11 @@ final class RuntimeSourcePlatformSection {
             return server_value;
         }
 
+        void* javan_http_server_get_address(void* value) {
+            javan_http_server_value* server = javan_http_server_checked(value);
+            return javan_server_socket_get_local_socket_address((void*) server->socket);
+        }
+
         void* javan_http_server_create_context(void* value, void* path, void* handler) {
             javan_http_server_value* server = javan_http_server_checked(value);
             if (path == NULL || handler == NULL || ((const char*) path)[0] != '/') {

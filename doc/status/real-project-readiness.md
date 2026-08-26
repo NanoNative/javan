@@ -14,7 +14,7 @@ Probe summary:
 | External library artifact smoke | Smoke | One bundled external library probe builds natively against a reproducible jar installed into the local Maven repository and is exercised by the required external-probe acceptance gate plus focused CLI integration. | Broader external-library dependency graphs and quieter unreachable-dependency diagnostics. |
 | External helper/library smoke | Smoke | Several bundled helper/library probes build natively against reproducible jars installed into the local Maven repository and are exercised by the required external-probe acceptance gate plus focused CLI integration. | Broader helper surfaces, broader dependency graphs, and quieter unreachable-dependency diagnostics. |
 | External scheduler/runtime smoke | Smoke | Several bundled scheduler/runtime probes build natively against reproducible jars installed into the local Maven repository and are exercised by the required external-probe acceptance gate plus focused CLI integration. | Broader service graphs and scheduler-adjacent runtime coverage beyond the current lifecycle slice. |
-| External HTTP service smoke | Planned smoke | One pinned external HTTP-service-shaped probe currently fails clearly with `JAVAN061` and reports `network/http`. | Broader HTTP service runtime, resources, thread/blocking model, and dev-console/reflection exclusion. |
+| External HTTP service smoke | Smoke | A bundled external handler jar serves a native loopback HTTP response through a reproducible probe and a generic dependency integration test. | Broader HTTP service runtime, resources, thread/blocking model, and dev-console/reflection exclusion. |
 
 These external probes are intentionally excluded from `doc/status/support-matrix.*`,
 `doc/status/jdk-compatibility.md`, and the core JDK support ledger. They are compatibility
@@ -121,6 +121,7 @@ Current discovered compatibility shapes:
 | Static long-to-text formatter | `CliDependencyProjectIntegrationTest.dependencyJarStaticLongFormatterBuilds` |
 | Scheduled executor one-shot task | `CliDependencyProjectIntegrationTest.dependencyJarScheduledExecutorOneShotBuilds` |
 | Scheduled executor fixed-rate schedule plus shutdown/awaitTermination before first fire | `CliDependencyProjectIntegrationTest.dependencyJarScheduledExecutorFixedRatePreShutdownBuilds` |
+| HTTP handler supplied by a dependency jar | `CliDependencyProjectIntegrationTest.dependencyJarHttpHandlerBuildsAndServesLoopbackResponse` |
 
 That mapping is the rule: when an external probe breaks, the permanent fix belongs in one of these
 generic compiler-owned dependency tests or a new generic equivalent, not in an upstream-project-
@@ -165,5 +166,5 @@ Next gates before claiming broader external-service compatibility:
 3. done: report reachable `network`, `socket`, and `http` usage even while unsupported
 4. implement TCP loopback support with close/ownership and sanitizer proof
 5. done partially: implement plain HTTP client loopback support for GET/string, POST+headers/byte[], and PUT byte[], raw loopback responder slices over `ServerSocket`/`Socket`, and one concrete-class `HttpServer` context with `404` path matching, owned worker shutdown, fixed-length/chunked/bodyless responses, forced-GC sanitizer proof, and Windows x64 CI execution for native Socket, ServerSocket, HttpClient, and HttpServer loopback; Windows package/self-host and process runtime support remain incomplete
-6. run a broader external service example without dev console or reflection-heavy paths as a native service
+6. done: run a native loopback HTTP service with an `HttpHandler` supplied by a reproducible external dependency jar
 7. add HTTPS/TLS/certificates after plain HTTP is stable
