@@ -346,6 +346,11 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         final String script = Files.readString(Path.of("scripts/build.sh"));
 
         assertThat(script)
+            .contains("MINGW*|MSYS*|CYGWIN*)")
+            .contains("BOOTSTRAP_SUFFIX=.exe")
+            .contains("OUTPUT=${1:-dist/javan$BOOTSTRAP_SUFFIX}")
+            .contains("javan-bootstrap-rebuilt$BOOTSTRAP_SUFFIX")
+            .contains("javan-bootstrap-verified$BOOTSTRAP_SUFFIX")
             .contains("GENERATION=${JAVAN_BOOTSTRAP_GENERATION:-3}")
             .contains("2|3)")
             .contains("javan-bootstrap-rebuilt")
