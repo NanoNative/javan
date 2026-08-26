@@ -50,7 +50,9 @@ final class RuntimeFootprintReportsTest {
             "\"target\": \"linux-aarch64\"",
             "\"target\": \"macos-aarch64\"",
             "\"target\": \"macos-x64\"",
-            "\"target\": \"windows-x64\""
+            "\"target\": \"windows-x64\"",
+            "\"status\": \"required-ci\"",
+            "native socket and HTTP loopback CI proof; package and process runtime remain incomplete"
         );
         assertThat(markdown).contains(
             "Runtime Footprint",

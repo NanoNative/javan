@@ -67,7 +67,7 @@ public enum BuildKind {
      */
     public Path artifactPath(final Path outputDirectory, final String outputName) {
         if (this == APP) {
-            return outputDirectory.resolve("bin").resolve(outputName);
+            return outputDirectory.resolve("bin").resolve(applicationName(outputName));
         }
         if (this == JAR) {
             return outputDirectory.resolve("dist").resolve(outputName + ".jar");
@@ -93,5 +93,10 @@ public enum BuildKind {
             return "lib" + outputName + ".dylib";
         }
         return "lib" + outputName + ".so";
+    }
+
+    private static String applicationName(final String outputName) {
+        final String os = Strings2.toAsciiLowerCase(System.getProperty("os.name", ""));
+        return os.contains("win") ? outputName + ".exe" : outputName;
     }
 }

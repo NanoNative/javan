@@ -164,6 +164,6 @@ Next gates before claiming broader external-service compatibility:
 2. done: add negative diagnostics for `Socket`, `ServerSocket`, `HttpClient`, and external `HttpServer`-shaped services
 3. done: report reachable `network`, `socket`, and `http` usage even while unsupported
 4. implement TCP loopback support with close/ownership and sanitizer proof
-5. done partially: implement plain HTTP client loopback support for GET/string, POST+headers/byte[], and PUT byte[], raw loopback responder slices over `ServerSocket`/`Socket`, and one concrete-class `HttpServer` context with `404` path matching, owned worker shutdown, fixed-length/chunked/bodyless responses, and forced-GC sanitizer proof; native socket service support remains unavailable on Windows
+5. done partially: implement plain HTTP client loopback support for GET/string, POST+headers/byte[], and PUT byte[], raw loopback responder slices over `ServerSocket`/`Socket`, and one concrete-class `HttpServer` context with `404` path matching, owned worker shutdown, fixed-length/chunked/bodyless responses, forced-GC sanitizer proof, and Windows x64 CI execution for native Socket, ServerSocket, HttpClient, and HttpServer loopback; Windows package/self-host and process runtime support remain incomplete
 6. run a broader external service example without dev console or reflection-heavy paths as a native service
 7. add HTTPS/TLS/certificates after plain HTTP is stable

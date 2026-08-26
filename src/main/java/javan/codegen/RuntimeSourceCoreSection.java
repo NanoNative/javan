@@ -36,6 +36,13 @@ final class RuntimeSourceCoreSection {
         #include <sys/stat.h>
         #include <sys/time.h>
         #include <time.h>
+        typedef uintptr_t javan_socket_handle;
+        #define JAVAN_SOCKET_INVALID ((javan_socket_handle) -1)
+        #if defined(_WIN32)
+        typedef int javan_socket_length;
+        #else
+        typedef socklen_t javan_socket_length;
+        #endif
         #if defined(__FAST_MATH__) || (defined(__FINITE_MATH_ONLY__) && __FINITE_MATH_ONLY__ != 0)
         #error "Javan requires strict floating-point compiler mode"
         #endif
@@ -62,7 +69,7 @@ final class RuntimeSourceCoreSection {
 
         static char* javan_string_alloc(unsigned long size);
         static void* javan_string_copy(const char* value);
-        static int javan_socket_native_close(int fd);
+        static int javan_socket_native_close(javan_socket_handle fd);
         static void javan_sleep_micros(unsigned long micros);
         static void javan_os_thread_yield(void);
         static void javan_cpu_spin_wait_hint(void);

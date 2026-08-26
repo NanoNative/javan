@@ -1,6 +1,7 @@
 package javan;
 
 import javan.testing.TestSuite.NativeTest;
+import javan.testing.TestSuite.WindowsCompatibilityProof;
 
 import javan.cli.Cli;
 import javan.cli.Version;
@@ -44,6 +45,7 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @NativeTest
 final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     @Test
+    @WindowsCompatibilityProof
     void socketExplicitConnectLifecycleBuildsAndMatchesJvmOutput() throws Exception {
         final int port = freeTcpPort();
         try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
@@ -86,7 +88,7 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
             final CliRun run = run(tempDir, "build", project.toString());
 
             assertThat(run.exitCode()).as(run.stderr()).isZero();
-            assertThat(process(project, List.of(project.resolve(".javan/bin/socket-explicit-connect-lifecycle").toString())).stdout())
+            assertThat(process(project, List.of(nativeBinary(project, "socket-explicit-connect-lifecycle").toString())).stdout())
                 .isEqualTo(jvmOutput);
             accepted.get(5, TimeUnit.SECONDS);
         }
@@ -3408,6 +3410,7 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    @WindowsCompatibilityProof
     void httpClientGetStringBuildsAndMatchesJvmOutput() throws Exception {
         final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
             new java.net.InetSocketAddress("127.0.0.1", 0),
@@ -3452,13 +3455,14 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
             final CliRun run = run(tempDir, "build", project.toString());
 
             assertThat(run.exitCode()).as(run.stderr()).isZero();
-            assertThat(process(project, List.of(project.resolve(".javan/bin/http-client-get-string").toString())).stdout()).isEqualTo(jvmOutput);
+            assertThat(process(project, List.of(nativeBinary(project, "http-client-get-string").toString())).stdout()).isEqualTo(jvmOutput);
         } finally {
             server.stop(0);
         }
     }
 
     @Test
+    @WindowsCompatibilityProof
     void httpServerLoopbackBuildsServesAndStopsCleanly() throws Exception {
         final int port = freeTcpPort();
         final Path project = project("http-server-loopback");
@@ -3502,7 +3506,7 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        final Process process = new ProcessBuilder(project.resolve(".javan/bin/http-server-loopback").toString())
+        final Process process = new ProcessBuilder(nativeBinary(project, "http-server-loopback").toString())
             .directory(project.toFile())
             .start();
         final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
@@ -4760,6 +4764,11 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
         }
     }
 
+    private static Path nativeBinary(final Path project, final String name) {
+        final boolean windows = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
+        return project.resolve(".javan/bin").resolve(windows ? name + ".exe" : name);
+    }
+
     private void assertHttpServerResponse(
         final String name,
         final String response,
@@ -4806,7 +4815,7 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        final Process process = new ProcessBuilder(project.resolve(".javan/bin").resolve(name).toString())
+        final Process process = new ProcessBuilder(nativeBinary(project, name).toString())
             .directory(project.toFile())
             .start();
         final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));

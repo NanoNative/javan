@@ -40,7 +40,7 @@ final class BuildSurfaceTest {
     void buildKindArtifactPathsMatchKindShape() {
         final Path out = tempDir.resolve(".javan");
 
-        assertThat(BuildKind.APP.artifactPath(out, "demo")).isEqualTo(out.resolve("bin/demo"));
+        assertThat(BuildKind.APP.artifactPath(out, "demo").getFileName().toString()).isIn("demo", "demo.exe");
         assertThat(BuildKind.JAR.artifactPath(out, "demo")).isEqualTo(out.resolve("dist/demo.jar"));
         assertThat(BuildKind.LIBRARY.artifactPath(out, "demo")).isEqualTo(out.resolve("dist/lib/demo"));
         assertThat(BuildKind.STATICLIB.artifactPath(out, "demo")).isEqualTo(out.resolve("dist/libdemo.a"));
@@ -59,6 +59,22 @@ final class BuildSurfaceTest {
             assertThat(BuildKind.SHAREDLIB.artifactPath(out, "demo").getFileName().toString()).isEqualTo("libdemo.dylib");
             System.setProperty("os.name", "Linux");
             assertThat(BuildKind.SHAREDLIB.artifactPath(out, "demo").getFileName().toString()).isEqualTo("libdemo.so");
+        } finally {
+            restoreOsName(previous);
+        }
+    }
+
+    @Test
+    void buildKindApplicationNamingFollowsCurrentOs() {
+        final Path out = tempDir.resolve(".javan");
+        final String previous = System.getProperty("os.name");
+        try {
+            System.setProperty("os.name", "Windows 11");
+            assertThat(BuildKind.APP.artifactPath(out, "demo").getFileName().toString()).isEqualTo("demo.exe");
+            System.setProperty("os.name", "Mac OS X");
+            assertThat(BuildKind.APP.artifactPath(out, "demo").getFileName().toString()).isEqualTo("demo");
+            System.setProperty("os.name", "Linux");
+            assertThat(BuildKind.APP.artifactPath(out, "demo").getFileName().toString()).isEqualTo("demo");
         } finally {
             restoreOsName(previous);
         }
