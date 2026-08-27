@@ -324,7 +324,8 @@ public final class Javan {
             output,
             check.layout().outputDirectory().resolve("cache").resolve("native"),
             nativeInterop.linkInputs(),
-            nativeInterop.externalSymbols()
+            nativeInterop.externalSymbols(),
+            options.jobs().orElse(0)
         );
         final Path binary = linked.artifact();
         writeNativeObjectCacheReport(check.layout().outputDirectory(), linked);
@@ -566,8 +567,21 @@ public final class Javan {
         final NativeLinker.CacheLinkResult linked
     ) throws IOException {
         final Path reports = outputDirectory.resolve("reports");
-        final StringBuilder json = new StringBuilder("{\n  \"objects\": [");
-        final StringBuilder markdown = new StringBuilder("# Native Object Cache\n\n| Source | Decision |\n| --- | --- |\n");
+        final NativeLinker.WorkerEvidence workers = linked.workers();
+        final String requested = workers.requestedJobs() == 0 ? "automatic" : Integer.toString(workers.requestedJobs());
+        final StringBuilder json = new StringBuilder("{\n  \"workers\": {")
+            .append("\n    \"requestedJobs\": ").append(workers.requestedJobs()).append(',')
+            .append("\n    \"effectiveJobs\": ").append(workers.effectiveJobs()).append(',')
+            .append("\n    \"queued\": ").append(workers.queued()).append(',')
+            .append("\n    \"backoffs\": ").append(workers.backoffs()).append(',')
+            .append("\n    \"outcome\": \"succeeded\"")
+            .append("\n  },\n  \"objects\": [");
+        final StringBuilder markdown = new StringBuilder("# Native Object Cache\n\n## Native Workers\n\n")
+            .append("| Requested | Effective | Queued | Memory Backoffs | Outcome |\n")
+            .append("| --- | --- | --- | --- | --- |\n")
+            .append("| ").append(requested).append(" | ").append(workers.effectiveJobs())
+            .append(" | ").append(workers.queued()).append(" | ").append(workers.backoffs())
+            .append(" | succeeded |\n\n## Objects\n\n| Source | Decision |\n| --- | --- |\n");
         for (int index = 0; index < linked.objects().size(); index++) {
             final NativeLinker.CacheEntry entry = linked.objects().get(index);
             if (index > 0) {

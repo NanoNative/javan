@@ -189,6 +189,7 @@ public final class Cli {
               --bindings <list>      c,rust,go,python
               --release             enable release build mode
               --target <triple>      assert host target for native build
+              --jobs <count>         limit native app compiler workers; default is memory-aware
             """;
     }
 

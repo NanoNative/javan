@@ -100,6 +100,14 @@ runtime class loading, and build-time application heaps. Optimizer-specific work
 
 ## Runtime And Memory
 
+Current build-safety boundary:
+
+- Native application builds compile only independent generated-object cache misses concurrently.
+  `--jobs <count>` requests a cap; the automatic mode uses at most two workers and reduces that
+  limit for available CPU and free physical memory. The native-object-cache report records the
+  requested/effective limit, queued objects, memory backoffs, and outcome. Final linking remains
+  serial and ordered.
+
 Near-term work:
 
 - finish concurrent mutation/return ownership beyond the current proven root handoffs
@@ -201,5 +209,5 @@ graph. They integrate through normal Java APIs, generated artifacts, and stable 
 - silently changing user projects, shell profiles, `PATH`, or `JAVA_HOME`
 - accepting unsupported bytecode and hoping generated C works
 - configuration files that replace compiler analysis
-- parallel compiler modes or compatibility layers without a current boundary
+- parallel compiler modes beyond the proven generated-object cache boundary
 - abstractions, modules, plugins, or reports justified only by possible future use

@@ -40,6 +40,14 @@ final class JavanHostOnlyMethodsTest {
     }
 
     @Test
+    void isHostOnlyMethodAcceptsJvmInterruptionCleanup() {
+        assertThat(JavanHostOnlyMethods.isHostOnlyMethod(
+            "javan/util/ProcessRunner",
+            method("stopInterruptedProcess", "(Ljava/lang/Process;Ljava/lang/InterruptedException;)V")
+        )).isTrue();
+    }
+
+    @Test
     void isHostOnlyMethodRejectsDifferentOwner() {
         assertThat(JavanHostOnlyMethods.isHostOnlyMethod(
             "javan/classfile/OtherReader",

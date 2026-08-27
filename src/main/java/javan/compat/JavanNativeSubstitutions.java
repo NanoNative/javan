@@ -17,6 +17,22 @@ public final class JavanNativeSubstitutions {
         "run",
         PROCESS_RUNNER_RUN_DESCRIPTOR
     );
+    private static final MethodRef PROCESS_RUNNER_RUN_RESULT = new MethodRef(
+        PROCESS_RUNNER_OWNER,
+        "runResult",
+        PROCESS_RUNNER_RUN_DESCRIPTOR
+    );
+    private static final String NATIVE_LINKER_OWNER = "javan/codegen/NativeLinker";
+    private static final MethodRef NATIVE_LINKER_AVAILABLE_PROCESSORS = new MethodRef(
+        NATIVE_LINKER_OWNER,
+        "nativeAvailableProcessors",
+        "()I"
+    );
+    private static final MethodRef NATIVE_LINKER_FREE_PHYSICAL_MEMORY = new MethodRef(
+        NATIVE_LINKER_OWNER,
+        "nativeFreePhysicalMemory",
+        "()J"
+    );
     private static final String FILES2_OWNER = "javan/util/Files2";
     private static final String FILES2_CREATE_DIRECTORIES_IF_POSSIBLE_DESCRIPTOR = "(Ljava/nio/file/Path;)Z";
     private static final MethodRef FILES2_CREATE_DIRECTORIES_IF_POSSIBLE = new MethodRef(
@@ -26,6 +42,9 @@ public final class JavanNativeSubstitutions {
     );
     private static final List<String> REPORT_LINES = List.of(
         PROCESS_RUNNER_RUN.display() + " -> javan_process_run",
+        PROCESS_RUNNER_RUN_RESULT.display() + " -> javan_process_run",
+        NATIVE_LINKER_AVAILABLE_PROCESSORS.display() + " -> javan_native_available_processors",
+        NATIVE_LINKER_FREE_PHYSICAL_MEMORY.display() + " -> javan_native_free_memory",
         FILES2_CREATE_DIRECTORIES_IF_POSSIBLE.display() + " -> javan_files_create_directories_if_possible"
     );
 
@@ -39,7 +58,11 @@ public final class JavanNativeSubstitutions {
      * @return true for exact substituted calls
      */
     public static boolean isSubstitutedCall(final MethodRef methodRef) {
-        return matches(PROCESS_RUNNER_RUN, methodRef) || matches(FILES2_CREATE_DIRECTORIES_IF_POSSIBLE, methodRef);
+        return matches(PROCESS_RUNNER_RUN, methodRef)
+            || matches(PROCESS_RUNNER_RUN_RESULT, methodRef)
+            || matches(NATIVE_LINKER_AVAILABLE_PROCESSORS, methodRef)
+            || matches(NATIVE_LINKER_FREE_PHYSICAL_MEMORY, methodRef)
+            || matches(FILES2_CREATE_DIRECTORIES_IF_POSSIBLE, methodRef);
     }
 
     /**
@@ -66,7 +89,11 @@ public final class JavanNativeSubstitutions {
      * @return true for exact substituted fallback methods
      */
     public static boolean isSubstitutedFallbackMethod(final String owner, final MethodInfo method) {
-        return matches(PROCESS_RUNNER_RUN, owner, method) || matches(FILES2_CREATE_DIRECTORIES_IF_POSSIBLE, owner, method);
+        return matches(PROCESS_RUNNER_RUN, owner, method)
+            || matches(PROCESS_RUNNER_RUN_RESULT, owner, method)
+            || matches(NATIVE_LINKER_AVAILABLE_PROCESSORS, owner, method)
+            || matches(NATIVE_LINKER_FREE_PHYSICAL_MEMORY, owner, method)
+            || matches(FILES2_CREATE_DIRECTORIES_IF_POSSIBLE, owner, method);
     }
 
     /**

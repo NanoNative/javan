@@ -120,6 +120,7 @@ final class BuildInvokerToolTest {
             List.of(),
             false,
             Optional.empty(),
+            Optional.empty(),
             List.of()
         );
     }

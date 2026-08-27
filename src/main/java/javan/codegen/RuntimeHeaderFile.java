@@ -160,6 +160,8 @@ final class RuntimeHeaderFile {
         void* javan_system_getenv(const char* name);
         void* javan_system_get_property(const char* key);
         void* javan_system_get_property_or_default(const char* key, const char* fallback);
+        int javan_native_available_processors(void);
+        long long javan_native_free_memory(void);
         void javan_runtime_prepare_command_line_args(int* argc, char*** argv);
         void javan_runtime_release_command_line_args(void);
         void javan_runtime_set_executable_path(const char* argv0);

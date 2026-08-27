@@ -55,6 +55,7 @@ final class CliCommandIntegrationTest {
             "--format <formats>",
             "--kind <kind>",
             "--profile <profile>",
+            "--jobs <count>",
             "core, service, library, or strict"
         );
         assertThat(run.stdout()).doesNotContain("--no-build");
@@ -284,6 +285,40 @@ final class CliCommandIntegrationTest {
             .contains("\"source\": \"main.c\", \"decision\": \"reused\"")
             .contains("\"source\": \"javan_runtime.c\", \"decision\": \"reused\"");
         assertThat(Files.readString(tempDir.resolve(".javan/reports/report.md"))).contains("`native-object-cache` | present");
+    }
+
+    @Test
+    void buildRecordsBoundedNativeWorkerEvidence() throws Exception {
+        final Path project = project("native-workers");
+        final Path source = project.resolve("src/main/java/com/acme/Main.java");
+        Files.createDirectories(source.getParent());
+        Files.writeString(source, """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(message());
+                }
+
+                static String message() {
+                    return "native-workers";
+                }
+            }
+            """);
+
+        final CliRun build = run(tempDir, "build", project.toString(), "--main", "com.acme.Main", "--jobs", "1");
+
+        assertThat(build.exitCode()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/native-object-cache.json"))).contains(
+            "\"requestedJobs\": 1",
+            "\"effectiveJobs\": 1",
+            "\"queued\": 2",
+            "\"backoffs\": 0",
+            "\"outcome\": \"succeeded\""
+        );
     }
 
     @Test

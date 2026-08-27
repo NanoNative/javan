@@ -38,6 +38,11 @@ final class RuntimeSourceCoreSection {
         #include <sys/stat.h>
         #include <sys/time.h>
         #include <time.h>
+        #if defined(__linux__)
+        #include <sys/sysinfo.h>
+        #elif defined(__APPLE__)
+        #include <mach/mach.h>
+        #endif
         typedef uintptr_t javan_socket_handle;
         #define JAVAN_SOCKET_INVALID ((javan_socket_handle) -1)
         #if defined(_WIN32)
@@ -1671,6 +1676,47 @@ final class RuntimeSourceCoreSection {
         void* javan_system_get_property_or_default(const char* key, const char* fallback) {
             void* value = javan_system_get_property(key);
             return value == NULL ? (void*) fallback : value;
+        }
+
+        int javan_native_available_processors(void) {
+        #if defined(_WIN32)
+            SYSTEM_INFO info;
+            GetSystemInfo(&info);
+            return info.dwNumberOfProcessors > 0 && info.dwNumberOfProcessors <= INT_MAX
+                ? (int) info.dwNumberOfProcessors
+                : 1;
+        #else
+            long processors = sysconf(_SC_NPROCESSORS_ONLN);
+            return processors > 0 && processors <= INT_MAX ? (int) processors : 1;
+        #endif
+        }
+
+        long long javan_native_free_memory(void) {
+        #if defined(_WIN32)
+            MEMORYSTATUSEX memory = {0};
+            memory.dwLength = sizeof(memory);
+            if (GlobalMemoryStatusEx(&memory) == 0 || memory.ullAvailPhys > LLONG_MAX) {
+                return LLONG_MAX;
+            }
+            return (long long) memory.ullAvailPhys;
+        #elif defined(__linux__)
+            struct sysinfo memory;
+            if (sysinfo(&memory) != 0) {
+                return LLONG_MAX;
+            }
+            unsigned long long bytes = (unsigned long long) memory.freeram * (unsigned long long) memory.mem_unit;
+            return bytes > LLONG_MAX ? LLONG_MAX : (long long) bytes;
+        #elif defined(__APPLE__)
+            vm_statistics64_data_t statistics;
+            mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
+            if (host_statistics64(mach_host_self(), HOST_VM_INFO64, (host_info64_t) &statistics, &count) != KERN_SUCCESS) {
+                return LLONG_MAX;
+            }
+            unsigned long long bytes = (unsigned long long) statistics.free_count * (unsigned long long) vm_page_size;
+            return bytes > LLONG_MAX ? LLONG_MAX : (long long) bytes;
+        #else
+            return LLONG_MAX;
+        #endif
         }
 
         void* javan_objects_require_non_null(void* value) {

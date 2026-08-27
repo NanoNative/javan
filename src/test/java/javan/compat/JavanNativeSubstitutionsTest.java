@@ -21,6 +21,21 @@ final class JavanNativeSubstitutionsTest {
     }
 
     @Test
+    void isSubstitutedCallAcceptsProcessRunnerResult() {
+        assertThat(JavanNativeSubstitutions.isSubstitutedCall(processRunnerResultRef())).isTrue();
+    }
+
+    @Test
+    void isSubstitutedCallAcceptsNativeLinkerResources() {
+        assertThat(JavanNativeSubstitutions.isSubstitutedCall(
+            new MethodRef("javan/codegen/NativeLinker", "nativeAvailableProcessors", "()I")
+        )).isTrue();
+        assertThat(JavanNativeSubstitutions.isSubstitutedCall(
+            new MethodRef("javan/codegen/NativeLinker", "nativeFreePhysicalMemory", "()J")
+        )).isTrue();
+    }
+
+    @Test
     void isSubstitutedCallAcceptsDirectoryPreparation() {
         assertThat(JavanNativeSubstitutions.isSubstitutedCall(files2DirectoryPreparationRef())).isTrue();
     }
@@ -61,6 +76,24 @@ final class JavanNativeSubstitutionsTest {
     }
 
     @Test
+    void isSubstitutedFallbackMethodAcceptsProcessRunnerResult() {
+        assertThat(JavanNativeSubstitutions.isSubstitutedFallbackMethod(
+            "javan/util/ProcessRunner",
+            new MethodInfo(0, "runResult", PROCESS_RUNNER_DESCRIPTOR, Optional.empty())
+        )).isTrue();
+    }
+
+    @Test
+    void isSubstitutedFallbackMethodAcceptsNativeLinkerResources() {
+        assertThat(JavanNativeSubstitutions.isSubstitutedFallbackMethod(
+            "javan/codegen/NativeLinker", new MethodInfo(0, "nativeAvailableProcessors", "()I", Optional.empty())
+        )).isTrue();
+        assertThat(JavanNativeSubstitutions.isSubstitutedFallbackMethod(
+            "javan/codegen/NativeLinker", new MethodInfo(0, "nativeFreePhysicalMemory", "()J", Optional.empty())
+        )).isTrue();
+    }
+
+    @Test
     void isSubstitutedFallbackMethodAcceptsDirectoryPreparation() {
         assertThat(JavanNativeSubstitutions.isSubstitutedFallbackMethod(
             "javan/util/Files2",
@@ -96,12 +129,19 @@ final class JavanNativeSubstitutionsTest {
     void reportLinesDescribeEveryNativeLowering() {
         assertThat(JavanNativeSubstitutions.reportLines()).containsExactly(
             "javan/util/ProcessRunner.run(Ljava/nio/file/Path;Ljava/util/List;)Ljavan/util/ProcessRunner$Result; -> javan_process_run",
+            "javan/util/ProcessRunner.runResult(Ljava/nio/file/Path;Ljava/util/List;)Ljavan/util/ProcessRunner$Result; -> javan_process_run",
+            "javan/codegen/NativeLinker.nativeAvailableProcessors()I -> javan_native_available_processors",
+            "javan/codegen/NativeLinker.nativeFreePhysicalMemory()J -> javan_native_free_memory",
             "javan/util/Files2.createDirectoriesIfPossible(Ljava/nio/file/Path;)Z -> javan_files_create_directories_if_possible"
         );
     }
 
     private static MethodRef processRunnerRunRef() {
         return new MethodRef("javan/util/ProcessRunner", "run", PROCESS_RUNNER_DESCRIPTOR);
+    }
+
+    private static MethodRef processRunnerResultRef() {
+        return new MethodRef("javan/util/ProcessRunner", "runResult", PROCESS_RUNNER_DESCRIPTOR);
     }
 
     private static MethodRef files2DirectoryPreparationRef() {

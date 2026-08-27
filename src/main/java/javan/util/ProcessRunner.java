@@ -58,24 +58,52 @@ public class ProcessRunner {
         builder.redirectError(stderrFile.toFile());
         try {
             final Process process = builder.start();
-            final boolean completed = process.waitFor(timeoutMillis, TimeUnit.MILLISECONDS);
-            if (!completed) {
-                process.destroyForcibly();
-                process.waitFor();
+            try {
+                final boolean completed = process.waitFor(timeoutMillis, TimeUnit.MILLISECONDS);
+                if (!completed) {
+                    process.destroyForcibly();
+                    process.waitFor();
+                    return new Result(
+                        124,
+                        Files.readString(stdoutFile),
+                        timeoutMessage(command, stderrFile)
+                    );
+                }
                 return new Result(
-                    124,
+                    process.exitValue(),
                     Files.readString(stdoutFile),
-                    timeoutMessage(command, stderrFile)
+                    Files.readString(stderrFile)
                 );
+            } catch (final InterruptedException exception) {
+                stopInterruptedProcess(process, exception);
+                throw exception;
             }
-            return new Result(
-                process.exitValue(),
-                Files.readString(stdoutFile),
-                Files.readString(stderrFile)
-            );
         } finally {
             Files.deleteIfExists(stdoutFile);
             Files.deleteIfExists(stderrFile);
+        }
+    }
+
+    /**
+     * Runs a command and represents launcher or interruption failures as a result.
+     *
+     * <p>This is useful at a concurrent task boundary, where checked exceptions cannot cross a
+     * {@link Runnable}. An exit code of {@code 125} means the waiting thread was interrupted;
+     * {@code 126} means the process could not be started or read.</p>
+     *
+     * @param workingDirectory process working directory
+     * @param command command and arguments
+     * @return captured result, including launcher failures
+     */
+    public Result runResult(final Path workingDirectory, final List<String> command) {
+        try {
+            return run(workingDirectory, command);
+        } catch (final InterruptedException interruption) {
+            Thread.currentThread().interrupt();
+            return new Result(125, "", "Interrupted while running process");
+        } catch (final IOException failure) {
+            final String message = failure.getMessage();
+            return new Result(126, "", message == null ? failure.getClass().getName() : message);
         }
     }
 
@@ -230,6 +258,20 @@ public class ProcessRunner {
             return "Timed out after " + (timeoutMillis / 1000L) + "s: " + commandLine(command);
         }
         return stderr + System.lineSeparator() + "Timed out after " + (timeoutMillis / 1000L) + "s: " + commandLine(command);
+    }
+
+    private static void stopInterruptedProcess(final Process process, final InterruptedException interruption) {
+        process.destroy();
+        try {
+            if (!process.waitFor(1, TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                process.waitFor();
+            }
+        } catch (final InterruptedException cleanup) {
+            process.destroyForcibly();
+            interruption.addSuppressed(cleanup);
+            Thread.currentThread().interrupt();
+        }
     }
 
     /**

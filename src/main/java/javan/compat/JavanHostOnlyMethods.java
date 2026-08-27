@@ -29,6 +29,11 @@ public final class JavanHostOnlyMethods {
             "javan/cli/Cli",
             "run",
             "(Ljava/nio/file/Path;Ljava/io/PrintStream;Ljava/io/PrintStream;[Ljava/lang/String;)I"
+        ),
+        new MethodRef(
+            "javan/util/ProcessRunner",
+            "stopInterruptedProcess",
+            "(Ljava/lang/Process;Ljava/lang/InterruptedException;)V"
         )
     );
 

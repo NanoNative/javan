@@ -32,10 +32,17 @@ With an installed `javan` binary:
 ```sh
 javan check .
 javan build .
+javan build . --jobs 2
 javan run . -- one two
 javan build . --jar
 javan build . --library --export com.acme.Math.add --bindings c,rust,go,python
 ```
+
+Native application builds compile independent generated C objects concurrently. The default is
+conservative and memory-aware, with at most two compiler workers; use `--jobs <count>` to request
+a lower or higher limit. Javan still reduces that request when the current CPU or free-memory
+bound requires it. The resulting `.javan/reports/native-object-cache.*` records the requested and
+effective limits, queued objects, memory backoffs, and outcome. Final native linking remains serial.
 
 ## Use Javan As A JDK
 
