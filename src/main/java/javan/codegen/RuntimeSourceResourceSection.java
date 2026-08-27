@@ -40,19 +40,24 @@ final class RuntimeSourceResourceSection {
                 0
             };
 
-            static javan_resource_input_stream_value* javan_resource_input_stream_checked(void* value) {
+            static javan_byte_input_stream_value* javan_byte_input_stream_checked(
+                void* value,
+                int expected_magic,
+                const char* null_message,
+                const char* invalid_message
+            ) {
                 if (value == NULL) {
-                    javan_panic("null resource input stream");
+                    javan_panic(null_message);
                 }
-                javan_resource_input_stream_value* stream = (javan_resource_input_stream_value*) value;
+                javan_byte_input_stream_value* stream = (javan_byte_input_stream_value*) value;
                 javan_byte_array* bytes = (javan_byte_array*) stream->bytes;
-                if (stream->magic != JAVAN_RESOURCE_INPUT_STREAM_MAGIC
+                if (stream->magic != expected_magic
                     || stream->bytes == NULL
                     || stream->length < 0
                     || stream->position < 0
                     || stream->position > stream->length
                     || bytes->length != stream->length) {
-                    javan_panic("unsupported resource input stream object");
+                    javan_panic(invalid_message);
                 }
                 return stream;
             }
@@ -135,8 +140,8 @@ final class RuntimeSourceResourceSection {
                 };
                 javan_root_frame_push(roots, 2);
                 bytes_root = javan_byte_array_from(resource->bytes, resource->length);
-                stream_root = javan_alloc(sizeof(javan_resource_input_stream_value));
-                javan_resource_input_stream_value* stream = (javan_resource_input_stream_value*) stream_root;
+                stream_root = javan_alloc(sizeof(javan_byte_input_stream_value));
+                javan_byte_input_stream_value* stream = (javan_byte_input_stream_value*) stream_root;
                 stream->magic = JAVAN_RESOURCE_INPUT_STREAM_MAGIC;
                 stream->position = 0;
                 stream->length = resource->length;
@@ -184,8 +189,13 @@ final class RuntimeSourceResourceSection {
                 return javan_class_loader_resource_as_stream(javan_class_loader_system(), name_value);
             }
 
-            int javan_resource_input_stream_read(void* value) {
-                javan_resource_input_stream_value* stream = javan_resource_input_stream_checked(value);
+            static int javan_byte_input_stream_read(
+                void* value,
+                int expected_magic,
+                const char* null_message,
+                const char* invalid_message
+            ) {
+                javan_byte_input_stream_value* stream = javan_byte_input_stream_checked(value, expected_magic, null_message, invalid_message);
                 javan_byte_array* bytes = (javan_byte_array*) stream->bytes;
                 if (stream->position >= stream->length) {
                     return -1;
@@ -195,20 +205,22 @@ final class RuntimeSourceResourceSection {
                 return next;
             }
 
-            int javan_resource_input_stream_read_bytes(void* value, void* bytes_value) {
-                javan_byte_array* bytes = (javan_byte_array*) javan_array_checked(bytes_value);
-                javan_array_kind_checked((javan_array_header*) bytes, JAVAN_ARRAY_KIND_BYTE);
-                return javan_resource_input_stream_read_bytes_range(value, bytes_value, 0, bytes->length);
-            }
-
-            int javan_resource_input_stream_read_bytes_range(void* value, void* bytes_value, int offset, int length) {
+            static int javan_byte_input_stream_read_bytes_range(
+                void* value,
+                void* bytes_value,
+                int offset,
+                int length,
+                int expected_magic,
+                const char* null_message,
+                const char* invalid_message
+            ) {
                 javan_byte_array* bytes = (javan_byte_array*) javan_array_checked(bytes_value);
                 javan_array_kind_checked((javan_array_header*) bytes, JAVAN_ARRAY_KIND_BYTE);
                 javan_array_range_checked((javan_array_header*) bytes, offset, length);
                 if (length == 0) {
                     return 0;
                 }
-                javan_resource_input_stream_value* stream = javan_resource_input_stream_checked(value);
+                javan_byte_input_stream_value* stream = javan_byte_input_stream_checked(value, expected_magic, null_message, invalid_message);
                 javan_byte_array* source = (javan_byte_array*) stream->bytes;
                 if (stream->position >= stream->length) {
                     return -1;
@@ -220,7 +232,12 @@ final class RuntimeSourceResourceSection {
                 return count;
             }
 
-            void* javan_resource_input_stream_read_all_bytes(void* value) {
+            static void* javan_byte_input_stream_read_all_bytes(
+                void* value,
+                int expected_magic,
+                const char* null_message,
+                const char* invalid_message
+            ) {
                 void* stream_root = value;
                 void* result = NULL;
                 void** roots[] = {
@@ -228,12 +245,48 @@ final class RuntimeSourceResourceSection {
                     (void**) &result
                 };
                 javan_root_frame_push(roots, 2);
-                javan_resource_input_stream_value* stream = javan_resource_input_stream_checked(stream_root);
+                javan_byte_input_stream_value* stream = javan_byte_input_stream_checked(stream_root, expected_magic, null_message, invalid_message);
                 result = javan_arrays_copy_of_range_byte(stream->bytes, stream->position, stream->length);
-                stream = javan_resource_input_stream_checked(stream_root);
+                stream = javan_byte_input_stream_checked(stream_root, expected_magic, null_message, invalid_message);
                 stream->position = stream->length;
                 javan_root_frame_pop(roots);
                 return result;
+            }
+
+            int javan_resource_input_stream_read(void* value) {
+                return javan_byte_input_stream_read(value, JAVAN_RESOURCE_INPUT_STREAM_MAGIC, "null resource input stream", "unsupported resource input stream object");
+            }
+
+            int javan_resource_input_stream_read_bytes(void* value, void* bytes_value) {
+                javan_byte_array* bytes = (javan_byte_array*) javan_array_checked(bytes_value);
+                javan_array_kind_checked((javan_array_header*) bytes, JAVAN_ARRAY_KIND_BYTE);
+                return javan_byte_input_stream_read_bytes_range(value, bytes_value, 0, bytes->length, JAVAN_RESOURCE_INPUT_STREAM_MAGIC, "null resource input stream", "unsupported resource input stream object");
+            }
+
+            int javan_resource_input_stream_read_bytes_range(void* value, void* bytes_value, int offset, int length) {
+                return javan_byte_input_stream_read_bytes_range(value, bytes_value, offset, length, JAVAN_RESOURCE_INPUT_STREAM_MAGIC, "null resource input stream", "unsupported resource input stream object");
+            }
+
+            void* javan_resource_input_stream_read_all_bytes(void* value) {
+                return javan_byte_input_stream_read_all_bytes(value, JAVAN_RESOURCE_INPUT_STREAM_MAGIC, "null resource input stream", "unsupported resource input stream object");
+            }
+
+            int javan_http_exchange_input_stream_read(void* value) {
+                return javan_byte_input_stream_read(value, JAVAN_HTTP_EXCHANGE_INPUT_STREAM_MAGIC, "null HTTP request body stream", "invalid HTTP request body stream");
+            }
+
+            int javan_http_exchange_input_stream_read_bytes(void* value, void* bytes_value) {
+                javan_byte_array* bytes = (javan_byte_array*) javan_array_checked(bytes_value);
+                javan_array_kind_checked((javan_array_header*) bytes, JAVAN_ARRAY_KIND_BYTE);
+                return javan_byte_input_stream_read_bytes_range(value, bytes_value, 0, bytes->length, JAVAN_HTTP_EXCHANGE_INPUT_STREAM_MAGIC, "null HTTP request body stream", "invalid HTTP request body stream");
+            }
+
+            int javan_http_exchange_input_stream_read_bytes_range(void* value, void* bytes_value, int offset, int length) {
+                return javan_byte_input_stream_read_bytes_range(value, bytes_value, offset, length, JAVAN_HTTP_EXCHANGE_INPUT_STREAM_MAGIC, "null HTTP request body stream", "invalid HTTP request body stream");
+            }
+
+            void* javan_http_exchange_input_stream_read_all_bytes(void* value) {
+                return javan_byte_input_stream_read_all_bytes(value, JAVAN_HTTP_EXCHANGE_INPUT_STREAM_MAGIC, "null HTTP request body stream", "invalid HTTP request body stream");
             }
 
             void javan_resource_input_stream_close(void* value) {
