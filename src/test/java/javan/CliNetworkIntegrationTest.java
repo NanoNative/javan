@@ -3630,6 +3630,111 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    @WindowsCompatibilityProof
+    void httpServerLoopbackHandlerReadsRequestMethod() throws Exception {
+        assertHttpServerResponse(
+            "http-server-request-method",
+            """
+                if ("GET".equals(exchange.getRequestMethod())) {
+                    final byte[] body = new byte[] {103, 101, 116};
+                    exchange.sendResponseHeaders(200, body.length);
+                    exchange.getResponseBody().write(body);
+                } else {
+                    exchange.sendResponseHeaders(405, -1L);
+                }
+                """,
+            200,
+            "get"
+        );
+    }
+
+    @Test
+    @WindowsCompatibilityProof
+    void httpServerLoopbackHandlerReadsRequestUri() throws Exception {
+        assertHttpServerResponse(
+            "http-server-request-uri",
+            """
+                if ("/hello".equals(exchange.getRequestURI().getRawPath())
+                    && "mode=strict".equals(exchange.getRequestURI().getRawQuery())) {
+                    final byte[] body = new byte[] {117, 114, 105};
+                    exchange.sendResponseHeaders(200, body.length);
+                    exchange.getResponseBody().write(body);
+                } else {
+                    exchange.sendResponseHeaders(404, -1L);
+                }
+                """,
+            200,
+            "uri",
+            "/hello?mode=strict"
+        );
+    }
+
+    @Test
+    @WindowsCompatibilityProof
+    void httpServerLoopbackHandlerReadsRequestHeader() throws Exception {
+        assertHttpServerResponse(
+            "http-server-request-header",
+            """
+                final com.sun.net.httpserver.Headers headers = exchange.getRequestHeaders();
+                if (headers == exchange.getRequestHeaders()
+                    && "strict".equals(headers.getFirst("x-javan-mode"))
+                    && headers.getFirst("missing") == null) {
+                    final byte[] body = new byte[] {104, 101, 97, 100, 101, 114};
+                    exchange.sendResponseHeaders(200, body.length);
+                    exchange.getResponseBody().write(body);
+                } else {
+                    exchange.sendResponseHeaders(404, -1L);
+                }
+                """,
+            200,
+            "header",
+            "/hello",
+            request -> {
+                request.header("X-Javan-Mode", "strict");
+                request.header("X-Javan-Mode", "later");
+                return request.GET().build();
+            }
+        );
+    }
+
+    @Test
+    @WindowsCompatibilityProof
+    void httpServerLoopbackHandlerReadsRequestBody() throws Exception {
+        assertHttpServerResponse(
+            "http-server-request-body",
+            """
+                final java.io.InputStream request = exchange.getRequestBody();
+                final byte[] start = new byte[2];
+                final int startCount = request.read(start);
+                final byte[] middle = new byte[3];
+                final int middleCount = request.read(middle, 1, 2);
+                final byte[] end = request.readAllBytes();
+                if (request == exchange.getRequestBody()
+                    && startCount == 2
+                    && start[0] == 104
+                    && start[1] == 101
+                    && middleCount == 2
+                    && middle[0] == 0
+                    && middle[1] == 108
+                    && middle[2] == 108
+                    && end.length == 1
+                    && end[0] == 111
+                    && request.read() == -1) {
+                    final byte[] response = new byte[] {98, 111, 100, 121};
+                    exchange.sendResponseHeaders(200, response.length);
+                    exchange.getResponseBody().write(response);
+                } else {
+                    exchange.sendResponseHeaders(400, -1L);
+                }
+                """,
+            200,
+            "body",
+            "/hello",
+            request -> request.POST(java.net.http.HttpRequest.BodyPublishers.ofString("hello")).build()
+        );
+    }
+
+    @Test
     void httpServerLoopbackStreamsChunkedResponse() throws Exception {
         assertHttpServerResponse(
             "http-server-chunked-response",
@@ -4775,6 +4880,27 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
         final int expectedStatus,
         final String expectedBody
     ) throws Exception {
+        assertHttpServerResponse(name, response, expectedStatus, expectedBody, "/hello");
+    }
+
+    private void assertHttpServerResponse(
+        final String name,
+        final String response,
+        final int expectedStatus,
+        final String expectedBody,
+        final String target
+    ) throws Exception {
+        assertHttpServerResponse(name, response, expectedStatus, expectedBody, target, request -> request.GET().build());
+    }
+
+    private void assertHttpServerResponse(
+        final String name,
+        final String response,
+        final int expectedStatus,
+        final String expectedBody,
+        final String target,
+        final java.util.function.Function<java.net.http.HttpRequest.Builder, java.net.http.HttpRequest> buildRequest
+    ) throws Exception {
         final int port = freeTcpPort();
         final Path project = project(name);
         writeJava(project, "com.acme.Main", """
@@ -4815,15 +4941,15 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        final Process process = new ProcessBuilder(nativeBinary(project, name).toString())
-            .directory(project.toFile())
-            .start();
+        final ProcessBuilder nativeCommand = new ProcessBuilder(nativeBinary(project, name).toString())
+            .directory(project.toFile());
+        nativeCommand.environment().put("JAVAN_GC_STRESS", "1");
+        nativeCommand.environment().put("JAVAN_GC_SAFEPOINT_INTERVAL", "1");
+        final Process process = nativeCommand.start();
         final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
         final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
-        final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/hello"))
-            .GET()
-            .build();
-        final java.net.http.HttpResponse<String> nativeResponse = awaitLoopbackResponse(client, request);
+        final java.net.http.HttpRequest.Builder request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + target));
+        final java.net.http.HttpResponse<String> nativeResponse = awaitLoopbackResponse(client, buildRequest.apply(request));
 
         assertThat(nativeResponse.statusCode()).isEqualTo(expectedStatus);
         assertThat(nativeResponse.body()).isEqualTo(expectedBody);

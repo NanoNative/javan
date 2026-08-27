@@ -3457,6 +3457,7 @@ public final class BytecodeToIR {
         if (kind == StackKind.CAUGHT_THROWABLE
             || kind == StackKind.SOCKET_INPUT_STREAM
             || kind == StackKind.RESOURCE_INPUT_STREAM
+            || kind == StackKind.HTTP_EXCHANGE_INPUT_STREAM
             || kind == StackKind.SOCKET_OUTPUT_STREAM
             || kind == StackKind.HTTP_EXCHANGE_OUTPUT_STREAM
             || kind == StackKind.VIRTUAL_THREAD_BUILDER
@@ -4602,6 +4603,7 @@ public final class BytecodeToIR {
         ERROR_PRINT_STREAM,
         SOCKET_INPUT_STREAM,
         RESOURCE_INPUT_STREAM,
+        HTTP_EXCHANGE_INPUT_STREAM,
         SOCKET_OUTPUT_STREAM,
         HTTP_EXCHANGE_OUTPUT_STREAM,
         INT,
@@ -4732,6 +4734,10 @@ public final class BytecodeToIR {
 
         static StackValue resourceInputStream(final IrExpression expression) {
             return new StackValue(StackKind.RESOURCE_INPUT_STREAM, Optional.empty(), Optional.of(expression), Optional.empty());
+        }
+
+        static StackValue httpExchangeInputStream(final IrExpression expression) {
+            return new StackValue(StackKind.HTTP_EXCHANGE_INPUT_STREAM, Optional.empty(), Optional.of(expression), Optional.empty());
         }
 
         static StackValue socketOutputStream(final IrExpression expression) {

@@ -1533,6 +1533,9 @@ final class BytecodeToIRControlFlowSupport {
         if (kind == StackKind.RESOURCE_INPUT_STREAM) {
             return StackValue.resourceInputStream(expression);
         }
+        if (kind == StackKind.HTTP_EXCHANGE_INPUT_STREAM) {
+            return StackValue.httpExchangeInputStream(expression);
+        }
         if (kind == StackKind.SOCKET_OUTPUT_STREAM) {
             return StackValue.socketOutputStream(expression);
         }
@@ -1553,6 +1556,7 @@ final class BytecodeToIRControlFlowSupport {
             || kind == StackKind.ERROR_PRINT_STREAM
             || kind == StackKind.SOCKET_INPUT_STREAM
             || kind == StackKind.RESOURCE_INPUT_STREAM
+            || kind == StackKind.HTTP_EXCHANGE_INPUT_STREAM
             || kind == StackKind.SOCKET_OUTPUT_STREAM
             || kind == StackKind.HTTP_EXCHANGE_OUTPUT_STREAM;
     }
