@@ -1368,9 +1368,10 @@ final class BytecodeToIRInvokeSupport {
             final boolean sendResponseHeaders = "sendResponseHeaders".equals(methodRef.name()) && "(IJ)V".equals(methodRef.descriptor());
             final boolean getRequestMethod = "getRequestMethod".equals(methodRef.name()) && "()Ljava/lang/String;".equals(methodRef.descriptor());
             final boolean getRequestUri = "getRequestURI".equals(methodRef.name()) && "()Ljava/net/URI;".equals(methodRef.descriptor());
+            final boolean getRequestHeaders = "getRequestHeaders".equals(methodRef.name()) && "()Lcom/sun/net/httpserver/Headers;".equals(methodRef.descriptor());
             final boolean getResponseBody = "getResponseBody".equals(methodRef.name()) && "()Ljava/io/OutputStream;".equals(methodRef.descriptor());
             final boolean close = "close".equals(methodRef.name()) && "()V".equals(methodRef.descriptor());
-            if (!sendResponseHeaders && !getRequestMethod && !getRequestUri && !getResponseBody && !close) {
+            if (!sendResponseHeaders && !getRequestMethod && !getRequestUri && !getRequestHeaders && !getResponseBody && !close) {
                 return false;
             }
             final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
@@ -1390,6 +1391,10 @@ final class BytecodeToIRInvokeSupport {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_http_exchange_get_request_uri", callArguments)));
                 return true;
             }
+            if (getRequestHeaders) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_http_exchange_get_request_headers", callArguments)));
+                return true;
+            }
             if (getResponseBody) {
                 stack.add(StackValue.httpExchangeOutputStream(IrExpression.objectCall("javan_http_exchange_output_stream", callArguments)));
                 return true;
@@ -1398,6 +1403,17 @@ final class BytecodeToIRInvokeSupport {
                 instructions.add(IrInstruction.callStaticVoid("javan_http_exchange_close", callArguments));
                 return true;
             }
+        }
+        if ("com/sun/net/httpserver/Headers".equals(methodRef.owner())
+            && "getFirst".equals(methodRef.name())
+            && "(Ljava/lang/String;)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
+            final IrExpression receiver = popObject(classFile, method, instruction, stack);
+            final List<IrExpression> callArguments = new ArrayList<>();
+            callArguments.add(receiver);
+            callArguments.addAll(arguments);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_http_headers_get_first", callArguments)));
+            return true;
         }
         if ("java/net/http/HttpClient".equals(methodRef.owner())
             && "send".equals(methodRef.name())

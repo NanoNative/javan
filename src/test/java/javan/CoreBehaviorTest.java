@@ -806,6 +806,8 @@ final class CoreBehaviorTest {
         assertThat(JdkCallSupport.isSupported(new MethodRef("com/sun/net/httpserver/HttpExchange", "sendResponseHeaders", "(IJ)V"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("com/sun/net/httpserver/HttpExchange", "getRequestMethod", "()Ljava/lang/String;"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("com/sun/net/httpserver/HttpExchange", "getRequestURI", "()Ljava/net/URI;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("com/sun/net/httpserver/HttpExchange", "getRequestHeaders", "()Lcom/sun/net/httpserver/Headers;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("com/sun/net/httpserver/Headers", "getFirst", "(Ljava/lang/String;)Ljava/lang/String;"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("com/sun/net/httpserver/HttpExchange", "getResponseBody", "()Ljava/io/OutputStream;"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("com/sun/net/httpserver/HttpExchange", "close", "()V"))).isTrue();
     }
