@@ -338,9 +338,9 @@ final class CliPathFilesIntegrationTest extends CliIntegrationSupport {
     @Test
     void filesNewDirectoryStreamBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("files-directory-stream");
-        Files.createDirectories(project.resolve("data"));
-        Files.writeString(project.resolve("data/a.txt"), "a", StandardCharsets.UTF_8);
-        Files.writeString(project.resolve("data/b.txt"), "b", StandardCharsets.UTF_8);
+        Files.createDirectories(project.resolve("data-pröject"));
+        Files.writeString(project.resolve("data-pröject/a.txt"), "a", StandardCharsets.UTF_8);
+        Files.writeString(project.resolve("data-pröject/b.txt"), "b", StandardCharsets.UTF_8);
         writeJava(project, "com.acme.Main", """
             package com.acme;
 
@@ -353,7 +353,7 @@ final class CliPathFilesIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) throws Exception {
-                    final DirectoryStream<Path> stream = Files.newDirectoryStream(Path.of("data"));
+                    final DirectoryStream<Path> stream = Files.newDirectoryStream(Path.of("data-pröject"));
                     int count = 0;
                     int sawA = 0;
                     int sawB = 0;

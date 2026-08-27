@@ -3430,15 +3430,34 @@ final class RuntimeFilesTest {
         assertThat(Files.readString(runtime)).contains(
             "static void javan_sleep_micros(unsigned long micros) {",
             "Sleep(millis);",
-            "CreateProcessA(",
+            "MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS",
+            "CommandLineToArgvW(GetCommandLineW(), &count)",
+            "javan_runtime_prepare_command_line_args",
+            "javan_runtime_release_command_line_args",
+            "atexit(javan_runtime_release_command_line_args)",
+            "CreateProcessW(",
             "WaitForSingleObject(process.hProcess, wait_timeout)",
             "TerminateProcess(process.hProcess, 124)",
             "javan_windows_command_line",
-            "GetModuleFileNameA(NULL, javan_runtime_executable_path",
-            "char stdout_path[MAX_PATH + 1] = {0};",
-            "char stderr_path[MAX_PATH + 1] = {0};",
-            "if (stdout_path[0] != '\\0') {",
+            "GetTempPathW(MAX_PATH, temporary_directory)",
+            "GetTempFileNameW(temporary_directory, L\"jvo\"",
+            "CreateFileW(",
+            "_wfopen(path, L\"rb\")",
+            "GetModuleFileNameW(NULL, wide_path",
+            "GetCurrentDirectoryW((DWORD) (sizeof(wide_cwd) / sizeof(wide_cwd[0])), wide_cwd)",
+            "wchar_t stdout_path[MAX_PATH + 1] = {0};",
+            "wchar_t stderr_path[MAX_PATH + 1] = {0};",
+            "struct _stat64 windows_info;",
+            "_wstat64(wide_path, &windows_info);",
+            "if (stdout_path[0] != L'\\0') {",
             "process wait failed"
+        ).doesNotContain(
+            "CreateProcessA(",
+            "GetTempPathA(",
+            "GetTempFileNameA(",
+            "CreateFileA(",
+            "GetModuleFileNameA(",
+            "_wstat(wide_path, info)"
         );
     }
 
@@ -3483,6 +3502,7 @@ final class RuntimeFilesTest {
                 main.toString(),
                 runtime.toString(),
                 "-lws2_32",
+                "-lshell32",
                 "-o",
                 output.toString()
             ),
@@ -3522,6 +3542,7 @@ final class RuntimeFilesTest {
                 main.toString(),
                 runtime.toString(),
                 "-lws2_32",
+                "-lshell32",
                 "-o",
                 tempDir.resolve("windows-double-to-float-probe.exe").toString()
             ),
@@ -3563,6 +3584,7 @@ final class RuntimeFilesTest {
                 main.toString(),
                 runtime.toString(),
                 "-lws2_32",
+                "-lshell32",
                 "-o",
                 output.toString()
             ),
@@ -8217,6 +8239,45 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void runtimeArgumentArrayOwnsCopiesOfBorrowedNativeArguments() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                char executable[] = "native-app";
+                char first[] = "Yuna";
+                char second[] = "Javan";
+                char* native_arguments[] = {executable, first, second};
+                void* arguments = NULL;
+                void** roots[] = {(void**) &arguments};
+                javan_root_frame_push(roots, 1);
+                arguments = javan_string_array_from_args(3, native_arguments);
+                first[0] = 'L';
+                second[0] = 'N';
+                javan_gc_collect();
+                printf(
+                    "%d:%s:%s\\n",
+                    javan_array_length(arguments),
+                    (char*) javan_object_array_get(arguments, 0),
+                    (char*) javan_object_array_get(arguments, 1)
+                );
+                javan_root_frame_pop(roots);
+                arguments = NULL;
+                javan_gc_collect();
+                printf("live=%lu\\n", javan_heap_live_allocations());
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("2:Yuna:Javan\nlive=0\n");
+    }
+
+    @Test
     void runtimeByteArrayExportRootsArrayAcrossExportAllocation() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -10357,6 +10418,151 @@ final class RuntimeFilesTest {
         );
 
         assertThat(stdout).isEqualTo("127:empty command:4\nafter-result=1\nafter-all=0\n");
+    }
+
+    @Test
+    @WindowsCompatibilityProof
+    void runtimeWindowsProcessUsesUtf8WorkingDirectoryUnderGcStress() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+            #if defined(_WIN32)
+            #include <windows.h>
+            #endif
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                #if defined(_WIN32)
+                const wchar_t* directory = L"javan-\\x00E4";
+                if (CreateDirectoryW(directory, NULL) == 0 && GetLastError() != ERROR_ALREADY_EXISTS) {
+                    return 1;
+                }
+                void* command = javan_arraylist_new();
+                (void) javan_arraylist_add(command, (void*) "cmd.exe");
+                (void) javan_arraylist_add(command, (void*) "/d");
+                (void) javan_arraylist_add(command, (void*) "/c");
+                (void) javan_arraylist_add(command, (void*) "echo ready > marker.txt");
+                void* working_directory = javan_string_from("javan-\\xC3\\xA4");
+                void* result = javan_process_run(working_directory, command, 10000);
+                DWORD marker = GetFileAttributesW(L"javan-\\x00E4\\\\marker.txt");
+                printf("%d:%d:%s\\n", javan_process_result_exit_code(result), marker != INVALID_FILE_ATTRIBUTES, (char*) javan_process_result_stderr(result));
+                javan_free(result);
+                javan_free(working_directory);
+                javan_free(command);
+                DeleteFileW(L"javan-\\x00E4\\\\marker.txt");
+                RemoveDirectoryW(directory);
+                #else
+                printf("not-windows\\n");
+                #endif
+                return 0;
+            }
+            """,
+            "512",
+            Map.of("JAVAN_GC_STRESS", "1")
+        );
+
+        final boolean windows = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
+        assertThat(stdout).isEqualTo(windows ? "0:1:\n" : "not-windows\n");
+    }
+
+    @Test
+    @WindowsCompatibilityProof
+    void runtimeWindowsPathsPreserveDriveRootsAndSeparators() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                #if defined(_WIN32)
+                void* path = javan_string_from("C:\\\\work\\\\src\\\\..\\\\output");
+                void* child = javan_string_from("child");
+                void* root_relative = javan_string_from("\\\\rooted");
+                void* normalized = javan_path_normalize(path);
+                void* resolved = javan_path_resolve(normalized, child);
+                void* rooted = javan_path_resolve(path, root_relative);
+                void* parent = javan_path_get_parent(normalized);
+                void* name = javan_path_get_file_name(normalized);
+                void* unc = javan_string_from("\\\\\\\\server\\\\share\\\\folder\\\\..\\\\child");
+                void* unc_normalized = javan_path_normalize(unc);
+                void* unc_parent = javan_path_get_parent(unc_normalized);
+                printf(
+                    "%d|%d|%s|%s|%d|%s|%s|%s|%d|%s|%s|%d\\n",
+                    javan_path_is_absolute(path),
+                    javan_path_is_absolute(normalized),
+                    (char*) normalized,
+                    (char*) resolved,
+                    javan_path_is_absolute(root_relative),
+                    (char*) rooted,
+                    (char*) parent,
+                    (char*) name,
+                    javan_path_get_name_count(normalized),
+                    (char*) unc_normalized,
+                    (char*) unc_parent,
+                    javan_path_get_name_count(unc_normalized)
+                );
+                #else
+                printf("not-windows\\n");
+                #endif
+                return 0;
+            }
+            """,
+            "512"
+        );
+
+        final boolean windows = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
+        assertThat(stdout).isEqualTo(windows
+            ? "1|1|C:\\work\\output|C:\\work\\output\\child|0|C:\\rooted|C:\\work|output|2|\\\\server\\share\\child|\\\\server\\share\\|1\n"
+            : "not-windows\n");
+    }
+
+    @Test
+    @WindowsCompatibilityProof
+    void runtimeWindowsPathToAbsoluteUsesUtf8CurrentDirectory() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+            #include <string.h>
+            #if defined(_WIN32)
+            #include <windows.h>
+            #endif
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                #if defined(_WIN32)
+                wchar_t original[MAX_PATH + 1];
+                DWORD original_length = GetCurrentDirectoryW(MAX_PATH, original);
+                if (original_length == 0 || original_length >= MAX_PATH
+                    || (CreateDirectoryW(L"javan-\\x00E4", NULL) == 0 && GetLastError() != ERROR_ALREADY_EXISTS)
+                    || SetCurrentDirectoryW(L"javan-\\x00E4") == 0) {
+                    return 1;
+                }
+                void* path = javan_string_from("child");
+                void* absolute = javan_path_to_absolute(path);
+                void* directory = javan_string_from("..\\\\javan-\\xC3\\xA4");
+                void* options = javan_object_array_new(0, "[Ljava.nio.file.LinkOption;");
+                printf(
+                    "%d:%d:%d\\n",
+                    javan_path_is_absolute(absolute),
+                    strstr((char*) absolute, "javan-\\xC3\\xA4\\\\child") != NULL,
+                    javan_files_is_directory(directory, options)
+                );
+                SetCurrentDirectoryW(original);
+                RemoveDirectoryW(L"javan-\\x00E4");
+                #else
+                printf("not-windows\\n");
+                #endif
+                return 0;
+            }
+            """,
+            "512"
+        );
+
+        final boolean windows = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
+        assertThat(stdout).isEqualTo(windows ? "1:1:1\n" : "not-windows\n");
     }
 
     @Test

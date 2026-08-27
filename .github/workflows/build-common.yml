@@ -407,13 +407,13 @@ jobs:
             sanitizer-scope: platform-smoke
             label: package_win_x64
             enabled: false
-            reason: native linker and process runtime are incomplete
+            reason: native package self-host proof is incomplete
           - target: windows-aarch64
             os: windows-11-arm
             sanitizer-scope: platform-smoke
             label: package_win_arm64
             enabled: false
-            reason: native linker and process runtime are incomplete
+            reason: native package self-host proof is incomplete
     uses: ./.github/workflows/native-proof.yml
     with:
       ref: ${{ inputs.ref || github.sha }}

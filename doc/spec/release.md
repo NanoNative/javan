@@ -109,8 +109,8 @@ Native artifact rows:
 
 The [accepted Snapshot run 32689384718](https://github.com/NanoNative/javan/actions/runs/32689384718)
 proves every currently enabled platform-contract and package row. The slower macOS x64
-package row remains disabled. Windows package rows remain disabled until native linker,
-process execution, and `.exe` package proof work on the matching host; Windows ARM64
+package row remains disabled. Windows package rows remain disabled until native linker and
+`.exe` package proof work on the matching host; Windows ARM64
 platform proof is also blocked until the hosted runner supplies Temurin 25. The platform
 matrix does not itself claim native package support.
 

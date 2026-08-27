@@ -235,6 +235,9 @@ final class CiParallelWorkflowSurfaceTest {
             .containsExactlyInAnyOrder(
                 "writeEmitsPlatformRecursiveRuntimeLockForSharedHeapState",
                 "writeProvidesNativeWindowsProcessExecution",
+                "runtimeWindowsProcessUsesUtf8WorkingDirectoryUnderGcStress",
+                "runtimeWindowsPathsPreserveDriveRootsAndSeparators",
+                "runtimeWindowsPathToAbsoluteUsesUtf8CurrentDirectory",
                 "generatedRuntimeCrossCompilesToWindowsPeWhenMinGwIsAvailable",
                 "generatedRuntimeExecutesBasicWindowsProbeWhenHostCompilerIsAvailable",
                 "secureRandomFillsByteArraysFromOsEntropy",
@@ -332,7 +335,7 @@ final class CiParallelWorkflowSurfaceTest {
             .contains("target: windows-x64", "target: windows-aarch64")
             .contains("historical slower architecture lane")
             .contains("  macos-package-self-host:", "name: package_mac_arm64", "label: package_mac_arm64")
-            .contains("native linker and process runtime are incomplete")
+            .contains("native package self-host proof is incomplete")
             .contains("proof: package-self-host")
             .contains("enabled: ${{ matrix.enabled }}");
     }

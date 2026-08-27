@@ -758,7 +758,7 @@ public final class NativeLinker {
 
     static List<String> platformLinkFlagsForOs(final String osName) {
         if (isWindowsHost(osName)) {
-            return List.of("-lws2_32");
+            return List.of("-lws2_32", "-lshell32");
         }
         if (Strings2.toAsciiLowerCase(osName).contains("linux")) {
             return List.of("-lm");

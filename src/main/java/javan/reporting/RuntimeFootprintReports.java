@@ -20,7 +20,7 @@ public final class RuntimeFootprintReports {
         new MatrixTarget("linux-aarch64", "ubuntu-24.04-arm", "required-ci", "host-native Linux arm64 app/library acceptance"),
         new MatrixTarget("macos-aarch64", "macos-15", "required-ci", "host-native macOS arm64 app/library acceptance"),
         new MatrixTarget("macos-x64", "macos-15-intel", "required-ci", "macOS x64 compiler/platform contract; slower native package lane remains disabled"),
-        new MatrixTarget("windows-x64", "windows-2025", "required-ci", "native socket and HTTP loopback CI proof; package and process runtime remain incomplete"),
+        new MatrixTarget("windows-x64", "windows-2025", "required-ci", "native socket, HTTP loopback, and process runtime CI proof; package self-host remains incomplete"),
         new MatrixTarget("windows-aarch64", "windows-11-arm", "planned-runtime-port", "Windows arm64 linker/runtime support is not implemented")
     );
 

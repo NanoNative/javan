@@ -52,7 +52,7 @@ final class RuntimeFootprintReportsTest {
             "\"target\": \"macos-x64\"",
             "\"target\": \"windows-x64\"",
             "\"status\": \"required-ci\"",
-            "native socket and HTTP loopback CI proof; package and process runtime remain incomplete"
+            "native socket, HTTP loopback, and process runtime CI proof; package self-host remains incomplete"
         );
         assertThat(markdown).contains(
             "Runtime Footprint",

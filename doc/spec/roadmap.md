@@ -85,7 +85,7 @@ Required native package targets:
 
 Remaining platform work:
 
-- finish Windows process, linker, filesystem, and package behavior
+- finish Windows linker, filesystem, and package behavior
 - prove fixed-point/self-host output and sanitizer provenance on every release target
 - keep snapshot publication on every `main` merge and final releases manual
 - keep Maven Central and Homebrew publication hard-disabled until explicitly implemented
