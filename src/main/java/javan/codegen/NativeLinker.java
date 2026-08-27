@@ -5,7 +5,6 @@ import javan.util.ProcessRunner;
 import javan.util.Strings2;
 
 import java.io.IOException;
-import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -14,9 +13,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Links generated C into a native executable with an available C compiler.
@@ -25,13 +21,7 @@ public final class NativeLinker {
     // FNV-1a keeps the self-host cache independent of unavailable crypto APIs.
     private static final long FNV_OFFSET_BASIS = -3750763034362895579L;
     private static final long FNV_PRIME = 1099511628211L;
-    private static final int AUTOMATIC_WORKERS = 2;
-    private static final long MINIMUM_FREE_MEMORY_PER_WORKER = 1_073_741_824L;
-
     private final ProcessRunner processRunner;
-    private final int testProcessors;
-    private final long[] testFreeMemory;
-    private int testFreeMemoryIndex;
 
     /**
      * Creates a native linker.
@@ -46,17 +36,7 @@ public final class NativeLinker {
      * @param processRunner process runner
      */
     public NativeLinker(final ProcessRunner processRunner) {
-        this(processRunner, 0);
-    }
-
-    NativeLinker(
-        final ProcessRunner processRunner,
-        final int testProcessors,
-        final long... testFreeMemory
-    ) {
         this.processRunner = Objects.requireNonNull(processRunner, "processRunner");
-        this.testProcessors = testProcessors;
-        this.testFreeMemory = testFreeMemory.clone();
     }
 
     /**
@@ -331,15 +311,13 @@ public final class NativeLinker {
         command.add("-o");
         command.add(output.toString());
         final ProcessRunner.Result result = processRunner.run(root, command);
+        if (result.interrupted()) {
+            throw new InterruptedException("Native link interrupted");
+        }
         if (result.exitCode() != 0) {
             throw linkFailure("Native link failed", result, symbols);
         }
-        final List<CacheEntry> entries = new ArrayList<>();
-        for (final ObjectPlan object : programObjects) {
-            entries.add(object.entry());
-        }
-        entries.add(runtimeObject.entry());
-        return new CacheLinkResult(output, entries, workers);
+        return new CacheLinkResult(output, entriesFor(objects), workers);
     }
 
     /**
@@ -735,87 +713,27 @@ public final class NativeLinker {
             }
         }
         final List<ObjectPlan> planned = List.copyOf(missing.values());
-        final int workers = effectiveWorkers(requestedJobs, planned.size());
-        int backoffs = 0;
-        if (workers == 1) {
-            for (final ObjectPlan object : planned) {
-                compileCachedObject(root, compiler, object);
-            }
-        } else if (workers > 1) {
-            backoffs = compileCachedObjectsInParallel(root, compiler, planned, workers);
+        for (final ObjectPlan object : planned) {
+            compileCachedObject(root, compiler, object);
         }
-        return new WorkerEvidence(requestedJobs, workers, Math.max(0, planned.size() - workers), backoffs);
-    }
-
-    private int effectiveWorkers(final int requestedJobs, final int objectCount) {
-        if (objectCount == 0) {
-            return 0;
-        }
-        final int requested = requestedJobs == 0 ? AUTOMATIC_WORKERS : requestedJobs;
-        final int processors = Math.max(1, availableProcessors());
-        final long availableMemory = Math.max(0L, freePhysicalMemory());
-        final int memoryWorkers = availableMemory == Long.MAX_VALUE
-            ? Integer.MAX_VALUE
-            : Math.max(1, (int) Math.min(
-                Integer.MAX_VALUE,
-                availableMemory / MINIMUM_FREE_MEMORY_PER_WORKER
-            ));
-        return Math.min(objectCount, Math.min(requested, Math.min(processors, memoryWorkers)));
-    }
-
-    private int compileCachedObjectsInParallel(
-        final Path root,
-        final String compiler,
-        final List<ObjectPlan> objects,
-        final int workers
-    ) throws IOException {
-        int next = 0;
-        int backoffs = 0;
-        while (next < objects.size()) {
-            final int remaining = objects.size() - next;
-            final int batchSize = admittedBatchSize(workers, remaining);
-            if (batchSize < Math.min(workers, remaining)) {
-                backoffs++;
-            }
-            final List<CompilerTask> tasks = new ArrayList<>();
-            final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
-            for (int index = 0; index < batchSize; index++) {
-                final ObjectPlan object = objects.get(next + index);
-                prepareCachedObject(object);
-                final CompilerTask task = new CompilerTask();
-                task.configure(
-                    processRunner,
-                    root,
-                    compilerCommand(compiler, object.source(), object.staging(), object.includeDirectories()),
-                    object
-                );
-                tasks.add(task);
-                executor.execute(task);
-            }
-            executor.close();
-            for (final CompilerTask task : tasks) {
-                commitCachedObject(task);
-            }
-            for (final CompilerTask task : tasks) {
-                Files.deleteIfExists(task.object().staging());
-            }
-            next += batchSize;
-        }
-        return backoffs;
-    }
-
-    private int admittedBatchSize(final int workers, final int remaining) {
-        final int maximum = Math.min(workers, remaining);
-        if (maximum == 1 || freePhysicalMemory() >= MINIMUM_FREE_MEMORY_PER_WORKER) {
-            return maximum;
-        }
-        return 1;
+        final int workers = planned.isEmpty() ? 0 : 1;
+        return new WorkerEvidence(requestedJobs, workers, Math.max(0, planned.size() - workers), 0);
     }
 
     private void compileCachedObject(final Path root, final String compiler, final ObjectPlan object)
         throws IOException, InterruptedException {
         prepareCachedObject(object);
-        compileObject(root, compiler, object.source(), object.staging(), object.includeDirectories());
+        final ProcessRunner.Result result = processRunner.runResult(
+            root, compilerCommand(compiler, object.source(), object.staging(), object.includeDirectories())
+        );
+        if (result.interrupted()) {
+            Files.deleteIfExists(object.staging());
+            throw new InterruptedException("Native compiler worker interrupted");
+        }
+        if (result.exitCode() != 0) {
+            Files.deleteIfExists(object.staging());
+            throw new IOException("Native compile failed\n" + result.stderr() + result.stdout());
+        }
         commitCachedObject(object);
         Files.deleteIfExists(object.staging());
     }
@@ -825,21 +743,18 @@ public final class NativeLinker {
         Files.deleteIfExists(object.staging());
     }
 
-    private static void commitCachedObject(final CompilerTask task) throws IOException {
-        final ProcessRunner.Result result = task.result();
-        if (result == null) {
-            throw new IOException("Native compiler worker completed without a result");
-        }
-        if (result.exitCode() != 0) {
-            throw new IOException("Native compile failed\n" + result.stderr() + result.stdout());
-        }
-        commitCachedObject(task.object());
-    }
-
     private static void commitCachedObject(final ObjectPlan object) throws IOException {
         final String checksum = objectChecksum(object.staging());
         Files.write(object.object(), Files.readAllBytes(object.staging()));
         Files.writeString(object.checksum(), checksum + System.lineSeparator());
+    }
+
+    private static List<CacheEntry> entriesFor(final List<ObjectPlan> objects) {
+        final List<CacheEntry> entries = new ArrayList<>();
+        for (final ObjectPlan object : objects) {
+            entries.add(object.entry());
+        }
+        return List.copyOf(entries);
     }
 
     private static Path stagingPath(final Path source) {
@@ -850,31 +765,6 @@ public final class NativeLinker {
     private String compilerIdentity(final Path root, final String compiler) throws IOException, InterruptedException {
         final ProcessRunner.Result result = processRunner.run(root, List.of(compiler, "--version"));
         return result.exitCode() + "\n" + result.stdout() + "\n" + result.stderr();
-    }
-
-    private int availableProcessors() {
-        return testProcessors > 0 ? testProcessors : nativeAvailableProcessors();
-    }
-
-    private long freePhysicalMemory() {
-        if (testFreeMemory.length == 0) {
-            return nativeFreePhysicalMemory();
-        }
-        final int index = Math.min(testFreeMemoryIndex, testFreeMemory.length - 1);
-        testFreeMemoryIndex++;
-        return testFreeMemory[index];
-    }
-
-    private static int nativeAvailableProcessors() {
-        return Runtime.getRuntime().availableProcessors();
-    }
-
-    private static long nativeFreePhysicalMemory() {
-        final java.lang.management.OperatingSystemMXBean operatingSystem = ManagementFactory.getOperatingSystemMXBean();
-        if (operatingSystem instanceof com.sun.management.OperatingSystemMXBean extended) {
-            return extended.getFreeMemorySize();
-        }
-        return Long.MAX_VALUE;
     }
 
     private static String objectFingerprint(
@@ -949,6 +839,9 @@ public final class NativeLinker {
         final List<Path> includeDirectories
     ) throws IOException, InterruptedException {
         final ProcessRunner.Result result = processRunner.run(root, compilerCommand(compiler, source, output, includeDirectories));
+        if (result.interrupted()) {
+            throw new InterruptedException("Interrupted while compiling native application");
+        }
         if (result.exitCode() != 0) {
             throw new IOException("Native compile failed\n" + result.stderr() + result.stdout());
         }
@@ -1136,43 +1029,6 @@ public final class NativeLinker {
         }
     }
 
-    private static final class CompilerTask implements Runnable {
-        private ProcessRunner processRunner;
-        private Path root;
-        private List<String> command;
-        private ObjectPlan object;
-        private final AtomicReference<ProcessRunner.Result> result = new AtomicReference<>();
-
-        private CompilerTask() {
-        }
-
-        private CompilerTask configure(
-            final ProcessRunner processRunner,
-            final Path root,
-            final List<String> command,
-            final ObjectPlan object
-        ) {
-            this.processRunner = processRunner;
-            this.root = root;
-            this.command = command;
-            this.object = object;
-            return this;
-        }
-
-        @Override
-        public void run() {
-            result.set(processRunner.runResult(root, command));
-        }
-
-        private ObjectPlan object() {
-            return object;
-        }
-
-        private ProcessRunner.Result result() {
-            return result.get();
-        }
-    }
-
     /**
      * Native link result with immutable generated-object cache evidence.
      *
@@ -1201,10 +1057,10 @@ public final class NativeLinker {
     /**
      * Bounded native compiler worker evidence for one application build.
      *
-     * @param requestedJobs explicit requested worker limit, or zero when the automatic limit was selected
-     * @param effectiveJobs worker limit after CPU, memory, and pending-object bounds
+     * @param requestedJobs requested native compiler worker cap, or zero when automatic mode was selected
+     * @param effectiveJobs one when there are cache misses, otherwise zero
      * @param queued number of unique object compilations that waited for a worker slot
-     * @param backoffs number of worker admissions delayed by low available memory
+     * @param backoffs retained report field; always zero while the worker cap is one
      */
     public record WorkerEvidence(int requestedJobs, int effectiveJobs, int queued, int backoffs) {
         public WorkerEvidence {

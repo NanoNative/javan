@@ -45,6 +45,46 @@ final class JavanHostOnlyMethodsTest {
             "javan/util/ProcessRunner",
             method("stopInterruptedProcess", "(Ljava/lang/Process;Ljava/lang/InterruptedException;)V")
         )).isTrue();
+        assertThat(JavanHostOnlyMethods.isHostOnlyMethod(
+            "javan/util/ProcessRunner",
+            method("stopProcessTree", "(Ljava/lang/Process;)V")
+        )).isTrue();
+        assertThat(JavanHostOnlyMethods.isHostOnlyMethod(
+            "javan/util/ProcessRunner",
+            method("processTree", "(Ljava/lang/Process;)Ljava/util/List;")
+        )).isTrue();
+        assertThat(JavanHostOnlyMethods.isHostOnlyMethod(
+            "javan/util/ProcessRunner",
+            method("addProcessTree", "(Ljava/util/List;Ljava/lang/Process;)V")
+        )).isTrue();
+        assertThat(JavanHostOnlyMethods.isHostOnlyMethod(
+            "javan/util/ProcessRunner",
+            method("addProcess", "(Ljava/util/List;Ljava/lang/ProcessHandle;)V")
+        )).isTrue();
+        assertThat(JavanHostOnlyMethods.isHostOnlyMethod(
+            "javan/util/ProcessRunner",
+            method("processDepth", "(Ljava/lang/ProcessHandle;)I")
+        )).isTrue();
+        assertThat(JavanHostOnlyMethods.isHostOnlyMethod(
+            "javan/util/ProcessRunner",
+            method("stopProcesses", "(Ljava/util/List;Z)V")
+        )).isTrue();
+        assertThat(JavanHostOnlyMethods.isHostOnlyMethod(
+            "javan/util/ProcessRunner",
+            method("stopDescendants", "(Ljava/util/List;Ljava/lang/ProcessHandle;Z)V")
+        )).isTrue();
+        assertThat(JavanHostOnlyMethods.isHostOnlyMethod(
+            "javan/util/ProcessRunner",
+            method("stopProcess", "(Ljava/lang/ProcessHandle;Z)V")
+        )).isTrue();
+        assertThat(JavanHostOnlyMethods.isHostOnlyMethod(
+            "javan/util/ProcessRunner",
+            method("waitForProcessesExit", "(Ljava/util/List;J)Z")
+        )).isTrue();
+        assertThat(JavanHostOnlyMethods.isHostOnlyMethod(
+            "javan/util/ProcessRunner",
+            method("allProcessesExited", "(Ljava/util/List;)Z")
+        )).isTrue();
     }
 
     @Test

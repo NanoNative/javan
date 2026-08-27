@@ -324,10 +324,10 @@ final class NativeLinkerTest {
     }
 
     @Test
-    void cachedLinkBoundsIndependentCompilesAndPreservesObjectOrder() throws Exception {
+    void cachedLinkSerializesIndependentCompilesAndPreservesObjectOrder() throws Exception {
         final GeneratedSources sources = generatedSources(3);
-        final ObjectWritingProcessRunner runner = new ObjectWritingProcessRunner(2);
-        final NativeLinker linker = new NativeLinker(runner, 8, Long.MAX_VALUE);
+        final ObjectWritingProcessRunner runner = new ObjectWritingProcessRunner(1);
+        final NativeLinker linker = new NativeLinker(runner);
 
         final NativeLinker.CacheLinkResult linked = linker.linkCached(
             tempDir,
@@ -343,20 +343,20 @@ final class NativeLinkerTest {
 
         assertThat(linked.workers()).satisfies(workers -> {
             assertThat(workers.requestedJobs()).isEqualTo(2);
-            assertThat(workers.effectiveJobs()).isEqualTo(2);
-            assertThat(workers.queued()).isEqualTo(3);
+            assertThat(workers.effectiveJobs()).isOne();
+            assertThat(workers.queued()).isEqualTo(4);
             assertThat(workers.backoffs()).isZero();
         });
-        assertThat(runner.peakCompiles()).isEqualTo(2);
+        assertThat(runner.peakCompiles()).isOne();
         assertThat(linked.objects()).extracting(NativeLinker.CacheEntry::source).containsExactly(
             "main.c", "units/functions-00.c", "units/functions-01.c", "units/functions-02.c", "javan_runtime.c"
         );
     }
 
     @Test
-    void cachedLinkProducesTheSameExecutableWithOneAndTwoWorkers() throws Exception {
+    void cachedLinkProducesTheSameExecutableForDifferentRequestedWorkerCaps() throws Exception {
         final GeneratedSources sources = generatedSources(2);
-        final NativeLinker linker = new NativeLinker(new ProcessRunner(), 8, Long.MAX_VALUE);
+        final NativeLinker linker = new NativeLinker(new ProcessRunner());
         final Path serialOutput = nativeOutput("serial");
         final Path parallelOutput = nativeOutput("parallel");
 
@@ -384,7 +384,7 @@ final class NativeLinkerTest {
         );
 
         assertThat(serial.workers().effectiveJobs()).isOne();
-        assertThat(parallel.workers().effectiveJobs()).isEqualTo(2);
+        assertThat(parallel.workers().effectiveJobs()).isOne();
         assertThat(serial.objects()).extracting(NativeLinker.CacheEntry::source)
             .containsExactlyElementsOf(parallel.objects().stream().map(NativeLinker.CacheEntry::source).toList());
         assertThat(new ProcessRunner().run(serialOutput.getParent(), List.of(serialOutput.toString())).exitCode()).isZero();
@@ -396,7 +396,7 @@ final class NativeLinkerTest {
         final GeneratedSources sources = generatedSources(1);
         Files.writeString(sources.programSources().get(1), "not valid C\n");
         final Path output = nativeOutput("failed");
-        final NativeLinker linker = new NativeLinker(new ProcessRunner(), 8, Long.MAX_VALUE);
+        final NativeLinker linker = new NativeLinker(new ProcessRunner());
 
         assertThatThrownBy(() -> linker.linkCached(
             tempDir,
@@ -414,10 +414,10 @@ final class NativeLinkerTest {
     }
 
     @Test
-    void cachedLinkQueuesTheNextCompilerWhenAvailableMemoryDrops() throws Exception {
-        final GeneratedSources sources = generatedSources(2);
-        final MemoryBackoffProcessRunner runner = new MemoryBackoffProcessRunner();
-        final NativeLinker linker = new NativeLinker(runner, 8, Long.MAX_VALUE, Long.MAX_VALUE, 0L);
+    void cachedLinkCapsExplicitWorkersAtOne() throws Exception {
+        final GeneratedSources sources = generatedSources(6);
+        final ObjectWritingProcessRunner runner = new ObjectWritingProcessRunner(1);
+        final NativeLinker linker = new NativeLinker(runner);
 
         final NativeLinker.CacheLinkResult linked = linker.linkCached(
             tempDir,
@@ -428,12 +428,38 @@ final class NativeLinkerTest {
             tempDir.resolve("cache"),
             NativeLinkInputs.empty(),
             List.of(),
-            2
+            4
         );
 
-        assertThat(linked.workers().effectiveJobs()).isEqualTo(2);
-        assertThat(linked.workers().backoffs()).isGreaterThanOrEqualTo(1);
-        assertThat(runner.peakCompiles()).isEqualTo(2);
+        assertThat(linked.workers().effectiveJobs()).isOne();
+        assertThat(linked.workers().queued()).isEqualTo(7);
+        assertThat(linked.workers().backoffs()).isZero();
+        assertThat(runner.peakCompiles()).isOne();
+    }
+
+    @Test
+    void cachedLinkCleansStagingAfterFailure() throws Exception {
+        final GeneratedSources sources = generatedSources(1);
+        final RecordingProcessRunner runner = new RecordingProcessRunner(
+            new ProcessRunner.Result(0, "", ""),
+            new ProcessRunner.Result(1, "", "intentional failure")
+        );
+        final NativeLinker linker = new NativeLinker(runner);
+
+        assertThatThrownBy(() -> linker.linkCached(
+            tempDir,
+            sources.programSources(),
+            sources.headers(),
+            sources.runtime(),
+            tempDir.resolve("out/failed"),
+            tempDir.resolve("cache"),
+            NativeLinkInputs.empty(),
+            List.of(),
+            2
+        )).isInstanceOf(IOException.class).hasMessageContaining("Native compile failed");
+
+        assertThat(sources.programSources().getFirst().resolveSibling("main.c.object")).doesNotExist();
+        assertThat(sources.programSources().get(1).resolveSibling("functions-00.c.object")).doesNotExist();
     }
 
     @Test
@@ -1075,12 +1101,6 @@ final class NativeLinkerTest {
             return peakCompiles.get();
         }
 
-    }
-
-    private static final class MemoryBackoffProcessRunner extends ObjectWritingProcessRunner {
-        private MemoryBackoffProcessRunner() {
-            super(2);
-        }
     }
 
 }

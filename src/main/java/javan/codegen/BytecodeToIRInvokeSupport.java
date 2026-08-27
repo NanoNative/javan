@@ -534,9 +534,6 @@ final class BytecodeToIRInvokeSupport {
         if (lowerJavanProcessRunnerRun(classes, classFile, method, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
-        if (lowerJavanNativeLinkerResources(methodRef, stack)) {
-            return;
-        }
         if (lowerScheduledThreadPoolExecutorCall(classFile, method, instruction, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
@@ -2037,21 +2034,6 @@ final class BytecodeToIRInvokeSupport {
         return true;
     }
 
-    static boolean lowerJavanNativeLinkerResources(final MethodRef methodRef, final List<StackValue> stack) {
-        if (!"javan/codegen/NativeLinker".equals(methodRef.owner())) {
-            return false;
-        }
-        if ("nativeAvailableProcessors".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
-            stack.add(StackValue.intExpression(IrExpression.intCall("javan_native_available_processors", List.of())));
-            return true;
-        }
-        if ("nativeFreePhysicalMemory".equals(methodRef.name()) && "()J".equals(methodRef.descriptor())) {
-            stack.add(StackValue.longExpression(IrExpression.longCall("javan_native_free_memory", List.of())));
-            return true;
-        }
-        return false;
-    }
-
     static boolean lowerJavanFiles2CreateDirectoriesIfPossible(
         final ClassFile classFile,
         final MethodInfo method,
@@ -2418,9 +2400,6 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if (lowerJavanFiles2CreateDirectoriesIfPossible(classFile, method, methodRef, stack)) {
-            return;
-        }
-        if (lowerJavanNativeLinkerResources(methodRef, stack)) {
             return;
         }
         if (lowerJdkCollectionStaticCall(classFile, method, methodRef, stack)) {

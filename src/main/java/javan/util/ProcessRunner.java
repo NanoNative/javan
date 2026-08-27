@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
@@ -61,8 +62,7 @@ public class ProcessRunner {
             try {
                 final boolean completed = process.waitFor(timeoutMillis, TimeUnit.MILLISECONDS);
                 if (!completed) {
-                    process.destroyForcibly();
-                    process.waitFor();
+                    stopProcessTree(process);
                     return new Result(
                         124,
                         Files.readString(stdoutFile),
@@ -85,10 +85,9 @@ public class ProcessRunner {
     }
 
     /**
-     * Runs a command and represents launcher or interruption failures as a result.
+     * Runs a command and returns launcher or interruption failures as deterministic process results.
      *
-     * <p>This is useful at a concurrent task boundary, where checked exceptions cannot cross a
-     * {@link Runnable}. An exit code of {@code 125} means the waiting thread was interrupted;
+     * <p>This is the concurrent-worker boundary. Exit code {@code 125} means interruption and
      * {@code 126} means the process could not be started or read.</p>
      *
      * @param workingDirectory process working directory
@@ -261,17 +260,125 @@ public class ProcessRunner {
     }
 
     private static void stopInterruptedProcess(final Process process, final InterruptedException interruption) {
-        process.destroy();
         try {
-            if (!process.waitFor(1, TimeUnit.SECONDS)) {
-                process.destroyForcibly();
-                process.waitFor();
-            }
+            stopProcessTree(process);
+        } catch (final IOException cleanup) {
+            interruption.addSuppressed(cleanup);
         } catch (final InterruptedException cleanup) {
-            process.destroyForcibly();
             interruption.addSuppressed(cleanup);
             Thread.currentThread().interrupt();
         }
+    }
+
+    private static void stopProcessTree(final Process process) throws IOException, InterruptedException {
+        final List<ProcessHandle> processes = processTree(process);
+        final ProcessHandle root = process.toHandle();
+        for (int index = 0; index < 5; index++) {
+            addProcessTree(processes, process);
+            stopDescendants(processes, root, false);
+            Thread.sleep(10L);
+        }
+        stopProcess(root, false);
+        if (waitForProcessesExit(processes, 1L)) {
+            return;
+        }
+        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2L);
+        do {
+            addProcessTree(processes, process);
+            stopProcesses(processes, true);
+            if (allProcessesExited(processes)) {
+                return;
+            }
+            Thread.sleep(10L);
+        } while (System.nanoTime() < deadline);
+        if (!allProcessesExited(processes)) {
+            throw new IOException("Could not stop child process tree");
+        }
+    }
+
+    private static List<ProcessHandle> processTree(final Process process) {
+        final List<ProcessHandle> tree = new ArrayList<>();
+        addProcessTree(tree, process);
+        tree.sort(Comparator.comparingInt(ProcessRunner::processDepth).reversed());
+        return tree;
+    }
+
+    private static void addProcessTree(final List<ProcessHandle> processes, final Process process) {
+        addProcess(processes, process.toHandle());
+        for (int index = 0; index < processes.size(); index++) {
+            final ProcessHandle known = processes.get(index);
+            known.descendants().forEach(descendant -> addProcess(processes, descendant));
+        }
+        processes.sort(Comparator.comparingInt(ProcessRunner::processDepth).reversed());
+    }
+
+    private static void addProcess(final List<ProcessHandle> processes, final ProcessHandle candidate) {
+        for (final ProcessHandle process : processes) {
+            if (process.pid() == candidate.pid()) {
+                return;
+            }
+        }
+        processes.add(candidate);
+    }
+
+    private static int processDepth(final ProcessHandle process) {
+        int depth = 0;
+        Optional<ProcessHandle> parent = process.parent();
+        while (parent.isPresent()) {
+            depth++;
+            parent = parent.orElseThrow().parent();
+        }
+        return depth;
+    }
+
+    private static void stopProcesses(final List<ProcessHandle> processes, final boolean forcibly) {
+        for (final ProcessHandle process : processes) {
+            stopProcess(process, forcibly);
+        }
+    }
+
+    private static void stopDescendants(
+        final List<ProcessHandle> processes,
+        final ProcessHandle root,
+        final boolean forcibly
+    ) {
+        for (final ProcessHandle process : processes) {
+            if (process.pid() != root.pid()) {
+                stopProcess(process, forcibly);
+            }
+        }
+    }
+
+    private static void stopProcess(final ProcessHandle process, final boolean forcibly) {
+        if (!process.isAlive()) {
+            return;
+        }
+        if (forcibly) {
+            process.destroyForcibly();
+        } else {
+            process.destroy();
+        }
+    }
+
+    private static boolean waitForProcessesExit(final List<ProcessHandle> processes, final long seconds)
+        throws InterruptedException {
+        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(seconds);
+        while (System.nanoTime() < deadline) {
+            if (allProcessesExited(processes)) {
+                return true;
+            }
+            Thread.sleep(10L);
+        }
+        return allProcessesExited(processes);
+    }
+
+    private static boolean allProcessesExited(final List<ProcessHandle> processes) {
+        for (final ProcessHandle process : processes) {
+            if (process.isAlive()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -282,5 +389,13 @@ public class ProcessRunner {
      * @param stderr standard error
      */
     public record Result(int exitCode, String stdout, String stderr) {
+        /**
+         * Returns whether the native runtime stopped this command because its calling thread was interrupted.
+         *
+         * @return true only for the reserved native interruption result
+         */
+        public boolean interrupted() {
+            return exitCode == 125 && "Interrupted while running process".equals(stderr);
+        }
     }
 }

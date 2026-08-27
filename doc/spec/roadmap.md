@@ -102,10 +102,11 @@ runtime class loading, and build-time application heaps. Optimizer-specific work
 
 Current build-safety boundary:
 
-- Native application builds compile only independent generated-object cache misses concurrently.
-  `--jobs <count>` requests a cap; the automatic mode uses at most two workers and reduces that
-  limit for available CPU and free physical memory. The native-object-cache report records the
-  requested/effective limit, queued objects, memory backoffs, and outcome. Final linking remains
+- Native application builds compile generated-object cache misses one at a time. `--jobs <count>`
+  records the requested cap, while the native-object-cache report records the effective cap of one,
+  queued objects, and outcome. This prevents compiler-process overcommit on the self-host release
+  path. Parallel native compilation is blocked on the proven executor-runtime slice; it must not be
+  reintroduced until self-host, package, cleanup, and interruption proof all pass. Final linking is
   serial and ordered.
 
 Near-term work:

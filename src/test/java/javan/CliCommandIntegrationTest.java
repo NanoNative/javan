@@ -309,11 +309,11 @@ final class CliCommandIntegrationTest {
             }
             """);
 
-        final CliRun build = run(tempDir, "build", project.toString(), "--main", "com.acme.Main", "--jobs", "1");
+        final CliRun build = run(tempDir, "build", project.toString(), "--main", "com.acme.Main", "--jobs", "4");
 
         assertThat(build.exitCode()).isZero();
         assertThat(Files.readString(project.resolve(".javan/reports/native-object-cache.json"))).contains(
-            "\"requestedJobs\": 1",
+            "\"requestedJobs\": 4",
             "\"effectiveJobs\": 1",
             "\"queued\": 2",
             "\"backoffs\": 0",

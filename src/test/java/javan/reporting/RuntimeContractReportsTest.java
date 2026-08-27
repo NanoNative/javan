@@ -43,7 +43,7 @@ final class RuntimeContractReportsTest {
             "\"linkage\": \"static-archive\"",
             "\"systemLibraries\": []",
             "\"abiSymbols\": [\"javan_export_com_acme_Math_add_int_int\"]",
-            "\"nativeSubstitutions\": [\"javan/util/ProcessRunner.run(Ljava/nio/file/Path;Ljava/util/List;)Ljavan/util/ProcessRunner$Result; -> javan_process_run\", \"javan/util/ProcessRunner.runResult(Ljava/nio/file/Path;Ljava/util/List;)Ljavan/util/ProcessRunner$Result; -> javan_process_run\", \"javan/codegen/NativeLinker.nativeAvailableProcessors()I -> javan_native_available_processors\", \"javan/codegen/NativeLinker.nativeFreePhysicalMemory()J -> javan_native_free_memory\", \"javan/util/Files2.createDirectoriesIfPossible(Ljava/nio/file/Path;)Z -> javan_files_create_directories_if_possible\"]",
+            "\"nativeSubstitutions\": [\"javan/util/ProcessRunner.run(Ljava/nio/file/Path;Ljava/util/List;)Ljavan/util/ProcessRunner$Result; -> javan_process_run\", \"javan/util/ProcessRunner.runResult(Ljava/nio/file/Path;Ljava/util/List;)Ljavan/util/ProcessRunner$Result; -> javan_process_run\", \"javan/util/Files2.createDirectoriesIfPossible(Ljava/nio/file/Path;)Z -> javan_files_create_directories_if_possible\"]",
             "\"nativeSubstitutionFallbackPolicy\": \"exact-owned-fallback-body-ignored-only-when-unreachable\"",
             "\"debugInfo\": \"not-requested\"",
             "\"memoryModel\": \"tracked-c-heap-safe-point-partial-gc\"",
@@ -95,7 +95,7 @@ final class RuntimeContractReportsTest {
         assertThat(markdown).contains(
             "Runtime Contract",
             "ABI symbols: `javan_export_com_acme_Math_add_int_int`",
-            "native substitutions: `javan/util/ProcessRunner.run(Ljava/nio/file/Path;Ljava/util/List;)Ljavan/util/ProcessRunner$Result; -> javan_process_run, javan/util/ProcessRunner.runResult(Ljava/nio/file/Path;Ljava/util/List;)Ljavan/util/ProcessRunner$Result; -> javan_process_run, javan/codegen/NativeLinker.nativeAvailableProcessors()I -> javan_native_available_processors, javan/codegen/NativeLinker.nativeFreePhysicalMemory()J -> javan_native_free_memory, javan/util/Files2.createDirectoriesIfPossible(Ljava/nio/file/Path;)Z -> javan_files_create_directories_if_possible`",
+            "native substitutions: `javan/util/ProcessRunner.run(Ljava/nio/file/Path;Ljava/util/List;)Ljavan/util/ProcessRunner$Result; -> javan_process_run, javan/util/ProcessRunner.runResult(Ljava/nio/file/Path;Ljava/util/List;)Ljavan/util/ProcessRunner$Result; -> javan_process_run, javan/util/Files2.createDirectoriesIfPossible(Ljava/nio/file/Path;)Z -> javan_files_create_directories_if_possible`",
             "native substitution fallback policy: `exact-owned-fallback-body-ignored-only-when-unreachable`",
             "memory model: `tracked-c-heap-safe-point-partial-gc`",
             "Java allocation ownership: `javan-owned-generated-objects-object-arrays-primitive-arrays-boxed-primitive-wrappers-runtime-strings-runtime-containers-and-owned-container-storage-gc-eligible`",

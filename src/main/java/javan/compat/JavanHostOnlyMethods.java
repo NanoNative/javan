@@ -34,6 +34,56 @@ public final class JavanHostOnlyMethods {
             "javan/util/ProcessRunner",
             "stopInterruptedProcess",
             "(Ljava/lang/Process;Ljava/lang/InterruptedException;)V"
+        ),
+        new MethodRef(
+            "javan/util/ProcessRunner",
+            "stopProcessTree",
+            "(Ljava/lang/Process;)V"
+        ),
+        new MethodRef(
+            "javan/util/ProcessRunner",
+            "processTree",
+            "(Ljava/lang/Process;)Ljava/util/List;"
+        ),
+        new MethodRef(
+            "javan/util/ProcessRunner",
+            "addProcessTree",
+            "(Ljava/util/List;Ljava/lang/Process;)V"
+        ),
+        new MethodRef(
+            "javan/util/ProcessRunner",
+            "addProcess",
+            "(Ljava/util/List;Ljava/lang/ProcessHandle;)V"
+        ),
+        new MethodRef(
+            "javan/util/ProcessRunner",
+            "processDepth",
+            "(Ljava/lang/ProcessHandle;)I"
+        ),
+        new MethodRef(
+            "javan/util/ProcessRunner",
+            "stopProcesses",
+            "(Ljava/util/List;Z)V"
+        ),
+        new MethodRef(
+            "javan/util/ProcessRunner",
+            "stopDescendants",
+            "(Ljava/util/List;Ljava/lang/ProcessHandle;Z)V"
+        ),
+        new MethodRef(
+            "javan/util/ProcessRunner",
+            "stopProcess",
+            "(Ljava/lang/ProcessHandle;Z)V"
+        ),
+        new MethodRef(
+            "javan/util/ProcessRunner",
+            "waitForProcessesExit",
+            "(Ljava/util/List;J)Z"
+        ),
+        new MethodRef(
+            "javan/util/ProcessRunner",
+            "allProcessesExited",
+            "(Ljava/util/List;)Z"
         )
     );
 

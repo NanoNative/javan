@@ -28,7 +28,7 @@ import java.util.Optional;
  * @param bindings native library binding languages
  * @param release whether release optimizations are requested
  * @param targetTriple requested host target assertion for native builds
- * @param jobs requested maximum concurrent native compiler processes
+ * @param jobs requested native compiler worker cap
  * @param passthroughArgs arguments passed to a built program by {@code run}
  */
 public record Options(

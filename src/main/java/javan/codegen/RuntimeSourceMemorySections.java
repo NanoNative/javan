@@ -14784,6 +14784,31 @@ final class RuntimeSourceMemorySections {
                 javan_root_frame_pop(roots);
                 return javan_process_result_new(127, "", "process output capture failed");
             }
+            HANDLE job = CreateJobObjectW(NULL, NULL);
+            JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits;
+            memset(&limits, 0, sizeof(limits));
+            limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            if (job == NULL || SetInformationJobObject(
+                job, JobObjectExtendedLimitInformation, &limits, sizeof(limits)
+            ) == 0) {
+                if (job != NULL) {
+                    CloseHandle(job);
+                }
+                CloseHandle(stdout_handle);
+                CloseHandle(stderr_handle);
+                DeleteFileW(stdout_path);
+                DeleteFileW(stderr_path);
+                javan_free(command_line_root);
+                command_line_root = NULL;
+                javan_free(command_line_wide_root);
+                command_line_wide_root = NULL;
+                if (cwd_wide_root != NULL) {
+                    javan_free(cwd_wide_root);
+                    cwd_wide_root = NULL;
+                }
+                javan_root_frame_pop(roots);
+                return javan_process_result_new(127, "", "process cleanup setup failed");
+            }
             STARTUPINFOW startup;
             PROCESS_INFORMATION process;
             memset(&startup, 0, sizeof(startup));
@@ -14793,13 +14818,13 @@ final class RuntimeSourceMemorySections {
             startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
             startup.hStdOutput = stdout_handle;
             startup.hStdError = stderr_handle;
-            BOOL started = CreateProcessW(
+            BOOL process_started = CreateProcessW(
                 NULL,
                 command_line_wide,
                 NULL,
                 NULL,
                 TRUE,
-                0,
+                CREATE_SUSPENDED,
                 NULL,
                 cwd_wide,
                 &startup,
@@ -14816,18 +14841,57 @@ final class RuntimeSourceMemorySections {
             javan_root_frame_pop(roots);
             CloseHandle(stdout_handle);
             CloseHandle(stderr_handle);
-            if (started == 0) {
+            if (process_started == 0) {
+                CloseHandle(job);
                 DeleteFileW(stdout_path);
                 DeleteFileW(stderr_path);
                 return javan_process_result_new(127, "", "process start failed");
             }
+            if (AssignProcessToJobObject(job, process.hProcess) == 0) {
+                TerminateProcess(process.hProcess, 127);
+                WaitForSingleObject(process.hProcess, INFINITE);
+                CloseHandle(process.hThread);
+                CloseHandle(process.hProcess);
+                CloseHandle(job);
+                DeleteFileW(stdout_path);
+                DeleteFileW(stderr_path);
+                return javan_process_result_new(127, "", "process cleanup setup failed");
+            }
+            if (ResumeThread(process.hThread) == (DWORD) -1) {
+                TerminateJobObject(job, 127);
+                WaitForSingleObject(process.hProcess, INFINITE);
+                CloseHandle(process.hThread);
+                CloseHandle(process.hProcess);
+                CloseHandle(job);
+                DeleteFileW(stdout_path);
+                DeleteFileW(stderr_path);
+                return javan_process_result_new(127, "", "process cleanup setup failed");
+            }
             long long timeout = timeout_millis <= 0 ? 300000LL : timeout_millis;
-            DWORD wait_timeout = timeout > (long long) INFINITE - 1 ? INFINITE - 1 : (DWORD) timeout;
-            DWORD waited = WaitForSingleObject(process.hProcess, wait_timeout);
-            int timed_out = waited == WAIT_TIMEOUT;
-            int wait_failed = waited != WAIT_OBJECT_0 && timed_out == 0;
-            if (timed_out != 0 || wait_failed != 0) {
-                TerminateProcess(process.hProcess, 124);
+            long long wait_started = javan_system_current_time_millis();
+            DWORD waited = WAIT_TIMEOUT;
+            int timed_out = 0;
+            int interrupted = 0;
+            while (waited == WAIT_TIMEOUT) {
+                if (javan_thread_current_interrupted_peek() != 0) {
+                    (void) javan_thread_interrupted();
+                    interrupted = 1;
+                    break;
+                }
+                long long elapsed = javan_system_current_time_millis() - wait_started;
+                if (elapsed >= timeout) {
+                    timed_out = 1;
+                    break;
+                }
+                long long remaining = timeout - elapsed;
+                DWORD slice = remaining > 10LL ? 10U : (DWORD) remaining;
+                waited = WaitForSingleObject(process.hProcess, slice);
+            }
+            int wait_failed = waited != WAIT_OBJECT_0 && timed_out == 0 && interrupted == 0;
+            if (timed_out != 0 || wait_failed != 0 || interrupted != 0) {
+                if (TerminateJobObject(job, 124) == 0) {
+                    TerminateProcess(process.hProcess, 124);
+                }
                 WaitForSingleObject(process.hProcess, INFINITE);
             }
             DWORD status = 127;
@@ -14836,6 +14900,7 @@ final class RuntimeSourceMemorySections {
             }
             CloseHandle(process.hThread);
             CloseHandle(process.hProcess);
+            CloseHandle(job);
             char* stdout_text = javan_windows_process_file_text(stdout_path);
             void** stdout_roots[] = {
                 (void**) &stdout_text
@@ -14846,7 +14911,9 @@ final class RuntimeSourceMemorySections {
             DeleteFileW(stdout_path);
             DeleteFileW(stderr_path);
             int exit_code = status > INT_MAX ? 127 : (int) status;
-            javan_process_result* result = timed_out != 0
+            javan_process_result* result = interrupted != 0
+                ? javan_process_result_new(125, stdout_text, "Interrupted while running process")
+                : timed_out != 0
                 ? javan_process_result_new(124, stdout_text, "Timed out")
                 : wait_failed != 0
                     ? javan_process_result_new(127, stdout_text, "process wait failed")
@@ -14908,6 +14975,9 @@ final class RuntimeSourceMemorySections {
                 return javan_process_result_new(127, "", "process fork failed");
             }
             if (child == 0) {
+                if (setpgid(0, 0) != 0) {
+                    _exit(127);
+                }
                 if (cwd != NULL && chdir((const char*) cwd) != 0) {
                     _exit(127);
                 }
@@ -14915,6 +14985,17 @@ final class RuntimeSourceMemorySections {
                 dup2(fileno(stderr_file), STDERR_FILENO);
                 execvp(argv[0], argv);
                 _exit(127);
+            }
+            if (setpgid(child, child) != 0 && errno != EACCES && errno != ESRCH) {
+                (void) kill(-child, SIGKILL);
+                kill(child, SIGKILL);
+                waitpid(child, NULL, 0);
+                javan_native_resource_pop(&stderr_resource);
+                fclose(stderr_file);
+                javan_native_resource_pop(&stdout_resource);
+                fclose(stdout_file);
+                javan_free(argv);
+                return javan_process_result_new(127, "", "process cleanup setup failed");
             }
 
             int status = 0;
@@ -14928,20 +15009,46 @@ final class RuntimeSourceMemorySections {
                     break;
                 }
                 if (waited < 0) {
+                    if (errno == EINTR) {
+                        continue;
+                    }
                     status = 127 << 8;
                     completed = 1;
                     break;
                 }
-                if (javan_system_current_time_millis() - started >= timeout) {
-                    kill(child, SIGKILL);
-                    waitpid(child, &status, 0);
+                int interrupted = javan_thread_current_interrupted_peek() != 0;
+                int timed_out = javan_system_current_time_millis() - started >= timeout;
+                if (timed_out != 0 || interrupted != 0) {
+                    if (interrupted != 0) {
+                        (void) javan_thread_interrupted();
+                    }
+                    (void) kill(-child, SIGTERM);
+                    long long deadline = javan_system_current_time_millis() + 1000LL;
+                    int leader_reaped = 0;
+                    while (leader_reaped == 0 && javan_system_current_time_millis() < deadline) {
+                        pid_t terminating = waitpid(child, &status, WNOHANG);
+                        if (terminating == child || (terminating < 0 && errno != EINTR)) {
+                            leader_reaped = 1;
+                            break;
+                        }
+                        javan_sleep_micros(10000UL);
+                    }
+                    (void) kill(-child, SIGKILL);
+                    while (leader_reaped == 0) {
+                        pid_t terminating = waitpid(child, &status, 0);
+                        if (terminating == child || (terminating < 0 && errno != EINTR)) {
+                            leader_reaped = 1;
+                        }
+                    }
                     char* stdout_text = javan_file_to_string(stdout_file);
                     javan_native_resource_pop(&stderr_resource);
                     fclose(stderr_file);
                     javan_native_resource_pop(&stdout_resource);
                     fclose(stdout_file);
                     javan_free(argv);
-                    javan_process_result* result = javan_process_result_new(124, stdout_text, "Timed out");
+                    javan_process_result* result = interrupted != 0
+                        ? javan_process_result_new(125, stdout_text, "Interrupted while running process")
+                        : javan_process_result_new(124, stdout_text, "Timed out");
                     javan_free(stdout_text);
                     return result;
                 }
