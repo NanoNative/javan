@@ -582,7 +582,7 @@ final class CompatibilityReportsTest {
     }
 
     @Test
-    void writeJdkCompatibilityLedgerStaysIndependentOfExternalProbeNames() throws Exception {
+    void writeReleaseScopeContractsInGeneratedReports() throws Exception {
         new CompatibilityReports().write(
             tempDir,
             tempDir.resolve(".javan"),
@@ -592,10 +592,27 @@ final class CompatibilityReportsTest {
         );
 
         final String compatibility = Files.readString(tempDir.resolve("doc/status/jdk-compatibility.md"));
+        final String matrix = Files.readString(tempDir.resolve("doc/status/support-matrix.md"));
+        final String matrixJson = Files.readString(tempDir.resolve("doc/status/support-matrix.json"));
 
         assertThat(compatibility).contains(
             "This ledger excludes external example or library probes.",
-            "and never define a supported JDK member count."
+            "and never define a supported JDK member count.",
+            "A broad JDK-compatibility release must report:",
+            "The first native release is scenario-bounded.",
+            "not a release-completion percentage.",
+            "| support rows | 315 |",
+            "| pass rows | 314 |",
+            "| scoped rows | 1 |",
+            "| accounted rows | 314 |",
+            "| unaccounted rows | 1 |"
+        );
+        assertThat(matrix).contains(
+            "A broad JDK-compatibility release requires `done = supported variants + rejected variants` with zero unknown leftovers.",
+            "The first native release is scenario-bounded: its declared reachable behavior must be supported or rejected clearly."
+        );
+        assertThat(matrixJson).contains(
+            "\"rule\": \"a broad JDK-compatibility release requires zero unknown leftovers; the first native release is scenario-bounded and requires declared reachable behavior to be supported or rejected\""
         );
     }
 

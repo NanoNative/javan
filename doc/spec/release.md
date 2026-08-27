@@ -3,6 +3,25 @@
 Javan releases are host-native binary releases. Each package is built on the operating
 system and CPU architecture it claims to support.
 
+## First Native Release Scope
+
+The current first-release contract claims host-native packages for Linux x64, Linux ARM64, and
+macOS ARM64. A package must be extracted and exercised through its own `bin/javan`; compiling on
+one target and relabeling the result for another is never release evidence.
+
+macOS x64 and Windows x64/ARM64 package rows remain outside this contract until their matching
+host proves package extraction, application build/run, self-host, ABI ownership, and sanitizer
+behavior. Their platform-contract smoke rows are useful evidence, but do not imply package
+support. The first-release rehearsal records those exclusions instead of silently treating them
+as passes.
+
+Before a public release, run an artifact-only rehearsal from clean inputs on every declared target.
+It must preserve the package, checksum, toolchain, acceptance, self-host, and sanitizer evidence
+described below without invoking a publication workflow. The current `dry_run=true` workflow
+dispatch is not this rehearsal: it deliberately behaves like a real GitHub release. A rehearsal
+may use only package-verification commands and already-produced artifacts, without credentials,
+upload, tag, or release API paths.
+
 ## Local Gate
 
 Run the same gate used by the release matrix:

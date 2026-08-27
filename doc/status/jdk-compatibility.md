@@ -36,8 +36,8 @@ tags, bootstrap methods, synthetic members, deprecated markers, and preview
 markers.
 
 Native support means a reachable API or bytecode variant is either implemented
-or deliberately rejected with a clear diagnostic. A release-gated JDK must have
-no unknown leftovers.
+or deliberately rejected with a clear diagnostic. A broad JDK-compatibility release
+must have no unknown leftovers; the first native release is scenario-bounded.
 
 ## Support Accounting
 
@@ -49,13 +49,13 @@ Current support ledger for the active JDK 25 evidence set:
 
 | Measure | Count |
 | --- | ---: |
-| support rows | 308 |
-| pass rows | 308 |
-| scoped rows | 0 |
+| support rows | 315 |
+| pass rows | 314 |
+| scoped rows | 1 |
 | target rows | 0 |
 | rejected rows | 0 |
-| accounted rows | 308 |
-| unaccounted rows | 0 |
+| accounted rows | 314 |
+| unaccounted rows | 1 |
 | exact supported JDK callable classes | 146 |
 | exact supported JDK constructors | 171 |
 | exact supported JDK methods | 759 |
@@ -77,13 +77,18 @@ Current support ledger for the active JDK 25 evidence set:
 This ledger excludes external example or library probes. Those stay in `doc/status/real-project-readiness.md`
 and never define a supported JDK member count.
 
-Release-gated JDKs must report:
+A broad JDK-compatibility release must report:
 
 ```text
 done = supported variants + rejected variants
 leftovers = unknown variants
 leftovers must be 0
 ```
+
+The first native release is scenario-bounded. Its package, self-host, ABI, acceptance,
+and declared external-probe flows must have no unknown reachable behavior: each shape is
+supported with evidence or rejected with a deterministic diagnostic. Global JDK inventory
+unknowns remain a compatibility-expansion metric, not a release-completion percentage.
 
 The exact supported and done JDK callable counts above are lower-bound progress signals.
 Flow-qualified rejected JDK call shapes above are diagnostic-shape accounting only.
