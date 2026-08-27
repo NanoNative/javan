@@ -10542,7 +10542,7 @@ final class RuntimeFilesTest {
                 }
                 void* path = javan_string_from("child");
                 void* absolute = javan_path_to_absolute(path);
-                void* directory = javan_string_from("..\\javan-\\xC3\\xA4");
+                void* directory = javan_string_from("..\\\\javan-\\xC3\\xA4");
                 void* options = javan_object_array_new(0, "[Ljava.nio.file.LinkOption;");
                 printf(
                     "%d:%d:%d\\n",

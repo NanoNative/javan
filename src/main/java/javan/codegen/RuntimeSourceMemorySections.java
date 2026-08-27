@@ -898,6 +898,10 @@ final class RuntimeSourceMemorySections {
             }
         }
 
+        static void javan_native_memory_cleanup(void* value) {
+            free(value);
+        }
+
         static void javan_native_resource_push(
             javan_native_resource_frame* frame,
             void* resource,

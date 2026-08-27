@@ -1077,6 +1077,14 @@ final class RuntimeSourceIoSections {
             list->length++;
         }
 
+        #if defined(_WIN32)
+        static void javan_native_windows_find_cleanup(void* value) {
+            if (value != NULL) {
+                (void) FindClose((HANDLE) value);
+            }
+        }
+        #endif
+
         void* javan_files_new_directory_stream(void* path_value) {
             void* source_root = path_value;
             void* result_root = NULL;
@@ -1088,6 +1096,78 @@ final class RuntimeSourceIoSections {
             const char* path = javan_path_checked(source_root);
             result_root = javan_list_new_with_capacity(0, 1);
             javan_object_list* result = (javan_object_list*) result_root;
+        #if defined(_WIN32)
+            wchar_t* wide_path = javan_windows_utf8_to_wide_copy(path);
+            if (wide_path == NULL) {
+                javan_root_frame_pop(javan_directory_result_roots);
+                return javan_files_io_failure("newDirectoryStream failed");
+            }
+            size_t path_length = wcslen(wide_path);
+            if (path_length > (size_t) (ULONG_MAX / sizeof(wchar_t) - 3UL)) {
+                free(wide_path);
+                javan_root_frame_pop(javan_directory_result_roots);
+                return javan_files_io_failure("newDirectoryStream failed");
+            }
+            wchar_t* pattern = (wchar_t*) malloc((unsigned long) (path_length + 3UL) * sizeof(wchar_t));
+            if (pattern == NULL) {
+                free(wide_path);
+                javan_root_frame_pop(javan_directory_result_roots);
+                return javan_files_io_failure("newDirectoryStream failed");
+            }
+            memcpy(pattern, wide_path, path_length * sizeof(wchar_t));
+            free(wide_path);
+            size_t pattern_length = path_length;
+            if (pattern_length > 0 && pattern[pattern_length - 1] != L'\\\\' && pattern[pattern_length - 1] != L'/') {
+                pattern[pattern_length++] = L'\\\\';
+            }
+            pattern[pattern_length++] = L'*';
+            pattern[pattern_length] = L'\\0';
+            WIN32_FIND_DATAW entry;
+            HANDLE directory = FindFirstFileW(pattern, &entry);
+            free(pattern);
+            if (directory == INVALID_HANDLE_VALUE) {
+                javan_root_frame_pop(javan_directory_result_roots);
+                return javan_files_io_failure("newDirectoryStream failed");
+            }
+            javan_native_resource_frame directory_resource;
+            javan_native_resource_push(&directory_resource, (void*) directory, javan_native_windows_find_cleanup);
+            for (;;) {
+                if (wcscmp(entry.cFileName, L".") != 0 && wcscmp(entry.cFileName, L"..") != 0) {
+                    char* name = javan_windows_wide_to_utf8_copy(entry.cFileName);
+                    if (name == NULL) {
+                        javan_native_resource_pop(&directory_resource);
+                        FindClose(directory);
+                        javan_root_frame_pop(javan_directory_result_roots);
+                        return javan_files_io_failure("newDirectoryStream read failed");
+                    }
+                    javan_native_resource_frame name_resource;
+                    javan_native_resource_push(&name_resource, name, javan_native_memory_cleanup);
+                    void* child = javan_path_resolve(source_root, (void*) name);
+                    javan_native_resource_pop(&name_resource);
+                    free(name);
+                    void** javan_directory_child_roots[] = {
+                        (void**) &child
+                    };
+                    javan_root_frame_push(javan_directory_child_roots, 1);
+                    javan_directory_stream_insert_sorted(result, child);
+                    javan_root_frame_pop(javan_directory_child_roots);
+                }
+                if (FindNextFileW(directory, &entry) == 0) {
+                    if (GetLastError() != ERROR_NO_MORE_FILES) {
+                        javan_native_resource_pop(&directory_resource);
+                        FindClose(directory);
+                        javan_root_frame_pop(javan_directory_result_roots);
+                        return javan_files_io_failure("newDirectoryStream read failed");
+                    }
+                    break;
+                }
+            }
+            javan_native_resource_pop(&directory_resource);
+            if (FindClose(directory) == 0) {
+                javan_root_frame_pop(javan_directory_result_roots);
+                return javan_files_io_failure("newDirectoryStream close failed");
+            }
+        #else
             DIR* directory = opendir(path);
             if (directory == NULL) {
                 javan_root_frame_pop(javan_directory_result_roots);
@@ -1121,6 +1201,7 @@ final class RuntimeSourceIoSections {
                 javan_root_frame_pop(javan_directory_result_roots);
                 return javan_files_io_failure("newDirectoryStream close failed");
             }
+        #endif
             javan_root_frame_pop(javan_directory_result_roots);
             return result_root;
         }
