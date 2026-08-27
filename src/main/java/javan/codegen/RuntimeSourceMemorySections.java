@@ -85,6 +85,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_RUNTIME_KIND_HTTP_EXCHANGE 42
         #define JAVAN_RUNTIME_KIND_HTTP_EXCHANGE_OUTPUT_STREAM 43
         #define JAVAN_RUNTIME_KIND_HTTP_CONTEXT 44
+        #define JAVAN_RUNTIME_KIND_HTTP_HEADERS 45
         #define JAVAN_SERVICE_LOADER_MAGIC 0x4a534c44
         #define JAVAN_SERVICE_ITERATOR_MAGIC 0x4a534954
         #define JAVAN_LIST_VIEW_UNMODIFIABLE 1
@@ -466,8 +467,14 @@ final class RuntimeSourceMemorySections {
             javan_socket* socket;
             void* request_method;
             void* request_uri;
+            void* request_headers;
             void* response_body;
         } javan_http_exchange_value;
+
+        typedef struct {
+            int magic;
+            void* request;
+        } javan_http_headers_value;
 
         typedef struct {
             int magic;
@@ -500,6 +507,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_HTTP_CONTEXT_MAGIC 0x4a485443
         #define JAVAN_HTTP_EXCHANGE_MAGIC 0x4a485845
         #define JAVAN_HTTP_EXCHANGE_OUTPUT_STREAM_MAGIC 0x4a48584f
+        #define JAVAN_HTTP_HEADERS_MAGIC 0x4a485848
         #define JAVAN_VIRTUAL_THREAD_BUILDER_MAGIC 0x4a565442
         #define JAVAN_VIRTUAL_THREAD_FACTORY_MAGIC 0x4a565446
         #define JAVAN_VIRTUAL_THREAD_EXECUTOR_MAGIC 0x4a565445
@@ -1610,6 +1618,7 @@ final class RuntimeSourceMemorySections {
                 || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_CONTEXT
                 || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_EXCHANGE
                 || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_EXCHANGE_OUTPUT_STREAM
+                || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_HEADERS
                 || runtime_kind == JAVAN_RUNTIME_KIND_SCHEDULED_THREAD_POOL_EXECUTOR
                 || runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_LONG
                 || runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN
@@ -2141,13 +2150,21 @@ final class RuntimeSourceMemorySections {
                     || exchange->response_written < 0LL
                     || exchange->socket == NULL
                     || exchange->request_method == NULL
-                    || exchange->request_uri == NULL) {
+                    || exchange->request_uri == NULL
+                    || exchange->request_headers == NULL) {
                     javan_panic("invalid runtime http exchange metadata");
                 }
                 javan_validate_runtime_managed_reference((void*) exchange->socket);
                 javan_validate_runtime_managed_reference(exchange->request_method);
                 javan_validate_runtime_managed_reference(exchange->request_uri);
+                javan_validate_runtime_managed_reference(exchange->request_headers);
                 javan_validate_runtime_managed_reference(exchange->response_body);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_HTTP_HEADERS) {
+                javan_http_headers_value* headers = (javan_http_headers_value*) node->value;
+                if (headers->magic != JAVAN_HTTP_HEADERS_MAGIC || headers->request == NULL) {
+                    javan_panic("invalid runtime http headers metadata");
+                }
+                javan_validate_runtime_managed_reference(headers->request);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_HTTP_CONTEXT) {
                 javan_http_context_value* context = (javan_http_context_value*) node->value;
                 if (context->magic != JAVAN_HTTP_CONTEXT_MAGIC || context->server == NULL) {
@@ -2352,6 +2369,7 @@ final class RuntimeSourceMemorySections {
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_HTTP_CONTEXT
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_HTTP_EXCHANGE
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_HTTP_EXCHANGE_OUTPUT_STREAM
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_HTTP_HEADERS
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_BUILDER
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_FACTORY
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_EXECUTOR
@@ -8390,7 +8408,13 @@ final class RuntimeSourceMemorySections {
                     javan_gc_mark_value((void*) exchange->socket);
                     javan_gc_mark_value(exchange->request_method);
                     javan_gc_mark_value(exchange->request_uri);
+                    javan_gc_mark_value(exchange->request_headers);
                     javan_gc_mark_value(exchange->response_body);
+                }
+            } else if (runtime_kind == JAVAN_RUNTIME_KIND_HTTP_HEADERS) {
+                javan_http_headers_value* headers = (javan_http_headers_value*) value;
+                if (headers != NULL && headers->magic == JAVAN_HTTP_HEADERS_MAGIC) {
+                    javan_gc_mark_value(headers->request);
                 }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_HTTP_CONTEXT) {
                 javan_http_context_value* context = (javan_http_context_value*) value;

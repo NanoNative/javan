@@ -3035,6 +3035,8 @@ final class RuntimeSourcePlatformSection {
 
     private static final String SOURCE_TAIL_C = """
 
+        static char* javan_http_copy_range(const char* value, unsigned long length);
+
         static javan_http_server_value* javan_http_server_checked(void* value) {
             if (value == NULL) {
                 javan_panic("null HttpServer");
@@ -3055,6 +3057,17 @@ final class RuntimeSourcePlatformSection {
                 javan_panic("invalid HttpExchange state");
             }
             return exchange;
+        }
+
+        static javan_http_headers_value* javan_http_headers_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("null HttpExchange request headers");
+            }
+            javan_http_headers_value* headers = (javan_http_headers_value*) value;
+            if (headers->magic != JAVAN_HTTP_HEADERS_MAGIC || headers->request == NULL) {
+                javan_panic("invalid HttpExchange request headers");
+            }
+            return headers;
         }
 
         static javan_http_exchange_output_stream_value* javan_http_exchange_output_stream_checked(void* value) {
@@ -3252,16 +3265,16 @@ final class RuntimeSourcePlatformSection {
             return accepted;
         }
 
-        static int javan_http_server_request_values(javan_socket* socket, const char* path, void** method_out, void** target_out) {
+        static int javan_http_server_request_values(javan_socket* socket, const char* path, void** method_out, void** target_out, void** headers_out) {
             char request[8192];
             int length = 0;
+            int complete = 0;
             while (length < (int) sizeof(request) - 1) {
                 int read = javan_socket_native_receive(socket->fd, request + length, (int) sizeof(request) - length - 1);
                 if (read <= 0) {
                     return 0;
                 }
                 length += (int) read;
-                int complete = 0;
                 for (int index = 3; index < length; index++) {
                     if (request[index - 3] == '\\r'
                         && request[index - 2] == '\\n'
@@ -3275,6 +3288,9 @@ final class RuntimeSourcePlatformSection {
                 if (complete != 0) {
                     break;
                 }
+            }
+            if (complete == 0) {
+                return 0;
             }
             request[length] = '\\0';
             char* first_space = strchr(request, ' ');
@@ -3294,6 +3310,7 @@ final class RuntimeSourcePlatformSection {
             if (actual != expected || strncmp(target, path, (size_t) expected) != 0) {
                 return 0;
             }
+            *headers_out = javan_string_from(request);
             *first_space = '\\0';
             *(char*) target_end = '\\0';
             *method_out = javan_string_from(request);
@@ -3301,7 +3318,15 @@ final class RuntimeSourcePlatformSection {
             return 1;
         }
 
-        static javan_http_exchange_value* javan_http_exchange_new(javan_socket* socket, void* request_method, void* request_uri) {
+        static javan_http_headers_value* javan_http_headers_new(void* request) {
+            javan_http_headers_value* headers = (javan_http_headers_value*) javan_alloc(sizeof(javan_http_headers_value));
+            headers->magic = JAVAN_HTTP_HEADERS_MAGIC;
+            headers->request = request;
+            javan_update_runtime_allocation_kind((void*) headers, JAVAN_RUNTIME_KIND_HTTP_HEADERS);
+            return headers;
+        }
+
+        static javan_http_exchange_value* javan_http_exchange_new(javan_socket* socket, void* request_method, void* request_uri, void* request_headers) {
             javan_http_exchange_value* exchange = (javan_http_exchange_value*) javan_alloc(sizeof(javan_http_exchange_value));
             exchange->magic = JAVAN_HTTP_EXCHANGE_MAGIC;
             exchange->response_headers_sent = 0;
@@ -3314,6 +3339,7 @@ final class RuntimeSourcePlatformSection {
             exchange->socket = socket;
             exchange->request_method = request_method;
             exchange->request_uri = request_uri;
+            exchange->request_headers = request_headers;
             exchange->response_body = NULL;
             javan_update_runtime_allocation_kind((void*) exchange, JAVAN_RUNTIME_KIND_HTTP_EXCHANGE);
             return exchange;
@@ -3327,8 +3353,10 @@ final class RuntimeSourcePlatformSection {
             void* request_method = NULL;
             void* request_target = NULL;
             void* request_uri = NULL;
-            void** roots[] = { &server_root, &socket_value, &exchange_value, &request_method, &request_target, &request_uri };
-            javan_root_frame_push(roots, 6);
+            void* request_text = NULL;
+            void* request_headers = NULL;
+            void** roots[] = { &server_root, &socket_value, &exchange_value, &request_method, &request_target, &request_uri, &request_text, &request_headers };
+            javan_root_frame_push(roots, 8);
             while (javan_http_server_stopped(server) == 0) {
                 javan_socket_handle accepted = javan_http_server_accept(server);
                 if (javan_socket_handle_is_open(accepted) == 0) {
@@ -3339,9 +3367,10 @@ final class RuntimeSourcePlatformSection {
                 if (javan_http_server_stopped(server) != 0) {
                     javan_socket_close(socket_value);
                 } else {
-                    if (javan_http_server_request_values(socket, server->path, &request_method, &request_target) != 0) {
+                    if (javan_http_server_request_values(socket, server->path, &request_method, &request_target, &request_text) != 0) {
                         request_uri = javan_uri_from_request_target(request_target);
-                        exchange_value = (void*) javan_http_exchange_new(socket, request_method, request_uri);
+                        request_headers = (void*) javan_http_headers_new(request_text);
+                        exchange_value = (void*) javan_http_exchange_new(socket, request_method, request_uri, request_headers);
                         javan_runtime_lock_enter();
                         server->active_exchange = exchange_value;
                         javan_runtime_lock_leave();
@@ -3362,6 +3391,8 @@ final class RuntimeSourcePlatformSection {
                 request_method = NULL;
                 request_target = NULL;
                 request_uri = NULL;
+                request_text = NULL;
+                request_headers = NULL;
             }
             javan_server_socket_close((void*) server->socket);
             javan_root_frame_pop(roots);
@@ -3373,6 +3404,75 @@ final class RuntimeSourcePlatformSection {
 
         void* javan_http_exchange_get_request_uri(void* value) {
             return javan_http_exchange_checked(value)->request_uri;
+        }
+
+        void* javan_http_exchange_get_request_headers(void* value) {
+            return javan_http_exchange_checked(value)->request_headers;
+        }
+
+        static int javan_http_header_name_matches(const char* value, unsigned long value_length, const char* expected) {
+            unsigned long expected_length = strlen(expected);
+            if (value_length != expected_length) {
+                return 0;
+            }
+            for (unsigned long index = 0; index < value_length; index++) {
+                char actual_character = value[index];
+                char expected_character = expected[index];
+                if (actual_character >= 'A' && actual_character <= 'Z') {
+                    actual_character = (char) (actual_character + ('a' - 'A'));
+                }
+                if (expected_character >= 'A' && expected_character <= 'Z') {
+                    expected_character = (char) (expected_character + ('a' - 'A'));
+                }
+                if (actual_character != expected_character) {
+                    return 0;
+                }
+            }
+            return 1;
+        }
+
+        void* javan_http_headers_get_first(void* value, void* name_value) {
+            void* headers_root = value;
+            void* name_root = name_value;
+            void* result_root = NULL;
+            void** roots[] = { &headers_root, &name_root, &result_root };
+            javan_root_frame_push(roots, 3);
+            javan_http_headers_value* headers = javan_http_headers_checked(headers_root);
+            if (name_root == NULL) {
+                javan_root_frame_pop(roots);
+                javan_panic("null HttpExchange request header name");
+            }
+            const char* request = (const char*) headers->request;
+            const char* line_end = strstr(request, "\\r\\n");
+            if (line_end == NULL) {
+                javan_root_frame_pop(roots);
+                javan_panic("invalid HttpExchange request headers");
+            }
+            const char* line = line_end + 2;
+            while (line[0] != '\\0' && !(line[0] == '\\r' && line[1] == '\\n')) {
+                line_end = strstr(line, "\\r\\n");
+                if (line_end == NULL) {
+                    javan_root_frame_pop(roots);
+                    javan_panic("invalid HttpExchange request headers");
+                }
+                const char* separator = memchr(line, ':', (size_t) (line_end - line));
+                if (separator != NULL
+                    && javan_http_header_name_matches(line, (unsigned long) (separator - line), (const char*) name_root) != 0) {
+                    const char* start = separator + 1;
+                    const char* end = line_end;
+                    while (start < end && (*start == ' ' || *start == '\\t')) {
+                        start++;
+                    }
+                    while (end > start && (end[-1] == ' ' || end[-1] == '\\t')) {
+                        end--;
+                    }
+                    result_root = javan_http_copy_range(start, (unsigned long) (end - start));
+                    break;
+                }
+                line = line_end + 2;
+            }
+            javan_root_frame_pop(roots);
+            return result_root;
         }
 
         void javan_http_exchange_send_response_headers(void* value, int status_code, long long response_length) {

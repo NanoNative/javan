@@ -3670,6 +3670,33 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    @WindowsCompatibilityProof
+    void httpServerLoopbackHandlerReadsRequestHeader() throws Exception {
+        assertHttpServerResponse(
+            "http-server-request-header",
+            """
+                final com.sun.net.httpserver.Headers headers = exchange.getRequestHeaders();
+                if (headers == exchange.getRequestHeaders()
+                    && "strict".equals(headers.getFirst("x-javan-mode"))
+                    && headers.getFirst("missing") == null) {
+                    final byte[] body = new byte[] {104, 101, 97, 100, 101, 114};
+                    exchange.sendResponseHeaders(200, body.length);
+                    exchange.getResponseBody().write(body);
+                } else {
+                    exchange.sendResponseHeaders(404, -1L);
+                }
+                """,
+            200,
+            "header",
+            "/hello",
+            request -> {
+                request.header("X-Javan-Mode", "strict");
+                request.header("X-Javan-Mode", "later");
+            }
+        );
+    }
+
+    @Test
     void httpServerLoopbackStreamsChunkedResponse() throws Exception {
         assertHttpServerResponse(
             "http-server-chunked-response",
@@ -4825,6 +4852,18 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
         final String expectedBody,
         final String target
     ) throws Exception {
+        assertHttpServerResponse(name, response, expectedStatus, expectedBody, target, request -> {
+        });
+    }
+
+    private void assertHttpServerResponse(
+        final String name,
+        final String response,
+        final int expectedStatus,
+        final String expectedBody,
+        final String target,
+        final java.util.function.Consumer<java.net.http.HttpRequest.Builder> configureRequest
+    ) throws Exception {
         final int port = freeTcpPort();
         final Path project = project(name);
         writeJava(project, "com.acme.Main", """
@@ -4872,10 +4911,9 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
         final Process process = nativeCommand.start();
         final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
         final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
-        final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + target))
-            .GET()
-            .build();
-        final java.net.http.HttpResponse<String> nativeResponse = awaitLoopbackResponse(client, request);
+        final java.net.http.HttpRequest.Builder request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + target));
+        configureRequest.accept(request);
+        final java.net.http.HttpResponse<String> nativeResponse = awaitLoopbackResponse(client, request.GET().build());
 
         assertThat(nativeResponse.statusCode()).isEqualTo(expectedStatus);
         assertThat(nativeResponse.body()).isEqualTo(expectedBody);
