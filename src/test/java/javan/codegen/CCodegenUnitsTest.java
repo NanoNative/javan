@@ -42,8 +42,12 @@ final class CCodegenUnitsTest {
         assertThat(Files.readString(first.header()))
             .contains("#ifndef JAVAN_PROGRAM_H", "void worker_symbol(void);", "void helper_symbol(void);");
         assertThat(Files.readString(first.main()))
-            .contains("#include \"javan_program.h\"", "int JAVAN_PROGRAM_MAIN(int argc, char** argv)")
-            .doesNotContain("void worker_symbol(void) {");
+            .contains(
+                "#include \"javan_program.h\"",
+                "int JAVAN_PROGRAM_MAIN(int argc, char** argv)",
+                "javan_runtime_prepare_command_line_args(&argc, &argv);"
+            )
+            .doesNotContain("void worker_symbol(void) {", "javan_runtime_release_command_line_args();");
         assertThat(first.sources().subList(1, first.sources().size()))
             .allSatisfy(source -> assertThat(read(source)).contains("#include \"../javan_program.h\""));
         assertThat(first.sources().stream().map(CCodegenUnitsTest::read).toList())

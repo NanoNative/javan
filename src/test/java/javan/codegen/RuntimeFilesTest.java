@@ -3434,6 +3434,7 @@ final class RuntimeFilesTest {
             "CommandLineToArgvW(GetCommandLineW(), &count)",
             "javan_runtime_prepare_command_line_args",
             "javan_runtime_release_command_line_args",
+            "atexit(javan_runtime_release_command_line_args)",
             "CreateProcessW(",
             "WaitForSingleObject(process.hProcess, wait_timeout)",
             "TerminateProcess(process.hProcess, 124)",
@@ -3446,9 +3447,18 @@ final class RuntimeFilesTest {
             "GetCurrentDirectoryW((DWORD) (sizeof(wide_cwd) / sizeof(wide_cwd[0])), wide_cwd)",
             "wchar_t stdout_path[MAX_PATH + 1] = {0};",
             "wchar_t stderr_path[MAX_PATH + 1] = {0};",
+            "struct _stat64 windows_info;",
+            "_wstat64(wide_path, &windows_info);",
             "if (stdout_path[0] != L'\\0') {",
             "process wait failed"
-        ).doesNotContain("CreateProcessA(", "GetTempPathA(", "GetTempFileNameA(", "CreateFileA(", "GetModuleFileNameA(");
+        ).doesNotContain(
+            "CreateProcessA(",
+            "GetTempPathA(",
+            "GetTempFileNameA(",
+            "CreateFileA(",
+            "GetModuleFileNameA(",
+            "_wstat(wide_path, info)"
+        );
     }
 
     @Test
@@ -10475,8 +10485,11 @@ final class RuntimeFilesTest {
                 void* rooted = javan_path_resolve(path, root_relative);
                 void* parent = javan_path_get_parent(normalized);
                 void* name = javan_path_get_file_name(normalized);
+                void* unc = javan_string_from("\\\\\\\\server\\\\share\\\\folder\\\\..\\\\child");
+                void* unc_normalized = javan_path_normalize(unc);
+                void* unc_parent = javan_path_get_parent(unc_normalized);
                 printf(
-                    "%d|%d|%s|%s|%d|%s|%s|%s|%d\\n",
+                    "%d|%d|%s|%s|%d|%s|%s|%s|%d|%s|%s|%d\\n",
                     javan_path_is_absolute(path),
                     javan_path_is_absolute(normalized),
                     (char*) normalized,
@@ -10485,7 +10498,10 @@ final class RuntimeFilesTest {
                     (char*) rooted,
                     (char*) parent,
                     (char*) name,
-                    javan_path_get_name_count(normalized)
+                    javan_path_get_name_count(normalized),
+                    (char*) unc_normalized,
+                    (char*) unc_parent,
+                    javan_path_get_name_count(unc_normalized)
                 );
                 #else
                 printf("not-windows\\n");
@@ -10498,7 +10514,7 @@ final class RuntimeFilesTest {
 
         final boolean windows = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
         assertThat(stdout).isEqualTo(windows
-            ? "1|1|C:\\work\\output|C:\\work\\output\\child|0|C:\\rooted|C:\\work|output|2\n"
+            ? "1|1|C:\\work\\output|C:\\work\\output\\child|0|C:\\rooted|C:\\work|output|2|\\\\server\\share\\child|\\\\server\\share\\|1\n"
             : "not-windows\n");
     }
 

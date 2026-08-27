@@ -832,8 +832,14 @@ final class RuntimeSourcePlatformSection {
             if (wide_path == NULL) {
                 return -1;
             }
-            int result = _wstat(wide_path, info);
+            struct _stat64 windows_info;
+            int result = _wstat64(wide_path, &windows_info);
             free(wide_path);
+            if (result == 0) {
+                info->st_mode = windows_info.st_mode;
+                info->st_size = windows_info.st_size;
+                info->st_mtime = windows_info.st_mtime;
+            }
             return result;
         #else
             if (no_follow) {
@@ -901,8 +907,26 @@ final class RuntimeSourcePlatformSection {
             if (((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z')) && path[1] == ':') {
                 return javan_path_is_separator(path[2]) ? 3 : 0;
             }
+            if (javan_path_is_separator(path[0]) && javan_path_is_separator(path[1])) {
+                const char* cursor = path + 2;
+                while (*cursor != '\\0' && !javan_path_is_separator(*cursor)) {
+                    cursor++;
+                }
+                if (cursor == path + 2 || *cursor == '\\0') {
+                    return 2;
+                }
+                cursor++;
+                const char* share = cursor;
+                while (*cursor != '\\0' && !javan_path_is_separator(*cursor)) {
+                    cursor++;
+                }
+                if (cursor == share) {
+                    return 2;
+                }
+                return (unsigned long) (cursor - path) + (*cursor == '\\0' ? 0UL : 1UL);
+            }
             if (javan_path_is_separator(path[0])) {
-                return javan_path_is_separator(path[1]) ? 2 : 1;
+                return 1;
             }
             return 0;
             #else

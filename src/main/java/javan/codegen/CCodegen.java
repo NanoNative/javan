@@ -2212,7 +2212,6 @@ public final class CCodegen {
             c.append("    (void) argc;").append(System.lineSeparator());
             c.append("    (void) argv;").append(System.lineSeparator());
             emitEntryParameters(function, c);
-            c.append("    javan_runtime_release_command_line_args();").append(System.lineSeparator());
         } else {
             emitSignature(function, c, functionStatic);
             c.append(" {").append(System.lineSeparator());

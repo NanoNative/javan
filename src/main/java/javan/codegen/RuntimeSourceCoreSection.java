@@ -187,6 +187,11 @@ final class RuntimeSourceCoreSection {
             javan_windows_command_line_values = values;
             javan_windows_command_line_owned_values = owned_values;
             javan_windows_command_line_count = count;
+            if (atexit(javan_runtime_release_command_line_args) != 0) {
+                javan_runtime_release_command_line_args();
+                javan_panic("Windows command line cleanup registration failed");
+                return;
+            }
             *argc = count;
             *argv = values;
         }
