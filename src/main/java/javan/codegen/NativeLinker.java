@@ -717,7 +717,7 @@ public final class NativeLinker {
             compileCachedObject(root, compiler, object);
         }
         final int workers = planned.isEmpty() ? 0 : 1;
-        return new WorkerEvidence(requestedJobs, workers, Math.max(0, planned.size() - workers), 0);
+        return new WorkerEvidence(requestedJobs, workers, Math.max(0, planned.size() - workers));
     }
 
     private void compileCachedObject(final Path root, final String compiler, final ObjectPlan object)
@@ -1050,7 +1050,7 @@ public final class NativeLinker {
          * @param objects generated object cache entries
          */
         public CacheLinkResult(final Path artifact, final List<CacheEntry> objects) {
-            this(artifact, objects, new WorkerEvidence(0, 0, 0, 0));
+            this(artifact, objects, new WorkerEvidence(0, 0, 0));
         }
     }
 
@@ -1060,11 +1060,10 @@ public final class NativeLinker {
      * @param requestedJobs requested native compiler worker cap, or zero when automatic mode was selected
      * @param effectiveJobs one when there are cache misses, otherwise zero
      * @param queued number of unique object compilations that waited for a worker slot
-     * @param backoffs retained report field; always zero while the worker cap is one
      */
-    public record WorkerEvidence(int requestedJobs, int effectiveJobs, int queued, int backoffs) {
+    public record WorkerEvidence(int requestedJobs, int effectiveJobs, int queued) {
         public WorkerEvidence {
-            if (requestedJobs < 0 || effectiveJobs < 0 || queued < 0 || backoffs < 0) {
+            if (requestedJobs < 0 || effectiveJobs < 0 || queued < 0) {
                 throw new IllegalArgumentException("Native worker evidence cannot be negative");
             }
         }

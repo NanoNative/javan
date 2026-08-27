@@ -316,7 +316,6 @@ final class CliCommandIntegrationTest {
             "\"requestedJobs\": 4",
             "\"effectiveJobs\": 1",
             "\"queued\": 2",
-            "\"backoffs\": 0",
             "\"outcome\": \"succeeded\""
         );
     }

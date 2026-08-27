@@ -38,11 +38,11 @@ javan build . --jar
 javan build . --library --export com.acme.Math.add --bindings c,rust,go,python
 ```
 
-Native application builds compile independent generated C objects concurrently. The default is
-conservative and memory-aware, with at most two compiler workers; use `--jobs <count>` to request
-a lower or higher limit. Javan still reduces that request when the current CPU or free-memory
-bound requires it. The resulting `.javan/reports/native-object-cache.*` records the requested and
-effective limits, queued objects, memory backoffs, and outcome. Final native linking remains serial.
+Native application builds currently compile generated C objects one at a time. Use `--jobs <count>`
+to record the requested worker cap; the resulting `.javan/reports/native-object-cache.*`
+records the requested cap, effective cap of one, queued objects, and outcome. Parallel native
+compilation remains blocked until its executor runtime, cleanup, interruption, self-host, and
+package-backed proof are complete. Final native linking remains serial and ordered.
 
 ## Use Javan As A JDK
 

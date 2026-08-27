@@ -345,7 +345,6 @@ final class NativeLinkerTest {
             assertThat(workers.requestedJobs()).isEqualTo(2);
             assertThat(workers.effectiveJobs()).isOne();
             assertThat(workers.queued()).isEqualTo(4);
-            assertThat(workers.backoffs()).isZero();
         });
         assertThat(runner.peakCompiles()).isOne();
         assertThat(linked.objects()).extracting(NativeLinker.CacheEntry::source).containsExactly(
@@ -433,7 +432,6 @@ final class NativeLinkerTest {
 
         assertThat(linked.workers().effectiveJobs()).isOne();
         assertThat(linked.workers().queued()).isEqualTo(7);
-        assertThat(linked.workers().backoffs()).isZero();
         assertThat(runner.peakCompiles()).isOne();
     }
 

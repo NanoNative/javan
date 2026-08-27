@@ -573,15 +573,13 @@ public final class Javan {
             .append("\n    \"requestedJobs\": ").append(workers.requestedJobs()).append(',')
             .append("\n    \"effectiveJobs\": ").append(workers.effectiveJobs()).append(',')
             .append("\n    \"queued\": ").append(workers.queued()).append(',')
-            .append("\n    \"backoffs\": ").append(workers.backoffs()).append(',')
             .append("\n    \"outcome\": \"succeeded\"")
             .append("\n  },\n  \"objects\": [");
         final StringBuilder markdown = new StringBuilder("# Native Object Cache\n\n## Native Workers\n\n")
-            .append("| Requested | Effective | Queued | Memory Backoffs | Outcome |\n")
-            .append("| --- | --- | --- | --- | --- |\n")
+            .append("| Requested | Effective | Queued | Outcome |\n")
+            .append("| --- | --- | --- | --- |\n")
             .append("| ").append(requested).append(" | ").append(workers.effectiveJobs())
-            .append(" | ").append(workers.queued()).append(" | ").append(workers.backoffs())
-            .append(" | succeeded |\n\n## Objects\n\n| Source | Decision |\n| --- | --- |\n");
+            .append(" | ").append(workers.queued()).append(" | succeeded |\n\n## Objects\n\n| Source | Decision |\n| --- | --- |\n");
         for (int index = 0; index < linked.objects().size(); index++) {
             final NativeLinker.CacheEntry entry = linked.objects().get(index);
             if (index > 0) {
