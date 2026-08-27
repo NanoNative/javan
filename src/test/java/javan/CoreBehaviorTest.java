@@ -782,6 +782,8 @@ final class CoreBehaviorTest {
     @Test
     void jdkCallSupportAcceptsHttpClientSendCalls() {
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/URI", "create", "(Ljava/lang/String;)Ljava/net/URI;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/URI", "getRawPath", "()Ljava/lang/String;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/URI", "getRawQuery", "()Ljava/lang/String;"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/http/HttpClient", "newHttpClient", "()Ljava/net/http/HttpClient;"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/http/HttpRequest", "newBuilder", "(Ljava/net/URI;)Ljava/net/http/HttpRequest$Builder;"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/http/HttpRequest$Builder", "GET", "()Ljava/net/http/HttpRequest$Builder;"))).isTrue();
@@ -803,6 +805,7 @@ final class CoreBehaviorTest {
         assertThat(JdkCallSupport.isSupported(new MethodRef("com/sun/net/httpserver/HttpServer", "stop", "(I)V"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("com/sun/net/httpserver/HttpExchange", "sendResponseHeaders", "(IJ)V"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("com/sun/net/httpserver/HttpExchange", "getRequestMethod", "()Ljava/lang/String;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("com/sun/net/httpserver/HttpExchange", "getRequestURI", "()Ljava/net/URI;"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("com/sun/net/httpserver/HttpExchange", "getResponseBody", "()Ljava/io/OutputStream;"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("com/sun/net/httpserver/HttpExchange", "close", "()V"))).isTrue();
     }

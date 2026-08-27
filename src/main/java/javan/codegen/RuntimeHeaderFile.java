@@ -632,6 +632,9 @@ final class RuntimeHeaderFile {
         void* javan_server_socket_accept(void* value);
         void javan_server_socket_close(void* value);
         void* javan_uri_create(void* value);
+        void* javan_uri_from_request_target(void* value);
+        void* javan_uri_get_raw_path(void* value);
+        void* javan_uri_get_raw_query(void* value);
         void* javan_http_client_new(void);
         void* javan_http_request_builder_new(void* uri);
         void* javan_http_request_builder_get(void* value);
@@ -655,6 +658,7 @@ final class RuntimeHeaderFile {
         void javan_http_server_handle(void* handler, void* exchange);
         void javan_http_exchange_send_response_headers(void* exchange, int status_code, long long response_length);
         void* javan_http_exchange_get_request_method(void* exchange);
+        void* javan_http_exchange_get_request_uri(void* exchange);
         void* javan_http_exchange_output_stream(void* exchange);
         void javan_http_exchange_output_stream_write(void* stream, int byte_value);
         void javan_http_exchange_output_stream_write_bytes(void* stream, void* bytes);

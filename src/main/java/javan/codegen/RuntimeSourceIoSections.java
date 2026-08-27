@@ -203,6 +203,58 @@ final class RuntimeSourceIoSections {
             return uri;
         }
 
+        void* javan_uri_from_request_target(void* value) {
+            void* target_root = value;
+            void* scheme = NULL;
+            void* host = NULL;
+            void* uri_root = NULL;
+            void** roots[] = { &target_root, &scheme, &host, &uri_root };
+            javan_root_frame_push(roots, 4);
+            if (target_root == NULL || ((const char*) target_root)[0] != '/') {
+                javan_panic("invalid HTTP request target");
+            }
+            scheme = javan_string_from("");
+            host = javan_string_from("");
+            uri_root = javan_alloc(sizeof(javan_uri_value));
+            javan_uri_value* uri = (javan_uri_value*) uri_root;
+            uri->magic = JAVAN_URI_MAGIC;
+            uri->port = 0;
+            uri->reserved0 = 0;
+            uri->reserved1 = 0;
+            uri->scheme = (char*) scheme;
+            uri->host = (char*) host;
+            uri->target = (char*) target_root;
+            javan_update_runtime_allocation_kind(uri_root, JAVAN_RUNTIME_KIND_URI);
+            javan_root_frame_pop(roots);
+            return uri_root;
+        }
+
+        void* javan_uri_get_raw_path(void* value) {
+            void* uri_root = value;
+            void* result_root = NULL;
+            void** roots[] = { &uri_root, &result_root };
+            javan_root_frame_push(roots, 2);
+            javan_uri_value* uri = javan_uri_checked(uri_root);
+            const char* query = strchr(uri->target, '?');
+            result_root = javan_http_copy_range(uri->target, query == NULL ? strlen(uri->target) : (unsigned long) (query - uri->target));
+            javan_root_frame_pop(roots);
+            return result_root;
+        }
+
+        void* javan_uri_get_raw_query(void* value) {
+            void* uri_root = value;
+            void* result_root = NULL;
+            void** roots[] = { &uri_root, &result_root };
+            javan_root_frame_push(roots, 2);
+            javan_uri_value* uri = javan_uri_checked(uri_root);
+            const char* query = strchr(uri->target, '?');
+            if (query != NULL) {
+                result_root = javan_http_copy_range(query + 1, strlen(query + 1));
+            }
+            javan_root_frame_pop(roots);
+            return result_root;
+        }
+
         void* javan_http_client_new(void) {
             javan_http_client_value* client = (javan_http_client_value*) javan_alloc(sizeof(javan_http_client_value));
             client->magic = JAVAN_HTTP_CLIENT_MAGIC;

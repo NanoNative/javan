@@ -1350,12 +1350,27 @@ final class BytecodeToIRInvokeSupport {
                 return true;
             }
         }
+        if ("java/net/URI".equals(methodRef.owner())) {
+            final boolean getRawPath = "getRawPath".equals(methodRef.name()) && "()Ljava/lang/String;".equals(methodRef.descriptor());
+            final boolean getRawQuery = "getRawQuery".equals(methodRef.name()) && "()Ljava/lang/String;".equals(methodRef.descriptor());
+            if (!getRawPath && !getRawQuery) {
+                return false;
+            }
+            popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
+            final IrExpression receiver = popObject(classFile, method, instruction, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                getRawPath ? "javan_uri_get_raw_path" : "javan_uri_get_raw_query",
+                List.of(receiver)
+            )));
+            return true;
+        }
         if ("com/sun/net/httpserver/HttpExchange".equals(methodRef.owner())) {
             final boolean sendResponseHeaders = "sendResponseHeaders".equals(methodRef.name()) && "(IJ)V".equals(methodRef.descriptor());
             final boolean getRequestMethod = "getRequestMethod".equals(methodRef.name()) && "()Ljava/lang/String;".equals(methodRef.descriptor());
+            final boolean getRequestUri = "getRequestURI".equals(methodRef.name()) && "()Ljava/net/URI;".equals(methodRef.descriptor());
             final boolean getResponseBody = "getResponseBody".equals(methodRef.name()) && "()Ljava/io/OutputStream;".equals(methodRef.descriptor());
             final boolean close = "close".equals(methodRef.name()) && "()V".equals(methodRef.descriptor());
-            if (!sendResponseHeaders && !getRequestMethod && !getResponseBody && !close) {
+            if (!sendResponseHeaders && !getRequestMethod && !getRequestUri && !getResponseBody && !close) {
                 return false;
             }
             final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
@@ -1369,6 +1384,10 @@ final class BytecodeToIRInvokeSupport {
             }
             if (getRequestMethod) {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_http_exchange_get_request_method", callArguments)));
+                return true;
+            }
+            if (getRequestUri) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_http_exchange_get_request_uri", callArguments)));
                 return true;
             }
             if (getResponseBody) {
