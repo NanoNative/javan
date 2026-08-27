@@ -3649,6 +3649,27 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    @WindowsCompatibilityProof
+    void httpServerLoopbackHandlerReadsRequestUri() throws Exception {
+        assertHttpServerResponse(
+            "http-server-request-uri",
+            """
+                if ("/hello".equals(exchange.getRequestURI().getRawPath())
+                    && "mode=strict".equals(exchange.getRequestURI().getRawQuery())) {
+                    final byte[] body = new byte[] {117, 114, 105};
+                    exchange.sendResponseHeaders(200, body.length);
+                    exchange.getResponseBody().write(body);
+                } else {
+                    exchange.sendResponseHeaders(404, -1L);
+                }
+                """,
+            200,
+            "uri",
+            "/hello?mode=strict"
+        );
+    }
+
+    @Test
     void httpServerLoopbackStreamsChunkedResponse() throws Exception {
         assertHttpServerResponse(
             "http-server-chunked-response",
@@ -4794,6 +4815,16 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
         final int expectedStatus,
         final String expectedBody
     ) throws Exception {
+        assertHttpServerResponse(name, response, expectedStatus, expectedBody, "/hello");
+    }
+
+    private void assertHttpServerResponse(
+        final String name,
+        final String response,
+        final int expectedStatus,
+        final String expectedBody,
+        final String target
+    ) throws Exception {
         final int port = freeTcpPort();
         final Path project = project(name);
         writeJava(project, "com.acme.Main", """
@@ -4841,7 +4872,7 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
         final Process process = nativeCommand.start();
         final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
         final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
-        final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/hello"))
+        final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + target))
             .GET()
             .build();
         final java.net.http.HttpResponse<String> nativeResponse = awaitLoopbackResponse(client, request);

@@ -3252,13 +3252,13 @@ final class RuntimeSourcePlatformSection {
             return accepted;
         }
 
-        static void* javan_http_server_request_method(javan_socket* socket, const char* path) {
+        static int javan_http_server_request_values(javan_socket* socket, const char* path, void** method_out, void** target_out) {
             char request[8192];
             int length = 0;
             while (length < (int) sizeof(request) - 1) {
                 int read = javan_socket_native_receive(socket->fd, request + length, (int) sizeof(request) - length - 1);
                 if (read <= 0) {
-                    return NULL;
+                    return 0;
                 }
                 length += (int) read;
                 int complete = 0;
@@ -3279,12 +3279,12 @@ final class RuntimeSourcePlatformSection {
             request[length] = '\\0';
             char* first_space = strchr(request, ' ');
             if (first_space == NULL) {
-                return NULL;
+                return 0;
             }
             const char* target = first_space + 1;
             const char* target_end = strchr(target, ' ');
             if (target_end == NULL) {
-                return NULL;
+                return 0;
             }
             int expected = (int) strlen(path);
             int actual = 0;
@@ -3292,13 +3292,16 @@ final class RuntimeSourcePlatformSection {
                 actual++;
             }
             if (actual != expected || strncmp(target, path, (size_t) expected) != 0) {
-                return NULL;
+                return 0;
             }
             *first_space = '\\0';
-            return javan_string_from(request);
+            *(char*) target_end = '\\0';
+            *method_out = javan_string_from(request);
+            *target_out = javan_string_from(target);
+            return 1;
         }
 
-        static javan_http_exchange_value* javan_http_exchange_new(javan_socket* socket, void* request_method) {
+        static javan_http_exchange_value* javan_http_exchange_new(javan_socket* socket, void* request_method, void* request_uri) {
             javan_http_exchange_value* exchange = (javan_http_exchange_value*) javan_alloc(sizeof(javan_http_exchange_value));
             exchange->magic = JAVAN_HTTP_EXCHANGE_MAGIC;
             exchange->response_headers_sent = 0;
@@ -3310,6 +3313,7 @@ final class RuntimeSourcePlatformSection {
             exchange->response_written = 0LL;
             exchange->socket = socket;
             exchange->request_method = request_method;
+            exchange->request_uri = request_uri;
             exchange->response_body = NULL;
             javan_update_runtime_allocation_kind((void*) exchange, JAVAN_RUNTIME_KIND_HTTP_EXCHANGE);
             return exchange;
@@ -3321,8 +3325,10 @@ final class RuntimeSourcePlatformSection {
             void* socket_value = NULL;
             void* exchange_value = NULL;
             void* request_method = NULL;
-            void** roots[] = { &server_root, &socket_value, &exchange_value, &request_method };
-            javan_root_frame_push(roots, 4);
+            void* request_target = NULL;
+            void* request_uri = NULL;
+            void** roots[] = { &server_root, &socket_value, &exchange_value, &request_method, &request_target, &request_uri };
+            javan_root_frame_push(roots, 6);
             while (javan_http_server_stopped(server) == 0) {
                 javan_socket_handle accepted = javan_http_server_accept(server);
                 if (javan_socket_handle_is_open(accepted) == 0) {
@@ -3333,9 +3339,9 @@ final class RuntimeSourcePlatformSection {
                 if (javan_http_server_stopped(server) != 0) {
                     javan_socket_close(socket_value);
                 } else {
-                    request_method = javan_http_server_request_method(socket, server->path);
-                    if (request_method != NULL) {
-                        exchange_value = (void*) javan_http_exchange_new(socket, request_method);
+                    if (javan_http_server_request_values(socket, server->path, &request_method, &request_target) != 0) {
+                        request_uri = javan_uri_from_request_target(request_target);
+                        exchange_value = (void*) javan_http_exchange_new(socket, request_method, request_uri);
                         javan_runtime_lock_enter();
                         server->active_exchange = exchange_value;
                         javan_runtime_lock_leave();
@@ -3354,6 +3360,8 @@ final class RuntimeSourcePlatformSection {
                 socket_value = NULL;
                 exchange_value = NULL;
                 request_method = NULL;
+                request_target = NULL;
+                request_uri = NULL;
             }
             javan_server_socket_close((void*) server->socket);
             javan_root_frame_pop(roots);
@@ -3361,6 +3369,10 @@ final class RuntimeSourcePlatformSection {
 
         void* javan_http_exchange_get_request_method(void* value) {
             return javan_http_exchange_checked(value)->request_method;
+        }
+
+        void* javan_http_exchange_get_request_uri(void* value) {
+            return javan_http_exchange_checked(value)->request_uri;
         }
 
         void javan_http_exchange_send_response_headers(void* value, int status_code, long long response_length) {
