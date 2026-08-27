@@ -602,6 +602,10 @@ final class RuntimeHeaderFile {
         int javan_resource_input_stream_read_bytes(void* value, void* bytes);
         int javan_resource_input_stream_read_bytes_range(void* value, void* bytes, int offset, int length);
         void* javan_resource_input_stream_read_all_bytes(void* value);
+        int javan_http_exchange_input_stream_read(void* value);
+        int javan_http_exchange_input_stream_read_bytes(void* value, void* bytes);
+        int javan_http_exchange_input_stream_read_bytes_range(void* value, void* bytes, int offset, int length);
+        void* javan_http_exchange_input_stream_read_all_bytes(void* value);
         void javan_socket_shutdown_input(void* value);
         void javan_socket_input_stream_close(void* value);
         void javan_resource_input_stream_close(void* value);
@@ -660,6 +664,7 @@ final class RuntimeHeaderFile {
         void* javan_http_exchange_get_request_method(void* exchange);
         void* javan_http_exchange_get_request_uri(void* exchange);
         void* javan_http_exchange_get_request_headers(void* exchange);
+        void* javan_http_exchange_get_request_body(void* exchange);
         void* javan_http_headers_get_first(void* headers, void* name);
         void* javan_http_exchange_output_stream(void* exchange);
         void javan_http_exchange_output_stream_write(void* stream, int byte_value);

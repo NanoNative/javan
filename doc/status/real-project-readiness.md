@@ -146,7 +146,7 @@ exceptions, and concrete instance calls.
 Known blockers before broader real-project coverage:
 
 - broader dependency-jar surface beyond the current smoke slices, especially deeper class-initialization graphs, richer collection/map helpers, additional atomics, more functional-interface shapes, and wider string/temporal helper families
-- broader service runtime coverage, especially multiple `HttpServer` contexts, `HttpContext` accessors, richer request-header/body APIs, executor-backed handlers, `HttpHandler` lambdas, HTTPS/TLS, certificates, and resource-heavy app packaging
+- broader service runtime coverage, especially multiple `HttpServer` contexts, `HttpContext` accessors, full request-header maps, chunked or streaming request bodies, executor-backed handlers, `HttpHandler` lambdas, HTTPS/TLS, certificates, and resource-heavy app packaging
 - richer Java semantic coverage, especially general try/catch/finally lowering, broader dynamic-call sites, wider enum/class-introspection edges, and full UTF-16 string semantics
 - more dependency-version variance proof, because reproducible bundled smoke is not the same as broad upstream-version compatibility
 
@@ -165,6 +165,6 @@ Next gates before claiming broader external-service compatibility:
 2. done: add negative diagnostics for `Socket`, `ServerSocket`, `HttpClient`, and external `HttpServer`-shaped services
 3. done: report reachable `network`, `socket`, and `http` usage even while unsupported
 4. implement TCP loopback support with close/ownership and sanitizer proof
-5. done partially: implement plain HTTP client loopback support for GET/string, POST+headers/byte[], and PUT byte[], raw loopback responder slices over `ServerSocket`/`Socket`, and one concrete-class `HttpServer` context with `404` path matching, request-method/URI and first request-header inspection, owned worker shutdown, fixed-length/chunked/bodyless responses, forced-GC sanitizer proof, and Windows x64 CI execution for native Socket, ServerSocket, HttpClient, and HttpServer loopback; Windows package/self-host and process runtime support remain incomplete
+5. done partially: implement plain HTTP client loopback support for GET/string, POST+headers/byte[], and PUT byte[], raw loopback responder slices over `ServerSocket`/`Socket`, and one concrete-class `HttpServer` context with `404` path matching, request-method/URI and first request-header inspection, bounded `Content-Length` request-body reads, owned worker shutdown, fixed-length/chunked/bodyless responses, forced-GC sanitizer proof, and Windows x64 CI execution for native Socket, ServerSocket, HttpClient, and HttpServer loopback; Windows package/self-host and process runtime support remain incomplete
 6. done: run a native loopback HTTP service with an `HttpHandler` supplied by a reproducible external dependency jar
 7. add HTTPS/TLS/certificates after plain HTTP is stable

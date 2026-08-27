@@ -3692,7 +3692,45 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
             request -> {
                 request.header("X-Javan-Mode", "strict");
                 request.header("X-Javan-Mode", "later");
+                return request.GET().build();
             }
+        );
+    }
+
+    @Test
+    @WindowsCompatibilityProof
+    void httpServerLoopbackHandlerReadsRequestBody() throws Exception {
+        assertHttpServerResponse(
+            "http-server-request-body",
+            """
+                final java.io.InputStream request = exchange.getRequestBody();
+                final byte[] start = new byte[2];
+                final int startCount = request.read(start);
+                final byte[] middle = new byte[3];
+                final int middleCount = request.read(middle, 1, 2);
+                final byte[] end = request.readAllBytes();
+                if (request == exchange.getRequestBody()
+                    && startCount == 2
+                    && start[0] == 104
+                    && start[1] == 101
+                    && middleCount == 2
+                    && middle[0] == 0
+                    && middle[1] == 108
+                    && middle[2] == 108
+                    && end.length == 1
+                    && end[0] == 111
+                    && request.read() == -1) {
+                    final byte[] response = new byte[] {98, 111, 100, 121};
+                    exchange.sendResponseHeaders(200, response.length);
+                    exchange.getResponseBody().write(response);
+                } else {
+                    exchange.sendResponseHeaders(400, -1L);
+                }
+                """,
+            200,
+            "body",
+            "/hello",
+            request -> request.POST(java.net.http.HttpRequest.BodyPublishers.ofString("hello")).build()
         );
     }
 
@@ -4852,8 +4890,7 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
         final String expectedBody,
         final String target
     ) throws Exception {
-        assertHttpServerResponse(name, response, expectedStatus, expectedBody, target, request -> {
-        });
+        assertHttpServerResponse(name, response, expectedStatus, expectedBody, target, request -> request.GET().build());
     }
 
     private void assertHttpServerResponse(
@@ -4862,7 +4899,7 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
         final int expectedStatus,
         final String expectedBody,
         final String target,
-        final java.util.function.Consumer<java.net.http.HttpRequest.Builder> configureRequest
+        final java.util.function.Function<java.net.http.HttpRequest.Builder, java.net.http.HttpRequest> buildRequest
     ) throws Exception {
         final int port = freeTcpPort();
         final Path project = project(name);
@@ -4912,8 +4949,7 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
         final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
         final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
         final java.net.http.HttpRequest.Builder request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + target));
-        configureRequest.accept(request);
-        final java.net.http.HttpResponse<String> nativeResponse = awaitLoopbackResponse(client, request.GET().build());
+        final java.net.http.HttpResponse<String> nativeResponse = awaitLoopbackResponse(client, buildRequest.apply(request));
 
         assertThat(nativeResponse.statusCode()).isEqualTo(expectedStatus);
         assertThat(nativeResponse.body()).isEqualTo(expectedBody);
