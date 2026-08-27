@@ -26,6 +26,48 @@ Every milestone needs a public CLI/package proof, native/JVM parity where applic
 an explicit unsupported boundary. New user flags are a last resort; the compiler should
 normally choose the safe path itself.
 
+## Active First Native Release Queue
+
+The first native release is deliberately narrow. It claims extracted, host-native packages for
+Linux x64, Linux ARM64, and macOS ARM64 only. It does not claim macOS x64 or Windows packages,
+general Java compatibility, TLS, or arbitrary external-library support. A `Done` CI row is
+evidence for one target; it is not a public-release decision.
+
+The queue below is the only work that may compete for release attention. It is ordered by release
+leverage, not by callable count. Keep at most two implementation slices and one CI/performance
+slice in progress. A task owns its whole vertical proof: public CLI input, generated output,
+native execution, and package evidence where the behavior is release-critical.
+
+| Order | Work | Required proof |
+| --- | --- | --- |
+| 1 | State the scenario-bounded JDK gate and current release scope. | No source claims full JDK inventory closure is required for the three-target first release; declared reachable behavior remains supported or rejected. |
+| 2 | Rehearse each declared target's extracted release archive without publication. | Linux x64, Linux ARM64, and macOS ARM64 verify checksum, package, self-host, acceptance, ABI, and sanitizer evidence from clean inputs, while recording exclusions. |
+| 3 | Verify a checksummed Linux release-candidate archive in a container as supplemental evidence. | The extracted Linux `bin/javan` performs `build`, `check`, and `report` without a source checkout or host tool dependency; it does not replace host-native rehearsal. |
+| 4 | Prove configured native imports from extracted packages on every declared target. | Primitive and borrowed-`byte[]` imports compile, link, execute, and reject invalid reachable shapes deterministically. |
+| 5 | Record cold, warm, and changed-source baselines after the bounded-worker path is verified. | Public `javan build` measurements with wall time, CPU time, peak RSS, artifact size, target, and toolchain. |
+| 6 | Balance the existing six native CI workers from recorded timings. | Deterministic, complete worker assignment plus before/after CI timing evidence; no worker-count increase. |
+
+The current bounded-worker pull request is verification work, not a second active feature slice.
+After it merges, the baseline task measures it before another build-speed change is started.
+
+There is currently no safe `dry_run` release workflow: the documented `dry_run=true` dispatch
+still behaves as a real GitHub release. Do not use it as rehearsal. Any future artifact rehearsal
+must run only package-verification commands and already-produced artifacts, with no credentials,
+upload, tag, or release API path.
+
+Deferred until this queue is green:
+
+- Windows x64 and ARM64 native package support, macOS x64 package support, and any runner-only
+  workaround.
+- Broad JDK callable accounting, whole-class support tasks, and compatibility work without a
+  failing release or external-probe command.
+- TLS, wider HTTP services, richer library ABI types, Maven/Gradle conveniences, container
+  publication, and report expansion that does not remove a current release blocker.
+
+When Windows x64 becomes a first-release requirement, promote its extracted-package, self-host,
+ABI, and sanitizer proof together. Do not relabel an existing Windows platform-contract smoke as
+package support.
+
 ## Compiler Analysis
 
 Javan currently has entrypoint-rooted reachability, instantiated-type-bounded class-hierarchy

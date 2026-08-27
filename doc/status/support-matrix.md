@@ -345,4 +345,4 @@ Status mapping:
 `pass` means covered by the current deterministic verification suite for the active JDK.
 `scoped` means a supported subset exists and unsupported shapes must be rejected clearly.
 `target` means tracked for the milestone but not claimed as native-supported by this matrix.
-JDK coverage accounting is planned: `done = supported variants + rejected variants`, and unknown leftovers must be `0` for a release-gated JDK.
+A broad JDK-compatibility release requires `done = supported variants + rejected variants` with zero unknown leftovers. The first native release is scenario-bounded: its declared reachable behavior must be supported or rejected clearly.

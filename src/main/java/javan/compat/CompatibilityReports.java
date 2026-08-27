@@ -375,7 +375,7 @@ public final class CompatibilityReports {
             .append("  \"jdkCoverageAccounting\": {\n")
             .append("    \"implemented\": false,\n")
             .append("    \"rule\": ")
-            .append(Json.string("done = supported variants + rejected variants; unknown leftovers must be 0 for a release-gated JDK"))
+            .append(Json.string("a broad JDK-compatibility release requires zero unknown leftovers; the first native release is scenario-bounded and requires declared reachable behavior to be supported or rejected"))
             .append("\n")
             .append("  },\n")
             .append("  \"counts\": {\n")
@@ -429,7 +429,7 @@ public final class CompatibilityReports {
         markdown.append("\n`pass` means covered by the current deterministic verification suite for the active JDK.\n");
         markdown.append("`scoped` means a supported subset exists and unsupported shapes must be rejected clearly.\n");
         markdown.append("`target` means tracked for the milestone but not claimed as native-supported by this matrix.\n");
-        markdown.append("JDK coverage accounting is planned: `done = supported variants + rejected variants`, and unknown leftovers must be `0` for a release-gated JDK.\n");
+        markdown.append("A broad JDK-compatibility release requires `done = supported variants + rejected variants` with zero unknown leftovers. The first native release is scenario-bounded: its declared reachable behavior must be supported or rejected clearly.\n");
         return markdown.toString();
     }
 
@@ -819,8 +819,8 @@ public final class CompatibilityReports {
             .append("tags, bootstrap methods, synthetic members, deprecated markers, and preview\n")
             .append("markers.\n\n")
             .append("Native support means a reachable API or bytecode variant is either implemented\n")
-            .append("or deliberately rejected with a clear diagnostic. A release-gated JDK must have\n")
-            .append("no unknown leftovers.\n\n")
+            .append("or deliberately rejected with a clear diagnostic. A broad JDK-compatibility release\n")
+            .append("must have no unknown leftovers; the first native release is scenario-bounded.\n\n")
             .append("## Support Accounting\n\n")
             .append("Inventory is implemented. Exact supported callable-member accounting is implemented as a\n")
             .append("lower-bound progress signal. Exact explicit rejected and unknown callable counts are now\n")
@@ -856,12 +856,16 @@ public final class CompatibilityReports {
             .append("| flow-qualified rejected JDK call shapes total | ").append(flowQualifiedRejected.total()).append(" |\n\n")
             .append("This ledger excludes external example or library probes. Those stay in `doc/status/real-project-readiness.md`\n")
             .append("and never define a supported JDK member count.\n\n")
-            .append("Release-gated JDKs must report:\n\n")
+            .append("A broad JDK-compatibility release must report:\n\n")
             .append("```text\n")
             .append("done = supported variants + rejected variants\n")
             .append("leftovers = unknown variants\n")
             .append("leftovers must be 0\n")
             .append("```\n\n")
+            .append("The first native release is scenario-bounded. Its package, self-host, ABI, acceptance,\n")
+            .append("and declared external-probe flows must have no unknown reachable behavior: each shape is\n")
+            .append("supported with evidence or rejected with a deterministic diagnostic. Global JDK inventory\n")
+            .append("unknowns remain a compatibility-expansion metric, not a release-completion percentage.\n\n")
             .append("The exact supported and done JDK callable counts above are lower-bound progress signals.\n")
             .append("Flow-qualified rejected JDK call shapes above are diagnostic-shape accounting only.\n")
             .append("They are tracked separately because they depend on receiver or call-flow facts rather than raw member inventory.\n")

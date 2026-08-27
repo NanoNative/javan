@@ -8,7 +8,7 @@
   },
   "jdkCoverageAccounting": {
     "implemented": false,
-    "rule": "done = supported variants + rejected variants; unknown leftovers must be 0 for a release-gated JDK"
+    "rule": "a broad JDK-compatibility release requires zero unknown leftovers; the first native release is scenario-bounded and requires declared reachable behavior to be supported or rejected"
   },
   "counts": {
     "rows": 315,
