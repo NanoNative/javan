@@ -271,29 +271,41 @@ public class ProcessRunner {
     }
 
     private static void stopProcessTree(final Process process) throws IOException, InterruptedException {
-        final List<ProcessHandle> processes = processTree(process);
-        final ProcessHandle root = process.toHandle();
-        for (int index = 0; index < 5; index++) {
-            addProcessTree(processes, process);
-            stopDescendants(processes, root, false);
-            Thread.sleep(10L);
-        }
-        stopProcess(root, false);
-        if (waitForProcessesExit(processes, 1L)) {
-            return;
-        }
-        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2L);
-        do {
-            addProcessTree(processes, process);
-            stopProcesses(processes, true);
-            if (allProcessesExited(processes)) {
+        try {
+            final List<ProcessHandle> processes = processTree(process);
+            final ProcessHandle root = process.toHandle();
+            for (int index = 0; index < 5; index++) {
+                addProcessTree(processes, process);
+                stopDescendants(processes, root, false);
+                Thread.sleep(10L);
+            }
+            stopProcess(root, false);
+            if (waitForProcessesExit(processes, 1L)) {
                 return;
             }
-            Thread.sleep(10L);
-        } while (System.nanoTime() < deadline);
-        if (!allProcessesExited(processes)) {
-            throw new IOException("Could not stop child process tree");
+            final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2L);
+            do {
+                addProcessTree(processes, process);
+                stopProcesses(processes, true);
+                if (allProcessesExited(processes)) {
+                    return;
+                }
+                Thread.sleep(10L);
+            } while (System.nanoTime() < deadline);
+            if (!allProcessesExited(processes)) {
+                throw new IOException("Could not stop child process tree");
+            }
+        } catch (final RuntimeException unavailable) {
+            // Sandboxed hosts can deny process-tree inspection; still terminate the launched process.
+            stopRootProcess(process);
         }
+    }
+
+    private static void stopRootProcess(final Process process) throws InterruptedException {
+        if (process.isAlive()) {
+            process.destroyForcibly();
+        }
+        process.waitFor();
     }
 
     private static List<ProcessHandle> processTree(final Process process) {
