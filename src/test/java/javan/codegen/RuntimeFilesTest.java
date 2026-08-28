@@ -3473,6 +3473,27 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void runtimeSocketStreamsRootResultsBeforeConcurrentCollection() throws Exception {
+        final String source = Files.readString(new RuntimeFiles().write(tempDir));
+        final String streamFactory = source.substring(source.indexOf("static void javan_socket_stream_new_into"));
+
+        assertThat(streamFactory).containsSubsequence(
+            "void** roots[] = {",
+            "javan_root_frame_push(roots, 2);",
+            "*result = NULL;",
+            "if (output_stream != 0) {",
+            "javan_socket_output_stream_value* stream = (javan_socket_output_stream_value*) javan_alloc_rooted(",
+            "result",
+            "javan_root_frame_pop(roots);",
+            "javan_socket_input_stream_value* stream = (javan_socket_input_stream_value*) javan_alloc_rooted(",
+            "result",
+            "javan_root_frame_pop(roots);",
+            "void javan_socket_input_stream_into(void** result, void* value)",
+            "void javan_socket_output_stream_into(void** result, void* value)"
+        );
+    }
+
+    @Test
     @WindowsCompatibilityProof
     void generatedRuntimeCrossCompilesToWindowsPeWhenMinGwIsAvailable() throws Exception {
         final Path compiler = findFirstExecutableOnPath("x86_64-w64-mingw32-gcc");
@@ -7485,8 +7506,8 @@ final class RuntimeFilesTest {
             "javan_update_runtime_allocation_kind((void*) socket_address, JAVAN_RUNTIME_KIND_INET_SOCKET_ADDRESS);",
             "javan_update_runtime_allocation_kind((void*) socket, JAVAN_RUNTIME_KIND_SOCKET);",
             "javan_update_runtime_allocation_kind((void*) socket, JAVAN_RUNTIME_KIND_SERVER_SOCKET);",
-            "javan_update_runtime_allocation_kind(stream_root, JAVAN_RUNTIME_KIND_SOCKET_INPUT_STREAM);",
-            "javan_update_runtime_allocation_kind(stream_root, JAVAN_RUNTIME_KIND_SOCKET_OUTPUT_STREAM);",
+            "javan_update_runtime_allocation_kind(*result, JAVAN_RUNTIME_KIND_SOCKET_INPUT_STREAM);",
+            "javan_update_runtime_allocation_kind(*result, JAVAN_RUNTIME_KIND_SOCKET_OUTPUT_STREAM);",
             "javan_update_runtime_allocation_kind((void*) list->values, JAVAN_RUNTIME_KIND_OWNED_BUFFER);",
             "javan_update_runtime_allocation_kind((void*) next_keys, JAVAN_RUNTIME_KIND_OWNED_BUFFER);",
             "javan_update_runtime_allocation_kind((void*) next_values, JAVAN_RUNTIME_KIND_OWNED_BUFFER);",

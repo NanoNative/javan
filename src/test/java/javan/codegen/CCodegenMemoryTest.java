@@ -36,6 +36,40 @@ final class CCodegenMemoryTest {
     private Path tempDir;
 
     @Test
+    void writesSocketStreamAllocationIntoCallerRoot() throws Exception {
+        final IrProgram program = new IrProgram(
+            List.of(),
+            List.of(new IrFunction(
+                "com/acme/Main",
+                "main",
+                "([Ljava/lang/String;)V",
+                "main_symbol",
+                IrType.VOID,
+                List.of(),
+                List.of(
+                    new IrLocal(IrType.OBJECT, "socket"),
+                    new IrLocal(IrType.OBJECT, "stream")
+                ),
+                List.of(
+                    IrInstruction.assignObject(
+                        "stream",
+                        IrExpression.objectCall("javan_socket_input_stream", List.of(IrExpression.objectLocal("socket")))
+                    ),
+                    IrInstruction.returnVoid()
+                )
+            )),
+            "main_symbol"
+        );
+
+        final String generated = Files.readString(new CCodegen().generate(program, tempDir));
+
+        assertThat(generated)
+            .contains("javan_socket_input_stream_into((void**) &javan_expr_tmp_0, socket);")
+            .contains("stream = javan_expr_tmp_0;")
+            .doesNotContain("javan_expr_tmp_0 = javan_socket_input_stream(socket);");
+    }
+
+    @Test
     void emitsStatementSafePointAfterCompletedAssignment() throws Exception {
         final IrProgram program = new IrProgram(
             List.of(nodeClass()),

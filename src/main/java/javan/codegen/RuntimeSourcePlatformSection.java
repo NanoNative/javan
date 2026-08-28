@@ -2446,44 +2446,45 @@ final class RuntimeSourcePlatformSection {
             }
         }
 
-        static void* javan_socket_stream_new(void* socket_value, int output_stream) {
+        static void javan_socket_stream_new_into(void** result, void* socket_value, int output_stream) {
+            if (result == NULL) {
+                javan_panic("missing socket stream result");
+            }
             (void) javan_socket_checked(socket_value);
+            void* socket_root = socket_value;
+            void** roots[] = {
+                (void**) &socket_root,
+                result
+            };
+            javan_root_frame_push(roots, 2);
+            javan_runtime_lock_enter();
+            *result = NULL;
+            javan_runtime_lock_leave();
             if (output_stream != 0) {
-                javan_socket_output_stream_value* stream = (javan_socket_output_stream_value*) javan_alloc(sizeof(javan_socket_output_stream_value));
-                void* stream_root = (void*) stream;
-                void* socket_root = socket_value;
-                void** javan_socket_output_stream_roots[] = {
-                    (void**) &socket_root,
-                    (void**) &stream_root
-                };
-                javan_root_frame_push(javan_socket_output_stream_roots, 2);
-                stream = (javan_socket_output_stream_value*) stream_root;
+                javan_socket_output_stream_value* stream = (javan_socket_output_stream_value*) javan_alloc_rooted(
+                    sizeof(javan_socket_output_stream_value),
+                    result
+                );
                 stream->magic = JAVAN_SOCKET_OUTPUT_STREAM_MAGIC;
                 stream->reserved0 = 0;
                 stream->reserved1 = 0;
                 stream->reserved2 = 0;
                 stream->socket = (javan_socket*) socket_root;
-                javan_update_runtime_allocation_kind(stream_root, JAVAN_RUNTIME_KIND_SOCKET_OUTPUT_STREAM);
-                javan_root_frame_pop(javan_socket_output_stream_roots);
-                return stream;
+                javan_update_runtime_allocation_kind(*result, JAVAN_RUNTIME_KIND_SOCKET_OUTPUT_STREAM);
+                javan_root_frame_pop(roots);
+                return;
             }
-            javan_socket_input_stream_value* stream = (javan_socket_input_stream_value*) javan_alloc(sizeof(javan_socket_input_stream_value));
-            void* stream_root = (void*) stream;
-            void* socket_root = socket_value;
-            void** javan_socket_input_stream_roots[] = {
-                (void**) &socket_root,
-                (void**) &stream_root
-            };
-            javan_root_frame_push(javan_socket_input_stream_roots, 2);
-            stream = (javan_socket_input_stream_value*) stream_root;
+            javan_socket_input_stream_value* stream = (javan_socket_input_stream_value*) javan_alloc_rooted(
+                sizeof(javan_socket_input_stream_value),
+                result
+            );
             stream->magic = JAVAN_SOCKET_INPUT_STREAM_MAGIC;
             stream->reserved0 = 0;
             stream->reserved1 = 0;
             stream->reserved2 = 0;
             stream->socket = (javan_socket*) socket_root;
-            javan_update_runtime_allocation_kind(stream_root, JAVAN_RUNTIME_KIND_SOCKET_INPUT_STREAM);
-            javan_root_frame_pop(javan_socket_input_stream_roots);
-            return stream;
+            javan_update_runtime_allocation_kind(*result, JAVAN_RUNTIME_KIND_SOCKET_INPUT_STREAM);
+            javan_root_frame_pop(roots);
         }
 
         void* javan_socket_connect_host(void* host_value, int port) {
@@ -2809,12 +2810,12 @@ final class RuntimeSourcePlatformSection {
             return NULL;
         }
 
-        void* javan_socket_input_stream(void* value) {
-            return javan_socket_stream_new(value, 0);
+        void javan_socket_input_stream_into(void** result, void* value) {
+            javan_socket_stream_new_into(result, value, 0);
         }
 
-        void* javan_socket_output_stream(void* value) {
-            return javan_socket_stream_new(value, 1);
+        void javan_socket_output_stream_into(void** result, void* value) {
+            javan_socket_stream_new_into(result, value, 1);
         }
 
         int javan_socket_input_stream_read(void* value) {
