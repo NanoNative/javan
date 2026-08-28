@@ -175,6 +175,9 @@ Current ABI v2 behavior:
   `javan_last_error_bytecode_offset()`, `javan_last_error_source_line()`,
   `javan_last_error_why()`, `javan_last_error_fix()`, and `javan_last_error_detail()`
   expose borrowed structured fields for the current process-global error
+- optional text fields, including `javan_last_error_source_line()`, are `NULL` when the
+  originating class-file input does not contain the corresponding source text; C callers
+  must check before using them as strings
 - callers can clear the stored library error with `javan_clear_error()`
 - clearing resets structured pointer fields to `NULL` and numeric fields to `-1`
 - the last-error state is process-global and single-threaded; the next export attempt clears it
