@@ -32,10 +32,17 @@ With an installed `javan` binary:
 ```sh
 javan check .
 javan build .
+javan build . --jobs 2
 javan run . -- one two
 javan build . --jar
 javan build . --library --export com.acme.Math.add --bindings c,rust,go,python
 ```
+
+Native application builds currently compile generated C objects one at a time. Use `--jobs <count>`
+to record the requested worker cap; the resulting `.javan/reports/native-object-cache.*`
+records the requested cap, effective cap of one, queued objects, and outcome. Parallel native
+compilation remains blocked until its executor runtime, cleanup, interruption, self-host, and
+package-backed proof are complete. Final native linking remains serial and ordered.
 
 ## Use Javan As A JDK
 

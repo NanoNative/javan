@@ -3436,8 +3436,8 @@ final class RuntimeFilesTest {
             "javan_runtime_release_command_line_args",
             "atexit(javan_runtime_release_command_line_args)",
             "CreateProcessW(",
-            "WaitForSingleObject(process.hProcess, wait_timeout)",
-            "TerminateProcess(process.hProcess, 124)",
+            "WaitForSingleObject(process.hProcess, slice)",
+            "TerminateJobObject(job, 124)",
             "javan_windows_command_line",
             "GetTempPathW(MAX_PATH, temporary_directory)",
             "GetTempFileNameW(temporary_directory, L\"jvo\"",
@@ -10418,6 +10418,45 @@ final class RuntimeFilesTest {
         );
 
         assertThat(stdout).isEqualTo("127:empty command:4\nafter-result=1\nafter-all=0\n");
+    }
+
+    @Test
+    void runtimeProcessTimeoutStopsPosixDescendants() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+            #if !defined(_WIN32)
+            #include <unistd.h>
+            #endif
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                #if defined(_WIN32)
+                printf("not-posix\\n");
+                #else
+                void* command = javan_arraylist_new();
+                (void) javan_arraylist_add(command, (void*) "sh");
+                (void) javan_arraylist_add(command, (void*) "-c");
+                (void) javan_arraylist_add(command, (void*) "sleep 2 & wait; touch descendant-alive");
+                void* result = javan_process_run(NULL, command, 10);
+                sleep(3);
+                printf(
+                    "%d:%d\\n",
+                    javan_process_result_exit_code(result),
+                    access("descendant-alive", F_OK) == 0
+                );
+                javan_free(result);
+                javan_free(command);
+                #endif
+                return 0;
+            }
+            """,
+            "512"
+        );
+
+        final boolean windows = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
+        assertThat(stdout).isEqualTo(windows ? "not-posix\n" : "124:0\n");
     }
 
     @Test

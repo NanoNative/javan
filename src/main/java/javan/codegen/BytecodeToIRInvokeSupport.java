@@ -1986,7 +1986,7 @@ final class BytecodeToIRInvokeSupport {
         final Map<Integer, IrLocal> localDeclarations
     ) {
         if (!"javan/util/ProcessRunner".equals(methodRef.owner())
-            || !"run".equals(methodRef.name())
+            || !("run".equals(methodRef.name()) || "runResult".equals(methodRef.name()))
             || !"(Ljava/nio/file/Path;Ljava/util/List;)Ljavan/util/ProcessRunner$Result;".equals(methodRef.descriptor())) {
             return false;
         }

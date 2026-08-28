@@ -28,6 +28,7 @@ import java.util.Optional;
  * @param bindings native library binding languages
  * @param release whether release optimizations are requested
  * @param targetTriple requested host target assertion for native builds
+ * @param jobs requested native compiler worker cap
  * @param passthroughArgs arguments passed to a built program by {@code run}
  */
 public record Options(
@@ -44,6 +45,7 @@ public record Options(
     List<BindingLanguage> bindings,
     boolean release,
     Optional<String> targetTriple,
+    Optional<Integer> jobs,
     List<String> passthroughArgs
 ) {
     /**
@@ -95,6 +97,7 @@ public record Options(
                 List.of(),
                 false,
                 Optional.empty(),
+                Optional.empty(),
                 List.of(java.util.Arrays.copyOfRange(args, 1, args.length))
             ));
         }
@@ -106,6 +109,7 @@ public record Options(
         Profile profile = Profile.CORE;
         boolean release = false;
         Optional<String> targetTriple = Optional.empty();
+        Optional<Integer> jobs = Optional.empty();
         final List<Path> classFolders = new ArrayList<>();
         final List<Path> classpathEntries = new ArrayList<>();
         final List<String> exports = new ArrayList<>();
@@ -201,6 +205,16 @@ public record Options(
                     return ParseResult.failure(value.error());
                 }
                 targetTriple = Optional.of(value.value());
+            } else if ("--jobs".equals(arg)) {
+                final ValueResult value = requiredValueResult(args, ++index, arg);
+                if (!value.pass()) {
+                    return ParseResult.failure(value.error());
+                }
+                final Optional<Integer> parsed = positiveInteger(value.value());
+                if (parsed.isEmpty()) {
+                    return ParseResult.failure("--jobs requires a positive integer");
+                }
+                jobs = parsed;
             } else if (arg.startsWith("-")) {
                 return ParseResult.failure("Unknown option: " + arg);
             } else if (target.isEmpty()) {
@@ -213,6 +227,12 @@ public record Options(
         final FormatResult resolvedFormats = libraryFormatsResult(buildKind, libraryFormats);
         if (!resolvedFormats.pass()) {
             return ParseResult.failure(resolvedFormats.error());
+        }
+        if (jobs.isPresent() && command != Command.BUILD && command != Command.RUN) {
+            return ParseResult.failure("--jobs requires build or run");
+        }
+        if (jobs.isPresent() && buildKind != BuildKind.APP) {
+            return ParseResult.failure("--jobs currently supports native application builds only");
         }
         return ParseResult.success(new Options(
             command,
@@ -228,6 +248,7 @@ public record Options(
             distinctBindings(bindings),
             release,
             targetTriple,
+            jobs,
             List.copyOf(passthroughArgs)
         ));
     }
@@ -246,6 +267,7 @@ public record Options(
             List.of(),
             List.of(),
             false,
+            Optional.empty(),
             Optional.empty(),
             List.of()
         );
@@ -266,6 +288,7 @@ public record Options(
             List.of(),
             false,
             Optional.empty(),
+            Optional.empty(),
             List.of(java.util.Arrays.copyOfRange(args, 1, args.length))
         );
     }
@@ -275,6 +298,22 @@ public record Options(
             return new ValueResult(false, "", "Missing value for " + option);
         }
         return new ValueResult(true, args[index], "");
+    }
+
+    private static Optional<Integer> positiveInteger(final String value) {
+        final int start = value.startsWith("+") ? 1 : 0;
+        if (start == value.length()) {
+            return Optional.empty();
+        }
+        int result = 0;
+        for (int index = start; index < value.length(); index++) {
+            final int digit = value.charAt(index) - '0';
+            if (digit < 0 || digit > 9 || result > 214748364 || (result == 214748364 && digit > 7)) {
+                return Optional.empty();
+            }
+            result = result * 10 + digit;
+        }
+        return result > 0 ? Optional.of(result) : Optional.empty();
     }
 
     private static List<Path> parseClasspath(final String value) {

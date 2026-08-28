@@ -130,6 +130,52 @@ final class OptionsTest {
     }
 
     @Test
+    void parseResultCapturesAPositiveNativeWorkerLimit() {
+        final Options.ParseResult result = Options.parseResult(new String[]{"build", "--jobs", "3"});
+
+        assertThat(result.pass()).isTrue();
+        assertThat(result.options().jobs()).contains(3);
+    }
+
+    @Test
+    void parseResultCapturesTheLargestSupportedNativeWorkerLimit() {
+        final Options.ParseResult result = Options.parseResult(new String[]{"build", "--jobs", "+2147483647"});
+
+        assertThat(result.pass()).isTrue();
+        assertThat(result.options().jobs()).contains(Integer.MAX_VALUE);
+    }
+
+    @Test
+    void parseResultLeavesNativeWorkerLimitAutomaticByDefault() {
+        final Options.ParseResult result = Options.parseResult(new String[]{"build"});
+
+        assertThat(result.pass()).isTrue();
+        assertThat(result.options().jobs()).isEmpty();
+    }
+
+    @Test
+    void parseResultRejectsInvalidNativeWorkerLimits() {
+        assertThat(Options.parseResult(new String[]{"build", "--jobs"}).error())
+            .isEqualTo("Missing value for --jobs");
+        assertThat(Options.parseResult(new String[]{"build", "--jobs", "0"}).error())
+            .isEqualTo("--jobs requires a positive integer");
+        assertThat(Options.parseResult(new String[]{"build", "--jobs", "many"}).error())
+            .isEqualTo("--jobs requires a positive integer");
+        assertThat(Options.parseResult(new String[]{"build", "--jobs", "2147483648"}).error())
+            .isEqualTo("--jobs requires a positive integer");
+    }
+
+    @Test
+    void parseResultRejectsNativeWorkerLimitsOutsideNativeApplicationBuilds() {
+        assertThat(Options.parseResult(new String[]{"check", "--jobs", "2"}).error())
+            .isEqualTo("--jobs requires build or run");
+        assertThat(Options.parseResult(new String[]{"build", "--jar", "--jobs", "2"}).error())
+            .isEqualTo("--jobs currently supports native application builds only");
+        assertThat(Options.parseResult(new String[]{"build", "--library", "--jobs", "2"}).error())
+            .isEqualTo("--jobs currently supports native application builds only");
+    }
+
+    @Test
     void parseResultRejectsUnsupportedBuildKind() {
         final Options.ParseResult result = Options.parseResult(new String[]{"build", "--kind", "plugin"});
 
