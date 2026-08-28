@@ -40,15 +40,18 @@ native execution, and package evidence where the behavior is release-critical.
 
 | Order | Work | Required proof |
 | --- | --- | --- |
-| 1 | State the scenario-bounded JDK gate and current release scope. | No source claims full JDK inventory closure is required for the three-target first release; declared reachable behavior remains supported or rejected. |
-| 2 | Rehearse each declared target's extracted release archive without publication. | Linux x64, Linux ARM64, and macOS ARM64 verify checksum, package, self-host, acceptance, ABI, and sanitizer evidence from clean inputs, while recording exclusions. |
-| 3 | Verify a checksummed Linux release-candidate archive in a container as supplemental evidence. | The extracted Linux `bin/javan` performs `build`, `check`, and `report` without a source checkout or host tool dependency; it does not replace host-native rehearsal. |
-| 4 | Prove configured native imports from extracted packages on every declared target. | Primitive and borrowed-`byte[]` imports compile, link, execute, and reject invalid reachable shapes deterministically. |
-| 5 | Record cold, warm, and changed-source baselines after the bounded-worker path is verified. | Public `javan build` measurements with wall time, CPU time, peak RSS, artifact size, target, and toolchain. |
-| 6 | Balance the existing six native CI workers from recorded timings. | Deterministic, complete worker assignment plus before/after CI timing evidence; no worker-count increase. |
+| 1 | [REL-SCOPE-01](https://github.com/NanoNative/javan/issues/103): keep the scenario-bounded JDK gate and release scope aligned. | No source claims full JDK inventory closure is required for the three-target first release; declared reachable behavior remains supported or rejected. |
+| 2 | [REL-ARTIFACT-01](https://github.com/NanoNative/javan/issues/116): rehearse each declared target's extracted release archive without publication. | Linux x64, Linux ARM64, and macOS ARM64 verify checksum, package, self-host, acceptance, ABI, and sanitizer evidence from clean inputs, while recording exclusions. |
+| 3 | [ABI-IMPORT-01](https://github.com/NanoNative/javan/issues/117): prove configured native imports from extracted packages on every declared target. | Primitive and borrowed-`byte[]` imports compile, link, execute, and reject invalid reachable shapes deterministically. |
+| 4 | [PERF-BASELINE-01](https://github.com/NanoNative/javan/issues/130): record cold, warm, and changed-source baselines after the bounded-worker path is verified. | Public `javan build` measurements with wall time, CPU time, peak RSS, artifact size, target, and toolchain. |
+| 5 | [CI-SHARD-01](https://github.com/NanoNative/javan/issues/250): balance the existing six native CI workers from recorded timings. | Deterministic, complete worker assignment plus before/after CI timing evidence; no worker-count increase. |
 
-The current bounded-worker pull request is verification work, not a second active feature slice.
-After it merges, the baseline task measures it before another build-speed change is started.
+The bounded-worker path is verified on `main`, not a second active feature slice. The baseline
+task measures it before another build-speed change is started.
+
+Supplemental evidence must not compete with this five-task release queue. [REL-CONTAINER-01](https://github.com/NanoNative/javan/issues/115)
+verifies a Linux archive in a container after the host-native gates move; it cannot replace
+extracted-package rehearsal on any declared target.
 
 There is currently no safe `dry_run` release workflow: the documented `dry_run=true` dispatch
 still behaves as a real GitHub release. Do not use it as rehearsal. Any future artifact rehearsal
@@ -57,6 +60,7 @@ upload, tag, or release API path.
 
 Deferred until this queue is green:
 
+- Linux container archive verification ([REL-CONTAINER-01](https://github.com/NanoNative/javan/issues/115)); it is supplemental release evidence, not a host-native package gate.
 - Windows x64 and ARM64 native package support, macOS x64 package support, and any runner-only
   workaround.
 - Broad JDK callable accounting, whole-class support tasks, and compatibility work without a

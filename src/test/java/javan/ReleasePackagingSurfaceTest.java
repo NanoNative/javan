@@ -22,6 +22,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     private static final Path TIMINGS_WORKFLOW = Path.of(".github/workflows/timings.yml");
     private static final Path RELEASE_WORKFLOW = Path.of(".github/workflows/release.yml");
     private static final Path CONTAINER_WORKFLOW = Path.of(".github/workflows/container-images.yml");
+    private static final Path ROADMAP = Path.of("doc/spec/roadmap.md");
     private static final Path VERIFY_RELEASE = Path.of(".github/scripts/verify-release.sh");
     private static final Path VERIFY_CI_PACKAGE_SMOKE = Path.of(".github/scripts/verify-ci-package-smoke.sh");
     private static final Path VERSION_TEMPLATE = Path.of("src/main/version/javan/cli/Version.java");
@@ -178,6 +179,28 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             .contains("native-acceptance:")
             .contains("native-sanitizer:")
             .contains("native-package-self-host:");
+    }
+
+    @Test
+    void firstNativeReleaseQueueKeepsFiveLinkedCoreGates() throws Exception {
+        final String roadmap = Files.readString(ROADMAP);
+        final String activeQueue = roadmap.substring(
+            roadmap.indexOf("## Active First Native Release Queue"),
+            roadmap.indexOf("Supplemental evidence must not compete")
+        );
+
+        assertThat(activeQueue)
+            .contains(
+                "issues/103",
+                "issues/116",
+                "issues/117",
+                "issues/130",
+                "issues/250"
+            )
+            .doesNotContain("issues/115");
+        assertThat(Pattern.compile("https://github.com/NanoNative/javan/issues/").matcher(activeQueue).results().count())
+            .isEqualTo(5);
+        assertThat(roadmap).contains("REL-CONTAINER-01", "issues/115");
     }
 
     @Test
