@@ -4,9 +4,10 @@ set -eu
 ROOT=$(CDPATH= cd "$(dirname "$0")/../.." && pwd)
 cd "$ROOT"
 . .github/scripts/timing-report.sh
+. .github/scripts/platform-target.sh
 PACKAGE_SANITIZER_SCOPE=${JAVAN_PACKAGE_SANITIZER_SCOPE:-full}
 PACKAGE_PROOF_SCOPE=${JAVAN_PACKAGE_PROOF_SCOPE:-full}
-PACKAGE_TARGET=${JAVAN_PACKAGE_TARGET:-host}
+PACKAGE_TARGET=${JAVAN_PACKAGE_TARGET:-$(javan_host_target)}
 BOOTSTRAP_GENERATION=${JAVAN_BOOTSTRAP_GENERATION:-3}
 case "$PACKAGE_PROOF_SCOPE" in
   bootstrap|full) ;;
@@ -89,6 +90,10 @@ if [ "$archive_status" = "fail" ]; then
   exit "$archive_code"
 fi
 javan_timing_run package_verify .github/scripts/verify-package.sh "$ARCHIVE"
+run_package_showcase() {
+  JAVAN_BIN=$PACKAGE_BIN sh .github/scripts/verify-showcase.sh
+}
+javan_timing_run package_showcase run_package_showcase
 if [ "$PACKAGE_PROOF_SCOPE" = "bootstrap" ]; then
   printf '%s\n' "Verified CI bootstrap package $ARCHIVE"
   exit 0
@@ -194,5 +199,17 @@ assert_contains "$REPORT" '"actualLiveBytes": 0'
 assert_contains "$REPORT" '"failureSignatures": "false"'
 assert_json_number_at_least "$REPORT" actualTotalAllocations 1
 assert_json_number_at_least "$REPORT" actualGcCollections 1
+
+REHEARSAL_BUNDLE=$(.github/scripts/package-release-rehearsal.sh "$ARCHIVE" "$PACKAGE_TARGET")
+javan_timing_run package_rehearsal \
+  .github/scripts/rehearse-release-artifact.sh --archive "$ARCHIVE" --target "$PACKAGE_TARGET"
+if [ ! -f "$REHEARSAL_BUNDLE" ] || [ ! -f "$REHEARSAL_BUNDLE.sha256" ]; then
+  printf '%s\n' "Missing release rehearsal sidecar for $ARCHIVE" >&2
+  exit 1
+fi
+if [ ! -f "${ARCHIVE%.tar.gz}.rehearsal.json" ]; then
+  printf '%s\n' "Missing release rehearsal report for $ARCHIVE" >&2
+  exit 1
+fi
 
 printf '%s\n' "Verified CI package smoke with $PACKAGE_BIN"

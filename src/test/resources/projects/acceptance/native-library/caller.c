@@ -54,6 +54,7 @@ int main(void) {
     javan_clear_error();
     int failed = javan_export_com_acme_Failures_failInt_void();
     const char* error = javan_last_error();
+    const char* error_source_line = javan_last_error_source_line();
     if (error == NULL || strstr(error, "negative array length") == NULL) {
         printf("last-error-missing\n");
         return 1;
@@ -65,7 +66,7 @@ int main(void) {
             || strcmp(javan_last_error_file(), "Failures.java") != 0
             || javan_last_error_line() != 8
             || javan_last_error_bytecode_offset() < 0
-            || strstr(javan_last_error_source_line(), "new int[-1]") == NULL
+            || (error_source_line != NULL && strstr(error_source_line, "new int[-1]") == NULL)
             || strstr(javan_last_error_detail(), "negative array length") == NULL) {
         printf("last-error-structured-missing\n");
         return 1;

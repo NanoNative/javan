@@ -3,6 +3,7 @@ set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 cd "$ROOT"
+. .github/scripts/platform-target.sh
 
 VERSION=${1:-}
 if [ -z "$VERSION" ]; then
@@ -20,18 +21,9 @@ if ! printf '%s\n' "$VERSION" | grep -E '^[0-9]{4}\.([1-9]|1[0-2])\.([1-9]|[12][
   exit 1
 fi
 
-case "$(uname -s)" in
-  Darwin) OS=macos ;;
-  Linux) OS=linux ;;
-  MINGW*|MSYS*|CYGWIN*) OS=windows ;;
-  *) OS=$(uname -s | tr '[:upper:]' '[:lower:]') ;;
-esac
-
-case "$(uname -m)" in
-  x86_64|amd64) ARCH=x64 ;;
-  arm64|aarch64) ARCH=aarch64 ;;
-  *) ARCH=$(uname -m | tr '[:upper:]' '[:lower:]') ;;
-esac
+HOST_TARGET=$(javan_host_target)
+OS=${HOST_TARGET%-*}
+ARCH=${HOST_TARGET#*-}
 if [ -n "${JAVAN_PACKAGE_TARGET:-}" ] && [ "$OS-$ARCH" != "$JAVAN_PACKAGE_TARGET" ]; then
   printf '%s\n' "Host target $OS-$ARCH does not match expected package target $JAVAN_PACKAGE_TARGET." >&2
   exit 1

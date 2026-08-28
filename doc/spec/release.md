@@ -22,6 +22,22 @@ dispatch is not this rehearsal: it deliberately behaves like a real GitHub relea
 may use only package-verification commands and already-produced artifacts, without credentials,
 upload, tag, or release API paths.
 
+The full package proof creates a matching, checksummed `-rehearsal.tar.gz` sidecar. It is
+internal release evidence, never product content or a GitHub Release asset. The sidecar carries
+only compiled Javan self-host input and deterministic fixtures, so the rehearsal runs in a clean
+temporary directory without reading a source checkout. Run it with:
+
+```sh
+.github/scripts/rehearse-release-artifact.sh \
+  --archive dist/release/javan-<version>-<target>.tar.gz \
+  --target <target>
+```
+
+It writes `javan-<version>-<target>.rehearsal.json` and Markdown beside the archive. The report
+records the built commit, target, C toolchain, completed package/self-host/acceptance/ABI/sanitizer
+checks, known exclusions, and that publication is disabled. Full release-package CI runs this
+proof for Linux x64, Linux ARM64, and macOS ARM64 before a release can publish.
+
 ## Local Gate
 
 Run the same gate used by the release matrix:
