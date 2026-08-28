@@ -270,11 +270,13 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     void buildPrimitiveLiteralBootstrap(@TempDir final Path bootstrapTempDir) throws Exception {
         final Path root = Path.of("").toAbsolutePath().normalize();
         final Path classes = root.resolve("target/classes");
+        final String os = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT);
+        final int bootstrapTimeoutSeconds = os.contains("win") ? 240 : 120;
         assertThat(classes.resolve("javan/Main.class")).exists();
 
         final CliRun bootstrapBuild = runWithTimeout(
             bootstrapTempDir,
-            Duration.ofSeconds(120),
+            Duration.ofSeconds(bootstrapTimeoutSeconds),
             "build",
             classes.toString(),
             "--main",

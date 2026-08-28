@@ -25,6 +25,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     private static final Path ROADMAP = Path.of("doc/spec/roadmap.md");
     private static final Path VERIFY_RELEASE = Path.of(".github/scripts/verify-release.sh");
     private static final Path VERIFY_CI_PACKAGE_SMOKE = Path.of(".github/scripts/verify-ci-package-smoke.sh");
+    private static final Path VERIFY_PACKAGE_NATIVE_IMPORTS = Path.of(".github/scripts/verify-package-native-imports.sh");
     private static final Path PACKAGE_RELEASE_REHEARSAL = Path.of(".github/scripts/package-release-rehearsal.sh");
     private static final Path REHEARSE_RELEASE_ARTIFACT = Path.of(".github/scripts/rehearse-release-artifact.sh");
     private static final Path VERSION_TEMPLATE = Path.of("src/main/version/javan/cli/Version.java");
@@ -912,6 +913,22 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     }
 
     @Test
+    void packageNativeImportVerifierUsesOnlyTheMatchingPackagedCliAndConfiguredAbiFixtures() throws Exception {
+        final String script = Files.readString(REPO_ROOT.resolve(VERIFY_PACKAGE_NATIVE_IMPORTS));
+        final String fixture = Files.readString(REPO_ROOT.resolve("src/test/resources/projects/acceptance/native-imports/native/imports.c"));
+
+        assertThat(script)
+            .contains("javan_host_target", "Archive $ARCHIVE_NAME does not match host target $TARGET.")
+            .contains("ARCHIVE_DIR=$(CDPATH= cd -- \"$(dirname -- \"$ARCHIVE\")\" && pwd)")
+            .contains("(cd \"$ARCHIVE_DIR\" && verify_checksum \"$ARCHIVE_NAME.sha256\")")
+            .contains("verify-package.sh", "native-imports", "native-import-invalid")
+            .contains("\"$PACKAGE_BIN\" build \"$SUCCESS\"", "\"$PACKAGE_BIN\" check \"$INVALID\"")
+            .contains("28:3:3:11:5", "error[JAVAN013]: native import ABI is not supported")
+            .contains("Use only the supported native import ABI.");
+        assertThat(fixture).contains("#include \"javan_runtime.h\"");
+    }
+
+    @Test
     void fullPackageProofRetainsReleaseRehearsalEvidence() throws Exception {
         final String workflow = Files.readString(NATIVE_PROOF);
 
@@ -920,6 +937,17 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             .contains("inputs.package_scope == 'full'")
             .contains(".rehearsal.json")
             .contains("-rehearsal.tar.gz");
+    }
+
+    @Test
+    void fullPackageProofRunsConfiguredNativeImportsFromThePackageArchive() throws Exception {
+        final String script = Files.readString(VERIFY_CI_PACKAGE_SMOKE);
+
+        assertThat(script)
+            .contains("package_imports", "verify-package-native-imports.sh \"$ARCHIVE\"")
+            .contains("PACKAGE_BIN=$PACKAGE_ROOT/bin/javan");
+        assertThat(script.indexOf("PACKAGE_BIN=$PACKAGE_ROOT/bin/javan"))
+            .isLessThan(script.indexOf("package_imports"));
     }
 
     @Test
