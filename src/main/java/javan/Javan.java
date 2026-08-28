@@ -5,6 +5,7 @@ import javan.analysis.ClassInitializationGraph;
 import javan.analysis.EntryPoint;
 import javan.analysis.ReachabilityAnalyzer;
 import javan.build.BindingGenerator;
+import javan.build.BuildKind;
 import javan.build.BuildInvoker;
 import javan.build.DeduplicationPlanner;
 import javan.build.ExportedMethod;
@@ -314,7 +315,7 @@ public final class Javan {
             program, generated, nativeInterop, stackAllocations
         );
         final Path runtimeC = runtimeFiles.write(generated, resources);
-        final Path output = check.layout().outputDirectory().resolve("bin").resolve(check.layout().outputName());
+        final Path output = BuildKind.APP.artifactPath(check.layout().outputDirectory(), check.layout().outputName());
         final NativeLinker.CacheLinkResult linked = nativeLinker.linkCached(
             check.layout().root(),
             generatedC.sources(),
@@ -323,7 +324,8 @@ public final class Javan {
             output,
             check.layout().outputDirectory().resolve("cache").resolve("native"),
             nativeInterop.linkInputs(),
-            nativeInterop.externalSymbols()
+            nativeInterop.externalSymbols(),
+            options.jobs().orElse(0)
         );
         final Path binary = linked.artifact();
         writeNativeObjectCacheReport(check.layout().outputDirectory(), linked);
@@ -549,7 +551,7 @@ public final class Javan {
         printText(out, "Classes: ", pathListText(layout.classFolders()));
         printText(out, "Sources: ", pathListText(layout.sourceFolders()));
         printText(out, "Resources: ", pathListText(layout.resourceFolders()));
-        printText(out, "Output:  ", layout.outputDirectory().resolve("bin").resolve(layout.outputName()).toString());
+        printText(out, "Output:  ", BuildKind.APP.artifactPath(layout.outputDirectory(), layout.outputName()).toString());
         for (final String warning : layout.warnings()) {
             printText(out, "warning: ", warning);
         }
@@ -565,8 +567,19 @@ public final class Javan {
         final NativeLinker.CacheLinkResult linked
     ) throws IOException {
         final Path reports = outputDirectory.resolve("reports");
-        final StringBuilder json = new StringBuilder("{\n  \"objects\": [");
-        final StringBuilder markdown = new StringBuilder("# Native Object Cache\n\n| Source | Decision |\n| --- | --- |\n");
+        final NativeLinker.WorkerEvidence workers = linked.workers();
+        final String requested = workers.requestedJobs() == 0 ? "automatic" : Integer.toString(workers.requestedJobs());
+        final StringBuilder json = new StringBuilder("{\n  \"workers\": {")
+            .append("\n    \"requestedJobs\": ").append(workers.requestedJobs()).append(',')
+            .append("\n    \"effectiveJobs\": ").append(workers.effectiveJobs()).append(',')
+            .append("\n    \"queued\": ").append(workers.queued()).append(',')
+            .append("\n    \"outcome\": \"succeeded\"")
+            .append("\n  },\n  \"objects\": [");
+        final StringBuilder markdown = new StringBuilder("# Native Object Cache\n\n## Native Workers\n\n")
+            .append("| Requested | Effective | Queued | Outcome |\n")
+            .append("| --- | --- | --- | --- |\n")
+            .append("| ").append(requested).append(" | ").append(workers.effectiveJobs())
+            .append(" | ").append(workers.queued()).append(" | succeeded |\n\n## Objects\n\n| Source | Decision |\n| --- | --- |\n");
         for (int index = 0; index < linked.objects().size(); index++) {
             final NativeLinker.CacheEntry entry = linked.objects().get(index);
             if (index > 0) {

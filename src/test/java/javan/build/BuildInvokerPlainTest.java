@@ -218,6 +218,7 @@ final class BuildInvokerPlainTest {
             List.of(),
             false,
             Optional.empty(),
+            Optional.empty(),
             List.of()
         );
     }

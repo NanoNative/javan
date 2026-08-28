@@ -942,6 +942,69 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void dependencyJarHttpHandlerBuildsAndServesLoopbackResponse() throws Exception {
+        final Path dependency = dependencyJar("http-handler", "dep.ResponseHandler", """
+            package dep;
+
+            import com.sun.net.httpserver.HttpExchange;
+            import com.sun.net.httpserver.HttpHandler;
+
+            public final class ResponseHandler implements HttpHandler {
+                @Override
+                public void handle(final HttpExchange exchange) throws java.io.IOException {
+                    final byte[] body = new byte[] {101, 120, 116, 101, 114, 110, 97, 108, 45, 112, 111, 110, 103};
+                    exchange.sendResponseHeaders(200, body.length);
+                    exchange.getResponseBody().write(body);
+                    exchange.close();
+                }
+            }
+            """);
+        final Path project = project("dependency-http-handler");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import com.sun.net.httpserver.HttpServer;
+            import dep.ResponseHandler;
+            import java.net.InetSocketAddress;
+            import java.net.URI;
+            import java.net.http.HttpClient;
+            import java.net.http.HttpRequest;
+            import java.net.http.HttpResponse;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+                    server.createContext("/health", new ResponseHandler());
+                    server.start();
+                    final int port = server.getAddress().getPort();
+                    final HttpRequest request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/health"))
+                        .GET()
+                        .build();
+                    final HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+                    System.out.println(response.statusCode());
+                    System.out.println(response.body());
+                    server.stop(0);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main", List.of(dependency));
+        final CliRun run = run(tempDir, "build", project.toString(), "--classpath", dependency.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(
+            project,
+            List.of(project.resolve(".javan/bin/dependency-http-handler").toString()),
+            defaultProcessTimeout(),
+            Map.of("JAVAN_GC_STRESS", "1")
+        ).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("200\nexternal-pong\n");
+    }
+
+    @Test
     void dependencyJarScheduledExecutorOneShotBuilds() throws Exception {
         final Path dependency = dependencyJar("schedulerlib", "dep.Scheduler", """
             package dep;

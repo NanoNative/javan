@@ -1,8 +1,11 @@
 package javan.codegen;
 
 import javan.build.NativeInteropConfig;
+import javan.classfile.MethodRef;
+import javan.ir.IrDispatch;
 import javan.ir.IrFunction;
 import javan.ir.IrInstruction;
+import javan.ir.IrParameter;
 import javan.ir.IrProgram;
 import javan.ir.IrType;
 import javan.optimizer.EscapeAnalyzer;
@@ -39,8 +42,12 @@ final class CCodegenUnitsTest {
         assertThat(Files.readString(first.header()))
             .contains("#ifndef JAVAN_PROGRAM_H", "void worker_symbol(void);", "void helper_symbol(void);");
         assertThat(Files.readString(first.main()))
-            .contains("#include \"javan_program.h\"", "int JAVAN_PROGRAM_MAIN(int argc, char** argv)")
-            .doesNotContain("void worker_symbol(void) {");
+            .contains(
+                "#include \"javan_program.h\"",
+                "int JAVAN_PROGRAM_MAIN(int argc, char** argv)",
+                "javan_runtime_prepare_command_line_args(&argc, &argv);"
+            )
+            .doesNotContain("void worker_symbol(void) {", "javan_runtime_release_command_line_args();");
         assertThat(first.sources().subList(1, first.sources().size()))
             .allSatisfy(source -> assertThat(read(source)).contains("#include \"../javan_program.h\""));
         assertThat(first.sources().stream().map(CCodegenUnitsTest::read).toList())
@@ -67,6 +74,33 @@ final class CCodegenUnitsTest {
             if (!second.sources().contains(old)) assertThat(old).doesNotExist();
         });
         assertThat(Files.readAllLines(second.manifest())).hasSize(3);
+    }
+
+    @Test
+    void emitsHttpHandlerBridgeForSplitPrograms() throws Exception {
+        final String dispatch = BytecodeToIR.dispatchSymbol(new MethodRef(
+            "com/sun/net/httpserver/HttpHandler", "handle", "(Lcom/sun/net/httpserver/HttpExchange;)V"
+        ));
+        final IrProgram program = new IrProgram(
+            List.of(),
+            List.of(function("com/acme/Main", "main_symbol")),
+            List.of(new IrDispatch(
+                dispatch,
+                IrType.VOID,
+                List.of(new IrParameter(IrType.OBJECT, "self"), new IrParameter(IrType.OBJECT, "arg0")),
+                List.of()
+            )),
+            "main_symbol"
+        );
+
+        final CCodegen.GeneratedC generated = new CCodegen().generateProgram(
+            program, tempDir.resolve("http-handler"), NativeInteropConfig.empty(), emptyStackPlan()
+        );
+
+        assertThat(Files.readString(generated.main())).contains(
+            "void javan_http_server_handle(void* handler, void* exchange)",
+            dispatch + "(handler, exchange);"
+        ).doesNotContain("HttpServer.start has no closed-world HttpHandler.handle implementation");
     }
 
     private static IrProgram program(final String... workerOwners) {

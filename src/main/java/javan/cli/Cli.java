@@ -189,6 +189,7 @@ public final class Cli {
               --bindings <list>      c,rust,go,python
               --release             enable release build mode
               --target <triple>      assert host target for native build
+              --jobs <count>         request a native app compiler worker cap; effective cap is currently one
             """;
     }
 

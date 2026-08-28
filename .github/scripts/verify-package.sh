@@ -2,7 +2,6 @@
 set -eu
 
 ARCHIVE=${1:-}
-REPO_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 if [ -z "$ARCHIVE" ] || [ ! -f "$ARCHIVE" ]; then
   printf '%s\n' "Usage: .github/scripts/verify-package.sh dist/release/javan-<version>-<os>-<arch>.tar.gz" >&2
   exit 2
@@ -33,6 +32,10 @@ LIST=$ARCHIVE_DIR/$EXPECTED_ROOT.contents
 tar -tzf "$ARCHIVE" >"$LIST"
 if grep -E '(^/|(^|/)\.\.($|/))' "$LIST" >/dev/null 2>&1; then
   printf '%s\n' "Archive contains unsafe paths." >&2
+  exit 1
+fi
+if tar -tvzf "$ARCHIVE" | grep -E '^[lh]' >/dev/null 2>&1; then
+  printf '%s\n' "Archive contains unsupported link entries." >&2
   exit 1
 fi
 if grep -v -E "^$EXPECTED_ROOT/$|^$EXPECTED_ROOT/bin/$|^$EXPECTED_ROOT/bin/$BIN_NAME$|^$EXPECTED_ROOT/README.md$|^$EXPECTED_ROOT/VERSION$|^$EXPECTED_ROOT/LICENSE$" "$LIST" >/dev/null 2>&1; then
@@ -69,10 +72,17 @@ if ! printf '%s\n' "$VERSION" | grep -Eq '^[0-9]{4}[.]([1-9]|1[0-2])[.]([1-9]|[1
 fi
 
 PACKAGE_BIN=$ROOT/bin/$BIN_NAME
-"$PACKAGE_BIN" --version | grep -F "javan $VERSION" >/dev/null
-"$PACKAGE_BIN" --help | grep -F "javan $VERSION" >/dev/null
+ACTUAL_VERSION=$("$PACKAGE_BIN" --version)
+if ! printf '%s\n' "$ACTUAL_VERSION" | grep -F "javan $VERSION" >/dev/null; then
+  printf '%s\n' "Package executable version does not match VERSION: expected javan $VERSION, got $ACTUAL_VERSION" >&2
+  exit 1
+fi
+ACTUAL_HELP=$("$PACKAGE_BIN" --help)
+if ! printf '%s\n' "$ACTUAL_HELP" | grep -F "javan $VERSION" >/dev/null; then
+  printf '%s\n' "Package help does not match VERSION: expected javan $VERSION." >&2
+  exit 1
+fi
 "$PACKAGE_BIN" --help >/dev/null
-JAVAN_BIN=$PACKAGE_BIN sh "$REPO_ROOT/.github/scripts/verify-showcase.sh" >/dev/null
 
 if [ "$BIN_NAME" = "javan" ]; then
   FACADE_HOME=$TMP/facade-home

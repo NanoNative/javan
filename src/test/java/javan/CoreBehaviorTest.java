@@ -782,6 +782,8 @@ final class CoreBehaviorTest {
     @Test
     void jdkCallSupportAcceptsHttpClientSendCalls() {
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/URI", "create", "(Ljava/lang/String;)Ljava/net/URI;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/URI", "getRawPath", "()Ljava/lang/String;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/URI", "getRawQuery", "()Ljava/lang/String;"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/http/HttpClient", "newHttpClient", "()Ljava/net/http/HttpClient;"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/http/HttpRequest", "newBuilder", "(Ljava/net/URI;)Ljava/net/http/HttpRequest$Builder;"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/http/HttpRequest$Builder", "GET", "()Ljava/net/http/HttpRequest$Builder;"))).isTrue();
@@ -796,6 +798,19 @@ final class CoreBehaviorTest {
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/http/HttpClient", "send", "(Ljava/net/http/HttpRequest;Ljava/net/http/HttpResponse$BodyHandler;)Ljava/net/http/HttpResponse;"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/http/HttpResponse", "statusCode", "()I"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/http/HttpResponse", "body", "()Ljava/lang/Object;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("com/sun/net/httpserver/HttpServer", "create", "(Ljava/net/InetSocketAddress;I)Lcom/sun/net/httpserver/HttpServer;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("com/sun/net/httpserver/HttpServer", "getAddress", "()Ljava/net/InetSocketAddress;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("com/sun/net/httpserver/HttpServer", "createContext", "(Ljava/lang/String;Lcom/sun/net/httpserver/HttpHandler;)Lcom/sun/net/httpserver/HttpContext;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("com/sun/net/httpserver/HttpServer", "start", "()V"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("com/sun/net/httpserver/HttpServer", "stop", "(I)V"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("com/sun/net/httpserver/HttpExchange", "sendResponseHeaders", "(IJ)V"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("com/sun/net/httpserver/HttpExchange", "getRequestMethod", "()Ljava/lang/String;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("com/sun/net/httpserver/HttpExchange", "getRequestURI", "()Ljava/net/URI;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("com/sun/net/httpserver/HttpExchange", "getRequestHeaders", "()Lcom/sun/net/httpserver/Headers;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("com/sun/net/httpserver/HttpExchange", "getRequestBody", "()Ljava/io/InputStream;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("com/sun/net/httpserver/Headers", "getFirst", "(Ljava/lang/String;)Ljava/lang/String;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("com/sun/net/httpserver/HttpExchange", "getResponseBody", "()Ljava/io/OutputStream;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("com/sun/net/httpserver/HttpExchange", "close", "()V"))).isTrue();
     }
 
     @Test
@@ -1002,6 +1017,16 @@ final class CoreBehaviorTest {
     void staticVerifierAcceptsSupportedHttpClientSendCall() {
         final List<Diagnostic> diagnostics = verifyInstruction(
             instruction(0, 182, "invokevirtual", new MethodRef("java/net/http/HttpClient", "send", "(Ljava/net/http/HttpRequest;Ljava/net/http/HttpResponse$BodyHandler;)Ljava/net/http/HttpResponse;")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsSupportedHttpServerCreateCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 184, "invokestatic", new MethodRef("com/sun/net/httpserver/HttpServer", "create", "(Ljava/net/InetSocketAddress;I)Lcom/sun/net/httpserver/HttpServer;")),
             true
         );
 

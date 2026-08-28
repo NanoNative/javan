@@ -203,6 +203,58 @@ final class RuntimeSourceIoSections {
             return uri;
         }
 
+        void* javan_uri_from_request_target(void* value) {
+            void* target_root = value;
+            void* scheme = NULL;
+            void* host = NULL;
+            void* uri_root = NULL;
+            void** roots[] = { &target_root, &scheme, &host, &uri_root };
+            javan_root_frame_push(roots, 4);
+            if (target_root == NULL || ((const char*) target_root)[0] != '/') {
+                javan_panic("invalid HTTP request target");
+            }
+            scheme = javan_string_from("");
+            host = javan_string_from("");
+            uri_root = javan_alloc(sizeof(javan_uri_value));
+            javan_uri_value* uri = (javan_uri_value*) uri_root;
+            uri->magic = JAVAN_URI_MAGIC;
+            uri->port = 0;
+            uri->reserved0 = 0;
+            uri->reserved1 = 0;
+            uri->scheme = (char*) scheme;
+            uri->host = (char*) host;
+            uri->target = (char*) target_root;
+            javan_update_runtime_allocation_kind(uri_root, JAVAN_RUNTIME_KIND_URI);
+            javan_root_frame_pop(roots);
+            return uri_root;
+        }
+
+        void* javan_uri_get_raw_path(void* value) {
+            void* uri_root = value;
+            void* result_root = NULL;
+            void** roots[] = { &uri_root, &result_root };
+            javan_root_frame_push(roots, 2);
+            javan_uri_value* uri = javan_uri_checked(uri_root);
+            const char* query = strchr(uri->target, '?');
+            result_root = javan_http_copy_range(uri->target, query == NULL ? strlen(uri->target) : (unsigned long) (query - uri->target));
+            javan_root_frame_pop(roots);
+            return result_root;
+        }
+
+        void* javan_uri_get_raw_query(void* value) {
+            void* uri_root = value;
+            void* result_root = NULL;
+            void** roots[] = { &uri_root, &result_root };
+            javan_root_frame_push(roots, 2);
+            javan_uri_value* uri = javan_uri_checked(uri_root);
+            const char* query = strchr(uri->target, '?');
+            if (query != NULL) {
+                result_root = javan_http_copy_range(query + 1, strlen(query + 1));
+            }
+            javan_root_frame_pop(roots);
+            return result_root;
+        }
+
         void* javan_http_client_new(void) {
             javan_http_client_value* client = (javan_http_client_value*) javan_alloc(sizeof(javan_http_client_value));
             client->magic = JAVAN_HTTP_CLIENT_MAGIC;
@@ -388,10 +440,12 @@ final class RuntimeSourceIoSections {
             return handler;
         }
 
-        static void javan_http_send_all(int fd, const char* bytes, unsigned long length) {
+        static void javan_http_send_all(javan_socket_handle fd, const char* bytes, unsigned long length) {
             unsigned long offset = 0;
             while (offset < length) {
-                ssize_t sent = send(fd, bytes + offset, (size_t) (length - offset), 0);
+                unsigned long remaining = length - offset;
+                int chunk_length = remaining > (unsigned long) INT_MAX ? INT_MAX : (int) remaining;
+                int sent = javan_socket_native_send(fd, bytes + offset, chunk_length, 0);
                 if (sent <= 0) {
                     javan_panic("http request write failed");
                 }
@@ -399,7 +453,7 @@ final class RuntimeSourceIoSections {
             }
         }
 
-        static char* javan_http_read_all(int fd, unsigned long* length_out) {
+        static char* javan_http_read_all(javan_socket_handle fd, unsigned long* length_out) {
             unsigned long capacity = 1024;
             unsigned long length = 0;
             char* buffer = (char*) malloc(capacity + 1UL);
@@ -408,7 +462,13 @@ final class RuntimeSourceIoSections {
             }
             while (1) {
                 if (length == capacity) {
-                    unsigned long next_capacity = capacity * 2UL;
+                    if (capacity >= (unsigned long) INT_MAX) {
+                        free(buffer);
+                        javan_panic("http response exceeds Java array size limit");
+                    }
+                    unsigned long next_capacity = capacity > (unsigned long) INT_MAX / 2UL
+                        ? (unsigned long) INT_MAX
+                        : capacity * 2UL;
                     char* next = (char*) realloc(buffer, next_capacity + 1UL);
                     if (next == NULL) {
                         free(buffer);
@@ -417,7 +477,9 @@ final class RuntimeSourceIoSections {
                     buffer = next;
                     capacity = next_capacity;
                 }
-                ssize_t received = recv(fd, buffer + length, (size_t) (capacity - length), 0);
+                unsigned long remaining = capacity - length;
+                int chunk_length = remaining > (unsigned long) INT_MAX ? INT_MAX : (int) remaining;
+                int received = javan_socket_native_receive(fd, buffer + length, chunk_length);
                 if (received < 0) {
                     free(buffer);
                     javan_panic("http response read failed");
@@ -487,13 +549,6 @@ final class RuntimeSourceIoSections {
         }
 
         void* javan_http_client_send(void* client_value, void* request_value, void* body_handler_value) {
-        #if defined(_WIN32)
-            (void) client_value;
-            (void) request_value;
-            (void) body_handler_value;
-            javan_socket_runtime_unsupported();
-            return NULL;
-        #else
             void** javan_http_send_roots[] = {
                 (void**) &client_value,
                 (void**) &request_value,
@@ -511,13 +566,13 @@ final class RuntimeSourceIoSections {
             javan_uri_value* uri = javan_uri_checked((void*) request->uri);
             javan_http_body_publisher_value* body_publisher = request->body == NULL ? NULL : javan_http_body_publisher_checked(request->body);
             struct sockaddr_storage address;
-            socklen_t address_length = 0;
+            javan_socket_length address_length = 0;
             javan_socket_host_checked(uri->host, &address, &address_length, uri->port);
-            int fd = socket(((struct sockaddr*) &address)->sa_family, SOCK_STREAM, 0);
-            if (fd < 0) {
+            javan_socket_handle fd = javan_socket_native_open(((struct sockaddr*) &address)->sa_family);
+            if (javan_socket_handle_is_open(fd) == 0) {
                 javan_panic("http socket open failed");
             }
-            if (connect(fd, (struct sockaddr*) &address, address_length) != 0) {
+            if (javan_socket_native_connect(fd, (struct sockaddr*) &address, address_length) != 0) {
                 javan_socket_native_close(fd);
                 javan_panic("http connect failed");
             }
@@ -636,7 +691,6 @@ final class RuntimeSourceIoSections {
             javan_root_frame_pop(javan_http_response_roots);
             javan_root_frame_pop(javan_http_send_roots);
             return response_root;
-        #endif
         }
 
         int javan_http_response_status_code(void* response) {
@@ -667,7 +721,7 @@ final class RuntimeSourceIoSections {
         }
 
         int javan_files_is_executable(void* path) {
-            return access(javan_path_checked(path), X_OK) == 0;
+            return javan_access_path(javan_path_checked(path), X_OK) == 0;
         }
 
         static void* javan_files_io_failure(const char* message) {
@@ -692,13 +746,13 @@ final class RuntimeSourceIoSections {
             javan_copy_options_checked(options);
             const char* source_path = javan_path_checked(source);
             const char* target_path = javan_path_checked(target);
-            FILE* input = fopen(source_path, "rb");
+            FILE* input = javan_file_open(source_path, "rb");
             if (input == NULL) {
                 return javan_files_io_failure("file copy source open failed");
             }
             javan_native_resource_frame input_resource;
             javan_native_resource_push(&input_resource, input, javan_native_file_cleanup);
-            FILE* output = fopen(target_path, "wb");
+            FILE* output = javan_file_open(target_path, "wb");
             if (output == NULL) {
                 javan_native_resource_pop(&input_resource);
                 fclose(input);
@@ -737,15 +791,36 @@ final class RuntimeSourceIoSections {
             return (void*) target_path;
         }
 
+        #if defined(_WIN32)
+        static int javan_windows_mkdir_if_needed(const char* path) {
+            if (path == NULL || path[0] == '\\0') {
+                return 1;
+            }
+            wchar_t* wide_path = javan_windows_utf8_to_wide_copy(path);
+            if (wide_path == NULL) {
+                return 0;
+            }
+            if (CreateDirectoryW(wide_path, NULL) != 0) {
+                free(wide_path);
+                return 1;
+            }
+            DWORD error = GetLastError();
+            DWORD attributes = GetFileAttributesW(wide_path);
+            free(wide_path);
+            return error == ERROR_ALREADY_EXISTS
+                && attributes != INVALID_FILE_ATTRIBUTES
+                && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+        }
+        #endif
+
         static int javan_mkdir_if_needed(const char* path) {
             if (path[0] == '\\0') {
                 return 1;
             }
             #if defined(_WIN32)
-            if (mkdir(path) == 0) {
+            return javan_windows_mkdir_if_needed(path);
             #else
             if (mkdir(path, 0777) == 0) {
-            #endif
                 return 1;
             }
             if (errno == EEXIST) {
@@ -755,6 +830,7 @@ final class RuntimeSourceIoSections {
                 }
             }
             return 0;
+            #endif
         }
 
         static char* javan_directory_creation_start(char* path) {
@@ -809,16 +885,12 @@ final class RuntimeSourceIoSections {
             if (!javan_mkdirs_if_possible(path)) {
                 return 0;
             }
-            #if defined(_WIN32)
-            return _access(path, 2) == 0;
-            #else
-            return access(path, W_OK) == 0;
-            #endif
+            return javan_access_path(path, W_OK) == 0;
         }
 
         void* javan_files_read_string(void* path_value) {
             const char* path = javan_path_checked(path_value);
-            FILE* file = fopen(path, "rb");
+            FILE* file = javan_file_open(path, "rb");
             if (file == NULL) {
                 return javan_files_io_failure("readString failed");
             }
@@ -871,7 +943,7 @@ final class RuntimeSourceIoSections {
             javan_empty_options_checked(options);
             const char* path = javan_path_checked(path_value);
             const char* text = value == NULL ? "" : (const char*) value;
-            FILE* file = fopen(path, "wb");
+            FILE* file = javan_file_open(path, "wb");
             if (file == NULL) {
                 return javan_files_io_failure("writeString failed");
             }
@@ -894,7 +966,7 @@ final class RuntimeSourceIoSections {
             const char* path = javan_path_checked(path_value);
             javan_byte_array* bytes = (javan_byte_array*) javan_array_checked(bytes_value);
             javan_array_kind_checked((javan_array_header*) bytes, JAVAN_ARRAY_KIND_BYTE);
-            FILE* file = fopen(path, "wb");
+            FILE* file = javan_file_open(path, "wb");
             if (file == NULL) {
                 return javan_files_io_failure("write bytes failed");
             }
@@ -915,7 +987,7 @@ final class RuntimeSourceIoSections {
 
         void* javan_files_read_all_bytes(void* path_value) {
             const char* path = javan_path_checked(path_value);
-            FILE* file = fopen(path, "rb");
+            FILE* file = javan_file_open(path, "rb");
             if (file == NULL) {
                 return javan_files_io_failure("readAllBytes failed");
             }
@@ -965,7 +1037,7 @@ final class RuntimeSourceIoSections {
 
         long long javan_files_size(void* path_value) {
             struct stat info;
-            if (stat(javan_path_checked(path_value), &info) != 0) {
+            if (javan_stat_path(javan_path_checked(path_value), 0, &info) != 0) {
                 javan_files_io_failure("Files.size failed");
                 return 0;
             }
@@ -1005,6 +1077,14 @@ final class RuntimeSourceIoSections {
             list->length++;
         }
 
+        #if defined(_WIN32)
+        static void javan_native_windows_find_cleanup(void* value) {
+            if (value != NULL) {
+                (void) FindClose((HANDLE) value);
+            }
+        }
+        #endif
+
         void* javan_files_new_directory_stream(void* path_value) {
             void* source_root = path_value;
             void* result_root = NULL;
@@ -1016,6 +1096,78 @@ final class RuntimeSourceIoSections {
             const char* path = javan_path_checked(source_root);
             result_root = javan_list_new_with_capacity(0, 1);
             javan_object_list* result = (javan_object_list*) result_root;
+        #if defined(_WIN32)
+            wchar_t* wide_path = javan_windows_utf8_to_wide_copy(path);
+            if (wide_path == NULL) {
+                javan_root_frame_pop(javan_directory_result_roots);
+                return javan_files_io_failure("newDirectoryStream failed");
+            }
+            size_t path_length = wcslen(wide_path);
+            if (path_length > (size_t) (ULONG_MAX / sizeof(wchar_t) - 3UL)) {
+                free(wide_path);
+                javan_root_frame_pop(javan_directory_result_roots);
+                return javan_files_io_failure("newDirectoryStream failed");
+            }
+            wchar_t* pattern = (wchar_t*) malloc((unsigned long) (path_length + 3UL) * sizeof(wchar_t));
+            if (pattern == NULL) {
+                free(wide_path);
+                javan_root_frame_pop(javan_directory_result_roots);
+                return javan_files_io_failure("newDirectoryStream failed");
+            }
+            memcpy(pattern, wide_path, path_length * sizeof(wchar_t));
+            free(wide_path);
+            size_t pattern_length = path_length;
+            if (pattern_length > 0 && pattern[pattern_length - 1] != L'\\\\' && pattern[pattern_length - 1] != L'/') {
+                pattern[pattern_length++] = L'\\\\';
+            }
+            pattern[pattern_length++] = L'*';
+            pattern[pattern_length] = L'\\0';
+            WIN32_FIND_DATAW entry;
+            HANDLE directory = FindFirstFileW(pattern, &entry);
+            free(pattern);
+            if (directory == INVALID_HANDLE_VALUE) {
+                javan_root_frame_pop(javan_directory_result_roots);
+                return javan_files_io_failure("newDirectoryStream failed");
+            }
+            javan_native_resource_frame directory_resource;
+            javan_native_resource_push(&directory_resource, (void*) directory, javan_native_windows_find_cleanup);
+            for (;;) {
+                if (wcscmp(entry.cFileName, L".") != 0 && wcscmp(entry.cFileName, L"..") != 0) {
+                    char* name = javan_windows_wide_to_utf8_copy(entry.cFileName);
+                    if (name == NULL) {
+                        javan_native_resource_pop(&directory_resource);
+                        FindClose(directory);
+                        javan_root_frame_pop(javan_directory_result_roots);
+                        return javan_files_io_failure("newDirectoryStream read failed");
+                    }
+                    javan_native_resource_frame name_resource;
+                    javan_native_resource_push(&name_resource, name, javan_native_memory_cleanup);
+                    void* child = javan_path_resolve(source_root, (void*) name);
+                    javan_native_resource_pop(&name_resource);
+                    free(name);
+                    void** javan_directory_child_roots[] = {
+                        (void**) &child
+                    };
+                    javan_root_frame_push(javan_directory_child_roots, 1);
+                    javan_directory_stream_insert_sorted(result, child);
+                    javan_root_frame_pop(javan_directory_child_roots);
+                }
+                if (FindNextFileW(directory, &entry) == 0) {
+                    if (GetLastError() != ERROR_NO_MORE_FILES) {
+                        javan_native_resource_pop(&directory_resource);
+                        FindClose(directory);
+                        javan_root_frame_pop(javan_directory_result_roots);
+                        return javan_files_io_failure("newDirectoryStream read failed");
+                    }
+                    break;
+                }
+            }
+            javan_native_resource_pop(&directory_resource);
+            if (FindClose(directory) == 0) {
+                javan_root_frame_pop(javan_directory_result_roots);
+                return javan_files_io_failure("newDirectoryStream close failed");
+            }
+        #else
             DIR* directory = opendir(path);
             if (directory == NULL) {
                 javan_root_frame_pop(javan_directory_result_roots);
@@ -1049,6 +1201,7 @@ final class RuntimeSourceIoSections {
                 javan_root_frame_pop(javan_directory_result_roots);
                 return javan_files_io_failure("newDirectoryStream close failed");
             }
+        #endif
             javan_root_frame_pop(javan_directory_result_roots);
             return result_root;
         }

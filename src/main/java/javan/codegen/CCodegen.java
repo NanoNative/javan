@@ -43,6 +43,9 @@ public final class CCodegen {
     private static final String PROGRAM_MANIFEST_VERSION = "javan-generated-sources-v1";
     private static final String GENERATED_METHOD_INVOKE_SYMBOL = "javan_generated_method_invoke";
     private static final String RUNNABLE_RUN_DISPATCH_SYMBOL = BytecodeToIR.dispatchSymbol(new MethodRef("java/lang/Runnable", "run", "()V"));
+    private static final String HTTP_HANDLER_HANDLE_DISPATCH_SYMBOL = BytecodeToIR.dispatchSymbol(
+        new MethodRef("com/sun/net/httpserver/HttpHandler", "handle", "(Lcom/sun/net/httpserver/HttpExchange;)V")
+    );
     private static final String MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL = "javan_materialized_lambda_apply_object";
     private static final String MATERIALIZED_LAMBDA_LONG_OBJECT_APPLY_SYMBOL = "javan_materialized_lambda_apply_long_object";
     private static final String MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL = "javan_materialized_lambda_apply_object2";
@@ -206,6 +209,7 @@ public final class CCodegen {
         emitExactFunctionOrNullHelpers(program, c);
         emitExactTemporalBridgeHelpers(c);
         emitThreadHelpers(program, c);
+        emitHttpServerHelpers(program, c);
         emitMaterializedLambdaHelpers(program, nativeWrapperSymbols, c);
         emitImportedNativeWrappers(nativeInterop, nativeWrapperSymbols, c);
         emitClassInitializationWrappers(program, nativeWrapperSymbols, c);
@@ -442,6 +446,7 @@ public final class CCodegen {
         emitExactFunctionOrNullHelpers(program, core);
         emitExactTemporalBridgeHelpers(core);
         emitThreadHelpers(program, core);
+        emitHttpServerHelpers(program, core);
         emitMaterializedLambdaHelpers(program, nativeWrapperSymbols, core);
         emitImportedNativeWrappers(nativeInterop, nativeWrapperSymbols, core);
         emitClassInitializationWrappers(program, nativeWrapperSymbols, core, false);
@@ -652,6 +657,7 @@ public final class CCodegen {
         emitExactEnumLookupHelpers(program, c);
         emitExactFunctionOrNullHelpers(program, c);
         emitThreadHelpers(program, c);
+        emitHttpServerHelpers(program, c);
         emitMaterializedLambdaHelpers(program, nativeWrapperSymbols, c);
         emitImportedNativeWrappers(nativeInterop, nativeWrapperSymbols, c);
         emitClassInitializationWrappers(program, nativeWrapperSymbols, c);
@@ -1973,6 +1979,22 @@ public final class CCodegen {
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
     }
 
+    private static void emitHttpServerHelpers(final IrProgram program, final StringBuilder c) {
+        c.append("void javan_http_server_handle(void* handler, void* exchange) {").append(System.lineSeparator());
+        c.append("    if (handler == 0 || exchange == 0) {").append(System.lineSeparator());
+        c.append("        javan_panic(\"HttpServer handler or exchange is null\");").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        if (hasDispatch(program, HTTP_HANDLER_HANDLE_DISPATCH_SYMBOL)) {
+            c.append("    ").append(HTTP_HANDLER_HANDLE_DISPATCH_SYMBOL).append("(handler, exchange);").append(System.lineSeparator());
+        } else {
+            c.append("    javan_panic(\"HttpServer.start has no closed-world HttpHandler.handle implementation\");").append(System.lineSeparator());
+        }
+        c.append("    if (javan_pending_has() != 0) {").append(System.lineSeparator());
+        c.append("        javan_pending_panic();").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+    }
+
     private static void emitMaterializedLambdaHelpers(
         final IrProgram program,
         final NativeWrapperSymbols nativeWrapperSymbols,
@@ -2183,6 +2205,7 @@ public final class CCodegen {
         final boolean entry = appEntry(emitMain, function, program);
         if (entry) {
             c.append("int JAVAN_PROGRAM_MAIN(int argc, char** argv) {").append(System.lineSeparator());
+            c.append("    javan_runtime_prepare_command_line_args(&argc, &argv);").append(System.lineSeparator());
             c.append("    javan_runtime_set_executable_path(argc > 0 ? argv[0] : NULL);").append(System.lineSeparator());
             c.append("    javan_runtime_validate_floating_layout();").append(System.lineSeparator());
             c.append("    javan_runtime_profile_consume_args(&argc, &argv);").append(System.lineSeparator());
@@ -5172,6 +5195,7 @@ public final class CCodegen {
         return GENERATED_OBJECT_CLONE_SYMBOL.equals(expression.value())
             || isArrayCopyIntoCall(expression.value())
             || isStringResultIntoCall(expression.value())
+            || isSocketStreamResultIntoCall(expression.value())
             || isThreadResultIntoCall(expression.value());
     }
 
@@ -5205,6 +5229,13 @@ public final class CCodegen {
                 "javan_string_value_of_double",
                 "javan_string_value_of_bool",
                 "javan_string_value_of_char" -> true;
+            default -> false;
+        };
+    }
+
+    private static boolean isSocketStreamResultIntoCall(final String symbol) {
+        return switch (symbol) {
+            case "javan_socket_input_stream", "javan_socket_output_stream" -> true;
             default -> false;
         };
     }

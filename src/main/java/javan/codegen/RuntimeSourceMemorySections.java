@@ -81,6 +81,12 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_RUNTIME_KIND_METHOD 38
         #define JAVAN_RUNTIME_KIND_SERVICE_LOADER 39
         #define JAVAN_RUNTIME_KIND_SERVICE_ITERATOR 40
+        #define JAVAN_RUNTIME_KIND_HTTP_SERVER 41
+        #define JAVAN_RUNTIME_KIND_HTTP_EXCHANGE 42
+        #define JAVAN_RUNTIME_KIND_HTTP_EXCHANGE_OUTPUT_STREAM 43
+        #define JAVAN_RUNTIME_KIND_HTTP_CONTEXT 44
+        #define JAVAN_RUNTIME_KIND_HTTP_HEADERS 45
+        #define JAVAN_RUNTIME_KIND_HTTP_EXCHANGE_INPUT_STREAM 46
         #define JAVAN_SERVICE_LOADER_MAGIC 0x4a534c44
         #define JAVAN_SERVICE_ITERATOR_MAGIC 0x4a534954
         #define JAVAN_LIST_VIEW_UNMODIFIABLE 1
@@ -316,7 +322,7 @@ final class RuntimeSourceMemorySections {
 
         typedef struct {
             int magic;
-            int fd;
+            javan_socket_handle fd;
             int connected;
             int closed;
             int bound;
@@ -339,7 +345,7 @@ final class RuntimeSourceMemorySections {
 
         typedef struct {
             int magic;
-            int fd;
+            javan_socket_handle fd;
             int bound;
             int closed;
             int local_port;
@@ -371,7 +377,7 @@ final class RuntimeSourceMemorySections {
             int length;
             int reserved0;
             void* bytes;
-        } javan_resource_input_stream_value;
+        } javan_byte_input_stream_value;
 
         typedef struct {
             int magic;
@@ -433,6 +439,53 @@ final class RuntimeSourceMemorySections {
             void* body;
         } javan_http_response_value;
 
+        typedef struct {
+            int magic;
+            int started;
+            int stopped;
+            int context_registered;
+            javan_server_socket* socket;
+            char* path;
+            void* handler;
+            void* worker;
+            void* active_exchange;
+        } javan_http_server_value;
+
+        typedef struct {
+            int magic;
+            javan_http_server_value* server;
+        } javan_http_context_value;
+
+        typedef struct {
+            int magic;
+            int response_headers_sent;
+            int closed;
+            int chunked;
+            int write_active;
+            int close_requested;
+            long long response_length;
+            long long response_written;
+            javan_socket* socket;
+            void* request_method;
+            void* request_uri;
+            void* request_headers;
+            void* request_body;
+            void* response_body;
+        } javan_http_exchange_value;
+
+        typedef struct {
+            int magic;
+            void* request;
+        } javan_http_headers_value;
+
+        typedef struct {
+            int magic;
+            int reserved0;
+            int reserved1;
+            int reserved2;
+            javan_http_exchange_value* exchange;
+        } javan_http_exchange_output_stream_value;
+
         #define JAVAN_OBJECT_LIST_MAGIC 0x4a4c5354
         #define JAVAN_OBJECT_ITERATOR_MAGIC 0x4a495452
         #define JAVAN_OBJECT_MAP_MAGIC 0x4a4d4150
@@ -452,6 +505,12 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_HTTP_BODY_PUBLISHER_MAGIC 0x4a485450
         #define JAVAN_HTTP_BODY_HANDLER_MAGIC 0x4a485448
         #define JAVAN_HTTP_RESPONSE_MAGIC 0x4a485453
+        #define JAVAN_HTTP_SERVER_MAGIC 0x4a485356
+        #define JAVAN_HTTP_CONTEXT_MAGIC 0x4a485443
+        #define JAVAN_HTTP_EXCHANGE_MAGIC 0x4a485845
+        #define JAVAN_HTTP_EXCHANGE_OUTPUT_STREAM_MAGIC 0x4a48584f
+        #define JAVAN_HTTP_HEADERS_MAGIC 0x4a485848
+        #define JAVAN_HTTP_EXCHANGE_INPUT_STREAM_MAGIC 0x4a485849
         #define JAVAN_VIRTUAL_THREAD_BUILDER_MAGIC 0x4a565442
         #define JAVAN_VIRTUAL_THREAD_FACTORY_MAGIC 0x4a565446
         #define JAVAN_VIRTUAL_THREAD_EXECUTOR_MAGIC 0x4a565445
@@ -839,6 +898,10 @@ final class RuntimeSourceMemorySections {
             }
         }
 
+        static void javan_native_memory_cleanup(void* value) {
+            free(value);
+        }
+
         static void javan_native_resource_push(
             javan_native_resource_frame* frame,
             void* resource,
@@ -1139,7 +1202,7 @@ final class RuntimeSourceMemorySections {
             }
             javan_runtime_lock_leave();
             if (json_path != NULL && json_path[0] != '\\0') {
-                FILE* json = fopen(json_path, "w");
+                FILE* json = javan_file_open(json_path, "w");
                 if (json != NULL) {
                     fprintf(json, "{\\n");
                     fprintf(json, "  \\"schemaVersion\\": 1,\\n");
@@ -1172,7 +1235,7 @@ final class RuntimeSourceMemorySections {
                 }
             }
             if (markdown_path != NULL && markdown_path[0] != '\\0') {
-                FILE* markdown = fopen(markdown_path, "w");
+                FILE* markdown = javan_file_open(markdown_path, "w");
                 if (markdown != NULL) {
                     fprintf(markdown, "# Runtime Profiling\\n\\n");
                     fprintf(markdown, "- status: `collected`\\n");
@@ -1558,6 +1621,12 @@ final class RuntimeSourceMemorySections {
                 || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_BODY_PUBLISHER
                 || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_BODY_HANDLER
                 || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_RESPONSE
+                || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_SERVER
+                || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_CONTEXT
+                || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_EXCHANGE
+                || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_EXCHANGE_OUTPUT_STREAM
+                || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_HEADERS
+                || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_EXCHANGE_INPUT_STREAM
                 || runtime_kind == JAVAN_RUNTIME_KIND_SCHEDULED_THREAD_POOL_EXECUTOR
                 || runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_LONG
                 || runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN
@@ -1960,7 +2029,6 @@ final class RuntimeSourceMemorySections {
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_SOCKET) {
                 javan_socket* socket = (javan_socket*) node->value;
                 if (socket->magic != JAVAN_SOCKET_MAGIC
-                    || socket->fd < -1
                     || (socket->connected != 0 && socket->connected != 1)
                     || (socket->closed != 0 && socket->closed != 1)
                     || (socket->bound != 0 && socket->bound != 1)
@@ -1983,7 +2051,6 @@ final class RuntimeSourceMemorySections {
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_SERVER_SOCKET) {
                 javan_server_socket* socket = (javan_server_socket*) node->value;
                 if (socket->magic != JAVAN_SERVER_SOCKET_MAGIC
-                    || socket->fd < -1
                     || (socket->bound != 0 && socket->bound != 1)
                     || (socket->closed != 0 && socket->closed != 1)
                     || socket->local_port < -1
@@ -2005,7 +2072,7 @@ final class RuntimeSourceMemorySections {
                     javan_panic("invalid runtime socket output stream metadata");
                 }
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_RESOURCE_INPUT_STREAM) {
-                javan_resource_input_stream_value* stream = (javan_resource_input_stream_value*) node->value;
+                javan_byte_input_stream_value* stream = (javan_byte_input_stream_value*) node->value;
                 if (stream->magic != JAVAN_RESOURCE_INPUT_STREAM_MAGIC
                     || stream->bytes == NULL
                     || stream->length < 0
@@ -2065,6 +2132,71 @@ final class RuntimeSourceMemorySections {
                 if (response->magic != JAVAN_HTTP_RESPONSE_MAGIC || response->status_code < 0 || response->body == NULL) {
                     javan_panic("invalid runtime http response metadata");
                 }
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_HTTP_SERVER) {
+                javan_http_server_value* server = (javan_http_server_value*) node->value;
+                if (server->magic != JAVAN_HTTP_SERVER_MAGIC
+                    || (server->started != 0 && server->started != 1)
+                    || (server->stopped != 0 && server->stopped != 1)
+                    || (server->context_registered != 0 && server->context_registered != 1)
+                    || server->socket == NULL
+                    || (server->context_registered != 0 && (server->path == NULL || server->handler == NULL))) {
+                    javan_panic("invalid runtime http server metadata");
+                }
+                javan_validate_runtime_managed_reference((void*) server->socket);
+                javan_validate_runtime_managed_reference(server->handler);
+                javan_validate_runtime_managed_reference(server->worker);
+                javan_validate_runtime_managed_reference(server->active_exchange);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_HTTP_EXCHANGE) {
+                javan_http_exchange_value* exchange = (javan_http_exchange_value*) node->value;
+                if (exchange->magic != JAVAN_HTTP_EXCHANGE_MAGIC
+                    || (exchange->response_headers_sent != 0 && exchange->response_headers_sent != 1)
+                    || (exchange->closed != 0 && exchange->closed != 1)
+                    || (exchange->chunked != 0 && exchange->chunked != 1)
+                    || (exchange->write_active != 0 && exchange->write_active != 1)
+                    || (exchange->close_requested != 0 && exchange->close_requested != 1)
+                    || exchange->response_length < -2LL
+                    || exchange->response_written < 0LL
+                    || exchange->socket == NULL
+                    || exchange->request_method == NULL
+                    || exchange->request_uri == NULL
+                    || exchange->request_headers == NULL
+                    || exchange->request_body == NULL) {
+                    javan_panic("invalid runtime http exchange metadata");
+                }
+                javan_validate_runtime_managed_reference((void*) exchange->socket);
+                javan_validate_runtime_managed_reference(exchange->request_method);
+                javan_validate_runtime_managed_reference(exchange->request_uri);
+                javan_validate_runtime_managed_reference(exchange->request_headers);
+                javan_validate_runtime_managed_reference(exchange->request_body);
+                javan_validate_runtime_managed_reference(exchange->response_body);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_HTTP_HEADERS) {
+                javan_http_headers_value* headers = (javan_http_headers_value*) node->value;
+                if (headers->magic != JAVAN_HTTP_HEADERS_MAGIC || headers->request == NULL) {
+                    javan_panic("invalid runtime http headers metadata");
+                }
+                javan_validate_runtime_managed_reference(headers->request);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_HTTP_EXCHANGE_INPUT_STREAM) {
+                javan_byte_input_stream_value* stream = (javan_byte_input_stream_value*) node->value;
+                if (stream->magic != JAVAN_HTTP_EXCHANGE_INPUT_STREAM_MAGIC
+                    || stream->bytes == NULL
+                    || stream->length < 0
+                    || stream->position < 0
+                    || stream->position > stream->length) {
+                    javan_panic("invalid runtime http request body metadata");
+                }
+                javan_validate_runtime_managed_reference(stream->bytes);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_HTTP_CONTEXT) {
+                javan_http_context_value* context = (javan_http_context_value*) node->value;
+                if (context->magic != JAVAN_HTTP_CONTEXT_MAGIC || context->server == NULL) {
+                    javan_panic("invalid runtime http context metadata");
+                }
+                javan_validate_runtime_managed_reference((void*) context->server);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_HTTP_EXCHANGE_OUTPUT_STREAM) {
+                javan_http_exchange_output_stream_value* stream = (javan_http_exchange_output_stream_value*) node->value;
+                if (stream->magic != JAVAN_HTTP_EXCHANGE_OUTPUT_STREAM_MAGIC || stream->exchange == NULL) {
+                    javan_panic("invalid runtime http exchange output stream metadata");
+                }
+                javan_validate_runtime_managed_reference((void*) stream->exchange);
             }
         }
 
@@ -2253,6 +2385,12 @@ final class RuntimeSourceMemorySections {
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_HTTP_BODY_PUBLISHER
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_HTTP_BODY_HANDLER
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_HTTP_RESPONSE
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_HTTP_SERVER
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_HTTP_CONTEXT
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_HTTP_EXCHANGE
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_HTTP_EXCHANGE_OUTPUT_STREAM
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_HTTP_HEADERS
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_HTTP_EXCHANGE_INPUT_STREAM
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_BUILDER
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_FACTORY
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_EXECUTOR
@@ -2740,17 +2878,28 @@ final class RuntimeSourceMemorySections {
                 }
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_SOCKET) {
                 javan_socket* socket = (javan_socket*) node->value;
-                if (socket != NULL && socket->fd >= 0) {
+                if (socket != NULL && socket->fd != JAVAN_SOCKET_INVALID) {
                     javan_socket_native_close(socket->fd);
-                    socket->fd = -1;
+                    socket->fd = JAVAN_SOCKET_INVALID;
                     socket->closed = 1;
                 }
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_SERVER_SOCKET) {
                 javan_server_socket* socket = (javan_server_socket*) node->value;
-                if (socket != NULL && socket->fd >= 0) {
+                if (socket != NULL && socket->fd != JAVAN_SOCKET_INVALID) {
                     javan_socket_native_close(socket->fd);
-                    socket->fd = -1;
+                    socket->fd = JAVAN_SOCKET_INVALID;
                     socket->closed = 1;
+                }
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_HTTP_SERVER) {
+                javan_http_server_value* server = (javan_http_server_value*) node->value;
+                if (server != NULL && server->socket != NULL) {
+                    javan_server_socket_close((void*) server->socket);
+                }
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_HTTP_EXCHANGE) {
+                javan_http_exchange_value* exchange = (javan_http_exchange_value*) node->value;
+                if (exchange != NULL && exchange->socket != NULL) {
+                    javan_socket_close((void*) exchange->socket);
+                    exchange->closed = 1;
                 }
             }
         }
@@ -3218,6 +3367,7 @@ final class RuntimeSourceMemorySections {
             int park_permit;
             int schedule_mode;
             int scheduled_first_run_started;
+            int native_task;
             long long id;
             char* name;
             long long scheduled_initial_delay_nanos;
@@ -5790,6 +5940,7 @@ final class RuntimeSourceMemorySections {
             object->park_permit = 0;
             object->schedule_mode = 0;
             object->scheduled_first_run_started = 0;
+            object->native_task = 0;
             object->id = javan_thread_next_id();
             object->name = NULL;
             object->scheduled_initial_delay_nanos = 0LL;
@@ -6362,6 +6513,7 @@ final class RuntimeSourceMemorySections {
             thread->park_permit = 0;
             thread->target = NULL;
             thread->scheduled_first_run_started = 0;
+            thread->native_task = 0;
             thread->scheduled_executor = NULL;
             thread->thread_locals = NULL;
             javan_profile_thread_completion_count_value++;
@@ -6956,7 +7108,18 @@ final class RuntimeSourceMemorySections {
         }
 
         void javan_thread_set_target(void* value, void* target) {
-            javan_require_thread(value)->target = target;
+            javan_thread* thread = javan_require_thread(value);
+            thread->target = target;
+            thread->native_task = 0;
+        }
+
+        void javan_thread_set_native_http_server(void* value, void* server) {
+            javan_thread* thread = javan_require_thread(value);
+            if (server == NULL) {
+                javan_panic("null HttpServer worker target");
+            }
+            thread->target = server;
+            thread->native_task = 1;
         }
 
         static javan_thread_local* javan_require_thread_local(void* value) {
@@ -7184,7 +7347,9 @@ final class RuntimeSourceMemorySections {
             void* target = thread->target;
             void** javan_thread_start_roots[] = { &value, &target };
             javan_root_frame_push(javan_thread_start_roots, 2);
-            if (thread->schedule_mode == 0) {
+            if (thread->native_task == 1) {
+                javan_http_server_run(target);
+            } else if (thread->schedule_mode == 0) {
                 if (thread->future_cancelled == 0 && target != NULL) {
                     javan_thread_run_target(target);
                 }
@@ -7307,6 +7472,15 @@ final class RuntimeSourceMemorySections {
         void javan_thread_run_target(void* target) {
             (void) target;
             javan_panic("Thread.start with Runnable target has no closed-world Runnable.run implementation");
+        }
+
+        #if defined(__GNUC__) || defined(__clang__)
+        __attribute__((weak))
+        #endif
+        void javan_http_server_handle(void* handler, void* exchange) {
+            (void) handler;
+            (void) exchange;
+            javan_panic("HttpServer.start has no closed-world HttpHandler.handle implementation");
         }
 
         void javan_thread_sleep_millis(long long millis) {
@@ -8205,7 +8379,7 @@ final class RuntimeSourceMemorySections {
                     javan_gc_mark_value((void*) stream->socket);
                 }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_RESOURCE_INPUT_STREAM) {
-                javan_resource_input_stream_value* stream = (javan_resource_input_stream_value*) value;
+                javan_byte_input_stream_value* stream = (javan_byte_input_stream_value*) value;
                 if (stream != NULL && stream->magic == JAVAN_RESOURCE_INPUT_STREAM_MAGIC) {
                     javan_gc_mark_value(stream->bytes);
                 }
@@ -8239,6 +8413,45 @@ final class RuntimeSourceMemorySections {
                 javan_http_response_value* response = (javan_http_response_value*) value;
                 if (response != NULL && response->magic == JAVAN_HTTP_RESPONSE_MAGIC) {
                     javan_gc_mark_value((void*) response->body);
+                }
+            } else if (runtime_kind == JAVAN_RUNTIME_KIND_HTTP_SERVER) {
+                javan_http_server_value* server = (javan_http_server_value*) value;
+                if (server != NULL && server->magic == JAVAN_HTTP_SERVER_MAGIC) {
+                    javan_gc_mark_value((void*) server->socket);
+                    javan_gc_mark_value((void*) server->path);
+                    javan_gc_mark_value(server->handler);
+                    javan_gc_mark_value(server->worker);
+                    javan_gc_mark_value(server->active_exchange);
+                }
+            } else if (runtime_kind == JAVAN_RUNTIME_KIND_HTTP_EXCHANGE) {
+                javan_http_exchange_value* exchange = (javan_http_exchange_value*) value;
+                if (exchange != NULL && exchange->magic == JAVAN_HTTP_EXCHANGE_MAGIC) {
+                    javan_gc_mark_value((void*) exchange->socket);
+                    javan_gc_mark_value(exchange->request_method);
+                    javan_gc_mark_value(exchange->request_uri);
+                    javan_gc_mark_value(exchange->request_headers);
+                    javan_gc_mark_value(exchange->request_body);
+                    javan_gc_mark_value(exchange->response_body);
+                }
+            } else if (runtime_kind == JAVAN_RUNTIME_KIND_HTTP_HEADERS) {
+                javan_http_headers_value* headers = (javan_http_headers_value*) value;
+                if (headers != NULL && headers->magic == JAVAN_HTTP_HEADERS_MAGIC) {
+                    javan_gc_mark_value(headers->request);
+                }
+            } else if (runtime_kind == JAVAN_RUNTIME_KIND_HTTP_EXCHANGE_INPUT_STREAM) {
+                javan_byte_input_stream_value* stream = (javan_byte_input_stream_value*) value;
+                if (stream != NULL && stream->magic == JAVAN_HTTP_EXCHANGE_INPUT_STREAM_MAGIC) {
+                    javan_gc_mark_value(stream->bytes);
+                }
+            } else if (runtime_kind == JAVAN_RUNTIME_KIND_HTTP_CONTEXT) {
+                javan_http_context_value* context = (javan_http_context_value*) value;
+                if (context != NULL && context->magic == JAVAN_HTTP_CONTEXT_MAGIC) {
+                    javan_gc_mark_value((void*) context->server);
+                }
+            } else if (runtime_kind == JAVAN_RUNTIME_KIND_HTTP_EXCHANGE_OUTPUT_STREAM) {
+                javan_http_exchange_output_stream_value* stream = (javan_http_exchange_output_stream_value*) value;
+                if (stream != NULL && stream->magic == JAVAN_HTTP_EXCHANGE_OUTPUT_STREAM_MAGIC) {
+                    javan_gc_mark_value((void*) stream->exchange);
                 }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_PROCESS_RESULT) {
                 javan_process_result* result = (javan_process_result*) value;
@@ -9580,9 +9793,17 @@ final class RuntimeSourceMemorySections {
         void* javan_string_array_from_args(int argc, char** argv) {
             int length = argc > 0 ? argc - 1 : 0;
             void* result = javan_object_array_new(length, "[Ljava.lang.String;");
+            void* value = NULL;
+            void** roots[] = {
+                (void**) &result,
+                (void**) &value
+            };
+            javan_root_frame_push(roots, 2);
             for (int index = 0; index < length; index++) {
-                javan_object_array_set(result, index, argv[index + 1]);
+                value = javan_string_from(argv[index + 1]);
+                javan_object_array_set(result, index, value);
             }
+            javan_root_frame_pop(roots);
             return result;
         }
 
@@ -14365,7 +14586,19 @@ final class RuntimeSourceMemorySections {
     private static final String SOURCE_COLLECTIONS_PROCESS = """
 
         #if defined(_WIN32)
-        static char* javan_windows_command_line(javan_object_list* command) {
+        static int javan_windows_command_line_requires_quotes(const char* value) {
+            if (value[0] == '\\0') {
+                return 1;
+            }
+            for (unsigned long index = 0; value[index] != '\\0'; index++) {
+                if (value[index] == ' ' || value[index] == '\\t' || value[index] == '"') {
+                    return 1;
+                }
+            }
+            return 0;
+        }
+
+        static char* javan_windows_command_line(javan_object_list* command, void** root_slot) {
             unsigned long capacity = 2;
             for (int index = 0; index < command->length; index++) {
                 const char* value = command->values[index] == NULL ? "" : (const char*) command->values[index];
@@ -14375,14 +14608,17 @@ final class RuntimeSourceMemorySections {
                 }
                 capacity += length * 2 + 3;
             }
-            char* result = (char*) javan_alloc(capacity);
+            char* result = (char*) javan_alloc_rooted(capacity, root_slot);
             char* write = result;
             for (int index = 0; index < command->length; index++) {
                 const char* value = command->values[index] == NULL ? "" : (const char*) command->values[index];
                 if (index > 0) {
                     *write++ = ' ';
                 }
-                *write++ = '"';
+                const int quoted = javan_windows_command_line_requires_quotes(value);
+                if (quoted != 0) {
+                    *write++ = '"';
+                }
                 unsigned long slashes = 0;
                 for (unsigned long position = 0; value[position] != '\\0'; position++) {
                     char character = value[position];
@@ -14404,17 +14640,36 @@ final class RuntimeSourceMemorySections {
                     slashes = 0;
                     *write++ = character;
                 }
-                for (unsigned long escaped = 0; escaped < slashes * 2; escaped++) {
+                for (unsigned long trailing = 0; trailing < slashes * (quoted != 0 ? 2UL : 1UL); trailing++) {
                     *write++ = '\\\\';
                 }
-                *write++ = '"';
+                if (quoted != 0) {
+                    *write++ = '"';
+                }
             }
             *write = '\\0';
             return result;
         }
 
-        static char* javan_windows_process_file_text(const char* path) {
-            FILE* file = fopen(path, "rb");
+        static wchar_t* javan_windows_utf8_to_wide(const char* value, void** root_slot) {
+            if (value == NULL || root_slot == NULL) {
+                return NULL;
+            }
+            int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value, -1, NULL, 0);
+            if (length <= 0 || (unsigned long) length > ULONG_MAX / sizeof(wchar_t)) {
+                return NULL;
+            }
+            wchar_t* result = (wchar_t*) javan_alloc_rooted((unsigned long) length * sizeof(wchar_t), root_slot);
+            if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value, -1, result, length) == 0) {
+                javan_free(result);
+                *root_slot = NULL;
+                return NULL;
+            }
+            return result;
+        }
+
+        static char* javan_windows_process_file_text(const wchar_t* path) {
+            FILE* file = _wfopen(path, L"rb");
             if (file == NULL) {
                 return (char*) javan_string_copy("");
             }
@@ -14430,25 +14685,56 @@ final class RuntimeSourceMemorySections {
             }
             void* cwd_root = cwd;
             void* command_root = command_value;
+            void* command_line_root = NULL;
+            void* command_line_wide_root = NULL;
+            void* cwd_wide_root = NULL;
             void** roots[] = {
                 (void**) &cwd_root,
-                (void**) &command_root
+                (void**) &command_root,
+                &command_line_root,
+                &command_line_wide_root,
+                &cwd_wide_root
             };
-            javan_root_frame_push(roots, 2);
-            char* command_line = javan_windows_command_line(command);
+            javan_root_frame_push(roots, 5);
+            char* command_line = javan_windows_command_line(command, &command_line_root);
             if (command_line == NULL) {
                 javan_root_frame_pop(roots);
                 return javan_process_result_new(127, "", "process command is too large");
             }
+            wchar_t* command_line_wide = javan_windows_utf8_to_wide(command_line, &command_line_wide_root);
+            wchar_t* cwd_wide = cwd_root == NULL
+                ? NULL
+                : javan_windows_utf8_to_wide((const char*) cwd_root, &cwd_wide_root);
+            if (command_line_wide == NULL || (cwd_root != NULL && cwd_wide == NULL)) {
+                javan_free(command_line_root);
+                command_line_root = NULL;
+                if (command_line_wide_root != NULL) {
+                    javan_free(command_line_wide_root);
+                    command_line_wide_root = NULL;
+                }
+                if (cwd_wide_root != NULL) {
+                    javan_free(cwd_wide_root);
+                    cwd_wide_root = NULL;
+                }
+                javan_root_frame_pop(roots);
+                return javan_process_result_new(127, "", "process path is not valid UTF-8");
+            }
 
-            char temporary_directory[MAX_PATH + 1];
-            char stdout_path[MAX_PATH + 1] = {0};
-            char stderr_path[MAX_PATH + 1] = {0};
-            DWORD temporary_length = GetTempPathA(MAX_PATH, temporary_directory);
+            wchar_t temporary_directory[MAX_PATH + 1];
+            wchar_t stdout_path[MAX_PATH + 1] = {0};
+            wchar_t stderr_path[MAX_PATH + 1] = {0};
+            DWORD temporary_length = GetTempPathW(MAX_PATH, temporary_directory);
             if (temporary_length == 0 || temporary_length >= MAX_PATH
-                || GetTempFileNameA(temporary_directory, "jvo", 0, stdout_path) == 0
-                || GetTempFileNameA(temporary_directory, "jve", 0, stderr_path) == 0) {
-                javan_free(command_line);
+                || GetTempFileNameW(temporary_directory, L"jvo", 0, stdout_path) == 0
+                || GetTempFileNameW(temporary_directory, L"jve", 0, stderr_path) == 0) {
+                javan_free(command_line_root);
+                command_line_root = NULL;
+                javan_free(command_line_wide_root);
+                command_line_wide_root = NULL;
+                if (cwd_wide_root != NULL) {
+                    javan_free(cwd_wide_root);
+                    cwd_wide_root = NULL;
+                }
                 javan_root_frame_pop(roots);
                 return javan_process_result_new(127, "", "process output capture failed");
             }
@@ -14456,7 +14742,7 @@ final class RuntimeSourceMemorySections {
             attributes.nLength = sizeof(attributes);
             attributes.lpSecurityDescriptor = NULL;
             attributes.bInheritHandle = TRUE;
-            HANDLE stdout_handle = CreateFileA(
+            HANDLE stdout_handle = CreateFileW(
                 stdout_path,
                 GENERIC_WRITE,
                 FILE_SHARE_READ | FILE_SHARE_WRITE,
@@ -14465,7 +14751,7 @@ final class RuntimeSourceMemorySections {
                 FILE_ATTRIBUTE_TEMPORARY,
                 NULL
             );
-            HANDLE stderr_handle = CreateFileA(
+            HANDLE stderr_handle = CreateFileW(
                 stderr_path,
                 GENERIC_WRITE,
                 FILE_SHARE_READ | FILE_SHARE_WRITE,
@@ -14481,17 +14767,49 @@ final class RuntimeSourceMemorySections {
                 if (stderr_handle != INVALID_HANDLE_VALUE) {
                     CloseHandle(stderr_handle);
                 }
-                if (stdout_path[0] != '\\0') {
-                    DeleteFileA(stdout_path);
+                if (stdout_path[0] != L'\\0') {
+                    DeleteFileW(stdout_path);
                 }
-                if (stderr_path[0] != '\\0') {
-                    DeleteFileA(stderr_path);
+                if (stderr_path[0] != L'\\0') {
+                    DeleteFileW(stderr_path);
                 }
-                javan_free(command_line);
+                javan_free(command_line_root);
+                command_line_root = NULL;
+                javan_free(command_line_wide_root);
+                command_line_wide_root = NULL;
+                if (cwd_wide_root != NULL) {
+                    javan_free(cwd_wide_root);
+                    cwd_wide_root = NULL;
+                }
                 javan_root_frame_pop(roots);
                 return javan_process_result_new(127, "", "process output capture failed");
             }
-            STARTUPINFOA startup;
+            HANDLE job = CreateJobObjectW(NULL, NULL);
+            JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits;
+            memset(&limits, 0, sizeof(limits));
+            limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            if (job == NULL || SetInformationJobObject(
+                job, JobObjectExtendedLimitInformation, &limits, sizeof(limits)
+            ) == 0) {
+                if (job != NULL) {
+                    CloseHandle(job);
+                }
+                CloseHandle(stdout_handle);
+                CloseHandle(stderr_handle);
+                DeleteFileW(stdout_path);
+                DeleteFileW(stderr_path);
+                javan_free(command_line_root);
+                command_line_root = NULL;
+                javan_free(command_line_wide_root);
+                command_line_wide_root = NULL;
+                if (cwd_wide_root != NULL) {
+                    javan_free(cwd_wide_root);
+                    cwd_wide_root = NULL;
+                }
+                javan_root_frame_pop(roots);
+                return javan_process_result_new(127, "", "process cleanup setup failed");
+            }
+            STARTUPINFOW startup;
             PROCESS_INFORMATION process;
             memset(&startup, 0, sizeof(startup));
             memset(&process, 0, sizeof(process));
@@ -14500,34 +14818,80 @@ final class RuntimeSourceMemorySections {
             startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
             startup.hStdOutput = stdout_handle;
             startup.hStdError = stderr_handle;
-            BOOL started = CreateProcessA(
+            BOOL process_started = CreateProcessW(
                 NULL,
-                command_line,
+                command_line_wide,
                 NULL,
                 NULL,
                 TRUE,
-                0,
+                CREATE_SUSPENDED,
                 NULL,
-                cwd_root == NULL ? NULL : (const char*) cwd_root,
+                cwd_wide,
                 &startup,
                 &process
             );
-            javan_free(command_line);
+            javan_free(command_line_root);
+            command_line_root = NULL;
+            javan_free(command_line_wide_root);
+            command_line_wide_root = NULL;
+            if (cwd_wide_root != NULL) {
+                javan_free(cwd_wide_root);
+                cwd_wide_root = NULL;
+            }
             javan_root_frame_pop(roots);
             CloseHandle(stdout_handle);
             CloseHandle(stderr_handle);
-            if (started == 0) {
-                DeleteFileA(stdout_path);
-                DeleteFileA(stderr_path);
+            if (process_started == 0) {
+                CloseHandle(job);
+                DeleteFileW(stdout_path);
+                DeleteFileW(stderr_path);
                 return javan_process_result_new(127, "", "process start failed");
             }
+            if (AssignProcessToJobObject(job, process.hProcess) == 0) {
+                TerminateProcess(process.hProcess, 127);
+                WaitForSingleObject(process.hProcess, INFINITE);
+                CloseHandle(process.hThread);
+                CloseHandle(process.hProcess);
+                CloseHandle(job);
+                DeleteFileW(stdout_path);
+                DeleteFileW(stderr_path);
+                return javan_process_result_new(127, "", "process cleanup setup failed");
+            }
+            if (ResumeThread(process.hThread) == (DWORD) -1) {
+                TerminateJobObject(job, 127);
+                WaitForSingleObject(process.hProcess, INFINITE);
+                CloseHandle(process.hThread);
+                CloseHandle(process.hProcess);
+                CloseHandle(job);
+                DeleteFileW(stdout_path);
+                DeleteFileW(stderr_path);
+                return javan_process_result_new(127, "", "process cleanup setup failed");
+            }
             long long timeout = timeout_millis <= 0 ? 300000LL : timeout_millis;
-            DWORD wait_timeout = timeout > (long long) INFINITE - 1 ? INFINITE - 1 : (DWORD) timeout;
-            DWORD waited = WaitForSingleObject(process.hProcess, wait_timeout);
-            int timed_out = waited == WAIT_TIMEOUT;
-            int wait_failed = waited != WAIT_OBJECT_0 && timed_out == 0;
-            if (timed_out != 0 || wait_failed != 0) {
-                TerminateProcess(process.hProcess, 124);
+            long long wait_started = javan_system_current_time_millis();
+            DWORD waited = WAIT_TIMEOUT;
+            int timed_out = 0;
+            int interrupted = 0;
+            while (waited == WAIT_TIMEOUT) {
+                if (javan_thread_current_interrupted_peek() != 0) {
+                    (void) javan_thread_interrupted();
+                    interrupted = 1;
+                    break;
+                }
+                long long elapsed = javan_system_current_time_millis() - wait_started;
+                if (elapsed >= timeout) {
+                    timed_out = 1;
+                    break;
+                }
+                long long remaining = timeout - elapsed;
+                DWORD slice = remaining > 10LL ? 10U : (DWORD) remaining;
+                waited = WaitForSingleObject(process.hProcess, slice);
+            }
+            int wait_failed = waited != WAIT_OBJECT_0 && timed_out == 0 && interrupted == 0;
+            if (timed_out != 0 || wait_failed != 0 || interrupted != 0) {
+                if (TerminateJobObject(job, 124) == 0) {
+                    TerminateProcess(process.hProcess, 124);
+                }
                 WaitForSingleObject(process.hProcess, INFINITE);
             }
             DWORD status = 127;
@@ -14536,6 +14900,7 @@ final class RuntimeSourceMemorySections {
             }
             CloseHandle(process.hThread);
             CloseHandle(process.hProcess);
+            CloseHandle(job);
             char* stdout_text = javan_windows_process_file_text(stdout_path);
             void** stdout_roots[] = {
                 (void**) &stdout_text
@@ -14543,10 +14908,12 @@ final class RuntimeSourceMemorySections {
             javan_root_frame_push(stdout_roots, 1);
             char* stderr_text = javan_windows_process_file_text(stderr_path);
             javan_root_frame_pop(stdout_roots);
-            DeleteFileA(stdout_path);
-            DeleteFileA(stderr_path);
+            DeleteFileW(stdout_path);
+            DeleteFileW(stderr_path);
             int exit_code = status > INT_MAX ? 127 : (int) status;
-            javan_process_result* result = timed_out != 0
+            javan_process_result* result = interrupted != 0
+                ? javan_process_result_new(125, stdout_text, "Interrupted while running process")
+                : timed_out != 0
                 ? javan_process_result_new(124, stdout_text, "Timed out")
                 : wait_failed != 0
                     ? javan_process_result_new(127, stdout_text, "process wait failed")
@@ -14608,6 +14975,9 @@ final class RuntimeSourceMemorySections {
                 return javan_process_result_new(127, "", "process fork failed");
             }
             if (child == 0) {
+                if (setpgid(0, 0) != 0) {
+                    _exit(127);
+                }
                 if (cwd != NULL && chdir((const char*) cwd) != 0) {
                     _exit(127);
                 }
@@ -14615,6 +14985,17 @@ final class RuntimeSourceMemorySections {
                 dup2(fileno(stderr_file), STDERR_FILENO);
                 execvp(argv[0], argv);
                 _exit(127);
+            }
+            if (setpgid(child, child) != 0 && errno != EACCES && errno != ESRCH) {
+                (void) kill(-child, SIGKILL);
+                kill(child, SIGKILL);
+                waitpid(child, NULL, 0);
+                javan_native_resource_pop(&stderr_resource);
+                fclose(stderr_file);
+                javan_native_resource_pop(&stdout_resource);
+                fclose(stdout_file);
+                javan_free(argv);
+                return javan_process_result_new(127, "", "process cleanup setup failed");
             }
 
             int status = 0;
@@ -14628,20 +15009,46 @@ final class RuntimeSourceMemorySections {
                     break;
                 }
                 if (waited < 0) {
+                    if (errno == EINTR) {
+                        continue;
+                    }
                     status = 127 << 8;
                     completed = 1;
                     break;
                 }
-                if (javan_system_current_time_millis() - started >= timeout) {
-                    kill(child, SIGKILL);
-                    waitpid(child, &status, 0);
+                int interrupted = javan_thread_current_interrupted_peek() != 0;
+                int timed_out = javan_system_current_time_millis() - started >= timeout;
+                if (timed_out != 0 || interrupted != 0) {
+                    if (interrupted != 0) {
+                        (void) javan_thread_interrupted();
+                    }
+                    (void) kill(-child, SIGTERM);
+                    long long deadline = javan_system_current_time_millis() + 1000LL;
+                    int leader_reaped = 0;
+                    while (leader_reaped == 0 && javan_system_current_time_millis() < deadline) {
+                        pid_t terminating = waitpid(child, &status, WNOHANG);
+                        if (terminating == child || (terminating < 0 && errno != EINTR)) {
+                            leader_reaped = 1;
+                            break;
+                        }
+                        javan_sleep_micros(10000UL);
+                    }
+                    (void) kill(-child, SIGKILL);
+                    while (leader_reaped == 0) {
+                        pid_t terminating = waitpid(child, &status, 0);
+                        if (terminating == child || (terminating < 0 && errno != EINTR)) {
+                            leader_reaped = 1;
+                        }
+                    }
                     char* stdout_text = javan_file_to_string(stdout_file);
                     javan_native_resource_pop(&stderr_resource);
                     fclose(stderr_file);
                     javan_native_resource_pop(&stdout_resource);
                     fclose(stdout_file);
                     javan_free(argv);
-                    javan_process_result* result = javan_process_result_new(124, stdout_text, "Timed out");
+                    javan_process_result* result = interrupted != 0
+                        ? javan_process_result_new(125, stdout_text, "Interrupted while running process")
+                        : javan_process_result_new(124, stdout_text, "Timed out");
                     javan_free(stdout_text);
                     return result;
                 }

@@ -22,8 +22,11 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     private static final Path TIMINGS_WORKFLOW = Path.of(".github/workflows/timings.yml");
     private static final Path RELEASE_WORKFLOW = Path.of(".github/workflows/release.yml");
     private static final Path CONTAINER_WORKFLOW = Path.of(".github/workflows/container-images.yml");
+    private static final Path ROADMAP = Path.of("doc/spec/roadmap.md");
     private static final Path VERIFY_RELEASE = Path.of(".github/scripts/verify-release.sh");
     private static final Path VERIFY_CI_PACKAGE_SMOKE = Path.of(".github/scripts/verify-ci-package-smoke.sh");
+    private static final Path PACKAGE_RELEASE_REHEARSAL = Path.of(".github/scripts/package-release-rehearsal.sh");
+    private static final Path REHEARSE_RELEASE_ARTIFACT = Path.of(".github/scripts/rehearse-release-artifact.sh");
     private static final Path VERSION_TEMPLATE = Path.of("src/main/version/javan/cli/Version.java");
     private static final Path REPO_ROOT = Path.of("").toAbsolutePath().normalize();
 
@@ -178,6 +181,127 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             .contains("native-acceptance:")
             .contains("native-sanitizer:")
             .contains("native-package-self-host:");
+    }
+
+    @Test
+    void firstNativeReleaseQueueKeepsFiveLinkedCoreGates() throws Exception {
+        final String roadmap = Files.readString(ROADMAP);
+        final String activeQueue = roadmap.substring(
+            roadmap.indexOf("## Active First Native Release Queue"),
+            roadmap.indexOf("Supplemental evidence must not compete")
+        );
+
+        assertThat(activeQueue)
+            .contains(
+                "issues/103",
+                "issues/116",
+                "issues/117",
+                "issues/130",
+                "issues/250"
+            )
+            .doesNotContain("issues/115");
+        assertThat(Pattern.compile("https://github.com/NanoNative/javan/issues/").matcher(activeQueue).results().count())
+            .isEqualTo(5);
+        assertThat(roadmap).contains("REL-CONTAINER-01", "issues/115");
+    }
+
+    @Test
+    void releaseRehearsalPackagesChecksummedCompiledInputsAndRejectsPublication() throws Exception {
+        final Path releaseDir = tempDir.resolve("release");
+        final String target = "linux-x64";
+        final String archiveName = "javan-2026.8.28-" + target + ".tar.gz";
+        Files.createDirectories(releaseDir);
+        writeReleaseArtifact(releaseDir, archiveName, "release archive");
+        final Path archive = releaseDir.resolve(archiveName);
+
+        final ProcessResult packageSidecar = process(
+            REPO_ROOT,
+            List.of(
+                "sh",
+                REPO_ROOT.resolve(PACKAGE_RELEASE_REHEARSAL).toString(),
+                archive.toString(),
+                target,
+                "0123456789abcdef"
+            ),
+            Duration.ofSeconds(30)
+        );
+
+        assertThat(packageSidecar.exitCode()).isZero();
+        final Path sidecar = Path.of(packageSidecar.stdout().strip());
+        assertThat(sidecar).isRegularFile();
+        assertThat(sidecar.resolveSibling(sidecar.getFileName() + ".sha256")).isRegularFile();
+        final ProcessResult contents = process(
+            REPO_ROOT,
+            List.of("tar", "-tzf", sidecar.toString()),
+            Duration.ofSeconds(20)
+        );
+        assertThat(contents.exitCode()).isZero();
+        assertThat(contents.stdout()).contains(
+            "self-host/classes/javan/Main.class",
+            "abi/caller.c",
+            "memory-soak/src/main/java/com/acme/Main.java",
+            "platform-target.sh",
+            "sanitizer-smoke.sh"
+        );
+
+        final ProcessResult rejectedPublication = process(
+            REPO_ROOT,
+            List.of(
+                "sh",
+                REPO_ROOT.resolve(REHEARSE_RELEASE_ARTIFACT).toString(),
+                "--archive", archive.toString(),
+                "--target", target,
+                "--upload"
+            ),
+            Duration.ofSeconds(20)
+        );
+        assertThat(rejectedPublication.exitCode()).isEqualTo(2);
+        assertThat(rejectedPublication.stderr()).contains("does not accept publication control");
+    }
+
+    @Test
+    void releaseRehearsalRejectsLinkEntriesBeforeExtraction() throws Exception {
+        final Path releaseDir = tempDir.resolve("linked-release");
+        final String target = hostTarget();
+        final String archiveName = "javan-2026.8.28-" + target + ".tar.gz";
+        final String rootName = archiveName.substring(0, archiveName.length() - ".tar.gz".length());
+        final Path archiveRoot = releaseDir.resolve(rootName);
+        Files.createDirectories(archiveRoot);
+        Files.createSymbolicLink(archiveRoot.resolve("escape"), Path.of(".."));
+        final Path archive = releaseDir.resolve(archiveName);
+        final ProcessResult packaged = process(
+            releaseDir,
+            List.of("tar", "-czf", archive.toString(), rootName),
+            Duration.ofSeconds(20)
+        );
+        assertThat(packaged.exitCode()).isZero();
+        writeReleaseArtifactChecksum(archive);
+        final ProcessResult sidecar = process(
+            REPO_ROOT,
+            List.of(
+                "sh",
+                REPO_ROOT.resolve(PACKAGE_RELEASE_REHEARSAL).toString(),
+                archive.toString(),
+                target,
+                "0123456789abcdef"
+            ),
+            Duration.ofSeconds(30)
+        );
+        assertThat(sidecar.exitCode()).isZero();
+
+        final ProcessResult rejected = process(
+            REPO_ROOT,
+            List.of(
+                "sh",
+                REPO_ROOT.resolve(REHEARSE_RELEASE_ARTIFACT).toString(),
+                "--archive", archive.toString(),
+                "--target", target
+            ),
+            Duration.ofSeconds(20)
+        );
+
+        assertThat(rejected.exitCode()).isEqualTo(1);
+        assertThat(rejected.stderr()).contains("unsupported link entries");
     }
 
     @Test
@@ -346,6 +470,13 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         final String script = Files.readString(Path.of("scripts/build.sh"));
 
         assertThat(script)
+            .contains("MINGW*|MSYS*|CYGWIN*)")
+            .contains("BOOTSTRAP_SUFFIX=.exe")
+            .contains("OUTPUT=${1:-dist/javan$BOOTSTRAP_SUFFIX}")
+            .contains("javan-bootstrap-from-jvm$BOOTSTRAP_SUFFIX build target/classes")
+            .contains("javan-bootstrap-rebuilt$BOOTSTRAP_SUFFIX build target/classes")
+            .contains("javan-bootstrap-rebuilt$BOOTSTRAP_SUFFIX")
+            .contains("javan-bootstrap-verified$BOOTSTRAP_SUFFIX")
             .contains("GENERATION=${JAVAN_BOOTSTRAP_GENERATION:-3}")
             .contains("2|3)")
             .contains("javan-bootstrap-rebuilt")
@@ -760,9 +891,35 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         assertThat(script)
             .contains("JAVAN_SELF_HOST_REUSE_GENERATED=true")
             .contains("sh .github/scripts/sanitizer-self-host-smoke.sh")
+            .contains("sh .github/scripts/verify-showcase.sh")
+            .contains("package-release-rehearsal.sh")
+            .contains("rehearse-release-artifact.sh")
             .contains("\"kind\": \"self-host\"")
             .contains("\"actualLiveAllocations\": 0")
             .contains("\"actualLiveBytes\": 0");
+        assertThat(script.indexOf("PACKAGE_BIN=$PACKAGE_ROOT/bin/javan"))
+            .isLessThan(script.indexOf("run_package_showcase()"));
+    }
+
+    @Test
+    void artifactOnlyPackageVerifierDoesNotReadTheSourceCheckout() throws Exception {
+        final String script = Files.readString(REPO_ROOT.resolve(".github/scripts/verify-package.sh"));
+
+        assertThat(script)
+            .doesNotContain("REPO_ROOT")
+            .doesNotContain("verify-showcase.sh")
+            .contains("unsupported link entries");
+    }
+
+    @Test
+    void fullPackageProofRetainsReleaseRehearsalEvidence() throws Exception {
+        final String workflow = Files.readString(NATIVE_PROOF);
+
+        assertThat(workflow)
+            .contains("- name: \"📤 Rehearsal")
+            .contains("inputs.package_scope == 'full'")
+            .contains(".rehearsal.json")
+            .contains("-rehearsal.tar.gz");
     }
 
     @Test
@@ -788,8 +945,31 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     private static void writeReleaseArtifact(final Path releaseDir, final String name, final String content) throws Exception {
         final Path archive = releaseDir.resolve(name);
         Files.writeString(archive, content, StandardCharsets.UTF_8);
+        writeReleaseArtifactChecksum(archive);
+    }
+
+    private static void writeReleaseArtifactChecksum(final Path archive) throws Exception {
         final String sha256 = sha256Hex(Files.readAllBytes(archive));
-        Files.writeString(releaseDir.resolve(name + ".sha256"), sha256 + "  " + name + "\n", StandardCharsets.UTF_8);
+        Files.writeString(
+            archive.resolveSibling(archive.getFileName() + ".sha256"),
+            sha256 + "  " + archive.getFileName() + "\n",
+            StandardCharsets.UTF_8
+        );
+    }
+
+    private static String hostTarget() {
+        final String os = System.getProperty("os.name").toLowerCase();
+        final String arch = System.getProperty("os.arch").toLowerCase();
+        if (os.contains("mac") && (arch.equals("aarch64") || arch.equals("arm64"))) {
+            return "macos-aarch64";
+        }
+        if (os.contains("linux") && (arch.equals("aarch64") || arch.equals("arm64"))) {
+            return "linux-aarch64";
+        }
+        if (os.contains("linux") && (arch.equals("x86_64") || arch.equals("amd64"))) {
+            return "linux-x64";
+        }
+        throw new IllegalStateException("Unsupported first-release test host: " + os + '-' + arch);
     }
 
     private static String sha256Hex(final byte[] bytes) throws Exception {

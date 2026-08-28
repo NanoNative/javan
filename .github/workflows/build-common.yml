@@ -99,10 +99,10 @@ jobs:
 
       - name: "🔍 Java"
         id: java_info
-        uses: YunaBraska/java-info-action@11a434ffbf6bb3357363d1933be71a4076a90a6b # 3
+        uses: YunaBraska/java-info-action@094dc70cf4050d156dded76d5574c962886c0b0a # 3.0.12
 
       - name: "☕ JDK [${{ steps.java_info.outputs.java_version }}]"
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         with:
           java-version: ${{ steps.java_info.outputs.java_version }}
           distribution: temurin
@@ -167,10 +167,10 @@ jobs:
 
       - name: "🔍 Java"
         id: java_info
-        uses: YunaBraska/java-info-action@11a434ffbf6bb3357363d1933be71a4076a90a6b # 3
+        uses: YunaBraska/java-info-action@094dc70cf4050d156dded76d5574c962886c0b0a # 3.0.12
 
       - name: "☕ JDK [${{ steps.java_info.outputs.java_version }}]"
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         with:
           java-version: ${{ steps.java_info.outputs.java_version }}
           distribution: temurin
@@ -407,13 +407,13 @@ jobs:
             sanitizer-scope: platform-smoke
             label: package_win_x64
             enabled: false
-            reason: native linker and process runtime are incomplete
+            reason: native package self-host proof is incomplete
           - target: windows-aarch64
             os: windows-11-arm
             sanitizer-scope: platform-smoke
             label: package_win_arm64
             enabled: false
-            reason: native linker and process runtime are incomplete
+            reason: native package self-host proof is incomplete
     uses: ./.github/workflows/native-proof.yml
     with:
       ref: ${{ inputs.ref || github.sha }}
@@ -529,10 +529,10 @@ jobs:
 
       - name: "🔍 Java"
         id: java_info
-        uses: YunaBraska/java-info-action@11a434ffbf6bb3357363d1933be71a4076a90a6b # 3
+        uses: YunaBraska/java-info-action@094dc70cf4050d156dded76d5574c962886c0b0a # 3.0.12
 
       - name: "☕ JDK [${{ steps.java_info.outputs.java_version }}]"
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         with:
           java-version: ${{ steps.java_info.outputs.java_version }}
           distribution: temurin
@@ -606,10 +606,10 @@ jobs:
 
       - name: "🔍 Java"
         id: java_info
-        uses: YunaBraska/java-info-action@11a434ffbf6bb3357363d1933be71a4076a90a6b # 3
+        uses: YunaBraska/java-info-action@094dc70cf4050d156dded76d5574c962886c0b0a # 3.0.12
 
       - name: "☕ JDK [${{ steps.java_info.outputs.java_version }}]"
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         with:
           java-version: ${{ steps.java_info.outputs.java_version }}
           distribution: temurin

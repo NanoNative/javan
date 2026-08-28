@@ -15,10 +15,12 @@ final class RuntimeSourceCoreSection {
         #include <stdio.h>
         #include <stdlib.h>
         #include <string.h>
+        #include <wchar.h>
         #if defined(_WIN32)
         #include <winsock2.h>
         #include <ws2tcpip.h>
         #include <windows.h>
+        #include <shellapi.h>
         #include <process.h>
         #include <io.h>
         #include <sys/time.h>
@@ -36,6 +38,13 @@ final class RuntimeSourceCoreSection {
         #include <sys/stat.h>
         #include <sys/time.h>
         #include <time.h>
+        typedef uintptr_t javan_socket_handle;
+        #define JAVAN_SOCKET_INVALID ((javan_socket_handle) -1)
+        #if defined(_WIN32)
+        typedef int javan_socket_length;
+        #else
+        typedef socklen_t javan_socket_length;
+        #endif
         #if defined(__FAST_MATH__) || (defined(__FINITE_MATH_ONLY__) && __FINITE_MATH_ONLY__ != 0)
         #error "Javan requires strict floating-point compiler mode"
         #endif
@@ -62,7 +71,7 @@ final class RuntimeSourceCoreSection {
 
         static char* javan_string_alloc(unsigned long size);
         static void* javan_string_copy(const char* value);
-        static int javan_socket_native_close(int fd);
+        static int javan_socket_native_close(javan_socket_handle fd);
         static void javan_sleep_micros(unsigned long micros);
         static void javan_os_thread_yield(void);
         static void javan_cpu_spin_wait_hint(void);
@@ -82,6 +91,135 @@ final class RuntimeSourceCoreSection {
         static JAVAN_THREAD_LOCAL jmp_buf* javan_panic_target = NULL;
         static JAVAN_THREAD_LOCAL JavanSourceContext* javan_source_context_top = NULL;
         static char javan_runtime_executable_path[4096];
+
+        #if defined(_WIN32)
+        static wchar_t* javan_windows_utf8_to_wide_copy(const char* value) {
+            if (value == NULL) {
+                return NULL;
+            }
+            int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value, -1, NULL, 0);
+            if (length <= 0 || (unsigned long) length > ULONG_MAX / sizeof(wchar_t)) {
+                return NULL;
+            }
+            wchar_t* result = (wchar_t*) malloc((unsigned long) length * sizeof(wchar_t));
+            if (result == NULL
+                || MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value, -1, result, length) == 0) {
+                free(result);
+                return NULL;
+            }
+            return result;
+        }
+
+        static char* javan_windows_wide_to_utf8_copy(const wchar_t* value) {
+            if (value == NULL) {
+                return NULL;
+            }
+            int length = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value, -1, NULL, 0, NULL, NULL);
+            if (length <= 0) {
+                return NULL;
+            }
+            char* result = (char*) malloc((unsigned long) length);
+            if (result == NULL
+                || WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value, -1, result, length, NULL, NULL) == 0) {
+                free(result);
+                return NULL;
+            }
+            return result;
+        }
+
+        static FILE* javan_file_open(const char* path, const char* mode) {
+            wchar_t* wide_path = javan_windows_utf8_to_wide_copy(path);
+            wchar_t* wide_mode = javan_windows_utf8_to_wide_copy(mode);
+            if (wide_path == NULL || wide_mode == NULL) {
+                free(wide_path);
+                free(wide_mode);
+                return NULL;
+            }
+            FILE* result = _wfopen(wide_path, wide_mode);
+            free(wide_path);
+            free(wide_mode);
+            return result;
+        }
+
+        static char** javan_windows_command_line_values = NULL;
+        static char** javan_windows_command_line_owned_values = NULL;
+        static int javan_windows_command_line_count = 0;
+
+        static void javan_windows_release_command_line_values(char** values, char** owned_values, int count) {
+            for (int index = 0; index < count; index++) {
+                free(owned_values == NULL ? NULL : owned_values[index]);
+            }
+            free(values);
+            free(owned_values);
+        }
+
+        void javan_runtime_prepare_command_line_args(int* argc, char*** argv) {
+            if (argc == NULL || argv == NULL) {
+                return;
+            }
+            int count = 0;
+            wchar_t** wide_values = CommandLineToArgvW(GetCommandLineW(), &count);
+            if (wide_values == NULL || count <= 0) {
+                if (wide_values != NULL) {
+                    LocalFree(wide_values);
+                }
+                javan_panic("Windows command line conversion failed");
+                return;
+            }
+            char** values = (char**) calloc((unsigned long) count + 1UL, sizeof(char*));
+            char** owned_values = (char**) calloc((unsigned long) count, sizeof(char*));
+            if (values == NULL || owned_values == NULL) {
+                javan_windows_release_command_line_values(values, owned_values, 0);
+                LocalFree(wide_values);
+                javan_panic("Windows command line allocation failed");
+                return;
+            }
+            for (int index = 0; index < count; index++) {
+                owned_values[index] = javan_windows_wide_to_utf8_copy(wide_values[index]);
+                if (owned_values[index] == NULL) {
+                    LocalFree(wide_values);
+                    javan_windows_release_command_line_values(values, owned_values, index + 1);
+                    javan_panic("Windows command line is not valid Unicode");
+                    return;
+                }
+                values[index] = owned_values[index];
+            }
+            LocalFree(wide_values);
+            javan_windows_command_line_values = values;
+            javan_windows_command_line_owned_values = owned_values;
+            javan_windows_command_line_count = count;
+            if (atexit(javan_runtime_release_command_line_args) != 0) {
+                javan_runtime_release_command_line_args();
+                javan_panic("Windows command line cleanup registration failed");
+                return;
+            }
+            *argc = count;
+            *argv = values;
+        }
+
+        void javan_runtime_release_command_line_args(void) {
+            javan_windows_release_command_line_values(
+                javan_windows_command_line_values,
+                javan_windows_command_line_owned_values,
+                javan_windows_command_line_count
+            );
+            javan_windows_command_line_values = NULL;
+            javan_windows_command_line_owned_values = NULL;
+            javan_windows_command_line_count = 0;
+        }
+        #else
+        static FILE* javan_file_open(const char* path, const char* mode) {
+            return fopen(path, mode);
+        }
+
+        void javan_runtime_prepare_command_line_args(int* argc, char*** argv) {
+            (void) argc;
+            (void) argv;
+        }
+
+        void javan_runtime_release_command_line_args(void) {
+        }
+        #endif
 
         static void javan_sleep_micros(unsigned long micros) {
             if (micros == 0UL) {
@@ -142,10 +280,17 @@ final class RuntimeSourceCoreSection {
                 return;
             }
         #if defined(_WIN32)
-            DWORD length = GetModuleFileNameA(NULL, javan_runtime_executable_path, (DWORD) sizeof(javan_runtime_executable_path));
-            if (length == 0 || length >= sizeof(javan_runtime_executable_path)) {
+            wchar_t wide_path[4096];
+            DWORD length = GetModuleFileNameW(NULL, wide_path, (DWORD) (sizeof(wide_path) / sizeof(wide_path[0])));
+            char* utf8_path = length == 0 || length >= sizeof(wide_path) / sizeof(wide_path[0])
+                ? NULL
+                : javan_windows_wide_to_utf8_copy(wide_path);
+            if (utf8_path == NULL || strlen(utf8_path) >= sizeof(javan_runtime_executable_path)) {
                 javan_copy_error_field(javan_runtime_executable_path, sizeof(javan_runtime_executable_path), argv0);
+            } else {
+                javan_copy_error_field(javan_runtime_executable_path, sizeof(javan_runtime_executable_path), utf8_path);
             }
+            free(utf8_path);
         #else
             if (argv0[0] == '/') {
                 javan_copy_error_field(javan_runtime_executable_path, sizeof(javan_runtime_executable_path), argv0);

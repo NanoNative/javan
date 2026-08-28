@@ -3,6 +3,41 @@
 Javan releases are host-native binary releases. Each package is built on the operating
 system and CPU architecture it claims to support.
 
+## First Native Release Scope
+
+The current first-release contract claims host-native packages for Linux x64, Linux ARM64, and
+macOS ARM64. A package must be extracted and exercised through its own `bin/javan`; compiling on
+one target and relabeling the result for another is never release evidence.
+
+macOS x64 and Windows x64/ARM64 package rows remain outside this contract until their matching
+host proves package extraction, application build/run, self-host, ABI ownership, and sanitizer
+behavior. Their platform-contract smoke rows are useful evidence, but do not imply package
+support. The first-release rehearsal records those exclusions instead of silently treating them
+as passes.
+
+Before a public release, run an artifact-only rehearsal from clean inputs on every declared target.
+It must preserve the package, checksum, toolchain, acceptance, self-host, and sanitizer evidence
+described below without invoking a publication workflow. The current `dry_run=true` workflow
+dispatch is not this rehearsal: it deliberately behaves like a real GitHub release. A rehearsal
+may use only package-verification commands and already-produced artifacts, without credentials,
+upload, tag, or release API paths.
+
+The full package proof creates a matching, checksummed `-rehearsal.tar.gz` sidecar. It is
+internal release evidence, never product content or a GitHub Release asset. The sidecar carries
+only compiled Javan self-host input and deterministic fixtures, so the rehearsal runs in a clean
+temporary directory without reading a source checkout. Run it with:
+
+```sh
+.github/scripts/rehearse-release-artifact.sh \
+  --archive dist/release/javan-<version>-<target>.tar.gz \
+  --target <target>
+```
+
+It writes `javan-<version>-<target>.rehearsal.json` and Markdown beside the archive. The report
+records the built commit, target, C toolchain, completed package/self-host/acceptance/ABI/sanitizer
+checks, known exclusions, and that publication is disabled. Full release-package CI runs this
+proof for Linux x64, Linux ARM64, and macOS ARM64 before a release can publish.
+
 ## Local Gate
 
 Run the same gate used by the release matrix:
@@ -109,8 +144,8 @@ Native artifact rows:
 
 The [accepted Snapshot run 32689384718](https://github.com/NanoNative/javan/actions/runs/32689384718)
 proves every currently enabled platform-contract and package row. The slower macOS x64
-package row remains disabled. Windows package rows remain disabled until native linker,
-process execution, and `.exe` package proof work on the matching host; Windows ARM64
+package row remains disabled. Windows package rows remain disabled until native linker and
+`.exe` package proof work on the matching host; Windows ARM64
 platform proof is also blocked until the hosted runner supplies Temurin 25. The platform
 matrix does not itself claim native package support.
 

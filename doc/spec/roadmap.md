@@ -26,6 +26,52 @@ Every milestone needs a public CLI/package proof, native/JVM parity where applic
 an explicit unsupported boundary. New user flags are a last resort; the compiler should
 normally choose the safe path itself.
 
+## Active First Native Release Queue
+
+The first native release is deliberately narrow. It claims extracted, host-native packages for
+Linux x64, Linux ARM64, and macOS ARM64 only. It does not claim macOS x64 or Windows packages,
+general Java compatibility, TLS, or arbitrary external-library support. A `Done` CI row is
+evidence for one target; it is not a public-release decision.
+
+The queue below is the only work that may compete for release attention. It is ordered by release
+leverage, not by callable count. Keep at most two implementation slices and one CI/performance
+slice in progress. A task owns its whole vertical proof: public CLI input, generated output,
+native execution, and package evidence where the behavior is release-critical.
+
+| Order | Work | Required proof |
+| --- | --- | --- |
+| 1 | [REL-SCOPE-01](https://github.com/NanoNative/javan/issues/103): keep the scenario-bounded JDK gate and release scope aligned. | No source claims full JDK inventory closure is required for the three-target first release; declared reachable behavior remains supported or rejected. |
+| 2 | [REL-ARTIFACT-01](https://github.com/NanoNative/javan/issues/116): rehearse each declared target's extracted release archive without publication. | Linux x64, Linux ARM64, and macOS ARM64 verify checksum, package, self-host, acceptance, ABI, and sanitizer evidence from clean inputs, while recording exclusions. |
+| 3 | [ABI-IMPORT-01](https://github.com/NanoNative/javan/issues/117): prove configured native imports from extracted packages on every declared target. | Primitive and borrowed-`byte[]` imports compile, link, execute, and reject invalid reachable shapes deterministically. |
+| 4 | [PERF-BASELINE-01](https://github.com/NanoNative/javan/issues/130): record cold, warm, and changed-source baselines after the bounded-worker path is verified. | Public `javan build` measurements with wall time, CPU time, peak RSS, artifact size, target, and toolchain. |
+| 5 | [CI-SHARD-01](https://github.com/NanoNative/javan/issues/250): balance the existing six native CI workers from recorded timings. | Deterministic, complete worker assignment plus before/after CI timing evidence; no worker-count increase. |
+
+The bounded-worker path is verified on `main`, not a second active feature slice. The baseline
+task measures it before another build-speed change is started.
+
+Supplemental evidence must not compete with this five-task release queue. [REL-CONTAINER-01](https://github.com/NanoNative/javan/issues/115)
+verifies a Linux archive in a container after the host-native gates move; it cannot replace
+extracted-package rehearsal on any declared target.
+
+There is currently no safe `dry_run` release workflow: the documented `dry_run=true` dispatch
+still behaves as a real GitHub release. Do not use it as rehearsal. Any future artifact rehearsal
+must run only package-verification commands and already-produced artifacts, with no credentials,
+upload, tag, or release API path.
+
+Deferred until this queue is green:
+
+- Linux container archive verification ([REL-CONTAINER-01](https://github.com/NanoNative/javan/issues/115)); it is supplemental release evidence, not a host-native package gate.
+- Windows x64 and ARM64 native package support, macOS x64 package support, and any runner-only
+  workaround.
+- Broad JDK callable accounting, whole-class support tasks, and compatibility work without a
+  failing release or external-probe command.
+- TLS, wider HTTP services, richer library ABI types, Maven/Gradle conveniences, container
+  publication, and report expansion that does not remove a current release blocker.
+
+When Windows x64 becomes a first-release requirement, promote its extracted-package, self-host,
+ABI, and sanitizer proof together. Do not relabel an existing Windows platform-contract smoke as
+package support.
+
 ## Compiler Analysis
 
 Javan currently has entrypoint-rooted reachability, instantiated-type-bounded class-hierarchy
@@ -58,6 +104,15 @@ runtime class loading, and build-time application heaps. Optimizer-specific work
 
 ## Runtime And Memory
 
+Current build-safety boundary:
+
+- Native application builds compile generated-object cache misses one at a time. `--jobs <count>`
+  records the requested cap, while the native-object-cache report records the effective cap of one,
+  queued objects, and outcome. This prevents compiler-process overcommit on the self-host release
+  path. Parallel native compilation is blocked on the proven executor-runtime slice; it must not be
+  reintroduced until self-host, package, cleanup, and interruption proof all pass. Final linking is
+  serial and ordered.
+
 Near-term work:
 
 - finish concurrent mutation/return ownership beyond the current proven root handoffs
@@ -85,7 +140,7 @@ Required native package targets:
 
 Remaining platform work:
 
-- finish Windows process, linker, filesystem, and package behavior
+- finish Windows linker, filesystem, and package behavior
 - prove fixed-point/self-host output and sanitizer provenance on every release target
 - keep snapshot publication on every `main` merge and final releases manual
 - keep Maven Central and Homebrew publication hard-disabled until explicitly implemented
@@ -159,5 +214,5 @@ graph. They integrate through normal Java APIs, generated artifacts, and stable 
 - silently changing user projects, shell profiles, `PATH`, or `JAVA_HOME`
 - accepting unsupported bytecode and hoping generated C works
 - configuration files that replace compiler analysis
-- parallel compiler modes or compatibility layers without a current boundary
+- parallel compiler modes beyond the proven generated-object cache boundary
 - abstractions, modules, plugins, or reports justified only by possible future use
