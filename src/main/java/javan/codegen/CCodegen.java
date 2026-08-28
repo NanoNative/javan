@@ -5195,6 +5195,7 @@ public final class CCodegen {
         return GENERATED_OBJECT_CLONE_SYMBOL.equals(expression.value())
             || isArrayCopyIntoCall(expression.value())
             || isStringResultIntoCall(expression.value())
+            || isSocketStreamResultIntoCall(expression.value())
             || isThreadResultIntoCall(expression.value());
     }
 
@@ -5228,6 +5229,13 @@ public final class CCodegen {
                 "javan_string_value_of_double",
                 "javan_string_value_of_bool",
                 "javan_string_value_of_char" -> true;
+            default -> false;
+        };
+    }
+
+    private static boolean isSocketStreamResultIntoCall(final String symbol) {
+        return switch (symbol) {
+            case "javan_socket_input_stream", "javan_socket_output_stream" -> true;
             default -> false;
         };
     }

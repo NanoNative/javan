@@ -595,8 +595,8 @@ final class RuntimeHeaderFile {
         void* javan_socket_get_local_socket_address(void* value);
         void* javan_socket_get_remote_socket_address(void* value);
         void* javan_socket_get_channel(void* value);
-        void* javan_socket_input_stream(void* value);
-        void* javan_socket_output_stream(void* value);
+        void javan_socket_input_stream_into(void** result, void* value);
+        void javan_socket_output_stream_into(void** result, void* value);
         int javan_socket_input_stream_read(void* value);
         int javan_socket_input_stream_read_bytes(void* value, void* bytes);
         int javan_socket_input_stream_read_bytes_range(void* value, void* bytes, int offset, int length);
