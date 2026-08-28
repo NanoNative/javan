@@ -257,6 +257,17 @@ The project parser accepts multiline arrays of quoted strings and trailing comma
 these configuration arrays. It is intentionally a small TOML parser, not full TOML:
 a physical newline inside a quoted array item is rejected.
 
+The first native release package proof builds a configured primitive import and a
+borrowed-`byte[]` import through extracted `bin/javan` archives on Linux x64, Linux
+ARM64, and macOS ARM64. Its fixture uses a target-specific source overlay and includes
+the generated `javan_runtime.h`; a reachable `String` import is separately required to
+fail with deterministic `JAVAN013`. Run the host-matching proof with:
+
+```sh
+sh .github/scripts/verify-package-native-imports.sh \
+  dist/release/javan-<version>-<target>.tar.gz
+```
+
 The import declaration names a Java method with `package.Class.method(parameters):return`
 syntax, followed by `->` and one external C symbol. The method must be `static native`.
 The supported import ABI is:

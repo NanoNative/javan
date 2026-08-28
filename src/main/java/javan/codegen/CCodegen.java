@@ -4758,27 +4758,33 @@ public final class CCodegen {
     }
 
     private enum ImportedNativeAbiType {
-        VOID("void", "void"),
-        INT("int", "int"),
-        LONG("long long", "long long"),
-        FLOAT("float", "float"),
-        DOUBLE("double", "double"),
-        BYTE_ARRAY("JavanNativeImportedByteArray", "void*");
-
-        private final String externalCName;
-        private final String wrapperCName;
-
-        ImportedNativeAbiType(final String externalCName, final String wrapperCName) {
-            this.externalCName = externalCName;
-            this.wrapperCName = wrapperCName;
-        }
+        VOID,
+        INT,
+        LONG,
+        FLOAT,
+        DOUBLE,
+        BYTE_ARRAY;
 
         private String externalCName() {
-            return externalCName;
+            return switch (this) {
+                case VOID -> "void";
+                case INT -> "int";
+                case LONG -> "long long";
+                case FLOAT -> "float";
+                case DOUBLE -> "double";
+                case BYTE_ARRAY -> "JavanNativeImportedByteArray";
+            };
         }
 
         private String wrapperCName() {
-            return wrapperCName;
+            return switch (this) {
+                case VOID -> "void";
+                case INT -> "int";
+                case LONG -> "long long";
+                case FLOAT -> "float";
+                case DOUBLE -> "double";
+                case BYTE_ARRAY -> "void*";
+            };
         }
     }
 

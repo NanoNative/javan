@@ -102,6 +102,8 @@ run_package_showcase() {
   JAVAN_BIN=$PACKAGE_BIN sh .github/scripts/verify-showcase.sh
 }
 javan_timing_run package_showcase run_package_showcase
+javan_timing_run package_imports \
+  .github/scripts/verify-package-native-imports.sh "$ARCHIVE"
 
 "$PACKAGE_BIN" doctor >/dev/null
 "$PACKAGE_BIN" --version >/dev/null

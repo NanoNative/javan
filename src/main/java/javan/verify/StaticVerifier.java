@@ -67,7 +67,7 @@ public final class StaticVerifier {
     ) {
         final List<Diagnostic> diagnostics = new ArrayList<>(verifyConfiguredNativeImports(classes, nativeEntryPoints));
         final ReachableEntries reachableEntries = new ReachableEntries(reachable);
-        final Set<EntryPoint> nativeEntryPointSet = Set.copyOf(nativeEntryPoints);
+        final ReachableEntries configuredNativeEntries = new ReachableEntries(nativeEntryPoints);
         final MethodRefFactsCache methodRefFacts = new MethodRefFactsCache(classes);
         for (final ClassFile classFile : classes.values()) {
             for (final MethodInfo method : classFile.methods()) {
@@ -79,7 +79,7 @@ public final class StaticVerifier {
                     isReachable,
                     reachableEntries,
                     methodRefFacts,
-                    nativeEntryPointSet
+                    configuredNativeEntries
                 ));
             }
         }
@@ -280,12 +280,14 @@ public final class StaticVerifier {
         final int reachable,
         final ReachableEntries reachableEntries,
         final MethodRefFactsCache methodRefFacts,
-        final Set<EntryPoint> nativeEntryPoints
+        final ReachableEntries configuredNativeEntries
     ) {
         final List<Diagnostic> diagnostics = new ArrayList<>();
         if (reachable == 1 && method.isNative()) {
             final EntryPoint nativeMethod = new EntryPoint(classFile.name(), method.name(), method.descriptor());
-            final boolean configuredNative = nativeEntryPoints.contains(nativeMethod);
+            final boolean configuredNative = configuredNativeEntries.contains(
+                nativeMethod.className(), nativeMethod.methodName(), nativeMethod.descriptor()
+            );
             if (!configuredNative && !method.isStatic()) {
                 diagnostics.add(error(
                     classFile,
@@ -336,7 +338,7 @@ public final class StaticVerifier {
                 methodCode,
                 reachable,
                 reachableEntries,
-                nativeEntryPoints
+                configuredNativeEntries
             ));
             final int hasMonitorInstructions = containsMonitorInstructions(methodCode) ? 1 : 0;
             final int exactVirtualThreadWrapperMethod = isSupportedExactVirtualThreadWrapperMethod(classes, classFile, method) ? 1 : 0;
@@ -394,7 +396,7 @@ public final class StaticVerifier {
         final CodeAttribute code,
         final int reachable,
         final ReachableEntries reachableEntries,
-        final Set<EntryPoint> nativeEntryPoints
+        final ReachableEntries configuredNativeEntries
     ) {
         if (reachable == 0) {
             return List.of();
@@ -417,7 +419,7 @@ public final class StaticVerifier {
                 implementation.name(),
                 implementation.descriptor()
             );
-            if (!nativeEntryPoints.contains(target)
+            if (!configuredNativeEntries.contains(target.className(), target.methodName(), target.descriptor())
                 || !reachableEntries.contains(target.className(), target.methodName(), target.descriptor())
                 || lambda.instantiatedMethodDescriptor().equals(implementation.descriptor())) {
                 continue;

@@ -1,0 +1,2 @@
+[native]
+imports = ["com.acme.Main.reject(java.lang.String):int -> imported_reject"]

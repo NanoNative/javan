@@ -161,6 +161,27 @@ final class NativeInteropResolverTest {
     }
 
     @Test
+    void retainsOnlyConfiguredImportsReachableByExactMethodSignature() {
+        final NativeInteropConfig configuration = new NativeInteropConfig(
+            List.of(
+                new NativeInteropConfig.ImportBinding(
+                    new EntryPoint(new String("sample/NativeApi"), new String("first"), new String("()I")),
+                    "sample_first"
+                ),
+                new NativeInteropConfig.ImportBinding(
+                    new EntryPoint("sample/NativeApi", "second", "()I"),
+                    "sample_second"
+                )
+            ),
+            NativeLinkInputs.empty()
+        );
+
+        assertThat(configuration.forReachableMethods(List.of(
+            new EntryPoint(new String("sample/NativeApi"), new String("second"), new String("()I"))
+        )).externalSymbols()).containsExactly("sample_second");
+    }
+
+    @Test
     void rejectsDuplicateExternalSymbol() throws Exception {
         write("""
             [native]

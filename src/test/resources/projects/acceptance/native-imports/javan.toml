@@ -1,0 +1,15 @@
+[native]
+imports = [
+  "com.acme.Main.adjust(int):int -> imported_adjust",
+  "com.acme.Main.mutate(byte[]):int -> imported_mutate",
+]
+sources = ["native/imports.c"]
+
+[native.target.linux-x64]
+sources = ["native/target.c"]
+
+[native.target.linux-aarch64]
+sources = ["native/target.c"]
+
+[native.target.macos-aarch64]
+sources = ["native/target.c"]

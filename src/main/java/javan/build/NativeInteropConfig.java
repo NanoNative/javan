@@ -92,14 +92,10 @@ public record NativeInteropConfig(List<ImportBinding> imports, NativeLinkInputs 
      */
     public NativeInteropConfig forReachableMethods(final List<EntryPoint> reachableMethods) {
         final List<EntryPoint> reachable = List.copyOf(Objects.requireNonNull(reachableMethods, "reachableMethods"));
-        final Set<EntryPoint> reachableSet = new HashSet<>();
-        for (int index = 0; index < reachable.size(); index++) {
-            reachableSet.add(reachable.get(index));
-        }
         final List<ImportBinding> reachableImports = new ArrayList<>();
         for (int index = 0; index < imports.size(); index++) {
             final ImportBinding binding = imports.get(index);
-            if (reachableSet.contains(binding.entryPoint())) {
+            if (containsEntryPoint(reachable, binding.entryPoint())) {
                 reachableImports.add(binding);
             }
         }
@@ -133,13 +129,14 @@ public record NativeInteropConfig(List<ImportBinding> imports, NativeLinkInputs 
 
     private static List<ImportBinding> copyImports(final List<ImportBinding> values) {
         final List<ImportBinding> imports = List.copyOf(Objects.requireNonNull(values, "imports"));
-        final Set<EntryPoint> entryPoints = new HashSet<>();
+        final List<EntryPoint> entryPoints = new ArrayList<>();
         final Set<String> symbols = new HashSet<>();
         final Map<String, EntryPoint> wrappers = new HashMap<>();
         for (final ImportBinding binding : imports) {
-            if (!entryPoints.add(binding.entryPoint())) {
+            if (containsEntryPoint(entryPoints, binding.entryPoint())) {
                 throw new IllegalArgumentException("Duplicate native import declaration: " + binding.entryPoint().display());
             }
+            entryPoints.add(binding.entryPoint());
             if (!symbols.add(binding.externalSymbol())) {
                 throw new IllegalArgumentException("Duplicate native import symbol: " + binding.externalSymbol());
             }
@@ -158,6 +155,15 @@ public record NativeInteropConfig(List<ImportBinding> imports, NativeLinkInputs 
             wrappers.put(wrapper, binding.entryPoint());
         }
         return imports;
+    }
+
+    private static boolean containsEntryPoint(final List<EntryPoint> entries, final EntryPoint target) {
+        for (final EntryPoint entry : entries) {
+            if (entry.equals(target)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     static boolean validExternalSymbol(final String value) {
