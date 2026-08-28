@@ -42,6 +42,11 @@ public final class JavanHostOnlyMethods {
         ),
         new MethodRef(
             "javan/util/ProcessRunner",
+            "stopRootProcess",
+            "(Ljava/lang/Process;)V"
+        ),
+        new MethodRef(
+            "javan/util/ProcessRunner",
             "processTree",
             "(Ljava/lang/Process;)Ljava/util/List;"
         ),

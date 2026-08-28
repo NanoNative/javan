@@ -51,6 +51,10 @@ final class JavanHostOnlyMethodsTest {
         )).isTrue();
         assertThat(JavanHostOnlyMethods.isHostOnlyMethod(
             "javan/util/ProcessRunner",
+            method("stopRootProcess", "(Ljava/lang/Process;)V")
+        )).isTrue();
+        assertThat(JavanHostOnlyMethods.isHostOnlyMethod(
+            "javan/util/ProcessRunner",
             method("processTree", "(Ljava/lang/Process;)Ljava/util/List;")
         )).isTrue();
         assertThat(JavanHostOnlyMethods.isHostOnlyMethod(

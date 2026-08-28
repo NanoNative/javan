@@ -19,6 +19,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 
 @Execution(CONCURRENT)
@@ -66,6 +67,7 @@ final class ProcessRunnerTest {
     @Test
     @EnabledOnOs({OS.LINUX, OS.MAC})
     void timeoutStopsShellDescendants() throws Exception {
+        assumeTrue(canInspectDescendantProcesses(), "Host does not permit process-tree inspection");
         final Path childPid = tempDir.resolve("child.pid");
 
         final ProcessRunner.Result result = new ProcessRunner(Duration.ofMillis(50)).run(
@@ -103,6 +105,7 @@ final class ProcessRunnerTest {
     @Test
     @EnabledOnOs({OS.LINUX, OS.MAC})
     void interruptionStopsTheRunningChildProcess() throws Exception {
+        assumeTrue(canInspectDescendantProcesses(), "Host does not permit process-tree inspection");
         final Path started = tempDir.resolve("started");
         final Path completed = tempDir.resolve("completed");
         final Path childPid = tempDir.resolve("child.pid");
@@ -139,6 +142,15 @@ final class ProcessRunnerTest {
         final long pid = Long.parseLong(Files.readString(childPid).trim());
         final Optional<ProcessHandle> process = ProcessHandle.of(pid);
         return process.isPresent() && processIsAlive(new ProcessIdentity(pid, process.orElseThrow().info().startInstant()));
+    }
+
+    private static boolean canInspectDescendantProcesses() {
+        try (var descendants = ProcessHandle.current().descendants()) {
+            descendants.toList();
+            return true;
+        } catch (final RuntimeException unavailable) {
+            return false;
+        }
     }
 
     private static ProcessIdentity childProcess(final Path childPid) throws Exception {
