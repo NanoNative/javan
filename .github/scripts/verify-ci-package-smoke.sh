@@ -90,10 +90,6 @@ if [ "$archive_status" = "fail" ]; then
   exit "$archive_code"
 fi
 javan_timing_run package_verify .github/scripts/verify-package.sh "$ARCHIVE"
-run_package_showcase() {
-  JAVAN_BIN=$PACKAGE_BIN sh .github/scripts/verify-showcase.sh
-}
-javan_timing_run package_showcase run_package_showcase
 if [ "$PACKAGE_PROOF_SCOPE" = "bootstrap" ]; then
   printf '%s\n' "Verified CI bootstrap package $ARCHIVE"
   exit 0
@@ -102,6 +98,10 @@ fi
 tar -xzf "$ARCHIVE" -C "$TMP"
 PACKAGE_ROOT=$TMP/$(basename "$ARCHIVE" .tar.gz)
 PACKAGE_BIN=$PACKAGE_ROOT/bin/javan
+run_package_showcase() {
+  JAVAN_BIN=$PACKAGE_BIN sh .github/scripts/verify-showcase.sh
+}
+javan_timing_run package_showcase run_package_showcase
 
 "$PACKAGE_BIN" doctor >/dev/null
 "$PACKAGE_BIN" --version >/dev/null

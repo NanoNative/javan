@@ -897,6 +897,8 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             .contains("\"kind\": \"self-host\"")
             .contains("\"actualLiveAllocations\": 0")
             .contains("\"actualLiveBytes\": 0");
+        assertThat(script.indexOf("PACKAGE_BIN=$PACKAGE_ROOT/bin/javan"))
+            .isLessThan(script.indexOf("run_package_showcase()"));
     }
 
     @Test
