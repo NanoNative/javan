@@ -717,6 +717,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
                 "target: macos-aarch64, runner: macos-15",
                 "uses: ./.github/workflows/native-proof.yml",
                 "proof: package-baseline",
+                "timeout_minutes: 90",
                 "pattern: package-build-baseline-*",
                 "Measurements are evidence, not regression thresholds."
             );
