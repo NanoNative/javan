@@ -96,6 +96,12 @@ javan_timing_measure() {
       fi
       ;;
     Darwin)
+      # Sandboxed macOS hosts can expose BSD time but deny its sysctl probes.
+      if ! /usr/bin/time -l true >/dev/null 2>&1; then
+        rm -f "$javan_timing_measure_file"
+        "$@"
+        return $?
+      fi
       if /usr/bin/time -l sh -c 'exec "$@" 2>&3' javan-timing "$@" 3>&2 2> "$javan_timing_measure_file"; then
         javan_timing_measure_code=0
       else

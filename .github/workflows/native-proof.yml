@@ -184,6 +184,18 @@ jobs:
           JAVAN_HEAP_LIMIT_BYTES: ${{ startsWith(inputs.target, 'macos-') && '1073741824' || '2147483648' }}
         run: sh .github/scripts/verify-ci-package-smoke.sh
 
+      - name: "📈 Baseline [${{ inputs.target }}]"
+        if: inputs.proof == 'package-baseline'
+        shell: sh
+        env:
+          JAVAN_PACKAGE_TARGET: ${{ inputs.target }}
+          JAVAN_HEAP_LIMIT_BYTES: ${{ startsWith(inputs.target, 'macos-') && '1073741824' || '2147483648' }}
+        run: |
+          set -eu
+          JAVAN_BUILD_REUSE_TARGET=true scripts/build.sh
+          archive=$(.github/scripts/package-release.sh "$JAVAN_VERSION")
+          sh .github/scripts/measure-package-build-baseline.sh "$archive"
+
       - name: "📤 Source [${{ inputs.target }}]"
         if: inputs.proof == 'package-self-host' && inputs.upload_bootstrap_source
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -235,3 +247,14 @@ jobs:
             target/javan-${{ inputs.target }}-timings.tsv
             dist/release/javan-${{ inputs.target }}-timings.json
             dist/release/javan-${{ inputs.target }}-timings.md
+
+      - name: "📈 Baseline [${{ inputs.target }}]"
+        if: ${{ always() && inputs.proof == 'package-baseline' && hashFiles(format('dist/release/javan-{0}-package-build-baseline.json', inputs.target)) != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: package-build-baseline-${{ inputs.target }}
+          retention-days: 90
+          if-no-files-found: error
+          path: |
+            dist/release/javan-${{ inputs.target }}-package-build-baseline.json
+            dist/release/javan-${{ inputs.target }}-package-build-baseline.md

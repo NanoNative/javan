@@ -20,6 +20,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     private static final Path BUILD_MERGE = Path.of(".github/workflows/build-merge.yml");
     private static final Path NATIVE_PROOF = Path.of(".github/workflows/native-proof.yml");
     private static final Path TIMINGS_WORKFLOW = Path.of(".github/workflows/timings.yml");
+    private static final Path PACKAGE_BASELINES_WORKFLOW = Path.of(".github/workflows/package-build-baselines.yml");
     private static final Path RELEASE_WORKFLOW = Path.of(".github/workflows/release.yml");
     private static final Path CONTAINER_WORKFLOW = Path.of(".github/workflows/container-images.yml");
     private static final Path ROADMAP = Path.of("doc/spec/roadmap.md");
@@ -670,6 +671,78 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     }
 
     @Test
+    void packageBuildBaselineMeasuresTheVersionedPublicShowcaseWithoutInventingThresholds() throws Exception {
+        final Path script = Path.of(".github/scripts/measure-package-build-baseline.sh");
+        final String content = Files.readString(script);
+
+        assertThat(content)
+            .contains(
+                "sh .github/scripts/verify-package.sh \"$ARCHIVE\"",
+                "cp -R \"$ROOT/example\" \"$FIXTURE\"",
+                "javan_timing_measure \"$PACKAGE_BIN\" build \"$FIXTURE/target/classes\"",
+                "for iteration in 1 2 3; do",
+                "measure_build \"cold-$iteration\" cold",
+                "measure_build \"warm-$iteration\" warm",
+                "measure_build changed-source changed-source",
+                "\"wallSeconds\"",
+                "\"cpuSeconds\"",
+                "\"peakRssBytes\"",
+                "\"artifactBytes\"",
+                "\"cToolchain\"",
+                "\"regressionPolicy\": \"none; results are comparative evidence, not universal thresholds\""
+            )
+            .doesNotContain("maximumRegression", "fail-on-regression");
+
+        final ProcessResult syntax = process(
+            REPO_ROOT,
+            List.of("sh", "-n", REPO_ROOT.resolve(script).toString()),
+            Duration.ofSeconds(20),
+            Map.of()
+        );
+        assertThat(syntax.exitCode()).as(syntax.stderr()).isZero();
+    }
+
+    @Test
+    void packageBuildBaselineWorkflowUsesEveryFirstReleaseTargetAndUploadsResults() throws Exception {
+        final String workflow = Files.readString(PACKAGE_BASELINES_WORKFLOW);
+        final String proof = Files.readString(NATIVE_PROOF);
+
+        assertThat(workflow)
+            .contains(
+                "name: PackageBuildBaselines",
+                "workflow_dispatch:",
+                "max-parallel: 3",
+                "target: linux-x64, runner: ubuntu-24.04",
+                "target: linux-aarch64, runner: ubuntu-24.04-arm",
+                "target: macos-aarch64, runner: macos-15",
+                "uses: ./.github/workflows/native-proof.yml",
+                "proof: package-baseline",
+                "pattern: package-build-baseline-*",
+                "Measurements are evidence, not regression thresholds."
+            );
+        assertThat(proof)
+            .contains(
+                "if: inputs.proof == 'package-baseline'",
+                "measure-package-build-baseline.sh",
+                "name: package-build-baseline-${{ inputs.target }}",
+                "retention-days: 90"
+            );
+    }
+
+    @Test
+    void packageBuildBaselineRejectsMissingArchives() throws Exception {
+        final ProcessResult result = process(
+            REPO_ROOT,
+            List.of("sh", REPO_ROOT.resolve(".github/scripts/measure-package-build-baseline.sh").toString()),
+            Duration.ofSeconds(20),
+            Map.of()
+        );
+
+        assertThat(result.exitCode()).isEqualTo(2);
+        assertThat(result.stderr()).contains("Usage: .github/scripts/measure-package-build-baseline.sh");
+    }
+
+    @Test
     void sanitizerScriptsShareOneStrictAsanConfiguration() throws Exception {
         final Path helper = REPO_ROOT.resolve(".github/scripts/sanitizer-common.sh");
         final Path runner = tempDir.resolve("sanitizer-common-test.sh");
@@ -769,9 +842,11 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             .containsPattern("\\| `bootstrap_gen2` \\| \\d+ \\| [^|]+ \\| [^|]+ \\| [^|]+ \\| pass \\| true \\|")
             .containsPattern("\\| `shell_function` \\| \\d+ \\| unknown \\| unknown \\| unavailable \\| pass \\| true \\|")
             .containsPattern("\\| \\*\\*Total measured\\*\\* \\| \\*\\*\\d+\\*\\* \\| \\| \\| \\| \\*\\*pass\\*\\* \\| \\|");
-        if (System.getProperty("os.name").startsWith("Linux") || System.getProperty("os.name").startsWith("Mac")) {
+        if (run.stdout().matches("(?s).*source=(?:gnu|bsd)-time.*")) {
             assertThat(jsonContent)
                 .containsPattern("\\\"cpuSeconds\\\": \\\"\\d+(?:\\.\\d+)?\\\", \\\"maxRssBytes\\\": \\\"\\d+\\\", \\\"resourceSource\\\": \\\"(?:gnu|bsd)-time\\\"");
+        } else {
+            assertThat(jsonContent).contains("\"resourceSource\": \"unavailable\"");
         }
     }
 

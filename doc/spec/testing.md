@@ -146,6 +146,13 @@ Native package timing artifacts record wall time, CPU time, peak RSS, metric sou
 count, and physical memory. A platform that cannot provide a resource metric records `unknown`;
 reports never substitute a guessed value.
 
+`Package Build Baselines` is a manual three-target workflow for release performance evidence. It
+extracts a host-native package and measures the public `bin/javan build` command against the
+versioned `example` fixture: three cold runs, three warm runs, and one controlled source-change
+rebuild. Its JSON and Markdown artifacts record the commit, target, JDK, C toolchain, wall time,
+CPU time, peak RSS, artifact size, and native-object-cache decisions per result. These are
+comparative measurements, not a CI regression threshold.
+
 JUnit parallel execution is enabled by default through `src/test/resources/junit-platform.properties`.
 This keeps the policy visible to Maven, IDEs, and other JUnit Platform launchers. Tests run
 concurrently unless they opt into `@Execution(SAME_THREAD)`, `@Isolated`, or a
