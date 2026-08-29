@@ -153,6 +153,10 @@ rebuild. Its JSON and Markdown artifacts record the commit, target, JDK, C toolc
 CPU time, peak RSS, artifact size, and native-object-cache decisions per result. These are
 comparative measurements, not a CI regression threshold.
 
+Native CLI workers also retain their standard Maven XML reports for 14 days. Those reports are
+the recorded per-test timing evidence for balancing the existing six automatic workers; workflow
+YAML continues to contain no Java class or method selector.
+
 JUnit parallel execution is enabled by default through `src/test/resources/junit-platform.properties`.
 This keeps the policy visible to Maven, IDEs, and other JUnit Platform launchers. Tests run
 concurrently unless they opt into `@Execution(SAME_THREAD)`, `@Isolated`, or a

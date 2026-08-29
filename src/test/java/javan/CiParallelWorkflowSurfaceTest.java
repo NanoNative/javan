@@ -376,6 +376,11 @@ final class CiParallelWorkflowSurfaceTest {
             .contains("Discover [${{ matrix.suite }}_${{ matrix.worker_index }}]")
             .contains("Test [${{ matrix.suite }}_${{ matrix.worker_index }}]")
             .contains("test_selector=%s\\n")
+            .contains("Timings [native_${{ matrix.worker_index }}]")
+            .contains("name: native-test-timings-${{ matrix.worker_index }}-linux-x64")
+            .contains("path: target/surefire-reports/TEST-*.xml")
+            .contains("retention-days: 14")
+            .contains("if-no-files-found: error")
             .contains("max-parallel: 8")
             .doesNotContain("matrix.test-selector", "CliJdkSemanticsIntegrationTest#");
 
