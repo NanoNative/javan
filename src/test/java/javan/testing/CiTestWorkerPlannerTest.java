@@ -3,7 +3,10 @@ package javan.testing;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -13,6 +16,23 @@ final class CiTestWorkerPlannerTest {
     @Test
     void nativeWorkersAreNonEmptyDisjointAndComplete() {
         assertWorkersComplete("native", 6);
+    }
+
+    @Test
+    void recordedNativeDurationsKeepWorkerEstimatesClose() {
+        final List<Set<String>> workers = IntStream.range(0, 6)
+            .mapToObj(index -> expand(CiTestWorkerPlanner.selector("native", index, 6))).toList();
+        final Map<String, Long> methodsByClass = workers.stream().flatMap(Set::stream)
+            .collect(Collectors.groupingBy(CiTestWorkerPlannerTest::className, Collectors.counting()));
+        final List<Double> estimates = workers.stream()
+            .map(worker -> worker.stream().collect(Collectors.groupingBy(CiTestWorkerPlannerTest::className, Collectors.counting()))
+                .entrySet().stream().mapToDouble(entry -> CiTestWorkerPlanner.estimatedSeconds("native", entry.getKey() + "#method")
+                    * entry.getValue() / methodsByClass.get(entry.getKey())).sum())
+            .toList();
+
+        assertThat(estimates).allMatch(estimate -> estimate > 0.0d);
+        assertThat(estimates.stream().max(Double::compareTo).orElseThrow()
+            - estimates.stream().min(Double::compareTo).orElseThrow()).isLessThan(30.0d);
     }
 
     @Test
@@ -56,5 +76,9 @@ final class CiTestWorkerPlannerTest {
             }
         }
         return tests;
+    }
+
+    private static String className(final String test) {
+        return test.substring(0, test.indexOf('#'));
     }
 }

@@ -8,18 +8,25 @@ import org.junit.platform.launcher.core.LauncherDiscoveryRequestBuilder;
 import org.junit.platform.launcher.core.LauncherFactory;
 
 import java.nio.file.Path;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.junit.platform.launcher.TagFilter.includeTags;
 
 /** Discovers one execution suite and deterministically divides it between CI workers. */
 public final class CiTestWorkerPlanner {
     private static final int LARGE_CLASS_METHODS = 100;
+    private static final Map<String, Double> NATIVE_CLASS_SECONDS = durations();
 
     private CiTestWorkerPlanner() {
     }
@@ -52,40 +59,68 @@ public final class CiTestWorkerPlanner {
             .sorted()
             .toList();
 
-        final List<String> selected = distribute(tests, workerCount).get(workerIndex);
+        final List<String> selected = distribute(suite, tests, workerCount).get(workerIndex);
         if (selected.isEmpty()) {
             throw new IllegalStateException("suite " + suite + " produced an empty worker " + workerIndex);
         }
         return toSurefireSelector(selected);
     }
 
-    private static List<List<String>> distribute(final List<String> tests, final int workerCount) {
+    private static List<List<String>> distribute(final String suite, final List<String> tests, final int workerCount) {
         final Map<String, List<String>> methodsByClass = new LinkedHashMap<>();
         for (final String test : tests) {
             final int separator = test.indexOf('#');
             methodsByClass.computeIfAbsent(test.substring(0, separator), ignored -> new ArrayList<>()).add(test);
         }
-        final List<List<String>> workers = new ArrayList<>();
+        final List<Worker> workers = new ArrayList<>();
         for (int index = 0; index < workerCount; index++) {
-            workers.add(new ArrayList<>());
+            workers.add(new Worker());
         }
         final boolean splitClasses = methodsByClass.size() < workerCount;
         methodsByClass.entrySet().stream()
-            .sorted(Comparator.<Map.Entry<String, List<String>>>comparingInt(entry -> entry.getValue().size())
+            .sorted(Comparator.<Map.Entry<String, List<String>>>comparingDouble(entry -> weight(suite, entry.getKey(), entry.getValue().size()))
                 .reversed()
                 .thenComparing(Map.Entry::getKey))
             .forEach(entry -> {
                 if (splitClasses || entry.getValue().size() > LARGE_CLASS_METHODS) {
-                    entry.getValue().forEach(test -> leastLoaded(workers).add(test));
+                    final double perMethod = weight(suite, entry.getKey(), entry.getValue().size()) / entry.getValue().size();
+                    entry.getValue().forEach(test -> leastLoaded(workers).add(test, perMethod));
                 } else {
-                    leastLoaded(workers).addAll(entry.getValue());
+                    leastLoaded(workers).addAll(entry.getValue(), weight(suite, entry.getKey(), entry.getValue().size()));
                 }
             });
-        return workers;
+        return workers.stream().map(worker -> List.copyOf(worker.tests)).toList();
     }
 
-    private static List<String> leastLoaded(final List<List<String>> workers) {
-        return workers.stream().min(Comparator.comparingInt(List::size)).orElseThrow();
+    static double estimatedSeconds(final String suite, final String test) {
+        final int separator = test.indexOf('#');
+        return weight(suite, test.substring(0, separator), 1);
+    }
+
+    private static Worker leastLoaded(final List<Worker> workers) {
+        return workers.stream().min(Comparator.comparingDouble(worker -> worker.seconds)).orElseThrow();
+    }
+
+    private static double weight(final String suite, final String className, final int methods) {
+        return "native".equals(suite) ? NATIVE_CLASS_SECONDS.getOrDefault(className, (double) methods) : methods;
+    }
+
+    private static Map<String, Double> durations() {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(
+            Objects.requireNonNull(CiTestWorkerPlanner.class.getResourceAsStream("/javan/testing/native-class-durations.tsv"),
+                "native test duration profile"), StandardCharsets.UTF_8))) {
+            return reader.lines().filter(line -> !line.startsWith("#")).map(line -> line.split("\\t"))
+                .collect(Collectors.toUnmodifiableMap(parts -> parts[0], parts -> Double.parseDouble(parts[1])));
+        } catch (IOException exception) {
+            throw new IllegalStateException("Cannot load native test durations", exception);
+        }
+    }
+
+    private static final class Worker {
+        private final List<String> tests = new ArrayList<>();
+        private double seconds;
+        private void add(final String test, final double estimatedSeconds) { tests.add(test); seconds += estimatedSeconds; }
+        private void addAll(final List<String> tests, final double estimatedSeconds) { this.tests.addAll(tests); seconds += estimatedSeconds; }
     }
 
     private static String toSurefireSelector(final List<String> tests) {

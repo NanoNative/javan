@@ -156,6 +156,9 @@ comparative measurements, not a CI regression threshold.
 Native CLI workers also retain their standard Maven XML reports for 14 days. Those reports are
 the recorded per-test timing evidence for balancing the existing six automatic workers; workflow
 YAML continues to contain no Java class or method selector.
+The planner stores the resulting class-duration profile in
+`src/test/resources/javan/testing/native-class-durations.tsv`; unknown newly discovered classes
+use their method count until the next recorded timing run replaces the profile.
 
 JUnit parallel execution is enabled by default through `src/test/resources/junit-platform.properties`.
 This keeps the policy visible to Maven, IDEs, and other JUnit Platform launchers. Tests run
