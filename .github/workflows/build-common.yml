@@ -218,6 +218,15 @@ jobs:
           -Dgroups='${{ matrix.suite }}'
           -Dtest='${{ steps.tests.outputs.test_selector }}' verify
 
+      - name: "📈 Timings [native_${{ matrix.worker_index }}]"
+        if: ${{ always() && matrix.suite == 'native' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: native-test-timings-${{ matrix.worker_index }}-linux-x64
+          path: target/surefire-reports/TEST-*.xml
+          retention-days: 14
+          if-no-files-found: error
+
   native-acceptance:
     name: ${{ matrix.label }}
     needs:
