@@ -1046,6 +1046,19 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             .contains("JAVAN_IMAGE=\"$image\" sh .github/scripts/verify-showcase.sh");
     }
 
+    @Test
+    void containerExtractionVerifiesArchiveChecksumsBeforeUnpacking() throws Exception {
+        for (final Path dockerfile : List.of(
+            Path.of("packaging/containers/javan-wolfi.Dockerfile"),
+            Path.of("packaging/containers/javan-distroless.Dockerfile"),
+            Path.of("packaging/containers/javan-scratch.Dockerfile")
+        )) {
+            final String source = Files.readString(dockerfile);
+            assertThat(source).contains("$archive.sha256", "sha256sum -c");
+            assertThat(source.indexOf("sha256sum -c")).isLessThan(source.indexOf("tar -xzf \"$archive\""));
+        }
+    }
+
     private static void writeReleaseArtifact(final Path releaseDir, final String name, final String content) throws Exception {
         final Path archive = releaseDir.resolve(name);
         Files.writeString(archive, content, StandardCharsets.UTF_8);
