@@ -1059,6 +1059,13 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         }
     }
 
+    @Test
+    void imageShowcaseVerificationUsesOnlyCompiledTemporaryInput() throws Exception {
+        final String script = Files.readString(Path.of(".github/scripts/verify-showcase.sh"));
+        assertThat(script).contains("-v \"$project:/workspace\"", "check classes --main com.acme.showcase.Main", "report . >/dev/null", "SHOWCASE_REPORT=$project/.javan/reports/report.json")
+            .doesNotContain("-v \"$ROOT:/workspace\"", "rm -rf \"$SHOWCASE_ROOT/target\"");
+    }
+
     private static void writeReleaseArtifact(final Path releaseDir, final String name, final String content) throws Exception {
         final Path archive = releaseDir.resolve(name);
         Files.writeString(archive, content, StandardCharsets.UTF_8);
