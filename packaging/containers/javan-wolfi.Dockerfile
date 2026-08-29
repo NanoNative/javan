@@ -13,6 +13,8 @@ RUN set -eu; \
     esac; \
     archive="/tmp/dist/release/javan-${JAVAN_VERSION}-linux-${package_arch}.tar.gz"; \
     test -f "$archive"; \
+    test -f "$archive.sha256"; \
+    (cd /tmp/dist/release && sha256sum -c "$(basename "$archive").sha256"); \
     tar -xzf "$archive"; \
     mkdir -p /opt; \
     mv "javan-${JAVAN_VERSION}-linux-${package_arch}" /opt/javan; \
