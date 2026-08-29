@@ -6,7 +6,15 @@ SHOWCASE=example
 SHOWCASE_ROOT=$ROOT/$SHOWCASE
 TMP=${TMPDIR:-/tmp}/javan-showcase-$$
 mkdir -p "$TMP"
-trap 'rm -rf "$TMP" "$SHOWCASE_ROOT/target"' EXIT HUP INT TERM
+
+cleanup() {
+  rm -rf "$TMP"
+  if [ -n "${SHOWCASE_TARGET:-}" ]; then
+    rm -rf "$SHOWCASE_TARGET"
+  fi
+}
+
+trap cleanup EXIT HUP INT TERM
 
 assert_contains() {
   file=$1
@@ -41,36 +49,47 @@ if [ -n "$JAVAN_BIN" ]; then
   esac
 fi
 
-rm -rf "$SHOWCASE_ROOT/target"
-mkdir -p "$SHOWCASE_ROOT/target/classes"
 find "$SHOWCASE_ROOT/src/main/java" -name '*.java' | sort >"$TMP/sources.txt"
-javac -d "$SHOWCASE_ROOT/target/classes" @"$TMP/sources.txt"
 
 if [ -n "$JAVAN_IMAGE" ]; then
+  project="$TMP/project"
+  mkdir -p "$project/classes"
+  javac -d "$project/classes" @"$TMP/sources.txt"
   docker run --rm \
-    -v "$ROOT:/workspace" \
+    -v "$project:/workspace" \
     -w /workspace \
     "$JAVAN_IMAGE" \
-    build "$SHOWCASE/target/classes" --main com.acme.showcase.Main --output native-showcase
+    build classes --main com.acme.showcase.Main --output native-showcase
 
   docker run --rm \
-    -v "$ROOT:/workspace" \
+    -v "$project:/workspace" \
     -w /workspace \
     "$JAVAN_IMAGE" \
-    report "$SHOWCASE/target" >/dev/null
+    check classes --main com.acme.showcase.Main
 
   docker run --rm \
-    --entrypoint "/workspace/$SHOWCASE/target/.javan/bin/native-showcase" \
-    -v "$ROOT:/workspace" \
+    -v "$project:/workspace" \
+    -w /workspace \
+    "$JAVAN_IMAGE" \
+    report . >/dev/null
+
+  docker run --rm \
+    --entrypoint "/workspace/.javan/bin/native-showcase" \
+    -v "$project:/workspace" \
     -w /workspace \
     "$JAVAN_IMAGE" >"$TMP/showcase.out"
+  SHOWCASE_REPORT=$project/.javan/reports/report.json
 else
-  "$JAVAN_BIN" build "$SHOWCASE_ROOT/target/classes" --main com.acme.showcase.Main --output native-showcase
-  "$JAVAN_BIN" report "$SHOWCASE_ROOT/target" >/dev/null
-  "$SHOWCASE_ROOT/target/.javan/bin/native-showcase" >"$TMP/showcase.out"
+  SHOWCASE_TARGET=$SHOWCASE_ROOT/target
+  rm -rf "$SHOWCASE_TARGET"
+  mkdir -p "$SHOWCASE_TARGET/classes"
+  javac -d "$SHOWCASE_TARGET/classes" @"$TMP/sources.txt"
+  "$JAVAN_BIN" build "$SHOWCASE_TARGET/classes" --main com.acme.showcase.Main --output native-showcase
+  "$JAVAN_BIN" report "$SHOWCASE_TARGET" >/dev/null
+  "$SHOWCASE_TARGET/.javan/bin/native-showcase" >"$TMP/showcase.out"
+  SHOWCASE_REPORT=$SHOWCASE_TARGET/.javan/reports/report.json
 fi
 
-SHOWCASE_REPORT=$SHOWCASE_ROOT/target/.javan/reports/report.json
 if [ ! -f "$SHOWCASE_REPORT" ]; then
   printf '%s\n' "Missing native showcase unified report: $SHOWCASE_REPORT" >&2
   exit 1
