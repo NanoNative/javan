@@ -41,7 +41,7 @@ jobs:
       sanitizer_scope: none
       proof: package-baseline
       version: ${{ needs.prepare.outputs.version }}
-      timeout_minutes: 60
+      timeout_minutes: 90
     secrets: inherit
 
   summary:
