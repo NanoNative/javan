@@ -3521,7 +3521,7 @@ final class CliIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void nullArrayCloneBuildsAndFailsClearly() throws Exception {
+    void dynamicNullArrayCloneBuildsAndFailsClearly() throws Exception {
         final Path project = project("null-array-clone");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -3531,7 +3531,10 @@ final class CliIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) {
-                    final int[] values = null;
+                    int[] values = null;
+                    if (args.length == 1) {
+                        values = new int[] {1};
+                    }
                     values.clone();
                 }
             }

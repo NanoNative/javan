@@ -418,7 +418,7 @@ final class CliStringApiIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void stringToStringNullFailsClearlyAtRuntime() throws Exception {
+    void stringToStringDynamicNullFailsClearlyAtRuntime() throws Exception {
         final Path project = project("string-to-string-null");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -428,7 +428,10 @@ final class CliStringApiIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) {
-                    final String value = null;
+                    String value = null;
+                    if (args.length == 1) {
+                        value = args[0];
+                    }
                     System.out.println(value.toString());
                 }
             }
