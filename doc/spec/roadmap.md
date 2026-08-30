@@ -33,34 +33,27 @@ Linux x64, Linux ARM64, and macOS ARM64 only. It does not claim macOS x64 or Win
 general Java compatibility, TLS, or arbitrary external-library support. A `Done` CI row is
 evidence for one target; it is not a public-release decision.
 
-The queue below is the only work that may compete for release attention. It is ordered by release
-leverage, not by callable count. Keep at most two implementation slices and one CI/performance
-slice in progress. A task owns its whole vertical proof: public CLI input, generated output,
-native execution, and package evidence where the behavior is release-critical.
+The primary three-target release gates are complete; their evidence is recorded in
+[#155](https://github.com/NanoNative/javan/issues/155). New work must not reopen them without a
+failed package proof or a changed release decision. Keep at most two implementation slices and one
+CI/performance slice in progress. A task owns its whole vertical proof: public CLI input, generated
+output, native execution, and package evidence where the behavior is release-critical.
 
 | Order | Work | Required proof |
 | --- | --- | --- |
-| 1 | [REL-SCOPE-01](https://github.com/NanoNative/javan/issues/103): keep the scenario-bounded JDK gate and release scope aligned. | No source claims full JDK inventory closure is required for the three-target first release; declared reachable behavior remains supported or rejected. |
-| 2 | [REL-ARTIFACT-01](https://github.com/NanoNative/javan/issues/116): rehearse each declared target's extracted release archive without publication. | Linux x64, Linux ARM64, and macOS ARM64 verify checksum, package, self-host, acceptance, ABI, and sanitizer evidence from clean inputs, while recording exclusions. |
-| 3 | [ABI-IMPORT-01](https://github.com/NanoNative/javan/issues/117): prove configured native imports from extracted packages on every declared target. | Primitive and borrowed-`byte[]` imports compile, link, execute, and reject invalid reachable shapes deterministically. |
-| 4 | [PERF-BASELINE-01](https://github.com/NanoNative/javan/issues/130): record cold, warm, and changed-source baselines after the bounded-worker path is verified. | Public `javan build` measurements with wall time, CPU time, peak RSS, artifact size, target, and toolchain. |
-| 5 | [CI-SHARD-01](https://github.com/NanoNative/javan/issues/250): balance the existing six native CI workers from recorded timings. | Deterministic, complete worker assignment plus before/after CI timing evidence; no worker-count increase. |
+| 1 | [REL-CONTAINER-01C](https://github.com/NanoNative/javan/issues/263): record container release-proof metadata. | The container proof retains the exact archive, target, command, checksum, and outcome metadata needed to audit the supplemental Linux evidence. |
 
-The bounded-worker path is verified on `main`, not a second active feature slice. The baseline
-task measures it before another build-speed change is started.
-
-Supplemental evidence must not compete with this five-task release queue. [REL-CONTAINER-01](https://github.com/NanoNative/javan/issues/115)
-verifies a Linux archive in a container after the host-native gates move; it cannot replace
-extracted-package rehearsal on any declared target.
+[REL-CONTAINER-01](https://github.com/NanoNative/javan/issues/115) is supplemental Linux evidence.
+It cannot replace extracted-package rehearsal on any declared target or expand the first-release
+platform contract.
 
 There is currently no safe `dry_run` release workflow: the documented `dry_run=true` dispatch
 still behaves as a real GitHub release. Do not use it as rehearsal. Any future artifact rehearsal
 must run only package-verification commands and already-produced artifacts, with no credentials,
 upload, tag, or release API path.
 
-Deferred until this queue is green:
+Deferred until a new release decision requires them:
 
-- Linux container archive verification ([REL-CONTAINER-01](https://github.com/NanoNative/javan/issues/115)); it is supplemental release evidence, not a host-native package gate.
 - Windows x64 and ARM64 native package support, macOS x64 package support, and any runner-only
   workaround.
 - Broad JDK callable accounting, whole-class support tasks, and compatibility work without a

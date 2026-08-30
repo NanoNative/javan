@@ -186,25 +186,24 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     }
 
     @Test
-    void firstNativeReleaseQueueKeepsFiveLinkedCoreGates() throws Exception {
+    void releaseQueueKeepsOnlyTheOpenSupplementalContainerMetadataGate() throws Exception {
         final String roadmap = Files.readString(ROADMAP);
         final String activeQueue = roadmap.substring(
             roadmap.indexOf("## Active First Native Release Queue"),
-            roadmap.indexOf("Supplemental evidence must not compete")
+            roadmap.indexOf("There is currently no safe `dry_run` release workflow")
         );
 
         assertThat(activeQueue)
             .contains(
-                "issues/103",
-                "issues/116",
-                "issues/117",
-                "issues/130",
-                "issues/250"
+                "issues/155",
+                "REL-CONTAINER-01C",
+                "issues/263",
+                "REL-CONTAINER-01",
+                "issues/115"
             )
-            .doesNotContain("issues/115");
+            .doesNotContain("issues/103", "issues/116", "issues/117", "issues/130", "issues/250");
         assertThat(Pattern.compile("https://github.com/NanoNative/javan/issues/").matcher(activeQueue).results().count())
-            .isEqualTo(5);
-        assertThat(roadmap).contains("REL-CONTAINER-01", "issues/115");
+            .isEqualTo(3);
     }
 
     @Test
