@@ -37,6 +37,8 @@ import java.util.Set;
  * Emits portable C for the initial javan IR profile.
  */
 public final class CCodegen {
+    private static final EscapeAnalyzer.StackAllocationSite[] NO_STACK_ALLOCATIONS =
+        new EscapeAnalyzer.StackAllocationSite[0];
     private static final int PROGRAM_UNIT_BUCKETS = 64;
     private static final String PROGRAM_HEADER = "javan_program.h";
     private static final String PROGRAM_MANIFEST = "javan_program.sources";
@@ -2219,8 +2221,12 @@ public final class CCodegen {
         for (final javan.ir.IrLocal local : function.locals()) {
             c.append("    ").append(local.type().cName()).append(' ').append(local.name()).append(" = 0;").append(System.lineSeparator());
         }
-        emitStackStorage(program, function, stackAllocations, c);
-        final List<String> rootNames = objectRootNames(program, function, stackAllocations);
+        final List<EscapeAnalyzer.StackAllocationSite> functionStackAllocations = stackAllocationSitesFor(function, stackAllocations);
+        final EscapeAnalyzer.StackAllocationSite[] stackAllocationsByInstruction = stackAllocationIndex(
+            function.instructions().size(), functionStackAllocations
+        );
+        emitStackStorage(program, function, functionStackAllocations, c);
+        final List<String> rootNames = objectRootNames(program, function, functionStackAllocations);
         final String rootFrameSymbol = rootFrameSymbol(function);
         final RootLivenessPlan rootLiveness = RootLivenessPlan.forFunction(function);
         emitRootFramePush(rootFrameSymbol, rootNames, c);
@@ -2249,8 +2255,7 @@ public final class CCodegen {
                 !rootNames.isEmpty(),
                 objectResultSymbols,
                 nativeWrapperSymbols,
-                stackAllocations,
-                function,
+                stackAllocationsByInstruction,
                 c
             );
             if (hasStatementSafePoint(instruction)) {
@@ -2279,13 +2284,10 @@ public final class CCodegen {
     private static void emitStackStorage(
         final IrProgram program,
         final IrFunction function,
-        final EscapeAnalyzer.StackAllocationPlan plan,
+        final List<EscapeAnalyzer.StackAllocationSite> stackAllocations,
         final StringBuilder c
     ) {
-        for (final EscapeAnalyzer.StackAllocationSite site : plan.sites()) {
-            if (!sameFunction(function, site)) {
-                continue;
-            }
+        for (final EscapeAnalyzer.StackAllocationSite site : stackAllocations) {
             if (site.kind() == IrExpression.Kind.OBJECT_ALLOCATION) {
                 emitStackObjectStorage(program, function, site, c);
                 continue;
@@ -2343,6 +2345,40 @@ public final class CCodegen {
             && site.descriptor().equals(function.descriptor());
     }
 
+    private static List<EscapeAnalyzer.StackAllocationSite> stackAllocationSitesFor(
+        final IrFunction function,
+        final EscapeAnalyzer.StackAllocationPlan plan
+    ) {
+        List<EscapeAnalyzer.StackAllocationSite> result = null;
+        for (final EscapeAnalyzer.StackAllocationSite site : plan.sites()) {
+            if (sameFunction(function, site)) {
+                if (result == null) {
+                    result = new ArrayList<>();
+                }
+                result.add(site);
+            }
+        }
+        return result == null ? List.of() : List.copyOf(result);
+    }
+
+    private static EscapeAnalyzer.StackAllocationSite[] stackAllocationIndex(
+        final int instructionCount,
+        final List<EscapeAnalyzer.StackAllocationSite> stackAllocations
+    ) {
+        if (stackAllocations.isEmpty()) {
+            return NO_STACK_ALLOCATIONS;
+        }
+        final EscapeAnalyzer.StackAllocationSite[] result = new EscapeAnalyzer.StackAllocationSite[instructionCount];
+        for (final EscapeAnalyzer.StackAllocationSite site : stackAllocations) {
+            final int instructionIndex = site.instructionIndex();
+            if (instructionIndex < 0 || instructionIndex >= instructionCount || result[instructionIndex] != null) {
+                throw new IllegalArgumentException("invalid stack allocation site");
+            }
+            result[instructionIndex] = site;
+        }
+        return result;
+    }
+
     private static StackArrayLayout stackArrayLayout(final IrExpression.Kind kind) {
         if (kind == IrExpression.Kind.INT_ARRAY_ALLOCATION) {
             return new StackArrayLayout("int", "JAVAN_ARRAY_KIND_INT", "[I");
@@ -2380,19 +2416,6 @@ public final class CCodegen {
 
     private static String stackObjectSymbol(final int instructionIndex) {
         return "javan_stack_object_" + instructionIndex;
-    }
-
-    private static EscapeAnalyzer.StackAllocationSite stackAllocationAt(
-        final IrFunction function,
-        final int instructionIndex,
-        final EscapeAnalyzer.StackAllocationPlan plan
-    ) {
-        for (final EscapeAnalyzer.StackAllocationSite site : plan.sites()) {
-            if (site.instructionIndex() == instructionIndex && sameFunction(function, site)) {
-                return site;
-            }
-        }
-        return null;
     }
 
     private static void emitStackAssignment(
@@ -2785,11 +2808,11 @@ public final class CCodegen {
     private static List<String> objectRootNames(
         final IrProgram program,
         final IrFunction function,
-        final EscapeAnalyzer.StackAllocationPlan plan
+        final List<EscapeAnalyzer.StackAllocationSite> stackAllocations
     ) {
         final List<String> result = new java.util.ArrayList<>(objectRootNames(function));
-        for (final EscapeAnalyzer.StackAllocationSite site : plan.sites()) {
-            if (!sameFunction(function, site) || site.kind() != IrExpression.Kind.OBJECT_ALLOCATION) {
+        for (final EscapeAnalyzer.StackAllocationSite site : stackAllocations) {
+            if (site.kind() != IrExpression.Kind.OBJECT_ALLOCATION) {
                 continue;
             }
             final IrExpression allocation = function.instructions().get(site.instructionIndex())
@@ -3907,8 +3930,7 @@ public final class CCodegen {
         final boolean hasRootFrame,
         final List<String> objectResultSymbols,
         final NativeWrapperSymbols nativeWrapperSymbols,
-        final EscapeAnalyzer.StackAllocationPlan stackAllocations,
-        final IrFunction function,
+        final EscapeAnalyzer.StackAllocationSite[] stackAllocationsByInstruction,
         final StringBuilder c
     ) {
         final boolean sourceContext = shouldEmitSourceContext(instruction);
@@ -4001,9 +4023,9 @@ public final class CCodegen {
                 );
                 break;
             case ASSIGN_OBJECT:
-                final EscapeAnalyzer.StackAllocationSite stackSite = stackAllocationAt(
-                    function, index, stackAllocations
-                );
+                final EscapeAnalyzer.StackAllocationSite stackSite = stackAllocationsByInstruction.length == 0
+                    ? null
+                    : stackAllocationsByInstruction[index];
                 if (stackSite == null) {
                     emitAssignment(
                         c,

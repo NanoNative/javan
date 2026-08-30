@@ -238,6 +238,48 @@ final class CCodegenMemoryTest {
     }
 
     @Test
+    void indexesMultiplePlannedStackAllocationsByInstruction() throws Exception {
+        final IrProgram program = new IrProgram(
+            List.of(nodeClass()),
+            List.of(new IrFunction(
+                "com/acme/Main",
+                "main",
+                "([Ljava/lang/String;)V",
+                "main_symbol",
+                IrType.VOID,
+                List.of(),
+                List.of(new IrLocal(IrType.OBJECT, "node"), new IrLocal(IrType.OBJECT, "values")),
+                List.of(
+                    IrInstruction.printlnLiteral("before"),
+                    IrInstruction.assignObject("node", IrExpression.objectAllocation("com/acme/Node")),
+                    IrInstruction.assignObject("values", IrExpression.intArrayAllocation(IrExpression.intLiteral(2))),
+                    IrInstruction.returnVoid()
+                )
+            )),
+            "main_symbol"
+        );
+        final EscapeAnalyzer analyzer = new EscapeAnalyzer();
+        final EscapeAnalyzer.StackAllocationPlan plan = analyzer.planStackAllocations(
+            program, analyzer.analyze(program), true
+        );
+
+        final String generated = Files.readString(new CCodegen().generate(
+            program, tempDir, javan.build.NativeInteropConfig.empty(), plan
+        ));
+
+        assertThat(plan.sites()).hasSize(2);
+        assertThat(generated).contains(
+            "struct javan_class_com_acme_Node javan_stack_object_1 = {1};",
+            "int values[2]; } javan_stack_array_2",
+            "node = (void*) &javan_stack_object_1;",
+            "values = (void*) &javan_stack_array_2;"
+        );
+        assertThat(generated)
+            .doesNotContain("node = javan_new_com_acme_Node();")
+            .doesNotContain("values = javan_int_array_new(2);");
+    }
+
+    @Test
     void emitsStableTypeIdForPlannedStackObject() throws Exception {
         final IrProgram program = new IrProgram(
             List.of(nodeClass()),
