@@ -27,6 +27,7 @@ final class WorkflowPolicySurfaceTest {
         Path.of(".github/scripts/install-external-probe-artifacts.sh");
     private static final Path LIST_EXTERNAL_PROBES =
         Path.of(".github/scripts/list-external-probe-artifacts.sh");
+    private static final Path VERIFY_IMAGE = Path.of(".github/scripts/verify-image.sh");
 
     @Test
     void entryWorkflowsQueueWithoutCancelingInFlightRuns() throws Exception {
@@ -108,6 +109,26 @@ final class WorkflowPolicySurfaceTest {
         assertThat(LIST_EXTERNAL_PROBES).doesNotExist();
         assertThat(Files.readString(INSTALL_EXTERNAL_PROBES))
             .contains("groupId=", "artifactId=", "version=");
+    }
+
+    @Test
+    void containerWorkflowRetainsVerifiedReleaseProofMetadata() throws Exception {
+        assertThat(Files.readString(CONTAINER_IMAGES_WORKFLOW))
+            .contains(
+                "JAVAN_RELEASE_ARCHIVE_DIR: dist/release",
+                "JAVAN_RELEASE_PROOF_DIR: dist/container-proof",
+                "name: container-release-proof-${{ steps.plan.outputs.version }}",
+                "retention-days: 90",
+                "path: dist/container-proof"
+            );
+        assertThat(Files.readString(VERIFY_IMAGE))
+            .contains(
+                "JAVAN_RELEASE_VERSION",
+                "JAVAN_RELEASE_ARCHIVE_DIR",
+                "JAVAN_RELEASE_PROOF_DIR",
+                "Manifest.Digest",
+                "Missing release proof input"
+            );
     }
 
     @Test

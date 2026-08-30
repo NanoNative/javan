@@ -157,6 +157,9 @@ jobs:
         env:
           IMAGE_REPOSITORY: ${{ steps.plan.outputs.repository }}
           RELEASE_VERSION: ${{ steps.plan.outputs.version }}
+          JAVAN_RELEASE_VERSION: ${{ steps.plan.outputs.version }}
+          JAVAN_RELEASE_ARCHIVE_DIR: dist/release
+          JAVAN_RELEASE_PROOF_DIR: dist/container-proof
         run: |
           for tag in \
             "$RELEASE_VERSION" \
@@ -170,6 +173,14 @@ jobs:
           do
             sh .github/scripts/verify-image.sh "$IMAGE_REPOSITORY:$tag"
           done
+
+      - name: "📤 Release proof [${{ steps.plan.outputs.version }}]"
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: container-release-proof-${{ steps.plan.outputs.version }}
+          retention-days: 90
+          if-no-files-found: error
+          path: dist/container-proof
 
       - name: "🧪 Showcase [${{ steps.plan.outputs.version }}]"
         shell: sh
