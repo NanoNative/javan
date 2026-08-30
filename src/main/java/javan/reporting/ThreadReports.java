@@ -73,42 +73,37 @@ public final class ThreadReports {
             if (code.isEmpty()) {
                 continue;
             }
-            boolean startsThread = false;
             final CodeAttribute methodCode = code.orElseThrow();
-            for (final Instruction instruction : methodCode.instructions()) {
-                if (invokesThreadStart(instruction)) {
-                    threadStartSites++;
-                    startsThread = true;
-                }
-            }
-            if (startsThread) {
-                threadStartMethods++;
-            }
             final String methodName = entry.methodName() + entry.descriptor();
             final int index = methodIndex(methods, entry.className(), methodName);
+            final long methodThreadStartSites = threadStartSitesInMethod(methodCode);
+            threadStartSites += methodThreadStartSites;
+            if (methodThreadStartSites > 0L) {
+                threadStartMethods++;
+            }
+            if (index < 0 && methodThreadStartSites == 0L) {
+                continue;
+            }
             final MethodStats stats = methodStats(methodCode);
             if (index >= 0) {
-                methods.set(index, methods.get(index).withReachableCode(threadStartSitesInMethod(methodCode), stats));
+                methods.set(index, methods.get(index).withReachableCode(methodThreadStartSites, stats));
             } else {
-                final long methodThreadStartSites = threadStartSitesInMethod(methodCode);
-                if (methodThreadStartSites > 0) {
-                    methods.add(new MethodActivity(
-                        entry.className(),
-                        methodName,
-                        methodThreadStartSites,
-                        0L,
-                        0L,
-                        0L,
-                        0L,
-                        0L,
-                        0L,
-                        stats.estimatedInstructions(),
-                        stats.allocationSites(),
-                        stats.ioCallSites(),
-                        stats.hasLoop(),
-                        TaskClass.UNKNOWN.name()
-                    ).refreshClassification());
-                }
+                methods.add(new MethodActivity(
+                    entry.className(),
+                    methodName,
+                    methodThreadStartSites,
+                    0L,
+                    0L,
+                    0L,
+                    0L,
+                    0L,
+                    0L,
+                    stats.estimatedInstructions(),
+                    stats.allocationSites(),
+                    stats.ioCallSites(),
+                    stats.hasLoop(),
+                    TaskClass.UNKNOWN.name()
+                ).refreshClassification());
             }
         }
         sortMethods(methods);
