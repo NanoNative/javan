@@ -77,6 +77,54 @@ final class CliSafetyDiagnosticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void buildRejectsLiteralOutOfBoundsArrayReadBeforeNativeGeneration() throws Exception {
+        final Path project = project("literal-out-of-bounds-array-read-build");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final int[] source = new int[2];
+                    final int[] values = source;
+                    System.out.println(values[2]);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains("error[JAVAN071]", "provable array index out of bounds", "index 2", "length 2");
+        assertThat(project.resolve(".javan/generated")).doesNotExist();
+    }
+
+    @Test
+    void checkRejectsLiteralNegativeArrayReadBeforeNativeGeneration() throws Exception {
+        final Path project = project("literal-negative-array-read-check");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final int[] values = new int[2];
+                    System.out.println(values[-1]);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains("error[JAVAN071]", "provable array index out of bounds", "index -1", "length 2");
+    }
+
+    @Test
     void buildRejectsLiteralNullFieldReceiverBeforeNativeGeneration() throws Exception {
         final Path project = project("literal-null-field-receiver-build");
         writeJava(project, "com.acme.Main", """
@@ -137,6 +185,37 @@ final class CliSafetyDiagnosticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void checkReportsUnreachableLiteralOutOfBoundsArrayReadAsWarning() throws Exception {
+        final Path project = project("unreachable-out-of-bounds-array-read-check");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("safe");
+                }
+
+                private static int unused() {
+                    final int[] values = new int[1];
+                    return values[1];
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/diagnostics.json"))).contains(
+            "\"severity\": \"warning\"",
+            "\"code\": \"JAVAN171\"",
+            "provable array index out of bounds in unreachable code"
+        );
+    }
+
+    @Test
     void checkAcceptsReassignedReceiver() throws Exception {
         final Path project = project("reassigned-null-receiver-check");
         writeJava(project, "com.acme.Main", """
@@ -186,5 +265,34 @@ final class CliSafetyDiagnosticsIntegrationTest extends CliIntegrationSupport {
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(run.stderr()).doesNotContain("JAVAN070");
+    }
+
+    @Test
+    void checkAcceptsInBoundsAndDynamicArrayReads() throws Exception {
+        final Path project = project("in-bounds-and-dynamic-array-read-check");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final int[] values = new int[2];
+                    System.out.println(values[1]);
+
+                    int index = 2;
+                    if (args.length == 1) {
+                        index = 0;
+                    }
+                    System.out.println(values[index]);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(run.stderr()).doesNotContain("JAVAN071");
     }
 }

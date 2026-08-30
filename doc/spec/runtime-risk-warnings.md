@@ -12,17 +12,18 @@ an unknown path is safe.
 
 ## Implemented Slice
 
-The verifier tracks only a literal `aconst_null` value and direct local copies within a
-straight-line bytecode segment. It reports only receiver operations whose receiver is exactly
-that value:
+The verifier tracks only literal `null`, literal one-dimensional array lengths, and direct
+local copies within a straight-line bytecode segment. It reports only exact failures:
 
 - reachable instance calls with no arguments, field reads, and `arraylength` fail with
   `JAVAN070` before native code generation
-- the same shape in an unreachable method is retained as `JAVAN170` in
+- reachable array reads whose literal index is outside a locally-created literal array length
+  fail with `JAVAN071` before native code generation
+- the same shapes in an unreachable method are retained as `JAVAN170` and `JAVAN171` in
   `.javan/reports/diagnostics.json` and `.md` without making `check` fail
 - reassigned locals, method parameters, field values, returned values, calls with arguments,
-  branch merges, exception paths, and all other dynamic shapes remain unknown and are not
-  diagnosed by this slice
+  array writes, dynamic array lengths or indexes, branch merges, exception paths, and all
+  other dynamic shapes remain unknown and are not diagnosed by this slice
 
 This small boundary prevents a known native runtime `NullPointerException` without treating a
 partial local scan as a general nullness analysis.
@@ -32,7 +33,7 @@ partial local scan as a general nullness analysis.
 Initial checks:
 
 - broader possible null dereference and null arguments
-- unsafe array index
+- unsafe array writes and broader array-index analysis
 - unsafe `String.charAt`
 - unsafe `String.substring`
 - `List.get(0)` without non-empty proof
@@ -94,7 +95,7 @@ duplicate findings by diagnostic id, source location, risk kind, and reachable p
 
 Current command behavior:
 
-- `javan check` and `javan build` stop before native generation for `JAVAN070`
+- `javan check` and `javan build` stop before native generation for `JAVAN070` and `JAVAN071`
 - exact unreachable findings are persisted in shared diagnostic reports without terminal error
   output
 - `.javan/reports/diagnostics.json` and `.javan/reports/diagnostics.md` are the current stable
