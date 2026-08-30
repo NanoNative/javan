@@ -945,7 +945,12 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         final String script = Files.readString(VERIFY_CI_PACKAGE_SMOKE);
 
         assertThat(script)
-            .contains("build target/classes --main javan.Main --jar --output javan-package-selfhost-jar")
+            .contains(
+                "if [ -f target/classes/javan/Main.class ]; then",
+                "JAVAN_BUILD_REUSE_TARGET=true scripts/build.sh",
+                "else\n  scripts/build.sh\nfi",
+                "build target/classes --main javan.Main --jar --output javan-package-selfhost-jar"
+            )
             .contains("Main-Class: javan.Main");
     }
 
