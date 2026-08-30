@@ -103,7 +103,11 @@ does not commit version or changelog changes to `main`.
 Container images are published by the reusable `Container Images` workflow after a GitHub
 release exists. It downloads the released Linux archives and can also be replayed manually with
 the release tag. Its `release.published` trigger remains available for releases created outside
-the automated release workflow.
+the automated release workflow. Before the workflow accepts each published image tag, it verifies
+both release archive checksums and the multi-architecture manifest, resolves the immutable image
+digest, and uploads the resulting JSON release proof for 90 days. Each proof record identifies the
+release version, Linux x64 and ARM64 archives, their checksums, the verified platforms, and the
+published image digest.
 
 The weekly `Maintenance` workflow uses the shared Maven Wrapper updater with the repository
 `GITHUB_TOKEN`; JavaN needs no PAT. It opens a maintenance pull request and runs the normal PR
