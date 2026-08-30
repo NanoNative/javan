@@ -4946,17 +4946,38 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
         nativeCommand.environment().put("JAVAN_GC_STRESS", "1");
         nativeCommand.environment().put("JAVAN_GC_SAFEPOINT_INTERVAL", "1");
         final Process process = nativeCommand.start();
-        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
-        final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
-        final java.net.http.HttpRequest.Builder request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + target));
-        final java.net.http.HttpResponse<String> nativeResponse = awaitLoopbackResponse(client, buildRequest.apply(request));
+        final CompletableFuture<String> stderr = readProcessErrorOnVirtualThread(process);
+        try {
+            final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+            final java.net.http.HttpRequest.Builder request = java.net.http.HttpRequest.newBuilder(
+                java.net.URI.create("http://127.0.0.1:" + port + target)
+            ).timeout(Duration.ofSeconds(5));
+            final java.net.http.HttpResponse<String> nativeResponse = awaitLoopbackResponse(client, buildRequest.apply(request));
 
-        assertThat(nativeResponse.statusCode()).isEqualTo(expectedStatus);
-        assertThat(nativeResponse.body()).isEqualTo(expectedBody);
-        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
-        assertThat(process.exitValue()).isZero();
-        assertThat(readStream(process.getInputStream())).isEmpty();
-        assertThat(stderr.join()).isEmpty();
+            assertThat(nativeResponse.statusCode()).isEqualTo(expectedStatus);
+            assertThat(nativeResponse.body()).isEqualTo(expectedBody);
+            assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
+            assertThat(process.exitValue()).isZero();
+            assertThat(readStream(process.getInputStream())).isEmpty();
+            assertThat(stderr.join()).isEmpty();
+        } finally {
+            if (process.isAlive()) {
+                process.destroyForcibly();
+                process.waitFor(5, TimeUnit.SECONDS);
+            }
+        }
+    }
+
+    private static CompletableFuture<String> readProcessErrorOnVirtualThread(final Process process) {
+        final CompletableFuture<String> result = new CompletableFuture<>();
+        Thread.ofVirtual().start(() -> {
+            try {
+                result.complete(readStream(process.getErrorStream()));
+            } catch (final RuntimeException exception) {
+                result.completeExceptionally(exception);
+            }
+        });
+        return result;
     }
 
     private static java.net.http.HttpResponse<String> awaitLoopbackResponse(
