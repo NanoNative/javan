@@ -2908,22 +2908,24 @@ public final class CCodegen {
             final int rootWordCount = uses.length == 0 ? 0 : uses[0].length;
             final long[][] liveIn = emptyRootSets(instructions.size(), rootWordCount);
             final long[][] liveOut = emptyRootSets(instructions.size(), rootWordCount);
+            final long[] nextIn = new long[rootWordCount];
+            final long[] nextOut = new long[rootWordCount];
             boolean changed = true;
             while (changed) {
                 changed = false;
                 for (int index = instructions.size() - 1; index >= 0; index--) {
-                    final long[] nextOut = new long[rootWordCount];
+                    clearRoots(nextOut);
                     for (final Integer successor : successors.get(index)) {
                         addRoots(nextOut, liveIn[successor.intValue()]);
                     }
-                    final long[] nextIn = copyRoots(uses[index]);
+                    copyRootsInto(uses[index], nextIn);
                     addRootsExcept(nextIn, nextOut, defs[index]);
                     if (!sameRoots(liveOut[index], nextOut)) {
-                        liveOut[index] = nextOut;
+                        copyRootsInto(nextOut, liveOut[index]);
                         changed = true;
                     }
                     if (!sameRoots(liveIn[index], nextIn)) {
-                        liveIn[index] = nextIn;
+                        copyRootsInto(nextIn, liveIn[index]);
                         changed = true;
                     }
                 }
@@ -2945,39 +2947,43 @@ public final class CCodegen {
             final long[][] mayOut = emptyRootSets(instructions.size(), rootWordCount);
             final long[][] clears = emptyRootSets(instructions.size(), rootWordCount);
             final long[] parameterRoots = objectParameterRootIndexes(function, rootIndexes, rootWordCount);
+            final long[] nextIn = new long[rootWordCount];
+            final long[] nextOut = new long[rootWordCount];
+            final long[] nextClears = new long[rootWordCount];
             boolean changed = true;
             while (changed) {
                 changed = false;
                 for (int index = 0; index < instructions.size(); index++) {
-                    final long[] nextIn = new long[rootWordCount];
+                    clearRoots(nextIn);
                     if (index == 0) {
                         addRoots(nextIn, parameterRoots);
                     }
                     for (final Integer predecessor : predecessors.get(index)) {
                         addRoots(nextIn, mayOut[predecessor.intValue()]);
                     }
-                    long[] nextOut = copyRoots(nextIn);
-                    nextOut = applyAssignmentMayState(instructions.get(index), defs[index], nextOut);
-                    final long[] nextClears = rootsToClearAfter(
+                    copyRootsInto(nextIn, nextOut);
+                    applyAssignmentMayState(instructions.get(index), defs[index], nextOut);
+                    rootsToClearAfter(
                         instructions.get(index),
                         index,
                         nextOut,
                         liveness,
-                        successors
+                        successors,
+                        nextClears
                     );
                     if (instructions.get(index).op() != IrInstruction.Op.BRANCH_IF) {
                         removeRoots(nextOut, nextClears);
                     }
                     if (!sameRoots(mayIn[index], nextIn)) {
-                        mayIn[index] = nextIn;
+                        copyRootsInto(nextIn, mayIn[index]);
                         changed = true;
                     }
                     if (!sameRoots(mayOut[index], nextOut)) {
-                        mayOut[index] = nextOut;
+                        copyRootsInto(nextOut, mayOut[index]);
                         changed = true;
                     }
                     if (!sameRoots(clears[index], nextClears)) {
-                        clears[index] = nextClears;
+                        copyRootsInto(nextClears, clears[index]);
                         changed = true;
                     }
                 }
@@ -2985,53 +2991,38 @@ public final class CCodegen {
             return clears;
         }
 
-        private static long[] applyAssignmentMayState(
+        private static void applyAssignmentMayState(
             final IrInstruction instruction,
             final long[] defs,
             final long[] state
         ) {
-            final long[] result = copyRoots(state);
-            removeRoots(result, defs);
+            removeRoots(state, defs);
             if (!assignsObjectNull(instruction)) {
-                addRoots(result, defs);
+                addRoots(state, defs);
             }
-            return result;
         }
 
-        private static long[] rootsToClearAfter(
+        private static void rootsToClearAfter(
             final IrInstruction instruction,
             final int instructionIndex,
             final long[] mayOut,
             final Liveness liveness,
-            final List<List<Integer>> successors
+            final List<List<Integer>> successors,
+            final long[] result
         ) {
+            clearRoots(result);
             if (!hasStatementSafePoint(instruction)) {
-                return new long[mayOut.length];
+                return;
             }
-            final long[] result = copyRoots(mayOut);
-            removeRoots(result, requiredAfterFallthroughClear(
-                instruction,
-                instructionIndex,
-                liveness,
-                successors
-            ));
-            return result;
-        }
-
-        private static long[] requiredAfterFallthroughClear(
-            final IrInstruction instruction,
-            final int instructionIndex,
-            final Liveness liveness,
-            final List<List<Integer>> successors
-        ) {
+            copyRootsInto(mayOut, result);
             if (instruction.op() != IrInstruction.Op.BRANCH_IF) {
-                return liveness.liveOut()[instructionIndex];
+                removeRoots(result, liveness.liveOut()[instructionIndex]);
+                return;
             }
             final Integer fallthrough = fallthroughSuccessor(instructionIndex, successors);
-            if (fallthrough == null) {
-                return new long[liveness.liveIn()[instructionIndex].length];
+            if (fallthrough != null) {
+                removeRoots(result, liveness.liveIn()[fallthrough.intValue()]);
             }
-            return liveness.liveIn()[fallthrough.intValue()];
         }
 
         private static Integer fallthroughSuccessor(final int instructionIndex, final List<List<Integer>> successors) {
@@ -3209,12 +3200,16 @@ public final class CCodegen {
             }
         }
 
-        private static long[] copyRoots(final long[] roots) {
-            final long[] result = new long[roots.length];
+        private static void clearRoots(final long[] roots) {
             for (int index = 0; index < roots.length; index++) {
-                result[index] = roots[index];
+                roots[index] = 0L;
             }
-            return result;
+        }
+
+        private static void copyRootsInto(final long[] source, final long[] target) {
+            for (int index = 0; index < source.length; index++) {
+                target[index] = source[index];
+            }
         }
 
         private static boolean containsRoot(final long[] roots, final int rootIndex) {
