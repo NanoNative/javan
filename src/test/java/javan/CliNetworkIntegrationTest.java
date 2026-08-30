@@ -719,8 +719,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void socketOobInlineRoundTripBuildsAndMatchesJvmOutput() throws Exception {
-        final int port = freeTcpPort();
-        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final int port = server.getLocalPort();
             final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
                 try (java.net.Socket socket = server.accept()) {
                     socket.getInputStream().read();
