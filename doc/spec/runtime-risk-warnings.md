@@ -1,8 +1,8 @@
 # Compile-Time Runtime-Risk Warnings
 
-Status: partial. `javan check` and `javan build` reject a reachable receiver that is
-provably the literal `null` in one straight-line bytecode segment. Broader nullness, range,
-and collection facts remain planned.
+Status: partial. `javan check` and `javan build` reject exact literal null-receiver, array-read,
+and supported ASCII `String.charAt` failures in one straight-line bytecode segment. Broader
+nullness, range, and collection facts remain planned.
 
 ## Goal
 
@@ -12,18 +12,25 @@ an unknown path is safe.
 
 ## Implemented Slice
 
-The verifier tracks only literal `null`, literal one-dimensional array lengths, and direct
-local copies within a straight-line bytecode segment. It reports only exact failures:
+The verifier tracks only literal `null`, literal one-dimensional array lengths, supported ASCII
+string lengths, and direct local copies within a straight-line bytecode segment. It reports only
+exact failures:
 
 - reachable instance calls with no arguments, field reads, and `arraylength` fail with
   `JAVAN070` before native code generation
 - reachable array reads whose literal index is outside a locally-created literal array length
   fail with `JAVAN071` before native code generation
-- the same shapes in an unreachable method are retained as `JAVAN170` and `JAVAN171` in
-  `.javan/reports/diagnostics.json` and `.md` without making `check` fail
+- reachable `String.charAt` calls whose literal index is outside a supported ASCII literal
+  length fail with `JAVAN072` before native code generation
+- the same shapes in an unreachable method are retained as `JAVAN170`, `JAVAN171`, and
+  `JAVAN172` in `.javan/reports/diagnostics.json` and `.md` without making `check` fail
 - reassigned locals, method parameters, field values, returned values, calls with arguments,
-  array writes, dynamic array lengths or indexes, branch merges, exception paths, and all
-  other dynamic shapes remain unknown and are not diagnosed by this slice
+  array writes, dynamic string or array lengths or indexes, non-ASCII string literals, branch
+  merges, exception paths, and all other dynamic shapes remain unknown and are not diagnosed by
+  this slice
+
+Non-ASCII string literals retain the existing `JAVAN046` UTF-16-profile diagnostic; this slice
+does not add a second bounds error for a string the current native profile cannot represent.
 
 This small boundary prevents a known native runtime `NullPointerException` without treating a
 partial local scan as a general nullness analysis.
@@ -34,7 +41,6 @@ Initial checks:
 
 - broader possible null dereference and null arguments
 - unsafe array writes and broader array-index analysis
-- unsafe `String.charAt`
 - unsafe `String.substring`
 - `List.get(0)` without non-empty proof
 - `Optional.get` without `isPresent` proof
@@ -95,7 +101,8 @@ duplicate findings by diagnostic id, source location, risk kind, and reachable p
 
 Current command behavior:
 
-- `javan check` and `javan build` stop before native generation for `JAVAN070` and `JAVAN071`
+- `javan check` and `javan build` stop before native generation for `JAVAN070`, `JAVAN071`, and
+  `JAVAN072`
 - exact unreachable findings are persisted in shared diagnostic reports without terminal error
   output
 - `.javan/reports/diagnostics.json` and `.javan/reports/diagnostics.md` are the current stable
