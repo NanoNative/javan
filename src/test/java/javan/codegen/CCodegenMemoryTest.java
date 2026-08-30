@@ -555,6 +555,41 @@ final class CCodegenMemoryTest {
     }
 
     @Test
+    void retainsLiveRootWhenBranchTargetIsImmediateFallthrough() throws Exception {
+        final IrProgram program = new IrProgram(
+            List.of(nodeClass()),
+            List.of(new IrFunction(
+                "com/acme/Main",
+                "main",
+                "([Ljava/lang/String;)V",
+                "main_symbol",
+                IrType.VOID,
+                List.of(),
+                List.of(new IrLocal(IrType.OBJECT, "tmp")),
+                List.of(
+                    IrInstruction.assignObject("tmp", IrExpression.objectAllocation("com/acme/Node")),
+                    IrInstruction.branchIf("use", IrExpression.intLiteral(1)),
+                    IrInstruction.label("use"),
+                    IrInstruction.printlnObject(IrExpression.objectLocal("tmp")),
+                    IrInstruction.returnVoid()
+                )
+            )),
+            "main_symbol"
+        );
+
+        final String generated = Files.readString(new CCodegen().generate(program, tempDir));
+
+        assertThat(generated).contains(
+            "if (1) goto use;\n"
+                + "    javan_gc_safe_point();\n"
+                + "use:\n"
+                + "    javan_gc_safe_point();\n"
+                + "    javan_println_object_value(tmp);"
+        );
+        assertThat(generated).doesNotContain("use:\n    tmp = 0;");
+    }
+
+    @Test
     void clearsBranchFallthroughWhenRootLiveOnlyOnTakenEdge() throws Exception {
         final IrProgram program = new IrProgram(
             List.of(nodeClass()),

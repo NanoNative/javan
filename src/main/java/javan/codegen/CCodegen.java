@@ -2835,6 +2835,8 @@ public final class CCodegen {
     }
 
     private static final class RootLivenessPlan {
+        private static final int[] NO_SUCCESSORS = new int[0];
+
         private final java.util.Map<Integer, List<String>> clearsAfter;
 
         private RootLivenessPlan(final java.util.Map<Integer, List<String>> clearsAfter) {
@@ -2848,7 +2850,8 @@ public final class CCodegen {
             if (roots.isEmpty()) {
                 return new RootLivenessPlan(clears);
             }
-            if (!hasValidControlFlow(instructions)) {
+            final java.util.Optional<int[][]> controlFlow = successors(instructions);
+            if (controlFlow.isEmpty()) {
                 return new RootLivenessPlan(clears);
             }
 
@@ -2868,7 +2871,7 @@ public final class CCodegen {
                 }
             }
 
-            final List<List<Integer>> successors = successors(instructions);
+            final int[][] successors = controlFlow.orElseThrow();
             final Liveness liveness = liveness(instructions, uses, defs, successors);
             final long[][] clearSets = clearSets(
                 function, instructions, rootIndexes, rootWordCount, defs, successors, liveness
@@ -2926,7 +2929,7 @@ public final class CCodegen {
             final List<IrInstruction> instructions,
             final long[][] uses,
             final long[][] defs,
-            final List<List<Integer>> successors
+            final int[][] successors
         ) {
             final int rootWordCount = uses.length == 0 ? 0 : uses[0].length;
             final long[][] liveIn = emptyRootSets(instructions.size(), rootWordCount);
@@ -2938,8 +2941,8 @@ public final class CCodegen {
                 changed = false;
                 for (int index = instructions.size() - 1; index >= 0; index--) {
                     clearRoots(nextOut);
-                    for (final Integer successor : successors.get(index)) {
-                        addRoots(nextOut, liveIn[successor.intValue()]);
+                    for (final int successor : successors[index]) {
+                        addRoots(nextOut, liveIn[successor]);
                     }
                     copyRootsInto(uses[index], nextIn);
                     addRootsExcept(nextIn, nextOut, defs[index]);
@@ -2962,10 +2965,10 @@ public final class CCodegen {
             final java.util.Map<String, Integer> rootIndexes,
             final int rootWordCount,
             final long[][] defs,
-            final List<List<Integer>> successors,
+            final int[][] successors,
             final Liveness liveness
         ) {
-            final List<List<Integer>> predecessors = predecessors(instructions.size(), successors);
+            final int[][] predecessors = predecessors(instructions.size(), successors);
             final long[][] mayIn = emptyRootSets(instructions.size(), rootWordCount);
             final long[][] mayOut = emptyRootSets(instructions.size(), rootWordCount);
             final long[][] clears = emptyRootSets(instructions.size(), rootWordCount);
@@ -2981,8 +2984,8 @@ public final class CCodegen {
                     if (index == 0) {
                         addRoots(nextIn, parameterRoots);
                     }
-                    for (final Integer predecessor : predecessors.get(index)) {
-                        addRoots(nextIn, mayOut[predecessor.intValue()]);
+                    for (final int predecessor : predecessors[index]) {
+                        addRoots(nextIn, mayOut[predecessor]);
                     }
                     copyRootsInto(nextIn, nextOut);
                     applyAssignmentMayState(instructions.get(index), defs[index], nextOut);
@@ -3030,7 +3033,7 @@ public final class CCodegen {
             final int instructionIndex,
             final long[] mayOut,
             final Liveness liveness,
-            final List<List<Integer>> successors,
+            final int[][] successors,
             final long[] result
         ) {
             clearRoots(result);
@@ -3042,34 +3045,51 @@ public final class CCodegen {
                 removeRoots(result, liveness.liveOut()[instructionIndex]);
                 return;
             }
-            final Integer fallthrough = fallthroughSuccessor(instructionIndex, successors);
-            if (fallthrough != null) {
-                removeRoots(result, liveness.liveIn()[fallthrough.intValue()]);
+            final int fallthrough = fallthroughSuccessor(instructionIndex, successors);
+            if (fallthrough >= 0) {
+                removeRoots(result, liveness.liveIn()[fallthrough]);
             }
         }
 
-        private static Integer fallthroughSuccessor(final int instructionIndex, final List<List<Integer>> successors) {
+        private static int fallthroughSuccessor(final int instructionIndex, final int[][] successors) {
             final int fallthroughIndex = instructionIndex + 1;
-            for (final Integer successor : successors.get(instructionIndex)) {
-                if (successor.intValue() == fallthroughIndex) {
+            for (final int successor : successors[instructionIndex]) {
+                if (successor == fallthroughIndex) {
                     return successor;
                 }
             }
-            return null;
+            return -1;
         }
 
-        private static List<List<Integer>> successors(final List<IrInstruction> instructions) {
-            final java.util.Map<String, Integer> labelTargets = labelTargets(instructions);
-            final List<List<Integer>> result = emptyIntegerSets(instructions.size());
+        private static java.util.Optional<int[][]> successors(final List<IrInstruction> instructions) {
+            final java.util.Map<String, Integer> labelTargets = new java.util.HashMap<>();
+            for (int index = 0; index < instructions.size(); index++) {
+                final IrInstruction instruction = instructions.get(index);
+                if (instruction.op() != IrInstruction.Op.LABEL) {
+                    continue;
+                }
+                final String label = instruction.value().orElseThrow();
+                if (labelTargets.putIfAbsent(label, Integer.valueOf(index)) != null) {
+                    return java.util.Optional.empty();
+                }
+            }
+            final int[][] result = new int[instructions.size()][];
             for (int index = 0; index < instructions.size(); index++) {
                 final IrInstruction instruction = instructions.get(index);
                 switch (instruction.op()) {
                     case JUMP:
-                        addLabelSuccessor(result.get(index), labelTargets, instruction.value().orElseThrow());
+                        final Integer jumpTarget = labelTargets.get(instruction.value().orElseThrow());
+                        if (jumpTarget == null) {
+                            return java.util.Optional.empty();
+                        }
+                        result[index] = new int[]{jumpTarget.intValue()};
                         break;
                     case BRANCH_IF:
-                        addLabelSuccessor(result.get(index), labelTargets, instruction.value().orElseThrow());
-                        addNextSuccessor(result.get(index), index, instructions.size());
+                        final Integer branchTarget = labelTargets.get(instruction.value().orElseThrow());
+                        if (branchTarget == null) {
+                            return java.util.Optional.empty();
+                        }
+                        result[index] = branchSuccessors(branchTarget.intValue(), index + 1, instructions.size());
                         break;
                     case PANIC:
                     case THROW_PENDING:
@@ -3080,78 +3100,41 @@ public final class CCodegen {
                     case RETURN_FLOAT:
                     case RETURN_DOUBLE:
                     case RETURN_OBJECT:
+                        result[index] = NO_SUCCESSORS;
                         break;
                     default:
-                        addNextSuccessor(result.get(index), index, instructions.size());
+                        result[index] = index + 1 < instructions.size() ? new int[]{index + 1} : NO_SUCCESSORS;
                         break;
                 }
             }
-            return result;
+            return java.util.Optional.of(result);
         }
 
-        private static boolean hasValidControlFlow(final List<IrInstruction> instructions) {
-            final java.util.Map<String, Integer> labelTargets = new java.util.LinkedHashMap<>();
-            for (int index = 0; index < instructions.size(); index++) {
-                final IrInstruction instruction = instructions.get(index);
-                if (instruction.op() == IrInstruction.Op.LABEL) {
-                    final String label = instruction.value().orElseThrow();
-                    if (labelTargets.get(label) != null) {
-                        return false;
-                    }
-                    labelTargets.put(label, Integer.valueOf(index));
-                }
+        private static int[] branchSuccessors(final int target, final int next, final int size) {
+            if (next >= size || target == next) {
+                return new int[]{target};
             }
-            for (final IrInstruction instruction : instructions) {
-                switch (instruction.op()) {
-                    case JUMP:
-                    case BRANCH_IF:
-                        if (labelTargets.get(instruction.value().orElseThrow()) == null) {
-                            return false;
-                        }
-                        break;
-                    default:
-                        break;
-                }
-            }
-            return true;
+            return new int[]{target, next};
         }
 
-        private static List<List<Integer>> predecessors(final int size, final List<List<Integer>> successors) {
-            final List<List<Integer>> result = emptyIntegerSets(size);
-            for (int index = 0; index < successors.size(); index++) {
-                for (final Integer successor : successors.get(index)) {
-                    addUniqueInteger(result.get(successor.intValue()), Integer.valueOf(index));
+        private static int[][] predecessors(final int size, final int[][] successors) {
+            final int[] counts = new int[size];
+            for (final int[] functionSuccessors : successors) {
+                for (final int successor : functionSuccessors) {
+                    counts[successor]++;
+                }
+            }
+            final int[][] result = new int[size][];
+            for (int index = 0; index < size; index++) {
+                result[index] = new int[counts[index]];
+            }
+            final int[] next = new int[size];
+            for (int index = 0; index < successors.length; index++) {
+                for (final int successor : successors[index]) {
+                    result[successor][next[successor]++] = index;
                 }
             }
             return result;
-        }
-
-        private static java.util.Map<String, Integer> labelTargets(final List<IrInstruction> instructions) {
-            final java.util.Map<String, Integer> result = new java.util.LinkedHashMap<>();
-            for (int index = 0; index < instructions.size(); index++) {
-                final IrInstruction instruction = instructions.get(index);
-                if (instruction.op() == IrInstruction.Op.LABEL) {
-                    result.put(instruction.value().orElseThrow(), Integer.valueOf(index));
-                }
-            }
-            return result;
-        }
-
-        private static void addLabelSuccessor(
-            final List<Integer> result,
-            final java.util.Map<String, Integer> labelTargets,
-            final String label
-        ) {
-            final Integer target = labelTargets.get(label);
-            if (target != null) {
-                addUniqueInteger(result, target);
-            }
-        }
-
-        private static void addNextSuccessor(final List<Integer> result, final int index, final int size) {
-            if (index + 1 < size) {
-                addUniqueInteger(result, Integer.valueOf(index + 1));
-            }
         }
 
         private static long[] objectParameterRootIndexes(
@@ -3257,28 +3240,6 @@ public final class CCodegen {
             return true;
         }
 
-        private static List<List<Integer>> emptyIntegerSets(final int size) {
-            final List<List<Integer>> result = new java.util.ArrayList<>();
-            for (int index = 0; index < size; index++) {
-                result.add(new java.util.ArrayList<>());
-            }
-            return result;
-        }
-
-        private static void addUniqueInteger(final List<Integer> values, final Integer value) {
-            if (!containsInteger(values, value)) {
-                values.add(value);
-            }
-        }
-
-        private static boolean containsInteger(final List<Integer> values, final Integer value) {
-            for (final Integer current : values) {
-                if (current.intValue() == value.intValue()) {
-                    return true;
-                }
-            }
-            return false;
-        }
 
         private static boolean assignsObjectNull(final IrInstruction instruction) {
             final java.util.Optional<javan.ir.IrExpression> expression = instruction.expression();
