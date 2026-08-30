@@ -138,6 +138,32 @@ public final class NativeLinker {
         final NativeLinkInputs linkInputs,
         final List<String> importedSymbols
     ) throws IOException, InterruptedException {
+        return link(root, mainC, runtimeC, output, linkInputs, importedSymbols, false);
+    }
+
+    /**
+     * Links generated C sources with explicit native link inputs and an optimization posture.
+     *
+     * @param root working directory
+     * @param mainC generated main C path
+     * @param runtimeC runtime C path
+     * @param output output binary path
+     * @param linkInputs validated native link inputs
+     * @param importedSymbols immutable native import symbol names
+     * @param release whether to enable portable release optimization
+     * @return output binary path
+     * @throws IOException when no compiler is available or linking fails
+     * @throws InterruptedException when interrupted while linking
+     */
+    public Path link(
+        final Path root,
+        final Path mainC,
+        final Path runtimeC,
+        final Path output,
+        final NativeLinkInputs linkInputs,
+        final List<String> importedSymbols,
+        final boolean release
+    ) throws IOException, InterruptedException {
         final NativeLinkInputs inputs = Objects.requireNonNull(linkInputs, "linkInputs");
         final List<String> symbols = List.copyOf(Objects.requireNonNull(importedSymbols, "importedSymbols"));
         rejectUnsupportedFrameworks(inputs, System.getProperty("os.name", ""));
@@ -145,7 +171,7 @@ public final class NativeLinker {
         Files.createDirectories(output.getParent());
         final List<String> command = new ArrayList<>();
         command.add(compiler);
-        command.addAll(compilerFlags());
+        command.addAll(compilerFlags(release));
         command.add(mainC.toString());
         command.add(runtimeC.toString());
         appendDirectLinkInputs(command, inputs, runtimeC.getParent());
@@ -196,7 +222,8 @@ public final class NativeLinker {
             cacheDirectory,
             linkInputs,
             importedSymbols,
-            0
+            0,
+            false
         );
     }
 
@@ -265,6 +292,49 @@ public final class NativeLinker {
         final List<String> importedSymbols,
         final int requestedJobs
     ) throws IOException, InterruptedException {
+        return linkCached(
+            root,
+            programSources,
+            programHeaders,
+            runtimeC,
+            output,
+            cacheDirectory,
+            linkInputs,
+            importedSymbols,
+            requestedJobs,
+            false
+        );
+    }
+
+    /**
+     * Links ordered generated application sources while reusing verified objects for one optimization posture.
+     *
+     * @param root working directory
+     * @param programSources ordered generated program sources
+     * @param programHeaders headers shared by every generated program source
+     * @param runtimeC runtime source
+     * @param output output binary
+     * @param cacheDirectory project-local native object cache
+     * @param linkInputs validated native link inputs
+     * @param importedSymbols immutable native import symbol names
+     * @param requestedJobs requested concurrent compiler processes, or zero for the conservative automatic limit
+     * @param release whether to enable portable release optimization
+     * @return linked artifact, object-cache evidence, and worker evidence
+     * @throws IOException when compilation, cache validation, or linking fails
+     * @throws InterruptedException when interrupted while compiling or linking
+     */
+    public CacheLinkResult linkCached(
+        final Path root,
+        final List<Path> programSources,
+        final List<Path> programHeaders,
+        final Path runtimeC,
+        final Path output,
+        final Path cacheDirectory,
+        final NativeLinkInputs linkInputs,
+        final List<String> importedSymbols,
+        final int requestedJobs,
+        final boolean release
+    ) throws IOException, InterruptedException {
         if (requestedJobs < 0) {
             throw new IllegalArgumentException("requestedJobs must not be negative");
         }
@@ -283,7 +353,7 @@ public final class NativeLinker {
         final List<ObjectPlan> programObjects = new ArrayList<>();
         for (final Path source : sources) {
             programObjects.add(objectPlan(
-                compiler, compilerIdentity, source, headers, List.of(generated), cacheDirectory, generated
+                compiler, compilerIdentity, source, headers, List.of(generated), cacheDirectory, generated, release
             ));
         }
         final Path runtimeHeader = generated.resolve("javan_runtime.h");
@@ -294,14 +364,15 @@ public final class NativeLinker {
             Files.isRegularFile(runtimeHeader) ? List.of(runtimeHeader) : List.of(),
             List.of(),
             cacheDirectory,
-            generated
+            generated,
+            release
         );
         final List<ObjectPlan> objects = new ArrayList<>(programObjects);
         objects.add(runtimeObject);
-        final WorkerEvidence workers = compileCachedObjects(root, compiler, objects, requestedJobs);
+        final WorkerEvidence workers = compileCachedObjects(root, compiler, objects, requestedJobs, release);
         final List<String> command = new ArrayList<>();
         command.add(compiler);
-        command.addAll(compilerFlags());
+        command.addAll(compilerFlags(release));
         for (final ObjectPlan object : programObjects) {
             command.add(object.object().toString());
         }
@@ -358,6 +429,33 @@ public final class NativeLinker {
         final List<String> importedSymbols
     )
         throws IOException, InterruptedException {
+        return linkSharedLibrary(root, mainC, runtimeC, output, linkInputs, importedSymbols, false);
+    }
+
+    /**
+     * Links generated C sources into a shared library with one optimization posture.
+     *
+     * @param root working directory
+     * @param mainC generated C path
+     * @param runtimeC runtime C path
+     * @param output output library path
+     * @param linkInputs validated native link inputs
+     * @param importedSymbols immutable native import symbol names
+     * @param release whether to enable portable release optimization
+     * @return output library path
+     * @throws IOException when linking fails
+     * @throws InterruptedException when interrupted while linking
+     */
+    public Path linkSharedLibrary(
+        final Path root,
+        final Path mainC,
+        final Path runtimeC,
+        final Path output,
+        final NativeLinkInputs linkInputs,
+        final List<String> importedSymbols,
+        final boolean release
+    )
+        throws IOException, InterruptedException {
         final NativeLinkInputs inputs = Objects.requireNonNull(linkInputs, "linkInputs");
         final List<String> symbols = List.copyOf(Objects.requireNonNull(importedSymbols, "importedSymbols"));
         rejectUnsupportedFrameworks(inputs, System.getProperty("os.name", ""));
@@ -366,7 +464,7 @@ public final class NativeLinker {
         final String osName = System.getProperty("os.name", "");
         final List<String> command = new ArrayList<>();
         command.add(compiler);
-        command.addAll(compilerFlags());
+        command.addAll(compilerFlags(release));
         if (isMacHost(osName)) {
             command.add("-dynamiclib");
         } else {
@@ -425,6 +523,33 @@ public final class NativeLinker {
         final List<String> importedSymbols
     )
         throws IOException, InterruptedException {
+        return linkStaticLibrary(root, mainC, runtimeC, output, linkInputs, importedSymbols, false);
+    }
+
+    /**
+     * Links generated C sources into a static library with one optimization posture.
+     *
+     * @param root working directory
+     * @param mainC generated C path
+     * @param runtimeC runtime C path
+     * @param output output library path
+     * @param linkInputs validated native link inputs
+     * @param importedSymbols immutable native import symbol names
+     * @param release whether to enable portable release optimization
+     * @return output library path
+     * @throws IOException when static-library inputs are unsupported or linking fails
+     * @throws InterruptedException when interrupted while linking
+     */
+    public Path linkStaticLibrary(
+        final Path root,
+        final Path mainC,
+        final Path runtimeC,
+        final Path output,
+        final NativeLinkInputs linkInputs,
+        final List<String> importedSymbols,
+        final boolean release
+    )
+        throws IOException, InterruptedException {
         final NativeLinkInputs inputs = Objects.requireNonNull(linkInputs, "linkInputs");
         final List<String> symbols = List.copyOf(Objects.requireNonNull(importedSymbols, "importedSymbols"));
         rejectUnsupportedFrameworks(inputs, System.getProperty("os.name", ""));
@@ -436,9 +561,11 @@ public final class NativeLinker {
         Files.createDirectories(objects);
         final Path mainObject = objects.resolve("javan_library.o");
         final Path runtimeObject = objects.resolve("javan_runtime.o");
-        compileObject(root, compiler, mainC, mainObject);
-        compileObject(root, compiler, runtimeC, runtimeObject);
-        final List<Path> sourceObjects = compileConfiguredSources(root, compiler, inputs.sources(), objects, runtimeC.getParent());
+        compileObject(root, compiler, mainC, mainObject, release);
+        compileObject(root, compiler, runtimeC, runtimeObject, release);
+        final List<Path> sourceObjects = compileConfiguredSources(
+            root, compiler, inputs.sources(), objects, runtimeC.getParent(), release
+        );
         final List<String> command = new ArrayList<>();
         command.add(archiver);
         command.add("rcs");
@@ -475,12 +602,13 @@ public final class NativeLinker {
         final String compiler,
         final List<Path> sources,
         final Path objectsDirectory,
-        final Path generatedHeaderDirectory
+        final Path generatedHeaderDirectory,
+        final boolean release
     ) throws IOException, InterruptedException {
         final List<Path> objects = new ArrayList<>();
         for (int index = 0; index < sources.size(); index++) {
             final Path object = objectsDirectory.resolve("native_input_" + index + ".o");
-            compileObject(root, compiler, sources.get(index), object, List.of(generatedHeaderDirectory));
+            compileObject(root, compiler, sources.get(index), object, List.of(generatedHeaderDirectory), release);
             objects.add(object);
         }
         return List.copyOf(objects);
@@ -662,9 +790,14 @@ public final class NativeLinker {
             || value == '_';
     }
 
-    private void compileObject(final Path root, final String compiler, final Path source, final Path output)
-        throws IOException, InterruptedException {
-        compileObject(root, compiler, source, output, List.of());
+    private void compileObject(
+        final Path root,
+        final String compiler,
+        final Path source,
+        final Path output,
+        final boolean release
+    ) throws IOException, InterruptedException {
+        compileObject(root, compiler, source, output, List.of(), release);
     }
 
     private ObjectPlan objectPlan(
@@ -674,9 +807,10 @@ public final class NativeLinker {
         final List<Path> dependencies,
         final List<Path> includeDirectories,
         final Path cacheDirectory,
-        final Path displayRoot
+        final Path displayRoot,
+        final boolean release
     ) throws IOException, InterruptedException {
-        final String fingerprint = objectFingerprint(compiler, compilerIdentity, source, dependencies);
+        final String fingerprint = objectFingerprint(compiler, compilerIdentity, source, dependencies, release);
         final Path object = cacheDirectory.resolve(fingerprint + ".o");
         final Path checksum = cacheDirectory.resolve(fingerprint + ".fnv64");
         if (Files.isRegularFile(object) && Files.isRegularFile(checksum)
@@ -704,7 +838,8 @@ public final class NativeLinker {
         final Path root,
         final String compiler,
         final List<ObjectPlan> objects,
-        final int requestedJobs
+        final int requestedJobs,
+        final boolean release
     ) throws IOException, InterruptedException {
         final Map<Path, ObjectPlan> missing = new LinkedHashMap<>();
         for (final ObjectPlan object : objects) {
@@ -714,17 +849,22 @@ public final class NativeLinker {
         }
         final List<ObjectPlan> planned = List.copyOf(missing.values());
         for (final ObjectPlan object : planned) {
-            compileCachedObject(root, compiler, object);
+            compileCachedObject(root, compiler, object, release);
         }
         final int workers = planned.isEmpty() ? 0 : 1;
         return new WorkerEvidence(requestedJobs, workers, Math.max(0, planned.size() - workers));
     }
 
-    private void compileCachedObject(final Path root, final String compiler, final ObjectPlan object)
+    private void compileCachedObject(
+        final Path root,
+        final String compiler,
+        final ObjectPlan object,
+        final boolean release
+    )
         throws IOException, InterruptedException {
         prepareCachedObject(object);
         final ProcessRunner.Result result = processRunner.runResult(
-            root, compilerCommand(compiler, object.source(), object.staging(), object.includeDirectories())
+            root, compilerCommand(compiler, object.source(), object.staging(), object.includeDirectories(), release)
         );
         if (result.interrupted()) {
             Files.deleteIfExists(object.staging());
@@ -771,7 +911,8 @@ public final class NativeLinker {
         final String compiler,
         final String compilerIdentity,
         final Path source,
-        final List<Path> dependencies
+        final List<Path> dependencies,
+        final boolean release
     ) throws IOException {
         long hash = FNV_OFFSET_BASIS;
         hash = fingerprint(hash, "javan-native-object-v2");
@@ -785,7 +926,7 @@ public final class NativeLinker {
             hash = fingerprint(hash, Long.toString(Files.size(compilerPath)));
             hash = fingerprint(hash, Long.toString(Files.getLastModifiedTime(compilerPath).toMillis()));
         }
-        for (final String flag : compilerFlags()) {
+        for (final String flag : compilerFlags(release)) {
             hash = fingerprint(hash, flag);
         }
         hash = fingerprint(hash, "-fPIC");
@@ -836,9 +977,12 @@ public final class NativeLinker {
         final String compiler,
         final Path source,
         final Path output,
-        final List<Path> includeDirectories
+        final List<Path> includeDirectories,
+        final boolean release
     ) throws IOException, InterruptedException {
-        final ProcessRunner.Result result = processRunner.run(root, compilerCommand(compiler, source, output, includeDirectories));
+        final ProcessRunner.Result result = processRunner.run(
+            root, compilerCommand(compiler, source, output, includeDirectories, release)
+        );
         if (result.interrupted()) {
             throw new InterruptedException("Interrupted while compiling native application");
         }
@@ -851,11 +995,12 @@ public final class NativeLinker {
         final String compiler,
         final Path source,
         final Path output,
-        final List<Path> includeDirectories
+        final List<Path> includeDirectories,
+        final boolean release
     ) {
         final List<String> command = new ArrayList<>();
         command.add(compiler);
-        command.addAll(compilerFlags());
+        command.addAll(compilerFlags(release));
         command.add("-fPIC");
         for (final Path includeDirectory : includeDirectories) {
             command.add("-I");
@@ -869,12 +1014,24 @@ public final class NativeLinker {
     }
 
     private static List<String> compilerFlags() {
+        return compilerFlags(false);
+    }
+
+    private static List<String> compilerFlags(final boolean release) {
+        return compilerFlagsForOs(System.getProperty("os.name", ""), release);
+    }
+
+    static List<String> compilerFlagsForOs(final String osName, final boolean release) {
         // Generated comparisons preserve explicit IR grouping; their redundant parentheses are intentional.
-        final String os = Strings2.toAsciiLowerCase(System.getProperty("os.name", ""));
-        if (os.contains("win")) {
-            return List.of("-Wno-parentheses");
+        final List<String> flags = new ArrayList<>();
+        if (release) {
+            flags.add("-O2");
         }
-        return List.of("-pthread", "-Wno-parentheses");
+        if (!isWindowsHost(osName)) {
+            flags.add("-pthread");
+        }
+        flags.add("-Wno-parentheses");
+        return List.copyOf(flags);
     }
 
     private static List<String> platformLinkFlags() {

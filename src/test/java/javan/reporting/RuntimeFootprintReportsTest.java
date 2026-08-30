@@ -123,7 +123,9 @@ final class RuntimeFootprintReportsTest {
             "\"requestedTarget\": \"" + RuntimeFootprintReports.hostTarget() + "\"",
             "\"release\": true",
             "\"bytes\": 0",
-            "\"status\": \"accepted-conservative\""
+            "\"name\": \"release-optimization\"",
+            "\"status\": \"enabled\"",
+            "portable host-C -O2"
         );
     }
 

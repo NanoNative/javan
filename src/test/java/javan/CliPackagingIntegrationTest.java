@@ -1407,7 +1407,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             }
             """);
 
-        final CliRun run = run(tempDir, "build", project.toString(), "--library", "--format", "static", "--export", "com.acme.Math.add");
+        final CliRun run = run(tempDir, "build", project.toString(), "--library", "--format", "static", "--release", "--export", "com.acme.Math.add");
 
         assertThat(run.exitCode()).isZero();
         assertThat(project.resolve(".javan/dist/liblibrary-static-format.a")).exists();
@@ -1431,7 +1431,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             }
             """);
 
-        final CliRun run = run(tempDir, "build", project.toString(), "--library", "--format", "shared", "--export", "com.acme.Math.add");
+        final CliRun run = run(tempDir, "build", project.toString(), "--library", "--format", "shared", "--release", "--export", "com.acme.Math.add");
 
         assertThat(run.exitCode()).isZero();
         assertThat(project.resolve(".javan/dist/liblibrary-shared-format.a")).doesNotExist();
