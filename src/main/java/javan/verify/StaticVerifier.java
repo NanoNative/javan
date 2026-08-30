@@ -451,18 +451,20 @@ public final class StaticVerifier {
         }
         final boolean[] nullLocals = new boolean[methodCode.maxLocals()];
         final int[] arrayLengths = new int[methodCode.maxLocals()];
-        clearStraightLineFacts(nullLocals, arrayLengths);
+        final int[] stringLengths = new int[methodCode.maxLocals()];
+        clearStraightLineFacts(nullLocals, arrayLengths, stringLengths);
         final List<Diagnostic> diagnostics = new ArrayList<>();
         for (int index = 0; index < instructions.size(); index++) {
             final Instruction instruction = instructions.get(index);
             if (isStraightLineFactControlFlowBoundary(instruction)) {
-                clearStraightLineFacts(nullLocals, arrayLengths);
+                clearStraightLineFacts(nullLocals, arrayLengths, stringLengths);
                 continue;
             }
             final int storedLocal = astoreLocalIndex(instruction);
             if (storedLocal >= 0 && storedLocal < nullLocals.length) {
                 nullLocals[storedLocal] = previousValueIsNull(instructions, index, nullLocals);
                 arrayLengths[storedLocal] = arrayLengthBeforeStore(instructions, index, arrayLengths);
+                stringLengths[storedLocal] = stringLengthBeforeStore(instructions, index, stringLengths);
                 continue;
             }
             if (isNullReceiverOperation(instruction) && previousValueIsNull(instructions, index, nullLocals)) {
@@ -476,6 +478,16 @@ public final class StaticVerifier {
                     final int literalIndex = arrayIndex.orElseThrow();
                     if (literalIndex < 0 || literalIndex >= arrayLength) {
                         diagnostics.add(arrayIndexDiagnostic(classFile, method, arrayLength, literalIndex, reachable));
+                    }
+                }
+            }
+            if (isStringCharAtInstruction(instruction) && index >= 2) {
+                final int stringLength = stringLengthBeforeCharAt(instructions, index, stringLengths);
+                final Optional<Integer> stringIndex = instructions.get(index - 1).intValue();
+                if (stringLength >= 0 && stringIndex.isPresent()) {
+                    final int literalIndex = stringIndex.orElseThrow();
+                    if (literalIndex < 0 || literalIndex >= stringLength) {
+                        diagnostics.add(stringCharAtIndexDiagnostic(classFile, method, stringLength, literalIndex, reachable));
                     }
                 }
             }
@@ -502,9 +514,56 @@ public final class StaticVerifier {
         return instructions.get(index - 2).intValue().orElse(-1);
     }
 
+    private static int stringLengthBeforeStore(
+        final List<Instruction> instructions,
+        final int index,
+        final int[] stringLengths
+    ) {
+        if (index == 0) {
+            return -1;
+        }
+        final Instruction previous = instructions.get(index - 1);
+        final int copiedLocal = aloadLocalIndex(previous);
+        if (copiedLocal >= 0 && copiedLocal < stringLengths.length) {
+            return stringLengths[copiedLocal];
+        }
+        return runtimeAsciiStringLength(previous);
+    }
+
     private static boolean isArrayLoadInstruction(final Instruction instruction) {
         final int opcode = instruction.opcode();
         return opcode >= 46 && opcode <= 53;
+    }
+
+    private static int stringLengthBeforeCharAt(
+        final List<Instruction> instructions,
+        final int index,
+        final int[] stringLengths
+    ) {
+        final Instruction receiver = instructions.get(index - 2);
+        final int local = aloadLocalIndex(receiver);
+        if (local >= 0 && local < stringLengths.length) {
+            return stringLengths[local];
+        }
+        return runtimeAsciiStringLength(receiver);
+    }
+
+    private static boolean isStringCharAtInstruction(final Instruction instruction) {
+        if (instruction.methodRef().isEmpty()) {
+            return false;
+        }
+        final MethodRef methodRef = instruction.methodRef().orElseThrow();
+        return "java/lang/String".equals(methodRef.owner())
+            && "charAt".equals(methodRef.name())
+            && "(I)C".equals(methodRef.descriptor());
+    }
+
+    private static int runtimeAsciiStringLength(final Instruction instruction) {
+        if (instruction.stringValue().isEmpty()) {
+            return -1;
+        }
+        final String literal = instruction.stringValue().orElseThrow();
+        return Strings2.isRuntimeAsciiStringConstant(literal) ? literal.length() : -1;
     }
 
     private static boolean previousValueIsNull(
@@ -551,10 +610,15 @@ public final class StaticVerifier {
             || opcode >= 198 && opcode <= 201;
     }
 
-    private static void clearStraightLineFacts(final boolean[] nullLocals, final int[] arrayLengths) {
+    private static void clearStraightLineFacts(
+        final boolean[] nullLocals,
+        final int[] arrayLengths,
+        final int[] stringLengths
+    ) {
         for (int index = 0; index < nullLocals.length; index++) {
             nullLocals[index] = false;
             arrayLengths[index] = -1;
+            stringLengths[index] = -1;
         }
     }
 
@@ -590,6 +654,22 @@ public final class StaticVerifier {
             return error(classFile, method, "JAVAN071", "provable array index out of bounds", subject, reason, fix);
         }
         return warning(classFile, method, "JAVAN171", "provable array index out of bounds in unreachable code", subject, reason, fix);
+    }
+
+    private static Diagnostic stringCharAtIndexDiagnostic(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final int stringLength,
+        final int stringIndex,
+        final int reachable
+    ) {
+        final String subject = "String length " + stringLength + " at index " + stringIndex;
+        final String reason = "This straight-line String.charAt call uses a literal index outside the literal ASCII string length, so native execution would only reproduce a StringIndexOutOfBoundsException.";
+        final String fix = "Use an index from 0 (inclusive) to String.length() (exclusive), or use a string long enough for this index.";
+        if (reachable == 1) {
+            return error(classFile, method, "JAVAN072", "provable String.charAt index out of bounds", subject, reason, fix);
+        }
+        return warning(classFile, method, "JAVAN172", "provable String.charAt index out of bounds in unreachable code", subject, reason, fix);
     }
 
     private static List<Diagnostic> boundedOptionalOrElseThrowDiagnostics(
