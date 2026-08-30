@@ -297,14 +297,46 @@ public final class ClassInitializationGraph {
 
     private static List<EntryPoint> sortedMethods(final List<EntryPoint> methods) {
         final List<EntryPoint> result = new ArrayList<>();
+        final List<EntryPoint> scratch = new ArrayList<>();
         for (final EntryPoint method : methods) {
-            int index = result.size();
-            while (index > 0 && compare(result.get(index - 1), method) > 0) {
-                index--;
-            }
-            result.add(index, method);
+            result.add(method);
+            scratch.add(method);
         }
+        sortMethods(result, scratch, 0, result.size());
         return result;
+    }
+
+    private static void sortMethods(
+        final List<EntryPoint> methods,
+        final List<EntryPoint> scratch,
+        final int from,
+        final int to
+    ) {
+        if (to - from < 2) {
+            return;
+        }
+        final int middle = from + (to - from) / 2;
+        sortMethods(methods, scratch, from, middle);
+        sortMethods(methods, scratch, middle, to);
+        int left = from;
+        int right = middle;
+        int target = from;
+        while (left < middle && right < to) {
+            if (compare(methods.get(left), methods.get(right)) <= 0) {
+                scratch.set(target++, methods.get(left++));
+            } else {
+                scratch.set(target++, methods.get(right++));
+            }
+        }
+        while (left < middle) {
+            scratch.set(target++, methods.get(left++));
+        }
+        while (right < to) {
+            scratch.set(target++, methods.get(right++));
+        }
+        for (int index = from; index < to; index++) {
+            methods.set(index, scratch.get(index));
+        }
     }
 
     private static int compare(final EntryPoint left, final EntryPoint right) {
