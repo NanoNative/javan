@@ -23,6 +23,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -374,6 +375,41 @@ final class CCodegenMemoryTest {
         final int clear = generated.indexOf("\n    tmp = 0;\n");
         assertThat(generated.indexOf("javan_println_object_value(tmp);")).isLessThan(clear);
         assertThat(clear).isLessThan(generated.indexOf("javan_gc_safe_point();", clear));
+    }
+
+    @Test
+    void clearsDeadObjectRootsBeyondSingleLivenessWordInDeclarationOrder() throws Exception {
+        final List<IrLocal> locals = new ArrayList<>();
+        final List<IrInstruction> instructions = new ArrayList<>();
+        for (int index = 0; index < 130; index++) {
+            final String name = "root_" + index;
+            locals.add(new IrLocal(IrType.OBJECT, name));
+            instructions.add(IrInstruction.assignObject(name, IrExpression.objectAllocation("com/acme/Node")));
+        }
+        instructions.add(IrInstruction.returnVoid());
+        final IrProgram program = new IrProgram(
+            List.of(nodeClass()),
+            List.of(new IrFunction(
+                "com/acme/Main",
+                "main",
+                "([Ljava/lang/String;)V",
+                "main_symbol",
+                IrType.VOID,
+                List.of(),
+                locals,
+                instructions
+            )),
+            "main_symbol"
+        );
+
+        final String generated = Files.readString(new CCodegen().generate(program, tempDir));
+
+        final int firstClear = generated.indexOf("\n    root_0 = 0;\n");
+        final int wordBoundaryClear = generated.indexOf("\n    root_64 = 0;\n");
+        final int finalClear = generated.indexOf("\n    root_129 = 0;\n");
+        assertThat(firstClear).isGreaterThanOrEqualTo(0);
+        assertThat(wordBoundaryClear).isGreaterThan(firstClear);
+        assertThat(finalClear).isGreaterThan(wordBoundaryClear);
     }
 
     @Test

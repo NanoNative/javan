@@ -2829,26 +2829,30 @@ public final class CCodegen {
                 return new RootLivenessPlan(clears);
             }
 
-            final List<List<String>> uses = emptyStringSets(instructions.size());
-            final List<List<String>> defs = emptyStringSets(instructions.size());
+            final java.util.Map<String, Integer> rootIndexes = rootIndexes(roots);
+            final int rootWordCount = rootWordCount(roots.size());
+            final long[][] uses = emptyRootSets(instructions.size(), rootWordCount);
+            final long[][] defs = emptyRootSets(instructions.size(), rootWordCount);
             for (int index = 0; index < instructions.size(); index++) {
                 final IrInstruction instruction = instructions.get(index);
                 final java.util.Optional<javan.ir.IrExpression> expression = instruction.expression();
                 if (expression.isPresent()) {
-                    collectRootUses(expression.get(), roots, uses.get(index));
+                    collectRootUses(expression.get(), rootIndexes, uses[index]);
                 }
-                final java.util.Optional<String> assignedRoot = assignedObjectRoot(instruction, roots);
-                if (assignedRoot.isPresent()) {
-                    defs.get(index).add(assignedRoot.get());
+                final int assignedRoot = assignedObjectRoot(instruction, rootIndexes);
+                if (assignedRoot >= 0) {
+                    addRoot(defs[index], assignedRoot);
                 }
             }
 
             final List<List<Integer>> successors = successors(instructions);
             final Liveness liveness = liveness(instructions, uses, defs, successors);
-            final List<List<String>> clearSets = clearSets(function, instructions, roots, defs, successors, liveness);
-            for (int index = 0; index < clearSets.size(); index++) {
-                if (!clearSets.get(index).isEmpty()) {
-                    clears.put(Integer.valueOf(index), clearSets.get(index));
+            final long[][] clearSets = clearSets(
+                function, instructions, rootIndexes, rootWordCount, defs, successors, liveness
+            );
+            for (int index = 0; index < clearSets.length; index++) {
+                if (hasRoots(clearSets[index])) {
+                    clears.put(Integer.valueOf(index), rootNames(clearSets[index], roots));
                 }
             }
             return new RootLivenessPlan(clears);
@@ -2868,60 +2872,58 @@ public final class CCodegen {
 
         private static void collectRootUses(
             final javan.ir.IrExpression expression,
-            final List<String> roots,
-            final List<String> result
+            final java.util.Map<String, Integer> rootIndexes,
+            final long[] result
         ) {
-            if (expression.kind() == javan.ir.IrExpression.Kind.LOCAL
-                && expression.type() == javan.ir.IrType.OBJECT
-                && contains(roots, expression.value())) {
-                addUnique(result, expression.value());
+            if (expression.kind() == javan.ir.IrExpression.Kind.LOCAL && expression.type() == javan.ir.IrType.OBJECT) {
+                final Integer rootIndex = rootIndexes.get(expression.value());
+                if (rootIndex != null) {
+                    addRoot(result, rootIndex.intValue());
+                }
             }
             for (final javan.ir.IrExpression argument : expression.arguments()) {
-                collectRootUses(argument, roots, result);
+                collectRootUses(argument, rootIndexes, result);
             }
         }
 
-        private static java.util.Optional<String> assignedObjectRoot(
+        private static int assignedObjectRoot(
             final IrInstruction instruction,
-            final List<String> roots
+            final java.util.Map<String, Integer> rootIndexes
         ) {
             if (instruction.op() == IrInstruction.Op.ASSIGN_OBJECT) {
-                final String target = instruction.value().orElseThrow();
-                if (contains(roots, target)) {
-                    return java.util.Optional.of(target);
+                final Integer rootIndex = rootIndexes.get(instruction.value().orElseThrow());
+                if (rootIndex != null) {
+                    return rootIndex.intValue();
                 }
             }
-            return java.util.Optional.empty();
+            return -1;
         }
 
         private static Liveness liveness(
             final List<IrInstruction> instructions,
-            final List<List<String>> uses,
-            final List<List<String>> defs,
+            final long[][] uses,
+            final long[][] defs,
             final List<List<Integer>> successors
         ) {
-            final List<List<String>> liveIn = emptyStringSets(instructions.size());
-            final List<List<String>> liveOut = emptyStringSets(instructions.size());
+            final int rootWordCount = uses.length == 0 ? 0 : uses[0].length;
+            final long[][] liveIn = emptyRootSets(instructions.size(), rootWordCount);
+            final long[][] liveOut = emptyRootSets(instructions.size(), rootWordCount);
             boolean changed = true;
             while (changed) {
                 changed = false;
                 for (int index = instructions.size() - 1; index >= 0; index--) {
-                    final List<String> nextOut = new java.util.ArrayList<>();
+                    final long[] nextOut = new long[rootWordCount];
                     for (final Integer successor : successors.get(index)) {
-                        addAllUnique(nextOut, liveIn.get(successor.intValue()));
+                        addRoots(nextOut, liveIn[successor.intValue()]);
                     }
-                    final List<String> nextIn = copyOf(uses.get(index));
-                    for (final String root : nextOut) {
-                        if (!contains(defs.get(index), root)) {
-                            addUnique(nextIn, root);
-                        }
-                    }
-                    if (!sameValues(liveOut.get(index), nextOut)) {
-                        liveOut.set(index, nextOut);
+                    final long[] nextIn = copyRoots(uses[index]);
+                    addRootsExcept(nextIn, nextOut, defs[index]);
+                    if (!sameRoots(liveOut[index], nextOut)) {
+                        liveOut[index] = nextOut;
                         changed = true;
                     }
-                    if (!sameValues(liveIn.get(index), nextIn)) {
-                        liveIn.set(index, nextIn);
+                    if (!sameRoots(liveIn[index], nextIn)) {
+                        liveIn[index] = nextIn;
                         changed = true;
                     }
                 }
@@ -2929,55 +2931,53 @@ public final class CCodegen {
             return new Liveness(liveIn, liveOut);
         }
 
-        private static List<List<String>> clearSets(
+        private static long[][] clearSets(
             final IrFunction function,
             final List<IrInstruction> instructions,
-            final List<String> roots,
-            final List<List<String>> defs,
+            final java.util.Map<String, Integer> rootIndexes,
+            final int rootWordCount,
+            final long[][] defs,
             final List<List<Integer>> successors,
             final Liveness liveness
         ) {
             final List<List<Integer>> predecessors = predecessors(instructions.size(), successors);
-            final List<List<String>> mayIn = emptyStringSets(instructions.size());
-            final List<List<String>> mayOut = emptyStringSets(instructions.size());
-            final List<List<String>> clears = emptyStringSets(instructions.size());
-            final List<String> parameterRoots = objectParameterRoots(function);
+            final long[][] mayIn = emptyRootSets(instructions.size(), rootWordCount);
+            final long[][] mayOut = emptyRootSets(instructions.size(), rootWordCount);
+            final long[][] clears = emptyRootSets(instructions.size(), rootWordCount);
+            final long[] parameterRoots = objectParameterRootIndexes(function, rootIndexes, rootWordCount);
             boolean changed = true;
             while (changed) {
                 changed = false;
                 for (int index = 0; index < instructions.size(); index++) {
-                    final List<String> nextIn = new java.util.ArrayList<>();
+                    final long[] nextIn = new long[rootWordCount];
                     if (index == 0) {
-                        addAllUnique(nextIn, parameterRoots);
+                        addRoots(nextIn, parameterRoots);
                     }
                     for (final Integer predecessor : predecessors.get(index)) {
-                        addAllUnique(nextIn, mayOut.get(predecessor.intValue()));
+                        addRoots(nextIn, mayOut[predecessor.intValue()]);
                     }
-                    List<String> nextOut = copyOf(nextIn);
-                    nextOut = applyAssignmentMayState(instructions.get(index), defs.get(index), nextOut);
-                    final List<String> nextClears = rootsToClearAfter(
+                    long[] nextOut = copyRoots(nextIn);
+                    nextOut = applyAssignmentMayState(instructions.get(index), defs[index], nextOut);
+                    final long[] nextClears = rootsToClearAfter(
                         instructions.get(index),
                         index,
-                        roots,
                         nextOut,
                         liveness,
                         successors
                     );
-                    for (final String root : nextClears) {
-                        if (instructions.get(index).op() != IrInstruction.Op.BRANCH_IF) {
-                            nextOut = withoutValue(nextOut, root);
-                        }
+                    if (instructions.get(index).op() != IrInstruction.Op.BRANCH_IF) {
+                        removeRoots(nextOut, nextClears);
                     }
-                    if (!sameValues(mayIn.get(index), nextIn)) {
-                        mayIn.set(index, nextIn);
+                    if (!sameRoots(mayIn[index], nextIn)) {
+                        mayIn[index] = nextIn;
                         changed = true;
                     }
-                    if (!sameValues(mayOut.get(index), nextOut)) {
-                        mayOut.set(index, nextOut);
+                    if (!sameRoots(mayOut[index], nextOut)) {
+                        mayOut[index] = nextOut;
                         changed = true;
                     }
-                    if (!sameValues(clears.get(index), nextClears)) {
-                        clears.set(index, nextClears);
+                    if (!sameRoots(clears[index], nextClears)) {
+                        clears[index] = nextClears;
                         changed = true;
                     }
                 }
@@ -2985,61 +2985,53 @@ public final class CCodegen {
             return clears;
         }
 
-        private static List<String> applyAssignmentMayState(
+        private static long[] applyAssignmentMayState(
             final IrInstruction instruction,
-            final List<String> defs,
-            final List<String> state
+            final long[] defs,
+            final long[] state
         ) {
-            List<String> result = state;
-            for (final String root : defs) {
-                result = withoutValue(result, root);
-                if (!assignsObjectNull(instruction)) {
-                    addUnique(result, root);
-                }
+            final long[] result = copyRoots(state);
+            removeRoots(result, defs);
+            if (!assignsObjectNull(instruction)) {
+                addRoots(result, defs);
             }
             return result;
         }
 
-        private static List<String> rootsToClearAfter(
+        private static long[] rootsToClearAfter(
             final IrInstruction instruction,
             final int instructionIndex,
-            final List<String> roots,
-            final List<String> mayOut,
+            final long[] mayOut,
             final Liveness liveness,
             final List<List<Integer>> successors
         ) {
-            final List<String> result = new java.util.ArrayList<>();
             if (!hasStatementSafePoint(instruction)) {
-                return result;
+                return new long[mayOut.length];
             }
-            final List<String> requiredAfterClear = requiredAfterFallthroughClear(
+            final long[] result = copyRoots(mayOut);
+            removeRoots(result, requiredAfterFallthroughClear(
                 instruction,
                 instructionIndex,
                 liveness,
                 successors
-            );
-            for (final String root : roots) {
-                if (contains(mayOut, root) && !contains(requiredAfterClear, root)) {
-                    result.add(root);
-                }
-            }
+            ));
             return result;
         }
 
-        private static List<String> requiredAfterFallthroughClear(
+        private static long[] requiredAfterFallthroughClear(
             final IrInstruction instruction,
             final int instructionIndex,
             final Liveness liveness,
             final List<List<Integer>> successors
         ) {
             if (instruction.op() != IrInstruction.Op.BRANCH_IF) {
-                return liveness.liveOut().get(instructionIndex);
+                return liveness.liveOut()[instructionIndex];
             }
             final Integer fallthrough = fallthroughSuccessor(instructionIndex, successors);
             if (fallthrough == null) {
-                return List.of();
+                return new long[liveness.liveIn()[instructionIndex].length];
             }
-            return liveness.liveIn().get(fallthrough.intValue());
+            return liveness.liveIn()[fallthrough.intValue()];
         }
 
         private static Integer fallthroughSuccessor(final int instructionIndex, final List<List<Integer>> successors) {
@@ -3148,22 +3140,103 @@ public final class CCodegen {
             }
         }
 
-        private static List<String> objectParameterRoots(final IrFunction function) {
-            final List<String> result = new java.util.ArrayList<>();
+        private static long[] objectParameterRootIndexes(
+            final IrFunction function,
+            final java.util.Map<String, Integer> rootIndexes,
+            final int rootWordCount
+        ) {
+            final long[] result = new long[rootWordCount];
             for (final javan.ir.IrParameter parameter : function.parameters()) {
                 if (parameter.type() == javan.ir.IrType.OBJECT) {
-                    result.add(parameter.name());
+                    final Integer rootIndex = rootIndexes.get(parameter.name());
+                    if (rootIndex != null) {
+                        addRoot(result, rootIndex.intValue());
+                    }
                 }
             }
             return result;
         }
 
-        private static List<List<String>> emptyStringSets(final int size) {
-            final List<List<String>> result = new java.util.ArrayList<>();
-            for (int index = 0; index < size; index++) {
-                result.add(new java.util.ArrayList<>());
+        private static java.util.Map<String, Integer> rootIndexes(final List<String> roots) {
+            final java.util.Map<String, Integer> result = new java.util.LinkedHashMap<>();
+            for (int index = 0; index < roots.size(); index++) {
+                result.put(roots.get(index), Integer.valueOf(index));
             }
             return result;
+        }
+
+        private static int rootWordCount(final int rootCount) {
+            return (rootCount + Long.SIZE - 1) / Long.SIZE;
+        }
+
+        private static long[][] emptyRootSets(final int size, final int rootWordCount) {
+            final long[][] result = new long[size][];
+            for (int index = 0; index < size; index++) {
+                result[index] = new long[rootWordCount];
+            }
+            return result;
+        }
+
+        private static List<String> rootNames(final long[] rootIndexes, final List<String> roots) {
+            final List<String> result = new java.util.ArrayList<>();
+            for (int rootIndex = 0; rootIndex < roots.size(); rootIndex++) {
+                if (containsRoot(rootIndexes, rootIndex)) {
+                    result.add(roots.get(rootIndex));
+                }
+            }
+            return result;
+        }
+
+        private static void addRoot(final long[] roots, final int rootIndex) {
+            roots[rootIndex / Long.SIZE] |= 1L << (rootIndex % Long.SIZE);
+        }
+
+        private static void addRoots(final long[] result, final long[] additions) {
+            for (int index = 0; index < result.length; index++) {
+                result[index] |= additions[index];
+            }
+        }
+
+        private static void addRootsExcept(final long[] result, final long[] additions, final long[] excluded) {
+            for (int index = 0; index < result.length; index++) {
+                result[index] |= additions[index] & ~excluded[index];
+            }
+        }
+
+        private static void removeRoots(final long[] result, final long[] removals) {
+            for (int index = 0; index < result.length; index++) {
+                result[index] &= ~removals[index];
+            }
+        }
+
+        private static long[] copyRoots(final long[] roots) {
+            final long[] result = new long[roots.length];
+            for (int index = 0; index < roots.length; index++) {
+                result[index] = roots[index];
+            }
+            return result;
+        }
+
+        private static boolean containsRoot(final long[] roots, final int rootIndex) {
+            return (roots[rootIndex / Long.SIZE] & (1L << (rootIndex % Long.SIZE))) != 0L;
+        }
+
+        private static boolean hasRoots(final long[] roots) {
+            for (final long rootWord : roots) {
+                if (rootWord != 0L) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static boolean sameRoots(final long[] left, final long[] right) {
+            for (int index = 0; index < left.length; index++) {
+                if (left[index] != right[index]) {
+                    return false;
+                }
+            }
+            return true;
         }
 
         private static List<List<Integer>> emptyIntegerSets(final int size) {
@@ -3174,47 +3247,10 @@ public final class CCodegen {
             return result;
         }
 
-        private static List<String> copyOf(final List<String> values) {
-            final List<String> result = new java.util.ArrayList<>();
-            addAllUnique(result, values);
-            return result;
-        }
-
-        private static void addAllUnique(final List<String> values, final List<String> additions) {
-            for (final String addition : additions) {
-                addUnique(values, addition);
-            }
-        }
-
-        private static void addUnique(final List<String> values, final String value) {
-            if (!contains(values, value)) {
-                values.add(value);
-            }
-        }
-
         private static void addUniqueInteger(final List<Integer> values, final Integer value) {
             if (!containsInteger(values, value)) {
                 values.add(value);
             }
-        }
-
-        private static List<String> withoutValue(final List<String> values, final String value) {
-            final List<String> result = new java.util.ArrayList<>();
-            for (final String current : values) {
-                if (!current.equals(value)) {
-                    result.add(current);
-                }
-            }
-            return result;
-        }
-
-        private static boolean contains(final List<String> values, final String value) {
-            for (final String current : values) {
-                if (current.equals(value)) {
-                    return true;
-                }
-            }
-            return false;
         }
 
         private static boolean containsInteger(final List<Integer> values, final Integer value) {
@@ -3226,24 +3262,12 @@ public final class CCodegen {
             return false;
         }
 
-        private static boolean sameValues(final List<String> left, final List<String> right) {
-            if (left.size() != right.size()) {
-                return false;
-            }
-            for (final String value : left) {
-                if (!contains(right, value)) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
         private static boolean assignsObjectNull(final IrInstruction instruction) {
             final java.util.Optional<javan.ir.IrExpression> expression = instruction.expression();
             return expression.isPresent() && expression.get().kind() == javan.ir.IrExpression.Kind.OBJECT_NULL;
         }
 
-        private record Liveness(List<List<String>> liveIn, List<List<String>> liveOut) {
+        private record Liveness(long[][] liveIn, long[][] liveOut) {
         }
     }
 
