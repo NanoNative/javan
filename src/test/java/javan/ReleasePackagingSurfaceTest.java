@@ -265,6 +265,38 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     }
 
     @Test
+    void imageVerificationRejectsMissingArchiveEvidenceWithoutWritingMetadata() throws Exception {
+        final String version = "2026.8.30";
+        final String image = "ghcr.io/nanonative/javan:" + version;
+        final Path releaseDir = Files.createDirectories(tempDir.resolve("release"));
+        final Path proofDir = tempDir.resolve("proof");
+        final Path bin = Files.createDirectories(tempDir.resolve("bin"));
+        writeReleaseArtifact(releaseDir, "javan-" + version + "-linux-x64.tar.gz", "linux-x64");
+        writeDockerManifestStub(bin);
+
+        final ProcessResult run = process(
+            REPO_ROOT,
+            List.of("sh", REPO_ROOT.resolve(VERIFY_IMAGE).toString(), image),
+            Duration.ofSeconds(20),
+            Map.of(
+                "JAVAN_RELEASE_VERSION", version,
+                "JAVAN_RELEASE_ARCHIVE_DIR", releaseDir.toString(),
+                "JAVAN_RELEASE_PROOF_DIR", proofDir.toString(),
+                "PATH", bin + System.getProperty("path.separator") + System.getenv("PATH")
+            )
+        );
+
+        assertThat(run.exitCode()).isEqualTo(1);
+        assertThat(run.stdout()).isEmpty();
+        assertThat(run.stderr()).contains(
+            "javan-" + version + "-linux-x64.tar.gz: OK",
+            "Missing release proof input: javan-" + version + "-linux-aarch64.tar.gz or javan-"
+                + version + "-linux-aarch64.tar.gz.sha256"
+        );
+        assertThat(proofDir).doesNotExist();
+    }
+
+    @Test
     void releaseRehearsalPackagesChecksummedCompiledInputsAndRejectsPublication() throws Exception {
         final Path releaseDir = tempDir.resolve("release");
         final String target = "linux-x64";
