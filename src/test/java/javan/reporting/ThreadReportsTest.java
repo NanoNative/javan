@@ -166,6 +166,18 @@ final class ThreadReportsTest {
         });
     }
 
+    @Test
+    void summarizeOmitsReachableMethodsWithoutThreadSignals() {
+        final ThreadReports.Summary summary = summarizeReachable(
+            List.of(),
+            method("main", List.of(instruction(0, 177, "return")))
+        );
+
+        assertThat(summary.threadStartSites()).isZero();
+        assertThat(summary.threadStartMethods()).isZero();
+        assertThat(summary.methods()).isEmpty();
+    }
+
     private static ThreadReports.Summary summarizeReachable(final List<Diagnostic> diagnostics, final MethodInfo method) {
         final EntryPoint entry = new EntryPoint("com/acme/Main", method.name(), method.descriptor());
         final ClassFile classFile = new ClassFile(
