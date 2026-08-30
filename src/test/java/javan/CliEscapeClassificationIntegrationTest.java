@@ -155,7 +155,11 @@ final class CliEscapeClassificationIntegrationTest extends CliIntegrationSupport
 
                 public static void main(final String[] args) {
                     int[] values = new int[1];
-                    System.out.println(values[1]);
+                    int index = 1;
+                    if (args.length == 1) {
+                        index = 0;
+                    }
+                    System.out.println(values[index]);
                 }
             }
             """);

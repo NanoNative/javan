@@ -386,7 +386,7 @@ public final class StaticVerifier {
                     methodRefFacts
                 ));
             }
-            diagnostics.addAll(provableNullReceiverDiagnostics(classFile, method, methodCode, instructions, reachable));
+            diagnostics.addAll(provableStraightLineRiskDiagnostics(classFile, method, methodCode, instructions, reachable));
         }
         return diagnostics;
     }
@@ -439,7 +439,7 @@ public final class StaticVerifier {
         return List.copyOf(diagnostics);
     }
 
-    private static List<Diagnostic> provableNullReceiverDiagnostics(
+    private static List<Diagnostic> provableStraightLineRiskDiagnostics(
         final ClassFile classFile,
         final MethodInfo method,
         final CodeAttribute methodCode,
@@ -450,23 +450,61 @@ public final class StaticVerifier {
             return List.of();
         }
         final boolean[] nullLocals = new boolean[methodCode.maxLocals()];
+        final int[] arrayLengths = new int[methodCode.maxLocals()];
+        clearStraightLineFacts(nullLocals, arrayLengths);
         final List<Diagnostic> diagnostics = new ArrayList<>();
         for (int index = 0; index < instructions.size(); index++) {
             final Instruction instruction = instructions.get(index);
-            if (isNullFactControlFlowBoundary(instruction)) {
-                clearNullFacts(nullLocals);
+            if (isStraightLineFactControlFlowBoundary(instruction)) {
+                clearStraightLineFacts(nullLocals, arrayLengths);
                 continue;
             }
             final int storedLocal = astoreLocalIndex(instruction);
             if (storedLocal >= 0 && storedLocal < nullLocals.length) {
                 nullLocals[storedLocal] = previousValueIsNull(instructions, index, nullLocals);
+                arrayLengths[storedLocal] = arrayLengthBeforeStore(instructions, index, arrayLengths);
                 continue;
             }
             if (isNullReceiverOperation(instruction) && previousValueIsNull(instructions, index, nullLocals)) {
                 diagnostics.add(nullReceiverDiagnostic(classFile, method, instruction, reachable));
             }
+            if (isArrayLoadInstruction(instruction) && index >= 2) {
+                final int arrayLocal = aloadLocalIndex(instructions.get(index - 2));
+                final Optional<Integer> arrayIndex = instructions.get(index - 1).intValue();
+                final int arrayLength = arrayLocal >= 0 && arrayLocal < arrayLengths.length ? arrayLengths[arrayLocal] : -1;
+                if (arrayLength >= 0 && arrayIndex.isPresent()) {
+                    final int literalIndex = arrayIndex.orElseThrow();
+                    if (literalIndex < 0 || literalIndex >= arrayLength) {
+                        diagnostics.add(arrayIndexDiagnostic(classFile, method, arrayLength, literalIndex, reachable));
+                    }
+                }
+            }
         }
         return List.copyOf(diagnostics);
+    }
+
+    private static int arrayLengthBeforeStore(
+        final List<Instruction> instructions,
+        final int index,
+        final int[] arrayLengths
+    ) {
+        if (index == 0) {
+            return -1;
+        }
+        final Instruction previous = instructions.get(index - 1);
+        final int copiedLocal = aloadLocalIndex(previous);
+        if (copiedLocal >= 0 && copiedLocal < arrayLengths.length) {
+            return arrayLengths[copiedLocal];
+        }
+        if ((previous.opcode() != 188 && previous.opcode() != 189) || index < 2) {
+            return -1;
+        }
+        return instructions.get(index - 2).intValue().orElse(-1);
+    }
+
+    private static boolean isArrayLoadInstruction(final Instruction instruction) {
+        final int opcode = instruction.opcode();
+        return opcode >= 46 && opcode <= 53;
     }
 
     private static boolean previousValueIsNull(
@@ -506,16 +544,17 @@ public final class StaticVerifier {
         return "java/io/InputStream".equals(methodRef.owner()) || "java/io/OutputStream".equals(methodRef.owner());
     }
 
-    private static boolean isNullFactControlFlowBoundary(final Instruction instruction) {
+    private static boolean isStraightLineFactControlFlowBoundary(final Instruction instruction) {
         final int opcode = instruction.opcode();
         return opcode >= 153 && opcode <= 177
             || opcode == 191
             || opcode >= 198 && opcode <= 201;
     }
 
-    private static void clearNullFacts(final boolean[] nullLocals) {
+    private static void clearStraightLineFacts(final boolean[] nullLocals, final int[] arrayLengths) {
         for (int index = 0; index < nullLocals.length; index++) {
             nullLocals[index] = false;
+            arrayLengths[index] = -1;
         }
     }
 
@@ -535,6 +574,22 @@ public final class StaticVerifier {
             return error(classFile, method, "JAVAN070", "provable null receiver", subject, reason, fix);
         }
         return warning(classFile, method, "JAVAN170", "provable null receiver in unreachable code", subject, reason, fix);
+    }
+
+    private static Diagnostic arrayIndexDiagnostic(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final int arrayLength,
+        final int arrayIndex,
+        final int reachable
+    ) {
+        final String subject = "array length " + arrayLength + " at index " + arrayIndex;
+        final String reason = "This straight-line array read uses a literal index outside the literal array length, so native execution would only reproduce an ArrayIndexOutOfBoundsException.";
+        final String fix = "Use an index from 0 (inclusive) to the array length (exclusive), or create an array large enough for this index.";
+        if (reachable == 1) {
+            return error(classFile, method, "JAVAN071", "provable array index out of bounds", subject, reason, fix);
+        }
+        return warning(classFile, method, "JAVAN171", "provable array index out of bounds in unreachable code", subject, reason, fix);
     }
 
     private static List<Diagnostic> boundedOptionalOrElseThrowDiagnostics(
