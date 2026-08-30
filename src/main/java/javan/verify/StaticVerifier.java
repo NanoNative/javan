@@ -386,6 +386,7 @@ public final class StaticVerifier {
                     methodRefFacts
                 ));
             }
+            diagnostics.addAll(provableNullReceiverDiagnostics(classFile, method, methodCode, instructions, reachable));
         }
         return diagnostics;
     }
@@ -436,6 +437,104 @@ public final class StaticVerifier {
             ));
         }
         return List.copyOf(diagnostics);
+    }
+
+    private static List<Diagnostic> provableNullReceiverDiagnostics(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final CodeAttribute methodCode,
+        final List<Instruction> instructions,
+        final int reachable
+    ) {
+        if (methodCode.exceptionTableLength() != 0) {
+            return List.of();
+        }
+        final boolean[] nullLocals = new boolean[methodCode.maxLocals()];
+        final List<Diagnostic> diagnostics = new ArrayList<>();
+        for (int index = 0; index < instructions.size(); index++) {
+            final Instruction instruction = instructions.get(index);
+            if (isNullFactControlFlowBoundary(instruction)) {
+                clearNullFacts(nullLocals);
+                continue;
+            }
+            final int storedLocal = astoreLocalIndex(instruction);
+            if (storedLocal >= 0 && storedLocal < nullLocals.length) {
+                nullLocals[storedLocal] = previousValueIsNull(instructions, index, nullLocals);
+                continue;
+            }
+            if (isNullReceiverOperation(instruction) && previousValueIsNull(instructions, index, nullLocals)) {
+                diagnostics.add(nullReceiverDiagnostic(classFile, method, instruction, reachable));
+            }
+        }
+        return List.copyOf(diagnostics);
+    }
+
+    private static boolean previousValueIsNull(
+        final List<Instruction> instructions,
+        final int index,
+        final boolean[] nullLocals
+    ) {
+        if (index == 0) {
+            return false;
+        }
+        final Instruction previous = instructions.get(index - 1);
+        if (previous.opcode() == 1) {
+            return true;
+        }
+        final int loadedLocal = aloadLocalIndex(previous);
+        return loadedLocal >= 0 && loadedLocal < nullLocals.length && nullLocals[loadedLocal];
+    }
+
+    private static boolean isNullReceiverOperation(final Instruction instruction) {
+        if (instruction.opcode() == 180 || instruction.opcode() == 190) {
+            return true;
+        }
+        if (instruction.opcode() != 182 && instruction.opcode() != 183 && instruction.opcode() != 185) {
+            return false;
+        }
+        if (instruction.methodRef().isEmpty()) {
+            return false;
+        }
+        final MethodRef methodRef = instruction.methodRef().orElseThrow();
+        if (defersToSpecializedStreamReceiverDiagnostic(methodRef)) {
+            return false;
+        }
+        return MethodDescriptor.parse(methodRef.descriptor()).parameterTypes().isEmpty();
+    }
+
+    private static boolean defersToSpecializedStreamReceiverDiagnostic(final MethodRef methodRef) {
+        return "java/io/InputStream".equals(methodRef.owner()) || "java/io/OutputStream".equals(methodRef.owner());
+    }
+
+    private static boolean isNullFactControlFlowBoundary(final Instruction instruction) {
+        final int opcode = instruction.opcode();
+        return opcode >= 153 && opcode <= 177
+            || opcode == 191
+            || opcode >= 198 && opcode <= 201;
+    }
+
+    private static void clearNullFacts(final boolean[] nullLocals) {
+        for (int index = 0; index < nullLocals.length; index++) {
+            nullLocals[index] = false;
+        }
+    }
+
+    private static Diagnostic nullReceiverDiagnostic(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final int reachable
+    ) {
+        final String subject = instruction.methodRef()
+            .map(MethodRef::display)
+            .or(() -> instruction.fieldRef().map(FieldRef::display))
+            .orElse(instruction.mnemonic());
+        final String reason = "This straight-line receiver is exactly the literal null, so native execution would only reproduce a runtime NullPointerException.";
+        final String fix = "Replace the null value before this receiver operation.";
+        if (reachable == 1) {
+            return error(classFile, method, "JAVAN070", "provable null receiver", subject, reason, fix);
+        }
+        return warning(classFile, method, "JAVAN170", "provable null receiver in unreachable code", subject, reason, fix);
     }
 
     private static List<Diagnostic> boundedOptionalOrElseThrowDiagnostics(
