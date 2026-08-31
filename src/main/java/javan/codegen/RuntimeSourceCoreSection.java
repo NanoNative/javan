@@ -1360,27 +1360,39 @@ final class RuntimeSourceCoreSection {
         }
 
         int javan_int_shl(int value, int shift) {
-            return (int) (((unsigned int) value) << (shift & 31));
+            return javan_int_from_bits((uint32_t) value << ((uint32_t) shift & UINT32_C(31)));
         }
 
         long long javan_long_shl(long long value, int shift) {
-            return (long long) (((unsigned long long) value) << (shift & 63));
+            return javan_long_from_bits((uint64_t) value << ((uint32_t) shift & UINT32_C(63)));
         }
 
         int javan_int_shr(int value, int shift) {
-            return value >> (shift & 31);
+            const uint32_t amount = (uint32_t) shift & UINT32_C(31);
+            const uint32_t bits = (uint32_t) value;
+            if (amount == 0U) {
+                return value;
+            }
+            return javan_int_from_bits((bits >> amount)
+                | ((bits & UINT32_C(0x80000000)) == 0U ? 0U : UINT32_MAX << (UINT32_C(32) - amount)));
         }
 
         long long javan_long_shr(long long value, int shift) {
-            return value >> (shift & 63);
+            const uint32_t amount = (uint32_t) shift & UINT32_C(63);
+            const uint64_t bits = (uint64_t) value;
+            if (amount == 0U) {
+                return value;
+            }
+            return javan_long_from_bits((bits >> amount)
+                | ((bits & UINT64_C(0x8000000000000000)) == 0ULL ? 0ULL : UINT64_MAX << (UINT32_C(64) - amount)));
         }
 
         int javan_int_ushr(int value, int shift) {
-            return (int) (((unsigned int) value) >> (shift & 31));
+            return javan_int_from_bits((uint32_t) value >> ((uint32_t) shift & UINT32_C(31)));
         }
 
         long long javan_long_ushr(long long value, int shift) {
-            return (long long) (((unsigned long long) value) >> (shift & 63));
+            return javan_long_from_bits((uint64_t) value >> ((uint32_t) shift & UINT32_C(63)));
         }
 
         long long javan_i2l(int value) {
