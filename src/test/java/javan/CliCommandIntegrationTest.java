@@ -283,7 +283,7 @@ final class CliCommandIntegrationTest {
 
         assertThat(rebuilt.exitCode()).isZero();
         assertThat(Files.readString(tempDir.resolve(".javan/reports/native-object-cache.json")))
-            .contains("\"source\": \"main.c\", \"decision\": \"reused\"")
+            .contains("\"source\": \"main.c\", \"decision\": \"reused\", \"reason\": \"verified\"")
             .contains("\"source\": \"javan_runtime.c\", \"decision\": \"reused\"");
         assertThat(Files.readString(tempDir.resolve(".javan/reports/report.md"))).contains("`native-object-cache` | present");
     }
@@ -317,7 +317,13 @@ final class CliCommandIntegrationTest {
             "\"requestedJobs\": 4",
             "\"effectiveJobs\": 1",
             "\"queued\": 2",
-            "\"outcome\": \"succeeded\""
+            "\"outcome\": \"succeeded\"",
+            "\"wallMillis\": ",
+            "\"artifactSizeBytes\": ",
+            "\"cpuSeconds\": \"unknown\"",
+            "\"peakRssBytes\": \"unknown\"",
+            "\"resourceSource\": \"unavailable\"",
+            "\"reason\": \"object-missing\""
         );
     }
 

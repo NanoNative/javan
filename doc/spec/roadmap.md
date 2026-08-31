@@ -108,10 +108,11 @@ Current build-safety boundary:
 
 - Native application builds compile generated-object cache misses one at a time. `--jobs <count>`
   records the requested cap, while the native-object-cache report records the effective cap of one,
-  queued objects, and outcome. This prevents compiler-process overcommit on the self-host release
-  path. Parallel native compilation is blocked on the proven executor-runtime slice; it must not be
-  reintroduced until self-host, package, cleanup, and interruption proof all pass. Final linking is
-  serial and ordered.
+  queued objects, outcome, wall time, artifact size, and deterministic cache decisions. CPU and peak
+  RSS remain explicitly `unknown` on hosts without portable child-process measurement. This prevents
+  compiler-process overcommit on the self-host release path. Parallel native compilation is blocked on
+  the proven executor-runtime slice; it must not be reintroduced until self-host, package, cleanup,
+  and interruption proof all pass. Final linking is serial and ordered.
 
 Near-term work:
 

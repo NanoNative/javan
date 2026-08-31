@@ -908,6 +908,38 @@ final class ReportSummarizerTest {
     }
 
     @Test
+    void writeSummarizesNativeObjectCacheBuildMetrics() throws Exception {
+        final Path reports = reportsDirectory();
+        Files.writeString(reports.resolve("native-object-cache.json"), """
+            {
+              "workers": {"requestedJobs": 4, "effectiveJobs": 1, "queued": 2, "outcome": "succeeded"},
+              "metrics": {
+                "wallMillis": 41,
+                "artifactSizeBytes": 2048,
+                "cpuSeconds": "unknown",
+                "peakRssBytes": "unknown",
+                "resourceSource": "unavailable"
+              },
+              "objects": []
+            }
+            """);
+        Files.writeString(reports.resolve("native-object-cache.md"), "# Native Object Cache\n");
+
+        final ReportSummarizer.Summary summary = new ReportSummarizer().write(tempDir);
+
+        assertThat(summary.markdown()).contains(
+            "requestedJobs: `4`",
+            "effectiveJobs: `1`",
+            "queued: `2`",
+            "wallMillis: `41`",
+            "artifactSizeBytes: `2048`",
+            "cpuSeconds: `unknown`",
+            "peakRssBytes: `unknown`",
+            "resourceSource: `unavailable`"
+        );
+    }
+
+    @Test
     void writeSummarizesDeduplicationMetrics() throws Exception {
         final Path reports = reportsDirectory();
         Files.writeString(reports.resolve("deduplication-plan.json"), """

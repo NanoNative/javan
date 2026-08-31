@@ -21,6 +21,11 @@ public final class NativeLinker {
     // FNV-1a keeps the self-host cache independent of unavailable crypto APIs.
     private static final long FNV_OFFSET_BASIS = -3750763034362895579L;
     private static final long FNV_PRIME = 1099511628211L;
+    private static final int CACHE_VERIFIED = 0;
+    private static final int CACHE_OBJECT_MISSING = 1;
+    private static final int CACHE_CHECKSUM_MISSING = 2;
+    private static final int CACHE_CHECKSUM_MISMATCH = 3;
+    private static final int CACHE_REBUILD_REQUESTED = 4;
     private final ProcessRunner processRunner;
 
     /**
@@ -821,7 +826,28 @@ public final class NativeLinker {
                 object,
                 checksum,
                 stagingPath(source),
-                new CacheEntry(sourceName(displayRoot, source), object, true)
+                new CacheEntry(sourceName(displayRoot, source), object, true, CACHE_VERIFIED)
+            );
+        }
+        // Keep cache-state literals at record construction for native self-host compilation.
+        if (!Files.isRegularFile(object)) {
+            return new ObjectPlan(
+                source,
+                includeDirectories,
+                object,
+                checksum,
+                stagingPath(source),
+                new CacheEntry(sourceName(displayRoot, source), object, false, CACHE_OBJECT_MISSING)
+            );
+        }
+        if (!Files.isRegularFile(checksum)) {
+            return new ObjectPlan(
+                source,
+                includeDirectories,
+                object,
+                checksum,
+                stagingPath(source),
+                new CacheEntry(sourceName(displayRoot, source), object, false, CACHE_CHECKSUM_MISSING)
             );
         }
         return new ObjectPlan(
@@ -830,7 +856,7 @@ public final class NativeLinker {
             object,
             checksum,
             stagingPath(source),
-            new CacheEntry(sourceName(displayRoot, source), object, false)
+            new CacheEntry(sourceName(displayRoot, source), object, false, CACHE_CHECKSUM_MISMATCH)
         );
     }
 
@@ -1232,11 +1258,49 @@ public final class NativeLinker {
      * @param source generated source file name
      * @param object verified cached object file
      * @param reused whether the object was reused rather than compiled
+     * @param reasonCode verified cache state or deterministic rebuild-reason code
      */
-    public record CacheEntry(String source, Path object, boolean reused) {
+    public record CacheEntry(String source, Path object, boolean reused, int reasonCode) {
         public CacheEntry {
             source = Objects.requireNonNull(source, "source");
             object = Objects.requireNonNull(object, "object");
+            if (reasonCode < CACHE_VERIFIED || reasonCode > CACHE_REBUILD_REQUESTED
+                || (reused && reasonCode != CACHE_VERIFIED)
+                || (!reused && reasonCode == CACHE_VERIFIED)) {
+                throw new IllegalArgumentException("Native cache decision is inconsistent");
+            }
+        }
+
+        /**
+         * Creates a cache decision for an existing caller that does not know a detailed rebuild reason.
+         *
+         * @param source generated source file name
+         * @param object verified cached object file
+         * @param reused whether the object was reused rather than compiled
+         */
+        public CacheEntry(final String source, final Path object, final boolean reused) {
+            this(source, object, reused, reused ? CACHE_VERIFIED : CACHE_REBUILD_REQUESTED);
+        }
+
+        /**
+         * Returns the stable report reason for this cache decision.
+         *
+         * @return verified cache state or deterministic rebuild reason
+         */
+        public String reason() {
+            if (reasonCode == CACHE_VERIFIED) {
+                return "verified";
+            }
+            if (reasonCode == CACHE_OBJECT_MISSING) {
+                return "object-missing";
+            }
+            if (reasonCode == CACHE_CHECKSUM_MISSING) {
+                return "checksum-missing";
+            }
+            if (reasonCode == CACHE_REBUILD_REQUESTED) {
+                return "rebuild-requested";
+            }
+            return "checksum-mismatch";
         }
     }
 }
