@@ -45,6 +45,9 @@ final class NetworkReportsTest {
                 invocation("java/net/InetAddress", "getByName", "(Ljava/lang/String;)Ljava/net/InetAddress;"),
                 literal("remote-host"),
                 intLiteral(443),
+                invocation("java/net/Socket", "<init>", "(Ljava/lang/String;I)V"),
+                literal("socket.example.test"),
+                intLiteral(8443),
                 invocation("java/net/Socket", "<init>", "(Ljava/lang/String;I)V")
             )),
             "com/acme/Hidden",
@@ -60,14 +63,15 @@ final class NetworkReportsTest {
 
         final List<Path> written = reports.write(tempDir, classes, new CallGraph(entry, List.of(entry), List.of()));
 
-        assertThat(report.reachableNetworkCallSiteCount()).isEqualTo(7);
-        assertThat(report.endpointCallSiteCount()).isEqualTo(7);
-        assertThat(report.knownExternalEndpointCallSiteCount()).isEqualTo(3);
+        assertThat(report.reachableNetworkCallSiteCount()).isEqualTo(8);
+        assertThat(report.endpointCallSiteCount()).isEqualTo(8);
+        assertThat(report.knownExternalEndpointCallSiteCount()).isEqualTo(4);
         assertThat(report.excludedInternalEndpointCallSiteCount()).isEqualTo(1);
         assertThat(report.unknownEndpointCallSiteCount()).isEqualTo(3);
         assertThat(report.hosts()).containsExactly(
             new NetworkReports.HostCount("api.example.com", 2),
-            new NetworkReports.HostCount("cache.example.test", 1)
+            new NetworkReports.HostCount("cache.example.test", 1),
+            new NetworkReports.HostCount("socket.example.test", 1)
         );
         assertThat(report.unknownEndpointCalls()).containsExactly(
             new NetworkReports.TargetCount("java/net/InetAddress.getByName(Ljava/lang/String;)Ljava/net/InetAddress;", 1),
@@ -79,10 +83,11 @@ final class NetworkReportsTest {
             tempDir.resolve("reports/network.md")
         );
         assertThat(Files.readString(tempDir.resolve("reports/network.json"))).contains(
-            "\"reachableNetworkCallSiteCount\": 7",
-            "\"knownExternalEndpointCallSiteCount\": 3",
+            "\"reachableNetworkCallSiteCount\": 8",
+            "\"knownExternalEndpointCallSiteCount\": 4",
             "{\"host\": \"api.example.com\", \"count\": 2}",
-            "{\"host\": \"cache.example.test\", \"count\": 1}"
+            "{\"host\": \"cache.example.test\", \"count\": 1}",
+            "{\"host\": \"socket.example.test\", \"count\": 1}"
         ).doesNotContain("private-password", "private-token", "hidden.example.test", "localhost", "remote-host");
         assertThat(Files.readString(tempDir.resolve("reports/network.md"))).contains(
             "# Reachable Network",

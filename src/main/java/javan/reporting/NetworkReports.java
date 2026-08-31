@@ -28,6 +28,9 @@ public final class NetworkReports {
     private static final MethodRef INET_BY_NAME = new MethodRef(
         "java/net/InetAddress", "getByName", "(Ljava/lang/String;)Ljava/net/InetAddress;"
     );
+    private static final MethodRef SOCKET_STRING_PORT = new MethodRef(
+        "java/net/Socket", "<init>", "(Ljava/lang/String;I)V"
+    );
 
     /**
      * Analyzes reachable bytecode and writes JSON and Markdown network reports.
@@ -132,6 +135,9 @@ public final class NetworkReports {
         final List<Instruction> instructions,
         final int invocationIndex
     ) {
+        if (reference.equals(SOCKET_STRING_PORT)) {
+            return invocationIndex < 2 ? Optional.empty() : externalHost(instructions.get(invocationIndex - 2).stringValue());
+        }
         if (invocationIndex == 0
             || (!reference.equals(URL_STRING) && !reference.equals(URI_CREATE) && !reference.equals(INET_BY_NAME))) {
             return Optional.empty();
@@ -141,9 +147,13 @@ public final class NetworkReports {
             return Optional.empty();
         }
         if (reference.equals(INET_BY_NAME)) {
-            return literal.filter(value -> internal(value) || externalHostLiteral(value));
+            return externalHost(literal);
         }
         return httpHost(literal.orElseThrow());
+    }
+
+    private static Optional<String> externalHost(final Optional<String> literal) {
+        return literal.filter(value -> internal(value) || externalHostLiteral(value));
     }
 
     private static boolean externalHostLiteral(final String value) {

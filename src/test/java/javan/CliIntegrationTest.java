@@ -276,6 +276,7 @@ final class CliIntegrationTest extends CliIntegrationSupport {
             package com.acme;
 
             import java.net.InetAddress;
+            import java.net.Socket;
             import java.net.URL;
 
             public final class Main {
@@ -286,6 +287,7 @@ final class CliIntegrationTest extends CliIntegrationSupport {
                     new URL("https://user:private-password@api.example.com/v1?token=private-token");
                     InetAddress.getByName("cache.example.test");
                     InetAddress.getByName("localhost");
+                    new Socket("socket.example.test", 8443);
                 }
             }
             """);
@@ -293,16 +295,17 @@ final class CliIntegrationTest extends CliIntegrationSupport {
         run(tempDir, "check", project.toString());
 
         assertThat(Files.readString(project.resolve(".javan/reports/network.json"))).contains(
-            "\"reachableNetworkCallSiteCount\": 3",
-            "\"endpointCallSiteCount\": 3",
-            "\"knownExternalEndpointCallSiteCount\": 2",
+            "\"reachableNetworkCallSiteCount\": 4",
+            "\"endpointCallSiteCount\": 4",
+            "\"knownExternalEndpointCallSiteCount\": 3",
             "\"excludedInternalEndpointCallSiteCount\": 1",
             "{\"host\": \"api.example.com\", \"count\": 1}",
-            "{\"host\": \"cache.example.test\", \"count\": 1}"
+            "{\"host\": \"cache.example.test\", \"count\": 1}",
+            "{\"host\": \"socket.example.test\", \"count\": 1}"
         ).doesNotContain("private-password", "private-token", "localhost");
         assertThat(Files.readString(project.resolve(".javan/reports/report.json"))).contains(
             "{\"name\": \"network\", \"status\": \"present\"",
-            "\"knownExternalEndpointCallSiteCount\": 2"
+            "\"knownExternalEndpointCallSiteCount\": 3"
         );
     }
 
