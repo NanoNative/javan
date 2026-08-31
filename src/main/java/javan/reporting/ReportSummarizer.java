@@ -32,6 +32,10 @@ public final class ReportSummarizer {
         new ReportSpec("class-initialization", List.of("class-initialization.json", "class-initialization.md")),
         new ReportSpec("exceptions", List.of("exceptions.json", "exceptions.md", "debug-map.json")),
         new ReportSpec("intrinsics", List.of("intrinsics.json", "intrinsics.md")),
+        new ReportSpec("logging", List.of("logging.json", "logging.md")),
+        new ReportSpec("network", List.of("network.json", "network.md")),
+        new ReportSpec("files", List.of("files.json", "files.md")),
+        new ReportSpec("system-access", List.of("system-access.json", "system-access.md")),
         new ReportSpec("optimizations", List.of("optimizations.json", "optimizations.md")),
         new ReportSpec("dependencies", List.of("dependencies.json", "dependencies.md")),
         new ReportSpec("licenses", List.of("licenses.json", "licenses.md")),
@@ -43,6 +47,7 @@ public final class ReportSummarizer {
         new ReportSpec("runtime-footprint", List.of("runtime-footprint.json", "runtime-footprint.md")),
         new ReportSpec("native-object-cache", List.of("native-object-cache.json", "native-object-cache.md")),
         new ReportSpec("sanitizer-proof", List.of("sanitizer-proof.json", "sanitizer-proof.md")),
+        new ReportSpec("jdk-module-usage", List.of("jdk-module-usage.json", "jdk-module-usage.md")),
         new ReportSpec("compatibility", List.of("compatibility-summary.json", "compatibility-summary.md"))
     );
 
@@ -148,6 +153,21 @@ public final class ReportSummarizer {
         }
         if ("intrinsics".equals(name)) {
             return intrinsicsMetrics(read(reportsDirectory.resolve("intrinsics.json")));
+        }
+        if ("logging".equals(name)) {
+            return loggingMetrics(read(reportsDirectory.resolve("logging.json")));
+        }
+        if ("network".equals(name)) {
+            return networkMetrics(read(reportsDirectory.resolve("network.json")));
+        }
+        if ("files".equals(name)) {
+            return fileMetrics(read(reportsDirectory.resolve("files.json")));
+        }
+        if ("system-access".equals(name)) {
+            return systemAccessMetrics(read(reportsDirectory.resolve("system-access.json")));
+        }
+        if ("jdk-module-usage".equals(name)) {
+            return jdkModuleUsageMetrics(read(reportsDirectory.resolve("jdk-module-usage.json")));
         }
         if ("optimizations".equals(name)) {
             return optimizationMetrics(read(reportsDirectory.resolve("optimizations.json")));
@@ -432,6 +452,114 @@ public final class ReportSummarizer {
         addNumber(result, value, "argumentEscape");
         addNumber(result, value, "globalEscape");
         addNumber(result, value, "stackAllocated");
+        return List.copyOf(result);
+    }
+
+    private static List<Metric> loggingMetrics(final Optional<String> report) {
+        if (report.isEmpty()) {
+            return List.of();
+        }
+        final String value = report.orElseThrow();
+        final List<Metric> result = new ArrayList<>();
+        addText(result, value, "apiFamily");
+        addNumber(result, value, "reachableLoggerCallSiteCount");
+        addNumber(result, value, "levelCallSiteCount");
+        addNumber(result, value, "literalLevelCallSiteCount");
+        addNumber(result, value, "inferredLevelCallSiteCount");
+        addNumber(result, value, "unknownLevelCallSiteCount");
+        addNumber(result, value, "nonEmittingCallSiteCount");
+        addArrayCount(result, value, "levels");
+        addArrayCount(result, value, "unknownLevelCalls");
+        return List.copyOf(result);
+    }
+
+    private static List<Metric> networkMetrics(final Optional<String> report) {
+        if (report.isEmpty()) {
+            return List.of();
+        }
+        final String value = report.orElseThrow();
+        final List<Metric> result = new ArrayList<>();
+        addNumber(result, value, "reachableNetworkCallSiteCount");
+        addNumber(result, value, "endpointCallSiteCount");
+        addNumber(result, value, "knownExternalEndpointCallSiteCount");
+        addNumber(result, value, "excludedInternalEndpointCallSiteCount");
+        addNumber(result, value, "unknownEndpointCallSiteCount");
+        addArrayCount(result, value, "knownExternalHosts");
+        addArrayCount(result, value, "unknownEndpointCalls");
+        addArrayCount(result, value, "networkCalls");
+        return List.copyOf(result);
+    }
+
+    private static List<Metric> fileMetrics(final Optional<String> report) {
+        if (report.isEmpty()) {
+            return List.of();
+        }
+        final String value = report.orElseThrow();
+        final List<Metric> result = new ArrayList<>();
+        addNumber(result, value, "reachableFileCallSiteCount");
+        addNumber(result, value, "readCallSiteCount");
+        addNumber(result, value, "writeCallSiteCount");
+        addNumber(result, value, "deleteCallSiteCount");
+        addNumber(result, value, "copyCallSiteCount");
+        addNumber(result, value, "metadataCallSiteCount");
+        addNumber(result, value, "directoryCallSiteCount");
+        addNumber(result, value, "unknownOperationCallSiteCount");
+        addNumber(result, value, "knownFilePathCount");
+        addNumber(result, value, "knownPathReferenceCount");
+        addNumber(result, value, "unknownPathCallSiteCount");
+        addArrayCount(result, value, "knownPaths");
+        addArrayCount(result, value, "unknownPathCalls");
+        addArrayCount(result, value, "fileCalls");
+        return List.copyOf(result);
+    }
+
+    private static List<Metric> systemAccessMetrics(final Optional<String> report) {
+        if (report.isEmpty()) {
+            return List.of();
+        }
+        final String value = report.orElseThrow();
+        final List<Metric> result = new ArrayList<>();
+        addNumber(result, value, "reachableProcessApiCallSiteCount");
+        addNumber(result, value, "processLaunchCallSiteCount");
+        addNumber(result, value, "processBuilderConfigurationCallSiteCount");
+        addNumber(result, value, "knownExecutableCount");
+        addNumber(result, value, "unknownExecutableLaunchCallSiteCount");
+        addNumber(result, value, "environmentLookupCallSiteCount");
+        addNumber(result, value, "knownEnvironmentVariableCount");
+        addNumber(result, value, "unknownEnvironmentLookupCallSiteCount");
+        addNumber(result, value, "propertyLookupCallSiteCount");
+        addNumber(result, value, "knownPropertyKeyCount");
+        addNumber(result, value, "unknownPropertyLookupCallSiteCount");
+        addNumber(result, value, "classLoadCallSiteCount");
+        addNumber(result, value, "knownClassLoadTargetCount");
+        addNumber(result, value, "unknownClassLoadCallSiteCount");
+        addNumber(result, value, "nativeLibraryLoadCallSiteCount");
+        addNumber(result, value, "knownNativeLibraryLoadTargetCount");
+        addNumber(result, value, "unknownNativeLibraryLoadCallSiteCount");
+        addArrayCount(result, value, "knownExecutables");
+        addArrayCount(result, value, "environmentVariables");
+        addArrayCount(result, value, "propertyKeys");
+        addArrayCount(result, value, "classLoadTargets");
+        addArrayCount(result, value, "nativeLibraryLoadTargets");
+        addArrayCount(result, value, "unknownExecutableLaunches");
+        addArrayCount(result, value, "unknownEnvironmentLookups");
+        addArrayCount(result, value, "unknownPropertyLookups");
+        addArrayCount(result, value, "unknownClassLoads");
+        addArrayCount(result, value, "unknownNativeLibraryLoads");
+        addArrayCount(result, value, "processCalls");
+        return List.copyOf(result);
+    }
+
+    private static List<Metric> jdkModuleUsageMetrics(final Optional<String> report) {
+        if (report.isEmpty()) {
+            return List.of();
+        }
+        final String value = report.orElseThrow();
+        final List<Metric> result = new ArrayList<>();
+        addText(result, value, "analysisScope");
+        addNumber(result, value, "reachableDirectJdkClassCount");
+        addNumber(result, value, "usedJdkModuleCount");
+        addArrayCount(result, value, "modules");
         return List.copyOf(result);
     }
 

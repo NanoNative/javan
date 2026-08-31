@@ -225,6 +225,168 @@ final class CliIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void checkReportsReachableLoggingWithoutRecordingMessagesOrClaimingSupport() throws Exception {
+        final Path project = project("check-logging-report");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.logging.Level;
+            import java.util.logging.Logger;
+
+            public final class Main {
+                private static final Logger LOGGER = Logger.getLogger("com.acme.private");
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    LOGGER.info("private-info-message");
+                    LOGGER.log(Level.WARNING, "private-warning-message");
+                    final Level dynamic = Level.FINE;
+                    LOGGER.log(dynamic, "private-dynamic-message");
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isNotZero();
+        assertThat(run.stderr()).contains("java/util/logging/Logger");
+        assertThat(Files.readString(project.resolve(".javan/reports/logging.json"))).contains(
+            "\"apiFamily\": \"java.util.logging.Logger\"",
+            "\"reachableLoggerCallSiteCount\": 4",
+            "\"levelCallSiteCount\": 3",
+            "\"literalLevelCallSiteCount\": 1",
+            "\"inferredLevelCallSiteCount\": 1",
+            "\"unknownLevelCallSiteCount\": 1",
+            "\"nonEmittingCallSiteCount\": 1",
+            "{\"level\": \"WARNING\", \"literal\": 1, \"inferred\": 0}",
+            "{\"level\": \"INFO\", \"literal\": 0, \"inferred\": 1}"
+        ).doesNotContain("private-info-message", "private-warning-message", "private-dynamic-message");
+        assertThat(Files.readString(project.resolve(".javan/reports/report.json"))).contains(
+            "{\"name\": \"logging\", \"status\": \"present\"",
+            "\"literalLevelCallSiteCount\": 1"
+        );
+    }
+
+    @Test
+    void checkReportsReachableNetworkHostsWithoutRecordingUrlsOrLoopbackEndpoints() throws Exception {
+        final Path project = project("check-network-report");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetAddress;
+            import java.net.Socket;
+            import java.net.URL;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    new URL("https://user:private-password@api.example.com/v1?token=private-token");
+                    InetAddress.getByName("cache.example.test");
+                    InetAddress.getByName("localhost");
+                    new Socket("socket.example.test", 8443);
+                }
+            }
+            """);
+
+        run(tempDir, "check", project.toString());
+
+        assertThat(Files.readString(project.resolve(".javan/reports/network.json"))).contains(
+            "\"reachableNetworkCallSiteCount\": 4",
+            "\"endpointCallSiteCount\": 4",
+            "\"knownExternalEndpointCallSiteCount\": 3",
+            "\"excludedInternalEndpointCallSiteCount\": 1",
+            "{\"host\": \"api.example.com\", \"count\": 1}",
+            "{\"host\": \"cache.example.test\", \"count\": 1}",
+            "{\"host\": \"socket.example.test\", \"count\": 1}"
+        ).doesNotContain("private-password", "private-token", "localhost");
+        assertThat(Files.readString(project.resolve(".javan/reports/report.json"))).contains(
+            "{\"name\": \"network\", \"status\": \"present\"",
+            "\"knownExternalEndpointCallSiteCount\": 3"
+        );
+    }
+
+    @Test
+    void checkReportsReachableLiteralFileAccessWithoutIncludingEmbeddedResources() throws Exception {
+        final Path project = project("check-file-report");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.nio.file.Files;
+            import java.nio.file.Path;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    Files.readString(Path.of("data").resolve("config.properties"));
+                    Files.writeString(Path.of("cache.txt"), "cache");
+                    Files.deleteIfExists(Path.of("stale.txt"));
+                    Files.size(Path.of("cache.txt"));
+                    Files.createDirectories(Path.of("output").resolve("nested"));
+                }
+            }
+            """);
+
+        run(tempDir, "check", project.toString());
+
+        assertThat(Files.readString(project.resolve(".javan/reports/files.json"))).contains(
+            "\"reachableFileCallSiteCount\": 5",
+            "\"readCallSiteCount\": 1",
+            "\"writeCallSiteCount\": 2",
+            "\"deleteCallSiteCount\": 1",
+            "\"metadataCallSiteCount\": 1",
+            "\"knownFilePathCount\": 4",
+            "\"knownPathReferenceCount\": 5",
+            "{\"path\": \"data/config.properties\", \"operation\": \"read\", \"count\": 1}",
+            "{\"path\": \"output/nested\", \"operation\": \"write\", \"count\": 1}"
+        ).doesNotContain("resources/");
+        assertThat(Files.readString(project.resolve(".javan/reports/report.json"))).contains(
+            "{\"name\": \"files\", \"status\": \"present\"",
+            "\"knownFilePathCount\": 4",
+            "\"knownPathReferenceCount\": 5"
+        );
+    }
+
+    @Test
+    void checkReportsReachableSystemConfigurationKeysWithoutValues() throws Exception {
+        final Path project = project("check-system-access-report");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.getenv("SERVICE_TOKEN");
+                    System.getProperty("service.endpoint", "http://localhost");
+                }
+            }
+            """);
+
+        run(tempDir, "check", project.toString());
+
+        assertThat(Files.readString(project.resolve(".javan/reports/system-access.json"))).contains(
+            "\"environmentLookupCallSiteCount\": 1",
+            "\"knownEnvironmentVariableCount\": 1",
+            "\"propertyLookupCallSiteCount\": 1",
+            "\"knownPropertyKeyCount\": 1",
+            "{\"name\": \"SERVICE_TOKEN\", \"count\": 1}",
+            "{\"name\": \"service.endpoint\", \"count\": 1}"
+        ).doesNotContain("http://localhost");
+        assertThat(Files.readString(project.resolve(".javan/reports/report.json"))).contains(
+            "{\"name\": \"system-access\", \"status\": \"present\"",
+            "\"knownEnvironmentVariableCount\": 1",
+            "\"knownPropertyKeyCount\": 1"
+        );
+    }
+
+    @Test
     void checkWritesReachableJdkLedgerBreakdownForSupportedCalls() throws Exception {
         final Path project = project("check-reachable-jdk-ledger");
         writeJava(project, "com.acme.Main", """
@@ -3112,6 +3274,11 @@ final class CliIntegrationTest extends CliIntegrationSupport {
 
         assertThat(run.exitCode()).isEqualTo(2);
         assertThat(run.stderr()).contains("error[JAVAN001]", "loading native libraries");
+        assertThat(Files.readString(project.resolve(".javan/reports/system-access.json"))).contains(
+            "\"nativeLibraryLoadCallSiteCount\": 1",
+            "\"knownNativeLibraryLoadTargetCount\": 1",
+            "{\"name\": \"danger\", \"count\": 1}"
+        );
     }
 
     @Test

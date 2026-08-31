@@ -637,6 +637,172 @@ final class ReportSummarizerTest {
     }
 
     @Test
+    void writeSummarizesLoggingMetrics() throws Exception {
+        final Path reports = reportsDirectory();
+        Files.writeString(reports.resolve("logging.json"), """
+            {
+              "apiFamily": "java.util.logging.Logger",
+              "reachableLoggerCallSiteCount": 4,
+              "levelCallSiteCount": 3,
+              "literalLevelCallSiteCount": 1,
+              "inferredLevelCallSiteCount": 1,
+              "unknownLevelCallSiteCount": 1,
+              "nonEmittingCallSiteCount": 1,
+              "levels": [{"level": "INFO"}],
+              "unknownLevelCalls": [{"target": "log"}]
+            }
+            """);
+        Files.writeString(reports.resolve("logging.md"), "# Reachable Logging\n");
+
+        final ReportSummarizer.Summary summary = new ReportSummarizer().write(tempDir);
+
+        assertThat(summary.markdown()).contains(
+            "| `logging` | present |",
+            "apiFamily: `java.util.logging.Logger`",
+            "reachableLoggerCallSiteCount: `4`",
+            "literalLevelCallSiteCount: `1`",
+            "unknownLevelCalls: `1`"
+        );
+    }
+
+    @Test
+    void writeSummarizesNetworkMetrics() throws Exception {
+        final Path reports = reportsDirectory();
+        Files.writeString(reports.resolve("network.json"), """
+            {
+              "reachableNetworkCallSiteCount": 3,
+              "endpointCallSiteCount": 3,
+              "knownExternalEndpointCallSiteCount": 2,
+              "excludedInternalEndpointCallSiteCount": 1,
+              "unknownEndpointCallSiteCount": 0,
+              "knownExternalHosts": [{"host": "api.example.com"}],
+              "unknownEndpointCalls": [],
+              "networkCalls": [{"target": "java/net/URL.<init>"}]
+            }
+            """);
+        Files.writeString(reports.resolve("network.md"), "# Reachable Network\n");
+
+        final ReportSummarizer.Summary summary = new ReportSummarizer().write(tempDir);
+
+        assertThat(summary.markdown()).contains(
+            "| `network` | present |",
+            "reachableNetworkCallSiteCount: `3`",
+            "knownExternalEndpointCallSiteCount: `2`",
+            "knownExternalHosts: `1`"
+        );
+    }
+
+    @Test
+    void writeSummarizesFileMetrics() throws Exception {
+        final Path reports = reportsDirectory();
+        Files.writeString(reports.resolve("files.json"), """
+            {
+              "reachableFileCallSiteCount": 5,
+              "readCallSiteCount": 1,
+              "writeCallSiteCount": 2,
+              "deleteCallSiteCount": 1,
+              "copyCallSiteCount": 0,
+              "metadataCallSiteCount": 1,
+              "directoryCallSiteCount": 0,
+              "unknownOperationCallSiteCount": 0,
+              "knownFilePathCount": 4,
+              "knownPathReferenceCount": 5,
+              "unknownPathCallSiteCount": 0,
+              "knownPaths": [{"path": "data/config.properties"}],
+              "unknownPathCalls": [],
+              "fileCalls": [{"target": "java/nio/file/Files.readString"}]
+            }
+            """);
+        Files.writeString(reports.resolve("files.md"), "# Reachable File Access\n");
+
+        final ReportSummarizer.Summary summary = new ReportSummarizer().write(tempDir);
+
+        assertThat(summary.markdown()).contains(
+            "| `files` | present |",
+            "reachableFileCallSiteCount: `5`",
+            "writeCallSiteCount: `2`",
+            "knownFilePathCount: `4`",
+            "knownPathReferenceCount: `5`"
+        );
+    }
+
+    @Test
+    void writeSummarizesSystemAccessMetrics() throws Exception {
+        final Path reports = reportsDirectory();
+        Files.writeString(reports.resolve("system-access.json"), """
+            {
+              "reachableProcessApiCallSiteCount": 4,
+              "processLaunchCallSiteCount": 3,
+              "processBuilderConfigurationCallSiteCount": 1,
+              "knownExecutableCount": 1,
+              "unknownExecutableLaunchCallSiteCount": 2,
+              "environmentLookupCallSiteCount": 2,
+              "knownEnvironmentVariableCount": 1,
+              "unknownEnvironmentLookupCallSiteCount": 1,
+              "propertyLookupCallSiteCount": 2,
+              "knownPropertyKeyCount": 2,
+              "unknownPropertyLookupCallSiteCount": 0,
+              "classLoadCallSiteCount": 2,
+              "knownClassLoadTargetCount": 1,
+              "unknownClassLoadCallSiteCount": 1,
+              "nativeLibraryLoadCallSiteCount": 2,
+              "knownNativeLibraryLoadTargetCount": 1,
+              "unknownNativeLibraryLoadCallSiteCount": 1,
+              "knownExecutables": [{"name": "git"}],
+              "environmentVariables": [{"name": "API_TOKEN"}],
+              "propertyKeys": [{"name": "app.home"}],
+              "classLoadTargets": [{"name": "com.acme.Plugin"}],
+              "nativeLibraryLoadTargets": [{"name": "danger"}],
+              "unknownExecutableLaunches": [],
+              "unknownEnvironmentLookups": [],
+              "unknownPropertyLookups": [],
+              "unknownClassLoads": [],
+              "unknownNativeLibraryLoads": [],
+              "processCalls": [{"target": "java/lang/Runtime.exec"}]
+            }
+            """);
+        Files.writeString(reports.resolve("system-access.md"), "# Reachable System Access\n");
+
+        final ReportSummarizer.Summary summary = new ReportSummarizer().write(tempDir);
+
+        assertThat(summary.markdown()).contains(
+            "| `system-access` | present |",
+            "processLaunchCallSiteCount: `3`",
+            "knownEnvironmentVariableCount: `1`",
+            "knownPropertyKeyCount: `2`",
+            "classLoadCallSiteCount: `2`",
+            "knownNativeLibraryLoadTargetCount: `1`"
+        );
+    }
+
+    @Test
+    void writeSummarizesReachableJdkModuleUsage() throws Exception {
+        final Path reports = reportsDirectory();
+        Files.writeString(reports.resolve("jdk-module-usage.json"), """
+            {
+              "analysisScope": "reachable-direct-jdk-references",
+              "reachableDirectJdkClassCount": 3,
+              "usedJdkModuleCount": 2,
+              "modules": [
+                {"name": "java.base", "reachableClassCount": 2},
+                {"name": "java.sql", "reachableClassCount": 1}
+              ]
+            }
+            """);
+        Files.writeString(reports.resolve("jdk-module-usage.md"), "# Reachable JDK Modules\n");
+
+        final ReportSummarizer.Summary summary = new ReportSummarizer().write(tempDir);
+
+        assertThat(summary.markdown()).contains(
+            "| `jdk-module-usage` | present |",
+            "analysisScope: `reachable-direct-jdk-references`",
+            "reachableDirectJdkClassCount: `3`",
+            "usedJdkModuleCount: `2`",
+            "modules: `2`"
+        );
+    }
+
+    @Test
     void writeSummarizesResourceMetrics() throws Exception {
         final Path reports = reportsDirectory();
         Files.writeString(reports.resolve("resources.json"), """

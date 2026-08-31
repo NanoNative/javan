@@ -44,11 +44,16 @@ import javan.reporting.ClassInitializationReports;
 import javan.reporting.ControlFlowReports;
 import javan.reporting.DependencyReports;
 import javan.reporting.ExceptionReports;
+import javan.reporting.FileReports;
 import javan.reporting.IntrinsicUsageReports;
 import javan.reporting.InstantiatedTypeReports;
+import javan.reporting.JdkModuleUsageReports;
+import javan.reporting.LoggingReports;
+import javan.reporting.NetworkReports;
 import javan.reporting.ReportSummarizer;
 import javan.reporting.RuntimeContractReports;
 import javan.reporting.RuntimeFootprintReports;
+import javan.reporting.SystemAccessReports;
 import javan.test.ProjectTestRunner;
 import javan.util.Files2;
 import javan.util.ProcessRunner;
@@ -96,6 +101,7 @@ public final class Javan {
     private final NativeLinker nativeLinker = new NativeLinker();
     private final ProjectReports reports = new ProjectReports();
     private final CompatibilityReports compatibilityReports = new CompatibilityReports();
+    private final JdkModuleUsageReports jdkModuleUsageReports = new JdkModuleUsageReports();
     private final LocalValueOptimizer localValueOptimizer = new LocalValueOptimizer();
     private final MethodEffectAnalyzer methodEffectAnalyzer = new MethodEffectAnalyzer();
     private final EscapeAnalyzer escapeAnalyzer = new EscapeAnalyzer();
@@ -105,7 +111,11 @@ public final class Javan {
     private final ClassInitializationReports classInitializationReports = new ClassInitializationReports();
     private final InstantiatedTypeReports instantiatedTypeReports = new InstantiatedTypeReports();
     private final ExceptionReports exceptionReports = new ExceptionReports();
+    private final FileReports fileReports = new FileReports();
+    private final SystemAccessReports systemAccessReports = new SystemAccessReports();
     private final IntrinsicUsageReports intrinsicUsageReports = new IntrinsicUsageReports();
+    private final LoggingReports loggingReports = new LoggingReports();
+    private final NetworkReports networkReports = new NetworkReports();
     private final RuntimeContractReports runtimeContractReports = new RuntimeContractReports();
     private final RuntimeFootprintReports runtimeFootprintReports = new RuntimeFootprintReports();
     private final ReportSummarizer reportSummarizer = new ReportSummarizer();
@@ -206,6 +216,10 @@ public final class Javan {
         reports.writeDiagnostics(layout, diagnostics, classes, callGraph);
         reports.writeToolchain(layout, toolchain);
         intrinsicUsageReports.write(layout.outputDirectory(), classes, callGraph);
+        loggingReports.write(layout.outputDirectory(), classes, callGraph);
+        networkReports.write(layout.outputDirectory(), classes, callGraph);
+        fileReports.write(layout.outputDirectory(), classes, callGraph);
+        systemAccessReports.write(layout.outputDirectory(), classes, callGraph);
         optimizationReports.writeScaffold(layout.outputDirectory());
         writeUnifiedReport(layout.outputDirectory());
         final List<Diagnostic> errors = errors(diagnostics);
@@ -491,6 +505,7 @@ public final class Javan {
         reports.writeDiagnostics(layout, diagnostics, classes, callGraph);
         final List<ClassMetadata> projectMetadata = classMetadataScanner.scanLayout(layout);
         final List<ClassMetadata> jdkMetadata = classMetadataScanner.scanCurrentJdk(layout.outputDirectory());
+        jdkModuleUsageReports.write(layout.outputDirectory(), classes, callGraph, jdkMetadata);
         final CompatibilityResult result = compatibilityReports.write(
             layout.root(),
             layout.outputDirectory(),
