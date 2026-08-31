@@ -52,6 +52,7 @@ import javan.reporting.NetworkReports;
 import javan.reporting.ReportSummarizer;
 import javan.reporting.RuntimeContractReports;
 import javan.reporting.RuntimeFootprintReports;
+import javan.reporting.SystemAccessReports;
 import javan.test.ProjectTestRunner;
 import javan.util.Files2;
 import javan.util.ProcessRunner;
@@ -109,6 +110,7 @@ public final class Javan {
     private final InstantiatedTypeReports instantiatedTypeReports = new InstantiatedTypeReports();
     private final ExceptionReports exceptionReports = new ExceptionReports();
     private final FileReports fileReports = new FileReports();
+    private final SystemAccessReports systemAccessReports = new SystemAccessReports();
     private final IntrinsicUsageReports intrinsicUsageReports = new IntrinsicUsageReports();
     private final LoggingReports loggingReports = new LoggingReports();
     private final NetworkReports networkReports = new NetworkReports();
@@ -215,6 +217,7 @@ public final class Javan {
         loggingReports.write(layout.outputDirectory(), classes, callGraph);
         networkReports.write(layout.outputDirectory(), classes, callGraph);
         fileReports.write(layout.outputDirectory(), classes, callGraph);
+        systemAccessReports.write(layout.outputDirectory(), classes, callGraph);
         optimizationReports.writeScaffold(layout.outputDirectory());
         writeUnifiedReport(layout.outputDirectory());
         final List<Diagnostic> errors = errors(diagnostics);

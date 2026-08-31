@@ -35,6 +35,7 @@ public final class ReportSummarizer {
         new ReportSpec("logging", List.of("logging.json", "logging.md")),
         new ReportSpec("network", List.of("network.json", "network.md")),
         new ReportSpec("files", List.of("files.json", "files.md")),
+        new ReportSpec("system-access", List.of("system-access.json", "system-access.md")),
         new ReportSpec("optimizations", List.of("optimizations.json", "optimizations.md")),
         new ReportSpec("dependencies", List.of("dependencies.json", "dependencies.md")),
         new ReportSpec("licenses", List.of("licenses.json", "licenses.md")),
@@ -160,6 +161,9 @@ public final class ReportSummarizer {
         }
         if ("files".equals(name)) {
             return fileMetrics(read(reportsDirectory.resolve("files.json")));
+        }
+        if ("system-access".equals(name)) {
+            return systemAccessMetrics(read(reportsDirectory.resolve("system-access.json")));
         }
         if ("optimizations".equals(name)) {
             return optimizationMetrics(read(reportsDirectory.resolve("optimizations.json")));
@@ -502,6 +506,33 @@ public final class ReportSummarizer {
         addArrayCount(result, value, "knownPaths");
         addArrayCount(result, value, "unknownPathCalls");
         addArrayCount(result, value, "fileCalls");
+        return List.copyOf(result);
+    }
+
+    private static List<Metric> systemAccessMetrics(final Optional<String> report) {
+        if (report.isEmpty()) {
+            return List.of();
+        }
+        final String value = report.orElseThrow();
+        final List<Metric> result = new ArrayList<>();
+        addNumber(result, value, "reachableProcessApiCallSiteCount");
+        addNumber(result, value, "processLaunchCallSiteCount");
+        addNumber(result, value, "processBuilderConfigurationCallSiteCount");
+        addNumber(result, value, "knownExecutableCount");
+        addNumber(result, value, "unknownExecutableLaunchCallSiteCount");
+        addNumber(result, value, "environmentLookupCallSiteCount");
+        addNumber(result, value, "knownEnvironmentVariableCount");
+        addNumber(result, value, "unknownEnvironmentLookupCallSiteCount");
+        addNumber(result, value, "propertyLookupCallSiteCount");
+        addNumber(result, value, "knownPropertyKeyCount");
+        addNumber(result, value, "unknownPropertyLookupCallSiteCount");
+        addArrayCount(result, value, "knownExecutables");
+        addArrayCount(result, value, "environmentVariables");
+        addArrayCount(result, value, "propertyKeys");
+        addArrayCount(result, value, "unknownExecutableLaunches");
+        addArrayCount(result, value, "unknownEnvironmentLookups");
+        addArrayCount(result, value, "unknownPropertyLookups");
+        addArrayCount(result, value, "processCalls");
         return List.copyOf(result);
     }
 

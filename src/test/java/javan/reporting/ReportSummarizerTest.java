@@ -727,6 +727,43 @@ final class ReportSummarizerTest {
     }
 
     @Test
+    void writeSummarizesSystemAccessMetrics() throws Exception {
+        final Path reports = reportsDirectory();
+        Files.writeString(reports.resolve("system-access.json"), """
+            {
+              "reachableProcessApiCallSiteCount": 4,
+              "processLaunchCallSiteCount": 3,
+              "processBuilderConfigurationCallSiteCount": 1,
+              "knownExecutableCount": 1,
+              "unknownExecutableLaunchCallSiteCount": 2,
+              "environmentLookupCallSiteCount": 2,
+              "knownEnvironmentVariableCount": 1,
+              "unknownEnvironmentLookupCallSiteCount": 1,
+              "propertyLookupCallSiteCount": 2,
+              "knownPropertyKeyCount": 2,
+              "unknownPropertyLookupCallSiteCount": 0,
+              "knownExecutables": [{"name": "git"}],
+              "environmentVariables": [{"name": "API_TOKEN"}],
+              "propertyKeys": [{"name": "app.home"}],
+              "unknownExecutableLaunches": [],
+              "unknownEnvironmentLookups": [],
+              "unknownPropertyLookups": [],
+              "processCalls": [{"target": "java/lang/Runtime.exec"}]
+            }
+            """);
+        Files.writeString(reports.resolve("system-access.md"), "# Reachable System Access\n");
+
+        final ReportSummarizer.Summary summary = new ReportSummarizer().write(tempDir);
+
+        assertThat(summary.markdown()).contains(
+            "| `system-access` | present |",
+            "processLaunchCallSiteCount: `3`",
+            "knownEnvironmentVariableCount: `1`",
+            "knownPropertyKeyCount: `2`"
+        );
+    }
+
+    @Test
     void writeSummarizesResourceMetrics() throws Exception {
         final Path reports = reportsDirectory();
         Files.writeString(reports.resolve("resources.json"), """

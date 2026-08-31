@@ -350,6 +350,40 @@ final class CliIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void checkReportsReachableSystemConfigurationKeysWithoutValues() throws Exception {
+        final Path project = project("check-system-access-report");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.getenv("SERVICE_TOKEN");
+                    System.getProperty("service.endpoint", "http://localhost");
+                }
+            }
+            """);
+
+        run(tempDir, "check", project.toString());
+
+        assertThat(Files.readString(project.resolve(".javan/reports/system-access.json"))).contains(
+            "\"environmentLookupCallSiteCount\": 1",
+            "\"knownEnvironmentVariableCount\": 1",
+            "\"propertyLookupCallSiteCount\": 1",
+            "\"knownPropertyKeyCount\": 1",
+            "{\"name\": \"SERVICE_TOKEN\", \"count\": 1}",
+            "{\"name\": \"service.endpoint\", \"count\": 1}"
+        ).doesNotContain("http://localhost");
+        assertThat(Files.readString(project.resolve(".javan/reports/report.json"))).contains(
+            "{\"name\": \"system-access\", \"status\": \"present\"",
+            "\"knownEnvironmentVariableCount\": 1",
+            "\"knownPropertyKeyCount\": 1"
+        );
+    }
+
+    @Test
     void checkWritesReachableJdkLedgerBreakdownForSupportedCalls() throws Exception {
         final Path project = project("check-reachable-jdk-ledger");
         writeJava(project, "com.acme.Main", """
