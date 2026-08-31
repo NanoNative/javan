@@ -3271,6 +3271,11 @@ final class CliIntegrationTest extends CliIntegrationSupport {
 
         assertThat(run.exitCode()).isEqualTo(2);
         assertThat(run.stderr()).contains("error[JAVAN001]", "loading native libraries");
+        assertThat(Files.readString(project.resolve(".javan/reports/system-access.json"))).contains(
+            "\"nativeLibraryLoadCallSiteCount\": 1",
+            "\"knownNativeLibraryLoadTargetCount\": 1",
+            "{\"name\": \"danger\", \"count\": 1}"
+        );
     }
 
     @Test

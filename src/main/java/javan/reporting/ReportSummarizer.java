@@ -530,12 +530,22 @@ public final class ReportSummarizer {
         addNumber(result, value, "propertyLookupCallSiteCount");
         addNumber(result, value, "knownPropertyKeyCount");
         addNumber(result, value, "unknownPropertyLookupCallSiteCount");
+        addNumber(result, value, "classLoadCallSiteCount");
+        addNumber(result, value, "knownClassLoadTargetCount");
+        addNumber(result, value, "unknownClassLoadCallSiteCount");
+        addNumber(result, value, "nativeLibraryLoadCallSiteCount");
+        addNumber(result, value, "knownNativeLibraryLoadTargetCount");
+        addNumber(result, value, "unknownNativeLibraryLoadCallSiteCount");
         addArrayCount(result, value, "knownExecutables");
         addArrayCount(result, value, "environmentVariables");
         addArrayCount(result, value, "propertyKeys");
+        addArrayCount(result, value, "classLoadTargets");
+        addArrayCount(result, value, "nativeLibraryLoadTargets");
         addArrayCount(result, value, "unknownExecutableLaunches");
         addArrayCount(result, value, "unknownEnvironmentLookups");
         addArrayCount(result, value, "unknownPropertyLookups");
+        addArrayCount(result, value, "unknownClassLoads");
+        addArrayCount(result, value, "unknownNativeLibraryLoads");
         addArrayCount(result, value, "processCalls");
         return List.copyOf(result);
     }
