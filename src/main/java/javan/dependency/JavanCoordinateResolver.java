@@ -96,6 +96,7 @@ public final class JavanCoordinateResolver {
             module.moduleName(),
             module.javaVersion(),
             List.copyOf(dependencies),
+            module.licensePolicy(),
             List.copyOf(warnings)
         );
     }

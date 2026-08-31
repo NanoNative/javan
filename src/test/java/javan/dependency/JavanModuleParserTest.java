@@ -5,6 +5,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
 
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
@@ -126,5 +127,61 @@ final class JavanModuleParserTest {
         assertThat(module.warnings()).isEmpty();
         assertThat(module.dependencies()).hasSize(1);
         assertThat(module.dependencies().get(0).notation()).isEqualTo("libs/a#b.jar");
+    }
+
+    @Test
+    void parseReadsQuotedLicensePolicyRules() {
+        final JavanModule module = new JavanModuleParser().parse(tempDir, """
+            license allow "Apache License, Version 2.0"
+            license deny "GNU General Public License, version 3"
+            """);
+
+        assertThat(module.warnings()).isEmpty();
+        assertThat(module.licensePolicy().rules()).containsExactly(
+            new LicensePolicy.Rule("allow", "Apache License, Version 2.0", 1),
+            new LicensePolicy.Rule("deny", "GNU General Public License, version 3", 2)
+        );
+        assertThat(module.licensePolicy().decide(new ArtifactMetadata.License(
+            "Apache License, Version 2.0", "Apache License, Version 2.0", "", "pom.xml", "dependency.pom"
+        )).status()).isEqualTo("allowed");
+        assertThat(module.licensePolicy().decide(new ArtifactMetadata.License(
+            "GNU General Public License, version 3", "GNU General Public License, version 3", "", "pom.xml", "dependency.pom"
+        )).status()).isEqualTo("blocked");
+    }
+
+    @Test
+    void parseRejectsMalformedOrUnknownLicensePolicyRules() {
+        final JavanModule module = new JavanModuleParser().parse(tempDir, """
+            license allow
+            license review "Apache License, Version 2.0"
+            license deny unknown
+            """);
+
+        assertThat(module.licensePolicy().rules()).isEmpty();
+        assertThat(module.warnings()).containsExactly(
+            "javan.mod line 1: license expects allow or deny plus one exact license identifier",
+            "javan.mod line 2: license action must be allow or deny",
+            "javan.mod line 3: license policy cannot target unknown metadata"
+        );
+    }
+
+    @Test
+    void licensePolicyUsesExactMetadataAndLetsDenyWin() {
+        final ArtifactMetadata.License apache = new ArtifactMetadata.License(
+            "Apache License, Version 2.0", "Apache License, Version 2.0", "", "pom.xml", "dependency.pom"
+        );
+        final LicensePolicy policy = new LicensePolicy(List.of(
+            new LicensePolicy.Rule("allow", apache.id(), 2),
+            new LicensePolicy.Rule("deny", apache.id(), 3)
+        ));
+
+        assertThat(LicensePolicy.empty().decide(apache).status()).isEqualTo("known");
+        assertThat(LicensePolicy.empty().decide(new ArtifactMetadata.License(
+            "unknown", "unknown", "", "none", ""
+        )).status()).isEqualTo("warning");
+        assertThat(policy.decide(apache)).satisfies(decision -> {
+            assertThat(decision.status()).isEqualTo("blocked");
+            assertThat(decision.source()).isEqualTo("javan.mod:3");
+        });
     }
 }
