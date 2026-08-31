@@ -29,6 +29,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     private static final Path VERIFY_PACKAGE_NATIVE_IMPORTS = Path.of(".github/scripts/verify-package-native-imports.sh");
     private static final Path PACKAGE_RELEASE_REHEARSAL = Path.of(".github/scripts/package-release-rehearsal.sh");
     private static final Path REHEARSE_RELEASE_ARTIFACT = Path.of(".github/scripts/rehearse-release-artifact.sh");
+    private static final Path VERIFY_IMAGE = Path.of(".github/scripts/verify-image.sh");
     private static final Path VERSION_TEMPLATE = Path.of("src/main/version/javan/cli/Version.java");
     private static final Path REPO_ROOT = Path.of("").toAbsolutePath().normalize();
 
@@ -205,6 +206,127 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         assertThat(Pattern.compile("https://github.com/NanoNative/javan/issues/").matcher(activeQueue).results().count())
             .isEqualTo(5);
         assertThat(roadmap).contains("REL-CONTAINER-01", "issues/115");
+    }
+
+    @Test
+    void imageVerificationRecordsVerifiedArchivesAndImmutableDigest() throws Exception {
+        final String version = "2026.8.30";
+        final String image = "ghcr.io/nanonative/javan:" + version;
+        final Path releaseDir = Files.createDirectories(tempDir.resolve("release"));
+        final Path proofDir = tempDir.resolve("proof");
+        final Path bin = Files.createDirectories(tempDir.resolve("bin"));
+        final String x64Content = "linux-x64";
+        final String arm64Content = "linux-aarch64";
+        writeReleaseArtifact(releaseDir, "javan-" + version + "-linux-x64.tar.gz", x64Content);
+        writeReleaseArtifact(releaseDir, "javan-" + version + "-linux-aarch64.tar.gz", arm64Content);
+        writeDockerManifestStub(bin);
+
+        final ProcessResult run = process(
+            REPO_ROOT,
+            List.of("sh", REPO_ROOT.resolve(VERIFY_IMAGE).toString(), image),
+            Duration.ofSeconds(20),
+            Map.of(
+                "JAVAN_RELEASE_VERSION", version,
+                "JAVAN_RELEASE_ARCHIVE_DIR", releaseDir.toString(),
+                "JAVAN_RELEASE_PROOF_DIR", proofDir.toString(),
+                "PATH", bin + System.getProperty("path.separator") + System.getenv("PATH")
+            )
+        );
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stderr()).contains(
+            "javan-" + version + "-linux-x64.tar.gz: OK",
+            "javan-" + version + "-linux-aarch64.tar.gz: OK"
+        );
+        assertThat(run.stdout()).contains("Verified image manifest", "Recorded release proof");
+        assertThat(Files.readString(proofDir.resolve("ghcr.io-nanonative-javan-" + version + ".json")))
+            .contains(
+                "\"image\": \"" + image + "\"",
+                "\"digest\": \"sha256:" + "a".repeat(64) + "\"",
+                "\"version\": \"" + version + "\"",
+                "\"target\": \"linux-x64\", \"sha256\": \""
+                    + sha256Hex(x64Content.getBytes(StandardCharsets.UTF_8)) + "\"",
+                "\"target\": \"linux-aarch64\", \"sha256\": \""
+                    + sha256Hex(arm64Content.getBytes(StandardCharsets.UTF_8)) + "\""
+            );
+    }
+
+    @Test
+    void imageVerificationRejectsMissingReleaseProofInputsBeforeRegistryAccess() {
+        final ProcessResult run = process(
+            REPO_ROOT,
+            List.of("sh", REPO_ROOT.resolve(VERIFY_IMAGE).toString(), "ghcr.io/nanonative/javan:2026.8.30"),
+            Duration.ofSeconds(20)
+        );
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stdout()).isEmpty();
+        assertThat(run.stderr()).contains("Missing release proof input: JAVAN_RELEASE_VERSION");
+    }
+
+    @Test
+    void imageVerificationRejectsMissingArchiveEvidenceWithoutWritingMetadata() throws Exception {
+        final String version = "2026.8.30";
+        final String image = "ghcr.io/nanonative/javan:" + version;
+        final Path releaseDir = Files.createDirectories(tempDir.resolve("release"));
+        final Path proofDir = tempDir.resolve("proof");
+        final Path bin = Files.createDirectories(tempDir.resolve("bin"));
+        writeReleaseArtifact(releaseDir, "javan-" + version + "-linux-x64.tar.gz", "linux-x64");
+        writeDockerManifestStub(bin);
+
+        final ProcessResult run = process(
+            REPO_ROOT,
+            List.of("sh", REPO_ROOT.resolve(VERIFY_IMAGE).toString(), image),
+            Duration.ofSeconds(20),
+            Map.of(
+                "JAVAN_RELEASE_VERSION", version,
+                "JAVAN_RELEASE_ARCHIVE_DIR", releaseDir.toString(),
+                "JAVAN_RELEASE_PROOF_DIR", proofDir.toString(),
+                "PATH", bin + System.getProperty("path.separator") + System.getenv("PATH")
+            )
+        );
+
+        assertThat(run.exitCode()).isEqualTo(1);
+        assertThat(run.stdout()).isEmpty();
+        assertThat(run.stderr()).contains(
+            "javan-" + version + "-linux-x64.tar.gz: OK",
+            "Missing release proof input: javan-" + version + "-linux-aarch64.tar.gz or javan-"
+                + version + "-linux-aarch64.tar.gz.sha256"
+        );
+        assertThat(proofDir).doesNotExist();
+    }
+
+    @Test
+    void imageVerificationRejectsNonLinuxManifestArchitecture() throws Exception {
+        final String version = "2026.8.30";
+        final String image = "ghcr.io/nanonative/javan:" + version;
+        final Path releaseDir = Files.createDirectories(tempDir.resolve("release"));
+        final Path proofDir = tempDir.resolve("proof");
+        final Path bin = Files.createDirectories(tempDir.resolve("bin"));
+        writeReleaseArtifact(releaseDir, "javan-" + version + "-linux-x64.tar.gz", "linux-x64");
+        writeReleaseArtifact(releaseDir, "javan-" + version + "-linux-aarch64.tar.gz", "linux-aarch64");
+        writeDockerManifestStub(bin, """
+            {"manifests":[
+              {"platform":{"architecture":"amd64","os":"linux"}},
+              {"platform":{"architecture":"arm64","os":"windows"}}
+            ]}
+            """);
+
+        final ProcessResult run = process(
+            REPO_ROOT,
+            List.of("sh", REPO_ROOT.resolve(VERIFY_IMAGE).toString(), image),
+            Duration.ofSeconds(20),
+            Map.of(
+                "JAVAN_RELEASE_VERSION", version,
+                "JAVAN_RELEASE_ARCHIVE_DIR", releaseDir.toString(),
+                "JAVAN_RELEASE_PROOF_DIR", proofDir.toString(),
+                "PATH", bin + System.getProperty("path.separator") + System.getenv("PATH")
+            )
+        );
+
+        assertThat(run.exitCode()).isEqualTo(1);
+        assertThat(run.stderr()).contains("Image manifest is missing linux/arm64");
+        assertThat(proofDir).doesNotExist();
     }
 
     @Test
@@ -1087,6 +1209,29 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             sha256 + "  " + archive.getFileName() + "\n",
             StandardCharsets.UTF_8
         );
+    }
+
+    private static void writeDockerManifestStub(final Path bin) throws Exception {
+        writeDockerManifestStub(bin, """
+            {"manifests":[
+              {"platform":{"architecture":"amd64","os":"linux"}},
+              {"platform":{"architecture":"arm64","os":"linux"}}
+            ]}
+            """);
+    }
+
+    private static void writeDockerManifestStub(final Path bin, final String manifest) throws Exception {
+        final Path docker = bin.resolve("docker");
+        final String script = """
+            #!/bin/sh
+            if [ "$5" = "--raw" ]; then
+              printf '%s\\n' '__JAVAN_MANIFEST__'
+              exit 0
+            fi
+            printf '%s\\n' 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+            """;
+        Files.writeString(docker, script.replace("__JAVAN_MANIFEST__", manifest.replace("\n", "")), StandardCharsets.UTF_8);
+        assertThat(docker.toFile().setExecutable(true)).isTrue();
     }
 
     private static String hostTarget() {
