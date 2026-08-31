@@ -1038,8 +1038,11 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         assertThat(containerWorkflow)
             .contains("- name: \"📥 Download")
             .contains("gh release download")
-            .contains("linux-x64.tar.gz")
-            .contains("linux-aarch64.tar.gz");
+            .contains(
+                "archive-target: x64",
+                "archive-target: aarch64",
+                "archive=\"javan-${RELEASE_VERSION}-linux-${ARCHIVE_TARGET}.tar.gz\""
+            );
     }
 
     @Test
