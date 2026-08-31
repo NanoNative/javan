@@ -32,6 +32,7 @@ public final class ReportSummarizer {
         new ReportSpec("class-initialization", List.of("class-initialization.json", "class-initialization.md")),
         new ReportSpec("exceptions", List.of("exceptions.json", "exceptions.md", "debug-map.json")),
         new ReportSpec("intrinsics", List.of("intrinsics.json", "intrinsics.md")),
+        new ReportSpec("logging", List.of("logging.json", "logging.md")),
         new ReportSpec("optimizations", List.of("optimizations.json", "optimizations.md")),
         new ReportSpec("dependencies", List.of("dependencies.json", "dependencies.md")),
         new ReportSpec("licenses", List.of("licenses.json", "licenses.md")),
@@ -148,6 +149,9 @@ public final class ReportSummarizer {
         }
         if ("intrinsics".equals(name)) {
             return intrinsicsMetrics(read(reportsDirectory.resolve("intrinsics.json")));
+        }
+        if ("logging".equals(name)) {
+            return loggingMetrics(read(reportsDirectory.resolve("logging.json")));
         }
         if ("optimizations".equals(name)) {
             return optimizationMetrics(read(reportsDirectory.resolve("optimizations.json")));
@@ -432,6 +436,24 @@ public final class ReportSummarizer {
         addNumber(result, value, "argumentEscape");
         addNumber(result, value, "globalEscape");
         addNumber(result, value, "stackAllocated");
+        return List.copyOf(result);
+    }
+
+    private static List<Metric> loggingMetrics(final Optional<String> report) {
+        if (report.isEmpty()) {
+            return List.of();
+        }
+        final String value = report.orElseThrow();
+        final List<Metric> result = new ArrayList<>();
+        addText(result, value, "apiFamily");
+        addNumber(result, value, "reachableLoggerCallSiteCount");
+        addNumber(result, value, "levelCallSiteCount");
+        addNumber(result, value, "literalLevelCallSiteCount");
+        addNumber(result, value, "inferredLevelCallSiteCount");
+        addNumber(result, value, "unknownLevelCallSiteCount");
+        addNumber(result, value, "nonEmittingCallSiteCount");
+        addArrayCount(result, value, "levels");
+        addArrayCount(result, value, "unknownLevelCalls");
         return List.copyOf(result);
     }
 

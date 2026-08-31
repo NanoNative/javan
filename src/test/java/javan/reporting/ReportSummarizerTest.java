@@ -637,6 +637,35 @@ final class ReportSummarizerTest {
     }
 
     @Test
+    void writeSummarizesLoggingMetrics() throws Exception {
+        final Path reports = reportsDirectory();
+        Files.writeString(reports.resolve("logging.json"), """
+            {
+              "apiFamily": "java.util.logging.Logger",
+              "reachableLoggerCallSiteCount": 4,
+              "levelCallSiteCount": 3,
+              "literalLevelCallSiteCount": 1,
+              "inferredLevelCallSiteCount": 1,
+              "unknownLevelCallSiteCount": 1,
+              "nonEmittingCallSiteCount": 1,
+              "levels": [{"level": "INFO"}],
+              "unknownLevelCalls": [{"target": "log"}]
+            }
+            """);
+        Files.writeString(reports.resolve("logging.md"), "# Reachable Logging\n");
+
+        final ReportSummarizer.Summary summary = new ReportSummarizer().write(tempDir);
+
+        assertThat(summary.markdown()).contains(
+            "| `logging` | present |",
+            "apiFamily: `java.util.logging.Logger`",
+            "reachableLoggerCallSiteCount: `4`",
+            "literalLevelCallSiteCount: `1`",
+            "unknownLevelCalls: `1`"
+        );
+    }
+
+    @Test
     void writeSummarizesResourceMetrics() throws Exception {
         final Path reports = reportsDirectory();
         Files.writeString(reports.resolve("resources.json"), """
