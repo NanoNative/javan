@@ -43,7 +43,8 @@ partial local scan as a general nullness analysis.
 Initial checks:
 
 - broader possible null dereference and null arguments
-- unsafe array writes and broader array-index analysis
+- covariant object-array stores and `ArrayStoreException` type checks
+- broader array-index analysis
 - `List.get(0)` without non-empty proof
 - `Optional.get` without `isPresent` proof
 - `Iterator.next` without `hasNext` proof

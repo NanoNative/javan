@@ -463,7 +463,7 @@ public final class EscapeAnalyzer {
             return result;
         }
         if (expression.kind() == IrExpression.Kind.LOCAL) {
-            return state.get(expression.value());
+            return expression.type() == IrType.OBJECT ? state.get(expression.value()) : empty(escapes.length);
         }
         if (expression.kind() == IrExpression.Kind.CALL) {
             final int[] uses = parameterEscapes.get(expression.value());
