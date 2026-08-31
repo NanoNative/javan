@@ -34,6 +34,7 @@ public final class ReportSummarizer {
         new ReportSpec("intrinsics", List.of("intrinsics.json", "intrinsics.md")),
         new ReportSpec("logging", List.of("logging.json", "logging.md")),
         new ReportSpec("network", List.of("network.json", "network.md")),
+        new ReportSpec("files", List.of("files.json", "files.md")),
         new ReportSpec("optimizations", List.of("optimizations.json", "optimizations.md")),
         new ReportSpec("dependencies", List.of("dependencies.json", "dependencies.md")),
         new ReportSpec("licenses", List.of("licenses.json", "licenses.md")),
@@ -156,6 +157,9 @@ public final class ReportSummarizer {
         }
         if ("network".equals(name)) {
             return networkMetrics(read(reportsDirectory.resolve("network.json")));
+        }
+        if ("files".equals(name)) {
+            return fileMetrics(read(reportsDirectory.resolve("files.json")));
         }
         if ("optimizations".equals(name)) {
             return optimizationMetrics(read(reportsDirectory.resolve("optimizations.json")));
@@ -475,6 +479,29 @@ public final class ReportSummarizer {
         addArrayCount(result, value, "knownExternalHosts");
         addArrayCount(result, value, "unknownEndpointCalls");
         addArrayCount(result, value, "networkCalls");
+        return List.copyOf(result);
+    }
+
+    private static List<Metric> fileMetrics(final Optional<String> report) {
+        if (report.isEmpty()) {
+            return List.of();
+        }
+        final String value = report.orElseThrow();
+        final List<Metric> result = new ArrayList<>();
+        addNumber(result, value, "reachableFileCallSiteCount");
+        addNumber(result, value, "readCallSiteCount");
+        addNumber(result, value, "writeCallSiteCount");
+        addNumber(result, value, "deleteCallSiteCount");
+        addNumber(result, value, "copyCallSiteCount");
+        addNumber(result, value, "metadataCallSiteCount");
+        addNumber(result, value, "directoryCallSiteCount");
+        addNumber(result, value, "unknownOperationCallSiteCount");
+        addNumber(result, value, "knownFilePathCount");
+        addNumber(result, value, "knownPathReferenceCount");
+        addNumber(result, value, "unknownPathCallSiteCount");
+        addArrayCount(result, value, "knownPaths");
+        addArrayCount(result, value, "unknownPathCalls");
+        addArrayCount(result, value, "fileCalls");
         return List.copyOf(result);
     }
 

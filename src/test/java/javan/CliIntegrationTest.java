@@ -307,6 +307,49 @@ final class CliIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void checkReportsReachableLiteralFileAccessWithoutIncludingEmbeddedResources() throws Exception {
+        final Path project = project("check-file-report");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.nio.file.Files;
+            import java.nio.file.Path;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    Files.readString(Path.of("data").resolve("config.properties"));
+                    Files.writeString(Path.of("cache.txt"), "cache");
+                    Files.deleteIfExists(Path.of("stale.txt"));
+                    Files.size(Path.of("cache.txt"));
+                    Files.createDirectories(Path.of("output").resolve("nested"));
+                }
+            }
+            """);
+
+        run(tempDir, "check", project.toString());
+
+        assertThat(Files.readString(project.resolve(".javan/reports/files.json"))).contains(
+            "\"reachableFileCallSiteCount\": 5",
+            "\"readCallSiteCount\": 1",
+            "\"writeCallSiteCount\": 2",
+            "\"deleteCallSiteCount\": 1",
+            "\"metadataCallSiteCount\": 1",
+            "\"knownFilePathCount\": 4",
+            "\"knownPathReferenceCount\": 5",
+            "{\"path\": \"data/config.properties\", \"operation\": \"read\", \"count\": 1}",
+            "{\"path\": \"output/nested\", \"operation\": \"write\", \"count\": 1}"
+        ).doesNotContain("resources/");
+        assertThat(Files.readString(project.resolve(".javan/reports/report.json"))).contains(
+            "{\"name\": \"files\", \"status\": \"present\"",
+            "\"knownFilePathCount\": 4",
+            "\"knownPathReferenceCount\": 5"
+        );
+    }
+
+    @Test
     void checkWritesReachableJdkLedgerBreakdownForSupportedCalls() throws Exception {
         final Path project = project("check-reachable-jdk-ledger");
         writeJava(project, "com.acme.Main", """

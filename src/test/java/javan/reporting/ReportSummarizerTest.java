@@ -693,6 +693,40 @@ final class ReportSummarizerTest {
     }
 
     @Test
+    void writeSummarizesFileMetrics() throws Exception {
+        final Path reports = reportsDirectory();
+        Files.writeString(reports.resolve("files.json"), """
+            {
+              "reachableFileCallSiteCount": 5,
+              "readCallSiteCount": 1,
+              "writeCallSiteCount": 2,
+              "deleteCallSiteCount": 1,
+              "copyCallSiteCount": 0,
+              "metadataCallSiteCount": 1,
+              "directoryCallSiteCount": 0,
+              "unknownOperationCallSiteCount": 0,
+              "knownFilePathCount": 4,
+              "knownPathReferenceCount": 5,
+              "unknownPathCallSiteCount": 0,
+              "knownPaths": [{"path": "data/config.properties"}],
+              "unknownPathCalls": [],
+              "fileCalls": [{"target": "java/nio/file/Files.readString"}]
+            }
+            """);
+        Files.writeString(reports.resolve("files.md"), "# Reachable File Access\n");
+
+        final ReportSummarizer.Summary summary = new ReportSummarizer().write(tempDir);
+
+        assertThat(summary.markdown()).contains(
+            "| `files` | present |",
+            "reachableFileCallSiteCount: `5`",
+            "writeCallSiteCount: `2`",
+            "knownFilePathCount: `4`",
+            "knownPathReferenceCount: `5`"
+        );
+    }
+
+    @Test
     void writeSummarizesResourceMetrics() throws Exception {
         final Path reports = reportsDirectory();
         Files.writeString(reports.resolve("resources.json"), """

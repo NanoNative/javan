@@ -44,6 +44,7 @@ import javan.reporting.ClassInitializationReports;
 import javan.reporting.ControlFlowReports;
 import javan.reporting.DependencyReports;
 import javan.reporting.ExceptionReports;
+import javan.reporting.FileReports;
 import javan.reporting.IntrinsicUsageReports;
 import javan.reporting.InstantiatedTypeReports;
 import javan.reporting.LoggingReports;
@@ -107,6 +108,7 @@ public final class Javan {
     private final ClassInitializationReports classInitializationReports = new ClassInitializationReports();
     private final InstantiatedTypeReports instantiatedTypeReports = new InstantiatedTypeReports();
     private final ExceptionReports exceptionReports = new ExceptionReports();
+    private final FileReports fileReports = new FileReports();
     private final IntrinsicUsageReports intrinsicUsageReports = new IntrinsicUsageReports();
     private final LoggingReports loggingReports = new LoggingReports();
     private final NetworkReports networkReports = new NetworkReports();
@@ -212,6 +214,7 @@ public final class Javan {
         intrinsicUsageReports.write(layout.outputDirectory(), classes, callGraph);
         loggingReports.write(layout.outputDirectory(), classes, callGraph);
         networkReports.write(layout.outputDirectory(), classes, callGraph);
+        fileReports.write(layout.outputDirectory(), classes, callGraph);
         optimizationReports.writeScaffold(layout.outputDirectory());
         writeUnifiedReport(layout.outputDirectory());
         final List<Diagnostic> errors = errors(diagnostics);
