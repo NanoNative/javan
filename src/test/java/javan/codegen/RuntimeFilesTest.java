@@ -31,6 +31,9 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 final class RuntimeFilesTest {
     @TempDir
     private Path tempDir;
+    // The content-addressed runtime object is shared; each probe still owns its source and executable.
+    @TempDir
+    private static Path nativeObjectCacheDir;
 
     @Test
     void runtimeSetEqualsDeclarationAndDefinitionAreUnique() throws Exception {
@@ -11819,14 +11822,15 @@ final class RuntimeFilesTest {
         final Path runtime = new RuntimeFiles().write(tempDir);
         final Path main = tempDir.resolve("probe.c");
         Files.writeString(main, source);
-        final Path binary = new NativeLinker().link(
+        final Path binary = new NativeLinker().linkCached(
             tempDir,
             main,
             runtime,
             tempDir.resolve("probe"),
+            nativeObjectCacheDir.resolve("native-objects"),
             linkInputs,
             List.of()
-        );
+        ).artifact();
         final Map<String, String> environment = new java.util.LinkedHashMap<>();
         environment.put("JAVAN_HEAP_LIMIT_BYTES", heapLimitBytes);
         environment.put("JAVAN_GC_STRESS", "1");
