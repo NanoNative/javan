@@ -846,6 +846,75 @@ final class BytecodeToIRMathSupport {
         )));
     }
 
+    static void lowerIntegralDivisionOrRemainder(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines,
+        final IrType valueType,
+        final String runtimeSymbol
+    ) {
+        if (valueType != IrType.INT && valueType != IrType.LONG) {
+            throw new IllegalArgumentException("Integral arithmetic requires an int or long value type");
+        }
+        final boolean longArithmetic = valueType == IrType.LONG;
+        final IrExpression right = longArithmetic
+            ? popLong(classFile, method, stack)
+            : popInt(classFile, method, stack);
+        final IrExpression left = longArithmetic
+            ? popLong(classFile, method, stack)
+            : popInt(classFile, method, stack);
+        final int leftIndex = localDeclarations.size();
+        final String leftName = (longArithmetic ? "long" : "int") + leftIndex;
+        localDeclarations.put(Integer.MIN_VALUE + leftIndex, new IrLocal(valueType, leftName));
+        if (longArithmetic) {
+            instructions.add(IrInstruction.assignLong(leftName, left));
+        } else {
+            instructions.add(IrInstruction.assignInt(leftName, left));
+        }
+        final int rightIndex = localDeclarations.size();
+        final String rightName = (longArithmetic ? "long" : "int") + rightIndex;
+        localDeclarations.put(Integer.MIN_VALUE + rightIndex, new IrLocal(valueType, rightName));
+        if (longArithmetic) {
+            instructions.add(IrInstruction.assignLong(rightName, right));
+        } else {
+            instructions.add(IrInstruction.assignInt(rightName, right));
+        }
+
+        final IrExpression checkedLeft = longArithmetic ? IrExpression.longLocal(leftName) : IrExpression.intLocal(leftName);
+        final IrExpression checkedRight = longArithmetic ? IrExpression.longLocal(rightName) : IrExpression.intLocal(rightName);
+        final IrExpression zero = longArithmetic ? IrExpression.longLiteral(0L) : IrExpression.intLiteral(0);
+        final String successLabel = "label_integral_" + (longArithmetic ? "long" : "int") + "_arithmetic_success_"
+            + instruction.offset() + "_" + rightIndex;
+        instructions.add(IrInstruction.branchIf(
+            successLabel,
+            IrExpression.intComparison("!=", checkedRight, zero)
+        ));
+        final List<StackValue> successStack = List.copyOf(stack);
+        routePendingPlatformException(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            "java/lang/ArithmeticException",
+            IrExpression.stringLiteral("/ by zero")
+        );
+        instructions.add(IrInstruction.label(successLabel));
+        stack.addAll(successStack);
+        if (longArithmetic) {
+            stack.add(StackValue.longExpression(IrExpression.longCall(runtimeSymbol, List.of(checkedLeft, checkedRight))));
+        } else {
+            stack.add(StackValue.intExpression(IrExpression.intCall(runtimeSymbol, List.of(checkedLeft, checkedRight))));
+        }
+    }
+
     static boolean lowerPureMathIntrinsic(
         final ClassFile classFile,
         final MethodInfo method,

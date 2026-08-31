@@ -1309,6 +1309,23 @@ final class RuntimeSourceCoreSection {
             return javan_int_from_bits((uint32_t) left * (uint32_t) right);
         }
 
+        int javan_int_divide(int left, int right) {
+            if (right == 0) {
+                return 0;
+            }
+            if (left == INT_MIN && right == -1) {
+                return INT_MIN;
+            }
+            return left / right;
+        }
+
+        int javan_int_remainder(int left, int right) {
+            if (right == 0 || (left == INT_MIN && right == -1)) {
+                return 0;
+            }
+            return left % right;
+        }
+
         long long javan_long_neg(long long value) {
             return javan_long_from_bits(UINT64_C(0) - (uint64_t) value);
         }
@@ -1323,6 +1340,23 @@ final class RuntimeSourceCoreSection {
 
         long long javan_long_multiply_wrapping(long long left, long long right) {
             return javan_long_from_bits((uint64_t) left * (uint64_t) right);
+        }
+
+        long long javan_long_divide(long long left, long long right) {
+            if (right == 0LL) {
+                return 0LL;
+            }
+            if (left == LLONG_MIN && right == -1LL) {
+                return LLONG_MIN;
+            }
+            return left / right;
+        }
+
+        long long javan_long_remainder(long long left, long long right) {
+            if (right == 0LL || (left == LLONG_MIN && right == -1LL)) {
+                return 0LL;
+            }
+            return left % right;
         }
 
         int javan_int_shl(int value, int shift) {

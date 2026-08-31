@@ -7301,14 +7301,14 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void staticVerifierRejectsProtectedCallToGeneratedIntegerDivisionHelper() {
+    void staticVerifierAcceptsProtectedCallToGeneratedIntegerDivisionHelper() {
         final List<Diagnostic> diagnostics = verifyProtectedGeneratedHelper(
             "()I",
             instruction(0, 108, "idiv"),
             instruction(1, 172, "ireturn")
         );
 
-        assertThat(diagnostics).extracting(Diagnostic::code).contains("JAVAN014");
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test

@@ -38,6 +38,22 @@ does not add a second bounds error for a string the current native profile canno
 This small boundary prevents a known native runtime `NullPointerException` without treating a
 partial local scan as a general nullness analysis.
 
+Integral `idiv`, `ldiv`, `irem`, and `lrem` are runtime-correct independently of static facts:
+
+- a zero divisor routes `ArithmeticException` with `/ by zero` through the original Java
+  handler or uncaught-exception path
+- division and remainder never execute C signed `/` or `%` with a zero divisor
+- `Integer.MIN_VALUE / -1`, `Long.MIN_VALUE / -1`, and their remainder forms preserve Java
+  results without relying on C signed-overflow behavior
+- `ArithmeticException` propagates through application methods so a caller can catch it
+
+This is runtime semantics, not a new compile-time warning. Javan does not yet reject a literal
+zero divisor before native generation because a valid program can catch the exception.
+
+The current handler admission is deliberately bounded: a protected range may contain one
+integral division or remainder plus bytecodes already classified as non-throwing. Broader
+protected ranges, including other potential failure points, remain outside this release slice.
+
 ## Next Risk Checks
 
 Initial checks:
@@ -47,9 +63,9 @@ Initial checks:
 - `List.get(0)` without non-empty proof
 - `Optional.get` without `isPresent` proof
 - `Iterator.next` without `hasNext` proof
-- division or modulo by possible zero
+- static diagnosis of division or modulo by a possible zero divisor
 - unsafe casts without `instanceof` proof
-- uncaught or panic-style exception paths
+- broader uncaught or panic-style exception diagnostics
 - redundant checks that can later feed release optimization
 
 ## Analysis Model

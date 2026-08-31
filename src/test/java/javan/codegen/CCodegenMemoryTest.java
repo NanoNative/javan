@@ -152,6 +152,27 @@ final class CCodegenMemoryTest {
     }
 
     @Test
+    void rejectsRawSignedDivisionAndRemainderExpressions() {
+        for (final String operator : List.of("/", "%")) {
+            final IrProgram program = new IrProgram(
+                List.of(),
+                List.of(
+                    new IrFunction(
+                        "com/acme/Main", "main", "([Ljava/lang/String;)V", "main_symbol", IrType.VOID,
+                        List.of(), List.of(), List.of(IrInstruction.returnVoid())
+                    ),
+                    primitiveArithmeticFunction("unsafe_signed_arithmetic", IrType.INT, operator)
+                ),
+                "main_symbol"
+            );
+
+            assertThatThrownBy(() -> new CCodegen().generate(program, tempDir))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Integral division and remainder must use checked runtime calls rather than integer binary expressions");
+        }
+    }
+
+    @Test
     void emitsPlannedPrimitiveArrayInFunctionStackStorage() throws Exception {
         final IrProgram program = new IrProgram(
             List.of(),

@@ -17,8 +17,9 @@ import javan.classfile.Instruction;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
 import javan.classfile.ServiceProvider;
-import javan.compat.JdkCallSupport;
+import javan.compat.BytecodeSupport;
 import javan.compat.ExactMethodSupport;
+import javan.compat.JdkCallSupport;
 import javan.ir.IrDispatch;
 import javan.ir.IrDispatchTarget;
 import javan.ir.IrFunction;
@@ -624,6 +625,10 @@ public final class BytecodeToIR {
         result.addAll(finallyReplacementThrowableTypes(classes, code));
         final Set<String> throwableParameters = applicationThrowableParameters(classes, method);
         for (final Instruction instruction : code.instructions()) {
+            if (BytecodeSupport.isIntegralDivisionOrRemainder(instruction.opcode())
+                && !caughtBy(classes, method, instruction.offset(), "java/lang/ArithmeticException")) {
+                result.add("java/lang/ArithmeticException");
+            }
             if (instruction.methodRef().isPresent()) {
                 for (final String throwableType : JdkCallSupport.transportedPlatformThrowableTypes(
                     instruction.methodRef().orElseThrow()
@@ -1863,10 +1868,32 @@ public final class BytecodeToIR {
                 binaryDouble(classFile, method, stack, "*");
                 break;
             case 108:
-                binaryInt(classFile, method, stack, "/");
+                BytecodeToIRMathSupport.lowerIntegralDivisionOrRemainder(
+                    classFile,
+                    method,
+                    instruction,
+                    instructions,
+                    stack,
+                    localDeclarations,
+                    pendingExceptionHandlerStacks,
+                    sourceLines,
+                    IrType.INT,
+                    "javan_int_divide"
+                );
                 break;
             case 109:
-                binaryLong(classFile, method, stack, "/");
+                BytecodeToIRMathSupport.lowerIntegralDivisionOrRemainder(
+                    classFile,
+                    method,
+                    instruction,
+                    instructions,
+                    stack,
+                    localDeclarations,
+                    pendingExceptionHandlerStacks,
+                    sourceLines,
+                    IrType.LONG,
+                    "javan_long_divide"
+                );
                 break;
             case 110:
                 binaryFloat(classFile, method, stack, "/");
@@ -1875,10 +1902,32 @@ public final class BytecodeToIR {
                 binaryDouble(classFile, method, stack, "/");
                 break;
             case 112:
-                binaryInt(classFile, method, stack, "%");
+                BytecodeToIRMathSupport.lowerIntegralDivisionOrRemainder(
+                    classFile,
+                    method,
+                    instruction,
+                    instructions,
+                    stack,
+                    localDeclarations,
+                    pendingExceptionHandlerStacks,
+                    sourceLines,
+                    IrType.INT,
+                    "javan_int_remainder"
+                );
                 break;
             case 113:
-                binaryLong(classFile, method, stack, "%");
+                BytecodeToIRMathSupport.lowerIntegralDivisionOrRemainder(
+                    classFile,
+                    method,
+                    instruction,
+                    instructions,
+                    stack,
+                    localDeclarations,
+                    pendingExceptionHandlerStacks,
+                    sourceLines,
+                    IrType.LONG,
+                    "javan_long_remainder"
+                );
                 break;
             case 116:
                 unaryIntNeg(classFile, method, stack);

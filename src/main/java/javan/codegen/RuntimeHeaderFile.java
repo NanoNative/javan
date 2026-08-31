@@ -132,10 +132,14 @@ final class RuntimeHeaderFile {
         int javan_int_add_wrapping(int left, int right);
         int javan_int_subtract_wrapping(int left, int right);
         int javan_int_multiply_wrapping(int left, int right);
+        int javan_int_divide(int left, int right);
+        int javan_int_remainder(int left, int right);
         long long javan_long_neg(long long value);
         long long javan_long_add_wrapping(long long left, long long right);
         long long javan_long_subtract_wrapping(long long left, long long right);
         long long javan_long_multiply_wrapping(long long left, long long right);
+        long long javan_long_divide(long long left, long long right);
+        long long javan_long_remainder(long long left, long long right);
         int javan_int_shl(int value, int shift);
         long long javan_long_shl(long long value, int shift);
         int javan_int_shr(int value, int shift);

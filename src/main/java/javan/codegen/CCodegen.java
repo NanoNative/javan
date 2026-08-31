@@ -3775,6 +3775,11 @@ public final class CCodegen {
             if ("*".equals(operator)) {
                 return wrappingIntegerBinary(prefix, "multiply", left, right);
             }
+            if ("/".equals(operator) || "%".equals(operator)) {
+                throw new IllegalArgumentException(
+                    "Integral division and remainder must use checked runtime calls rather than integer binary expressions"
+                );
+            }
             return new StringBuilder("(")
                 .append(left)
                 .append(" ")

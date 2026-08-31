@@ -5993,10 +5993,29 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnInt(IrExpression.intBinary(
-                "/",
-                IrExpression.intLocal("arg0"),
-                IrExpression.intLocal("arg1")
+            IrInstruction.assignInt("int0", IrExpression.intLocal("arg0")),
+            IrInstruction.assignInt("int1", IrExpression.intLocal("arg1")),
+            IrInstruction.branchIf(
+                "label_integral_int_arithmetic_success_2_1",
+                IrExpression.intComparison("!=", IrExpression.intLocal("int1"), IrExpression.intLiteral(0))
+            ),
+            IrInstruction.throwPending(
+                "java/lang/ArithmeticException",
+                IrExpression.stringLiteral("/ by zero"),
+                new IrSourceLocation(
+                    "com/acme/Main",
+                    "main",
+                    "(II)I",
+                    2,
+                    Optional.of("Main.java"),
+                    Optional.empty(),
+                    Optional.empty()
+                )
+            ),
+            IrInstruction.label("label_integral_int_arithmetic_success_2_1"),
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_int_divide",
+                List.of(IrExpression.intLocal("int0"), IrExpression.intLocal("int1"))
             ))
         );
     }
@@ -6016,10 +6035,29 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnInt(IrExpression.intBinary(
-                "%",
-                IrExpression.intLocal("arg0"),
-                IrExpression.intLocal("arg1")
+            IrInstruction.assignInt("int0", IrExpression.intLocal("arg0")),
+            IrInstruction.assignInt("int1", IrExpression.intLocal("arg1")),
+            IrInstruction.branchIf(
+                "label_integral_int_arithmetic_success_2_1",
+                IrExpression.intComparison("!=", IrExpression.intLocal("int1"), IrExpression.intLiteral(0))
+            ),
+            IrInstruction.throwPending(
+                "java/lang/ArithmeticException",
+                IrExpression.stringLiteral("/ by zero"),
+                new IrSourceLocation(
+                    "com/acme/Main",
+                    "main",
+                    "(II)I",
+                    2,
+                    Optional.of("Main.java"),
+                    Optional.empty(),
+                    Optional.empty()
+                )
+            ),
+            IrInstruction.label("label_integral_int_arithmetic_success_2_1"),
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_int_remainder",
+                List.of(IrExpression.intLocal("int0"), IrExpression.intLocal("int1"))
             ))
         );
     }
@@ -6039,10 +6077,29 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnLong(IrExpression.longBinary(
-                "/",
-                IrExpression.longLocal("arg0"),
-                IrExpression.longLocal("arg1")
+            IrInstruction.assignLong("long0", IrExpression.longLocal("arg0")),
+            IrInstruction.assignLong("long1", IrExpression.longLocal("arg1")),
+            IrInstruction.branchIf(
+                "label_integral_long_arithmetic_success_2_1",
+                IrExpression.intComparison("!=", IrExpression.longLocal("long1"), IrExpression.longLiteral(0L))
+            ),
+            IrInstruction.throwPending(
+                "java/lang/ArithmeticException",
+                IrExpression.stringLiteral("/ by zero"),
+                new IrSourceLocation(
+                    "com/acme/Main",
+                    "main",
+                    "(JJ)J",
+                    2,
+                    Optional.of("Main.java"),
+                    Optional.empty(),
+                    Optional.empty()
+                )
+            ),
+            IrInstruction.label("label_integral_long_arithmetic_success_2_1"),
+            IrInstruction.returnLong(IrExpression.longCall(
+                "javan_long_divide",
+                List.of(IrExpression.longLocal("long0"), IrExpression.longLocal("long1"))
             ))
         );
     }
@@ -6062,10 +6119,29 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnLong(IrExpression.longBinary(
-                "%",
-                IrExpression.longLocal("arg0"),
-                IrExpression.longLocal("arg1")
+            IrInstruction.assignLong("long0", IrExpression.longLocal("arg0")),
+            IrInstruction.assignLong("long1", IrExpression.longLocal("arg1")),
+            IrInstruction.branchIf(
+                "label_integral_long_arithmetic_success_2_1",
+                IrExpression.intComparison("!=", IrExpression.longLocal("long1"), IrExpression.longLiteral(0L))
+            ),
+            IrInstruction.throwPending(
+                "java/lang/ArithmeticException",
+                IrExpression.stringLiteral("/ by zero"),
+                new IrSourceLocation(
+                    "com/acme/Main",
+                    "main",
+                    "(JJ)J",
+                    2,
+                    Optional.of("Main.java"),
+                    Optional.empty(),
+                    Optional.empty()
+                )
+            ),
+            IrInstruction.label("label_integral_long_arithmetic_success_2_1"),
+            IrInstruction.returnLong(IrExpression.longCall(
+                "javan_long_remainder",
+                List.of(IrExpression.longLocal("long0"), IrExpression.longLocal("long1"))
             ))
         );
     }

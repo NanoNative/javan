@@ -11467,6 +11467,48 @@ final class RuntimeFilesTest {
             .isEqualTo("9223372036854775807\n");
     }
 
+    @Test
+    void intIntegralArithmeticHandlesMinimumOverflowAndDefensiveZero() throws Exception {
+        assertThat(runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <limits.h>
+            #include <stdio.h>
+
+            int main(void) {
+                printf("%d %d %d %d\\n",
+                    javan_int_divide(INT_MIN, -1),
+                    javan_int_remainder(INT_MIN, -1),
+                    javan_int_divide(7, 0),
+                    javan_int_remainder(7, 0));
+                return 0;
+            }
+            """,
+            "4096"
+        )).isEqualTo("-2147483648 0 0 0\n");
+    }
+
+    @Test
+    void longIntegralArithmeticHandlesMinimumOverflowAndDefensiveZero() throws Exception {
+        assertThat(runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <limits.h>
+            #include <stdio.h>
+
+            int main(void) {
+                printf("%lld %lld %lld %lld\\n",
+                    javan_long_divide(LLONG_MIN, -1LL),
+                    javan_long_remainder(LLONG_MIN, -1LL),
+                    javan_long_divide(7LL, 0LL),
+                    javan_long_remainder(7LL, 0LL));
+                return 0;
+            }
+            """,
+            "4096"
+        )).isEqualTo("-9223372036854775808 0 0 0\n");
+    }
+
     private String longNegation(final String value) throws Exception {
         return runRuntimeBoundaryProbe(
             """

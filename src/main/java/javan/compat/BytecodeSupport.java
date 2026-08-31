@@ -86,6 +86,16 @@ public final class BytecodeSupport {
         return listOf(NATIVE_SUPPORTED);
     }
 
+    /**
+     * Returns whether an opcode performs integral division or remainder and can throw on a zero divisor.
+     *
+     * @param opcode unsigned JVM opcode
+     * @return whether the opcode is {@code idiv}, {@code ldiv}, {@code irem}, or {@code lrem}
+     */
+    public static boolean isIntegralDivisionOrRemainder(final int opcode) {
+        return opcode == 108 || opcode == 109 || opcode == 112 || opcode == 113;
+    }
+
     private static boolean recognizedRejectedOpcode(final int opcode) {
         return switch (opcode) {
             case 90, 93, 94, 95,

@@ -2077,6 +2077,9 @@ public final class StaticVerifier {
         if (supportedMathExactHandler(code, handler)) {
             return true;
         }
+        if (supportedIntegralArithmeticHandler(code, handler)) {
+            return true;
+        }
         if (supportedFinallyHandler(classes, method, code, handler)) {
             return true;
         }
@@ -3273,6 +3276,10 @@ public final class StaticVerifier {
             targetMethod.orElseThrow()
         );
         for (final Instruction instruction : code.instructions()) {
+            if (BytecodeSupport.isIntegralDivisionOrRemainder(instruction.opcode())
+                && !caughtByThrowableHandler(classes, code, instruction.offset(), "java/lang/ArithmeticException")) {
+                result.add("java/lang/ArithmeticException");
+            }
             if (instruction.methodRef().isPresent()) {
                 final MethodRef called = instruction.methodRef().orElseThrow();
                 for (final String throwableType : JdkCallSupport.transportedPlatformThrowableTypes(called)) {
@@ -3643,6 +3650,30 @@ public final class StaticVerifier {
             }
         }
         return hasExactCall == 1;
+    }
+
+    private static boolean supportedIntegralArithmeticHandler(final CodeAttribute code, final CodeException handler) {
+        if (handler.catchType().isEmpty()
+            || !JdkCallSupport.isPlatformThrowableAssignable(
+                "java/lang/ArithmeticException",
+                handler.catchType().orElseThrow()
+            )) {
+            return false;
+        }
+        int arithmeticInstructionCount = 0;
+        for (final Instruction instruction : code.instructions()) {
+            if (instruction.offset() < handler.startPc() || instruction.offset() >= handler.endPc()) {
+                continue;
+            }
+            if (BytecodeSupport.isIntegralDivisionOrRemainder(instruction.opcode())) {
+                arithmeticInstructionCount++;
+                continue;
+            }
+            if (!boundedNonThrowingOpcode(instruction.opcode())) {
+                return false;
+            }
+        }
+        return arithmeticInstructionCount == 1;
     }
 
     private static boolean isSupportedMathExactCall(final Instruction instruction) {

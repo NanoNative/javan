@@ -95,6 +95,257 @@ final class CliCoreSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void integerDivisionPreservesZeroExceptionAndMinimumOverflowSemantics() throws Exception {
+        final Path project = project("integer-division-semantics");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(result(10, 2));
+                    System.out.println(result(10, 0));
+                    System.out.println(result(Integer.MIN_VALUE, -1));
+                }
+
+                private static int result(final int left, final int right) {
+                    try {
+                        return left / right;
+                    } catch (final ArithmeticException ignored) {
+                        return 73;
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/integer-division-semantics").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("5\n73\n-2147483648\n");
+        assertThat(generatedProgramSource(project)).contains("javan_int_divide");
+    }
+
+    @Test
+    void integerRemainderPreservesZeroExceptionAndMinimumOverflowSemantics() throws Exception {
+        final Path project = project("integer-remainder-semantics");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(result(10, 3));
+                    System.out.println(result(10, 0));
+                    System.out.println(result(Integer.MIN_VALUE, -1));
+                }
+
+                private static int result(final int left, final int right) {
+                    try {
+                        return left % right;
+                    } catch (final ArithmeticException ignored) {
+                        return 73;
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/integer-remainder-semantics").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("1\n73\n0\n");
+        assertThat(generatedProgramSource(project)).contains("javan_int_remainder");
+    }
+
+    @Test
+    void longDivisionPreservesZeroExceptionAndMinimumOverflowSemantics() throws Exception {
+        final Path project = project("long-division-semantics");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(result(10L, 2L));
+                    System.out.println(result(10L, 0L));
+                    System.out.println(result(Long.MIN_VALUE, -1L));
+                }
+
+                private static long result(final long left, final long right) {
+                    try {
+                        return left / right;
+                    } catch (final ArithmeticException ignored) {
+                        return 73L;
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/long-division-semantics").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("5\n73\n-9223372036854775808\n");
+        assertThat(generatedProgramSource(project)).contains("javan_long_divide");
+    }
+
+    @Test
+    void longRemainderPreservesZeroExceptionAndMinimumOverflowSemantics() throws Exception {
+        final Path project = project("long-remainder-semantics");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(result(10L, 3L));
+                    System.out.println(result(10L, 0L));
+                    System.out.println(result(Long.MIN_VALUE, -1L));
+                }
+
+                private static long result(final long left, final long right) {
+                    try {
+                        return left % right;
+                    } catch (final ArithmeticException ignored) {
+                        return 73L;
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/long-remainder-semantics").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("1\n73\n0\n");
+        assertThat(generatedProgramSource(project)).contains("javan_long_remainder");
+    }
+
+    @Test
+    void integralDivisionPropagatesArithmeticExceptionAcrossApplicationMethods() throws Exception {
+        final Path project = project("integral-division-propagation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    try {
+                        System.out.println(divide(10, 0));
+                    } catch (final ArithmeticException ignored) {
+                        System.out.println(73);
+                    }
+                }
+
+                private static int divide(final int left, final int right) {
+                    return left / right;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/integral-division-propagation").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("73\n");
+    }
+
+    @Test
+    void integralDivisionHandlerAllowsFollowOnNonThrowingArithmetic() throws Exception {
+        final Path project = project("integral-division-follow-on-arithmetic");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(result(10, 2));
+                    System.out.println(result(10, 0));
+                }
+
+                private static int result(final int left, final int right) {
+                    try {
+                        return left / right * 2;
+                    } catch (final ArithmeticException ignored) {
+                        return 73;
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/integral-division-follow-on-arithmetic").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("10\n73\n");
+    }
+
+    @Test
+    void uncaughtIntegralDivisionByZeroUsesNativeJavaExceptionPanic() throws Exception {
+        final Path project = project("integral-division-panic");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(divide(10, zero()));
+                }
+
+                private static int divide(final int left, final int right) {
+                    return left / right;
+                }
+
+                private static int zero() {
+                    return 0;
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(
+            project,
+            List.of(project.resolve(".javan/bin/integral-division-panic").toString())
+        );
+        assertThat(nativeRun.exitCode()).isEqualTo(1);
+        assertThat(nativeRun.stdout()).isEmpty();
+        assertThat(nativeRun.stderr()).contains(
+            "[JAVAN-RUNTIME-PANIC] uncaught Java exception",
+            "java/lang/ArithmeticException",
+            "detail: / by zero"
+        );
+    }
+
+    @Test
     void staticFieldsAndClassInitializerBuildAndMatchJvmOutput() throws Exception {
         final Path project = project("static-fields");
         writeJava(project, "com.acme.Main", """
