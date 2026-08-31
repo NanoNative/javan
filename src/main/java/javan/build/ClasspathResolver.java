@@ -161,9 +161,9 @@ public final class ClasspathResolver {
         throws IOException, InterruptedException {
         final Path outputFile = layout.outputDirectory().resolve("classpath.txt");
         Files.createDirectories(outputFile.getParent());
-        final List<String> command = Files.exists(layout.root().resolve("mvnw"))
-            ? List.of("./mvnw", "-q", "-DincludeScope=runtime", "-Dmdep.outputFile=" + outputFile.toString(), "dependency:build-classpath")
-            : List.of("mvn", "-q", "-DincludeScope=runtime", "-Dmdep.outputFile=" + outputFile.toString(), "dependency:build-classpath");
+        final List<String> command = MavenCommand.forProject(layout.root(), List.of(
+            "-q", "-DincludeScope=runtime", "-Dmdep.outputFile=" + outputFile.toString(), "dependency:build-classpath"
+        ));
         final ProcessRunner.Result result = processRunner.run(layout.root(), command);
         if (result.exitCode() != 0) {
             warnings.add("Unable to resolve Maven dependency classpath; continuing with project classes only.");

@@ -27,6 +27,22 @@ final class ClasspathResolverTest {
     }
 
     @Test
+    void mavenWrapperCommandUsesWindowsLauncher() throws Exception {
+        final Path root = tempDir.resolve("windows-maven-project");
+        final Path output = root.resolve(".javan/classpath.txt");
+        Files.createDirectories(root);
+        Files.writeString(root.resolve("mvnw"), "#!/bin/sh\n");
+        Files.writeString(root.resolve("mvnw.cmd"), "@echo off\r\n");
+
+        assertThat(MavenCommand.forProject(root, List.of(
+            "-q", "-DincludeScope=runtime", "-Dmdep.outputFile=" + output.toString(), "dependency:build-classpath"
+        ), "Windows 11")).containsExactly(
+            "cmd", "/d", "/s", "/c", "mvnw.cmd", "-q", "-DincludeScope=runtime",
+            "-Dmdep.outputFile=" + output.toString(), "dependency:build-classpath"
+        );
+    }
+
+    @Test
     void resolveMavenWrapperReadsClasspathFileAndAddsWarningOnFailure() throws Exception {
         final Path root = tempDir.resolve("maven-project");
         final Path output = root.resolve(".javan");
@@ -56,8 +72,6 @@ final class ClasspathResolverTest {
                 ;;
             esac
             """);
-        root.resolve("mvnw").toFile().setExecutable(true);
-
         final ProjectLayout resolved = new ClasspathResolver(new ProcessRunner()).resolve(new ProjectLayout(
             root,
             root,
@@ -79,8 +93,6 @@ final class ClasspathResolverTest {
         assertThat(resolved.warnings()).isEmpty();
 
         Files.writeString(root.resolve("mvnw"), "#!/bin/sh\nexit 7\n");
-        root.resolve("mvnw").toFile().setExecutable(true);
-
         final ProjectLayout failed = new ClasspathResolver(new ProcessRunner()).resolve(new ProjectLayout(
             root,
             root,

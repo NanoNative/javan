@@ -375,6 +375,9 @@ final class CiParallelWorkflowSurfaceTest {
             .contains("javan.testing.CiTestWorkerPlanner")
             .contains("Discover [${{ matrix.suite }}_${{ matrix.worker_index }}]")
             .contains("Test [${{ matrix.suite }}_${{ matrix.worker_index }}]")
+            .contains("selector_file=$(mktemp)")
+            .contains("> \"$selector_file\"")
+            .contains("selector=$(cat \"$selector_file\")")
             .contains("test_selector=%s\\n")
             .contains("Timings [native_${{ matrix.worker_index }}]")
             .contains("name: native-test-timings-${{ matrix.worker_index }}-linux-x64")
@@ -382,7 +385,7 @@ final class CiParallelWorkflowSurfaceTest {
             .contains("retention-days: 14")
             .contains("if-no-files-found: error")
             .contains("max-parallel: 8")
-            .doesNotContain("matrix.test-selector", "CliJdkSemanticsIntegrationTest#");
+            .doesNotContain("matrix.test-selector", "CliJdkSemanticsIntegrationTest#", "selector=$(./mvnw");
 
         try (Stream<Path> tests = Files.list(Path.of("src/test/java/javan"))) {
             final var cliTests = tests

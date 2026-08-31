@@ -205,11 +205,14 @@ jobs:
         id: tests
         run: |
           ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -DskipTests test-compile
-          selector=$(./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" \
+          selector_file=$(mktemp)
+          trap 'rm -f "$selector_file"' EXIT
+          ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" \
             -Dexec.classpathScope=test \
             -Dexec.mainClass=javan.testing.CiTestWorkerPlanner \
             -Dexec.args='${{ matrix.suite }} ${{ matrix.worker_index }} ${{ matrix.worker_count }}' \
-            exec:java)
+            exec:java > "$selector_file"
+          selector=$(cat "$selector_file")
           printf 'test_selector=%s\n' "$selector" | tee -a "$GITHUB_OUTPUT"
 
       - name: "🧪 Test [${{ matrix.suite }}_${{ matrix.worker_index }}]"

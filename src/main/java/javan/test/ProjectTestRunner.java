@@ -2,6 +2,7 @@ package javan.test;
 
 import javan.detect.BuildTool;
 import javan.detect.ProjectLayout;
+import javan.build.MavenCommand;
 import javan.util.ProcessRunner;
 import javan.util.Strings2;
 
@@ -56,7 +57,7 @@ public final class ProjectTestRunner {
 
     private static List<String> command(final ProjectLayout layout) {
         if (layout.buildTool() == BuildTool.MAVEN) {
-            return mavenCommand(layout.root());
+            return MavenCommand.forProject(layout.root(), List.of("test"));
         }
         if (layout.buildTool() == BuildTool.GRADLE) {
             return gradleCommand(layout.root());
@@ -70,12 +71,6 @@ public final class ProjectTestRunner {
             );
         }
         throw new IllegalStateException("Unsupported build tool");
-    }
-
-    private static List<String> mavenCommand(final Path root) {
-        return Files.exists(root.resolve("mvnw"))
-            ? List.of("./mvnw", "test")
-            : List.of("mvn", "test");
     }
 
     private static String joinCommand(final List<String> command) {

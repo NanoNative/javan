@@ -69,7 +69,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         final CliRun run = run(tempDir, "test", project.toString());
 
         assertThat(run.exitCode()).isZero();
-        assertThat(run.stdout()).contains("Running tests:", "./mvnw test", "maven-test-ok");
+        assertThat(run.stdout()).contains("Running tests:", "sh ./mvnw test", "maven-test-ok");
         assertThat(run.stderr()).isEmpty();
         assertThat(Files.readString(project.resolve("invocations.txt"))).contains(
             "-q -DskipTests compile",
