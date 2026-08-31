@@ -96,6 +96,34 @@ final class NetworkReportsTest {
         ).doesNotContain("private-password", "private-token", "hidden.example.test", "localhost", "remote-host");
     }
 
+    @Test
+    void excludesPrivateAndLocalNetworkHosts() {
+        final EntryPoint entry = new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V");
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classFile("com/acme/Main", method(
+                "main",
+                "([Ljava/lang/String;)V",
+                literal("10.4.5.6"), inetByName(),
+                literal("172.16.0.1"), inetByName(),
+                literal("172.31.255.255"), inetByName(),
+                literal("192.168.1.1"), inetByName(),
+                literal("169.254.3.2"), inetByName(),
+                literal("fd00::1"), inetByName(),
+                literal("fe80::1"), inetByName(),
+                literal("service.local"), inetByName(),
+                literal("api.example.test"), inetByName()
+            ))
+        );
+
+        final NetworkReports.Report report = new NetworkReports().analyze(classes, List.of(entry));
+
+        assertThat(report.knownExternalEndpointCallSiteCount()).isOne();
+        assertThat(report.excludedInternalEndpointCallSiteCount()).isEqualTo(8);
+        assertThat(report.unknownEndpointCallSiteCount()).isZero();
+        assertThat(report.hosts()).containsExactly(new NetworkReports.HostCount("api.example.test", 1));
+    }
+
     private static ClassFile classFile(final String name, final MethodInfo method) {
         return new ClassFile(65, name, "java/lang/Object", 0, List.of(), List.of(), List.of(method), Path.of(name + ".class"), true);
     }
@@ -109,6 +137,10 @@ final class NetworkReportsTest {
             0, 182, "invokevirtual", new byte[0], Optional.of(new MethodRef(owner, name, descriptor)), Optional.empty(),
             Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()
         );
+    }
+
+    private static Instruction inetByName() {
+        return invocation("java/net/InetAddress", "getByName", "(Ljava/lang/String;)Ljava/net/InetAddress;");
     }
 
     private static Instruction literal(final String value) {

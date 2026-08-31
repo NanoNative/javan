@@ -226,9 +226,65 @@ public final class NetworkReports {
         final String normalized = Strings2.toAsciiLowerCase(host);
         return "localhost".equals(normalized)
             || normalized.endsWith(".localhost")
-            || normalized.startsWith("127.")
+            || normalized.endsWith(".local")
             || "::1".equals(normalized)
-            || "0.0.0.0".equals(normalized);
+            || "0.0.0.0".equals(normalized)
+            || privateIpv4(normalized)
+            || privateIpv6(normalized);
+    }
+
+    private static boolean privateIpv4(final String host) {
+        final int firstEnd = host.indexOf('.');
+        if (firstEnd < 1) {
+            return false;
+        }
+        final int secondEnd = host.indexOf('.', firstEnd + 1);
+        if (secondEnd < 0) {
+            return false;
+        }
+        final int thirdEnd = host.indexOf('.', secondEnd + 1);
+        if (thirdEnd < 0 || host.indexOf('.', thirdEnd + 1) >= 0) {
+            return false;
+        }
+        final int first = decimal(host, 0, firstEnd);
+        final int second = decimal(host, firstEnd + 1, secondEnd);
+        final int third = decimal(host, secondEnd + 1, thirdEnd);
+        final int fourth = decimal(host, thirdEnd + 1, host.length());
+        if (first < 0 || second < 0 || third < 0 || fourth < 0) {
+            return false;
+        }
+        return first == 10
+            || first == 127
+            || (first == 169 && second == 254)
+            || (first == 172 && second >= 16 && second <= 31)
+            || (first == 192 && second == 168);
+    }
+
+    private static int decimal(final String value, final int start, final int end) {
+        if (start >= end) {
+            return -1;
+        }
+        int result = 0;
+        for (int index = start; index < end; index++) {
+            final char current = value.charAt(index);
+            if (current < '0' || current > '9') {
+                return -1;
+            }
+            result = result * 10 + current - '0';
+            if (result > 255) {
+                return -1;
+            }
+        }
+        return result;
+    }
+
+    private static boolean privateIpv6(final String host) {
+        return host.startsWith("fc")
+            || host.startsWith("fd")
+            || host.startsWith("fe8")
+            || host.startsWith("fe9")
+            || host.startsWith("fea")
+            || host.startsWith("feb");
     }
 
     private static void incrementHost(final List<HostCount> hosts, final String host) {
