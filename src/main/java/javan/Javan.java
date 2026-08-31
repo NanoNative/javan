@@ -46,6 +46,7 @@ import javan.reporting.DependencyReports;
 import javan.reporting.ExceptionReports;
 import javan.reporting.IntrinsicUsageReports;
 import javan.reporting.InstantiatedTypeReports;
+import javan.reporting.LoggingReports;
 import javan.reporting.ReportSummarizer;
 import javan.reporting.RuntimeContractReports;
 import javan.reporting.RuntimeFootprintReports;
@@ -106,6 +107,7 @@ public final class Javan {
     private final InstantiatedTypeReports instantiatedTypeReports = new InstantiatedTypeReports();
     private final ExceptionReports exceptionReports = new ExceptionReports();
     private final IntrinsicUsageReports intrinsicUsageReports = new IntrinsicUsageReports();
+    private final LoggingReports loggingReports = new LoggingReports();
     private final RuntimeContractReports runtimeContractReports = new RuntimeContractReports();
     private final RuntimeFootprintReports runtimeFootprintReports = new RuntimeFootprintReports();
     private final ReportSummarizer reportSummarizer = new ReportSummarizer();
@@ -206,6 +208,7 @@ public final class Javan {
         reports.writeDiagnostics(layout, diagnostics, classes, callGraph);
         reports.writeToolchain(layout, toolchain);
         intrinsicUsageReports.write(layout.outputDirectory(), classes, callGraph);
+        loggingReports.write(layout.outputDirectory(), classes, callGraph);
         optimizationReports.writeScaffold(layout.outputDirectory());
         writeUnifiedReport(layout.outputDirectory());
         final List<Diagnostic> errors = errors(diagnostics);

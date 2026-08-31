@@ -225,6 +225,51 @@ final class CliIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void checkReportsReachableLoggingWithoutRecordingMessagesOrClaimingSupport() throws Exception {
+        final Path project = project("check-logging-report");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.logging.Level;
+            import java.util.logging.Logger;
+
+            public final class Main {
+                private static final Logger LOGGER = Logger.getLogger("com.acme.private");
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    LOGGER.info("private-info-message");
+                    LOGGER.log(Level.WARNING, "private-warning-message");
+                    final Level dynamic = Level.FINE;
+                    LOGGER.log(dynamic, "private-dynamic-message");
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isNotZero();
+        assertThat(run.stderr()).contains("java/util/logging/Logger");
+        assertThat(Files.readString(project.resolve(".javan/reports/logging.json"))).contains(
+            "\"apiFamily\": \"java.util.logging.Logger\"",
+            "\"reachableLoggerCallSiteCount\": 4",
+            "\"levelCallSiteCount\": 3",
+            "\"literalLevelCallSiteCount\": 1",
+            "\"inferredLevelCallSiteCount\": 1",
+            "\"unknownLevelCallSiteCount\": 1",
+            "\"nonEmittingCallSiteCount\": 1",
+            "{\"level\": \"WARNING\", \"literal\": 1, \"inferred\": 0}",
+            "{\"level\": \"INFO\", \"literal\": 0, \"inferred\": 1}"
+        ).doesNotContain("private-info-message", "private-warning-message", "private-dynamic-message");
+        assertThat(Files.readString(project.resolve(".javan/reports/report.json"))).contains(
+            "{\"name\": \"logging\", \"status\": \"present\"",
+            "\"literalLevelCallSiteCount\": 1"
+        );
+    }
+
+    @Test
     void checkWritesReachableJdkLedgerBreakdownForSupportedCalls() throws Exception {
         final Path project = project("check-reachable-jdk-ledger");
         writeJava(project, "com.acme.Main", """
