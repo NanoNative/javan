@@ -161,15 +161,28 @@ public final class ClasspathResolver {
         throws IOException, InterruptedException {
         final Path outputFile = layout.outputDirectory().resolve("classpath.txt");
         Files.createDirectories(outputFile.getParent());
-        final List<String> command = Files.exists(layout.root().resolve("mvnw"))
-            ? List.of("./mvnw", "-q", "-DincludeScope=runtime", "-Dmdep.outputFile=" + outputFile.toString(), "dependency:build-classpath")
-            : List.of("mvn", "-q", "-DincludeScope=runtime", "-Dmdep.outputFile=" + outputFile.toString(), "dependency:build-classpath");
+        final List<String> command = mavenCommand(layout.root(), outputFile, System.getProperty("os.name", ""));
         final ProcessRunner.Result result = processRunner.run(layout.root(), command);
         if (result.exitCode() != 0) {
             warnings.add("Unable to resolve Maven dependency classpath; continuing with project classes only.");
             return;
         }
         addClasspathFile(outputFile, classpath);
+    }
+
+    static List<String> mavenCommand(final Path root, final Path outputFile, final String osName) {
+        final List<String> command = new ArrayList<>();
+        if (Strings2.toAsciiLowerCase(osName).contains("win") && Files.exists(root.resolve("mvnw.cmd"))) {
+            command.addAll(List.of("cmd", "/d", "/s", "/c", "mvnw.cmd"));
+        } else if (Files.exists(root.resolve("mvnw"))) {
+            command.addAll(List.of("sh", "./mvnw"));
+        } else {
+            command.add("mvn");
+        }
+        command.addAll(List.of(
+            "-q", "-DincludeScope=runtime", "-Dmdep.outputFile=" + outputFile.toString(), "dependency:build-classpath"
+        ));
+        return List.copyOf(command);
     }
 
     private void resolveGradle(final ProjectLayout layout, final List<Path> classpath, final List<String> warnings)
