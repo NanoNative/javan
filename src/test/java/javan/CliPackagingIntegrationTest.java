@@ -1142,7 +1142,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void nativeLibraryExportPublishesUncaughtArrayIndexOutOfBoundsException() throws Exception {
+    void nativeLibraryExportPreservesSourceMappedArrayIndexExceptionDetails() throws Exception {
         final Path project = project("library-array-index");
         writeJava(project, "com.acme.Failures", """
             package com.acme;
@@ -1181,11 +1181,39 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
 
             int main(void) {
                 int direct = javan_export_com_acme_Failures_fail_void();
-                printf("direct:%d:%s:%s\\n", direct, javan_last_error_code(), javan_last_error_detail());
+                printf("direct:%d:%s:%s:%s:%s:%s:%d:%d:%s:%s:%s:%s\\n",
+                    direct,
+                    javan_last_error_code(),
+                    javan_last_error_summary(),
+                    javan_last_error_class(),
+                    javan_last_error_method(),
+                    javan_last_error_file(),
+                    javan_last_error_line(),
+                    javan_last_error_bytecode_offset(),
+                    javan_last_error_source_line(),
+                    javan_last_error_why(),
+                    javan_last_error_fix(),
+                    javan_last_error_detail()
+                );
                 javan_clear_error();
                 int value = 42;
                 JavanResult result = javan_try_com_acme_Failures_fail_void(&value);
-                printf("try:%d:%s:%s:%d\\n", result.ok, result.code, result.detail, value);
+                javan_clear_error();
+                printf("try:%d:%s:%s:%s:%s:%s:%d:%d:%s:%s:%s:%s:%d\\n",
+                    result.ok,
+                    result.code,
+                    result.summary,
+                    result.class_name,
+                    result.method,
+                    result.file,
+                    result.line,
+                    result.bytecode_offset,
+                    result.source_line,
+                    result.why,
+                    result.fix,
+                    result.detail,
+                    value
+                );
                 javan_result_free(&result);
                 return 0;
             }
@@ -1195,8 +1223,8 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         assertThat(process(project, List.of("cc", caller.toString(), library.toString(), "-o", binary.toString())).exitCode())
             .isZero();
         assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo("""
-            direct:0:JAVAN-RUNTIME-PANIC:Index -1 out of bounds for length 1
-            try:0:JAVAN-RUNTIME-PANIC:Index -1 out of bounds for length 1:0
+            direct:0:JAVAN-RUNTIME-PANIC:uncaught Java exception (java/lang/ArrayIndexOutOfBoundsException):com.acme.Failures:fail()I:Failures.java:9:13:        return values[negativeIndex()];:An exception reached the native boundary without a supported catch block.:Catch it in Java or let the application terminate intentionally.:Index -1 out of bounds for length 1
+            try:0:JAVAN-RUNTIME-PANIC:uncaught Java exception (java/lang/ArrayIndexOutOfBoundsException):com.acme.Failures:fail()I:Failures.java:9:13:        return values[negativeIndex()];:An exception reached the native boundary without a supported catch block.:Catch it in Java or let the application terminate intentionally.:Index -1 out of bounds for length 1:0
             """);
     }
 
