@@ -742,12 +742,22 @@ final class ReportSummarizerTest {
               "propertyLookupCallSiteCount": 2,
               "knownPropertyKeyCount": 2,
               "unknownPropertyLookupCallSiteCount": 0,
+              "classLoadCallSiteCount": 2,
+              "knownClassLoadTargetCount": 1,
+              "unknownClassLoadCallSiteCount": 1,
+              "nativeLibraryLoadCallSiteCount": 2,
+              "knownNativeLibraryLoadTargetCount": 1,
+              "unknownNativeLibraryLoadCallSiteCount": 1,
               "knownExecutables": [{"name": "git"}],
               "environmentVariables": [{"name": "API_TOKEN"}],
               "propertyKeys": [{"name": "app.home"}],
+              "classLoadTargets": [{"name": "com.acme.Plugin"}],
+              "nativeLibraryLoadTargets": [{"name": "danger"}],
               "unknownExecutableLaunches": [],
               "unknownEnvironmentLookups": [],
               "unknownPropertyLookups": [],
+              "unknownClassLoads": [],
+              "unknownNativeLibraryLoads": [],
               "processCalls": [{"target": "java/lang/Runtime.exec"}]
             }
             """);
@@ -759,7 +769,9 @@ final class ReportSummarizerTest {
             "| `system-access` | present |",
             "processLaunchCallSiteCount: `3`",
             "knownEnvironmentVariableCount: `1`",
-            "knownPropertyKeyCount: `2`"
+            "knownPropertyKeyCount: `2`",
+            "classLoadCallSiteCount: `2`",
+            "knownNativeLibraryLoadTargetCount: `1`"
         );
     }
 

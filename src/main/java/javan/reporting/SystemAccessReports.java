@@ -18,12 +18,14 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Writes deterministic reachable process and system-configuration access evidence without executing user code.
+ * Writes deterministic reachable process, system-configuration, and runtime-loading evidence without executing user code.
  */
 public final class SystemAccessReports {
     private static final String SYSTEM = "java/lang/System";
     private static final String RUNTIME = "java/lang/Runtime";
     private static final String PROCESS_BUILDER = "java/lang/ProcessBuilder";
+    private static final String CLASS = "java/lang/Class";
+    private static final String CLASS_LOADER = "java/lang/ClassLoader";
     private static final MethodRef GETENV = new MethodRef(SYSTEM, "getenv", "(Ljava/lang/String;)Ljava/lang/String;");
     private static final MethodRef GETENV_ALL = new MethodRef(SYSTEM, "getenv", "()Ljava/util/Map;");
     private static final MethodRef GET_PROPERTY = new MethodRef(SYSTEM, "getProperty", "(Ljava/lang/String;)Ljava/lang/String;");
@@ -55,7 +57,7 @@ public final class SystemAccessReports {
     }
 
     /**
-     * Counts reachable process-launch and system-configuration APIs with only directly proven literal names.
+     * Counts reachable system-access APIs with only directly proven literal names.
      *
      * @param classes parsed application and dependency classes
      * @param reachable reachable application methods
@@ -94,6 +96,13 @@ public final class SystemAccessReports {
             } else if (GET_PROPERTY_DEFAULT.equals(target)) {
                 counts.property(target, literalArgument(instructions, index, 2, 0));
             }
+            final Optional<String> className = classLoadName(instructions, index, target);
+            if (className.isPresent() || classLoad(target)) {
+                counts.classLoad(target, className);
+            }
+            if (nativeLibraryLoad(target)) {
+                counts.nativeLibraryLoad(target, literalFinalStringArgument(instructions, index));
+            }
             if (processApi(target)) {
                 counts.process(target, literalExecutable(instructions, index, target));
             }
@@ -118,8 +127,50 @@ public final class SystemAccessReports {
         return instructions.get(firstArgument + argumentIndex).stringValue();
     }
 
+    private static Optional<String> literalFinalStringArgument(final List<Instruction> instructions, final int invocationIndex) {
+        if (invocationIndex == 0) {
+            return Optional.empty();
+        }
+        return instructions.get(invocationIndex - 1).stringValue();
+    }
+
     private static boolean processApi(final MethodRef reference) {
         return PROCESS_BUILDER.equals(reference.owner()) || (RUNTIME.equals(reference.owner()) && "exec".equals(reference.name()));
+    }
+
+    private static boolean nativeLibraryLoad(final MethodRef reference) {
+        return SYSTEM.equals(reference.owner())
+            && ("load".equals(reference.name()) || "loadLibrary".equals(reference.name()))
+            && "(Ljava/lang/String;)V".equals(reference.descriptor());
+    }
+
+    private static boolean classLoad(final MethodRef reference) {
+        return (CLASS.equals(reference.owner()) && "forName".equals(reference.name()))
+            || ((CLASS_LOADER.equals(reference.owner()) || reference.owner().startsWith(CLASS_LOADER + "$"))
+            && "loadClass".equals(reference.name()));
+    }
+
+    private static Optional<String> classLoadName(
+        final List<Instruction> instructions,
+        final int invocationIndex,
+        final MethodRef reference
+    ) {
+        if (CLASS.equals(reference.owner()) && "forName".equals(reference.name())) {
+            if ("(Ljava/lang/String;)Ljava/lang/Class;".equals(reference.descriptor())) {
+                return literalFinalStringArgument(instructions, invocationIndex);
+            }
+            if ("(Ljava/lang/Module;Ljava/lang/String;)Ljava/lang/Class;".equals(reference.descriptor())) {
+                return literalFinalStringArgument(instructions, invocationIndex);
+            }
+            return Optional.empty();
+        }
+        if ((CLASS_LOADER.equals(reference.owner()) || reference.owner().startsWith(CLASS_LOADER + "$"))
+            && "loadClass".equals(reference.name())) {
+            if ("(Ljava/lang/String;)Ljava/lang/Class;".equals(reference.descriptor())) {
+                return literalFinalStringArgument(instructions, invocationIndex);
+            }
+        }
+        return Optional.empty();
     }
 
     private static Optional<String> literalExecutable(
@@ -168,12 +219,22 @@ public final class SystemAccessReports {
             .append("  \"propertyLookupCallSiteCount\": ").append(report.propertyLookupCallSiteCount()).append(",\n")
             .append("  \"knownPropertyKeyCount\": ").append(report.propertyKeys().size()).append(",\n")
             .append("  \"unknownPropertyLookupCallSiteCount\": ").append(report.unknownPropertyLookupCallSiteCount()).append(",\n")
+            .append("  \"classLoadCallSiteCount\": ").append(report.classLoadCallSiteCount()).append(",\n")
+            .append("  \"knownClassLoadTargetCount\": ").append(report.classLoadTargets().size()).append(",\n")
+            .append("  \"unknownClassLoadCallSiteCount\": ").append(report.unknownClassLoadCallSiteCount()).append(",\n")
+            .append("  \"nativeLibraryLoadCallSiteCount\": ").append(report.nativeLibraryLoadCallSiteCount()).append(",\n")
+            .append("  \"knownNativeLibraryLoadTargetCount\": ").append(report.nativeLibraryLoadTargets().size()).append(",\n")
+            .append("  \"unknownNativeLibraryLoadCallSiteCount\": ").append(report.unknownNativeLibraryLoadCallSiteCount()).append(",\n")
             .append("  \"knownExecutables\": [\n").append(namesJson(report.knownExecutables())).append("  ],\n")
             .append("  \"environmentVariables\": [\n").append(namesJson(report.environmentVariables())).append("  ],\n")
             .append("  \"propertyKeys\": [\n").append(namesJson(report.propertyKeys())).append("  ],\n")
+            .append("  \"classLoadTargets\": [\n").append(namesJson(report.classLoadTargets())).append("  ],\n")
+            .append("  \"nativeLibraryLoadTargets\": [\n").append(namesJson(report.nativeLibraryLoadTargets())).append("  ],\n")
             .append("  \"unknownExecutableLaunches\": [\n").append(callsJson(report.unknownExecutableLaunches())).append("  ],\n")
             .append("  \"unknownEnvironmentLookups\": [\n").append(callsJson(report.unknownEnvironmentLookups())).append("  ],\n")
             .append("  \"unknownPropertyLookups\": [\n").append(callsJson(report.unknownPropertyLookups())).append("  ],\n")
+            .append("  \"unknownClassLoads\": [\n").append(callsJson(report.unknownClassLoads())).append("  ],\n")
+            .append("  \"unknownNativeLibraryLoads\": [\n").append(callsJson(report.unknownNativeLibraryLoads())).append("  ],\n")
             .append("  \"processCalls\": [\n").append(callsJson(report.processCalls())).append("  ]\n")
             .append("}\n")
             .toString();
@@ -208,9 +269,9 @@ public final class SystemAccessReports {
     private static String markdown(final Report report) {
         final StringBuilder result = new StringBuilder();
         result.append("# Reachable System Access\n\n");
-        result.append("The compiler scans reachable process and system-configuration APIs without executing user code. ")
+        result.append("The compiler scans reachable process, system-configuration, and runtime-loading APIs without executing user code. ")
             .append("It records environment-variable and property names, never their values. Process command arguments are never recorded. ")
-            .append("Only a direct literal `Runtime.exec(String)` can identify an executable; dynamic process launches remain unknown.\n\n");
+            .append("Only direct literal load targets are recorded. The report does not make dynamic class loading or runtime native-library loading supported.\n\n");
         result.append("- reachable process API call sites: `").append(report.reachableProcessApiCallSiteCount()).append("`\n");
         result.append("- process launch call sites: `").append(report.processLaunchCallSiteCount()).append("`\n");
         result.append("- ProcessBuilder configuration call sites: `").append(report.processBuilderConfigurationCallSiteCount()).append("`\n");
@@ -221,13 +282,23 @@ public final class SystemAccessReports {
         result.append("- unknown environment lookups: `").append(report.unknownEnvironmentLookupCallSiteCount()).append("`\n");
         result.append("- property lookup call sites: `").append(report.propertyLookupCallSiteCount()).append("`\n");
         result.append("- known property keys: `").append(report.propertyKeys().size()).append("`\n");
-        result.append("- unknown property lookups: `").append(report.unknownPropertyLookupCallSiteCount()).append("`\n\n");
+        result.append("- unknown property lookups: `").append(report.unknownPropertyLookupCallSiteCount()).append("`\n");
+        result.append("- class-load call sites: `").append(report.classLoadCallSiteCount()).append("`\n");
+        result.append("- known class-load targets: `").append(report.classLoadTargets().size()).append("`\n");
+        result.append("- unknown class-load targets: `").append(report.unknownClassLoadCallSiteCount()).append("`\n");
+        result.append("- native-library load call sites: `").append(report.nativeLibraryLoadCallSiteCount()).append("`\n");
+        result.append("- known native-library load targets: `").append(report.nativeLibraryLoadTargets().size()).append("`\n");
+        result.append("- unknown native-library load targets: `").append(report.unknownNativeLibraryLoadCallSiteCount()).append("`\n\n");
         appendNames(result, "Known Executables", "Executable", report.knownExecutables());
         appendNames(result, "Environment Variables", "Variable", report.environmentVariables());
         appendNames(result, "Property Keys", "Property", report.propertyKeys());
+        appendNames(result, "Class-Load Targets", "Class", report.classLoadTargets());
+        appendNames(result, "Native-Library Load Targets", "Target", report.nativeLibraryLoadTargets());
         appendCalls(result, "Unknown Executable Launches", report.unknownExecutableLaunches());
         appendCalls(result, "Unknown Environment Lookups", report.unknownEnvironmentLookups());
         appendCalls(result, "Unknown Property Lookups", report.unknownPropertyLookups());
+        appendCalls(result, "Unknown Class Loads", report.unknownClassLoads());
+        appendCalls(result, "Unknown Native-Library Loads", report.unknownNativeLibraryLoads());
         return result.toString();
     }
 
@@ -280,9 +351,13 @@ public final class SystemAccessReports {
         private final List<NameCount> knownExecutables = new ArrayList<>();
         private final List<NameCount> environmentVariables = new ArrayList<>();
         private final List<NameCount> propertyKeys = new ArrayList<>();
+        private final List<NameCount> classLoadTargets = new ArrayList<>();
+        private final List<NameCount> nativeLibraryLoadTargets = new ArrayList<>();
         private final List<CallCount> unknownExecutableLaunches = new ArrayList<>();
         private final List<CallCount> unknownEnvironmentLookups = new ArrayList<>();
         private final List<CallCount> unknownPropertyLookups = new ArrayList<>();
+        private final List<CallCount> unknownClassLoads = new ArrayList<>();
+        private final List<CallCount> unknownNativeLibraryLoads = new ArrayList<>();
         private final List<CallCount> processCalls = new ArrayList<>();
         private int reachableProcessApiCallSites;
         private int processLaunchCallSites;
@@ -292,6 +367,10 @@ public final class SystemAccessReports {
         private int unknownEnvironmentLookupCallSites;
         private int propertyLookupCallSites;
         private int unknownPropertyLookupCallSites;
+        private int classLoadCallSites;
+        private int unknownClassLoadCallSites;
+        private int nativeLibraryLoadCallSites;
+        private int unknownNativeLibraryLoadCallSites;
 
         void process(final MethodRef target, final Optional<String> executable) {
             reachableProcessApiCallSites++;
@@ -331,6 +410,26 @@ public final class SystemAccessReports {
             }
         }
 
+        void classLoad(final MethodRef target, final Optional<String> name) {
+            classLoadCallSites++;
+            if (name.isPresent()) {
+                incrementName(classLoadTargets, name.orElseThrow());
+            } else {
+                unknownClassLoadCallSites++;
+                incrementCall(unknownClassLoads, target.display());
+            }
+        }
+
+        void nativeLibraryLoad(final MethodRef target, final Optional<String> name) {
+            nativeLibraryLoadCallSites++;
+            if (name.isPresent()) {
+                incrementName(nativeLibraryLoadTargets, name.orElseThrow());
+            } else {
+                unknownNativeLibraryLoadCallSites++;
+                incrementCall(unknownNativeLibraryLoads, target.display());
+            }
+        }
+
         Report report() {
             return new Report(
                 reachableProcessApiCallSites,
@@ -341,12 +440,20 @@ public final class SystemAccessReports {
                 unknownEnvironmentLookupCallSites,
                 propertyLookupCallSites,
                 unknownPropertyLookupCallSites,
+                classLoadCallSites,
+                unknownClassLoadCallSites,
+                nativeLibraryLoadCallSites,
+                unknownNativeLibraryLoadCallSites,
                 List.copyOf(knownExecutables),
                 List.copyOf(environmentVariables),
                 List.copyOf(propertyKeys),
+                List.copyOf(classLoadTargets),
+                List.copyOf(nativeLibraryLoadTargets),
                 List.copyOf(unknownExecutableLaunches),
                 List.copyOf(unknownEnvironmentLookups),
                 List.copyOf(unknownPropertyLookups),
+                List.copyOf(unknownClassLoads),
+                List.copyOf(unknownNativeLibraryLoads),
                 List.copyOf(processCalls)
             );
         }
@@ -398,12 +505,20 @@ public final class SystemAccessReports {
         int unknownEnvironmentLookupCallSiteCount,
         int propertyLookupCallSiteCount,
         int unknownPropertyLookupCallSiteCount,
+        int classLoadCallSiteCount,
+        int unknownClassLoadCallSiteCount,
+        int nativeLibraryLoadCallSiteCount,
+        int unknownNativeLibraryLoadCallSiteCount,
         List<NameCount> knownExecutables,
         List<NameCount> environmentVariables,
         List<NameCount> propertyKeys,
+        List<NameCount> classLoadTargets,
+        List<NameCount> nativeLibraryLoadTargets,
         List<CallCount> unknownExecutableLaunches,
         List<CallCount> unknownEnvironmentLookups,
         List<CallCount> unknownPropertyLookups,
+        List<CallCount> unknownClassLoads,
+        List<CallCount> unknownNativeLibraryLoads,
         List<CallCount> processCalls
     ) {
     }
