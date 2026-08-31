@@ -26,7 +26,7 @@ final class ProjectTestRunnerTest {
         assumeFalse(isWindows());
         final Path root = tempDir.resolve("maven-wrapper");
         Files.createDirectories(root);
-        writeExecutable(root.resolve("mvnw"), """
+        Files.writeString(root.resolve("mvnw"), """
             #!/bin/sh
             printf 'wrapper-stdout\\n'
             printf 'wrapper-stderr\\n' >&2
@@ -39,7 +39,7 @@ final class ProjectTestRunnerTest {
         assertThat(exitCode).isEqualTo(7);
         assertThat(output.toString()).contains(
             "Running tests:",
-            "./mvnw test",
+            "sh ./mvnw test",
             "wrapper-stdout",
             "wrapper-stderr"
         );

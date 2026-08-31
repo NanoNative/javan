@@ -52,8 +52,6 @@ final class BuildInvokerToolTest {
             esac
             exit 11
             """);
-        root.resolve("mvnw").toFile().setExecutable(true);
-
         final ProjectLayout updated = new BuildInvoker().ensureClasses(layout(root, output, BuildTool.MAVEN), options(root));
 
         assertThat(updated.classFolders()).contains(classes.toAbsolutePath().normalize());
@@ -68,7 +66,6 @@ final class BuildInvokerToolTest {
         Files.createDirectories(root);
         Files.writeString(root.resolve("pom.xml"), "<project/>");
         Files.writeString(root.resolve("mvnw"), "#!/bin/sh\necho boom >&2\nexit 4\n");
-        root.resolve("mvnw").toFile().setExecutable(true);
 
         assertThatThrownBy(() -> new BuildInvoker().ensureClasses(layout(root, root.resolve(".javan"), BuildTool.MAVEN), options(root)))
             .isInstanceOf(java.io.IOException.class)

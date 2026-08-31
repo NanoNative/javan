@@ -34,7 +34,9 @@ final class ClasspathResolverTest {
         Files.writeString(root.resolve("mvnw"), "#!/bin/sh\n");
         Files.writeString(root.resolve("mvnw.cmd"), "@echo off\r\n");
 
-        assertThat(ClasspathResolver.mavenCommand(root, output, "Windows 11")).containsExactly(
+        assertThat(MavenCommand.forProject(root, List.of(
+            "-q", "-DincludeScope=runtime", "-Dmdep.outputFile=" + output.toString(), "dependency:build-classpath"
+        ), "Windows 11")).containsExactly(
             "cmd", "/d", "/s", "/c", "mvnw.cmd", "-q", "-DincludeScope=runtime",
             "-Dmdep.outputFile=" + output.toString(), "dependency:build-classpath"
         );

@@ -71,9 +71,7 @@ public final class BuildInvoker {
     }
 
     private ProjectLayout buildMaven(final ProjectLayout layout) throws IOException, InterruptedException {
-        final List<String> command = Files.exists(layout.root().resolve("mvnw"))
-            ? List.of("./mvnw", "-q", "-DskipTests", "compile")
-            : List.of("mvn", "-q", "-DskipTests", "compile");
+        final List<String> command = MavenCommand.forProject(layout.root(), List.of("-q", "-DskipTests", "compile"));
         final ProcessRunner.Result result = processRunner.run(layout.root(), command);
         if (result.exitCode() != 0) {
             throw new IOException("Maven compile failed\n" + result.stderr() + result.stdout());
