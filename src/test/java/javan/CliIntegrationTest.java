@@ -270,6 +270,43 @@ final class CliIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void checkReportsReachableNetworkHostsWithoutRecordingUrlsOrLoopbackEndpoints() throws Exception {
+        final Path project = project("check-network-report");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetAddress;
+            import java.net.URL;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    new URL("https://user:private-password@api.example.com/v1?token=private-token");
+                    InetAddress.getByName("cache.example.test");
+                    InetAddress.getByName("localhost");
+                }
+            }
+            """);
+
+        run(tempDir, "check", project.toString());
+
+        assertThat(Files.readString(project.resolve(".javan/reports/network.json"))).contains(
+            "\"reachableNetworkCallSiteCount\": 3",
+            "\"endpointCallSiteCount\": 3",
+            "\"knownExternalEndpointCallSiteCount\": 2",
+            "\"excludedInternalEndpointCallSiteCount\": 1",
+            "{\"host\": \"api.example.com\", \"count\": 1}",
+            "{\"host\": \"cache.example.test\", \"count\": 1}"
+        ).doesNotContain("private-password", "private-token", "localhost");
+        assertThat(Files.readString(project.resolve(".javan/reports/report.json"))).contains(
+            "{\"name\": \"network\", \"status\": \"present\"",
+            "\"knownExternalEndpointCallSiteCount\": 2"
+        );
+    }
+
+    @Test
     void checkWritesReachableJdkLedgerBreakdownForSupportedCalls() throws Exception {
         final Path project = project("check-reachable-jdk-ledger");
         writeJava(project, "com.acme.Main", """
