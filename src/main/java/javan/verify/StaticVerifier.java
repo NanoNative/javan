@@ -482,12 +482,34 @@ public final class StaticVerifier {
                 }
             }
             if (isStringCharAtInstruction(instruction) && index >= 2) {
-                final int stringLength = stringLengthBeforeCharAt(instructions, index, stringLengths);
+                final int stringLength = stringLengthBeforeCall(instructions, index, 1, stringLengths);
                 final Optional<Integer> stringIndex = instructions.get(index - 1).intValue();
                 if (stringLength >= 0 && stringIndex.isPresent()) {
                     final int literalIndex = stringIndex.orElseThrow();
                     if (literalIndex < 0 || literalIndex >= stringLength) {
                         diagnostics.add(stringCharAtIndexDiagnostic(classFile, method, stringLength, literalIndex, reachable));
+                    }
+                }
+            }
+            final int substringArgumentCount = stringSubstringArgumentCount(instruction);
+            if (substringArgumentCount > 0 && index >= substringArgumentCount + 1) {
+                final int stringLength = stringLengthBeforeCall(instructions, index, substringArgumentCount, stringLengths);
+                final Optional<Integer> start = instructions.get(index - substringArgumentCount).intValue();
+                final Optional<Integer> end = substringArgumentCount == 2
+                    ? instructions.get(index - 1).intValue()
+                    : Optional.empty();
+                if (stringLength >= 0 && start.isPresent() && (substringArgumentCount == 1 || end.isPresent())) {
+                    final int literalStart = start.orElseThrow();
+                    final int literalEnd = end.orElse(stringLength);
+                    if (literalStart < 0 || literalStart > literalEnd || literalEnd > stringLength) {
+                        diagnostics.add(stringSubstringIndexDiagnostic(
+                            classFile,
+                            method,
+                            stringLength,
+                            literalStart,
+                            end,
+                            reachable
+                        ));
                     }
                 }
             }
@@ -535,12 +557,13 @@ public final class StaticVerifier {
         return opcode >= 46 && opcode <= 53;
     }
 
-    private static int stringLengthBeforeCharAt(
+    private static int stringLengthBeforeCall(
         final List<Instruction> instructions,
         final int index,
+        final int argumentCount,
         final int[] stringLengths
     ) {
-        final Instruction receiver = instructions.get(index - 2);
+        final Instruction receiver = instructions.get(index - argumentCount - 1);
         final int local = aloadLocalIndex(receiver);
         if (local >= 0 && local < stringLengths.length) {
             return stringLengths[local];
@@ -556,6 +579,21 @@ public final class StaticVerifier {
         return "java/lang/String".equals(methodRef.owner())
             && "charAt".equals(methodRef.name())
             && "(I)C".equals(methodRef.descriptor());
+    }
+
+    private static int stringSubstringArgumentCount(final Instruction instruction) {
+        if (instruction.methodRef().isEmpty()) {
+            return 0;
+        }
+        final MethodRef methodRef = instruction.methodRef().orElseThrow();
+        if (!"java/lang/String".equals(methodRef.owner()) || !"substring".equals(methodRef.name())) {
+            return 0;
+        }
+        return switch (methodRef.descriptor()) {
+            case "(I)Ljava/lang/String;" -> 1;
+            case "(II)Ljava/lang/String;" -> 2;
+            default -> 0;
+        };
     }
 
     private static int runtimeAsciiStringLength(final Instruction instruction) {
@@ -670,6 +708,25 @@ public final class StaticVerifier {
             return error(classFile, method, "JAVAN072", "provable String.charAt index out of bounds", subject, reason, fix);
         }
         return warning(classFile, method, "JAVAN172", "provable String.charAt index out of bounds in unreachable code", subject, reason, fix);
+    }
+
+    private static Diagnostic stringSubstringIndexDiagnostic(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final int stringLength,
+        final int start,
+        final Optional<Integer> end,
+        final int reachable
+    ) {
+        final String subject = end.isPresent()
+            ? "String length " + stringLength + " at start " + start + " and end " + end.orElseThrow()
+            : "String length " + stringLength + " at start " + start;
+        final String reason = "This straight-line String.substring call uses literal bounds outside the literal ASCII string length, so native execution would only reproduce a StringIndexOutOfBoundsException.";
+        final String fix = "Use a start from 0 to String.length() (inclusive), and an end from start to String.length() (inclusive).";
+        if (reachable == 1) {
+            return error(classFile, method, "JAVAN073", "provable String.substring index out of bounds", subject, reason, fix);
+        }
+        return warning(classFile, method, "JAVAN173", "provable String.substring index out of bounds in unreachable code", subject, reason, fix);
     }
 
     private static List<Diagnostic> boundedOptionalOrElseThrowDiagnostics(

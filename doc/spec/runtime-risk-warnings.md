@@ -1,7 +1,7 @@
 # Compile-Time Runtime-Risk Warnings
 
 Status: partial. `javan check` and `javan build` reject exact literal null-receiver, array-read,
-and supported ASCII `String.charAt` failures in one straight-line bytecode segment. Broader
+and supported ASCII `String` indexing failures in one straight-line bytecode segment. Broader
 nullness, range, and collection facts remain planned.
 
 ## Goal
@@ -22,8 +22,11 @@ exact failures:
   fail with `JAVAN071` before native code generation
 - reachable `String.charAt` calls whose literal index is outside a supported ASCII literal
   length fail with `JAVAN072` before native code generation
-- the same shapes in an unreachable method are retained as `JAVAN170`, `JAVAN171`, and
-  `JAVAN172` in `.javan/reports/diagnostics.json` and `.md` without making `check` fail
+- reachable `String.substring` calls whose literal start or end is outside a supported ASCII
+  literal length fail with `JAVAN073` before native code generation
+- the same shapes in an unreachable method are retained as `JAVAN170`, `JAVAN171`,
+  `JAVAN172`, and `JAVAN173` in `.javan/reports/diagnostics.json` and `.md` without making
+  `check` fail
 - reassigned locals, method parameters, field values, returned values, calls with arguments,
   array writes, dynamic string or array lengths or indexes, non-ASCII string literals, branch
   merges, exception paths, and all other dynamic shapes remain unknown and are not diagnosed by
@@ -41,7 +44,6 @@ Initial checks:
 
 - broader possible null dereference and null arguments
 - unsafe array writes and broader array-index analysis
-- unsafe `String.substring`
 - `List.get(0)` without non-empty proof
 - `Optional.get` without `isPresent` proof
 - `Iterator.next` without `hasNext` proof
@@ -102,7 +104,7 @@ duplicate findings by diagnostic id, source location, risk kind, and reachable p
 Current command behavior:
 
 - `javan check` and `javan build` stop before native generation for `JAVAN070`, `JAVAN071`, and
-  `JAVAN072`
+  `JAVAN072`, and `JAVAN073`
 - exact unreachable findings are persisted in shared diagnostic reports without terminal error
   output
 - `.javan/reports/diagnostics.json` and `.javan/reports/diagnostics.md` are the current stable
