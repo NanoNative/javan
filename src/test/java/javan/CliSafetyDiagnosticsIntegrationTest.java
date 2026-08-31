@@ -172,6 +172,97 @@ final class CliSafetyDiagnosticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void buildRejectsLiteralStringSubstringStartOutsideLengthBeforeNativeGeneration() throws Exception {
+        final Path project = project("literal-string-substring-start-out-of-bounds-build");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String source = "done";
+                    final String value = source;
+                    System.out.println(value.substring(5));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains("error[JAVAN073]", "provable String.substring index out of bounds", "start 5", "length 4");
+        assertThat(project.resolve(".javan/generated")).doesNotExist();
+    }
+
+    @Test
+    void checkRejectsLiteralStringSubstringRangeOutsideLengthBeforeNativeGeneration() throws Exception {
+        final Path project = project("literal-string-substring-range-out-of-bounds-check");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("done".substring(3, 2));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains("error[JAVAN073]", "provable String.substring index out of bounds", "start 3", "end 2", "length 4");
+    }
+
+    @Test
+    void checkRejectsLiteralNegativeStringSubstringStartBeforeNativeGeneration() throws Exception {
+        final Path project = project("literal-negative-string-substring-start-check");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("done".substring(-1));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains("error[JAVAN073]", "provable String.substring index out of bounds", "start -1", "length 4");
+    }
+
+    @Test
+    void checkRejectsLiteralStringSubstringEndOutsideLengthBeforeNativeGeneration() throws Exception {
+        final Path project = project("literal-string-substring-end-out-of-bounds-check");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("done".substring(1, 5));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains("error[JAVAN073]", "provable String.substring index out of bounds", "start 1", "end 5", "length 4");
+    }
+
+    @Test
     void buildRejectsLiteralNullFieldReceiverBeforeNativeGeneration() throws Exception {
         final Path project = project("literal-null-field-receiver-build");
         writeJava(project, "com.acme.Main", """
@@ -293,6 +384,36 @@ final class CliSafetyDiagnosticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void checkReportsUnreachableLiteralStringSubstringAsWarning() throws Exception {
+        final Path project = project("unreachable-string-substring-out-of-bounds-check");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("safe");
+                }
+
+                private static String unused() {
+                    return "a".substring(2);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/diagnostics.json"))).contains(
+            "\"severity\": \"warning\"",
+            "\"code\": \"JAVAN173\"",
+            "provable String.substring index out of bounds in unreachable code"
+        );
+    }
+
+    @Test
     void checkAcceptsReassignedReceiver() throws Exception {
         final Path project = project("reassigned-null-receiver-check");
         writeJava(project, "com.acme.Main", """
@@ -400,5 +521,36 @@ final class CliSafetyDiagnosticsIntegrationTest extends CliIntegrationSupport {
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(run.stderr()).doesNotContain("JAVAN072");
+    }
+
+    @Test
+    void checkAcceptsInBoundsAndDynamicStringSubstring() throws Exception {
+        final Path project = project("in-bounds-and-dynamic-string-substring-check");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String value = "done";
+                    System.out.println(value.substring(4));
+                    System.out.println(value.substring(1, 4));
+                    System.out.println(value.substring(2, 2));
+
+                    int start = 5;
+                    if (args.length == 1) {
+                        start = 0;
+                    }
+                    System.out.println(value.substring(start));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(run.stderr()).doesNotContain("JAVAN073");
     }
 }
