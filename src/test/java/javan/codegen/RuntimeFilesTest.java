@@ -11470,6 +11470,71 @@ final class RuntimeFilesTest {
             .isEqualTo("9223372036854775807\n");
     }
 
+    @Test
+    void intShiftHelpersPreserveJavaBoundaryAndMaskedCountSemantics() throws Exception {
+        assertThat(runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <limits.h>
+            #include <stdio.h>
+
+            int main(void) {
+                printf("%d %d %d %d %d %d %d %d %d\\n",
+                    javan_int_shl(1, 31),
+                    javan_int_shl(1, 32),
+                    javan_int_shl(1, -1),
+                    javan_int_shr(INT_MIN, 1),
+                    javan_int_shr(INT_MIN, 32),
+                    javan_int_shr(INT_MIN, -1),
+                    javan_int_ushr(-1, 1),
+                    javan_int_ushr(-1, 32),
+                    javan_int_ushr(-1, -1));
+                return 0;
+            }
+            """,
+            "4096"
+        )).isEqualTo("-2147483648 1 -2147483648 -1073741824 -2147483648 -1 2147483647 -1 1\n");
+    }
+
+    @Test
+    void longShiftHelpersPreserveJavaBoundaryAndMaskedCountSemantics() throws Exception {
+        assertThat(runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <limits.h>
+            #include <stdio.h>
+
+            int main(void) {
+                printf("%lld %lld %lld %lld %lld %lld %lld %lld %lld\\n",
+                    javan_long_shl(1LL, 63),
+                    javan_long_shl(1LL, 64),
+                    javan_long_shl(1LL, -1),
+                    javan_long_shr(LLONG_MIN, 1),
+                    javan_long_shr(LLONG_MIN, 64),
+                    javan_long_shr(LLONG_MIN, -1),
+                    javan_long_ushr(-1LL, 1),
+                    javan_long_ushr(-1LL, 64),
+                    javan_long_ushr(-1LL, -1));
+                return 0;
+            }
+            """,
+            "4096"
+        )).isEqualTo("-9223372036854775808 1 -9223372036854775808 -4611686018427387904 -9223372036854775808 -1 9223372036854775807 -1 1\n");
+    }
+
+    @Test
+    void integralShiftHelpersAvoidImplementationDefinedSignedOperations() throws Exception {
+        final String source = Files.readString(new RuntimeFiles().write(tempDir));
+
+        assertThat(source)
+            .contains("return javan_int_from_bits((uint32_t) value << ((uint32_t) shift & UINT32_C(31)));")
+            .contains("return javan_long_from_bits((uint64_t) value << ((uint32_t) shift & UINT32_C(63)));")
+            .contains("return javan_int_from_bits((uint32_t) value >> ((uint32_t) shift & UINT32_C(31)));")
+            .contains("return javan_long_from_bits((uint64_t) value >> ((uint32_t) shift & UINT32_C(63)));")
+            .doesNotContain("return value >> (shift & 31);")
+            .doesNotContain("return value >> (shift & 63);");
+    }
+
     private String longNegation(final String value) throws Exception {
         return runRuntimeBoundaryProbe(
             """

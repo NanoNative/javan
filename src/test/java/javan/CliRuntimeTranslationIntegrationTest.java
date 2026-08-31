@@ -8877,6 +8877,55 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void integralShiftBoundariesBuildAndMatchJvmOutput() throws Exception {
+        final Path project = project("integral-shift-boundaries");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final int one = args.length + 1;
+                    final int intMinimum = one << 31;
+                    final int intMask = args.length + 32;
+                    final int negativeMask = args.length - 1;
+                    System.out.println(one << 31);
+                    System.out.println(one << intMask);
+                    System.out.println(one << negativeMask);
+                    System.out.println(intMinimum >> 1);
+                    System.out.println(intMinimum >> intMask);
+                    System.out.println(intMinimum >> negativeMask);
+                    System.out.println(-one >>> 1);
+                    System.out.println(-one >>> intMask);
+                    System.out.println(-one >>> negativeMask);
+
+                    final long longOne = (long) one;
+                    final long longMinimum = longOne << 63;
+                    final int longMask = args.length + 64;
+                    System.out.println(longOne << 63);
+                    System.out.println(longOne << longMask);
+                    System.out.println(longOne << negativeMask);
+                    System.out.println(longMinimum >> 1);
+                    System.out.println(longMinimum >> longMask);
+                    System.out.println(longMinimum >> negativeMask);
+                    System.out.println(-longOne >>> 1);
+                    System.out.println(-longOne >>> longMask);
+                    System.out.println(-longOne >>> negativeMask);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/integral-shift-boundaries").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
     void polymorphicSuperclassVirtualCallBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("polymorphic-call");
         writeJava(project, "com.acme.Main", """
