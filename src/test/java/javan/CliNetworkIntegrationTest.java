@@ -47,8 +47,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     @Test
     @WindowsCompatibilityProof
     void socketExplicitConnectLifecycleBuildsAndMatchesJvmOutput() throws Exception {
-        final int port = freeTcpPort();
-        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final int port = server.getLocalPort();
             final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
                 try (java.net.Socket socket = server.accept()) {
                     socket.getOutputStream().flush();
@@ -139,8 +139,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     @Test
     void socketConnectStateIpv6BuildsAndTalksToLoopbackServer() throws Exception {
         Assumptions.assumeTrue(ipv6LoopbackAvailable(), "IPv6 loopback is not available on this host");
-        final int port = freeTcpPort();
-        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("::1"))) {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("::1"))) {
+            final int port = server.getLocalPort();
             final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
                 try (java.net.Socket socket = server.accept()) {
                     socket.getOutputStream().flush();
@@ -181,8 +181,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void socketHostConstructorWithLocalBindBuildsAndMatchesJvmOutput() throws Exception {
-        final int port = freeTcpPort();
-        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final int port = server.getLocalPort();
             final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
                 try (java.net.Socket socket = server.accept()) {
                     socket.getOutputStream().write(65);
@@ -225,8 +225,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void socketInetAddressConstructorWithLocalBindBuildsAndMatchesJvmOutput() throws Exception {
-        final int port = freeTcpPort();
-        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final int port = server.getLocalPort();
             final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
                 try (java.net.Socket socket = server.accept()) {
                     socket.getOutputStream().write(66);
@@ -274,8 +274,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void socketHostConstructorWithNullLocalAddressBuildsAndMatchesJvmOutput() throws Exception {
-        final int port = freeTcpPort();
-        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final int port = server.getLocalPort();
             final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
                 try (java.net.Socket socket = server.accept()) {
                     socket.getOutputStream().write(67);
@@ -318,8 +318,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void socketLocalAddressBuildsAndReportsIpv4Loopback() throws Exception {
-        final int port = freeTcpPort();
-        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final int port = server.getLocalPort();
             final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
                 try (java.net.Socket socket = server.accept()) {
                     socket.getOutputStream().flush();
@@ -356,8 +356,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void socketSocketAddressObjectsBuildAndExposePortsAndHosts() throws Exception {
-        final int port = freeTcpPort();
-        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final int port = server.getLocalPort();
             final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
                 try (java.net.Socket socket = server.accept()) {
                     socket.getOutputStream().flush();
@@ -400,8 +400,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void socketTcpNoDelayDefaultBuildsAndMatchesJvmOutput() throws Exception {
-        final int port = freeTcpPort();
-        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final int port = server.getLocalPort();
             final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
                 try (java.net.Socket socket = server.accept()) {
                     socket.getOutputStream().flush();
@@ -438,8 +438,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void socketTcpNoDelayEnableBuildsAndMatchesJvmOutput() throws Exception {
-        final int port = freeTcpPort();
-        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final int port = server.getLocalPort();
             final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
                 try (java.net.Socket socket = server.accept()) {
                     socket.getOutputStream().flush();
@@ -477,8 +477,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void socketKeepAliveDefaultBuildsAndMatchesJvmOutput() throws Exception {
-        final int port = freeTcpPort();
-        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final int port = server.getLocalPort();
             final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
                 try (java.net.Socket socket = server.accept()) {
                     socket.getOutputStream().flush();
@@ -515,8 +515,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void socketKeepAliveEnableBuildsAndMatchesJvmOutput() throws Exception {
-        final int port = freeTcpPort();
-        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final int port = server.getLocalPort();
             final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
                 try (java.net.Socket socket = server.accept()) {
                     socket.getOutputStream().flush();
@@ -554,8 +554,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void socketReuseAddressRoundTripBuildsAndMatchesJvmOutput() throws Exception {
-        final int port = freeTcpPort();
-        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final int port = server.getLocalPort();
             final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
                 try (java.net.Socket socket = server.accept()) {
                     socket.getOutputStream().flush();
@@ -596,8 +596,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void socketSoTimeoutRoundTripBuildsAndMatchesJvmOutput() throws Exception {
-        final int port = freeTcpPort();
-        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final int port = server.getLocalPort();
             final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
                 try (java.net.Socket socket = server.accept()) {
                     socket.getOutputStream().flush();
@@ -636,8 +636,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void socketSoLingerRoundTripBuildsAndMatchesJvmOutput() throws Exception {
-        final int port = freeTcpPort();
-        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final int port = server.getLocalPort();
             final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
                 try (java.net.Socket socket = server.accept()) {
                     socket.getOutputStream().flush();
@@ -679,8 +679,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void socketSoLingerClampBuildsAndMatchesJvmOutput() throws Exception {
-        final int port = freeTcpPort();
-        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final int port = server.getLocalPort();
             final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
                 try (java.net.Socket socket = server.accept()) {
                     socket.getOutputStream().flush();
@@ -763,8 +763,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void socketTrafficClassRoundTripBuildsAndMatchesJvmOutput() throws Exception {
-        final int port = freeTcpPort();
-        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final int port = server.getLocalPort();
             final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
                 try (java.net.Socket socket = server.accept()) {
                     socket.getInputStream().read();
@@ -807,8 +807,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void socketTrafficClassNegativeBuildsAndFailsClearly() throws Exception {
-        final int port = freeTcpPort();
-        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final int port = server.getLocalPort();
             final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
                 try (java.net.Socket socket = server.accept()) {
                     socket.getInputStream().read();
@@ -847,8 +847,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void socketTrafficClassHighBuildsAndFailsClearly() throws Exception {
-        final int port = freeTcpPort();
-        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final int port = server.getLocalPort();
             final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
                 try (java.net.Socket socket = server.accept()) {
                     socket.getInputStream().read();
@@ -887,8 +887,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void socketReceiveBufferSizeRoundTripBuildsAndMatchesJvmOutput() throws Exception {
-        final int port = freeTcpPort();
-        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final int port = server.getLocalPort();
             final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
                 try (java.net.Socket socket = server.accept()) {
                     socket.getOutputStream().flush();
@@ -928,8 +928,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void socketSendBufferSizeRoundTripBuildsAndMatchesJvmOutput() throws Exception {
-        final int port = freeTcpPort();
-        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final int port = server.getLocalPort();
             final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
                 try (java.net.Socket socket = server.accept()) {
                     socket.getOutputStream().flush();
@@ -969,8 +969,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void socketBoundAndClosedStateBuildsAndMatchesJvmOutput() throws Exception {
-        final int port = freeTcpPort();
-        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final int port = server.getLocalPort();
             final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
                 try (java.net.Socket socket = server.accept()) {
                     socket.getInputStream().available();
@@ -1012,8 +1012,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void socketShutdownInputStateBuildsAndMatchesJvmOutput() throws Exception {
-        final int port = freeTcpPort();
-        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final int port = server.getLocalPort();
             final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
                 try (java.net.Socket socket = server.accept()) {
                     socket.getInputStream().available();
@@ -1056,8 +1056,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void socketShutdownOutputStateBuildsAndMatchesJvmOutput() throws Exception {
-        final int port = freeTcpPort();
-        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final int port = server.getLocalPort();
             final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
                 try (java.net.Socket socket = server.accept()) {
                     socket.getInputStream().available();
@@ -1677,8 +1677,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void socketInputStreamReadByteBuildsAndReadsFromLoopbackServer() throws Exception {
-        final int port = freeTcpPort();
-        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final int port = server.getLocalPort();
             final CompletableFuture<Void> served = CompletableFuture.runAsync(() -> {
                 try (java.net.Socket socket = server.accept()) {
                     socket.getOutputStream().write(65);
@@ -1718,8 +1718,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void socketReadTimeoutFailsClearlyAtRuntime() throws Exception {
-        final int port = freeTcpPort();
-        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final int port = server.getLocalPort();
             final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
                 try (java.net.Socket socket = server.accept()) {
                     socket.isConnected();
@@ -1758,8 +1758,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void socketOutputStreamWriteBytesBuildsAndWritesToLoopbackServer() throws Exception {
-        final int port = freeTcpPort();
-        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final int port = server.getLocalPort();
             final CompletableFuture<String> served = CompletableFuture.supplyAsync(() -> {
                 try (java.net.Socket socket = server.accept()) {
                     return new String(socket.getInputStream().readNBytes(3), StandardCharsets.UTF_8);
@@ -3927,8 +3927,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void socketInetAddressConstructorBuildsAndReadsFromLoopbackServer() throws Exception {
-        final int port = freeTcpPort();
-        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final int port = server.getLocalPort();
             final CompletableFuture<Void> served = CompletableFuture.runAsync(() -> {
                 try (java.net.Socket socket = server.accept()) {
                     socket.getOutputStream().write(65);
@@ -3970,8 +3970,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     @Test
     void socketInetAddressIpv6ConstructorBuildsAndReadsFromLoopbackServer() throws Exception {
         Assumptions.assumeTrue(ipv6LoopbackAvailable(), "IPv6 loopback is not available on this host");
-        final int port = freeTcpPort();
-        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("::1"))) {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("::1"))) {
+            final int port = server.getLocalPort();
             final CompletableFuture<Void> served = CompletableFuture.runAsync(() -> {
                 try (java.net.Socket socket = server.accept()) {
                     socket.getOutputStream().write(65);
