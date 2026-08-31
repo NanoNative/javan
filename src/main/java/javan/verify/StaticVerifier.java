@@ -386,6 +386,7 @@ public final class StaticVerifier {
                     methodRefFacts
                 ));
             }
+            diagnostics.addAll(provableStraightLineRiskDiagnostics(classFile, method, methodCode, instructions, reachable));
         }
         return diagnostics;
     }
@@ -436,6 +437,296 @@ public final class StaticVerifier {
             ));
         }
         return List.copyOf(diagnostics);
+    }
+
+    private static List<Diagnostic> provableStraightLineRiskDiagnostics(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final CodeAttribute methodCode,
+        final List<Instruction> instructions,
+        final int reachable
+    ) {
+        if (methodCode.exceptionTableLength() != 0) {
+            return List.of();
+        }
+        final boolean[] nullLocals = new boolean[methodCode.maxLocals()];
+        final int[] arrayLengths = new int[methodCode.maxLocals()];
+        final int[] stringLengths = new int[methodCode.maxLocals()];
+        clearStraightLineFacts(nullLocals, arrayLengths, stringLengths);
+        final List<Diagnostic> diagnostics = new ArrayList<>();
+        for (int index = 0; index < instructions.size(); index++) {
+            final Instruction instruction = instructions.get(index);
+            if (isStraightLineFactControlFlowBoundary(instruction)) {
+                clearStraightLineFacts(nullLocals, arrayLengths, stringLengths);
+                continue;
+            }
+            final int storedLocal = astoreLocalIndex(instruction);
+            if (storedLocal >= 0 && storedLocal < nullLocals.length) {
+                nullLocals[storedLocal] = previousValueIsNull(instructions, index, nullLocals);
+                arrayLengths[storedLocal] = arrayLengthBeforeStore(instructions, index, arrayLengths);
+                stringLengths[storedLocal] = stringLengthBeforeStore(instructions, index, stringLengths);
+                continue;
+            }
+            if (isNullReceiverOperation(instruction) && previousValueIsNull(instructions, index, nullLocals)) {
+                diagnostics.add(nullReceiverDiagnostic(classFile, method, instruction, reachable));
+            }
+            if (isArrayLoadInstruction(instruction) && index >= 2) {
+                final int arrayLocal = aloadLocalIndex(instructions.get(index - 2));
+                final Optional<Integer> arrayIndex = instructions.get(index - 1).intValue();
+                final int arrayLength = arrayLocal >= 0 && arrayLocal < arrayLengths.length ? arrayLengths[arrayLocal] : -1;
+                if (arrayLength >= 0 && arrayIndex.isPresent()) {
+                    final int literalIndex = arrayIndex.orElseThrow();
+                    if (literalIndex < 0 || literalIndex >= arrayLength) {
+                        diagnostics.add(arrayIndexDiagnostic(classFile, method, arrayLength, literalIndex, reachable));
+                    }
+                }
+            }
+            if (isStringCharAtInstruction(instruction) && index >= 2) {
+                final int stringLength = stringLengthBeforeCall(instructions, index, 1, stringLengths);
+                final Optional<Integer> stringIndex = instructions.get(index - 1).intValue();
+                if (stringLength >= 0 && stringIndex.isPresent()) {
+                    final int literalIndex = stringIndex.orElseThrow();
+                    if (literalIndex < 0 || literalIndex >= stringLength) {
+                        diagnostics.add(stringCharAtIndexDiagnostic(classFile, method, stringLength, literalIndex, reachable));
+                    }
+                }
+            }
+            final int substringArgumentCount = stringSubstringArgumentCount(instruction);
+            if (substringArgumentCount > 0 && index >= substringArgumentCount + 1) {
+                final int stringLength = stringLengthBeforeCall(instructions, index, substringArgumentCount, stringLengths);
+                final Optional<Integer> start = instructions.get(index - substringArgumentCount).intValue();
+                final Optional<Integer> end = substringArgumentCount == 2
+                    ? instructions.get(index - 1).intValue()
+                    : Optional.empty();
+                if (stringLength >= 0 && start.isPresent() && (substringArgumentCount == 1 || end.isPresent())) {
+                    final int literalStart = start.orElseThrow();
+                    final int literalEnd = end.orElse(stringLength);
+                    if (literalStart < 0 || literalStart > literalEnd || literalEnd > stringLength) {
+                        diagnostics.add(stringSubstringIndexDiagnostic(
+                            classFile,
+                            method,
+                            stringLength,
+                            literalStart,
+                            end,
+                            reachable
+                        ));
+                    }
+                }
+            }
+        }
+        return List.copyOf(diagnostics);
+    }
+
+    private static int arrayLengthBeforeStore(
+        final List<Instruction> instructions,
+        final int index,
+        final int[] arrayLengths
+    ) {
+        if (index == 0) {
+            return -1;
+        }
+        final Instruction previous = instructions.get(index - 1);
+        final int copiedLocal = aloadLocalIndex(previous);
+        if (copiedLocal >= 0 && copiedLocal < arrayLengths.length) {
+            return arrayLengths[copiedLocal];
+        }
+        if ((previous.opcode() != 188 && previous.opcode() != 189) || index < 2) {
+            return -1;
+        }
+        return instructions.get(index - 2).intValue().orElse(-1);
+    }
+
+    private static int stringLengthBeforeStore(
+        final List<Instruction> instructions,
+        final int index,
+        final int[] stringLengths
+    ) {
+        if (index == 0) {
+            return -1;
+        }
+        final Instruction previous = instructions.get(index - 1);
+        final int copiedLocal = aloadLocalIndex(previous);
+        if (copiedLocal >= 0 && copiedLocal < stringLengths.length) {
+            return stringLengths[copiedLocal];
+        }
+        return runtimeAsciiStringLength(previous);
+    }
+
+    private static boolean isArrayLoadInstruction(final Instruction instruction) {
+        final int opcode = instruction.opcode();
+        return opcode >= 46 && opcode <= 53;
+    }
+
+    private static int stringLengthBeforeCall(
+        final List<Instruction> instructions,
+        final int index,
+        final int argumentCount,
+        final int[] stringLengths
+    ) {
+        final Instruction receiver = instructions.get(index - argumentCount - 1);
+        final int local = aloadLocalIndex(receiver);
+        if (local >= 0 && local < stringLengths.length) {
+            return stringLengths[local];
+        }
+        return runtimeAsciiStringLength(receiver);
+    }
+
+    private static boolean isStringCharAtInstruction(final Instruction instruction) {
+        if (instruction.methodRef().isEmpty()) {
+            return false;
+        }
+        final MethodRef methodRef = instruction.methodRef().orElseThrow();
+        return "java/lang/String".equals(methodRef.owner())
+            && "charAt".equals(methodRef.name())
+            && "(I)C".equals(methodRef.descriptor());
+    }
+
+    private static int stringSubstringArgumentCount(final Instruction instruction) {
+        if (instruction.methodRef().isEmpty()) {
+            return 0;
+        }
+        final MethodRef methodRef = instruction.methodRef().orElseThrow();
+        if (!"java/lang/String".equals(methodRef.owner()) || !"substring".equals(methodRef.name())) {
+            return 0;
+        }
+        return switch (methodRef.descriptor()) {
+            case "(I)Ljava/lang/String;" -> 1;
+            case "(II)Ljava/lang/String;" -> 2;
+            default -> 0;
+        };
+    }
+
+    private static int runtimeAsciiStringLength(final Instruction instruction) {
+        if (instruction.stringValue().isEmpty()) {
+            return -1;
+        }
+        final String literal = instruction.stringValue().orElseThrow();
+        return Strings2.isRuntimeAsciiStringConstant(literal) ? literal.length() : -1;
+    }
+
+    private static boolean previousValueIsNull(
+        final List<Instruction> instructions,
+        final int index,
+        final boolean[] nullLocals
+    ) {
+        if (index == 0) {
+            return false;
+        }
+        final Instruction previous = instructions.get(index - 1);
+        if (previous.opcode() == 1) {
+            return true;
+        }
+        final int loadedLocal = aloadLocalIndex(previous);
+        return loadedLocal >= 0 && loadedLocal < nullLocals.length && nullLocals[loadedLocal];
+    }
+
+    private static boolean isNullReceiverOperation(final Instruction instruction) {
+        if (instruction.opcode() == 180 || instruction.opcode() == 190) {
+            return true;
+        }
+        if (instruction.opcode() != 182 && instruction.opcode() != 183 && instruction.opcode() != 185) {
+            return false;
+        }
+        if (instruction.methodRef().isEmpty()) {
+            return false;
+        }
+        final MethodRef methodRef = instruction.methodRef().orElseThrow();
+        if (defersToSpecializedStreamReceiverDiagnostic(methodRef)) {
+            return false;
+        }
+        return MethodDescriptor.parse(methodRef.descriptor()).parameterTypes().isEmpty();
+    }
+
+    private static boolean defersToSpecializedStreamReceiverDiagnostic(final MethodRef methodRef) {
+        return "java/io/InputStream".equals(methodRef.owner()) || "java/io/OutputStream".equals(methodRef.owner());
+    }
+
+    private static boolean isStraightLineFactControlFlowBoundary(final Instruction instruction) {
+        final int opcode = instruction.opcode();
+        return opcode >= 153 && opcode <= 177
+            || opcode == 191
+            || opcode >= 198 && opcode <= 201;
+    }
+
+    private static void clearStraightLineFacts(
+        final boolean[] nullLocals,
+        final int[] arrayLengths,
+        final int[] stringLengths
+    ) {
+        for (int index = 0; index < nullLocals.length; index++) {
+            nullLocals[index] = false;
+            arrayLengths[index] = -1;
+            stringLengths[index] = -1;
+        }
+    }
+
+    private static Diagnostic nullReceiverDiagnostic(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final int reachable
+    ) {
+        final String subject = instruction.methodRef()
+            .map(MethodRef::display)
+            .or(() -> instruction.fieldRef().map(FieldRef::display))
+            .orElse(instruction.mnemonic());
+        final String reason = "This straight-line receiver is exactly the literal null, so native execution would only reproduce a runtime NullPointerException.";
+        final String fix = "Replace the null value before this receiver operation.";
+        if (reachable == 1) {
+            return error(classFile, method, "JAVAN070", "provable null receiver", subject, reason, fix);
+        }
+        return warning(classFile, method, "JAVAN170", "provable null receiver in unreachable code", subject, reason, fix);
+    }
+
+    private static Diagnostic arrayIndexDiagnostic(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final int arrayLength,
+        final int arrayIndex,
+        final int reachable
+    ) {
+        final String subject = "array length " + arrayLength + " at index " + arrayIndex;
+        final String reason = "This straight-line array read uses a literal index outside the literal array length, so native execution would only reproduce an ArrayIndexOutOfBoundsException.";
+        final String fix = "Use an index from 0 (inclusive) to the array length (exclusive), or create an array large enough for this index.";
+        if (reachable == 1) {
+            return error(classFile, method, "JAVAN071", "provable array index out of bounds", subject, reason, fix);
+        }
+        return warning(classFile, method, "JAVAN171", "provable array index out of bounds in unreachable code", subject, reason, fix);
+    }
+
+    private static Diagnostic stringCharAtIndexDiagnostic(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final int stringLength,
+        final int stringIndex,
+        final int reachable
+    ) {
+        final String subject = "String length " + stringLength + " at index " + stringIndex;
+        final String reason = "This straight-line String.charAt call uses a literal index outside the literal ASCII string length, so native execution would only reproduce a StringIndexOutOfBoundsException.";
+        final String fix = "Use an index from 0 (inclusive) to String.length() (exclusive), or use a string long enough for this index.";
+        if (reachable == 1) {
+            return error(classFile, method, "JAVAN072", "provable String.charAt index out of bounds", subject, reason, fix);
+        }
+        return warning(classFile, method, "JAVAN172", "provable String.charAt index out of bounds in unreachable code", subject, reason, fix);
+    }
+
+    private static Diagnostic stringSubstringIndexDiagnostic(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final int stringLength,
+        final int start,
+        final Optional<Integer> end,
+        final int reachable
+    ) {
+        final String subject = end.isPresent()
+            ? "String length " + stringLength + " at start " + start + " and end " + end.orElseThrow()
+            : "String length " + stringLength + " at start " + start;
+        final String reason = "This straight-line String.substring call uses literal bounds outside the literal ASCII string length, so native execution would only reproduce a StringIndexOutOfBoundsException.";
+        final String fix = "Use a start from 0 to String.length() (inclusive), and an end from start to String.length() (inclusive).";
+        if (reachable == 1) {
+            return error(classFile, method, "JAVAN073", "provable String.substring index out of bounds", subject, reason, fix);
+        }
+        return warning(classFile, method, "JAVAN173", "provable String.substring index out of bounds in unreachable code", subject, reason, fix);
     }
 
     private static List<Diagnostic> boundedOptionalOrElseThrowDiagnostics(

@@ -1,22 +1,49 @@
 # Compile-Time Runtime-Risk Warnings
 
-Status: roadmap only. This file describes planned behavior and does not claim current
-implementation.
+Status: partial. `javan check` and `javan build` reject exact literal null-receiver, array-read,
+and supported ASCII `String` indexing failures in one straight-line bytecode segment. Broader
+nullness, range, and collection facts remain planned.
 
 ## Goal
 
-`javan check` and `javan build` should warn when reachable code may fail at runtime. The
-analysis is conservative: it may report uncertain risk, but it must not claim safety unless
-the required facts are proven.
+`javan check` and `javan build` must diagnose runtime failure only when the available facts
+prove it. Dynamic values keep normal Java runtime checks; the analyzer must never claim that
+an unknown path is safe.
 
-## Planned Risk Checks
+## Implemented Slice
+
+The verifier tracks only literal `null`, literal one-dimensional array lengths, supported ASCII
+string lengths, and direct local copies within a straight-line bytecode segment. It reports only
+exact failures:
+
+- reachable instance calls with no arguments, field reads, and `arraylength` fail with
+  `JAVAN070` before native code generation
+- reachable array reads whose literal index is outside a locally-created literal array length
+  fail with `JAVAN071` before native code generation
+- reachable `String.charAt` calls whose literal index is outside a supported ASCII literal
+  length fail with `JAVAN072` before native code generation
+- reachable `String.substring` calls whose literal start or end is outside a supported ASCII
+  literal length fail with `JAVAN073` before native code generation
+- the same shapes in an unreachable method are retained as `JAVAN170`, `JAVAN171`,
+  `JAVAN172`, and `JAVAN173` in `.javan/reports/diagnostics.json` and `.md` without making
+  `check` fail
+- reassigned locals, method parameters, field values, returned values, calls with arguments,
+  array writes, dynamic string or array lengths or indexes, non-ASCII string literals, branch
+  merges, exception paths, and all other dynamic shapes remain unknown and are not diagnosed by
+  this slice
+
+Non-ASCII string literals retain the existing `JAVAN046` UTF-16-profile diagnostic; this slice
+does not add a second bounds error for a string the current native profile cannot represent.
+
+This small boundary prevents a known native runtime `NullPointerException` without treating a
+partial local scan as a general nullness analysis.
+
+## Next Risk Checks
 
 Initial checks:
 
-- possible null dereference
-- unsafe array index
-- unsafe `String.charAt`
-- unsafe `String.substring`
+- broader possible null dereference and null arguments
+- unsafe array writes and broader array-index analysis
 - `List.get(0)` without non-empty proof
 - `Optional.get` without `isPresent` proof
 - `Iterator.next` without `hasNext` proof
@@ -27,7 +54,8 @@ Initial checks:
 
 ## Analysis Model
 
-The planned analysis runs after bytecode lowering and before backend code generation:
+The implemented literal rule runs in static verification before native code generation. The
+broader planned analysis runs after bytecode lowering:
 
 ```text
 bytecode -> javan IR -> CFG -> flow-sensitive facts -> diagnostics -> reports
@@ -63,7 +91,8 @@ Unknown guard helpers remain ordinary calls.
 
 Severity is deterministic:
 
-- definite runtime failure is an error
+- a reachable, definite runtime failure is an error
+- an exact unreachable finding is retained as a warning in the report
 - likely runtime failure is a warning
 - uncertain finding is info and appears only in `--strict`
 
@@ -72,10 +101,18 @@ duplicate findings by diagnostic id, source location, risk kind, and reachable p
 
 ## CLI And Report Policy
 
+Current command behavior:
+
+- `javan check` and `javan build` stop before native generation for `JAVAN070`, `JAVAN071`, and
+  `JAVAN072`, and `JAVAN073`
+- exact unreachable findings are persisted in shared diagnostic reports without terminal error
+  output
+- `.javan/reports/diagnostics.json` and `.javan/reports/diagnostics.md` are the current stable
+  machine-readable and human-readable surfaces
+
 Planned command behavior:
 
-- `javan check` reports errors and warnings for reachable code
-- `javan build` runs the same analysis before native generation
+- broader static safety analysis runs before native generation
 - `javan report` reads and summarizes the generated report model
 - strictness, warnings-as-errors, and feature toggles should be available from project or
   global settings before adding more public flags
@@ -86,6 +123,8 @@ Planned command behavior:
 
 Generated report paths:
 
+- `.javan/reports/diagnostics.json`
+- `.javan/reports/diagnostics.md`
 - `.javan/reports/safety-warnings.json`
 - `.javan/reports/safety-warnings.md`
 - `.javan/reports/report.json`
@@ -98,7 +137,7 @@ Markdown report should group findings by severity and source path.
 ## Constraints
 
 - Never claim safety unless proven.
-- Do not issue a warning for unreachable code unless a strict compatibility mode asks for it.
+- Keep unreachable findings non-blocking and separate from reachable build errors.
 - Do not remove checks here; optimization remains a separate release-mode pass.
 - Keep public/exported method boundaries conservative because callers may be outside the
   closed world.
