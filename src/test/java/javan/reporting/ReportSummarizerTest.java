@@ -764,6 +764,33 @@ final class ReportSummarizerTest {
     }
 
     @Test
+    void writeSummarizesReachableJdkModuleUsage() throws Exception {
+        final Path reports = reportsDirectory();
+        Files.writeString(reports.resolve("jdk-module-usage.json"), """
+            {
+              "analysisScope": "reachable-direct-jdk-references",
+              "reachableDirectJdkClassCount": 3,
+              "usedJdkModuleCount": 2,
+              "modules": [
+                {"name": "java.base", "reachableClassCount": 2},
+                {"name": "java.sql", "reachableClassCount": 1}
+              ]
+            }
+            """);
+        Files.writeString(reports.resolve("jdk-module-usage.md"), "# Reachable JDK Modules\n");
+
+        final ReportSummarizer.Summary summary = new ReportSummarizer().write(tempDir);
+
+        assertThat(summary.markdown()).contains(
+            "| `jdk-module-usage` | present |",
+            "analysisScope: `reachable-direct-jdk-references`",
+            "reachableDirectJdkClassCount: `3`",
+            "usedJdkModuleCount: `2`",
+            "modules: `2`"
+        );
+    }
+
+    @Test
     void writeSummarizesResourceMetrics() throws Exception {
         final Path reports = reportsDirectory();
         Files.writeString(reports.resolve("resources.json"), """

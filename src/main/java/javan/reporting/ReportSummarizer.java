@@ -47,6 +47,7 @@ public final class ReportSummarizer {
         new ReportSpec("runtime-footprint", List.of("runtime-footprint.json", "runtime-footprint.md")),
         new ReportSpec("native-object-cache", List.of("native-object-cache.json", "native-object-cache.md")),
         new ReportSpec("sanitizer-proof", List.of("sanitizer-proof.json", "sanitizer-proof.md")),
+        new ReportSpec("jdk-module-usage", List.of("jdk-module-usage.json", "jdk-module-usage.md")),
         new ReportSpec("compatibility", List.of("compatibility-summary.json", "compatibility-summary.md"))
     );
 
@@ -164,6 +165,9 @@ public final class ReportSummarizer {
         }
         if ("system-access".equals(name)) {
             return systemAccessMetrics(read(reportsDirectory.resolve("system-access.json")));
+        }
+        if ("jdk-module-usage".equals(name)) {
+            return jdkModuleUsageMetrics(read(reportsDirectory.resolve("jdk-module-usage.json")));
         }
         if ("optimizations".equals(name)) {
             return optimizationMetrics(read(reportsDirectory.resolve("optimizations.json")));
@@ -533,6 +537,19 @@ public final class ReportSummarizer {
         addArrayCount(result, value, "unknownEnvironmentLookups");
         addArrayCount(result, value, "unknownPropertyLookups");
         addArrayCount(result, value, "processCalls");
+        return List.copyOf(result);
+    }
+
+    private static List<Metric> jdkModuleUsageMetrics(final Optional<String> report) {
+        if (report.isEmpty()) {
+            return List.of();
+        }
+        final String value = report.orElseThrow();
+        final List<Metric> result = new ArrayList<>();
+        addText(result, value, "analysisScope");
+        addNumber(result, value, "reachableDirectJdkClassCount");
+        addNumber(result, value, "usedJdkModuleCount");
+        addArrayCount(result, value, "modules");
         return List.copyOf(result);
     }
 

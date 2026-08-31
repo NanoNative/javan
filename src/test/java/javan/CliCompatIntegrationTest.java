@@ -48,10 +48,17 @@ final class CliCompatIntegrationTest {
         assertThat(run.stdout()).contains("Compatibility:", "status:          pass", "jdk classes:");
         assertThat(project.resolve(".javan/reports/compatibility-summary.md")).exists();
         assertThat(project.resolve(".javan/reports/compatibility-summary.json")).exists();
+        assertThat(project.resolve(".javan/reports/jdk-module-usage.json")).exists();
+        assertThat(project.resolve(".javan/reports/jdk-module-usage.md")).exists();
         assertThat(Files.readString(project.resolve(".javan/reports/report.json"))).contains(
             "{\"name\": \"compatibility\", \"status\": \"present\"",
+            "{\"name\": \"jdk-module-usage\", \"status\": \"present\"",
             "\"status\": \"pass\"",
             "\"javaFeatureVersion\": " + jdk
+        );
+        assertThat(Files.readString(project.resolve(".javan/reports/jdk-module-usage.json"))).contains(
+            "\"analysisScope\": \"reachable-direct-jdk-references\"",
+            "\"name\": \"java.base\""
         );
         assertThat(project.resolve(".javan/reports/jdk-" + jdk + "-inventory.json")).exists();
         assertThat(project.resolve(".javan/reports/bytecode-patterns-jdk-" + jdk + ".json")).exists();
