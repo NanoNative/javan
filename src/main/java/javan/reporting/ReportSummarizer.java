@@ -33,6 +33,7 @@ public final class ReportSummarizer {
         new ReportSpec("exceptions", List.of("exceptions.json", "exceptions.md", "debug-map.json")),
         new ReportSpec("intrinsics", List.of("intrinsics.json", "intrinsics.md")),
         new ReportSpec("logging", List.of("logging.json", "logging.md")),
+        new ReportSpec("network", List.of("network.json", "network.md")),
         new ReportSpec("optimizations", List.of("optimizations.json", "optimizations.md")),
         new ReportSpec("dependencies", List.of("dependencies.json", "dependencies.md")),
         new ReportSpec("licenses", List.of("licenses.json", "licenses.md")),
@@ -152,6 +153,9 @@ public final class ReportSummarizer {
         }
         if ("logging".equals(name)) {
             return loggingMetrics(read(reportsDirectory.resolve("logging.json")));
+        }
+        if ("network".equals(name)) {
+            return networkMetrics(read(reportsDirectory.resolve("network.json")));
         }
         if ("optimizations".equals(name)) {
             return optimizationMetrics(read(reportsDirectory.resolve("optimizations.json")));
@@ -454,6 +458,23 @@ public final class ReportSummarizer {
         addNumber(result, value, "nonEmittingCallSiteCount");
         addArrayCount(result, value, "levels");
         addArrayCount(result, value, "unknownLevelCalls");
+        return List.copyOf(result);
+    }
+
+    private static List<Metric> networkMetrics(final Optional<String> report) {
+        if (report.isEmpty()) {
+            return List.of();
+        }
+        final String value = report.orElseThrow();
+        final List<Metric> result = new ArrayList<>();
+        addNumber(result, value, "reachableNetworkCallSiteCount");
+        addNumber(result, value, "endpointCallSiteCount");
+        addNumber(result, value, "knownExternalEndpointCallSiteCount");
+        addNumber(result, value, "excludedInternalEndpointCallSiteCount");
+        addNumber(result, value, "unknownEndpointCallSiteCount");
+        addArrayCount(result, value, "knownExternalHosts");
+        addArrayCount(result, value, "unknownEndpointCalls");
+        addArrayCount(result, value, "networkCalls");
         return List.copyOf(result);
     }
 

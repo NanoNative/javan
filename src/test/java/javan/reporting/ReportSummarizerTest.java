@@ -666,6 +666,33 @@ final class ReportSummarizerTest {
     }
 
     @Test
+    void writeSummarizesNetworkMetrics() throws Exception {
+        final Path reports = reportsDirectory();
+        Files.writeString(reports.resolve("network.json"), """
+            {
+              "reachableNetworkCallSiteCount": 3,
+              "endpointCallSiteCount": 3,
+              "knownExternalEndpointCallSiteCount": 2,
+              "excludedInternalEndpointCallSiteCount": 1,
+              "unknownEndpointCallSiteCount": 0,
+              "knownExternalHosts": [{"host": "api.example.com"}],
+              "unknownEndpointCalls": [],
+              "networkCalls": [{"target": "java/net/URL.<init>"}]
+            }
+            """);
+        Files.writeString(reports.resolve("network.md"), "# Reachable Network\n");
+
+        final ReportSummarizer.Summary summary = new ReportSummarizer().write(tempDir);
+
+        assertThat(summary.markdown()).contains(
+            "| `network` | present |",
+            "reachableNetworkCallSiteCount: `3`",
+            "knownExternalEndpointCallSiteCount: `2`",
+            "knownExternalHosts: `1`"
+        );
+    }
+
+    @Test
     void writeSummarizesResourceMetrics() throws Exception {
         final Path reports = reportsDirectory();
         Files.writeString(reports.resolve("resources.json"), """
