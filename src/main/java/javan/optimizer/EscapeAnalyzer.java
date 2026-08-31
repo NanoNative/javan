@@ -26,6 +26,7 @@ public final class EscapeAnalyzer {
     private static final int NO_ESCAPE_RANK = 0;
     private static final int ARGUMENT_ESCAPE_RANK = 1;
     private static final int GLOBAL_ESCAPE_RANK = 2;
+    private static final int[] NO_SUCCESSORS = new int[0];
 
     /**
      * Classifies all managed allocations in a lowered program.
@@ -154,6 +155,9 @@ public final class EscapeAnalyzer {
         final List<StackAllocationSite> result = new ArrayList<>();
         for (final IrFunction function : program.functions()) {
             int remainingStackBytes = MAX_STACK_ALLOCATION_BYTES;
+            int[][] controlFlow = null;
+            int[] repeatMarkers = null;
+            int[] repeatWork = null;
             for (int index = 0; index < function.instructions().size(); index++) {
                 final IrInstruction instruction = function.instructions().get(index);
                 if (instruction.op() != IrInstruction.Op.ASSIGN_OBJECT || instruction.expression().isEmpty()) {
@@ -164,11 +168,16 @@ public final class EscapeAnalyzer {
                 if (shape == null || shape.bytes() > remainingStackBytes) {
                     continue;
                 }
-                if (repeats(function.instructions(), index)) {
+                final AllocationSite site = siteAt(analysis, function, index, expression.kind());
+                if (site == null || site.escape() != Escape.NO_ESCAPE) {
                     continue;
                 }
-                final AllocationSite site = siteAt(analysis, function, index, expression.kind());
-                if (site != null && site.escape() == Escape.NO_ESCAPE) {
+                if (controlFlow == null) {
+                    controlFlow = controlFlow(function.instructions());
+                    repeatMarkers = new int[function.instructions().size()];
+                    repeatWork = new int[function.instructions().size()];
+                }
+                if (!repeats(index, controlFlow, repeatMarkers, repeatWork)) {
                     result.add(new StackAllocationSite(
                         function.owner(), function.name(), function.descriptor(), index,
                         expression.kind(), shape.length()
@@ -180,18 +189,21 @@ public final class EscapeAnalyzer {
         return new StackAllocationPlan(result);
     }
 
-    private static boolean repeats(final List<IrInstruction> instructions, final int allocationIndex) {
-        final Map<String, Integer> labels = labels(instructions);
-        final boolean[] visited = new boolean[instructions.size()];
-        final int[] work = new int[instructions.size()];
+    private static boolean repeats(
+        final int allocationIndex,
+        final int[][] controlFlow,
+        final int[] markers,
+        final int[] work
+    ) {
+        final int marker = allocationIndex + 1;
         int cursor = 0;
         int workSize = 0;
-        for (final int successor : successors(allocationIndex, instructions, labels)) {
+        for (final int successor : controlFlow[allocationIndex]) {
             if (successor == allocationIndex) {
                 return true;
             }
-            if (!visited[successor]) {
-                visited[successor] = true;
+            if (markers[successor] != marker) {
+                markers[successor] = marker;
                 work[workSize] = successor;
                 workSize++;
             }
@@ -199,12 +211,12 @@ public final class EscapeAnalyzer {
         while (cursor < workSize) {
             final int index = work[cursor];
             cursor++;
-            for (final int successor : successors(index, instructions, labels)) {
+            for (final int successor : controlFlow[index]) {
                 if (successor == allocationIndex) {
                     return true;
                 }
-                if (!visited[successor]) {
-                    visited[successor] = true;
+                if (markers[successor] != marker) {
+                    markers[successor] = marker;
                     work[workSize] = successor;
                     workSize++;
                 }
@@ -379,7 +391,7 @@ public final class EscapeAnalyzer {
         if (instructions.isEmpty()) {
             return true;
         }
-        final Map<String, Integer> labels = labels(instructions);
+        final int[][] controlFlow = controlFlow(instructions);
         final State[] incoming = new State[instructions.size()];
         final int maxVisits = instructions.size() * MAX_VISITS_PER_INSTRUCTION;
         final int[] work = new int[maxVisits];
@@ -392,7 +404,7 @@ public final class EscapeAnalyzer {
             final State outgoing = transfer(
                 incoming[index], instructions.get(index), locals, ids.get(index), escapes, parameterEscapes
             );
-            for (final int successor : successors(index, instructions, labels)) {
+            for (final int successor : controlFlow[index]) {
                 State merged = outgoing;
                 if (incoming[successor] != null) {
                     merged = incoming[successor].merge(outgoing);
@@ -606,37 +618,33 @@ public final class EscapeAnalyzer {
         return labels;
     }
 
-    private static List<Integer> successors(
-        final int index,
-        final List<IrInstruction> instructions,
-        final Map<String, Integer> labels
-    ) {
-        final IrInstruction instruction = instructions.get(index);
-        if (instruction.op() == IrInstruction.Op.JUMP) {
-            return List.of(labels.get(instruction.value().orElseThrow()));
-        }
-        if (instruction.op() == IrInstruction.Op.BRANCH_IF) {
-            final int target = labels.get(instruction.value().orElseThrow());
-            if (index + 1 < instructions.size()) {
-                return List.of(target, index + 1);
+    private static int[][] controlFlow(final List<IrInstruction> instructions) {
+        final Map<String, Integer> labels = labels(instructions);
+        final int[][] result = new int[instructions.size()][];
+        for (int index = 0; index < instructions.size(); index++) {
+            final IrInstruction instruction = instructions.get(index);
+            if (instruction.op() == IrInstruction.Op.JUMP) {
+                result[index] = new int[]{labels.get(instruction.value().orElseThrow()).intValue()};
+            } else if (instruction.op() == IrInstruction.Op.BRANCH_IF) {
+                final int target = labels.get(instruction.value().orElseThrow()).intValue();
+                result[index] = index + 1 < instructions.size() ? new int[]{target, index + 1} : new int[]{target};
+            } else if (terminal(instruction)) {
+                result[index] = NO_SUCCESSORS;
+            } else if (index + 1 < instructions.size()) {
+                result[index] = new int[]{index + 1};
+            } else {
+                result[index] = NO_SUCCESSORS;
             }
-            return List.of(target);
         }
-        if (instruction.op() == IrInstruction.Op.RETURN_VOID
-            || instruction.op() == IrInstruction.Op.RETURN_INT
-            || instruction.op() == IrInstruction.Op.RETURN_LONG
-            || instruction.op() == IrInstruction.Op.RETURN_FLOAT
-            || instruction.op() == IrInstruction.Op.RETURN_DOUBLE
-            || instruction.op() == IrInstruction.Op.RETURN_OBJECT
-            || instruction.op() == IrInstruction.Op.PANIC
-            || instruction.op() == IrInstruction.Op.THROW_PENDING
-            || instruction.op() == IrInstruction.Op.PROPAGATE_PENDING) {
-            return List.of();
-        }
-        if (index + 1 < instructions.size()) {
-            return List.of(index + 1);
-        }
-        return List.of();
+        return result;
+    }
+
+    private static boolean terminal(final IrInstruction instruction) {
+        return switch (instruction.op()) {
+            case RETURN_VOID, RETURN_INT, RETURN_LONG, RETURN_FLOAT, RETURN_DOUBLE, RETURN_OBJECT,
+                 PANIC, THROW_PENDING, PROPAGATE_PENDING -> true;
+            default -> false;
+        };
     }
 
     /**
