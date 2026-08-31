@@ -9155,6 +9155,15 @@ final class RuntimeSourceMemorySections {
             }
         }
 
+        void* javan_array_index_out_of_bounds_message(int index, int length) {
+            char buffer[96];
+            int written = snprintf(buffer, sizeof(buffer), "Index %d out of bounds for length %d", index, length);
+            if (written < 0 || written >= (int) sizeof(buffer)) {
+                javan_panic("array index message formatting failed");
+            }
+            return javan_string_from(buffer);
+        }
+
         static void javan_array_range_checked(javan_array_header* array, int position, int length) {
             if (position < 0 || length < 0 || position > array->length || length > array->length - position) {
                 javan_panic("array copy out of bounds");

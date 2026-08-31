@@ -7279,25 +7279,25 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void staticVerifierRejectsProtectedCallToGeneratedArrayReadHelper() {
+    void staticVerifierAcceptsProtectedCallToGeneratedArrayReadHelper() {
         final List<Diagnostic> diagnostics = verifyProtectedGeneratedHelper(
             "()I",
             instruction(0, 46, "iaload"),
             instruction(1, 172, "ireturn")
         );
 
-        assertThat(diagnostics).extracting(Diagnostic::code).contains("JAVAN014");
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test
-    void staticVerifierRejectsProtectedCallToGeneratedArrayWriteHelper() {
+    void staticVerifierAcceptsProtectedCallToGeneratedArrayWriteHelper() {
         final List<Diagnostic> diagnostics = verifyProtectedGeneratedHelper(
             "()V",
             instruction(0, 79, "iastore"),
             instruction(1, 177, "return")
         );
 
-        assertThat(diagnostics).extracting(Diagnostic::code).contains("JAVAN014");
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test

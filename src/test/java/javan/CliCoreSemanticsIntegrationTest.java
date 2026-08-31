@@ -450,6 +450,146 @@ final class CliCoreSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void arrayAccessesPreserveCatchableJavaExceptions() throws Exception {
+        final Path project = project("array-access-exception-semantics");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final int index = args.length - 1;
+                    System.out.println(read(index));
+                    System.out.println(write(index));
+                    System.out.println(nullLength());
+                    System.out.println(objectWrite(index));
+                }
+
+                private static String read(final int index) {
+                    final int[] values = {17};
+                    final int value;
+                    try {
+                        value = values[index];
+                    } catch (final ArrayIndexOutOfBoundsException exception) {
+                        return "read:" + exception.getMessage();
+                    }
+                    return "read:" + value;
+                }
+
+                private static String write(final int index) {
+                    final int[] values = {17};
+                    int wrote = 0;
+                    try {
+                        values[index] = 42;
+                        wrote = 1;
+                    } catch (final ArrayIndexOutOfBoundsException exception) {
+                        return "write:" + exception.getMessage();
+                    }
+                    return wrote == 1 ? "write:ok" : "write:missing";
+                }
+
+                private static String nullLength() {
+                    final int[] values = null;
+                    final int length;
+                    try {
+                        length = values.length;
+                    } catch (final NullPointerException exception) {
+                        return "length:null";
+                    }
+                    return "length:" + length;
+                }
+
+                private static String objectWrite(final int index) {
+                    final Object[] values = new String[1];
+                    final Object value = "ok";
+                    int wrote = 0;
+                    try {
+                        values[index] = value;
+                        wrote = 1;
+                    } catch (final ArrayIndexOutOfBoundsException exception) {
+                        return "object:" + exception.getMessage();
+                    }
+                    return wrote == 1 ? "object:ok" : "object:unreachable";
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/array-access-exception-semantics").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("""
+            read:Index -1 out of bounds for length 1
+            write:Index -1 out of bounds for length 1
+            length:null
+            object:Index -1 out of bounds for length 1
+            """);
+        assertThat(generatedProgramSource(project)).contains("javan_array_index_out_of_bounds_message");
+    }
+
+    @Test
+    void arrayAccessExceptionsPropagateAcrossApplicationMethods() throws Exception {
+        final Path project = project("array-access-exception-propagation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(readOrCatch(args.length - 1));
+                    System.out.println(lengthOrCatch(null));
+                }
+
+                private static String readOrCatch(final int index) {
+                    final int value;
+                    try {
+                        value = read(index);
+                    } catch (final ArrayIndexOutOfBoundsException exception) {
+                        return exception.getMessage();
+                    }
+                    return "value:" + value;
+                }
+
+                private static String lengthOrCatch(final int[] values) {
+                    final int length;
+                    try {
+                        length = lengthOf(values);
+                    } catch (final NullPointerException exception) {
+                        return "null";
+                    }
+                    return "length:" + length;
+                }
+
+                private static int read(final int index) {
+                    final int[] values = {17};
+                    return values[index];
+                }
+
+                private static int lengthOf(final int[] values) {
+                    return values.length;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/array-access-exception-propagation").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("""
+            Index -1 out of bounds for length 1
+            null
+            """);
+    }
+
+    @Test
     void staticFieldsAndClassInitializerBuildAndMatchJvmOutput() throws Exception {
         final Path project = project("static-fields");
         writeJava(project, "com.acme.Main", """

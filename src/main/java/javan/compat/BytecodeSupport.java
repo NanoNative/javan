@@ -106,6 +106,26 @@ public final class BytecodeSupport {
         return opcode == 188 || opcode == 189;
     }
 
+    /**
+     * Returns whether an opcode reads or writes an indexed array element.
+     *
+     * @param opcode unsigned JVM opcode
+     * @return whether the opcode is an {@code xaload} or {@code xastore} instruction
+     */
+    public static boolean isIndexedArrayAccess(final int opcode) {
+        return opcode >= 46 && opcode <= 53 || opcode >= 79 && opcode <= 86;
+    }
+
+    /**
+     * Returns whether an opcode dereferences an array reference.
+     *
+     * @param opcode unsigned JVM opcode
+     * @return whether the opcode reads an array length or accesses an indexed element
+     */
+    public static boolean isArrayReferenceAccess(final int opcode) {
+        return opcode == 190 || isIndexedArrayAccess(opcode);
+    }
+
     private static boolean recognizedRejectedOpcode(final int opcode) {
         return switch (opcode) {
             case 90, 93, 94, 95,

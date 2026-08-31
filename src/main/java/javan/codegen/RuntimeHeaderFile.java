@@ -320,6 +320,7 @@ final class RuntimeHeaderFile {
         int javan_char_array_get(void* array, int index);
         void javan_char_array_set(void* array, int index, int value);
         int javan_array_length(void* array);
+        void* javan_array_index_out_of_bounds_message(int index, int length);
         void javan_arrays_copy_of_object_into(void** result, void* array, int new_length);
         void javan_arrays_copy_of_boolean_into(void** result, void* array, int new_length);
         void javan_arrays_copy_of_int_into(void** result, void* array, int new_length);

@@ -2083,6 +2083,9 @@ public final class StaticVerifier {
         if (supportedNegativeArraySizeHandler(code, handler)) {
             return true;
         }
+        if (supportedArrayAccessHandler(code, handler)) {
+            return true;
+        }
         if (supportedSingleApplicationThrowableTransportHandler(classes, code, handler)) {
             return true;
         }
@@ -3295,6 +3298,24 @@ public final class StaticVerifier {
                 )) {
                 result.add("java/lang/NegativeArraySizeException");
             }
+            if (BytecodeSupport.isArrayReferenceAccess(instruction.opcode())
+                && !caughtByThrowableHandler(
+                    classes,
+                    code,
+                    instruction.offset(),
+                    "java/lang/NullPointerException"
+                )) {
+                result.add("java/lang/NullPointerException");
+            }
+            if (BytecodeSupport.isIndexedArrayAccess(instruction.opcode())
+                && !caughtByThrowableHandler(
+                    classes,
+                    code,
+                    instruction.offset(),
+                    "java/lang/ArrayIndexOutOfBoundsException"
+                )) {
+                result.add("java/lang/ArrayIndexOutOfBoundsException");
+            }
             if (instruction.methodRef().isPresent()) {
                 final MethodRef called = instruction.methodRef().orElseThrow();
                 for (final String throwableType : JdkCallSupport.transportedPlatformThrowableTypes(called)) {
@@ -3713,6 +3734,37 @@ public final class StaticVerifier {
             }
         }
         return arrayAllocationCount == 1;
+    }
+
+    private static boolean supportedArrayAccessHandler(final CodeAttribute code, final CodeException handler) {
+        if (handler.catchType().isEmpty()) {
+            return false;
+        }
+        final String catchType = handler.catchType().orElseThrow();
+        int arrayAccessCount = 0;
+        for (final Instruction instruction : code.instructions()) {
+            if (instruction.offset() < handler.startPc() || instruction.offset() >= handler.endPc()) {
+                continue;
+            }
+            if (BytecodeSupport.isArrayReferenceAccess(instruction.opcode())) {
+                if (arrayAccessCanThrowTo(instruction.opcode(), catchType)) {
+                    arrayAccessCount++;
+                }
+                continue;
+            }
+            if (!boundedNonThrowingOpcode(instruction.opcode())) {
+                return false;
+            }
+        }
+        return arrayAccessCount == 1;
+    }
+
+    private static boolean arrayAccessCanThrowTo(final int opcode, final String catchType) {
+        if (JdkCallSupport.isPlatformThrowableAssignable("java/lang/NullPointerException", catchType)) {
+            return true;
+        }
+        return BytecodeSupport.isIndexedArrayAccess(opcode)
+            && JdkCallSupport.isPlatformThrowableAssignable("java/lang/ArrayIndexOutOfBoundsException", catchType);
     }
 
     private static boolean supportedSingleApplicationThrowableTransportHandler(

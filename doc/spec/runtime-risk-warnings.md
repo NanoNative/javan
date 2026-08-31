@@ -60,17 +60,31 @@ lengths:
 - generated C allocation helpers retain their negative-length panic as an internal defensive
   boundary; Java bytecode reaches the Java exception path first
 
+Indexed array reads and writes, and `arraylength`, are likewise runtime-correct for dynamic
+references and indices:
+
+- a null array reference routes `NullPointerException` through the original Java handler or
+  uncaught-exception path
+- an index below zero or at least the dynamic array length routes
+  `ArrayIndexOutOfBoundsException` with the JDK message format
+  `Index <index> out of bounds for length <length>`
+- both exceptions propagate through application methods and native-library exports, including
+  structured `javan_try_*` failures
+- generated C array helpers retain their bounds panic as an internal defensive boundary; Java
+  bytecode reaches the Java exception path first
+
 The current direct handler admission is deliberately bounded: a protected range may contain one
-integral division or remainder, or one one-dimensional array allocation, plus bytecodes already
-classified as non-throwing. Broader protected ranges, including other potential failure points,
-remain outside this release slice.
+integral division or remainder, one one-dimensional array allocation, or one array-reference
+access, plus bytecodes already classified as non-throwing. Broader protected ranges, including
+other potential failure points, remain outside this release slice.
 
 ## Next Risk Checks
 
 Initial checks:
 
 - broader possible null dereference and null arguments
-- unsafe array writes and broader array-index analysis
+- covariant object-array stores and `ArrayStoreException` type checks
+- broader array-index analysis
 - `List.get(0)` without non-empty proof
 - `Optional.get` without `isPresent` proof
 - `Iterator.next` without `hasNext` proof

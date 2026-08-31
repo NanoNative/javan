@@ -5012,11 +5012,33 @@ final class BytecodeToIRTest {
             plain(7, 172, "ireturn")
         ));
 
-        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.assignObject("object0", IrExpression.intArrayAllocation(IrExpression.intLiteral(3))),
-            IrInstruction.assignArrayInt(IrExpression.objectLocal("object0"), IrExpression.intLiteral(0), IrExpression.intLiteral(5)),
-            IrInstruction.returnInt(IrExpression.arrayLength(IrExpression.objectLocal("object0")))
+        assertThat(function.locals()).containsExactly(
+            new IrLocal(IrType.OBJECT, "object0"),
+            new IrLocal(IrType.OBJECT, "object1"),
+            new IrLocal(IrType.INT, "int2"),
+            new IrLocal(IrType.INT, "int3"),
+            new IrLocal(IrType.OBJECT, "object4")
+        );
+        assertThat(function.instructions()).extracting(IrInstruction::op).containsExactly(
+            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.THROW_PENDING,
+            IrInstruction.Op.LABEL,
+            IrInstruction.Op.ASSIGN_INT,
+            IrInstruction.Op.ASSIGN_INT,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.THROW_PENDING,
+            IrInstruction.Op.LABEL,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.THROW_PENDING,
+            IrInstruction.Op.LABEL,
+            IrInstruction.Op.ASSIGN_ARRAY_INT,
+            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.THROW_PENDING,
+            IrInstruction.Op.LABEL,
+            IrInstruction.Op.RETURN_INT
         );
     }
 
@@ -5081,15 +5103,43 @@ final class BytecodeToIRTest {
             plain(8, 176, "areturn")
         ));
 
-        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.assignObject("object0", IrExpression.objectArrayAllocation(IrExpression.intLiteral(1), "[Ljava.lang.String;")),
-            IrInstruction.assignArrayObject(
-                IrExpression.objectLocal("object0"),
-                IrExpression.intLiteral(0),
-                IrExpression.stringLiteral("value")
-            ),
-            IrInstruction.returnObject(IrExpression.objectArrayLoad(IrExpression.objectLocal("object0"), IrExpression.intLiteral(0)))
+        assertThat(function.locals()).containsExactly(
+            new IrLocal(IrType.OBJECT, "object0"),
+            new IrLocal(IrType.OBJECT, "object1"),
+            new IrLocal(IrType.INT, "int2"),
+            new IrLocal(IrType.INT, "int3"),
+            new IrLocal(IrType.OBJECT, "object4"),
+            new IrLocal(IrType.INT, "int5"),
+            new IrLocal(IrType.INT, "int6")
+        );
+        assertThat(function.instructions()).extracting(IrInstruction::op).containsExactly(
+            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.THROW_PENDING,
+            IrInstruction.Op.LABEL,
+            IrInstruction.Op.ASSIGN_INT,
+            IrInstruction.Op.ASSIGN_INT,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.THROW_PENDING,
+            IrInstruction.Op.LABEL,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.THROW_PENDING,
+            IrInstruction.Op.LABEL,
+            IrInstruction.Op.ASSIGN_ARRAY_OBJECT,
+            IrInstruction.Op.ASSIGN_OBJECT,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.THROW_PENDING,
+            IrInstruction.Op.LABEL,
+            IrInstruction.Op.ASSIGN_INT,
+            IrInstruction.Op.ASSIGN_INT,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.THROW_PENDING,
+            IrInstruction.Op.LABEL,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.THROW_PENDING,
+            IrInstruction.Op.LABEL,
+            IrInstruction.Op.RETURN_OBJECT
         );
     }
 
