@@ -47,6 +47,7 @@ import javan.reporting.ExceptionReports;
 import javan.reporting.FileReports;
 import javan.reporting.IntrinsicUsageReports;
 import javan.reporting.InstantiatedTypeReports;
+import javan.reporting.JdkModuleUsageReports;
 import javan.reporting.LoggingReports;
 import javan.reporting.NetworkReports;
 import javan.reporting.ReportSummarizer;
@@ -100,6 +101,7 @@ public final class Javan {
     private final NativeLinker nativeLinker = new NativeLinker();
     private final ProjectReports reports = new ProjectReports();
     private final CompatibilityReports compatibilityReports = new CompatibilityReports();
+    private final JdkModuleUsageReports jdkModuleUsageReports = new JdkModuleUsageReports();
     private final LocalValueOptimizer localValueOptimizer = new LocalValueOptimizer();
     private final MethodEffectAnalyzer methodEffectAnalyzer = new MethodEffectAnalyzer();
     private final EscapeAnalyzer escapeAnalyzer = new EscapeAnalyzer();
@@ -503,6 +505,7 @@ public final class Javan {
         reports.writeDiagnostics(layout, diagnostics, classes, callGraph);
         final List<ClassMetadata> projectMetadata = classMetadataScanner.scanLayout(layout);
         final List<ClassMetadata> jdkMetadata = classMetadataScanner.scanCurrentJdk(layout.outputDirectory());
+        jdkModuleUsageReports.write(layout.outputDirectory(), classes, callGraph, jdkMetadata);
         final CompatibilityResult result = compatibilityReports.write(
             layout.root(),
             layout.outputDirectory(),
