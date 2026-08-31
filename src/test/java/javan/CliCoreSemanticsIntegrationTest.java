@@ -95,6 +95,37 @@ final class CliCoreSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void buildKeepsManagedRootsLiveAcrossLivenessWordBoundaries() throws Exception {
+        final Path project = project("root-liveness-word-boundaries");
+        final StringBuilder source = new StringBuilder("""
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+            """);
+        for (int index = 0; index < 130; index++) {
+            source.append("        final int[] root_").append(index).append(" = new int[] { ").append(index).append(" };\n");
+        }
+        source.append("""
+                    System.out.println(root_0[0] + root_64[0] + root_129[0]);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Main", source.toString());
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/root-liveness-word-boundaries").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("193\n");
+    }
+
+    @Test
     void staticFieldsAndClassInitializerBuildAndMatchJvmOutput() throws Exception {
         final Path project = project("static-fields");
         writeJava(project, "com.acme.Main", """
