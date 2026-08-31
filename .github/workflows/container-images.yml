@@ -251,7 +251,7 @@ jobs:
             sh .github/scripts/verify-image.sh "$IMAGE_REPOSITORY:$tag"
           done
 
-      - name: "📤 Release proof [${{ steps.plan.outputs.version }}]"
+      - name: "📤 Release [${{ steps.plan.outputs.version }}]"
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: container-release-proof-${{ needs.plan.outputs.version }}
