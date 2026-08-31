@@ -175,7 +175,7 @@ final class WorkflowPolicySurfaceTest {
             """);
         assertThat(docker.toFile().setExecutable(true)).isTrue();
 
-        final ProcessBuilder command = new ProcessBuilder("sh", VERIFY_IMAGE.toString(), image).directory(tempDir.toFile());
+        final ProcessBuilder command = new ProcessBuilder("sh", VERIFY_IMAGE.toAbsolutePath().toString(), image).directory(tempDir.toFile());
         command.environment().put("JAVAN_RELEASE_VERSION", version);
         command.environment().put("JAVAN_RELEASE_ARCHIVE_DIR", archives.toString());
         command.environment().put("JAVAN_RELEASE_PROOF_DIR", proofs.toString());
