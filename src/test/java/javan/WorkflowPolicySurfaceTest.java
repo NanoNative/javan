@@ -1,10 +1,17 @@
 package javan;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -144,6 +151,61 @@ final class WorkflowPolicySurfaceTest {
                 "Manifest.Digest",
                 "Missing release proof input"
             );
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void verifyImageRecordsChecksummedMultiArchitectureReleaseProof(@TempDir final Path tempDir) throws Exception {
+        final String version = "2026.8.31";
+        final String image = "ghcr.io/nanonative/javan:latest";
+        final Path archives = tempDir.resolve("archives");
+        final Path proofs = tempDir.resolve("proofs");
+        final Path tools = tempDir.resolve("tools");
+        Files.createDirectories(archives);
+        Files.createDirectories(tools);
+        final String x64Checksum = writeArchive(archives, version, "linux-x64", "x64 archive");
+        final String arm64Checksum = writeArchive(archives, version, "linux-aarch64", "arm64 archive");
+        final Path docker = Files.writeString(tools.resolve("docker"), """
+            #!/bin/sh
+            case "$*" in
+              *--raw) printf '%s\\n' '{"manifests":[{"architecture":"amd64"},{"architecture":"arm64"}]}' ;;
+              *--format*) printf '%s\\n' 'sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' ;;
+              *) exit 64 ;;
+            esac
+            """);
+        assertThat(docker.toFile().setExecutable(true)).isTrue();
+
+        final ProcessBuilder command = new ProcessBuilder("sh", VERIFY_IMAGE.toString(), image).directory(tempDir.toFile());
+        command.environment().put("JAVAN_RELEASE_VERSION", version);
+        command.environment().put("JAVAN_RELEASE_ARCHIVE_DIR", archives.toString());
+        command.environment().put("JAVAN_RELEASE_PROOF_DIR", proofs.toString());
+        command.environment().put("PATH", tools + ":" + command.environment().get("PATH"));
+        final Process process = command.start();
+
+        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
+        final String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        final String error = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
+        assertThat(process.exitValue()).as(error).isZero();
+        assertThat(output).contains("Recorded release proof");
+        assertThat(Files.readString(proofs.resolve("ghcr.io-nanonative-javan-latest.json"))).contains(
+            "\"image\": \"" + image + "\"",
+            "\"digest\": \"sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\"",
+            "\"version\": \"" + version + "\"",
+            "{\"target\": \"linux-x64\", \"sha256\": \"" + x64Checksum + "\"}",
+            "{\"target\": \"linux-aarch64\", \"sha256\": \"" + arm64Checksum + "\"}"
+        );
+    }
+
+    private static String writeArchive(final Path archives, final String version, final String target, final String content) throws Exception {
+        final String archiveName = "javan-" + version + "-" + target + ".tar.gz";
+        final Path archive = Files.writeString(archives.resolve(archiveName), content);
+        final String checksum = sha256(archive);
+        Files.writeString(archives.resolve(archiveName + ".sha256"), checksum + "  " + archiveName + "\n");
+        return checksum;
+    }
+
+    private static String sha256(final Path path) throws Exception {
+        return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path)));
     }
 
     @Test
