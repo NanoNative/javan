@@ -111,6 +111,21 @@ final class WorkflowPolicySurfaceTest {
     }
 
     @Test
+    void containerWorkflowBuildsEachArchitectureOnItsNativeRunner() throws Exception {
+        assertThat(Files.readString(CONTAINER_IMAGES_WORKFLOW))
+            .contains(
+                "runner: ubuntu-24.04",
+                "runner: ubuntu-24.04-arm",
+                "platform: linux/amd64",
+                "platform: linux/arm64",
+                "docker buildx imagetools create",
+                "\"$IMAGE_REPOSITORY:$tag-amd64\"",
+                "\"$IMAGE_REPOSITORY:$tag-arm64\""
+            )
+            .doesNotContain("docker/setup-qemu-action", "platforms: linux/amd64,linux/arm64");
+    }
+
+    @Test
     void pomKeepsNonBlockingCoverageAndBoundedParallelExecutionContracts() throws Exception {
         assertThat(Files.readString(POM))
             .contains("<forkCount>2</forkCount>")
