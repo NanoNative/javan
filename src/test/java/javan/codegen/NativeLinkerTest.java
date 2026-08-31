@@ -286,17 +286,23 @@ final class NativeLinkerTest {
 
         assertThat(initial.artifact()).isRegularFile();
         assertThat(initial.objects()).allSatisfy(entry -> assertThat(entry.reused()).isFalse());
+        assertThat(initial.objects()).extracting(NativeLinker.CacheEntry::reason)
+            .containsOnly("object-missing");
         assertThat(reused.objects()).allSatisfy(entry -> assertThat(entry.reused()).isTrue());
+        assertThat(reused.objects()).extracting(NativeLinker.CacheEntry::reason)
+            .containsOnly("verified");
         assertThat(release.objects()).allSatisfy(entry -> assertThat(entry.reused()).isFalse());
         assertThat(reusedRelease.objects()).allSatisfy(entry -> assertThat(entry.reused()).isTrue());
         assertThat(changedHeader.objects()).allSatisfy(entry -> assertThat(entry.reused()).isFalse());
         assertThat(repaired.objects()).anySatisfy(entry -> {
             assertThat(entry.source()).isEqualTo("main.c");
             assertThat(entry.reused()).isFalse();
+            assertThat(entry.reason()).isEqualTo("checksum-mismatch");
         });
         assertThat(repaired.objects()).anySatisfy(entry -> {
             assertThat(entry.source()).isEqualTo("runtime.c");
             assertThat(entry.reused()).isTrue();
+            assertThat(entry.reason()).isEqualTo("verified");
         });
         assertThat(changed.objects()).anySatisfy(entry -> {
             assertThat(entry.source()).isEqualTo("main.c");

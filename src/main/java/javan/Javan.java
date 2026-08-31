@@ -56,6 +56,7 @@ import javan.reporting.RuntimeFootprintReports;
 import javan.reporting.SystemAccessReports;
 import javan.test.ProjectTestRunner;
 import javan.util.Files2;
+import javan.util.Json;
 import javan.util.ProcessRunner;
 import javan.util.Strings2;
 import javan.verify.Diagnostic;
@@ -324,6 +325,7 @@ public final class Javan {
         final PrintStream out
     )
         throws IOException, InterruptedException {
+        final long nativeStarted = System.nanoTime();
         final List<ResourceBundler.ResourceFile> resources = resourceBundler.bundle(check.layout());
         final CCodegen.GeneratedC generatedC = cCodegen.generateProgram(
             program, generated, nativeInterop, stackAllocations
@@ -343,7 +345,12 @@ public final class Javan {
             options.release()
         );
         final Path binary = linked.artifact();
-        writeNativeObjectCacheReport(check.layout().outputDirectory(), linked);
+        writeNativeObjectCacheReport(
+            check.layout().outputDirectory(),
+            linked,
+            Math.max(0L, (System.nanoTime() - nativeStarted) / 1_000_000L),
+            Files.size(binary)
+        );
         runtimeContractReports.write(check.layout().outputDirectory(), "app", List.of(binary));
         runtimeFootprintReports.write(
             check.layout().outputDirectory(),
@@ -582,7 +589,9 @@ public final class Javan {
 
     private static void writeNativeObjectCacheReport(
         final Path outputDirectory,
-        final NativeLinker.CacheLinkResult linked
+        final NativeLinker.CacheLinkResult linked,
+        final long wallMillis,
+        final long artifactSizeBytes
     ) throws IOException {
         final Path reports = outputDirectory.resolve("reports");
         final NativeLinker.WorkerEvidence workers = linked.workers();
@@ -592,21 +601,34 @@ public final class Javan {
             .append("\n    \"effectiveJobs\": ").append(workers.effectiveJobs()).append(',')
             .append("\n    \"queued\": ").append(workers.queued()).append(',')
             .append("\n    \"outcome\": \"succeeded\"")
+            .append("\n  },\n  \"metrics\": {")
+            .append("\n    \"wallMillis\": ").append(wallMillis).append(',')
+            .append("\n    \"artifactSizeBytes\": ").append(artifactSizeBytes).append(',')
+            .append("\n    \"cpuSeconds\": \"unknown\",")
+            .append("\n    \"peakRssBytes\": \"unknown\",")
+            .append("\n    \"resourceSource\": \"unavailable\"")
             .append("\n  },\n  \"objects\": [");
         final StringBuilder markdown = new StringBuilder("# Native Object Cache\n\n## Native Workers\n\n")
             .append("| Requested | Effective | Queued | Outcome |\n")
             .append("| --- | --- | --- | --- |\n")
             .append("| ").append(requested).append(" | ").append(workers.effectiveJobs())
-            .append(" | ").append(workers.queued()).append(" | succeeded |\n\n## Objects\n\n| Source | Decision |\n| --- | --- |\n");
+            .append(" | ").append(workers.queued()).append(" | succeeded |\n\n## Metrics\n\n")
+            .append("| Wall time | Artifact bytes | CPU seconds | Peak RSS bytes | Resource source |\n")
+            .append("| --- | --- | --- | --- | --- |\n")
+            .append("| ").append(wallMillis).append(" | ").append(artifactSizeBytes)
+            .append(" | unknown | unknown | unavailable |\n\n")
+            .append("CPU and peak RSS are `unknown` when the current platform exposes no portable child-process measurement.\n\n")
+            .append("## Objects\n\n| Source | Decision | Reason |\n| --- | --- | --- |\n");
         for (int index = 0; index < linked.objects().size(); index++) {
             final NativeLinker.CacheEntry entry = linked.objects().get(index);
             if (index > 0) {
                 json.append(',');
             }
             final String decision = entry.reused() ? "reused" : "rebuilt";
-            json.append("\n    {\"source\": \"").append(entry.source()).append("\", \"decision\": \"")
-                .append(decision).append("\"}");
-            markdown.append("| `").append(entry.source()).append("` | ").append(decision).append(" |\n");
+            json.append("\n    {\"source\": ").append(Json.string(entry.source())).append(", \"decision\": ")
+                .append(Json.string(decision)).append(", \"reason\": ").append(Json.string(entry.reason())).append('}');
+            markdown.append("| `").append(entry.source()).append("` | ").append(decision).append(" | ")
+                .append(entry.reason()).append(" |\n");
         }
         json.append("\n  ]\n}\n");
         Files2.writeString(reports.resolve("native-object-cache.json"), json.toString());

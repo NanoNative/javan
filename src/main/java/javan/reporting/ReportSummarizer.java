@@ -196,6 +196,9 @@ public final class ReportSummarizer {
         if ("runtime-footprint".equals(name)) {
             return runtimeFootprintMetrics(read(reportsDirectory.resolve("runtime-footprint.json")));
         }
+        if ("native-object-cache".equals(name)) {
+            return nativeObjectCacheMetrics(read(reportsDirectory.resolve("native-object-cache.json")));
+        }
         if ("sanitizer-proof".equals(name)) {
             return sanitizerProofMetrics(read(reportsDirectory.resolve("sanitizer-proof.json")));
         }
@@ -830,6 +833,23 @@ public final class ReportSummarizer {
         addArrayNumberSum(result, value, "artifacts", "bytes", "artifactBytes");
         addArrayCount(result, value, "footprints");
         addArrayCount(result, value, "osArchCoverage");
+        return List.copyOf(result);
+    }
+
+    private static List<Metric> nativeObjectCacheMetrics(final Optional<String> report) {
+        if (report.isEmpty()) {
+            return List.of();
+        }
+        final String value = report.orElseThrow();
+        final List<Metric> result = new ArrayList<>();
+        addNumber(result, value, "requestedJobs");
+        addNumber(result, value, "effectiveJobs");
+        addNumber(result, value, "queued");
+        addNumber(result, value, "wallMillis");
+        addNumber(result, value, "artifactSizeBytes");
+        addText(result, value, "cpuSeconds");
+        addText(result, value, "peakRssBytes");
+        addText(result, value, "resourceSource");
         return List.copyOf(result);
     }
 

@@ -821,16 +821,21 @@ public final class NativeLinker {
                 object,
                 checksum,
                 stagingPath(source),
-                new CacheEntry(sourceName(displayRoot, source), object, true)
+                new CacheEntry(sourceName(displayRoot, source), object, true, "verified")
             );
         }
+        final String reason = !Files.isRegularFile(object)
+            ? "object-missing"
+            : !Files.isRegularFile(checksum)
+                ? "checksum-missing"
+                : "checksum-mismatch";
         return new ObjectPlan(
             source,
             includeDirectories,
             object,
             checksum,
             stagingPath(source),
-            new CacheEntry(sourceName(displayRoot, source), object, false)
+            new CacheEntry(sourceName(displayRoot, source), object, false, reason)
         );
     }
 
@@ -1232,11 +1237,24 @@ public final class NativeLinker {
      * @param source generated source file name
      * @param object verified cached object file
      * @param reused whether the object was reused rather than compiled
+     * @param reason verified cache state or deterministic rebuild reason
      */
-    public record CacheEntry(String source, Path object, boolean reused) {
+    public record CacheEntry(String source, Path object, boolean reused, String reason) {
         public CacheEntry {
             source = Objects.requireNonNull(source, "source");
             object = Objects.requireNonNull(object, "object");
+            reason = Objects.requireNonNull(reason, "reason");
+        }
+
+        /**
+         * Creates cache evidence for an existing caller without a detailed reason.
+         *
+         * @param source generated source file name
+         * @param object verified cached object file
+         * @param reused whether the object was reused rather than compiled
+         */
+        public CacheEntry(final String source, final Path object, final boolean reused) {
+            this(source, object, reused, reused ? "verified" : "rebuilt");
         }
     }
 }
