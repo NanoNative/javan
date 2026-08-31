@@ -6,8 +6,7 @@ reachability-backed `check`, `build`, and `compat` flows. Javan also reads local
 `javan.mod` path dependencies, resolves direct and compile/runtime-transitive coordinates
 from a configured local Maven repository or `~/.m2/repository`, stores verified artifacts
 and POM metadata in the global Javan cache, and writes deterministic `javan.lock`. Network
-resolution, authenticated mirrors, full test reachability, and license policy blocking remain
-roadmap work.
+resolution, authenticated mirrors, and full test reachability remain roadmap work.
 
 ## Current Implementation
 
@@ -33,6 +32,8 @@ require main libs/runtime.jar
 require main com.acme:math:1.2.3
 require test libs/test-support.jar
 require tool tools/codegen.jar
+license allow "Apache License, Version 2.0"
+license deny "GNU General Public License, version 3"
 ```
 
 Rules today:
@@ -70,8 +71,11 @@ Current license rows inspect jar metadata first:
 - `META-INF/LICENSE*`, `META-INF/NOTICE*`, `LICENSE*`, `NOTICE*`, `COPYING`
 - directory-level `LICENSE`, `LICENSE.txt`, `LICENSE.md`, `NOTICE`, `COPYING`
 
-Unknown licenses are reported as `unknown` and marked warning. Javan does not guess SPDX
-ids and does not block builds on license policy yet.
+License rules match only the exact identifier that artifact metadata reported. Javan never guesses
+SPDX ids, parses license text, or gives legal advice. A matching `allow` rule is reported as
+`allowed`; a matching `deny` rule is reported as advisory `blocked` and produces `JAVAN181` with
+both the detected metadata source and the `javan.mod` line. A deny rule does not block a build.
+Unknown licenses remain `unknown` and are reported as warnings.
 
 ## Goal
 
@@ -169,6 +173,17 @@ Each dependency row should include:
 License detection should use artifact metadata first, then packaged license files, then
 project policy overrides. Unknown licenses must be reported as unknown, not guessed.
 
+Project policy uses quoted exact identifiers in `javan.mod`:
+
+```text
+license allow "Apache License, Version 2.0"
+license deny "GNU General Public License, version 3"
+```
+
+When both rules name the same exact identifier, `deny` takes precedence. The report records the
+matching `javan.mod:<line>` source. These labels are evidence for the project's own review, not a
+legal determination or a build blocker.
+
 ## IDE And CI Contract
 
 The dependency and license findings must feed the same unified diagnostics/report model as
@@ -181,8 +196,8 @@ diagnostics through the wrapper.
 - declared dependency used only from `src/test/java` appears as `test used`
 - declared dependency never reached appears as `unused`
 - transitive dependency reached through a main dependency appears as `main transitive used`
-- dependency with unknown license produces a warning unless policy blocks unknown licenses
-- dependency with blocked license fails the build when policy says blocked
+- dependency with unknown license remains an evidence-backed warning
+- dependency with explicitly denied license produces an advisory warning and a blocked report row
 - local Maven cache is used without network access
 - GitHub source dependency is pinned and checksum-verified
 - authenticated mirror works without leaking credentials into reports or lock files

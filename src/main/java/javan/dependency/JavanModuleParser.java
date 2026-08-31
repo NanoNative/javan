@@ -44,6 +44,7 @@ public final class JavanModuleParser {
         String moduleName = "";
         String javaVersion = "";
         final List<JavanDependency> dependencies = new ArrayList<>();
+        final List<LicensePolicy.Rule> licenseRules = new ArrayList<>();
         final List<String> warnings = new ArrayList<>();
         int lineStart = 0;
         int lineNumber = 1;
@@ -66,6 +67,9 @@ public final class JavanModuleParser {
                     if (parsed.dependency().isPresent()) {
                         dependencies.add(parsed.dependency().orElseThrow());
                     }
+                    if (parsed.licenseRule().isPresent()) {
+                        licenseRules.add(parsed.licenseRule().orElseThrow());
+                    }
                     warnings.addAll(parsed.warnings());
                 }
             }
@@ -75,7 +79,9 @@ public final class JavanModuleParser {
             lineStart = lineEnd + 1;
             lineNumber++;
         }
-        return new JavanModule(true, moduleName, javaVersion, List.copyOf(dependencies), List.copyOf(warnings));
+        return new JavanModule(
+            true, moduleName, javaVersion, List.copyOf(dependencies), new LicensePolicy(licenseRules), List.copyOf(warnings)
+        );
     }
 
     private static ParsedLine parseLine(final Path root, final List<String> tokens, final int lineNumber) {
@@ -95,7 +101,24 @@ public final class JavanModuleParser {
         if ("require".equals(keyword)) {
             return parseRequire(root, tokens, lineNumber);
         }
+        if ("license".equals(keyword)) {
+            return parseLicense(tokens, lineNumber);
+        }
         return ParsedLine.warning(lineNumber, "unsupported javan.mod directive: " + keyword);
+    }
+
+    private static ParsedLine parseLicense(final List<String> tokens, final int lineNumber) {
+        if (tokens.size() != 3) {
+            return ParsedLine.warning(lineNumber, "license expects allow or deny plus one exact license identifier");
+        }
+        final String action = tokens.get(1);
+        if (!"allow".equals(action) && !"deny".equals(action)) {
+            return ParsedLine.warning(lineNumber, "license action must be allow or deny");
+        }
+        if ("unknown".equals(tokens.get(2))) {
+            return ParsedLine.warning(lineNumber, "license policy cannot target unknown metadata");
+        }
+        return ParsedLine.licenseRule(new LicensePolicy.Rule(action, tokens.get(2), lineNumber));
     }
 
     private static ParsedLine parseRequire(final Path root, final List<String> tokens, final int lineNumber) {
@@ -189,22 +212,27 @@ public final class JavanModuleParser {
         String moduleName,
         String javaVersion,
         Optional<JavanDependency> dependency,
+        Optional<LicensePolicy.Rule> licenseRule,
         List<String> warnings
     ) {
         private static ParsedLine module(final String moduleName) {
-            return new ParsedLine(moduleName, "", Optional.empty(), List.of());
+            return new ParsedLine(moduleName, "", Optional.empty(), Optional.empty(), List.of());
         }
 
         private static ParsedLine java(final String javaVersion) {
-            return new ParsedLine("", javaVersion, Optional.empty(), List.of());
+            return new ParsedLine("", javaVersion, Optional.empty(), Optional.empty(), List.of());
         }
 
         private static ParsedLine dependency(final JavanDependency dependency) {
-            return new ParsedLine("", "", Optional.of(dependency), List.of());
+            return new ParsedLine("", "", Optional.of(dependency), Optional.empty(), List.of());
+        }
+
+        private static ParsedLine licenseRule(final LicensePolicy.Rule rule) {
+            return new ParsedLine("", "", Optional.empty(), Optional.of(rule), List.of());
         }
 
         private static ParsedLine warning(final int lineNumber, final String warning) {
-            return new ParsedLine("", "", Optional.empty(), List.of("javan.mod line " + lineNumber + ": " + warning));
+            return new ParsedLine("", "", Optional.empty(), Optional.empty(), List.of("javan.mod line " + lineNumber + ": " + warning));
         }
     }
 }

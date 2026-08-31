@@ -9,9 +9,11 @@ import javan.dependency.ArtifactMetadata;
 import javan.dependency.JavanDependency;
 import javan.dependency.JavanModule;
 import javan.dependency.JavanModuleParser;
+import javan.dependency.LicensePolicy;
 import javan.util.Files2;
 import javan.util.Json;
 import javan.util.Strings2;
+import javan.verify.Diagnostic;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -42,28 +44,31 @@ public final class DependencyReports {
         final Map<String, ClassFile> classes,
         final CallGraph callGraph
     ) throws IOException {
-        final List<DependencyEntry> entries = entries(layout, classes, callGraph);
+        final ReportData data = reportData(layout, classes, callGraph);
         final Path reports = layout.outputDirectory().resolve("reports");
         final Path dependenciesJson = reports.resolve("dependencies.json");
         final Path dependenciesMarkdown = reports.resolve("dependencies.md");
         final Path licensesJson = reports.resolve("licenses.json");
         final Path licensesMarkdown = reports.resolve("licenses.md");
-        Files2.writeString(dependenciesJson, dependenciesJson(entries));
-        Files2.writeString(dependenciesMarkdown, dependenciesMarkdown(entries));
-        Files2.writeString(licensesJson, licensesJson(entries));
-        Files2.writeString(licensesMarkdown, licensesMarkdown(entries));
-        return new WrittenReports(dependenciesJson, dependenciesMarkdown, licensesJson, licensesMarkdown);
+        Files2.writeString(dependenciesJson, dependenciesJson(data.entries(), data.policy()));
+        Files2.writeString(dependenciesMarkdown, dependenciesMarkdown(data.entries(), data.policy()));
+        Files2.writeString(licensesJson, licensesJson(data.entries(), data.policy()));
+        Files2.writeString(licensesMarkdown, licensesMarkdown(data.entries(), data.policy()));
+        return new WrittenReports(
+            dependenciesJson, dependenciesMarkdown, licensesJson, licensesMarkdown, licenseDiagnostics(data.entries(), data.policy())
+        );
     }
 
-    private List<DependencyEntry> entries(
+    private ReportData reportData(
         final ProjectLayout layout,
         final Map<String, ClassFile> classes,
         final CallGraph callGraph
     ) throws IOException {
+        final JavanModule module = resolvedModule(layout.root());
         final List<EntryClasses> entryClasses = entryClasses(layout);
         final Map<String, Path> classOwners = classOwners(entryClasses);
         final List<String> reachableDependencyClasses = reachableDependencyClasses(classes, callGraph);
-        final List<DeclaredPath> declaredPaths = declaredPaths(layout.root());
+        final List<DeclaredPath> declaredPaths = declaredPaths(module);
         final List<DependencyEntry> result = new ArrayList<>();
         for (int index = 0; index < entryClasses.size(); index++) {
             final EntryClasses entry = entryClasses.get(index);
@@ -86,11 +91,14 @@ public final class DependencyReports {
                 metadata.license()
             ));
         }
-        return List.copyOf(result);
+        return new ReportData(List.copyOf(result), module.licensePolicy());
     }
 
-    private List<DeclaredPath> declaredPaths(final Path root) throws IOException {
-        final JavanModule module = new javan.dependency.JavanCoordinateResolver().resolve(moduleParser.read(root));
+    private JavanModule resolvedModule(final Path root) throws IOException {
+        return new javan.dependency.JavanCoordinateResolver().resolve(moduleParser.read(root));
+    }
+
+    private static List<DeclaredPath> declaredPaths(final JavanModule module) {
         if (!module.present()) {
             return List.of();
         }
@@ -195,8 +203,8 @@ public final class DependencyReports {
         return ArtifactMetadata.read(entry, contents);
     }
 
-    private static String dependenciesJson(final List<DependencyEntry> entries) {
-        final Summary summary = summary(entries);
+    private static String dependenciesJson(final List<DependencyEntry> entries, final LicensePolicy policy) {
+        final Summary summary = summary(entries, policy);
         final StringBuilder json = new StringBuilder();
         json.append("{\n");
         appendNumber(json, "dependencyCount", entries.size(), true);
@@ -244,15 +252,15 @@ public final class DependencyReports {
         return json.toString();
     }
 
-    private static String licensesJson(final List<DependencyEntry> entries) {
-        final Summary summary = summary(entries);
+    private static String licensesJson(final List<DependencyEntry> entries, final LicensePolicy policy) {
+        final Summary summary = summary(entries, policy);
         final StringBuilder json = new StringBuilder();
         json.append("{\n");
         appendNumber(json, "licenseCount", entries.size(), true);
         appendNumber(json, "knownLicenses", summary.knownLicenses(), true);
         appendNumber(json, "unknownLicenses", summary.unknownLicenses(), true);
-        appendNumber(json, "warningLicenses", summary.unknownLicenses(), true);
-        appendNumber(json, "blockedLicenses", 0, true);
+        appendNumber(json, "warningLicenses", summary.warningLicenses(), true);
+        appendNumber(json, "blockedLicenses", summary.blockedLicenses(), true);
         json.append("  \"licenses\": [");
         if (!entries.isEmpty()) {
             json.append('\n');
@@ -261,7 +269,7 @@ public final class DependencyReports {
             if (index > 0) {
                 json.append(",\n");
             }
-            json.append(licenseJson(entries.get(index)));
+            json.append(licenseJson(entries.get(index), policy));
         }
         if (!entries.isEmpty()) {
             json.append('\n');
@@ -271,9 +279,10 @@ public final class DependencyReports {
         return json.toString();
     }
 
-    private static String licenseJson(final DependencyEntry entry) {
+    private static String licenseJson(final DependencyEntry entry, final LicensePolicy policy) {
         final StringBuilder json = new StringBuilder();
         final ArtifactMetadata.License license = entry.license();
+        final LicensePolicy.Decision decision = policy.decide(license);
         json.append("    {\n");
         appendNumber(json, "index", entry.index(), true, 6);
         appendText(json, "dependency", path(entry.path()), true, 6);
@@ -283,13 +292,14 @@ public final class DependencyReports {
         appendText(json, "url", license.url(), true, 6);
         appendText(json, "source", license.source(), true, 6);
         appendText(json, "path", license.path(), true, 6);
-        appendText(json, "policy", license.known() ? "known" : "warning", false, 6);
+        appendText(json, "policy", decision.status(), true, 6);
+        appendText(json, "policySource", decision.source(), false, 6);
         json.append("    }");
         return json.toString();
     }
 
-    private static String dependenciesMarkdown(final List<DependencyEntry> entries) {
-        final Summary summary = summary(entries);
+    private static String dependenciesMarkdown(final List<DependencyEntry> entries, final LicensePolicy policy) {
+        final Summary summary = summary(entries, policy);
         final StringBuilder markdown = new StringBuilder();
         markdown.append("# Dependency Report\n\n");
         markdown.append("- dependency count: `").append(entries.size()).append("`\n");
@@ -314,31 +324,57 @@ public final class DependencyReports {
         return markdown.toString();
     }
 
-    private static String licensesMarkdown(final List<DependencyEntry> entries) {
-        final Summary summary = summary(entries);
+    private static String licensesMarkdown(final List<DependencyEntry> entries, final LicensePolicy policy) {
+        final Summary summary = summary(entries, policy);
         final StringBuilder markdown = new StringBuilder();
         markdown.append("# License Report\n\n");
         markdown.append("- license entries: `").append(entries.size()).append("`\n");
         markdown.append("- known licenses: `").append(summary.knownLicenses()).append("`\n");
         markdown.append("- unknown licenses: `").append(summary.unknownLicenses()).append("`\n");
-        markdown.append("- blocked licenses: `0`\n\n");
-        markdown.append("Unknown licenses are reported, not blocked. Policy enforcement is not implemented yet.\n\n");
-        markdown.append("| Dependency | Coordinate | License | Source | Policy |\n");
-        markdown.append("| --- | --- | --- | --- | --- |\n");
+        markdown.append("- warning licenses: `").append(summary.warningLicenses()).append("`\n");
+        markdown.append("- blocked licenses: `").append(summary.blockedLicenses()).append("`\n\n");
+        markdown.append("Unknown metadata remains a warning. Explicit deny rules are advisory and never make a legal conclusion or block a build.\n\n");
+        markdown.append("| Dependency | Coordinate | License | Source | Policy | Policy source |\n");
+        markdown.append("| --- | --- | --- | --- | --- | --- |\n");
         for (final DependencyEntry entry : entries) {
             final ArtifactMetadata.License license = entry.license();
+            final LicensePolicy.Decision decision = policy.decide(license);
             markdown
                 .append("| `").append(path(entry.path())).append("` | `").append(entry.coordinate())
                 .append("` | `").append(license.id()).append("` | `").append(license.sourcePath())
-                .append("` | `").append(license.known() ? "known" : "warning").append("` |\n");
+                .append("` | `").append(decision.status()).append("` | `").append(decision.source()).append("` |\n");
         }
         if (entries.isEmpty()) {
-            markdown.append("| _none_ | - | - | - | - |\n");
+            markdown.append("| _none_ | - | - | - | - | - |\n");
         }
         return markdown.toString();
     }
 
-    private static Summary summary(final List<DependencyEntry> entries) {
+    private static List<Diagnostic> licenseDiagnostics(final List<DependencyEntry> entries, final LicensePolicy policy) {
+        final List<Diagnostic> result = new ArrayList<>();
+        for (final DependencyEntry entry : entries) {
+            final LicensePolicy.Decision decision = policy.decide(entry.license());
+            if (decision.blocked()) {
+                result.add(Diagnostic.warning(
+                    "JAVAN181",
+                    "dependency license blocked by policy",
+                    "",
+                    "",
+                    dependencySubject(entry),
+                    "Detected " + entry.license().id() + " from " + entry.license().sourcePath()
+                        + "; " + decision.source() + " denies that exact identifier.",
+                    "Replace the dependency or change the explicit javan.mod license rule."
+                ));
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private static String dependencySubject(final DependencyEntry entry) {
+        return Strings2.isBlank(entry.coordinate()) ? path(entry.path()) : entry.coordinate();
+    }
+
+    private static Summary summary(final List<DependencyEntry> entries, final LicensePolicy policy) {
         int present = 0;
         int missing = 0;
         int used = 0;
@@ -346,6 +382,8 @@ public final class DependencyReports {
         int reachableClasses = 0;
         int knownLicenses = 0;
         int unknownLicenses = 0;
+        int warningLicenses = 0;
+        int blockedLicenses = 0;
         for (final DependencyEntry entry : entries) {
             if ("present".equals(entry.status())) {
                 present++;
@@ -363,8 +401,17 @@ public final class DependencyReports {
             } else {
                 unknownLicenses++;
             }
+            final LicensePolicy.Decision decision = policy.decide(entry.license());
+            if ("warning".equals(decision.status())) {
+                warningLicenses++;
+            }
+            if (decision.blocked()) {
+                blockedLicenses++;
+            }
         }
-        return new Summary(present, missing, used, unused, reachableClasses, knownLicenses, unknownLicenses);
+        return new Summary(
+            present, missing, used, unused, reachableClasses, knownLicenses, unknownLicenses, warningLicenses, blockedLicenses
+        );
     }
 
     private static void appendText(
@@ -496,12 +543,14 @@ public final class DependencyReports {
      * @param dependenciesMarkdown dependencies Markdown path
      * @param licensesJson licenses JSON path
      * @param licensesMarkdown licenses Markdown path
+     * @param diagnostics advisory policy diagnostics
      */
     public record WrittenReports(
         Path dependenciesJson,
         Path dependenciesMarkdown,
         Path licensesJson,
-        Path licensesMarkdown
+        Path licensesMarkdown,
+        List<Diagnostic> diagnostics
     ) {
     }
 
@@ -537,6 +586,9 @@ public final class DependencyReports {
         }
     }
 
+    private record ReportData(List<DependencyEntry> entries, LicensePolicy policy) {
+    }
+
     private record Summary(
         int presentDependencies,
         int missingDependencies,
@@ -544,7 +596,9 @@ public final class DependencyReports {
         int unusedDependencies,
         int reachableDependencyClasses,
         int knownLicenses,
-        int unknownLicenses
+        int unknownLicenses,
+        int warningLicenses,
+        int blockedLicenses
     ) {
     }
 }

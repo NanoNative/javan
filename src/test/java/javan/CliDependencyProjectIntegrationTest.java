@@ -292,6 +292,64 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void checkReportsAnExplicitlyDeniedDependencyLicenseWithoutBlockingAnalysis() throws Exception {
+        final Path dependency = dependencyJarWithMavenLicense("policy-license", "dep.PolicyLicense", """
+            package dep;
+
+            public final class PolicyLicense {
+                private PolicyLicense() {
+                }
+
+                public static int value() {
+                    return 29;
+                }
+            }
+            """, "com.acme", "policy-license", "1.0.0", "Apache License, Version 2.0");
+        final Path project = project("dependency-license-policy");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import dep.PolicyLicense;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(PolicyLicense.value());
+                }
+            }
+            """);
+        Files.writeString(project.resolve("javan.mod"), """
+            module com.acme.app
+            java 25
+            require main %s
+            license deny "Apache License, Version 2.0"
+            """.formatted(pathForMod(project, dependency)), StandardCharsets.UTF_8);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stdout()).contains(
+            "warning[JAVAN181]: dependency license blocked by policy",
+            "Apache License, Version 2.0",
+            "pom.xml:META-INF/maven/com/acme/policy-license/pom.xml",
+            "javan.mod:4"
+        );
+        assertThat(Files.readString(project.resolve(".javan/reports/licenses.json"))).contains(
+            "\"policy\": \"blocked\"",
+            "\"policySource\": \"javan.mod:4\"",
+            "\"blockedLicenses\": 1"
+        );
+        assertThat(Files.readString(project.resolve(".javan/reports/diagnostics.json"))).contains(
+            "\"errors\": 0",
+            "\"warnings\": 1",
+            "\"code\": \"JAVAN181\"",
+            "\"severity\": \"warning\""
+        );
+    }
+
+    @Test
     void javanModMainDependencyCompilesWithoutClasspathOption() throws Exception {
         final Path dependency = dependencyJar("mod-mathlib", "dep.ModMath", """
             package dep;
