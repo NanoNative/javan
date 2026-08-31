@@ -8,6 +8,7 @@ import javan.cli.Version;
 import javan.reporting.RuntimeFootprintReports;
 import javan.util.Files2;
 import javan.util.Json;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -29,6 +30,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -44,6 +46,14 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @ResourceLock(value = Resources.SYSTEM_PROPERTIES, mode = ResourceAccessMode.READ)
 @NativeTest
 final class CliNetworkIntegrationTest extends CliIntegrationSupport {
+    private static final String NATIVE_SERVER_READY_PORT = "JAVAN_TEST_READY_PORT=";
+    private final List<NativeServer> nativeServers = new ArrayList<>();
+
+    @AfterEach
+    void closeNativeServers() {
+        nativeServers.forEach(NativeServer::close);
+    }
+
     @Test
     @WindowsCompatibilityProof
     void socketExplicitConnectLifecycleBuildsAndMatchesJvmOutput() throws Exception {
@@ -1100,7 +1110,6 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void serverSocketAcceptBuildsAndAcceptsLoopbackClient() throws Exception {
-        final int port = freeTcpPort();
         final Path project = project("server-socket-accept");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -1113,7 +1122,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) throws Exception {
-                    final ServerSocket server = new ServerSocket(%d);
+                    final ServerSocket server = new ServerSocket(0);
+                    System.out.println("JAVAN_TEST_READY_PORT=" + server.getLocalPort());
                     System.out.println(server.getLocalPort());
                     final Socket accepted = server.accept();
                     System.out.println(accepted.isConnected());
@@ -1123,26 +1133,23 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     server.close();
                 }
             }
-            """.formatted(port));
+            """);
 
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        final Process process = new ProcessBuilder(project.resolve(".javan/bin/server-socket-accept").toString())
-            .directory(project.toFile())
-            .start();
-        final CompletableFuture<String> stdout = CompletableFuture.supplyAsync(() -> readStream(process.getInputStream()));
-        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
-        connectLoopback(port);
-        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
-        assertThat(process.exitValue()).isZero();
-        assertThat(stdout.join()).isEqualTo(port + "\ntrue\n127.0.0.1\ntrue\n");
-        assertThat(stderr.join()).isEmpty();
+        try (NativeServer server = startNativeServer(project, "server-socket-accept")) {
+            final int port = server.awaitPort();
+            connectLoopback(port);
+            assertThat(server.process().waitFor(10, TimeUnit.SECONDS)).isTrue();
+            assertThat(server.process().exitValue()).isZero();
+            assertThat(server.stdout().join()).isEqualTo(port + "\ntrue\n127.0.0.1\ntrue\n");
+            assertThat(server.stderr().join()).isEmpty();
+        }
     }
 
     @Test
     void serverSocketAcceptAllowsGeneratedPlatformWorkerToConnect() throws Exception {
-        final int port = freeTcpPort();
         final Path project = project("server-socket-accept-platform-worker");
         writeJava(project, "com.acme.ConnectorAction", """
             package com.acme;
@@ -1196,8 +1203,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) throws Exception {
-                    final ServerSocket server = new ServerSocket(%d);
-                    final Thread worker = new Thread(new Connector(%d), "loopback-connector");
+                    final ServerSocket server = new ServerSocket(0);
+                    final Thread worker = new Thread(new Connector(server.getLocalPort()), "loopback-connector");
                     worker.start();
                     final Socket accepted = server.accept();
                     accepted.close();
@@ -1207,7 +1214,7 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     System.out.println("joined");
                 }
             }
-            """.formatted(port, port));
+            """);
         writeJava(project, "com.acme.Connector", """
             package com.acme;
 
@@ -1276,7 +1283,6 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void serverSocketBacklogConstructorBuildsAndAcceptsLoopbackClient() throws Exception {
-        final int port = freeTcpPort();
         final Path project = project("server-socket-backlog");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -1289,7 +1295,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) throws Exception {
-                    final ServerSocket server = new ServerSocket(%d, 2);
+                    final ServerSocket server = new ServerSocket(0, 2);
+                    System.out.println("JAVAN_TEST_READY_PORT=" + server.getLocalPort());
                     System.out.println(server.getLocalPort());
                     final Socket accepted = server.accept();
                     System.out.println(accepted.isConnected());
@@ -1299,26 +1306,23 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     server.close();
                 }
             }
-            """.formatted(port));
+            """);
 
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        final Process process = new ProcessBuilder(project.resolve(".javan/bin/server-socket-backlog").toString())
-            .directory(project.toFile())
-            .start();
-        final CompletableFuture<String> stdout = CompletableFuture.supplyAsync(() -> readStream(process.getInputStream()));
-        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
-        connectLoopback(port);
-        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
-        assertThat(process.exitValue()).isZero();
-        assertThat(stdout.join()).isEqualTo(port + "\ntrue\n127.0.0.1\ntrue\n");
-        assertThat(stderr.join()).isEmpty();
+        try (NativeServer server = startNativeServer(project, "server-socket-backlog")) {
+            final int port = server.awaitPort();
+            connectLoopback(port);
+            assertThat(server.process().waitFor(10, TimeUnit.SECONDS)).isTrue();
+            assertThat(server.process().exitValue()).isZero();
+            assertThat(server.stdout().join()).isEqualTo(port + "\ntrue\n127.0.0.1\ntrue\n");
+            assertThat(server.stderr().join()).isEmpty();
+        }
     }
 
     @Test
     void serverSocketBindAddressConstructorBuildsAndAcceptsIpv4LoopbackClient() throws Exception {
-        final int port = freeTcpPort();
         final Path project = project("server-socket-bind-address-ipv4");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -1332,7 +1336,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) throws Exception {
-                    final ServerSocket server = new ServerSocket(%d, 2, InetAddress.getByName("127.0.0.1"));
+                    final ServerSocket server = new ServerSocket(0, 2, InetAddress.getByName("127.0.0.1"));
+                    System.out.println("JAVAN_TEST_READY_PORT=" + server.getLocalPort());
                     System.out.println(server.getLocalPort());
                     final Socket accepted = server.accept();
                     System.out.println(accepted.isConnected());
@@ -1342,27 +1347,24 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     server.close();
                 }
             }
-            """.formatted(port));
+            """);
 
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        final Process process = new ProcessBuilder(project.resolve(".javan/bin/server-socket-bind-address-ipv4").toString())
-            .directory(project.toFile())
-            .start();
-        final CompletableFuture<String> stdout = CompletableFuture.supplyAsync(() -> readStream(process.getInputStream()));
-        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
-        connectLoopback(port);
-        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
-        assertThat(process.exitValue()).isZero();
-        assertThat(stdout.join()).isEqualTo(port + "\ntrue\n127.0.0.1\ntrue\n");
-        assertThat(stderr.join()).isEmpty();
+        try (NativeServer server = startNativeServer(project, "server-socket-bind-address-ipv4")) {
+            final int port = server.awaitPort();
+            connectLoopback(port);
+            assertThat(server.process().waitFor(10, TimeUnit.SECONDS)).isTrue();
+            assertThat(server.process().exitValue()).isZero();
+            assertThat(server.stdout().join()).isEqualTo(port + "\ntrue\n127.0.0.1\ntrue\n");
+            assertThat(server.stderr().join()).isEmpty();
+        }
     }
 
     @Test
     void serverSocketBindAddressConstructorBuildsAndAcceptsIpv6LoopbackClient() throws Exception {
         Assumptions.assumeTrue(ipv6LoopbackAvailable(), "IPv6 loopback is not available on this host");
-        final int port = freeTcpPort();
         final Path project = project("server-socket-bind-address-ipv6");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -1376,7 +1378,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) throws Exception {
-                    final ServerSocket server = new ServerSocket(%d, 2, InetAddress.getByName("::1"));
+                    final ServerSocket server = new ServerSocket(0, 2, InetAddress.getByName("::1"));
+                    System.out.println("JAVAN_TEST_READY_PORT=" + server.getLocalPort());
                     System.out.println(server.getLocalPort());
                     final Socket accepted = server.accept();
                     System.out.println(accepted.isConnected());
@@ -1386,26 +1389,23 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     server.close();
                 }
             }
-            """.formatted(port));
+            """);
 
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        final Process process = new ProcessBuilder(project.resolve(".javan/bin/server-socket-bind-address-ipv6").toString())
-            .directory(project.toFile())
-            .start();
-        final CompletableFuture<String> stdout = CompletableFuture.supplyAsync(() -> readStream(process.getInputStream()));
-        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
-        connectLoopbackIpv6(port);
-        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
-        assertThat(process.exitValue()).isZero();
-        assertThat(stdout.join()).isEqualTo(port + "\ntrue\n0:0:0:0:0:0:0:1\ntrue\n");
-        assertThat(stderr.join()).isEmpty();
+        try (NativeServer server = startNativeServer(project, "server-socket-bind-address-ipv6")) {
+            final int port = server.awaitPort();
+            connectLoopbackIpv6(port);
+            assertThat(server.process().waitFor(10, TimeUnit.SECONDS)).isTrue();
+            assertThat(server.process().exitValue()).isZero();
+            assertThat(server.stdout().join()).isEqualTo(port + "\ntrue\n0:0:0:0:0:0:0:1\ntrue\n");
+            assertThat(server.stderr().join()).isEmpty();
+        }
     }
 
     @Test
     void serverSocketGetInetAddressBuildsForDefaultLoopbackBind() throws Exception {
-        final int port = freeTcpPort();
         final Path project = project("server-socket-get-inet-address-default");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -1417,12 +1417,12 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) throws Exception {
-                    final ServerSocket server = new ServerSocket(%d);
+                    final ServerSocket server = new ServerSocket(0);
                     System.out.println(server.getInetAddress().getHostAddress());
                     server.close();
                 }
             }
-            """.formatted(port));
+            """);
 
         final CliRun run = run(tempDir, "build", project.toString());
 
@@ -1434,7 +1434,6 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     @Test
     void serverSocketGetInetAddressBuildsForIpv6BindAddress() throws Exception {
         Assumptions.assumeTrue(ipv6LoopbackAvailable(), "IPv6 loopback is not available on this host");
-        final int port = freeTcpPort();
         final Path project = project("server-socket-get-inet-address-ipv6");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -1447,12 +1446,12 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) throws Exception {
-                    final ServerSocket server = new ServerSocket(%d, 2, InetAddress.getByName("::1"));
+                    final ServerSocket server = new ServerSocket(0, 2, InetAddress.getByName("::1"));
                     System.out.println(server.getInetAddress().getHostAddress());
                     server.close();
                 }
             }
-            """.formatted(port));
+            """);
 
         final CliRun run = run(tempDir, "build", project.toString());
 
@@ -1463,7 +1462,6 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void serverSocketLocalSocketAddressBuildsAndReportsBoundEndpoint() throws Exception {
-        final int port = freeTcpPort();
         final Path project = project("server-socket-local-socket-address");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -1476,25 +1474,26 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) throws Exception {
-                    final ServerSocket server = new ServerSocket(%d, 2);
+                    final ServerSocket server = new ServerSocket(0, 2);
                     final InetSocketAddress address = (InetSocketAddress) server.getLocalSocketAddress();
                     System.out.println(address.getAddress().getHostAddress());
                     System.out.println(address.getPort());
                     server.close();
                 }
             }
-            """.formatted(port));
+            """);
 
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        assertThat(process(project, List.of(project.resolve(".javan/bin/server-socket-local-socket-address").toString())).stdout())
-            .isEqualTo("127.0.0.1\n" + port + "\n");
+        final String nativeOutput = process(project, List.of(project.resolve(".javan/bin/server-socket-local-socket-address").toString())).stdout();
+        assertThat(nativeOutput).matches("127\\.0\\.0\\.1\\n[0-9]+\\n");
+        final int port = Integer.parseInt(nativeOutput.substring("127.0.0.1\n".length(), nativeOutput.length() - 1));
+        assertThat(port).isBetween(1, 65_535);
     }
 
     @Test
     void serverSocketSoTimeoutRoundTripBuildsAndMatchesJvmOutput() throws Exception {
-        final int port = freeTcpPort();
         final Path project = project("server-socket-so-timeout-round-trip");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -1506,14 +1505,14 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) throws Exception {
-                    final ServerSocket server = new ServerSocket(%d, 2);
+                    final ServerSocket server = new ServerSocket(0, 2);
                     System.out.println(server.getSoTimeout());
                     server.setSoTimeout(250);
                     System.out.println(server.getSoTimeout());
                     server.close();
                 }
             }
-            """.formatted(port));
+            """);
 
         final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
@@ -1525,7 +1524,6 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void serverSocketReceiveBufferSizeRoundTripBuildsAndMatchesJvmOutput() throws Exception {
-        final int port = freeTcpPort();
         final Path project = project("server-socket-receive-buffer-size-round-trip");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -1537,14 +1535,14 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) throws Exception {
-                    final ServerSocket server = new ServerSocket(%d, 2);
+                    final ServerSocket server = new ServerSocket(0, 2);
                     System.out.println(server.getReceiveBufferSize());
                     server.setReceiveBufferSize(8192);
                     System.out.println(server.getReceiveBufferSize());
                     server.close();
                 }
             }
-            """.formatted(port));
+            """);
 
         final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
@@ -1556,7 +1554,6 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void serverSocketReuseAddressDefaultBuildsAndMatchesJvmOutput() throws Exception {
-        final int port = freeTcpPort();
         final Path project = project("server-socket-reuse-address-default");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -1568,12 +1565,12 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) throws Exception {
-                    final ServerSocket server = new ServerSocket(%d, 2);
+                    final ServerSocket server = new ServerSocket(0, 2);
                     System.out.println(server.getReuseAddress());
                     server.close();
                 }
             }
-            """.formatted(port));
+            """);
 
         final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
@@ -1584,7 +1581,6 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void serverSocketReuseAddressRoundTripBuildsAndMatchesJvmOutput() throws Exception {
-        final int port = freeTcpPort();
         final Path project = project("server-socket-reuse-address-round-trip");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -1596,7 +1592,7 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) throws Exception {
-                    final ServerSocket server = new ServerSocket(%d, 2);
+                    final ServerSocket server = new ServerSocket(0, 2);
                     server.setReuseAddress(false);
                     System.out.println(server.getReuseAddress());
                     server.setReuseAddress(true);
@@ -1604,7 +1600,7 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     server.close();
                 }
             }
-            """.formatted(port));
+            """);
 
         final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
@@ -1616,7 +1612,6 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void serverSocketBoundAndClosedStateBuildsAndMatchesJvmOutput() throws Exception {
-        final int port = freeTcpPort();
         final Path project = project("server-socket-bound-and-closed-state");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -1628,7 +1623,7 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) throws Exception {
-                    final ServerSocket server = new ServerSocket(%d, 2);
+                    final ServerSocket server = new ServerSocket(0, 2);
                     System.out.println(server.isBound());
                     System.out.println(server.isClosed());
                     server.close();
@@ -1636,7 +1631,7 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     System.out.println(server.isClosed());
                 }
             }
-            """.formatted(port));
+            """);
 
         final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
@@ -1648,7 +1643,6 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void serverSocketAcceptTimeoutFailsClearlyAtRuntime() throws Exception {
-        final int port = freeTcpPort();
         final Path project = project("server-socket-accept-timeout-runtime");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -1660,12 +1654,12 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) throws Exception {
-                    final ServerSocket server = new ServerSocket(%d, 2);
+                    final ServerSocket server = new ServerSocket(0, 2);
                     server.setSoTimeout(50);
                     server.accept();
                 }
             }
-            """.formatted(port));
+            """);
 
         final CliRun run = run(tempDir, "build", project.toString());
 
@@ -1800,7 +1794,6 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void acceptedSocketInputStreamReadByteBuildsAndReadsFromLoopbackClient() throws Exception {
-        final int port = freeTcpPort();
         final Path project = project("accepted-socket-input-stream-read-byte");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -1814,7 +1807,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) throws Exception {
-                    final ServerSocket server = new ServerSocket(%d);
+                    final ServerSocket server = new ServerSocket(0);
+                    System.out.println("JAVAN_TEST_READY_PORT=" + server.getLocalPort());
                     final Socket accepted = server.accept();
                     final InputStream in = accepted.getInputStream();
                     System.out.println(in.read());
@@ -1822,26 +1816,22 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     server.close();
                 }
             }
-            """.formatted(port));
+            """);
 
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        final Process process = new ProcessBuilder(project.resolve(".javan/bin/accepted-socket-input-stream-read-byte").toString())
-            .directory(project.toFile())
-            .start();
-        final CompletableFuture<String> stdout = CompletableFuture.supplyAsync(() -> readStream(process.getInputStream()));
-        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
-        writeLoopbackBytes(port, new byte[] {90});
-        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
-        assertThat(process.exitValue()).isZero();
-        assertThat(stdout.join()).isEqualTo("90\n");
-        assertThat(stderr.join()).isEmpty();
+        try (NativeServer server = startNativeServer(project, "accepted-socket-input-stream-read-byte")) {
+            writeLoopbackBytes(server.awaitPort(), new byte[] {90});
+            assertThat(server.process().waitFor(10, TimeUnit.SECONDS)).isTrue();
+            assertThat(server.process().exitValue()).isZero();
+            assertThat(server.stdout().join()).isEqualTo("90\n");
+            assertThat(server.stderr().join()).isEmpty();
+        }
     }
 
     @Test
     void loopbackHttpHelloRouteBuildsAndServesDeterministicResponse() throws Exception {
-        final int port = freeTcpPort();
         final Path project = project("loopback-http-hello-route");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -1867,7 +1857,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) throws Exception {
-                    final ServerSocket server = new ServerSocket(%d);
+                    final ServerSocket server = new ServerSocket(0);
+                    System.out.println("JAVAN_TEST_READY_PORT=" + server.getLocalPort());
                     final Socket accepted = server.accept();
                     final InputStream in = accepted.getInputStream();
                     final OutputStream out = accepted.getOutputStream();
@@ -1916,42 +1907,29 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     return false;
                 }
             }
-            """.formatted(port));
+            """);
 
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        final Process process = new ProcessBuilder(project.resolve(".javan/bin/loopback-http-hello-route").toString())
-            .directory(project.toFile())
-            .start();
-        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
-        final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
-        final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/hello"))
-            .GET()
-            .build();
-        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        java.net.http.HttpResponse<String> response = null;
-        while (System.nanoTime() < deadline) {
-            try {
-                response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
-                break;
-            } catch (final java.net.ConnectException exception) {
-                Thread.sleep(25L);
-            }
-        }
+        try (NativeServer server = startNativeServer(project, "loopback-http-hello-route")) {
+            final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+            final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(
+                java.net.URI.create("http://127.0.0.1:" + server.awaitPort() + "/hello")
+            ).GET().build();
+            final java.net.http.HttpResponse<String> response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
 
-        assertThat(response).isNotNull();
-        assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(response.body()).isEqualTo("pong");
-        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
-        assertThat(process.exitValue()).isZero();
-        assertThat(readStream(process.getInputStream())).isEmpty();
-        assertThat(stderr.join()).isEmpty();
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.body()).isEqualTo("pong");
+            assertThat(server.process().waitFor(10, TimeUnit.SECONDS)).isTrue();
+            assertThat(server.process().exitValue()).isZero();
+            assertThat(server.stdout().join()).isEmpty();
+            assertThat(server.stderr().join()).isEmpty();
+        }
     }
 
     @Test
     void loopbackHttpUnknownRouteBuildsAndServes404Response() throws Exception {
-        final int port = freeTcpPort();
         final Path project = project("loopback-http-unknown-route");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -1984,7 +1962,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) throws Exception {
-                    final ServerSocket server = new ServerSocket(%d);
+                    final ServerSocket server = new ServerSocket(0);
+                    System.out.println("JAVAN_TEST_READY_PORT=" + server.getLocalPort());
                     final Socket accepted = server.accept();
                     final InputStream in = accepted.getInputStream();
                     final OutputStream out = accepted.getOutputStream();
@@ -2034,42 +2013,28 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     return false;
                 }
             }
-            """.formatted(port));
+            """);
 
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        final Process process = new ProcessBuilder(project.resolve(".javan/bin/loopback-http-unknown-route").toString())
-            .directory(project.toFile())
-            .start();
-        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
+        final NativeServer server = startNativeServer(project, "loopback-http-unknown-route");
+        final int port = server.awaitPort();
         final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
         final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/missing"))
             .GET()
             .build();
-        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        java.net.http.HttpResponse<String> response = null;
-        while (System.nanoTime() < deadline) {
-            try {
-                response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
-                break;
-            } catch (final java.net.ConnectException exception) {
-                Thread.sleep(25L);
-            }
-        }
-
-        assertThat(response).isNotNull();
+        final java.net.http.HttpResponse<String> response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(404);
         assertThat(response.body()).isEqualTo("miss");
-        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
-        assertThat(process.exitValue()).isZero();
-        assertThat(readStream(process.getInputStream())).isEmpty();
-        assertThat(stderr.join()).isEmpty();
+        assertThat(server.process().waitFor(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(server.process().exitValue()).isZero();
+        assertThat(server.stdout().join()).isEmpty();
+        assertThat(server.stderr().join()).isEmpty();
     }
 
     @Test
     void loopbackHttpPostBodyBuildsAndServesCreatedResponse() throws Exception {
-        final int port = freeTcpPort();
         final Path project = project("loopback-http-post-body");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -2108,7 +2073,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) throws Exception {
-                    final ServerSocket server = new ServerSocket(%d);
+                    final ServerSocket server = new ServerSocket(0);
+                    System.out.println("JAVAN_TEST_READY_PORT=" + server.getLocalPort());
                     final Socket accepted = server.accept();
                     final InputStream in = accepted.getInputStream();
                     final OutputStream out = accepted.getOutputStream();
@@ -2207,42 +2173,28 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     return matchesAt(value, offset, expected);
                 }
             }
-            """.formatted(port));
+            """);
 
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        final Process process = new ProcessBuilder(project.resolve(".javan/bin/loopback-http-post-body").toString())
-            .directory(project.toFile())
-            .start();
-        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
+        final NativeServer server = startNativeServer(project, "loopback-http-post-body");
+        final int port = server.awaitPort();
         final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
         final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/metric"))
             .POST(java.net.http.HttpRequest.BodyPublishers.ofString("hello"))
             .build();
-        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        java.net.http.HttpResponse<String> response = null;
-        while (System.nanoTime() < deadline) {
-            try {
-                response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
-                break;
-            } catch (final java.net.ConnectException exception) {
-                Thread.sleep(25L);
-            }
-        }
-
-        assertThat(response).isNotNull();
+        final java.net.http.HttpResponse<String> response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(201);
         assertThat(response.body()).isEqualTo("saved");
-        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
-        assertThat(process.exitValue()).isZero();
-        assertThat(readStream(process.getInputStream())).isEmpty();
-        assertThat(stderr.join()).isEmpty();
+        assertThat(server.process().waitFor(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(server.process().exitValue()).isZero();
+        assertThat(server.stdout().join()).isEmpty();
+        assertThat(server.stderr().join()).isEmpty();
     }
 
     @Test
     void loopbackHttpSequentialRequestsBuildsAndServesTwoConnections() throws Exception {
-        final int port = freeTcpPort();
         final Path project = project("loopback-http-sequential-requests");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -2268,7 +2220,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) throws Exception {
-                    final ServerSocket server = new ServerSocket(%d);
+                    final ServerSocket server = new ServerSocket(0);
+                    System.out.println("JAVAN_TEST_READY_PORT=" + server.getLocalPort());
                     for (int handled = 0; handled < 2; handled++) {
                         final Socket accepted = server.accept();
                         final InputStream in = accepted.getInputStream();
@@ -2319,45 +2272,32 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     return false;
                 }
             }
-            """.formatted(port));
+            """);
 
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        final Process process = new ProcessBuilder(project.resolve(".javan/bin/loopback-http-sequential-requests").toString())
-            .directory(project.toFile())
-            .start();
-        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
+        final NativeServer server = startNativeServer(project, "loopback-http-sequential-requests");
+        final int port = server.awaitPort();
         final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
         final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/hello"))
             .GET()
             .build();
-        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        java.net.http.HttpResponse<String> first = null;
-        while (System.nanoTime() < deadline) {
-            try {
-                first = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
-                break;
-            } catch (final java.net.ConnectException exception) {
-                Thread.sleep(25L);
-            }
-        }
-        assertThat(first).isNotNull();
+        final java.net.http.HttpResponse<String> first = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
         assertThat(first.statusCode()).isEqualTo(200);
         assertThat(first.body()).isEqualTo("pong");
 
         final java.net.http.HttpResponse<String> second = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
         assertThat(second.statusCode()).isEqualTo(200);
         assertThat(second.body()).isEqualTo("pong");
-        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
-        assertThat(process.exitValue()).isZero();
-        assertThat(readStream(process.getInputStream())).isEmpty();
-        assertThat(stderr.join()).isEmpty();
+        assertThat(server.process().waitFor(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(server.process().exitValue()).isZero();
+        assertThat(server.stdout().join()).isEmpty();
+        assertThat(server.stderr().join()).isEmpty();
     }
 
     @Test
     void loopbackHttpMethodAndPathDispatchBuildsAndServesDifferentRoutes() throws Exception {
-        final int port = freeTcpPort();
         final Path project = project("loopback-http-method-and-path-dispatch");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -2406,7 +2346,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) throws Exception {
-                    final ServerSocket server = new ServerSocket(%d);
+                    final ServerSocket server = new ServerSocket(0);
+                    System.out.println("JAVAN_TEST_READY_PORT=" + server.getLocalPort());
                     for (int handled = 0; handled < 2; handled++) {
                         final Socket accepted = server.accept();
                         final InputStream in = accepted.getInputStream();
@@ -2509,15 +2450,13 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     return matchesAt(value, offset, expected);
                 }
             }
-            """.formatted(port));
+            """);
 
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        final Process process = new ProcessBuilder(project.resolve(".javan/bin/loopback-http-method-and-path-dispatch").toString())
-            .directory(project.toFile())
-            .start();
-        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
+        final NativeServer server = startNativeServer(project, "loopback-http-method-and-path-dispatch");
+        final int port = server.awaitPort();
         final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
         final java.net.http.HttpRequest getRequest = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/hello"))
             .GET()
@@ -2525,32 +2464,21 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
         final java.net.http.HttpRequest postRequest = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/metric"))
             .POST(java.net.http.HttpRequest.BodyPublishers.ofString("hello"))
             .build();
-        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        java.net.http.HttpResponse<String> first = null;
-        while (System.nanoTime() < deadline) {
-            try {
-                first = client.send(getRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
-                break;
-            } catch (final java.net.ConnectException exception) {
-                Thread.sleep(25L);
-            }
-        }
-        assertThat(first).isNotNull();
+        final java.net.http.HttpResponse<String> first = client.send(getRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
         assertThat(first.statusCode()).isEqualTo(200);
         assertThat(first.body()).isEqualTo("pong");
 
         final java.net.http.HttpResponse<String> second = client.send(postRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
         assertThat(second.statusCode()).isEqualTo(201);
         assertThat(second.body()).isEqualTo("saved");
-        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
-        assertThat(process.exitValue()).isZero();
-        assertThat(readStream(process.getInputStream())).isEmpty();
-        assertThat(stderr.join()).isEmpty();
+        assertThat(server.process().waitFor(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(server.process().exitValue()).isZero();
+        assertThat(server.stdout().join()).isEmpty();
+        assertThat(server.stderr().join()).isEmpty();
     }
 
     @Test
     void loopbackHttpRouteHandlersBuildAndServeAcrossMultipleClasses() throws Exception {
-        final int port = freeTcpPort();
         final Path project = project("loopback-http-route-handlers");
         writeJava(project, "com.acme.RouteHandler", """
             package com.acme;
@@ -2732,7 +2660,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                         new MetricHandler(),
                         new NotFoundHandler()
                     };
-                    final ServerSocket server = new ServerSocket(%d);
+                    final ServerSocket server = new ServerSocket(0);
+                    System.out.println("JAVAN_TEST_READY_PORT=" + server.getLocalPort());
                     for (int handled = 0; handled < 2; handled++) {
                         final Socket accepted = server.accept();
                         final InputStream in = accepted.getInputStream();
@@ -2778,15 +2707,13 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     throw new IllegalStateException("no handler");
                 }
             }
-            """.formatted(port));
+            """);
 
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        final Process process = new ProcessBuilder(project.resolve(".javan/bin/loopback-http-route-handlers").toString())
-            .directory(project.toFile())
-            .start();
-        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
+        final NativeServer server = startNativeServer(project, "loopback-http-route-handlers");
+        final int port = server.awaitPort();
         final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
         final java.net.http.HttpRequest getRequest = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/hello"))
             .GET()
@@ -2794,32 +2721,21 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
         final java.net.http.HttpRequest postRequest = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/metric"))
             .POST(java.net.http.HttpRequest.BodyPublishers.ofString("hello"))
             .build();
-        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        java.net.http.HttpResponse<String> first = null;
-        while (System.nanoTime() < deadline) {
-            try {
-                first = client.send(getRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
-                break;
-            } catch (final java.net.ConnectException exception) {
-                Thread.sleep(25L);
-            }
-        }
-        assertThat(first).isNotNull();
+        final java.net.http.HttpResponse<String> first = client.send(getRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
         assertThat(first.statusCode()).isEqualTo(200);
         assertThat(first.body()).isEqualTo("pong");
 
         final java.net.http.HttpResponse<String> second = client.send(postRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
         assertThat(second.statusCode()).isEqualTo(201);
         assertThat(second.body()).isEqualTo("saved");
-        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
-        assertThat(process.exitValue()).isZero();
-        assertThat(readStream(process.getInputStream())).isEmpty();
-        assertThat(stderr.join()).isEmpty();
+        assertThat(server.process().waitFor(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(server.process().exitValue()).isZero();
+        assertThat(server.stdout().join()).isEmpty();
+        assertThat(server.stderr().join()).isEmpty();
     }
 
     @Test
     void loopbackHttpRequestHeaderDispatchBuildsAndMatchesHeaderValue() throws Exception {
-        final int port = freeTcpPort();
         final Path project = project("loopback-http-request-header-dispatch");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -2858,7 +2774,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) throws Exception {
-                    final ServerSocket server = new ServerSocket(%d);
+                    final ServerSocket server = new ServerSocket(0);
+                    System.out.println("JAVAN_TEST_READY_PORT=" + server.getLocalPort());
                     final Socket accepted = server.accept();
                     final InputStream in = accepted.getInputStream();
                     final OutputStream out = accepted.getOutputStream();
@@ -2931,42 +2848,29 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     return true;
                 }
             }
-            """.formatted(port));
+            """);
 
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        final Process process = new ProcessBuilder(project.resolve(".javan/bin/loopback-http-request-header-dispatch").toString())
-            .directory(project.toFile())
-            .start();
-        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
+        final NativeServer server = startNativeServer(project, "loopback-http-request-header-dispatch");
+        final int port = server.awaitPort();
         final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
         final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/header"))
             .header("X-Mode", "strict")
             .GET()
             .build();
-        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        java.net.http.HttpResponse<String> response = null;
-        while (System.nanoTime() < deadline) {
-            try {
-                response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
-                break;
-            } catch (final java.net.ConnectException exception) {
-                Thread.sleep(25L);
-            }
-        }
-        assertThat(response).isNotNull();
+        final java.net.http.HttpResponse<String> response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(202);
         assertThat(response.body()).isEqualTo("strict");
-        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
-        assertThat(process.exitValue()).isZero();
-        assertThat(readStream(process.getInputStream())).isEmpty();
-        assertThat(stderr.join()).isEmpty();
+        assertThat(server.process().waitFor(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(server.process().exitValue()).isZero();
+        assertThat(server.stdout().join()).isEmpty();
+        assertThat(server.stderr().join()).isEmpty();
     }
 
     @Test
     void loopbackHttpResponseHeaderBuildsAndClientObservesHeaderValue() throws Exception {
-        final int port = freeTcpPort();
         final Path project = project("loopback-http-response-header");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -2993,7 +2897,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) throws Exception {
-                    final ServerSocket server = new ServerSocket(%d);
+                    final ServerSocket server = new ServerSocket(0);
+                    System.out.println("JAVAN_TEST_READY_PORT=" + server.getLocalPort());
                     final Socket accepted = server.accept();
                     final InputStream in = accepted.getInputStream();
                     final OutputStream out = accepted.getOutputStream();
@@ -3042,42 +2947,29 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     return false;
                 }
             }
-            """.formatted(port));
+            """);
 
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        final Process process = new ProcessBuilder(project.resolve(".javan/bin/loopback-http-response-header").toString())
-            .directory(project.toFile())
-            .start();
-        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
+        final NativeServer server = startNativeServer(project, "loopback-http-response-header");
+        final int port = server.awaitPort();
         final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
         final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/response-header"))
             .GET()
             .build();
-        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        java.net.http.HttpResponse<String> response = null;
-        while (System.nanoTime() < deadline) {
-            try {
-                response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
-                break;
-            } catch (final java.net.ConnectException exception) {
-                Thread.sleep(25L);
-            }
-        }
-        assertThat(response).isNotNull();
+        final java.net.http.HttpResponse<String> response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).isEqualTo("pong");
         assertThat(response.headers().firstValue("X-Mode")).contains("strict");
-        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
-        assertThat(process.exitValue()).isZero();
-        assertThat(readStream(process.getInputStream())).isEmpty();
-        assertThat(stderr.join()).isEmpty();
+        assertThat(server.process().waitFor(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(server.process().exitValue()).isZero();
+        assertThat(server.stdout().join()).isEmpty();
+        assertThat(server.stderr().join()).isEmpty();
     }
 
     @Test
     void loopbackHttpRequestResponseObjectsBuildAndServeAcrossServiceClasses() throws Exception {
-        final int port = freeTcpPort();
         final Path project = project("loopback-http-request-response-objects");
         writeJava(project, "com.acme.RequestData", """
             package com.acme;
@@ -3288,8 +3180,9 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     this.router = router;
                 }
 
-                public void serve(final int port, final int connections) throws Exception {
-                    final ServerSocket server = new ServerSocket(port);
+                public void serve(final int connections) throws Exception {
+                    final ServerSocket server = new ServerSocket(0);
+                    System.out.println("JAVAN_TEST_READY_PORT=" + server.getLocalPort());
                     for (int handled = 0; handled < connections; handled++) {
                         final Socket accepted = server.accept();
                         final InputStream in = accepted.getInputStream();
@@ -3335,18 +3228,16 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                         new MetricRoute(),
                         new NotFoundRoute()
                     });
-                    new HttpService(router).serve(%d, 3);
+                    new HttpService(router).serve(3);
                 }
             }
-            """.formatted(port));
+            """);
 
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        final Process process = new ProcessBuilder(project.resolve(".javan/bin/loopback-http-request-response-objects").toString())
-            .directory(project.toFile())
-            .start();
-        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
+        final NativeServer server = startNativeServer(project, "loopback-http-request-response-objects");
+        final int port = server.awaitPort();
         final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
         final java.net.http.HttpRequest getRequest = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/hello"))
             .GET()
@@ -3357,17 +3248,7 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
         final java.net.http.HttpRequest missingRequest = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/missing"))
             .GET()
             .build();
-        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        java.net.http.HttpResponse<String> first = null;
-        while (System.nanoTime() < deadline) {
-            try {
-                first = client.send(getRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
-                break;
-            } catch (final java.net.ConnectException exception) {
-                Thread.sleep(25L);
-            }
-        }
-        assertThat(first).isNotNull();
+        final java.net.http.HttpResponse<String> first = client.send(getRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
         assertThat(first.statusCode()).isEqualTo(200);
         assertThat(first.body()).isEqualTo("pong");
 
@@ -3378,10 +3259,10 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
         final java.net.http.HttpResponse<String> third = client.send(missingRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
         assertThat(third.statusCode()).isEqualTo(404);
         assertThat(third.body()).isEqualTo("miss");
-        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
-        assertThat(process.exitValue()).isZero();
-        assertThat(readStream(process.getInputStream())).isEmpty();
-        assertThat(stderr.join()).isEmpty();
+        assertThat(server.process().waitFor(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(server.process().exitValue()).isZero();
+        assertThat(server.stdout().join()).isEmpty();
+        assertThat(server.stderr().join()).isEmpty();
     }
 
     @Test
@@ -3464,7 +3345,6 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     @Test
     @WindowsCompatibilityProof
     void httpServerLoopbackBuildsServesAndStopsCleanly() throws Exception {
-        final int port = freeTcpPort();
         final Path project = project("http-server-loopback");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -3479,12 +3359,13 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) throws Exception {
-                    server = HttpServer.create(new InetSocketAddress("127.0.0.1", %d), 0);
+                    server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
                     server.createContext("/hello", new HelloHandler());
                     server.start();
+                    System.out.println("JAVAN_TEST_READY_PORT=" + server.getAddress().getPort());
                 }
             }
-            """.formatted(port));
+            """);
         writeJava(project, "com.acme.HelloHandler", """
             package com.acme;
 
@@ -3506,10 +3387,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        final Process process = new ProcessBuilder(nativeBinary(project, "http-server-loopback").toString())
-            .directory(project.toFile())
-            .start();
-        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
+        final NativeServer server = startNativeServer(project, "http-server-loopback");
+        final int port = server.awaitPort();
         final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
         final java.net.http.HttpRequest missingRequest = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/missing"))
             .GET()
@@ -3517,16 +3396,16 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
         final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/hello"))
             .GET()
             .build();
-        java.net.http.HttpResponse<String> response = awaitLoopbackResponse(client, missingRequest);
+        java.net.http.HttpResponse<String> response = client.send(missingRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(404);
         assertThat(response.body()).isEmpty();
         response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).isEqualTo("pong");
-        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
-        assertThat(process.exitValue()).isZero();
-        assertThat(readStream(process.getInputStream())).isEmpty();
-        assertThat(stderr.join()).isEmpty();
+        assertThat(server.process().waitFor(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(server.process().exitValue()).isZero();
+        assertThat(server.stdout().join()).isEmpty();
+        assertThat(server.stderr().join()).isEmpty();
     }
 
     @Test
@@ -4901,7 +4780,6 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
         final String target,
         final java.util.function.Function<java.net.http.HttpRequest.Builder, java.net.http.HttpRequest> buildRequest
     ) throws Exception {
-        final int port = freeTcpPort();
         final Path project = project(name);
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -4916,12 +4794,13 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) throws Exception {
-                    server = HttpServer.create(new InetSocketAddress("127.0.0.1", %d), 0);
+                    server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
                     server.createContext("/hello", new HelloHandler());
                     server.start();
+                    System.out.println("JAVAN_TEST_READY_PORT=" + server.getAddress().getPort());
                 }
             }
-            """.formatted(port));
+            """);
         writeJava(project, "com.acme.HelloHandler", """
             package com.acme;
 
@@ -4945,26 +4824,25 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
             .directory(project.toFile());
         nativeCommand.environment().put("JAVAN_GC_STRESS", "1");
         nativeCommand.environment().put("JAVAN_GC_SAFEPOINT_INTERVAL", "1");
-        final Process process = nativeCommand.start();
-        final CompletableFuture<String> stderr = readProcessErrorOnVirtualThread(process);
+        final NativeServer server = startNativeServer(nativeCommand);
         try {
+            final int port = server.awaitPort();
             final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
             final java.net.http.HttpRequest.Builder request = java.net.http.HttpRequest.newBuilder(
                 java.net.URI.create("http://127.0.0.1:" + port + target)
             ).timeout(Duration.ofSeconds(5));
-            final java.net.http.HttpResponse<String> nativeResponse = awaitLoopbackResponse(client, buildRequest.apply(request));
+            final java.net.http.HttpResponse<String> nativeResponse = client.send(
+                buildRequest.apply(request), java.net.http.HttpResponse.BodyHandlers.ofString()
+            );
 
             assertThat(nativeResponse.statusCode()).isEqualTo(expectedStatus);
             assertThat(nativeResponse.body()).isEqualTo(expectedBody);
-            assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
-            assertThat(process.exitValue()).isZero();
-            assertThat(readStream(process.getInputStream())).isEmpty();
-            assertThat(stderr.join()).isEmpty();
+            assertThat(server.process().waitFor(10, TimeUnit.SECONDS)).isTrue();
+            assertThat(server.process().exitValue()).isZero();
+            assertThat(server.stdout().join()).isEmpty();
+            assertThat(server.stderr().join()).isEmpty();
         } finally {
-            if (process.isAlive()) {
-                process.destroyForcibly();
-                process.waitFor(5, TimeUnit.SECONDS);
-            }
+            server.close();
         }
     }
 
@@ -4980,19 +4858,77 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
         return result;
     }
 
-    private static java.net.http.HttpResponse<String> awaitLoopbackResponse(
-        final java.net.http.HttpClient client,
-        final java.net.http.HttpRequest request
-    ) throws Exception {
-        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        while (System.nanoTime() < deadline) {
+    private NativeServer startNativeServer(final Path project, final String name) throws IOException {
+        return startNativeServer(new ProcessBuilder(nativeBinary(project, name).toString()).directory(project.toFile()));
+    }
+
+    private NativeServer startNativeServer(final ProcessBuilder command) throws IOException {
+        final Process process = command.start();
+        final CompletableFuture<Integer> readyPort = new CompletableFuture<>();
+        final CompletableFuture<String> stdout = new CompletableFuture<>();
+        Thread.ofVirtual().start(() -> {
+            try (java.io.BufferedReader reader = process.inputReader(StandardCharsets.UTF_8)) {
+                readyPort.complete(parseNativeServerPort(reader.readLine()));
+                final StringBuilder remaining = new StringBuilder();
+                for (String line = reader.readLine(); line != null; line = reader.readLine()) {
+                    remaining.append(line).append('\n');
+                }
+                stdout.complete(remaining.toString());
+            } catch (final Exception exception) {
+                readyPort.completeExceptionally(exception);
+                stdout.completeExceptionally(exception);
+            }
+        });
+        final NativeServer server = new NativeServer(process, readyPort, stdout, readProcessErrorOnVirtualThread(process));
+        nativeServers.add(server);
+        return server;
+    }
+
+    private static int parseNativeServerPort(final String line) {
+        try {
+            if (line == null || !line.startsWith(NATIVE_SERVER_READY_PORT)) {
+                throw new IllegalArgumentException("missing readiness frame");
+            }
+            final int port = Integer.parseInt(line.substring(NATIVE_SERVER_READY_PORT.length()));
+            if (port < 1 || port > 65_535) {
+                throw new IllegalArgumentException("out of range");
+            }
+            return port;
+        } catch (final RuntimeException exception) {
+            throw new IllegalStateException("Native server did not report a valid ready port: " + line, exception);
+        }
+    }
+
+    private record NativeServer(
+        Process process,
+        CompletableFuture<Integer> readyPort,
+        CompletableFuture<String> stdout,
+        CompletableFuture<String> stderr
+    ) implements AutoCloseable {
+        private int awaitPort() throws Exception {
             try {
-                return client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
-            } catch (final java.net.ConnectException exception) {
-                Thread.sleep(25L);
+                return readyPort.get(5, TimeUnit.SECONDS);
+            } catch (final InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                close();
+                throw new IllegalStateException("Native server did not publish a ready port within five seconds.", exception);
+            } catch (final java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException exception) {
+                close();
+                throw new IllegalStateException("Native server did not publish a ready port within five seconds.", exception);
             }
         }
-        throw new AssertionError("Native HttpServer did not accept a loopback request within five seconds");
+
+        @Override
+        public void close() {
+            if (process.isAlive()) {
+                process.destroyForcibly();
+                try {
+                    process.waitFor(5, TimeUnit.SECONDS);
+                } catch (final InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }
     }
 
 }
