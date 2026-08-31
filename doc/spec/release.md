@@ -161,6 +161,12 @@ package-backed sanitizer leg reuses the generated self-host C output from the im
 preceding packaged self-build. The accepted Snapshot run supplies timing and package evidence
 for every currently enabled package row.
 
+To reproduce a host-native package proof, run
+`JAVAN_PACKAGE_TARGET=<target> sh .github/scripts/verify-ci-package-smoke.sh`; for this release's
+macOS target, use `macos-aarch64`. The command reuses precompiled classes in CI, but performs its
+own clean build when those classes are absent, so the documented local proof starts from a clean
+checkout rather than relying on CI-only setup.
+
 ## Maven Central
 
 Maven Central publication is `Planned` and deliberately hard-disabled. The complete

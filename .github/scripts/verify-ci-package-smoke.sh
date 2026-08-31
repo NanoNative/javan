@@ -77,7 +77,11 @@ finish() {
 trap finish EXIT
 trap 'exit 130' HUP INT TERM
 
-JAVAN_BUILD_REUSE_TARGET=true scripts/build.sh
+if [ -f target/classes/javan/Main.class ]; then
+  JAVAN_BUILD_REUSE_TARGET=true scripts/build.sh
+else
+  scripts/build.sh
+fi
 started=$(javan_timing_now)
 if ARCHIVE=$(.github/scripts/package-release.sh "${JAVAN_VERSION:-}"); then
   archive_status=pass
