@@ -55,6 +55,7 @@ final class CliCommandIntegrationTest {
             "--format <formats>",
             "--kind <kind>",
             "--profile <profile>",
+            "Javan and host-C -O2 release optimizations",
             "--jobs <count>",
             "core, service, library, or strict"
         );

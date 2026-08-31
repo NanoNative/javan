@@ -56,6 +56,18 @@ final class NativeLinkerTest {
     }
 
     @Test
+    void releaseCompilerFlagsOptimizeWithoutChangingPlatformLinkRequirements() {
+        assertThat(NativeLinker.compilerFlagsForOs("Linux", true))
+            .containsExactly("-O2", "-pthread", "-Wno-parentheses");
+        assertThat(NativeLinker.compilerFlagsForOs("Mac OS X", true))
+            .containsExactly("-O2", "-pthread", "-Wno-parentheses");
+        assertThat(NativeLinker.compilerFlagsForOs("Windows 11", true))
+            .containsExactly("-O2", "-Wno-parentheses");
+        assertThat(NativeLinker.compilerFlagsForOs("Linux", false))
+            .containsExactly("-pthread", "-Wno-parentheses");
+    }
+
+    @Test
     void windowsHostResolvesExeSuffixFromPathEntry() throws Exception {
         final Path compiler = Files.createFile(tempDir.resolve("gcc.exe"));
         assertThat(compiler.toFile().setExecutable(true)).isTrue();
@@ -235,6 +247,30 @@ final class NativeLinkerTest {
         final NativeLinker.CacheLinkResult reused = linker.linkCached(
             tempDir, main, runtime, tempDir.resolve("out/reused"), cache, NativeLinkInputs.empty(), List.of()
         );
+        final NativeLinker.CacheLinkResult release = linker.linkCached(
+            tempDir,
+            List.of(main),
+            List.of(header),
+            runtime,
+            tempDir.resolve("out/release"),
+            cache,
+            NativeLinkInputs.empty(),
+            List.of(),
+            0,
+            true
+        );
+        final NativeLinker.CacheLinkResult reusedRelease = linker.linkCached(
+            tempDir,
+            List.of(main),
+            List.of(header),
+            runtime,
+            tempDir.resolve("out/reused-release"),
+            cache,
+            NativeLinkInputs.empty(),
+            List.of(),
+            0,
+            true
+        );
         Files.writeString(header, "#define EXIT_CODE 1\n");
         final NativeLinker.CacheLinkResult changedHeader = linker.linkCached(
             tempDir, main, runtime, tempDir.resolve("out/changed-header"), cache, NativeLinkInputs.empty(), List.of()
@@ -251,6 +287,8 @@ final class NativeLinkerTest {
         assertThat(initial.artifact()).isRegularFile();
         assertThat(initial.objects()).allSatisfy(entry -> assertThat(entry.reused()).isFalse());
         assertThat(reused.objects()).allSatisfy(entry -> assertThat(entry.reused()).isTrue());
+        assertThat(release.objects()).allSatisfy(entry -> assertThat(entry.reused()).isFalse());
+        assertThat(reusedRelease.objects()).allSatisfy(entry -> assertThat(entry.reused()).isTrue());
         assertThat(changedHeader.objects()).allSatisfy(entry -> assertThat(entry.reused()).isFalse());
         assertThat(repaired.objects()).anySatisfy(entry -> {
             assertThat(entry.source()).isEqualTo("main.c");
@@ -660,6 +698,43 @@ final class NativeLinkerTest {
         });
 
         assertThat(runner.commands().get(0)).contains("-shared", "-Wl,--no-undefined");
+    }
+
+    @Test
+    void releaseLibraryCommandsCompileWithPortableOptimization() throws Exception {
+        final RecordingProcessRunner runner = new RecordingProcessRunner(
+            new ProcessRunner.Result(0, "", ""),
+            new ProcessRunner.Result(0, "", ""),
+            new ProcessRunner.Result(0, "", ""),
+            new ProcessRunner.Result(0, "", "")
+        );
+        final NativeLinker linker = new NativeLinker(runner);
+
+        withOsName("Linux", () -> {
+            linker.linkSharedLibrary(
+                tempDir,
+                tempDir.resolve("main.c"),
+                tempDir.resolve("runtime.c"),
+                tempDir.resolve("out/libdemo.so"),
+                NativeLinkInputs.empty(),
+                List.of(),
+                true
+            );
+            linker.linkStaticLibrary(
+                tempDir,
+                tempDir.resolve("main.c"),
+                tempDir.resolve("runtime.c"),
+                tempDir.resolve("out/libdemo.a"),
+                NativeLinkInputs.empty(),
+                List.of(),
+                true
+            );
+        });
+
+        assertThat(runner.commands().get(0)).contains("-O2", "-shared");
+        assertThat(runner.commands().get(1)).contains("-O2", "-fPIC", "-c");
+        assertThat(runner.commands().get(2)).contains("-O2", "-fPIC", "-c");
+        assertThat(runner.commands().get(3)).doesNotContain("-O2");
     }
 
     @Test

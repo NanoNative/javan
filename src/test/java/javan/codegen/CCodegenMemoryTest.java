@@ -23,6 +23,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -237,6 +238,48 @@ final class CCodegenMemoryTest {
     }
 
     @Test
+    void indexesMultiplePlannedStackAllocationsByInstruction() throws Exception {
+        final IrProgram program = new IrProgram(
+            List.of(nodeClass()),
+            List.of(new IrFunction(
+                "com/acme/Main",
+                "main",
+                "([Ljava/lang/String;)V",
+                "main_symbol",
+                IrType.VOID,
+                List.of(),
+                List.of(new IrLocal(IrType.OBJECT, "node"), new IrLocal(IrType.OBJECT, "values")),
+                List.of(
+                    IrInstruction.printlnLiteral("before"),
+                    IrInstruction.assignObject("node", IrExpression.objectAllocation("com/acme/Node")),
+                    IrInstruction.assignObject("values", IrExpression.intArrayAllocation(IrExpression.intLiteral(2))),
+                    IrInstruction.returnVoid()
+                )
+            )),
+            "main_symbol"
+        );
+        final EscapeAnalyzer analyzer = new EscapeAnalyzer();
+        final EscapeAnalyzer.StackAllocationPlan plan = analyzer.planStackAllocations(
+            program, analyzer.analyze(program), true
+        );
+
+        final String generated = Files.readString(new CCodegen().generate(
+            program, tempDir, javan.build.NativeInteropConfig.empty(), plan
+        ));
+
+        assertThat(plan.sites()).hasSize(2);
+        assertThat(generated).contains(
+            "struct javan_class_com_acme_Node javan_stack_object_1 = {1};",
+            "int values[2]; } javan_stack_array_2",
+            "node = (void*) &javan_stack_object_1;",
+            "values = (void*) &javan_stack_array_2;"
+        );
+        assertThat(generated)
+            .doesNotContain("node = javan_new_com_acme_Node();")
+            .doesNotContain("values = javan_int_array_new(2);");
+    }
+
+    @Test
     void emitsStableTypeIdForPlannedStackObject() throws Exception {
         final IrProgram program = new IrProgram(
             List.of(nodeClass()),
@@ -377,6 +420,41 @@ final class CCodegenMemoryTest {
     }
 
     @Test
+    void clearsDeadObjectRootsBeyondSingleLivenessWordInDeclarationOrder() throws Exception {
+        final List<IrLocal> locals = new ArrayList<>();
+        final List<IrInstruction> instructions = new ArrayList<>();
+        for (int index = 0; index < 130; index++) {
+            final String name = "root_" + index;
+            locals.add(new IrLocal(IrType.OBJECT, name));
+            instructions.add(IrInstruction.assignObject(name, IrExpression.objectAllocation("com/acme/Node")));
+        }
+        instructions.add(IrInstruction.returnVoid());
+        final IrProgram program = new IrProgram(
+            List.of(nodeClass()),
+            List.of(new IrFunction(
+                "com/acme/Main",
+                "main",
+                "([Ljava/lang/String;)V",
+                "main_symbol",
+                IrType.VOID,
+                List.of(),
+                locals,
+                instructions
+            )),
+            "main_symbol"
+        );
+
+        final String generated = Files.readString(new CCodegen().generate(program, tempDir));
+
+        final int firstClear = generated.indexOf("\n    root_0 = 0;\n");
+        final int wordBoundaryClear = generated.indexOf("\n    root_64 = 0;\n");
+        final int finalClear = generated.indexOf("\n    root_129 = 0;\n");
+        assertThat(firstClear).isGreaterThanOrEqualTo(0);
+        assertThat(wordBoundaryClear).isGreaterThan(firstClear);
+        assertThat(finalClear).isGreaterThan(wordBoundaryClear);
+    }
+
+    @Test
     void keepsLoopCarriedRootLiveAcrossBackedge() throws Exception {
         final IrProgram program = new IrProgram(
             List.of(nodeClass()),
@@ -474,6 +552,41 @@ final class CCodegenMemoryTest {
                 + "    javan_runtime_lock_leave();\n"
                 + "    javan_gc_safe_point();"
         );
+    }
+
+    @Test
+    void retainsLiveRootWhenBranchTargetIsImmediateFallthrough() throws Exception {
+        final IrProgram program = new IrProgram(
+            List.of(nodeClass()),
+            List.of(new IrFunction(
+                "com/acme/Main",
+                "main",
+                "([Ljava/lang/String;)V",
+                "main_symbol",
+                IrType.VOID,
+                List.of(),
+                List.of(new IrLocal(IrType.OBJECT, "tmp")),
+                List.of(
+                    IrInstruction.assignObject("tmp", IrExpression.objectAllocation("com/acme/Node")),
+                    IrInstruction.branchIf("use", IrExpression.intLiteral(1)),
+                    IrInstruction.label("use"),
+                    IrInstruction.printlnObject(IrExpression.objectLocal("tmp")),
+                    IrInstruction.returnVoid()
+                )
+            )),
+            "main_symbol"
+        );
+
+        final String generated = Files.readString(new CCodegen().generate(program, tempDir));
+
+        assertThat(generated).contains(
+            "if (1) goto use;\n"
+                + "    javan_gc_safe_point();\n"
+                + "use:\n"
+                + "    javan_gc_safe_point();\n"
+                + "    javan_println_object_value(tmp);"
+        );
+        assertThat(generated).doesNotContain("use:\n    tmp = 0;");
     }
 
     @Test

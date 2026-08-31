@@ -26,7 +26,7 @@ import java.util.Optional;
  * @param profile selected static profile
  * @param exports native library export declarations
  * @param bindings native library binding languages
- * @param release whether release optimizations are requested
+ * @param release whether Javan and host-C release optimizations are requested
  * @param targetTriple requested host target assertion for native builds
  * @param jobs requested native compiler worker cap
  * @param passthroughArgs arguments passed to a built program by {@code run}

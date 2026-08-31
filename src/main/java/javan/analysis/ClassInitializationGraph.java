@@ -9,10 +9,12 @@ import javan.util.Strings2;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /** Builds the deterministic runtime trigger and dependency graph for JVM class initialization. */
 public final class ClassInitializationGraph {
@@ -63,10 +65,10 @@ public final class ClassInitializationGraph {
     public static Result analyze(final Map<String, ClassFile> classes, final List<EntryPoint> reachableMethods) {
         final List<EntryPoint> methods = sortedMethods(reachableMethods);
         final List<Trigger> triggers = new ArrayList<>();
-        final List<String> roots = new ArrayList<>();
+        final Set<String> roots = new HashSet<>();
         for (final EntryPoint entry : methods) {
             if ("<clinit>".equals(entry.methodName()) && supportsRuntimeInitialization(classes, entry.className())) {
-                addUniqueSorted(roots, entry.className());
+                roots.add(entry.className());
             }
             final ClassFile classFile = classes.get(entry.className());
             if (classFile == null) {
@@ -83,11 +85,11 @@ public final class ClassInitializationGraph {
                 }
                 final String owner = target.orElseThrow();
                 triggers.add(new Trigger(entry, instruction.offset(), triggerKind(instruction.opcode()), owner));
-                addUniqueSorted(roots, owner);
+                roots.add(owner);
             }
         }
         final Map<String, List<String>> dependencies = new LinkedHashMap<>();
-        for (final String root : roots) {
+        for (final String root : sortedStrings(roots)) {
             addNode(classes, root, dependencies, new ArrayList<>());
         }
         return new Result(dependencies, triggers);
@@ -295,14 +297,46 @@ public final class ClassInitializationGraph {
 
     private static List<EntryPoint> sortedMethods(final List<EntryPoint> methods) {
         final List<EntryPoint> result = new ArrayList<>();
+        final List<EntryPoint> scratch = new ArrayList<>();
         for (final EntryPoint method : methods) {
-            int index = result.size();
-            while (index > 0 && compare(result.get(index - 1), method) > 0) {
-                index--;
-            }
-            result.add(index, method);
+            result.add(method);
+            scratch.add(method);
         }
+        sortMethods(result, scratch, 0, result.size());
         return result;
+    }
+
+    private static void sortMethods(
+        final List<EntryPoint> methods,
+        final List<EntryPoint> scratch,
+        final int from,
+        final int to
+    ) {
+        if (to - from < 2) {
+            return;
+        }
+        final int middle = from + (to - from) / 2;
+        sortMethods(methods, scratch, from, middle);
+        sortMethods(methods, scratch, middle, to);
+        int left = from;
+        int right = middle;
+        int target = from;
+        while (left < middle && right < to) {
+            if (compare(methods.get(left), methods.get(right)) <= 0) {
+                scratch.set(target++, methods.get(left++));
+            } else {
+                scratch.set(target++, methods.get(right++));
+            }
+        }
+        while (left < middle) {
+            scratch.set(target++, methods.get(left++));
+        }
+        while (right < to) {
+            scratch.set(target++, methods.get(right++));
+        }
+        for (int index = from; index < to; index++) {
+            methods.set(index, scratch.get(index));
+        }
     }
 
     private static int compare(final EntryPoint left, final EntryPoint right) {
@@ -313,13 +347,15 @@ public final class ClassInitializationGraph {
         return Strings2.compareAscii(left.descriptor(), right.descriptor());
     }
 
-    private static void addUniqueSorted(final List<String> values, final String value) {
-        int index = 0;
-        while (index < values.size() && Strings2.compareAscii(values.get(index), value) < 0) {
-            index++;
+    private static List<String> sortedStrings(final Set<String> values) {
+        final List<String> unordered = new ArrayList<>();
+        for (final String value : values) {
+            unordered.add(value);
         }
-        if (index >= values.size() || !values.get(index).equals(value)) {
-            values.add(index, value);
+        final List<String> result = new ArrayList<>();
+        for (final Integer index : Strings2.sortedIndexes(unordered)) {
+            result.add(unordered.get(index.intValue()));
         }
+        return result;
     }
 }

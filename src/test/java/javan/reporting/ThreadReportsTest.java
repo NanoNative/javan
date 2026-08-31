@@ -78,7 +78,13 @@ final class ThreadReportsTest {
         );
 
         assertThat(summary.ioBoundTaskMethods()).isEqualTo(1L);
-        assertThat(summary.methods()).singleElement().extracting(ThreadReports.MethodActivity::classification).isEqualTo("IO_BOUND");
+        assertThat(summary.methods()).singleElement().satisfies(method -> {
+            assertThat(method.classification()).isEqualTo("IO_BOUND");
+            assertThat(method.estimatedInstructions()).isEqualTo(4L);
+            assertThat(method.allocationSites()).isZero();
+            assertThat(method.ioCallSites()).isEqualTo(1L);
+            assertThat(method.hasLoop()).isFalse();
+        });
     }
 
     @Test
@@ -135,6 +141,41 @@ final class ThreadReportsTest {
 
         assertThat(summary.pinningRiskMethods()).isEqualTo(1L);
         assertThat(summary.methods()).singleElement().extracting(ThreadReports.MethodActivity::classification).isEqualTo("PINNING_RISK");
+    }
+
+    @Test
+    void summarizeRetainsReachableMetricsForDiagnosticOnlyMethods() {
+        final ThreadReports.Summary summary = summarizeReachable(
+            List.of(Diagnostic.error("JAVAN178", "", "com/acme/Main", "main()V", "Thread.sleep(long)", "", "")),
+            method(
+                "main",
+                List.of(
+                    instruction(0, 187, "new"),
+                    instruction(1, 182, "invokevirtual", new MethodRef("java/io/InputStream", "read", "()I")),
+                    instruction(2, 177, "return")
+                )
+            )
+        );
+
+        assertThat(summary.methods()).singleElement().satisfies(method -> {
+            assertThat(method.blockingWaits()).isEqualTo(1L);
+            assertThat(method.threadStartSites()).isZero();
+            assertThat(method.estimatedInstructions()).isEqualTo(3L);
+            assertThat(method.allocationSites()).isEqualTo(1L);
+            assertThat(method.ioCallSites()).isEqualTo(1L);
+        });
+    }
+
+    @Test
+    void summarizeOmitsReachableMethodsWithoutThreadSignals() {
+        final ThreadReports.Summary summary = summarizeReachable(
+            List.of(),
+            method("main", List.of(instruction(0, 177, "return")))
+        );
+
+        assertThat(summary.threadStartSites()).isZero();
+        assertThat(summary.threadStartMethods()).isZero();
+        assertThat(summary.methods()).isEmpty();
     }
 
     private static ThreadReports.Summary summarizeReachable(final List<Diagnostic> diagnostics, final MethodInfo method) {

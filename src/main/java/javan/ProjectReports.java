@@ -110,10 +110,12 @@ public final class ProjectReports {
     }
 
     private static void writeReachabilityReport(final ProjectLayout layout, final CallGraph callGraph) throws IOException {
+        final List<String> reachableMethods = sortedEntries(callGraph.reachableMethods());
         final StringBuilder report = new StringBuilder();
         report.append("entry: ").append(callGraph.entryPoint().display()).append(System.lineSeparator());
+        report.append("reachableMethods: ").append(reachableMethods.size()).append(System.lineSeparator());
         report.append("reachable:").append(System.lineSeparator());
-        for (final String line : sortedEntries(callGraph.reachableMethods())) {
+        for (final String line : reachableMethods) {
             report.append("  ").append(line).append(System.lineSeparator());
         }
         final Path reports = layout.outputDirectory().resolve("reports");

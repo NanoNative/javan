@@ -187,7 +187,7 @@ public final class Cli {
               --profile <profile>    core, service, library, or strict
               --export <method>      exported library method
               --bindings <list>      c,rust,go,python
-              --release             enable release build mode
+              --release             enable Javan and host-C -O2 release optimizations
               --target <triple>      assert host target for native build
               --jobs <count>         request a native app compiler worker cap; effective cap is currently one
             """;

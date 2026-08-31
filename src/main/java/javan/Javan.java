@@ -325,7 +325,8 @@ public final class Javan {
             check.layout().outputDirectory().resolve("cache").resolve("native"),
             nativeInterop.linkInputs(),
             nativeInterop.externalSymbols(),
-            options.jobs().orElse(0)
+            options.jobs().orElse(0),
+            options.release()
         );
         final Path binary = linked.artifact();
         writeNativeObjectCacheReport(check.layout().outputDirectory(), linked);
@@ -362,7 +363,9 @@ public final class Javan {
         final List<Path> artifacts = new ArrayList<>();
         for (final LibraryFormat format : options.libraryFormats()) {
             final Path output = libraryArtifactPath(format, check.layout().outputDirectory(), check.layout().outputName());
-            artifacts.add(linkLibraryFormat(format, check.layout().root(), libraryC, runtimeC, output, nativeInterop));
+            artifacts.add(linkLibraryFormat(
+                format, check.layout().root(), libraryC, runtimeC, output, nativeInterop, options.release()
+            ));
         }
         final List<Path> bindings = bindingGenerator.generate(
             check.layout().outputDirectory(),
@@ -773,7 +776,8 @@ public final class Javan {
         final Path libraryC,
         final Path runtimeC,
         final Path output,
-        final NativeInteropConfig nativeInterop
+        final NativeInteropConfig nativeInterop,
+        final boolean release
     ) throws IOException, InterruptedException {
         if (format == LibraryFormat.STATIC) {
             return nativeLinker.linkStaticLibrary(
@@ -782,7 +786,8 @@ public final class Javan {
                 runtimeC,
                 output,
                 nativeInterop.linkInputs(),
-                nativeInterop.externalSymbols()
+                nativeInterop.externalSymbols(),
+                release
             );
         }
         if (format == LibraryFormat.SHARED) {
@@ -792,7 +797,8 @@ public final class Javan {
                 runtimeC,
                 output,
                 nativeInterop.linkInputs(),
-                nativeInterop.externalSymbols()
+                nativeInterop.externalSymbols(),
+                release
             );
         }
         throw new IllegalStateException("Unsupported library format");

@@ -16,6 +16,7 @@ import java.util.Optional;
  */
 public final class ReportSummarizer {
     private static final long NO_NUMBER = Long.MIN_VALUE;
+    private static final String REACHABLE_METHOD_COUNT_PREFIX = "reachableMethods: ";
     private static final List<ReportSpec> REPORTS = List.of(
         new ReportSpec("project", List.of("project.json")),
         new ReportSpec("toolchain", List.of("toolchain.json", "toolchain.md")),
@@ -1122,6 +1123,30 @@ public final class ReportSummarizer {
     }
 
     private static long reachableMethodCount(final String value) {
+        final long declaredCount = declaredReachableMethodCount(value);
+        if (declaredCount != NO_NUMBER) {
+            return declaredCount;
+        }
+        return legacyReachableMethodCount(value);
+    }
+
+    private static long declaredReachableMethodCount(final String value) {
+        int search = 0;
+        while (search < value.length()) {
+            final int match = value.indexOf(REACHABLE_METHOD_COUNT_PREFIX, search);
+            if (match < 0) {
+                return NO_NUMBER;
+            }
+            if (match == 0 || value.charAt(match - 1) == '\n') {
+                final long count = numberAt(value, match + REACHABLE_METHOD_COUNT_PREFIX.length());
+                return count < 0L ? NO_NUMBER : count;
+            }
+            search = match + REACHABLE_METHOD_COUNT_PREFIX.length();
+        }
+        return NO_NUMBER;
+    }
+
+    private static long legacyReachableMethodCount(final String value) {
         long count = 0L;
         boolean reachable = false;
         int lineStart = 0;

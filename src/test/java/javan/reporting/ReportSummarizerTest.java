@@ -470,7 +470,10 @@ final class ReportSummarizerTest {
     @Test
     void writeSummarizesReachabilityMetrics() throws Exception {
         final Path reports = reportsDirectory();
-        Files.writeString(reports.resolve("reachability.txt"), "entry: com/acme/Main.main([Ljava/lang/String;)V\r\nreachable:\n  a\n  b\n");
+        Files.writeString(
+            reports.resolve("reachability.txt"),
+            "entry: com/acme/Main.main([Ljava/lang/String;)V\r\nreachableMethods: 2\nreachable:\n  a\n  b\n  stale\n"
+        );
 
         final ReportSummarizer.Summary summary = new ReportSummarizer().write(tempDir);
 
@@ -486,6 +489,16 @@ final class ReportSummarizerTest {
 
         assertThat(summary.markdown()).contains("reachableMethods: `1`");
         assertThat(summary.markdown()).doesNotContain("entry:");
+    }
+
+    @Test
+    void writeFallsBackToReachabilityEntriesWhenDeclaredCountIsMalformed() throws Exception {
+        final Path reports = reportsDirectory();
+        Files.writeString(reports.resolve("reachability.txt"), "reachableMethods: -1\nreachable:\n  a\n");
+
+        final ReportSummarizer.Summary summary = new ReportSummarizer().write(tempDir);
+
+        assertThat(summary.markdown()).contains("reachableMethods: `1`");
     }
 
     @Test

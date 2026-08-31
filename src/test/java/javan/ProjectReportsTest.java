@@ -95,6 +95,7 @@ final class ProjectReportsTest {
         new ProjectReports().writeReachability(layout, graph);
 
         final String report = Files.readString(layout.outputDirectory().resolve("reports/reachability.txt"));
+        assertThat(report).contains("reachableMethods: 3");
         assertThat(report.indexOf("com/acme/Alpha.call()V")).isLessThan(report.indexOf("com/acme/Zed.call()V"));
         assertThat(Files.readString(layout.outputDirectory().resolve("reports/call-graph.json")))
             .contains(
