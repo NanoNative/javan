@@ -168,7 +168,7 @@ final class WorkflowPolicySurfaceTest {
         final Path docker = Files.writeString(tools.resolve("docker"), """
             #!/bin/sh
             case "$*" in
-              *--raw) printf '%s\\n' '{"manifests":[{"architecture":"amd64"},{"architecture":"arm64"}]}' ;;
+              *--raw) printf '%s\\n' '{"manifests":[{"platform":{"architecture":"amd64","os":"linux"}},{"platform":{"architecture":"arm64","os":"linux"}}]}' ;;
               *--format*) printf '%s\\n' 'sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' ;;
               *) exit 64 ;;
             esac

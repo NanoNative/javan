@@ -43,11 +43,17 @@ archive_checksum() {
 }
 
 RAW=$(docker buildx imagetools inspect "$IMAGE" --raw)
-if ! printf '%s\n' "$RAW" | grep -Eq '"architecture"[[:space:]]*:[[:space:]]*"amd64"'; then
+has_linux_platform() {
+  architecture=$1
+  platform_pattern='"platform"[[:space:]]*:[[:space:]]*\{[^}]*("architecture"[[:space:]]*:[[:space:]]*"'"$architecture"'"[^}]*"os"[[:space:]]*:[[:space:]]*"linux"|"os"[[:space:]]*:[[:space:]]*"linux"[^}]*"architecture"[[:space:]]*:[[:space:]]*"'"$architecture"'")[^}]*\}'
+  printf '%s\n' "$RAW" | tr '\n' ' ' | grep -Eq "$platform_pattern"
+}
+
+if ! has_linux_platform amd64; then
   printf '%s\n' "Image manifest is missing linux/amd64: $IMAGE" >&2
   exit 1
 fi
-if ! printf '%s\n' "$RAW" | grep -Eq '"architecture"[[:space:]]*:[[:space:]]*"arm64"'; then
+if ! has_linux_platform arm64; then
   printf '%s\n' "Image manifest is missing linux/arm64: $IMAGE" >&2
   exit 1
 fi

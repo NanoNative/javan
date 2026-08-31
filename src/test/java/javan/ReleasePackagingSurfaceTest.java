@@ -297,6 +297,39 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     }
 
     @Test
+    void imageVerificationRejectsNonLinuxManifestArchitecture() throws Exception {
+        final String version = "2026.8.30";
+        final String image = "ghcr.io/nanonative/javan:" + version;
+        final Path releaseDir = Files.createDirectories(tempDir.resolve("release"));
+        final Path proofDir = tempDir.resolve("proof");
+        final Path bin = Files.createDirectories(tempDir.resolve("bin"));
+        writeReleaseArtifact(releaseDir, "javan-" + version + "-linux-x64.tar.gz", "linux-x64");
+        writeReleaseArtifact(releaseDir, "javan-" + version + "-linux-aarch64.tar.gz", "linux-aarch64");
+        writeDockerManifestStub(bin, """
+            {"manifests":[
+              {"platform":{"architecture":"amd64","os":"linux"}},
+              {"platform":{"architecture":"arm64","os":"windows"}}
+            ]}
+            """);
+
+        final ProcessResult run = process(
+            REPO_ROOT,
+            List.of("sh", REPO_ROOT.resolve(VERIFY_IMAGE).toString(), image),
+            Duration.ofSeconds(20),
+            Map.of(
+                "JAVAN_RELEASE_VERSION", version,
+                "JAVAN_RELEASE_ARCHIVE_DIR", releaseDir.toString(),
+                "JAVAN_RELEASE_PROOF_DIR", proofDir.toString(),
+                "PATH", bin + System.getProperty("path.separator") + System.getenv("PATH")
+            )
+        );
+
+        assertThat(run.exitCode()).isEqualTo(1);
+        assertThat(run.stderr()).contains("Image manifest is missing linux/arm64");
+        assertThat(proofDir).doesNotExist();
+    }
+
+    @Test
     void releaseRehearsalPackagesChecksummedCompiledInputsAndRejectsPublication() throws Exception {
         final Path releaseDir = tempDir.resolve("release");
         final String target = "linux-x64";
@@ -1179,15 +1212,25 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     }
 
     private static void writeDockerManifestStub(final Path bin) throws Exception {
+        writeDockerManifestStub(bin, """
+            {"manifests":[
+              {"platform":{"architecture":"amd64","os":"linux"}},
+              {"platform":{"architecture":"arm64","os":"linux"}}
+            ]}
+            """);
+    }
+
+    private static void writeDockerManifestStub(final Path bin, final String manifest) throws Exception {
         final Path docker = bin.resolve("docker");
-        Files.writeString(docker, """
+        final String script = """
             #!/bin/sh
             if [ "$5" = "--raw" ]; then
-              printf '%s\\n' '{"manifests":[{"architecture":"amd64"},{"architecture":"arm64"}]}'
+              printf '%s\\n' '__JAVAN_MANIFEST__'
               exit 0
             fi
             printf '%s\\n' 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-            """, StandardCharsets.UTF_8);
+            """;
+        Files.writeString(docker, script.replace("__JAVAN_MANIFEST__", manifest.replace("\n", "")), StandardCharsets.UTF_8);
         assertThat(docker.toFile().setExecutable(true)).isTrue();
     }
 
