@@ -11,8 +11,12 @@ fields.
   --export com.acme.Math.add \
   --export com.acme.Text.greet \
   --export com.acme.Bytes.duplicate \
+  --export com.acme.Bytes.merge \
   --export com.acme.Store.rememberString \
   --export com.acme.Store.lastString \
+  --export com.acme.Store.rememberBytes \
+  --export com.acme.Store.lastBytes \
+  --export com.acme.Store.clear \
   --export com.acme.Failures.failInt \
   --bindings c,rust,go,python
 cc caller.c .javan/dist/libnative-library.a -o native-library-caller

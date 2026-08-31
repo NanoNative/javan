@@ -96,6 +96,16 @@ public final class BytecodeSupport {
         return opcode == 108 || opcode == 109 || opcode == 112 || opcode == 113;
     }
 
+    /**
+     * Returns whether an opcode allocates a one-dimensional Java array and can throw for a negative length.
+     *
+     * @param opcode unsigned JVM opcode
+     * @return whether the opcode is {@code newarray} or {@code anewarray}
+     */
+    public static boolean isSingleDimensionArrayAllocation(final int opcode) {
+        return opcode == 188 || opcode == 189;
+    }
+
     private static boolean recognizedRejectedOpcode(final int opcode) {
         return switch (opcode) {
             case 90, 93, 94, 95,

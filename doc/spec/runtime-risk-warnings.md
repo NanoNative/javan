@@ -50,9 +50,20 @@ Integral `idiv`, `ldiv`, `irem`, and `lrem` are runtime-correct independently of
 This is runtime semantics, not a new compile-time warning. Javan does not yet reject a literal
 zero divisor before native generation because a valid program can catch the exception.
 
-The current handler admission is deliberately bounded: a protected range may contain one
-integral division or remainder plus bytecodes already classified as non-throwing. Broader
-protected ranges, including other potential failure points, remain outside this release slice.
+One-dimensional `newarray` and `anewarray` allocations are likewise runtime-correct for dynamic
+lengths:
+
+- a negative length routes `NegativeArraySizeException` with the Java decimal length as its
+  message through the original handler or uncaught-exception path
+- the exception can propagate through application methods for callers to catch
+- known non-negative literals avoid an unnecessary generated check
+- generated C allocation helpers retain their negative-length panic as an internal defensive
+  boundary; Java bytecode reaches the Java exception path first
+
+The current direct handler admission is deliberately bounded: a protected range may contain one
+integral division or remainder, or one one-dimensional array allocation, plus bytecodes already
+classified as non-throwing. Broader protected ranges, including other potential failure points,
+remain outside this release slice.
 
 ## Next Risk Checks
 

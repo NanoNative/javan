@@ -629,6 +629,10 @@ public final class BytecodeToIR {
                 && !caughtBy(classes, method, instruction.offset(), "java/lang/ArithmeticException")) {
                 result.add("java/lang/ArithmeticException");
             }
+            if (BytecodeSupport.isSingleDimensionArrayAllocation(instruction.opcode())
+                && !caughtBy(classes, method, instruction.offset(), "java/lang/NegativeArraySizeException")) {
+                result.add("java/lang/NegativeArraySizeException");
+            }
             if (instruction.methodRef().isPresent()) {
                 for (final String throwableType : JdkCallSupport.transportedPlatformThrowableTypes(
                     instruction.methodRef().orElseThrow()
@@ -2171,10 +2175,28 @@ public final class BytecodeToIR {
                 BytecodeToIRDynamicSupport.newObject(classes, classFile, method, instruction, instructions, stack, localDeclarations);
                 break;
             case 188:
-                newPrimitiveArray(classFile, method, instruction, instructions, stack, localDeclarations);
+                newPrimitiveArray(
+                    classFile,
+                    method,
+                    instruction,
+                    instructions,
+                    stack,
+                    localDeclarations,
+                    pendingExceptionHandlerStacks,
+                    sourceLines
+                );
                 break;
             case 189:
-                newObjectArray(classFile, method, instruction, instructions, stack, localDeclarations);
+                newObjectArray(
+                    classFile,
+                    method,
+                    instruction,
+                    instructions,
+                    stack,
+                    localDeclarations,
+                    pendingExceptionHandlerStacks,
+                    sourceLines
+                );
                 break;
             case 190:
                 arrayLength(classFile, method, stack);
@@ -2594,9 +2616,20 @@ public final class BytecodeToIR {
         final Instruction instruction,
         final List<IrInstruction> instructions,
         final List<StackValue> stack,
-        final Map<Integer, IrLocal> localDeclarations
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
     ) {
-        final IrExpression length = popInt(classFile, method, stack);
+        final IrExpression length = checkedArrayLength(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            localDeclarations,
+            pendingExceptionHandlerStacks,
+            sourceLines
+        );
         final String componentJvmName = instruction.className().orElseThrow();
         final String localName = "object" + localDeclarations.size();
         localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
@@ -2622,17 +2655,72 @@ public final class BytecodeToIR {
         final Instruction instruction,
         final List<IrInstruction> instructions,
         final List<StackValue> stack,
-        final Map<Integer, IrLocal> localDeclarations
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
     ) {
         if (instruction.operands().length == 0) {
             throw unsupported(classFile, method, instruction);
         }
-        final IrExpression length = popInt(classFile, method, stack);
+        final IrExpression length = checkedArrayLength(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            localDeclarations,
+            pendingExceptionHandlerStacks,
+            sourceLines
+        );
         final String localName = "object" + localDeclarations.size();
         localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
         final IrExpression local = IrExpression.objectLocal(localName);
         instructions.add(IrInstruction.assignObject(localName, primitiveArrayAllocation(classFile, method, instruction, length)));
         stack.add(StackValue.objectExpression(local));
+    }
+
+    private static IrExpression checkedArrayLength(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
+    ) {
+        final IrExpression length = popInt(classFile, method, stack);
+        if (length.kind() == IrExpression.Kind.INT_LITERAL && Integer.parseInt(length.value()) >= 0) {
+            return length;
+        }
+        final int lengthLocalIndex = localDeclarations.size();
+        final String lengthLocalName = "int" + lengthLocalIndex;
+        localDeclarations.put(
+            Integer.MIN_VALUE + lengthLocalIndex,
+            new IrLocal(IrType.INT, lengthLocalName)
+        );
+        instructions.add(IrInstruction.assignInt(lengthLocalName, length));
+        final IrExpression checkedLength = IrExpression.intLocal(lengthLocalName);
+        final String successLabel = "label_array_length_non_negative_" + instruction.offset() + "_" + lengthLocalIndex;
+        instructions.add(IrInstruction.branchIf(
+            successLabel,
+            IrExpression.intComparison(">=", checkedLength, IrExpression.intLiteral(0))
+        ));
+        final List<StackValue> successStack = List.copyOf(stack);
+        BytecodeToIRInvokeSupport.routePendingPlatformException(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            "java/lang/NegativeArraySizeException",
+            IrExpression.objectCall("javan_string_value_of_int", List.of(checkedLength))
+        );
+        instructions.add(IrInstruction.label(successLabel));
+        stack.addAll(successStack);
+        return checkedLength;
     }
 
     static IrExpression primitiveArrayAllocation(

@@ -2080,6 +2080,12 @@ public final class StaticVerifier {
         if (supportedIntegralArithmeticHandler(code, handler)) {
             return true;
         }
+        if (supportedNegativeArraySizeHandler(code, handler)) {
+            return true;
+        }
+        if (supportedSingleApplicationThrowableTransportHandler(classes, code, handler)) {
+            return true;
+        }
         if (supportedFinallyHandler(classes, method, code, handler)) {
             return true;
         }
@@ -3280,6 +3286,15 @@ public final class StaticVerifier {
                 && !caughtByThrowableHandler(classes, code, instruction.offset(), "java/lang/ArithmeticException")) {
                 result.add("java/lang/ArithmeticException");
             }
+            if (BytecodeSupport.isSingleDimensionArrayAllocation(instruction.opcode())
+                && !caughtByThrowableHandler(
+                    classes,
+                    code,
+                    instruction.offset(),
+                    "java/lang/NegativeArraySizeException"
+                )) {
+                result.add("java/lang/NegativeArraySizeException");
+            }
             if (instruction.methodRef().isPresent()) {
                 final MethodRef called = instruction.methodRef().orElseThrow();
                 for (final String throwableType : JdkCallSupport.transportedPlatformThrowableTypes(called)) {
@@ -3674,6 +3689,57 @@ public final class StaticVerifier {
             }
         }
         return arithmeticInstructionCount == 1;
+    }
+
+    private static boolean supportedNegativeArraySizeHandler(final CodeAttribute code, final CodeException handler) {
+        if (handler.catchType().isEmpty()
+            || !JdkCallSupport.isPlatformThrowableAssignable(
+                "java/lang/NegativeArraySizeException",
+                handler.catchType().orElseThrow()
+            )) {
+            return false;
+        }
+        int arrayAllocationCount = 0;
+        for (final Instruction instruction : code.instructions()) {
+            if (instruction.offset() < handler.startPc() || instruction.offset() >= handler.endPc()) {
+                continue;
+            }
+            if (BytecodeSupport.isSingleDimensionArrayAllocation(instruction.opcode())) {
+                arrayAllocationCount++;
+                continue;
+            }
+            if (!boundedNonThrowingOpcode(instruction.opcode())) {
+                return false;
+            }
+        }
+        return arrayAllocationCount == 1;
+    }
+
+    private static boolean supportedSingleApplicationThrowableTransportHandler(
+        final Map<String, ClassFile> classes,
+        final CodeAttribute code,
+        final CodeException handler
+    ) {
+        if (handler.catchType().isEmpty() || !isThrowable(classes, handler.catchType().orElseThrow())) {
+            return false;
+        }
+        final String catchType = handler.catchType().orElseThrow();
+        int transportingCallCount = 0;
+        for (final Instruction instruction : code.instructions()) {
+            if (instruction.offset() < handler.startPc() || instruction.offset() >= handler.endPc()) {
+                continue;
+            }
+            if (instruction.methodRef().isPresent()
+                && classes.containsKey(instruction.methodRef().orElseThrow().owner())
+                && supportedTransportedThrowableCall(classes, instruction, catchType)) {
+                transportingCallCount++;
+                continue;
+            }
+            if (!boundedNonThrowingOpcode(instruction.opcode())) {
+                return false;
+            }
+        }
+        return transportingCallCount == 1;
     }
 
     private static boolean isSupportedMathExactCall(final Instruction instruction) {

@@ -2482,6 +2482,7 @@ public final class CCodegen {
         if (program.classInitializationDependencies().containsKey(export.entryPoint().className())) {
             c.append("    ").append(classInitializationSymbol(export.entryPoint().className())).append("();")
                 .append(System.lineSeparator());
+            emitExportPendingPanic(List.of(), false, c);
         }
         final List<Integer> objectArguments = objectExportArgumentIndexes(export);
         final AbiType returnType = export.returnType();
@@ -2524,33 +2525,55 @@ public final class CCodegen {
             + ")";
         if (returnType == AbiType.VOID) {
             c.append("    ").append(call).append(";").append(System.lineSeparator());
-            emitExportWrapperCleanup(objectArguments, objectReturn, c);
-            c.append("    javan_panic_clear_target(&javan_export_panic_target);").append(System.lineSeparator());
         } else if (returnType == AbiType.STRING) {
             c.append("    ").append(objectCall).append(";").append(System.lineSeparator());
-            c.append("    char* javan_export_result = javan_string_export((const char*) javan_export_object_result);").append(System.lineSeparator());
-            emitExportWrapperCleanup(objectArguments, objectReturn, c);
+        } else if (returnType == AbiType.BYTE_ARRAY) {
+            c.append("    ").append(objectCall).append(";").append(System.lineSeparator());
+        } else if (returnType == AbiType.OBJECT) {
+            c.append("    ").append(objectCall).append(";").append(System.lineSeparator());
+        } else {
+            c.append("    ").append(returnType.cReturnName()).append(" javan_export_primitive_result = ")
+                .append(call).append(";").append(System.lineSeparator());
+        }
+        emitExportPendingPanic(objectArguments, objectReturn, c);
+        if (returnType == AbiType.VOID) {
+            emitExportWrapperCleanup(objectArguments, objectReturn, "    ", c);
+            c.append("    javan_panic_clear_target(&javan_export_panic_target);").append(System.lineSeparator());
+        } else if (returnType == AbiType.STRING) {
+            c.append("    char* javan_export_result = javan_string_export((const char*) javan_export_object_result);")
+                .append(System.lineSeparator());
+            emitExportWrapperCleanup(objectArguments, objectReturn, "    ", c);
             c.append("    javan_panic_clear_target(&javan_export_panic_target);").append(System.lineSeparator());
             c.append("    return javan_export_result;").append(System.lineSeparator());
         } else if (returnType == AbiType.BYTE_ARRAY) {
-            c.append("    ").append(objectCall).append(";").append(System.lineSeparator());
-            c.append("    JavanByteArray javan_export_result = javan_byte_array_export(javan_export_object_result);").append(System.lineSeparator());
-            emitExportWrapperCleanup(objectArguments, objectReturn, c);
+            c.append("    JavanByteArray javan_export_result = javan_byte_array_export(javan_export_object_result);")
+                .append(System.lineSeparator());
+            emitExportWrapperCleanup(objectArguments, objectReturn, "    ", c);
             c.append("    javan_panic_clear_target(&javan_export_panic_target);").append(System.lineSeparator());
             c.append("    return javan_export_result;").append(System.lineSeparator());
         } else if (returnType == AbiType.OBJECT) {
-            c.append("    ").append(objectCall).append(";").append(System.lineSeparator());
-            c.append("    JavanObjectHandle* javan_export_result = javan_object_handle_new(javan_export_object_result);").append(System.lineSeparator());
-            emitExportWrapperCleanup(objectArguments, objectReturn, c);
+            c.append("    JavanObjectHandle* javan_export_result = javan_object_handle_new(javan_export_object_result);")
+                .append(System.lineSeparator());
+            emitExportWrapperCleanup(objectArguments, objectReturn, "    ", c);
             c.append("    javan_panic_clear_target(&javan_export_panic_target);").append(System.lineSeparator());
             c.append("    return javan_export_result;").append(System.lineSeparator());
         } else {
-            c.append("    ").append(returnType.cReturnName()).append(" javan_export_result = ").append(call).append(";").append(System.lineSeparator());
-            emitExportWrapperCleanup(objectArguments, objectReturn, c);
+            emitExportWrapperCleanup(objectArguments, objectReturn, "    ", c);
             c.append("    javan_panic_clear_target(&javan_export_panic_target);").append(System.lineSeparator());
-            c.append("    return javan_export_result;").append(System.lineSeparator());
+            c.append("    return javan_export_primitive_result;").append(System.lineSeparator());
         }
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+    }
+
+    private static void emitExportPendingPanic(
+        final List<Integer> objectArguments,
+        final boolean objectReturn,
+        final StringBuilder c
+    ) {
+        c.append("    if (javan_pending_has() != 0) {").append(System.lineSeparator());
+        emitExportWrapperCleanup(objectArguments, objectReturn, "        ", c);
+        c.append("        javan_pending_panic();").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
     }
 
     private static void emitExportWrapperDefaultReturn(final AbiType type, final StringBuilder c) {
@@ -2711,12 +2734,13 @@ public final class CCodegen {
     private static void emitExportWrapperCleanup(
         final List<Integer> objectArguments,
         final boolean objectReturn,
+        final String indent,
         final StringBuilder c
     ) {
         if (objectArguments.isEmpty() && !objectReturn) {
             return;
         }
-        c.append("    javan_root_frame_pop(javan_export_roots);").append(System.lineSeparator());
+        c.append(indent).append("javan_root_frame_pop(javan_export_roots);").append(System.lineSeparator());
     }
 
     private static void emitExportSignature(final ExportedMethod export, final StringBuilder c) {

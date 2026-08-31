@@ -2031,6 +2031,8 @@ final class CCodegenMemoryTest {
             "arg0_array = javan_byte_array_from(arg0.data, arg0.length);",
             "arg1_array = javan_byte_array_from(arg1.data, arg1.length);",
             BytecodeToIR.symbol(entry) + "((void**) &javan_export_object_result, arg0_array, arg1_array);",
+            "if (javan_pending_has() != 0) {",
+            "javan_pending_panic();",
             "JavanByteArray javan_export_result = javan_byte_array_export(javan_export_object_result);",
             "javan_root_frame_pop(javan_export_roots);",
             "JavanResult javan_try_com_acme_Bytes_merge_bytes_bytes(JavanByteArray arg0, JavanByteArray arg1, JavanByteArray* out) {",
@@ -2050,6 +2052,14 @@ final class CCodegenMemoryTest {
             .isLessThan(generated.indexOf("arg1_array = javan_byte_array_from(arg1.data, arg1.length);"));
         assertThat(generated.indexOf("arg1_array = javan_byte_array_from(arg1.data, arg1.length);"))
             .isLessThan(generated.indexOf(BytecodeToIR.symbol(entry) + "((void**) &javan_export_object_result, arg0_array, arg1_array);"));
+        final int exportedCall = generated.indexOf(
+            BytecodeToIR.symbol(entry) + "((void**) &javan_export_object_result, arg0_array, arg1_array);"
+        );
+        final int pendingCheck = generated.indexOf("if (javan_pending_has() != 0) {", exportedCall);
+        assertThat(exportedCall).isLessThan(pendingCheck);
+        assertThat(generated.indexOf("javan_root_frame_pop(javan_export_roots);", exportedCall))
+            .isLessThan(generated.indexOf("javan_pending_panic();", pendingCheck));
+        assertThat(pendingCheck).isLessThan(generated.indexOf("javan_byte_array_export(javan_export_object_result);", pendingCheck));
         assertThat(generated.indexOf("javan_root_frame_pop(javan_export_roots);"))
             .isLessThan(generated.indexOf("javan_panic_clear_target(&javan_export_panic_target);", generated.indexOf("javan_root_frame_pop(javan_export_roots);")));
         assertThat(generated)

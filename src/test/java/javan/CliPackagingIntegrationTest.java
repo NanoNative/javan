@@ -1088,6 +1088,60 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeLibraryExportPublishesUncaughtNegativeArraySizeException() throws Exception {
+        final Path project = project("library-negative-array-size");
+        writeJava(project, "com.acme.Failures", """
+            package com.acme;
+
+            public final class Failures {
+                private Failures() {
+                }
+
+                public static int fail() {
+                    return new int[-1].length;
+                }
+            }
+            """);
+
+        final CliRun run = run(
+            tempDir,
+            "build",
+            project.toString(),
+            "--library",
+            "--format",
+            "static",
+            "--export",
+            "com.acme.Failures.fail"
+        );
+
+        assertThat(run.exitCode()).isZero();
+        final Path library = project.resolve(".javan/dist/liblibrary-negative-array-size.a");
+        final Path caller = writeC(project, "call_failure.c", """
+            #include <stdio.h>
+            #include ".javan/dist/bindings/c/library-negative-array-size.h"
+
+            int main(void) {
+                int direct = javan_export_com_acme_Failures_fail_void();
+                printf("direct:%d:%s:%s\\n", direct, javan_last_error_code(), javan_last_error_detail());
+                javan_clear_error();
+                int value = 42;
+                JavanResult result = javan_try_com_acme_Failures_fail_void(&value);
+                printf("try:%d:%s:%s:%d\\n", result.ok, result.code, result.detail, value);
+                javan_result_free(&result);
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-failure");
+
+        assertThat(process(project, List.of("cc", caller.toString(), library.toString(), "-o", binary.toString())).exitCode())
+            .isZero();
+        assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo("""
+            direct:0:JAVAN-RUNTIME-PANIC:-1
+            try:0:JAVAN-RUNTIME-PANIC:-1:0
+            """);
+    }
+
+    @Test
     void staticLibraryEmbedsDependencyResourceAndReadsItFromCExport() throws Exception {
         final Path dependency = addJarResource(
             dependencyJar("library-resource", "dep.Library", """
