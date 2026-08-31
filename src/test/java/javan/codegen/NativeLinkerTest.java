@@ -315,6 +315,14 @@ final class NativeLinkerTest {
     }
 
     @Test
+    void cacheEntryPreservesThreeArgumentCallerEvidence() {
+        final Path object = Path.of("cache.o");
+
+        assertThat(new NativeLinker.CacheEntry("main.c", object, true).reason()).isEqualTo("verified");
+        assertThat(new NativeLinker.CacheEntry("main.c", object, false).reason()).isEqualTo("rebuild-requested");
+    }
+
+    @Test
     void cachedLinkCompilesOrderedProgramUnitsAndInvalidatesTheirSharedHeader() throws Exception {
         final Path generated = Files.createDirectories(tempDir.resolve("generated"));
         final Path units = Files.createDirectories(generated.resolve("units"));
