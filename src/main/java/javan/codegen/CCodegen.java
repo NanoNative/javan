@@ -137,6 +137,7 @@ public final class CCodegen {
         }
         c.append("#include <stddef.h>").append(System.lineSeparator());
         c.append("#include <stdio.h>").append(System.lineSeparator()).append(System.lineSeparator());
+        emitGeneratedRuntimeClassResolverPrototype(c);
         emitObjectHeader(c);
         for (final IrClass classInfo : program.classes()) {
             emitStruct(classInfo, c);
@@ -363,6 +364,7 @@ public final class CCodegen {
         final StringBuilder header
     ) {
         header.append("void* javan_generated_object_get_class(void* value);\n");
+        emitGeneratedRuntimeClassResolverPrototype(header);
         if (features.classForName()) {
             header.append("void* javan_generated_class_for_name(void* name_value);\n");
         }
@@ -395,6 +397,10 @@ public final class CCodegen {
             header.append("void ").append(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL).append("(void* self, void* arg);\n");
             header.append("void ").append(MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL).append("(void* self, void* first_arg, void* second_arg);\n");
         }
+    }
+
+    private static void emitGeneratedRuntimeClassResolverPrototype(final StringBuilder c) {
+        c.append("void* javan_generated_runtime_class_from_binary_name(const char* binary_name);\n");
     }
 
     private static void emitServiceLoaderPrototypes(final CodegenFeatures features, final StringBuilder header) {
@@ -588,6 +594,7 @@ public final class CCodegen {
         }
         c.append("#include <stddef.h>").append(System.lineSeparator());
         c.append("#include <stdio.h>").append(System.lineSeparator()).append(System.lineSeparator());
+        emitGeneratedRuntimeClassResolverPrototype(c);
         emitObjectHeader(c);
         for (final IrClass classInfo : program.classes()) {
             emitStruct(classInfo, c);
@@ -995,6 +1002,8 @@ public final class CCodegen {
             c.append("};").append(System.lineSeparator());
         }
         c.append("static void javan_register_generated_type_descriptors(void) {").append(System.lineSeparator());
+        c.append("    javan_register_generated_runtime_class_resolver(javan_generated_runtime_class_from_binary_name);")
+            .append(System.lineSeparator());
         if (program.classes().isEmpty()) {
             c.append("    javan_register_type_descriptors((JavanTypeDescriptor*) 0, 0);").append(System.lineSeparator());
         } else {
@@ -1495,6 +1504,7 @@ public final class CCodegen {
 
     private static void emitGeneratedObjectClassHelpers(final IrProgram program, final StringBuilder c) {
         final java.util.Map<String, Integer> typeIds = typeIds(program);
+        final java.util.Map<String, IrClass> classes = generatedClassesByName(program);
         c.append("void* javan_generated_object_get_class(void* value) {").append(System.lineSeparator());
         c.append("    if (value == 0) {").append(System.lineSeparator());
         c.append("        javan_panic(\"null object has no class\");").append(System.lineSeparator());
@@ -1502,25 +1512,37 @@ public final class CCodegen {
         c.append("    switch (((struct javan_object_header*) value)->_javan_type_id) {").append(System.lineSeparator());
         for (final IrClass classInfo : program.classes()) {
             final int typeId = typeIds.get(classInfo.jvmName()).intValue();
-            c.append("        case ").append(typeId).append(": return javan_runtime_class_literal(")
-                .append(emitCStringLiteral(displayClassName(classInfo.jvmName())))
-                .append(", ")
-                .append(typeId)
-                .append(", ")
-                .append(classInfo.enumClass() ? 1 : 0)
-                .append(", 0, 1, ")
-                .append(typeId)
-                .append(");")
-                .append(System.lineSeparator());
+            c.append("        case ").append(typeId).append(": return ");
+            emitGeneratedRuntimeClassLiteral(classInfo, typeIds, classes, c);
+            c.append(';').append(System.lineSeparator());
         }
         c.append("        default: javan_panic(\"unsupported generated object type\");").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
         c.append("    return 0;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+
+        c.append("void* javan_generated_runtime_class_from_binary_name(const char* binary_name) {")
+            .append(System.lineSeparator());
+        c.append("    if (binary_name == NULL) {").append(System.lineSeparator());
+        c.append("        return NULL;").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        for (final IrClass classInfo : program.classes()) {
+            c.append("    if (javan_string_equals(binary_name, ")
+                .append(emitCStringLiteral(displayClassName(classInfo.jvmName())))
+                .append(") != 0) {")
+                .append(System.lineSeparator());
+            c.append("        return ");
+            emitGeneratedRuntimeClassLiteral(classInfo, typeIds, classes, c);
+            c.append(';').append(System.lineSeparator());
+            c.append("    }").append(System.lineSeparator());
+        }
+        c.append("    return NULL;").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
     }
 
     private static void emitClassForNameHelper(final IrProgram program, final StringBuilder c) {
         final java.util.Map<String, Integer> typeIds = typeIds(program);
+        final java.util.Map<String, IrClass> classes = generatedClassesByName(program);
         c.append("JAVAN_PROGRAM_LINKAGE void* javan_generated_class_for_name(void* name_value) {")
             .append(System.lineSeparator());
         c.append("    if (name_value == NULL) {").append(System.lineSeparator());
@@ -1528,27 +1550,89 @@ public final class CCodegen {
         c.append("    }").append(System.lineSeparator());
         c.append("    const char* name = (const char*) name_value;").append(System.lineSeparator());
         for (final IrClass classInfo : program.classes()) {
-            final int typeId = typeIds.get(classInfo.jvmName()).intValue();
             c.append("    if (javan_string_equals(name, ")
                 .append(emitCStringLiteral(displayClassName(classInfo.jvmName())))
                 .append(")) {")
                 .append(System.lineSeparator());
             emitClassInitialization(program, classInfo.jvmName(), c);
-            c.append("        return javan_runtime_class_literal(")
-                .append(emitCStringLiteral(displayClassName(classInfo.jvmName())))
-                .append(", ")
-                .append(typeId)
-                .append(", ")
-                .append(classInfo.enumClass() ? 1 : 0)
-                .append(", 0, 1, ")
-                .append(typeId)
-                .append(");")
-                .append(System.lineSeparator());
+            c.append("        return ");
+            emitGeneratedRuntimeClassLiteral(classInfo, typeIds, classes, c);
+            c.append(';').append(System.lineSeparator());
             c.append("    }").append(System.lineSeparator());
         }
         c.append("    return javan_runtime_class_for_name_known(name_value);")
             .append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+    }
+
+    private static void emitGeneratedRuntimeClassLiteral(
+        final IrClass classInfo,
+        final java.util.Map<String, Integer> typeIds,
+        final java.util.Map<String, IrClass> classes,
+        final StringBuilder c
+    ) {
+        final List<Integer> assignableTypeIds = generatedAssignableTypeIds(classes, typeIds, classInfo.jvmName());
+        c.append("javan_runtime_class_literal(")
+            .append(emitCStringLiteral(displayClassName(classInfo.jvmName())))
+            .append(", ")
+            .append(typeIds.get(classInfo.jvmName()).intValue())
+            .append(", ")
+            .append(classInfo.enumClass() ? 1 : 0)
+            .append(", 0, ")
+            .append(assignableTypeIds.size());
+        for (final int typeId : assignableTypeIds) {
+            c.append(", ").append(typeId);
+        }
+        c.append(')');
+    }
+
+    private static java.util.Map<String, IrClass> generatedClassesByName(final IrProgram program) {
+        final java.util.Map<String, IrClass> result = new LinkedHashMap<>();
+        for (final IrClass classInfo : program.classes()) {
+            result.put(classInfo.jvmName(), classInfo);
+        }
+        return Map.copyOf(result);
+    }
+
+    private static List<Integer> generatedAssignableTypeIds(
+        final java.util.Map<String, IrClass> classes,
+        final java.util.Map<String, Integer> typeIds,
+        final String target
+    ) {
+        final List<Integer> result = new ArrayList<>();
+        for (final IrClass candidate : classes.values()) {
+            if (generatedClassAssignableTo(classes, candidate.jvmName(), target, new LinkedHashSet<>())) {
+                result.add(typeIds.get(candidate.jvmName()).intValue());
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private static boolean generatedClassAssignableTo(
+        final java.util.Map<String, IrClass> classes,
+        final String candidate,
+        final String target,
+        final Set<String> visited
+    ) {
+        if ("java/lang/Object".equals(target)) {
+            return classes.containsKey(candidate);
+        }
+        if (!visited.add(candidate)) {
+            return false;
+        }
+        if (candidate.equals(target)) {
+            return true;
+        }
+        final IrClass classInfo = classes.get(candidate);
+        if (classInfo == null) {
+            return false;
+        }
+        for (final String interfaceName : classInfo.interfaces()) {
+            if (generatedClassAssignableTo(classes, interfaceName, target, new LinkedHashSet<>(visited))) {
+                return true;
+            }
+        }
+        return generatedClassAssignableTo(classes, classInfo.superName(), target, visited);
     }
 
     private static void emitMethodMetadata(final IrProgram program, final StringBuilder c) {

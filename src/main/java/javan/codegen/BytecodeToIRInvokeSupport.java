@@ -2590,7 +2590,13 @@ final class BytecodeToIRInvokeSupport {
         if (owner != null && owner.isEnum()) {
             return IrExpression.objectStaticField(fieldRef.owner(), fieldRef.name());
         }
-        return IrExpression.stringLiteral(fieldRef.name());
+        return IrExpression.objectCall(
+            "javan_platform_enum_constant",
+            List.of(
+                IrExpression.stringLiteral(binaryClassName(fieldRef.owner())),
+                IrExpression.stringLiteral(fieldRef.name())
+            )
+        );
     }
 
     private static Optional<Integer> enumOrdinalForStaticField(

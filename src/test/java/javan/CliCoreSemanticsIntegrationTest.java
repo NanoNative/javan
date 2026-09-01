@@ -208,6 +208,154 @@ final class CliCoreSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void objectArrayStoresPreserveCatchableJavaArrayStoreExceptions() throws Exception {
+        final Path project = project("object-array-store-exception-semantics");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Object[] values = new Integer[1];
+                    final Object value = "bad";
+                    try {
+                        values[0] = value;
+                    } catch (final ArrayStoreException exception) {
+                        System.out.println(exception.getMessage());
+                    }
+                    values[0] = Integer.valueOf(7);
+                    System.out.println(values[0]);
+                    values[0] = null;
+                    System.out.println(values[0] == null ? "null-ok" : "unexpected");
+                    final String[] compatible = new String[1];
+                    compatible[0] = "compatible";
+                    System.out.println(compatible[0]);
+                    final Handler[] handlers = new Handler[1];
+                    handlers[0] = new ConcreteHandler();
+                    System.out.println(handlers[0].message());
+                    final Base[] bases = new Base[1];
+                    bases[0] = new Derived();
+                    System.out.println(bases[0].message());
+                    final Map.Entry<String, Integer>[] entries = new Map.Entry[1];
+                    entries[0] = Map.entry("entry", 9);
+                    System.out.println(entries[0].getKey());
+                }
+            }
+
+            interface Handler {
+                String message();
+            }
+
+            final class ConcreteHandler implements Handler {
+                @Override
+                public String message() {
+                    return "interface-ok";
+                }
+            }
+
+            class Base {
+                String message() {
+                    return "base";
+                }
+            }
+
+            final class Derived extends Base {
+                @Override
+                String message() {
+                    return "inheritance-ok";
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/object-array-store-exception-semantics").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("java.lang.String\n7\nnull-ok\ncompatible\ninterface-ok\ninheritance-ok\nentry\n");
+    }
+
+    @Test
+    void objectArrayStoreExceptionsPropagateAcrossApplicationMethods() throws Exception {
+        final Path project = project("object-array-store-exception-propagation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    try {
+                        storeInvalidValue();
+                    } catch (final ArrayStoreException exception) {
+                        System.out.println(exception.getMessage());
+                    }
+                }
+
+                private static void storeInvalidValue() {
+                    final Object[] values = new Integer[1];
+                    values[0] = "bad";
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/object-array-store-exception-propagation").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("java.lang.String\n");
+    }
+
+    @Test
+    void objectArrayStoresPreserveTypedPlatformEnumValues() throws Exception {
+        final Path project = project("object-array-platform-enum-semantics");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.nio.file.CopyOption;
+            import java.nio.file.LinkOption;
+            import java.nio.file.StandardCopyOption;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final LinkOption[] options = new LinkOption[1];
+                    options[0] = LinkOption.NOFOLLOW_LINKS;
+                    System.out.println(options[0] == LinkOption.NOFOLLOW_LINKS);
+                    final CopyOption[] copyOptions = new CopyOption[1];
+                    copyOptions[0] = StandardCopyOption.REPLACE_EXISTING;
+                    System.out.println(copyOptions[0] == StandardCopyOption.REPLACE_EXISTING);
+                    try {
+                        final Object[] untyped = options;
+                        final Object forged = "NOFOLLOW_LINKS";
+                        untyped[0] = forged;
+                    } catch (final ArrayStoreException exception) {
+                        System.out.println(exception.getMessage());
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/object-array-platform-enum-semantics").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\ntrue\njava.lang.String\n");
+    }
+
+    @Test
     void arrayAccessExceptionsPropagateAcrossApplicationMethods() throws Exception {
         final Path project = project("array-access-exception-propagation");
         writeJava(project, "com.acme.Main", """

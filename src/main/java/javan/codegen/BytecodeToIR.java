@@ -637,6 +637,10 @@ public final class BytecodeToIR {
                 && !caughtBy(classes, method, instruction.offset(), "java/lang/ArrayIndexOutOfBoundsException")) {
                 result.add("java/lang/ArrayIndexOutOfBoundsException");
             }
+            if (instruction.opcode() == 83
+                && !caughtBy(classes, method, instruction.offset(), "java/lang/ArrayStoreException")) {
+                result.add("java/lang/ArrayStoreException");
+            }
             if (instruction.methodRef().isPresent()) {
                 for (final String throwableType : JdkCallSupport.transportedPlatformThrowableTypes(
                     instruction.methodRef().orElseThrow()
@@ -3031,11 +3035,48 @@ public final class BytecodeToIR {
         final IrExpression value = popObject(classFile, method, stack);
         final IrExpression index = popInt(classFile, method, stack);
         final IrExpression array = popObject(classFile, method, stack);
+        final String valueLocalName = "object" + localDeclarations.size();
+        localDeclarations.put(
+            Integer.MIN_VALUE + localDeclarations.size(),
+            new IrLocal(IrType.OBJECT, valueLocalName)
+        );
+        final IrExpression checkedValue = IrExpression.objectLocal(valueLocalName);
+        instructions.add(IrInstruction.assignObject(valueLocalName, value));
         final ArrayAccess access = checkedArrayAccess(
             classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks,
             sourceLines, array, index
         );
-        instructions.add(IrInstruction.assignArrayObject(access.array(), access.index(), value));
+        final String assignableLabel = "label_object_array_store_assignable_"
+            + instruction.offset() + "_" + localDeclarations.size();
+        instructions.add(IrInstruction.branchIf(
+            assignableLabel,
+            IrExpression.intComparison(
+                "!=",
+                IrExpression.intCall(
+                    "javan_object_array_accepts",
+                    List.of(access.array(), checkedValue)
+                ),
+                IrExpression.intLiteral(0)
+            )
+        ));
+        final List<StackValue> successStack = List.copyOf(stack);
+        BytecodeToIRInvokeSupport.routePendingPlatformException(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            "java/lang/ArrayStoreException",
+            IrExpression.objectCall(
+                "javan_class_type_name",
+                List.of(IrExpression.objectCall("javan_object_get_class", List.of(checkedValue)))
+            )
+        );
+        instructions.add(IrInstruction.label(assignableLabel));
+        stack.addAll(successStack);
+        instructions.add(IrInstruction.assignArrayObject(access.array(), access.index(), checkedValue));
     }
 
     static void storeIntArray(

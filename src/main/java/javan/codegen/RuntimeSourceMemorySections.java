@@ -87,6 +87,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_RUNTIME_KIND_HTTP_CONTEXT 44
         #define JAVAN_RUNTIME_KIND_HTTP_HEADERS 45
         #define JAVAN_RUNTIME_KIND_HTTP_EXCHANGE_INPUT_STREAM 46
+        #define JAVAN_RUNTIME_KIND_PLATFORM_ENUM 47
         #define JAVAN_SERVICE_LOADER_MAGIC 0x4a534c44
         #define JAVAN_SERVICE_ITERATOR_MAGIC 0x4a534954
         #define JAVAN_LIST_VIEW_UNMODIFIABLE 1
@@ -158,6 +159,12 @@ final class RuntimeSourceMemorySections {
             int* key_hashes;
             int* index_buckets;
         } javan_object_map;
+
+        typedef struct javan_platform_enum_value {
+            const char* class_name;
+            const char* constant_name;
+            struct javan_platform_enum_value* next;
+        } javan_platform_enum_value;
 
         typedef struct {
             int magic;
@@ -629,6 +636,7 @@ final class RuntimeSourceMemorySections {
         } javan_runtime_class_registry;
 
         static javan_allocation_node* javan_allocations = NULL;
+        static javan_platform_enum_value* javan_platform_enum_values = NULL;
         static javan_runtime_class_registry javan_runtime_classes = { NULL, NULL, NULL, 0, 0 };
         static JavanObjectHandle* javan_object_handles = NULL;
         static void* javan_allocation_cache_values[JAVAN_ALLOCATION_CACHE_SIZE];
@@ -645,6 +653,7 @@ final class RuntimeSourceMemorySections {
         static unsigned long javan_adaptive_gc_next_allocations = JAVAN_ADAPTIVE_GC_MIN_ALLOCATIONS;
         static JavanTypeDescriptor* javan_type_descriptors_value = NULL;
         static int javan_type_descriptor_count_value = 0;
+        static void* (*javan_generated_runtime_class_resolver_value)(const char*) = NULL;
         static int (*javan_record_object_equals_resolver_value)(void*, void*) = NULL;
         static int (*javan_record_object_hash_code_resolver_value)(void*) = NULL;
         static int (*javan_record_exact_type_resolver_value)(void*, int) = NULL;
@@ -1480,6 +1489,12 @@ final class RuntimeSourceMemorySections {
             javan_runtime_lock_leave();
         }
 
+        void javan_register_generated_runtime_class_resolver(void* (*resolver)(const char*)) {
+            javan_runtime_lock_enter();
+            javan_generated_runtime_class_resolver_value = resolver;
+            javan_runtime_lock_leave();
+        }
+
         void javan_register_record_object_method_resolvers(
             int (*equals_resolver)(void*, void*),
             int (*hash_code_resolver)(void*),
@@ -1627,6 +1642,7 @@ final class RuntimeSourceMemorySections {
                 || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_EXCHANGE_OUTPUT_STREAM
                 || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_HEADERS
                 || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_EXCHANGE_INPUT_STREAM
+                || runtime_kind == JAVAN_RUNTIME_KIND_PLATFORM_ENUM
                 || runtime_kind == JAVAN_RUNTIME_KIND_SCHEDULED_THREAD_POOL_EXECUTOR
                 || runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_LONG
                 || runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN
@@ -2391,6 +2407,7 @@ final class RuntimeSourceMemorySections {
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_HTTP_EXCHANGE_OUTPUT_STREAM
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_HTTP_HEADERS
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_HTTP_EXCHANGE_INPUT_STREAM
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_PLATFORM_ENUM
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_BUILDER
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_FACTORY
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_EXECUTOR
@@ -4085,7 +4102,57 @@ final class RuntimeSourceMemorySections {
             }
         }
 
+        static int javan_runtime_class_platform_type_id(const char* binary_name) {
+            if (strcmp(binary_name, "java.lang.Integer") == 0) return JAVAN_TYPE_JAVA_LANG_INTEGER;
+            if (strcmp(binary_name, "java.lang.Long") == 0) return JAVAN_TYPE_JAVA_LANG_LONG;
+            if (strcmp(binary_name, "java.lang.Float") == 0) return JAVAN_TYPE_JAVA_LANG_FLOAT;
+            if (strcmp(binary_name, "java.lang.Double") == 0) return JAVAN_TYPE_JAVA_LANG_DOUBLE;
+            if (strcmp(binary_name, "java.lang.Boolean") == 0) return JAVAN_TYPE_JAVA_LANG_BOOLEAN;
+            if (strcmp(binary_name, "java.lang.Byte") == 0) return JAVAN_TYPE_JAVA_LANG_BYTE;
+            if (strcmp(binary_name, "java.lang.Short") == 0) return JAVAN_TYPE_JAVA_LANG_SHORT;
+            if (strcmp(binary_name, "java.lang.Character") == 0) return JAVAN_TYPE_JAVA_LANG_CHARACTER;
+            if (strcmp(binary_name, "java.nio.file.attribute.FileTime") == 0) return JAVAN_TYPE_JAVA_NIO_FILE_ATTRIBUTE_FILE_TIME;
+            if (strcmp(binary_name, "java.time.Duration") == 0) return JAVAN_TYPE_JAVA_TIME_DURATION;
+            if (strcmp(binary_name, "java.lang.Thread") == 0) return JAVAN_TYPE_JAVA_LANG_THREAD;
+            if (strcmp(binary_name, "java.lang.ThreadLocal") == 0) return JAVAN_TYPE_JAVA_LANG_THREAD_LOCAL;
+            if (strcmp(binary_name, "java.lang.InheritableThreadLocal") == 0) return JAVAN_TYPE_JAVA_LANG_INHERITABLE_THREAD_LOCAL;
+            if (strcmp(binary_name, "java.nio.charset.Charset") == 0) return JAVAN_TYPE_JAVA_NIO_CHARSET_CHARSET;
+            if (strcmp(binary_name, "java.time.format.DateTimeFormatter") == 0) return JAVAN_TYPE_JAVA_TIME_FORMAT_DATE_TIME_FORMATTER;
+            if (strcmp(binary_name, "java.time.format.DateTimeFormatterBuilder") == 0) return JAVAN_TYPE_JAVA_TIME_FORMAT_DATE_TIME_FORMATTER_BUILDER;
+            if (strcmp(binary_name, "java.time.format.TextStyle") == 0) return JAVAN_TYPE_JAVA_TIME_FORMAT_TEXT_STYLE;
+            if (strcmp(binary_name, "java.util.Locale") == 0) return JAVAN_TYPE_JAVA_UTIL_LOCALE;
+            return 0;
+        }
+
+        static const char* javan_runtime_class_platform_binary_name(int type_id) {
+            switch (type_id) {
+                case JAVAN_TYPE_JAVA_LANG_INTEGER: return "java.lang.Integer";
+                case JAVAN_TYPE_JAVA_LANG_LONG: return "java.lang.Long";
+                case JAVAN_TYPE_JAVA_LANG_FLOAT: return "java.lang.Float";
+                case JAVAN_TYPE_JAVA_LANG_DOUBLE: return "java.lang.Double";
+                case JAVAN_TYPE_JAVA_LANG_BOOLEAN: return "java.lang.Boolean";
+                case JAVAN_TYPE_JAVA_LANG_BYTE: return "java.lang.Byte";
+                case JAVAN_TYPE_JAVA_LANG_SHORT: return "java.lang.Short";
+                case JAVAN_TYPE_JAVA_LANG_CHARACTER: return "java.lang.Character";
+                case JAVAN_TYPE_JAVA_NIO_FILE_ATTRIBUTE_FILE_TIME: return "java.nio.file.attribute.FileTime";
+                case JAVAN_TYPE_JAVA_TIME_DURATION: return "java.time.Duration";
+                case JAVAN_TYPE_JAVA_LANG_THREAD: return "java.lang.Thread";
+                case JAVAN_TYPE_JAVA_LANG_THREAD_LOCAL: return "java.lang.ThreadLocal";
+                case JAVAN_TYPE_JAVA_LANG_INHERITABLE_THREAD_LOCAL: return "java.lang.InheritableThreadLocal";
+                case JAVAN_TYPE_JAVA_NIO_CHARSET_CHARSET: return "java.nio.charset.Charset";
+                case JAVAN_TYPE_JAVA_TIME_FORMAT_DATE_TIME_FORMATTER: return "java.time.format.DateTimeFormatter";
+                case JAVAN_TYPE_JAVA_TIME_FORMAT_DATE_TIME_FORMATTER_BUILDER: return "java.time.format.DateTimeFormatterBuilder";
+                case JAVAN_TYPE_JAVA_TIME_FORMAT_TEXT_STYLE: return "java.time.format.TextStyle";
+                case JAVAN_TYPE_JAVA_UTIL_LOCALE: return "java.util.Locale";
+                default: return NULL;
+            }
+        }
+
         static int javan_runtime_class_known_exact_type_id(const char* binary_name) {
+            int platform_type_id = javan_runtime_class_platform_type_id(binary_name);
+            if (platform_type_id != 0) {
+                return platform_type_id;
+            }
             if (strcmp(binary_name, "java.lang.String") == 0) {
                 return JAVAN_CLASS_EXACT_STRING;
             }
@@ -4202,6 +4269,19 @@ final class RuntimeSourceMemorySections {
         }
 
         static void* javan_runtime_class_from_binary_name(const char* binary_name) {
+            javan_runtime_lock_enter();
+            javan_runtime_class_state* cached = javan_runtime_class_registry_lookup_name_unlocked(binary_name);
+            void* (*resolver)(const char*) = javan_generated_runtime_class_resolver_value;
+            javan_runtime_lock_leave();
+            if (cached != NULL) {
+                return cached;
+            }
+            if (resolver != NULL) {
+                void* generated = resolver(binary_name);
+                if (generated != NULL) {
+                    return generated;
+                }
+            }
             int exact_type_id = javan_runtime_class_known_exact_type_id(binary_name);
             if (exact_type_id != 0) {
                 return javan_runtime_class_literal(binary_name, exact_type_id, 0, binary_name[0] == '[' ? 1 : 0, 0);
@@ -4455,12 +4535,65 @@ final class RuntimeSourceMemorySections {
             return 0;
         }
 
+        void* javan_platform_enum_constant(const char* class_name, const char* constant_name) {
+            if (class_name == NULL || class_name[0] == '\\0'
+                || constant_name == NULL || constant_name[0] == '\\0') {
+                javan_panic("invalid platform enum constant");
+            }
+            javan_runtime_lock_enter();
+            for (javan_platform_enum_value* current = javan_platform_enum_values; current != NULL; current = current->next) {
+                if (strcmp(current->class_name, class_name) == 0 && strcmp(current->constant_name, constant_name) == 0) {
+                    javan_runtime_lock_leave();
+                    return current;
+                }
+            }
+            javan_platform_enum_value* value = (javan_platform_enum_value*) javan_alloc(sizeof(javan_platform_enum_value));
+            value->class_name = class_name;
+            value->constant_name = constant_name;
+            value->next = javan_platform_enum_values;
+            javan_platform_enum_values = value;
+            javan_update_runtime_allocation_kind(value, JAVAN_RUNTIME_KIND_PLATFORM_ENUM);
+            javan_runtime_lock_leave();
+            return value;
+        }
+
+        const char* javan_platform_enum_name(void* value) {
+            javan_allocation_metadata snapshot;
+            if (javan_find_allocation(value, &snapshot) == 0
+                || snapshot.runtime_kind != JAVAN_RUNTIME_KIND_PLATFORM_ENUM) {
+                javan_panic("unsupported platform enum");
+            }
+            return ((javan_platform_enum_value*) value)->constant_name;
+        }
+
+        static int javan_platform_enum_is_instance_of(
+            javan_platform_enum_value* value,
+            const char* target_binary_name
+        ) {
+            if (strcmp(value->class_name, target_binary_name) == 0
+                || strcmp(target_binary_name, "java.lang.Enum") == 0
+                || strcmp(target_binary_name, "java.lang.Comparable") == 0
+                || strcmp(target_binary_name, "java.io.Serializable") == 0
+                || strcmp(target_binary_name, "java.lang.constant.Constable") == 0) {
+                return 1;
+            }
+            return strcmp(target_binary_name, "java.nio.file.CopyOption") == 0
+                && (strcmp(value->class_name, "java.nio.file.StandardCopyOption") == 0
+                    || strcmp(value->class_name, "java.nio.file.LinkOption") == 0) ? 1 : 0;
+        }
+
         static int javan_runtime_class_builtin_instance(javan_runtime_class_state* state, void* object_value) {
             if (state->exact_type_id == JAVAN_CLASS_EXACT_OBJECT) {
                 return object_value != NULL ? 1 : 0;
             }
             javan_allocation_metadata snapshot;
             int found = javan_find_allocation(object_value, &snapshot);
+            if (found != 0 && snapshot.runtime_kind == JAVAN_RUNTIME_KIND_PLATFORM_ENUM) {
+                return javan_platform_enum_is_instance_of(
+                    (javan_platform_enum_value*) object_value,
+                    state->binary_name
+                );
+            }
             if (state->exact_type_id == JAVAN_CLASS_EXACT_STRING) {
                 if (found != 0 && snapshot.runtime_kind == JAVAN_RUNTIME_KIND_STRING) {
                     return 1;
@@ -4475,6 +4608,11 @@ final class RuntimeSourceMemorySections {
             }
             if (state->exact_type_id == JAVAN_CLASS_EXACT_HASH_MAP) {
                 return found != 0 && snapshot.runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_MAP ? 1 : 0;
+            }
+            if (found != 0
+                && snapshot.runtime_kind == JAVAN_RUNTIME_KIND_MAP_ENTRY
+                && strcmp(state->binary_name, "java.util.Map$Entry") == 0) {
+                return 1;
             }
             if (state->exact_type_id == JAVAN_CLASS_EXACT_CLASS) {
                 return javan_runtime_class_registry_contains(object_value);
@@ -4604,6 +4742,9 @@ final class RuntimeSourceMemorySections {
                 binary_name[index] = '\\0';
                 return javan_runtime_class_from_binary_name(binary_name);
             }
+            if (found != 0 && snapshot.runtime_kind == JAVAN_RUNTIME_KIND_PLATFORM_ENUM) {
+                return javan_runtime_class_from_binary_name(((javan_platform_enum_value*) value)->class_name);
+            }
             int type_id = javan_registered_type_id(value);
             if (type_id > 0) {
                 JavanTypeDescriptor* descriptor = javan_type_descriptor_for(type_id);
@@ -4624,59 +4765,9 @@ final class RuntimeSourceMemorySections {
             if (found != 0 && snapshot.runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_MAP) {
                 return javan_runtime_class_literal("java.util.HashMap", JAVAN_CLASS_EXACT_HASH_MAP, 0, 0, 0);
             }
-            if (type_id == JAVAN_TYPE_JAVA_LANG_INTEGER) {
-                return javan_runtime_class_literal("java.lang.Integer", JAVAN_TYPE_JAVA_LANG_INTEGER, 0, 0, 0);
-            }
-            if (type_id == JAVAN_TYPE_JAVA_LANG_LONG) {
-                return javan_runtime_class_literal("java.lang.Long", JAVAN_TYPE_JAVA_LANG_LONG, 0, 0, 0);
-            }
-            if (type_id == JAVAN_TYPE_JAVA_LANG_FLOAT) {
-                return javan_runtime_class_literal("java.lang.Float", JAVAN_TYPE_JAVA_LANG_FLOAT, 0, 0, 0);
-            }
-            if (type_id == JAVAN_TYPE_JAVA_LANG_DOUBLE) {
-                return javan_runtime_class_literal("java.lang.Double", JAVAN_TYPE_JAVA_LANG_DOUBLE, 0, 0, 0);
-            }
-            if (type_id == JAVAN_TYPE_JAVA_LANG_BOOLEAN) {
-                return javan_runtime_class_literal("java.lang.Boolean", JAVAN_TYPE_JAVA_LANG_BOOLEAN, 0, 0, 0);
-            }
-            if (type_id == JAVAN_TYPE_JAVA_LANG_BYTE) {
-                return javan_runtime_class_literal("java.lang.Byte", JAVAN_TYPE_JAVA_LANG_BYTE, 0, 0, 0);
-            }
-            if (type_id == JAVAN_TYPE_JAVA_LANG_SHORT) {
-                return javan_runtime_class_literal("java.lang.Short", JAVAN_TYPE_JAVA_LANG_SHORT, 0, 0, 0);
-            }
-            if (type_id == JAVAN_TYPE_JAVA_LANG_CHARACTER) {
-                return javan_runtime_class_literal("java.lang.Character", JAVAN_TYPE_JAVA_LANG_CHARACTER, 0, 0, 0);
-            }
-            if (type_id == JAVAN_TYPE_JAVA_LANG_THREAD) {
-                return javan_runtime_class_literal("java.lang.Thread", JAVAN_TYPE_JAVA_LANG_THREAD, 0, 0, 0);
-            }
-            if (type_id == JAVAN_TYPE_JAVA_LANG_THREAD_LOCAL) {
-                return javan_runtime_class_literal("java.lang.ThreadLocal", JAVAN_TYPE_JAVA_LANG_THREAD_LOCAL, 0, 0, 0);
-            }
-            if (type_id == JAVAN_TYPE_JAVA_LANG_INHERITABLE_THREAD_LOCAL) {
-                return javan_runtime_class_literal("java.lang.InheritableThreadLocal", JAVAN_TYPE_JAVA_LANG_INHERITABLE_THREAD_LOCAL, 0, 0, 0);
-            }
-            if (type_id == JAVAN_TYPE_JAVA_TIME_DURATION) {
-                return javan_runtime_class_literal("java.time.Duration", JAVAN_TYPE_JAVA_TIME_DURATION, 0, 0, 0);
-            }
-            if (type_id == JAVAN_TYPE_JAVA_TIME_FORMAT_DATE_TIME_FORMATTER) {
-                return javan_runtime_class_literal("java.time.format.DateTimeFormatter", JAVAN_TYPE_JAVA_TIME_FORMAT_DATE_TIME_FORMATTER, 0, 0, 0);
-            }
-            if (type_id == JAVAN_TYPE_JAVA_TIME_FORMAT_DATE_TIME_FORMATTER_BUILDER) {
-                return javan_runtime_class_literal("java.time.format.DateTimeFormatterBuilder", JAVAN_TYPE_JAVA_TIME_FORMAT_DATE_TIME_FORMATTER_BUILDER, 0, 0, 0);
-            }
-            if (type_id == JAVAN_TYPE_JAVA_TIME_FORMAT_TEXT_STYLE) {
-                return javan_runtime_class_literal("java.time.format.TextStyle", JAVAN_TYPE_JAVA_TIME_FORMAT_TEXT_STYLE, 0, 0, 0);
-            }
-            if (type_id == JAVAN_TYPE_JAVA_UTIL_LOCALE) {
-                return javan_runtime_class_literal("java.util.Locale", JAVAN_TYPE_JAVA_UTIL_LOCALE, 0, 0, 0);
-            }
-            if (type_id == JAVAN_TYPE_JAVA_NIO_CHARSET_CHARSET) {
-                return javan_runtime_class_literal("java.nio.charset.Charset", JAVAN_TYPE_JAVA_NIO_CHARSET_CHARSET, 0, 0, 0);
-            }
-            if (type_id == JAVAN_TYPE_JAVA_NIO_FILE_ATTRIBUTE_FILE_TIME) {
-                return javan_runtime_class_literal("java.nio.file.attribute.FileTime", JAVAN_TYPE_JAVA_NIO_FILE_ATTRIBUTE_FILE_TIME, 0, 0, 0);
+            const char* platform_binary_name = javan_runtime_class_platform_binary_name(type_id);
+            if (platform_binary_name != NULL) {
+                return javan_runtime_class_literal(platform_binary_name, type_id, 0, 0, 0);
             }
             javan_panic("unsupported getClass runtime object");
             return NULL;
@@ -7272,7 +7363,7 @@ final class RuntimeSourceMemorySections {
         }
 
         static long long javan_time_unit_to_nanos(void* unit, long long value) {
-            const char* name = (const char*) unit;
+            const char* name = javan_platform_enum_name(unit);
             if (name == NULL) {
                 javan_panic("unsupported TimeUnit");
             }
@@ -9206,6 +9297,32 @@ final class RuntimeSourceMemorySections {
             javan_object_array* values = (javan_object_array*) javan_array_checked(array);
             javan_array_bounds_checked((javan_array_header*) values, index);
             return values->values[index];
+        }
+
+        int javan_object_array_accepts(void* array, void* value) {
+            if (value == NULL) {
+                return 1;
+            }
+            void* array_root = array;
+            void* value_root = value;
+            void* array_class = NULL;
+            void* component_class = NULL;
+            void** roots[] = {
+                (void**) &array_root,
+                (void**) &value_root,
+                (void**) &array_class,
+                (void**) &component_class
+            };
+            javan_root_frame_push(roots, 4);
+            array_class = javan_object_get_class(array_root);
+            component_class = javan_class_component_type(array_class);
+            if (component_class == NULL) {
+                javan_root_frame_pop(roots);
+                javan_panic("invalid object array metadata");
+            }
+            int result = javan_class_is_instance(component_class, value_root);
+            javan_root_frame_pop(roots);
+            return result;
         }
 
         void javan_object_array_set(void* array, int index, void* value) {

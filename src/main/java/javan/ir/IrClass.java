@@ -13,6 +13,7 @@ import java.util.List;
  * @param enumConstants enum constant names in declaration order
  * @param enumClass whether this class is declared as an enum, including empty enums
  * @param cloneable whether instances may be cloned through Object.clone
+ * @param interfaces directly declared JVM interfaces used for runtime type checks
  */
 public record IrClass(
     String jvmName,
@@ -22,8 +23,13 @@ public record IrClass(
     List<IrField> staticFields,
     List<String> enumConstants,
     boolean enumClass,
-    boolean cloneable
+    boolean cloneable,
+    List<String> interfaces
 ) {
+    public IrClass {
+        interfaces = List.copyOf(interfaces);
+    }
+
     /**
      * Creates class metadata without static fields.
      *
@@ -32,7 +38,7 @@ public record IrClass(
      * @param fields lowered field metadata
      */
     public IrClass(final String jvmName, final String symbol, final List<IrField> fields) {
-        this(jvmName, "java/lang/Object", symbol, fields, List.of(), List.of(), false, false);
+        this(jvmName, "java/lang/Object", symbol, fields, List.of(), List.of(), false, false, List.of());
     }
 
     /**
@@ -44,7 +50,7 @@ public record IrClass(
      * @param staticFields lowered static field metadata
      */
     public IrClass(final String jvmName, final String symbol, final List<IrField> fields, final List<IrField> staticFields) {
-        this(jvmName, "java/lang/Object", symbol, fields, staticFields, List.of(), false, false);
+        this(jvmName, "java/lang/Object", symbol, fields, staticFields, List.of(), false, false, List.of());
     }
 
     /**
@@ -63,7 +69,7 @@ public record IrClass(
         final List<IrField> staticFields,
         final List<String> enumConstants
     ) {
-        this(jvmName, "java/lang/Object", symbol, fields, staticFields, enumConstants, !enumConstants.isEmpty(), false);
+        this(jvmName, "java/lang/Object", symbol, fields, staticFields, enumConstants, !enumConstants.isEmpty(), false, List.of());
     }
 
     /**
@@ -84,7 +90,7 @@ public record IrClass(
         final List<String> enumConstants,
         final boolean cloneable
     ) {
-        this(jvmName, "java/lang/Object", symbol, fields, staticFields, enumConstants, !enumConstants.isEmpty(), cloneable);
+        this(jvmName, "java/lang/Object", symbol, fields, staticFields, enumConstants, !enumConstants.isEmpty(), cloneable, List.of());
     }
 
     /** Creates compatibility metadata without explicit superclass information. */
@@ -97,6 +103,56 @@ public record IrClass(
         final boolean enumClass,
         final boolean cloneable
     ) {
-        this(jvmName, "java/lang/Object", symbol, fields, staticFields, enumConstants, enumClass, cloneable);
+        this(jvmName, "java/lang/Object", symbol, fields, staticFields, enumConstants, enumClass, cloneable, List.of());
+    }
+
+    /**
+     * Creates compatibility metadata with directly declared interfaces.
+     *
+     * @param jvmName JVM internal class name
+     * @param symbol C struct symbol
+     * @param fields lowered instance fields
+     * @param staticFields lowered static field metadata
+     * @param enumConstants enum constant names in declaration order
+     * @param enumClass whether this class is declared as an enum
+     * @param cloneable whether instances may be cloned through Object.clone
+     * @param interfaces directly declared JVM interfaces
+     */
+    public IrClass(
+        final String jvmName,
+        final String symbol,
+        final List<IrField> fields,
+        final List<IrField> staticFields,
+        final List<String> enumConstants,
+        final boolean enumClass,
+        final boolean cloneable,
+        final List<String> interfaces
+    ) {
+        this(jvmName, "java/lang/Object", symbol, fields, staticFields, enumConstants, enumClass, cloneable, interfaces);
+    }
+
+    /**
+     * Creates full class metadata without explicit interface information.
+     *
+     * @param jvmName JVM internal class name
+     * @param superName JVM internal superclass name
+     * @param symbol C struct symbol
+     * @param fields lowered instance fields
+     * @param staticFields lowered static field metadata
+     * @param enumConstants enum constant names in declaration order
+     * @param enumClass whether this class is declared as an enum
+     * @param cloneable whether instances may be cloned through Object.clone
+     */
+    public IrClass(
+        final String jvmName,
+        final String superName,
+        final String symbol,
+        final List<IrField> fields,
+        final List<IrField> staticFields,
+        final List<String> enumConstants,
+        final boolean enumClass,
+        final boolean cloneable
+    ) {
+        this(jvmName, superName, symbol, fields, staticFields, enumConstants, enumClass, cloneable, List.of());
     }
 }

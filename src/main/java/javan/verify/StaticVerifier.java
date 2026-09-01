@@ -2083,7 +2083,13 @@ public final class StaticVerifier {
         if (supportedArrayAccessHandler(code, handler)) {
             return true;
         }
+        if (supportedObjectArrayStoreHandler(code, handler)) {
+            return true;
+        }
         if (supportedSingleApplicationArrayAccessHandler(classes, code, handler)) {
+            return true;
+        }
+        if (supportedSingleApplicationObjectArrayStoreHandler(classes, code, handler)) {
             return true;
         }
         if (supportedSingleApplicationNegativeArraySizeHandler(classes, code, handler)) {
@@ -3312,6 +3318,15 @@ public final class StaticVerifier {
                 )) {
                 result.add("java/lang/ArrayIndexOutOfBoundsException");
             }
+            if (instruction.opcode() == 83
+                && !caughtByThrowableHandler(
+                    classes,
+                    code,
+                    instruction.offset(),
+                    "java/lang/ArrayStoreException"
+                )) {
+                result.add("java/lang/ArrayStoreException");
+            }
             if (instruction.methodRef().isPresent()) {
                 final MethodRef called = instruction.methodRef().orElseThrow();
                 for (final String throwableType : JdkCallSupport.transportedPlatformThrowableTypes(called)) {
@@ -3784,6 +3799,30 @@ public final class StaticVerifier {
             && JdkCallSupport.isPlatformThrowableAssignable("java/lang/ArrayIndexOutOfBoundsException", catchType);
     }
 
+    private static boolean supportedObjectArrayStoreHandler(final CodeAttribute code, final CodeException handler) {
+        if (handler.catchType().isEmpty()
+            || !JdkCallSupport.isPlatformThrowableAssignable(
+                "java/lang/ArrayStoreException",
+                handler.catchType().orElseThrow()
+            )) {
+            return false;
+        }
+        int objectArrayStoreCount = 0;
+        for (final Instruction instruction : code.instructions()) {
+            if (instruction.offset() < handler.startPc() || instruction.offset() >= handler.endPc()) {
+                continue;
+            }
+            if (instruction.opcode() == 83) {
+                objectArrayStoreCount++;
+                continue;
+            }
+            if (!boundedNonThrowingOpcode(instruction.opcode())) {
+                return false;
+            }
+        }
+        return objectArrayStoreCount == 1;
+    }
+
     private static boolean supportedSingleApplicationArrayAccessHandler(
         final Map<String, ClassFile> classes,
         final CodeAttribute code,
@@ -3797,6 +3836,37 @@ public final class StaticVerifier {
             && !JdkCallSupport.isPlatformThrowableAssignable("java/lang/ArrayIndexOutOfBoundsException", catchType)) {
             return false;
         }
+        int transportingCallCount = 0;
+        for (final Instruction instruction : code.instructions()) {
+            if (instruction.offset() < handler.startPc() || instruction.offset() >= handler.endPc()) {
+                continue;
+            }
+            if (instruction.methodRef().isPresent()
+                && classes.containsKey(instruction.methodRef().orElseThrow().owner())
+                && supportedTransportedThrowableCall(classes, instruction, catchType)) {
+                transportingCallCount++;
+                continue;
+            }
+            if (!boundedNonThrowingOpcode(instruction.opcode())) {
+                return false;
+            }
+        }
+        return transportingCallCount == 1;
+    }
+
+    private static boolean supportedSingleApplicationObjectArrayStoreHandler(
+        final Map<String, ClassFile> classes,
+        final CodeAttribute code,
+        final CodeException handler
+    ) {
+        if (handler.catchType().isEmpty()
+            || !JdkCallSupport.isPlatformThrowableAssignable(
+                "java/lang/ArrayStoreException",
+                handler.catchType().orElseThrow()
+            )) {
+            return false;
+        }
+        final String catchType = handler.catchType().orElseThrow();
         int transportingCallCount = 0;
         for (final Instruction instruction : code.instructions()) {
             if (instruction.offset() < handler.startPc() || instruction.offset() >= handler.endPc()) {

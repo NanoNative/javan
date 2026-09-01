@@ -310,7 +310,8 @@ final class BytecodeToIRTest {
                 ),
                 List.of("READY"),
                 false,
-                true
+                true,
+                List.of("java/lang/Cloneable")
             ),
             new IrClass(
                 "com/acme/Zeta",
@@ -5106,13 +5107,15 @@ final class BytecodeToIRTest {
         assertThat(function.locals()).containsExactly(
             new IrLocal(IrType.OBJECT, "object0"),
             new IrLocal(IrType.OBJECT, "object1"),
-            new IrLocal(IrType.INT, "int2"),
+            new IrLocal(IrType.OBJECT, "object2"),
             new IrLocal(IrType.INT, "int3"),
-            new IrLocal(IrType.OBJECT, "object4"),
-            new IrLocal(IrType.INT, "int5"),
-            new IrLocal(IrType.INT, "int6")
+            new IrLocal(IrType.INT, "int4"),
+            new IrLocal(IrType.OBJECT, "object5"),
+            new IrLocal(IrType.INT, "int6"),
+            new IrLocal(IrType.INT, "int7")
         );
         assertThat(function.instructions()).extracting(IrInstruction::op).containsExactly(
+            IrInstruction.Op.ASSIGN_OBJECT,
             IrInstruction.Op.ASSIGN_OBJECT,
             IrInstruction.Op.ASSIGN_OBJECT,
             IrInstruction.Op.BRANCH_IF,
@@ -5120,6 +5123,9 @@ final class BytecodeToIRTest {
             IrInstruction.Op.LABEL,
             IrInstruction.Op.ASSIGN_INT,
             IrInstruction.Op.ASSIGN_INT,
+            IrInstruction.Op.BRANCH_IF,
+            IrInstruction.Op.THROW_PENDING,
+            IrInstruction.Op.LABEL,
             IrInstruction.Op.BRANCH_IF,
             IrInstruction.Op.THROW_PENDING,
             IrInstruction.Op.LABEL,
@@ -20017,7 +20023,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersSupportedJdkEnumConstantFieldToStringLiteral() {
+    void lowersSupportedJdkEnumConstantFieldToTypedPlatformValue() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -20033,12 +20039,18 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.stringLiteral("NOFOLLOW_LINKS"))
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_platform_enum_constant",
+                List.of(
+                    IrExpression.stringLiteral("java.nio.file.LinkOption"),
+                    IrExpression.stringLiteral("NOFOLLOW_LINKS")
+                )
+            ))
         );
     }
 
     @Test
-    void lowersSupportedStandardCopyOptionFieldToStringLiteral() {
+    void lowersSupportedStandardCopyOptionFieldToTypedPlatformValue() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -20054,7 +20066,13 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.stringLiteral("REPLACE_EXISTING"))
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_platform_enum_constant",
+                List.of(
+                    IrExpression.stringLiteral("java.nio.file.StandardCopyOption"),
+                    IrExpression.stringLiteral("REPLACE_EXISTING")
+                )
+            ))
         );
     }
 
