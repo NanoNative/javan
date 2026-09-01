@@ -286,8 +286,11 @@ final class RuntimeHeaderFile {
         int javan_object_non_null(void* value);
         int javan_object_builtin_instance_of(void* value, int target);
         int javan_object_type_in(void* value, int count, ...);
+        void* javan_platform_enum_constant(const char* class_name, const char* constant_name);
+        const char* javan_platform_enum_name(void* value);
         void* javan_object_array_new(int length, const char* class_name);
         void* javan_object_array_get(void* array, int index);
+        int javan_object_array_accepts(void* array, void* value);
         void javan_object_array_set(void* array, int index, void* value);
         void* javan_int_array_new(int length);
         int javan_int_array_get(void* array, int index);
@@ -846,6 +849,7 @@ final class RuntimeHeaderFile {
         int javan_class_is_assignable_from(void* target, void* source);
         void* javan_object_get_class(void* value);
         void* javan_generated_object_get_class(void* value);
+        void javan_register_generated_runtime_class_resolver(void* (*resolver)(const char*));
         int javan_virtual_thread_object_equals(void* left, void* right);
         int javan_virtual_thread_object_hash_code(void* value);
         void* javan_thread_current(void);

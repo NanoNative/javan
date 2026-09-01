@@ -816,7 +816,7 @@ final class RuntimeSourcePlatformSection {
             javan_object_array* values = (javan_object_array*) header;
             int no_follow = 0;
             for (int index = 0; index < values->length; index++) {
-                const char* option = (const char*) values->values[index];
+                const char* option = javan_platform_enum_name(values->values[index]);
                 if (option == NULL || strcmp(option, "NOFOLLOW_LINKS") != 0) {
                     javan_panic("unsupported link option");
                 }
@@ -868,7 +868,7 @@ final class RuntimeSourcePlatformSection {
             javan_array_kind_checked(header, JAVAN_ARRAY_KIND_OBJECT);
             javan_object_array* values = (javan_object_array*) header;
             for (int index = 0; index < values->length; index++) {
-                const char* option = (const char*) values->values[index];
+                const char* option = javan_platform_enum_name(values->values[index]);
                 if (option == NULL || strcmp(option, "REPLACE_EXISTING") != 0) {
                     javan_panic("unsupported file copy option");
                 }
