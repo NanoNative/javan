@@ -466,6 +466,44 @@ final class CliIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void uncaughtArrayIndexBuildsAsNativeJavaExceptionPanic() throws Exception {
+        final Path project = project("array-index-panic");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final int[] values = {17};
+                    final int index = args.length - 1;
+                    System.out.println(values[index]);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/array-index-panic").toString()));
+        assertThat(nativeRun.exitCode()).isEqualTo(1);
+        assertThat(nativeRun.stdout()).isEmpty();
+        assertThat(nativeRun.stderr()).contains(
+            "[JAVAN-RUNTIME-PANIC] uncaught Java exception",
+            "Where:",
+            "com.acme.Main.main([Ljava/lang/String;)V(Main.java:",
+            "Code:",
+            "System.out.println(values[index]);",
+            "^ here",
+            "Why:",
+            "java/lang/ArrayIndexOutOfBoundsException",
+            "detail: Index -1 out of bounds for length 1",
+            "Fix:"
+        );
+    }
+
+    @Test
     void reachableExplicitThrowCatchBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("try-catch");
         writeJava(project, "com.acme.Main", """

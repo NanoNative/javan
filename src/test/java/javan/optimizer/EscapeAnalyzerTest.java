@@ -229,6 +229,22 @@ final class EscapeAnalyzerTest {
     }
 
     @Test
+    void keepsAllocationsLocalWhenUnknownCallsReceivePrimitiveLocals() {
+        final IrFunction function = function(
+            local("array"),
+            IrInstruction.assignObject("array", IrExpression.intArrayAllocation(IrExpression.intLiteral(1))),
+            IrInstruction.assignInt("length", IrExpression.arrayLength(IrExpression.objectLocal("array"))),
+            IrInstruction.callStaticVoid("format_failure", List.of(IrExpression.intLocal("length"))),
+            IrInstruction.returnVoid()
+        );
+
+        final EscapeAnalyzer.Analysis result = analyzer.analyze(program(function));
+
+        assertThat(result.sites()).extracting(EscapeAnalyzer.AllocationSite::escape)
+            .containsExactly(EscapeAnalyzer.Escape.NO_ESCAPE);
+    }
+
+    @Test
     void plansBoundedObjectsIncludingManagedReferenceFields() {
         final List<IrField> oversizedFields = java.util.stream.IntStream.range(0, 600)
             .mapToObj(index -> new IrField(IrType.INT, "value" + index, "field_value_" + index))

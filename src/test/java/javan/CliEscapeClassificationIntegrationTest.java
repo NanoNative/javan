@@ -171,7 +171,11 @@ final class CliEscapeClassificationIntegrationTest extends CliIntegrationSupport
             project, List.of(project.resolve(".javan/bin/stack-array-bounds").toString())
         );
         assertThat(result.exitCode()).isNotZero();
-        assertThat(result.stderr()).contains("[JAVAN-RUNTIME-PANIC]", "detail: array index out of bounds");
+        assertThat(result.stderr()).contains(
+            "[JAVAN-RUNTIME-PANIC]",
+            "java/lang/ArrayIndexOutOfBoundsException",
+            "detail: Index 1 out of bounds for length 1"
+        );
         assertThat(Files.readString(project.resolve(".javan/reports/optimizations.json")))
             .contains("\"stackAllocated\": 1");
     }

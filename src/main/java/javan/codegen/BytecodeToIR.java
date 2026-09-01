@@ -629,6 +629,14 @@ public final class BytecodeToIR {
                 && !caughtBy(classes, method, instruction.offset(), "java/lang/NegativeArraySizeException")) {
                 result.add("java/lang/NegativeArraySizeException");
             }
+            if (BytecodeSupport.isArrayReferenceAccess(instruction.opcode())
+                && !caughtBy(classes, method, instruction.offset(), "java/lang/NullPointerException")) {
+                result.add("java/lang/NullPointerException");
+            }
+            if (BytecodeSupport.isIndexedArrayAccess(instruction.opcode())
+                && !caughtBy(classes, method, instruction.offset(), "java/lang/ArrayIndexOutOfBoundsException")) {
+                result.add("java/lang/ArrayIndexOutOfBoundsException");
+            }
             if (instruction.methodRef().isPresent()) {
                 for (final String throwableType : JdkCallSupport.transportedPlatformThrowableTypes(
                     instruction.methodRef().orElseThrow()
@@ -1706,28 +1714,28 @@ public final class BytecodeToIR {
                 stack.add(localObjectValue(classFile, method, locals, objectLocalKinds, objectLocalThrowableTypes, objectLocalLambdas, instruction.opcode() - 42));
                 break;
             case 46:
-                loadIntArray(classFile, method, stack);
+                loadIntArray(classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks, sourceLines);
                 break;
             case 47:
-                loadLongArray(classFile, method, stack);
+                loadLongArray(classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks, sourceLines);
                 break;
             case 48:
-                loadFloatArray(classFile, method, stack);
+                loadFloatArray(classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks, sourceLines);
                 break;
             case 49:
-                loadDoubleArray(classFile, method, stack);
+                loadDoubleArray(classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks, sourceLines);
                 break;
             case 51:
-                loadByteArray(classFile, method, stack);
+                loadByteArray(classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks, sourceLines);
                 break;
             case 52:
-                loadCharArray(classFile, method, stack);
+                loadCharArray(classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks, sourceLines);
                 break;
             case 53:
-                loadShortArray(classFile, method, stack);
+                loadShortArray(classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks, sourceLines);
                 break;
             case 50:
-                loadObjectArray(classFile, method, stack);
+                loadObjectArray(classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks, sourceLines);
                 break;
             case 54:
                 storeInt(classFile, method, instructions, stack, locals, localDeclarations, unsigned(instruction.operands()[0]));
@@ -1775,28 +1783,28 @@ public final class BytecodeToIR {
                 storeObject(classFile, method, instruction, instructions, stack, locals, objectLocalKinds, objectLocalThrowableTypes, objectLocalLambdas, localDeclarations, instruction.opcode() - 75);
                 break;
             case 79:
-                storeIntArray(classFile, method, instructions, stack);
+                storeIntArray(classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks, sourceLines);
                 break;
             case 80:
-                storeLongArray(classFile, method, instructions, stack);
+                storeLongArray(classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks, sourceLines);
                 break;
             case 81:
-                storeFloatArray(classFile, method, instructions, stack);
+                storeFloatArray(classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks, sourceLines);
                 break;
             case 82:
-                storeDoubleArray(classFile, method, instructions, stack);
+                storeDoubleArray(classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks, sourceLines);
                 break;
             case 84:
-                storeByteArray(classFile, method, instructions, stack);
+                storeByteArray(classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks, sourceLines);
                 break;
             case 85:
-                storeCharArray(classFile, method, instructions, stack);
+                storeCharArray(classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks, sourceLines);
                 break;
             case 86:
-                storeShortArray(classFile, method, instructions, stack);
+                storeShortArray(classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks, sourceLines);
                 break;
             case 83:
-                storeObjectArray(classFile, method, instructions, stack);
+                storeObjectArray(classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks, sourceLines);
                 break;
             case 89:
                 stack.add(stack.getLast());
@@ -2151,7 +2159,7 @@ public final class BytecodeToIR {
                 );
                 break;
             case 190:
-                arrayLength(classFile, method, stack);
+                arrayLength(classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks, sourceLines);
                 break;
             case 191:
                 BytecodeToIRControlFlowSupport.lowerThrow(classes, classFile, method, instruction, instructions, stack,
@@ -2709,14 +2717,150 @@ public final class BytecodeToIR {
         throw unsupported(classFile, method, instruction);
     }
 
+    private record ArrayAccess(IrExpression array, IrExpression index) {
+    }
+
+    private static IrExpression checkedArrayReference(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines,
+        final IrExpression array
+    ) {
+        final int arrayLocalIndex = localDeclarations.size();
+        final String arrayLocalName = "object" + arrayLocalIndex;
+        localDeclarations.put(
+            Integer.MIN_VALUE + arrayLocalIndex,
+            new IrLocal(IrType.OBJECT, arrayLocalName)
+        );
+        instructions.add(IrInstruction.assignObject(arrayLocalName, array));
+        final IrExpression checkedArray = IrExpression.objectLocal(arrayLocalName);
+        final String nonNullLabel = "label_array_non_null_" + instruction.offset() + "_" + arrayLocalIndex;
+        instructions.add(IrInstruction.branchIf(
+            nonNullLabel,
+            IrExpression.objectComparison("!=", checkedArray, IrExpression.objectNull())
+        ));
+        final List<StackValue> successStack = List.copyOf(stack);
+        BytecodeToIRInvokeSupport.routePendingPlatformException(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            "java/lang/NullPointerException",
+            IrExpression.objectNull()
+        );
+        instructions.add(IrInstruction.label(nonNullLabel));
+        stack.addAll(successStack);
+        return checkedArray;
+    }
+
+    private static ArrayAccess checkedArrayAccess(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines,
+        final IrExpression array,
+        final IrExpression index
+    ) {
+        final IrExpression checkedArray = checkedArrayReference(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            localDeclarations,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            array
+        );
+        final int indexLocalIndex = localDeclarations.size();
+        final String indexLocalName = "int" + indexLocalIndex;
+        localDeclarations.put(
+            Integer.MIN_VALUE + indexLocalIndex,
+            new IrLocal(IrType.INT, indexLocalName)
+        );
+        instructions.add(IrInstruction.assignInt(indexLocalName, index));
+        final IrExpression checkedIndex = IrExpression.intLocal(indexLocalName);
+        final int lengthLocalIndex = localDeclarations.size();
+        final String lengthLocalName = "int" + lengthLocalIndex;
+        localDeclarations.put(
+            Integer.MIN_VALUE + lengthLocalIndex,
+            new IrLocal(IrType.INT, lengthLocalName)
+        );
+        instructions.add(IrInstruction.assignInt(lengthLocalName, IrExpression.arrayLength(checkedArray)));
+        final IrExpression length = IrExpression.intLocal(lengthLocalName);
+        final String nonNegativeLabel = "label_array_index_non_negative_" + instruction.offset() + "_" + indexLocalIndex;
+        instructions.add(IrInstruction.branchIf(
+            nonNegativeLabel,
+            IrExpression.intComparison(">=", checkedIndex, IrExpression.intLiteral(0))
+        ));
+        final List<StackValue> successStack = List.copyOf(stack);
+        final IrExpression message = IrExpression.objectCall(
+            "javan_array_index_out_of_bounds_message",
+            List.of(checkedIndex, length)
+        );
+        BytecodeToIRInvokeSupport.routePendingPlatformException(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            "java/lang/ArrayIndexOutOfBoundsException",
+            message
+        );
+        instructions.add(IrInstruction.label(nonNegativeLabel));
+        stack.addAll(successStack);
+        final String inBoundsLabel = "label_array_index_in_bounds_" + instruction.offset() + "_" + indexLocalIndex;
+        instructions.add(IrInstruction.branchIf(
+            inBoundsLabel,
+            IrExpression.intComparison("<", checkedIndex, length)
+        ));
+        BytecodeToIRInvokeSupport.routePendingPlatformException(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            "java/lang/ArrayIndexOutOfBoundsException",
+            message
+        );
+        instructions.add(IrInstruction.label(inBoundsLabel));
+        stack.addAll(successStack);
+        return new ArrayAccess(checkedArray, checkedIndex);
+    }
+
     static void loadObjectArray(
         final ClassFile classFile,
         final MethodInfo method,
-        final List<StackValue> stack
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
     ) {
         final IrExpression index = popInt(classFile, method, stack);
         final StackValue array = popObjectValue(classFile, method, firstInstruction(method), stack);
-        final IrExpression loaded = IrExpression.objectArrayLoad(stackValueExpression(array), index);
+        final ArrayAccess access = checkedArrayAccess(
+            classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks,
+            sourceLines, stackValueExpression(array), index
+        );
+        final IrExpression loaded = IrExpression.objectArrayLoad(access.array(), access.index());
         if (array.throwable().isPresent() && array.throwable().orElseThrow().arrayDepth() > 0) {
             final ThrowableValue element = array.throwable().orElseThrow();
             if (element.arrayDepth() == 1) {
@@ -2744,175 +2888,312 @@ public final class BytecodeToIR {
     static void loadIntArray(
         final ClassFile classFile,
         final MethodInfo method,
-        final List<StackValue> stack
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
     ) {
         final IrExpression index = popInt(classFile, method, stack);
         final IrExpression array = popObject(classFile, method, stack);
-        stack.add(StackValue.intExpression(IrExpression.intArrayLoad(array, index)));
+        final ArrayAccess access = checkedArrayAccess(
+            classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks,
+            sourceLines, array, index
+        );
+        stack.add(StackValue.intExpression(IrExpression.intArrayLoad(access.array(), access.index())));
     }
 
     static void loadLongArray(
         final ClassFile classFile,
         final MethodInfo method,
-        final List<StackValue> stack
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
     ) {
         final IrExpression index = popInt(classFile, method, stack);
         final IrExpression array = popObject(classFile, method, stack);
-        stack.add(StackValue.longExpression(IrExpression.longArrayLoad(array, index)));
+        final ArrayAccess access = checkedArrayAccess(
+            classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks,
+            sourceLines, array, index
+        );
+        stack.add(StackValue.longExpression(IrExpression.longArrayLoad(access.array(), access.index())));
     }
 
     static void loadFloatArray(
         final ClassFile classFile,
         final MethodInfo method,
-        final List<StackValue> stack
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
     ) {
         final IrExpression index = popInt(classFile, method, stack);
         final IrExpression array = popObject(classFile, method, stack);
-        stack.add(StackValue.floatExpression(IrExpression.floatArrayLoad(array, index)));
+        final ArrayAccess access = checkedArrayAccess(
+            classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks,
+            sourceLines, array, index
+        );
+        stack.add(StackValue.floatExpression(IrExpression.floatArrayLoad(access.array(), access.index())));
     }
 
     static void loadDoubleArray(
         final ClassFile classFile,
         final MethodInfo method,
-        final List<StackValue> stack
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
     ) {
         final IrExpression index = popInt(classFile, method, stack);
         final IrExpression array = popObject(classFile, method, stack);
-        stack.add(StackValue.doubleExpression(IrExpression.doubleArrayLoad(array, index)));
+        final ArrayAccess access = checkedArrayAccess(
+            classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks,
+            sourceLines, array, index
+        );
+        stack.add(StackValue.doubleExpression(IrExpression.doubleArrayLoad(access.array(), access.index())));
     }
 
     static void loadByteArray(
         final ClassFile classFile,
         final MethodInfo method,
-        final List<StackValue> stack
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
     ) {
         final IrExpression index = popInt(classFile, method, stack);
         final IrExpression array = popObject(classFile, method, stack);
-        stack.add(StackValue.intExpression(IrExpression.byteArrayLoad(array, index)));
+        final ArrayAccess access = checkedArrayAccess(
+            classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks,
+            sourceLines, array, index
+        );
+        stack.add(StackValue.intExpression(IrExpression.byteArrayLoad(access.array(), access.index())));
     }
 
     static void loadShortArray(
         final ClassFile classFile,
         final MethodInfo method,
-        final List<StackValue> stack
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
     ) {
         final IrExpression index = popInt(classFile, method, stack);
         final IrExpression array = popObject(classFile, method, stack);
-        stack.add(StackValue.intExpression(IrExpression.shortArrayLoad(array, index)));
+        final ArrayAccess access = checkedArrayAccess(
+            classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks,
+            sourceLines, array, index
+        );
+        stack.add(StackValue.intExpression(IrExpression.shortArrayLoad(access.array(), access.index())));
     }
 
     static void loadCharArray(
         final ClassFile classFile,
         final MethodInfo method,
-        final List<StackValue> stack
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
     ) {
         final IrExpression index = popInt(classFile, method, stack);
         final IrExpression array = popObject(classFile, method, stack);
-        stack.add(StackValue.intExpression(IrExpression.charArrayLoad(array, index)));
+        final ArrayAccess access = checkedArrayAccess(
+            classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks,
+            sourceLines, array, index
+        );
+        stack.add(StackValue.intExpression(IrExpression.charArrayLoad(access.array(), access.index())));
     }
 
     static void storeObjectArray(
         final ClassFile classFile,
         final MethodInfo method,
+        final Instruction instruction,
         final List<IrInstruction> instructions,
-        final List<StackValue> stack
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
     ) {
         final IrExpression value = popObject(classFile, method, stack);
         final IrExpression index = popInt(classFile, method, stack);
         final IrExpression array = popObject(classFile, method, stack);
-        instructions.add(IrInstruction.assignArrayObject(array, index, value));
+        final ArrayAccess access = checkedArrayAccess(
+            classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks,
+            sourceLines, array, index
+        );
+        instructions.add(IrInstruction.assignArrayObject(access.array(), access.index(), value));
     }
 
     static void storeIntArray(
         final ClassFile classFile,
         final MethodInfo method,
+        final Instruction instruction,
         final List<IrInstruction> instructions,
-        final List<StackValue> stack
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
     ) {
         final IrExpression value = popInt(classFile, method, stack);
         final IrExpression index = popInt(classFile, method, stack);
         final IrExpression array = popObject(classFile, method, stack);
-        instructions.add(IrInstruction.assignArrayInt(array, index, value));
+        final ArrayAccess access = checkedArrayAccess(
+            classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks,
+            sourceLines, array, index
+        );
+        instructions.add(IrInstruction.assignArrayInt(access.array(), access.index(), value));
     }
 
     static void storeLongArray(
         final ClassFile classFile,
         final MethodInfo method,
+        final Instruction instruction,
         final List<IrInstruction> instructions,
-        final List<StackValue> stack
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
     ) {
         final IrExpression value = popLong(classFile, method, stack);
         final IrExpression index = popInt(classFile, method, stack);
         final IrExpression array = popObject(classFile, method, stack);
-        instructions.add(IrInstruction.assignArrayLong(array, index, value));
+        final ArrayAccess access = checkedArrayAccess(
+            classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks,
+            sourceLines, array, index
+        );
+        instructions.add(IrInstruction.assignArrayLong(access.array(), access.index(), value));
     }
 
     static void storeFloatArray(
         final ClassFile classFile,
         final MethodInfo method,
+        final Instruction instruction,
         final List<IrInstruction> instructions,
-        final List<StackValue> stack
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
     ) {
         final IrExpression value = popFloat(classFile, method, stack);
         final IrExpression index = popInt(classFile, method, stack);
         final IrExpression array = popObject(classFile, method, stack);
-        instructions.add(IrInstruction.assignArrayFloat(array, index, value));
+        final ArrayAccess access = checkedArrayAccess(
+            classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks,
+            sourceLines, array, index
+        );
+        instructions.add(IrInstruction.assignArrayFloat(access.array(), access.index(), value));
     }
 
     static void storeDoubleArray(
         final ClassFile classFile,
         final MethodInfo method,
+        final Instruction instruction,
         final List<IrInstruction> instructions,
-        final List<StackValue> stack
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
     ) {
         final IrExpression value = popDouble(classFile, method, stack);
         final IrExpression index = popInt(classFile, method, stack);
         final IrExpression array = popObject(classFile, method, stack);
-        instructions.add(IrInstruction.assignArrayDouble(array, index, value));
+        final ArrayAccess access = checkedArrayAccess(
+            classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks,
+            sourceLines, array, index
+        );
+        instructions.add(IrInstruction.assignArrayDouble(access.array(), access.index(), value));
     }
 
     static void storeByteArray(
         final ClassFile classFile,
         final MethodInfo method,
+        final Instruction instruction,
         final List<IrInstruction> instructions,
-        final List<StackValue> stack
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
     ) {
         final IrExpression value = popInt(classFile, method, stack);
         final IrExpression index = popInt(classFile, method, stack);
         final IrExpression array = popObject(classFile, method, stack);
-        instructions.add(IrInstruction.assignArrayByte(array, index, value));
+        final ArrayAccess access = checkedArrayAccess(
+            classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks,
+            sourceLines, array, index
+        );
+        instructions.add(IrInstruction.assignArrayByte(access.array(), access.index(), value));
     }
 
     static void storeShortArray(
         final ClassFile classFile,
         final MethodInfo method,
+        final Instruction instruction,
         final List<IrInstruction> instructions,
-        final List<StackValue> stack
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
     ) {
         final IrExpression value = popInt(classFile, method, stack);
         final IrExpression index = popInt(classFile, method, stack);
         final IrExpression array = popObject(classFile, method, stack);
-        instructions.add(IrInstruction.assignArrayShort(array, index, value));
+        final ArrayAccess access = checkedArrayAccess(
+            classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks,
+            sourceLines, array, index
+        );
+        instructions.add(IrInstruction.assignArrayShort(access.array(), access.index(), value));
     }
 
     static void storeCharArray(
         final ClassFile classFile,
         final MethodInfo method,
+        final Instruction instruction,
         final List<IrInstruction> instructions,
-        final List<StackValue> stack
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
     ) {
         final IrExpression value = popInt(classFile, method, stack);
         final IrExpression index = popInt(classFile, method, stack);
         final IrExpression array = popObject(classFile, method, stack);
-        instructions.add(IrInstruction.assignArrayChar(array, index, value));
+        final ArrayAccess access = checkedArrayAccess(
+            classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks,
+            sourceLines, array, index
+        );
+        instructions.add(IrInstruction.assignArrayChar(access.array(), access.index(), value));
     }
 
     static void arrayLength(
         final ClassFile classFile,
         final MethodInfo method,
-        final List<StackValue> stack
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
     ) {
-        stack.add(StackValue.intExpression(IrExpression.arrayLength(popObject(classFile, method, stack))));
+        final IrExpression array = popObject(classFile, method, stack);
+        final IrExpression checkedArray = checkedArrayReference(
+            classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks,
+            sourceLines, array
+        );
+        stack.add(StackValue.intExpression(IrExpression.arrayLength(checkedArray)));
     }
 
 
