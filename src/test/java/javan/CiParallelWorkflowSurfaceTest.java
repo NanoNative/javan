@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -68,6 +69,28 @@ final class CiParallelWorkflowSurfaceTest {
         assertThat(Files.readString(RELEASE))
             .contains("workflow_dispatch:")
             .contains("uses: ./.github/workflows/build-common.yml");
+    }
+
+    @Test
+    void pullRequestWorkflowVerifiesMainAndStackedBasesWithoutElevatedPermissions() throws Exception {
+        final String workflow = Files.readString(BUILD_PR);
+        final String pullRequest = workflow.substring(
+            workflow.indexOf("  pull_request:"), workflow.indexOf("  workflow_dispatch:")
+        );
+
+        assertThat(pullRequest)
+            .doesNotContain("branches:", "branches-ignore:")
+            .contains("- opened", "- reopened", "- synchronize", "- ready_for_review");
+        assertThat(workflow)
+            .contains("permissions: {}", "contents: read", "ref: ${{ inputs.ref || github.sha }}")
+            .doesNotContain("pull_request_target:", "prepare_publication: true");
+        final var permissions = Pattern.compile(
+            "(?m)^(\\h*)permissions:[^\\r\\n]*(?:\\R\\1\\h+[^\\r\\n]*)*"
+        ).matcher(workflow);
+        while (permissions.find()) {
+            assertThat(permissions.group().replaceAll("(?m)#.*$", ""))
+                .doesNotContainPattern(":\\h*['\"]?write(?:-all)?\\b");
+        }
     }
 
     @Test

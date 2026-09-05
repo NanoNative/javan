@@ -167,8 +167,10 @@ concurrently unless they opt into `@Execution(SAME_THREAD)`, `@Isolated`, or a
 project output, locale, timezone, or process-wide caches must stay serial until that shared
 state is removed or guarded by a narrow resource lock. Maven uses two reusable Surefire
 processes so isolated native suites can advance two at a time without sharing JVM state.
-Each suite keeps its existing execution and resource-lock rules inside its process; the
-fixed two-process bound avoids scaling native compiler load with the host CPU count.
+Each suite keeps its existing execution and resource-lock rules inside its process.
+JUnit uses CPU-scaled pools (`dynamic.factor = 1.0`) in each JVM, so the two-process
+bound is not a global limit on native compiler processes. Before making a serial native
+suite concurrent, establish an explicit resource bound and verify its isolation.
 The CLI compatibility command tests are split into `CliCompatIntegrationTest`; its three
 JDK-inventory/probe tests run concurrently and now take about `31s` together instead of
 about `88s` when they lived inside the serial CLI monolith. Cheap CLI command/report/toolchain

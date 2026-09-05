@@ -6,7 +6,7 @@ cd "$ROOT"
 
 ./mvnw -q \
   clean verify
-scripts/build.sh
+JAVAN_BUILD_REUSE_TARGET=true scripts/build.sh
 ARCHIVE=$(.github/scripts/package-release.sh "${JAVAN_VERSION:-}")
 .github/scripts/verify-package.sh "$ARCHIVE"
 
