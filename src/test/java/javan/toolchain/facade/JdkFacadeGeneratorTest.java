@@ -8,6 +8,8 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -70,6 +72,41 @@ final class JdkFacadeGeneratorTest {
         assertThat(facade.resolve("bin/javac")).hasContent("#!/bin/sh\necho second\n");
         assertThat(facade.resolve("bin/javan")).hasContent("#!/bin/sh\necho second\n");
         assertThat(facade.resolve("bin/jar")).isSymbolicLink();
+    }
+
+    @Test
+    void launchersPreserveBackendPathsWithoutExecutingShellCharacters() throws Exception {
+        final Path backend = Files.move(backendJdk(), tempDir.resolve("backend';printf INJECTED;#"));
+
+        assertLauncherPaths(backend, tempDir.resolve("facades"));
+    }
+
+    @Test
+    void launchersPreserveFacadeRootPathsContainingApostrophes() throws Exception {
+        assertLauncherPaths(backendJdk(), tempDir.resolve("O'Reilly facades"));
+    }
+
+    private void assertLauncherPaths(final Path backend, final Path root) throws Exception {
+        final Path facade = tempDir.resolve("generated-facade");
+        new JdkFacadeGenerator().generate(facade, candidate(backend), root);
+        final Path launcher = tempDir.resolve("capture-launcher");
+        Files.writeString(launcher, "#!/bin/sh\nprintf '%s\\n' \"$JAVAN_FACADE_BACKEND\" \"$JAVAN_FACADE_ROOT\" \"$@\"\n");
+        assertThat(launcher.toFile().setExecutable(true)).isTrue();
+        for (final String name : List.of("java", "javac", "javan")) {
+            final ProcessBuilder builder = new ProcessBuilder(facade.resolve("bin").resolve(name).toString(), "argument with ' quotes");
+            builder.environment().put("JAVAN_BIN", launcher.toString());
+            builder.redirectErrorStream(true);
+            final Process process = builder.start();
+            try {
+                assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
+                final String output = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                assertThat(process.exitValue()).as(output).isZero();
+                final String command = "javan".equals(name) ? "" : "--jn-facade-" + name + "\n";
+                assertThat(output).isEqualTo(backend + "\n" + root + "\n" + command + "argument with ' quotes\n");
+            } finally {
+                process.destroyForcibly();
+            }
+        }
     }
 
     private Path backendJdk() throws Exception {
