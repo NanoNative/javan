@@ -578,6 +578,110 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     }
 
     @Test
+    void releaseEntrypointReusesVerifiedClassesAndPreservesReportsThroughEveryProof() throws Exception {
+        final Path root = tempDir.resolve("release fixture");
+        for (final String script : List.of(
+            ".github/scripts/verify-release.sh", "scripts/build.sh",
+            ".github/scripts/timing-report.sh", ".github/scripts/generated-sources.sh"
+        )) {
+            final Path destination = root.resolve(script);
+            Files.createDirectories(destination.getParent());
+            writeExecutableScript(destination, Files.readString(REPO_ROOT.resolve(script)));
+        }
+        final Map<String, String> stubs = Map.of(
+            "mvnw", """
+                #!/bin/sh
+                set -eu
+                case "$*" in
+                  *help:evaluate*) printf '1.0.0\\n'; exit 0 ;;
+                  '-q clean verify'|'-q -DskipTests clean package') ;;
+                  *) printf 'Unexpected Maven arguments: %s\\n' "$*" >&2; exit 1 ;;
+                esac
+                printf '%s\\n' "$*" >> maven-preparations.log
+                rm -rf target
+                mkdir -p target/classes/javan target/site/jacoco
+                touch target/classes/javan/Main.class target/javan-1.0.0.jar
+                if [ "$*" = '-q clean verify' ]; then
+                  printf 'verified report\\n' > target/site/jacoco/report-sentinel
+                fi
+                """,
+            "tools/uname", """
+                #!/bin/sh
+                printf 'fixture-host\\n'
+                """,
+            "tools/java", """
+                #!/bin/sh
+                set -eu
+                case "$*" in
+                  *--output*)
+                    for output do :; done
+                    printf 'bootstrap:%s\\n' "$output" >> "$PROOF_LOG"
+                    mkdir -p target/.javan/generated target/.javan/bin
+                    for file in main.c javan_program.h javan_runtime.c javan_runtime.h; do
+                      printf 'stub source\\n' > "target/.javan/generated/$file"
+                    done
+                    printf 'javan-generated-sources-v1\\nmain.c\\n' > target/.javan/generated/javan_program.sources
+                    cp "$0" "target/.javan/bin/$output"
+                    ;;
+                  *) printf 'compiler:%s\\n' "$*" >> "$PROOF_LOG" ;;
+                esac
+                """,
+            ".github/scripts/package-release.sh", """
+                #!/bin/sh
+                set -eu
+                printf 'package\\n' >> "$PROOF_LOG"
+                mkdir -p dist/package/bin
+                cp dist/javan dist/package/bin/javan
+                tar -czf dist/package.tar.gz -C dist package
+                printf '%s/dist/package.tar.gz\\n' "$PWD"
+                """,
+            ".github/scripts/verify-package.sh", """
+                #!/bin/sh
+                set -eu
+                test -f "$1"
+                printf 'verify-package\\n' >> "$PROOF_LOG"
+                """,
+            ".github/scripts/acceptance.sh", """
+                #!/bin/sh
+                set -eu
+                test -x "$JAVAN_BIN"
+                printf 'acceptance\\n' >> "$PROOF_LOG"
+                """,
+            ".github/scripts/sanitizer-suite.sh", """
+                #!/bin/sh
+                set -eu
+                test -x "$JAVAN_BIN"
+                printf 'sanitizer:%s\\n' "$JAVAN_SANITIZER_REQUIRED" >> "$PROOF_LOG"
+                """
+        );
+        for (final Map.Entry<String, String> stub : stubs.entrySet()) {
+            final Path destination = root.resolve(stub.getKey());
+            Files.createDirectories(destination.getParent());
+            writeExecutableScript(destination, stub.getValue());
+        }
+        final Path proofLog = root.resolve("proof.log");
+        final ProcessResult run = process(root, List.of("sh", ".github/scripts/verify-release.sh"),
+            Duration.ofSeconds(20), Map.of(
+                "PATH", root.resolve("tools") + java.io.File.pathSeparator + System.getenv("PATH"),
+                "TMPDIR", Files.createDirectories(root.resolve("tmp")).toString(),
+                "PROOF_LOG", proofLog.toString(),
+                "JAVAN_BUILD_REUSE_TARGET", "false",
+                "JAVAN_BOOTSTRAP_GENERATION", "3",
+                "JAVAN_BOOTSTRAP_SOURCE", "",
+                "JAVAN_TIMING_LOG", ""
+            ));
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(Files.readAllLines(root.resolve("maven-preparations.log"))).containsExactly("-q clean verify");
+        assertThat(root.resolve("target/site/jacoco/report-sentinel")).hasContent("verified report\n");
+        assertThat(Files.readAllLines(proofLog)).containsExactly(
+            "bootstrap:javan-bootstrap-from-jvm", "bootstrap:javan-bootstrap-rebuilt", "bootstrap:javan-bootstrap-verified",
+            "compiler:--version", "package", "verify-package",
+            "compiler:doctor", "compiler:--help", "compiler:--version", "acceptance", "sanitizer:true"
+        );
+    }
+
+    @Test
     void buildScriptAllowsReuseTargetWithoutPackagedJar() throws Exception {
         final String script = Files.readString(Path.of("scripts/build.sh"));
 
