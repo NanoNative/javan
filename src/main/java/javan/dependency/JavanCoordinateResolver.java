@@ -50,7 +50,7 @@ public final class JavanCoordinateResolver {
      *
      * @param module parsed module
      * @return module with resolved paths, transitives, and mediation warnings
-     * @throws IOException when a coordinate or required local POM value is invalid
+     * @throws IOException when a coordinate, its filesystem path, or a required local POM value is invalid
      */
     public JavanModule resolve(final JavanModule module) throws IOException {
         if (!module.present()) {
@@ -106,7 +106,7 @@ public final class JavanCoordinateResolver {
      *
      * @param dependency dependency declaration
      * @return dependency with resolved path when it is a coordinate
-     * @throws IOException when the coordinate form is invalid
+     * @throws IOException when the coordinate contains unsafe filesystem components or resolves outside a repository root
      */
     public JavanDependency resolve(final JavanDependency dependency) throws IOException {
         if (!dependency.coordinate()) {
@@ -808,20 +808,16 @@ public final class JavanCoordinateResolver {
     }
 
     private Path artifactPath(final MavenCoordinate coordinate, final boolean pom) throws IOException {
-        final Path cached = pom ? pomPath(cache, coordinate) : pathFor(cache, coordinate);
+        final Path cached = artifactPath(cache, coordinate, pom);
         if (cacheEnabled && Files.isRegularFile(cached)) {
             if (Files.isRegularFile(checksumFile(cached))) {
                 verifyCached(cached);
                 return cached;
             }
         }
-        Path first = pom
-            ? pomPath(Path.of(".").toAbsolutePath().normalize(), coordinate)
-            : pathFor(Path.of(".").toAbsolutePath().normalize(), coordinate);
+        Path first = artifactPath(Path.of(".").toAbsolutePath().normalize(), coordinate, pom);
         for (int index = 0; index < repositories.size(); index++) {
-            final Path candidate = pom
-                ? pomPath(repositories.get(index), coordinate)
-                : pathFor(repositories.get(index), coordinate);
+            final Path candidate = artifactPath(repositories.get(index), coordinate, pom);
             if (index == 0) {
                 first = candidate;
             }
@@ -880,24 +876,17 @@ public final class JavanCoordinateResolver {
         );
     }
 
-    private static Path pathFor(final Path repository, final MavenCoordinate coordinate) {
-        return repository
+    private static Path artifactPath(final Path repository, final MavenCoordinate coordinate, final boolean pom) throws IOException {
+        final Path path = repository
             .resolve(Strings2.replaceChar(coordinate.groupId(), '.', java.io.File.separatorChar))
             .resolve(coordinate.artifactId())
             .resolve(coordinate.version())
-            .resolve(coordinate.artifactId() + "-" + coordinate.version() + ".jar")
-            .toAbsolutePath()
+            .resolve(coordinate.artifactId() + "-" + coordinate.version() + (pom ? ".pom" : ".jar"))
             .normalize();
-    }
-
-    private static Path pomPath(final Path repository, final MavenCoordinate coordinate) {
-        return repository
-            .resolve(Strings2.replaceChar(coordinate.groupId(), '.', java.io.File.separatorChar))
-            .resolve(coordinate.artifactId())
-            .resolve(coordinate.version())
-            .resolve(coordinate.artifactId() + "-" + coordinate.version() + ".pom")
-            .toAbsolutePath()
-            .normalize();
+        if (!path.startsWith(repository)) {
+            throw new IOException("Maven coordinate " + text(coordinate) + " escapes repository root: " + repository);
+        }
+        return path;
     }
 
     private static MavenCoordinate parse(final JavanDependency dependency) throws IOException {
@@ -936,10 +925,24 @@ public final class JavanCoordinateResolver {
         final String artifactId,
         final String version
     ) throws IOException {
-        if (Strings2.isBlank(groupId) || Strings2.isBlank(artifactId) || Strings2.isBlank(version)) {
+        if (!safeComponent(groupId) || !safeComponent(artifactId) || !safeComponent(version)) {
             throw invalid(dependency);
         }
         return new MavenCoordinate(groupId, artifactId, version);
+    }
+
+    private static boolean safeComponent(final String value) {
+        if (Strings2.isBlank(value) || ".".equals(value) || "..".equals(value)) {
+            return false;
+        }
+        for (int index = 0; index < value.length(); index++) {
+            final char character = value.charAt(index);
+            if ("/\\:<>\"|?*".indexOf(character) >= 0 || character < ' '
+                || (character >= 0x7f && character <= 0x9f)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static IOException invalid(final JavanDependency dependency) {
