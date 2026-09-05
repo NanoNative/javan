@@ -247,26 +247,10 @@ if [ "$run_code" -ne 0 ]; then
   exit 1
 fi
 
-{
-  printf '%s\n' '10'
-  printf '%s\n' 'try-add:1:10'
-  printf '%s\n' 'Hi Yuna'
-  printf '%s\n' 'null-greeting:Hi null'
-  printf '%s\n' '4:3:4'
-  printf '%s\n' 'empty-bytes:0:clean'
-  printf '%s\n' 'merged-bytes:4:3:1'
-  printf '%s\n' 'retained:Yuna'
-  printf '%s\n' 'retained-bytes:3:1:4'
-  printf '%s\n' 'last-error:0:negative array length'
-  printf '%s\n' 'result-error:negative array length'
-  printf '%s\n' 'byte-error:negative byte array length'
-  printf '%s\n' 'byte-result-error:negative byte array length'
-} >"$TMP/expected.out"
-
-if ! cmp "$TMP/expected.out" "$TMP/native.out" >/dev/null; then
+if ! cmp "$FULL_PROJECT/expected.stdout" "$TMP/native.out" >/dev/null; then
   printf '%s\n' "sanitizer library output differed" >&2
   printf '%s\n' "--- expected" >&2
-  cat "$TMP/expected.out" >&2
+  cat "$FULL_PROJECT/expected.stdout" >&2
   printf '%s\n' "--- native" >&2
   cat "$TMP/native.out" >&2
   printf '%s\n' "--- sanitizer stderr" >&2
@@ -452,19 +436,19 @@ int main(void) {
     javan_clear_error();
     int failed = javan_export_com_acme_Failures_failInt_void();
     const char* error = javan_last_error();
-    if (failed != 0 || error == NULL || strstr(error, "negative array length") == NULL) {
+    if (failed != 0 || error == NULL || strstr(error, "NegativeArraySizeException") == NULL) {
         fputs("missing recoverable library error\n", stderr);
         return 1;
     }
     if (strcmp(javan_last_error_code(), "JAVAN-RUNTIME-PANIC") != 0
-            || strcmp(javan_last_error_summary(), "runtime helper failure") != 0
+            || strcmp(javan_last_error_summary(), "uncaught Java exception (java/lang/NegativeArraySizeException)") != 0
             || strcmp(javan_last_error_class(), "com.acme.Failures") != 0
             || strstr(javan_last_error_method(), "failInt()I") == NULL
             || strcmp(javan_last_error_file(), "Failures.java") != 0
             || javan_last_error_line() != 8
             || javan_last_error_bytecode_offset() < 0
             || strstr(javan_last_error_source_line(), "new int[-1]") == NULL
-            || strstr(javan_last_error_detail(), "negative array length") == NULL) {
+            || strcmp(javan_last_error_detail(), "-1") != 0) {
         fputs("missing structured library error\n", stderr);
         return 1;
     }
@@ -484,14 +468,14 @@ int main(void) {
             || fail_result.code == NULL
             || strcmp(fail_result.code, "JAVAN-RUNTIME-PANIC") != 0
             || fail_result.detail == NULL
-            || strstr(fail_result.detail, "negative array length") == NULL
+            || strcmp(fail_result.detail, "-1") != 0
             || fail_result.line != 8
             || fail_result.bytecode_offset < 0) {
         fputs("missing owned result error\n", stderr);
         return 1;
     }
     javan_clear_error();
-    if (strstr(fail_result.detail, "negative array length") == NULL) {
+    if (strcmp(fail_result.detail, "-1") != 0) {
         fputs("owned result did not survive borrowed error clear\n", stderr);
         return 1;
     }
@@ -500,6 +484,19 @@ int main(void) {
         fputs("owned result did not clear after free\n", stderr);
         return 1;
     }
+    for (int attempt = 0; attempt < 128; attempt++) {
+        JavanResult repeated = javan_try_com_acme_Failures_failInt_void(&try_failed);
+        if (repeated.ok != 0 || repeated.detail == NULL || strcmp(repeated.detail, "-1") != 0) {
+            fputs("repeated failure lost its structured error\n", stderr);
+            return 1;
+        }
+        javan_result_free(&repeated);
+        if (javan_export_com_acme_Math_add_int_int(4, 6) != 10 || javan_last_error() != NULL) {
+            fputs("library did not recover after Java exception\n", stderr);
+            return 1;
+        }
+    }
+    javan_thread_detach_current();
     javan_gc_collect();
     javan_validate_heap_metadata();
     javan_library_write_proof_counters();
@@ -744,6 +741,8 @@ import native_library as binding
 lib = binding.load(library)
 lib.javan_gc_collect.argtypes = []
 lib.javan_gc_collect.restype = None
+lib.javan_thread_detach_current.argtypes = []
+lib.javan_thread_detach_current.restype = None
 lib.javan_validate_heap_metadata.argtypes = []
 lib.javan_validate_heap_metadata.restype = None
 lib.javan_heap_live_allocations.argtypes = []
@@ -768,7 +767,7 @@ for _ in range(128):
 try:
     binding.try_javan_export_com_acme_Failures_failInt_void(lib)
 except binding.JavanError as error:
-    if error.code != "JAVAN-RUNTIME-PANIC" or "negative array length" not in (error.detail or ""):
+    if error.code != "JAVAN-RUNTIME-PANIC" or error.detail != "-1":
         raise SystemExit("invalid wrapped failure")
 else:
     raise SystemExit("missing wrapped failure")
@@ -776,6 +775,7 @@ else:
 if checksum != 10378:
     raise SystemExit(f"unexpected checksum {checksum}")
 
+lib.javan_thread_detach_current()
 lib.javan_gc_collect()
 lib.javan_validate_heap_metadata()
 if lib.javan_heap_live_allocations() != 0:
@@ -836,6 +836,7 @@ use native_library::{
 use std::ffi::{c_char, CString};
 
 unsafe extern "C" {
+    fn javan_thread_detach_current();
     fn javan_gc_collect();
     fn javan_validate_heap_metadata();
     fn javan_heap_live_allocations() -> usize;
@@ -864,7 +865,7 @@ fn main() {
     }
     let error = unsafe { try_javan_export_com_acme_Failures_failInt_void() }.expect_err("expected failure");
     if error.code.as_deref() != Some("JAVAN-RUNTIME-PANIC")
-            || !error.detail.as_deref().unwrap_or("").contains("negative array length") {
+            || error.detail.as_deref() != Some("-1") {
         eprintln!("invalid wrapped failure");
         std::process::exit(1);
     }
@@ -873,6 +874,7 @@ fn main() {
         std::process::exit(1);
     }
     unsafe {
+        javan_thread_detach_current();
         javan_gc_collect();
         javan_validate_heap_metadata();
         if javan_heap_live_allocations() != 0 {
@@ -968,6 +970,7 @@ package native_library
 /*
 #include <stdlib.h>
 #include "native-library.h"
+void javan_thread_detach_current(void);
 void javan_gc_collect(void);
 void javan_validate_heap_metadata(void);
 unsigned long javan_heap_live_allocations(void);
@@ -992,6 +995,7 @@ func javanTestByteArray(values []int8) JavanByteArray {
 }
 
 func javanTestCollectAndValidate() (uint64, uint64) {
+    C.javan_thread_detach_current()
     C.javan_gc_collect()
     C.javan_validate_heap_metadata()
     return uint64(C.javan_heap_live_allocations()), uint64(C.javan_heap_live_bytes())
@@ -1000,9 +1004,14 @@ EOF
   cat >"$GO_PACKAGE/${SAFE_PACKAGE}_ownership_test.go" <<'EOF'
 package native_library
 
-import "testing"
+import (
+    "runtime"
+    "testing"
+)
 
 func TestJavanBindingOwnership(t *testing.T) {
+    runtime.LockOSThread()
+    defer runtime.UnlockOSThread()
     name := javanTestCString("Loop")
     defer javanTestCStringFree(name)
     data := []int8{3, 1, 4, 1, 5, 9, 2, 6}
@@ -1036,7 +1045,7 @@ func TestJavanBindingOwnership(t *testing.T) {
         t.Fatal("missing wrapped failure")
     }
     wrapped, ok := err.(JavanError)
-    if !ok || wrapped.Code != "JAVAN-RUNTIME-PANIC" || wrapped.Detail == "" {
+    if !ok || wrapped.Code != "JAVAN-RUNTIME-PANIC" || wrapped.Detail != "-1" {
         t.Fatalf("invalid wrapped failure %#v", err)
     }
     if checksum != 10378 {

@@ -430,8 +430,8 @@ final class CliIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void generatedRuntimeHelperFailureBuildsAsReadableNativePanic() throws Exception {
-        final Path project = project("helper-panic");
+    void uncaughtNegativeArrayLengthBuildsAsNativeJavaExceptionPanic() throws Exception {
+        final Path project = project("negative-array-size-panic");
         writeJava(project, "com.acme.Main", """
             package com.acme;
 
@@ -440,7 +440,7 @@ final class CliIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) {
-                    System.out.println(new int[-1].length);
+                    final int[] values = new int[-1];
                 }
             }
             """);
@@ -448,18 +448,19 @@ final class CliIntegrationTest extends CliIntegrationSupport {
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).isZero();
-        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/helper-panic").toString()));
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/negative-array-size-panic").toString()));
         assertThat(nativeRun.exitCode()).isEqualTo(1);
         assertThat(nativeRun.stdout()).isEmpty();
         assertThat(nativeRun.stderr()).contains(
-            "[JAVAN-RUNTIME-PANIC] runtime helper failure",
+            "[JAVAN-RUNTIME-PANIC] uncaught Java exception",
             "Where:",
             "com.acme.Main.main([Ljava/lang/String;)V(Main.java:",
             "Code:",
-            "System.out.println(new int[-1].length);",
+            "final int[] values = new int[-1];",
             "^ here",
             "Why:",
-            "detail: negative array length",
+            "java/lang/NegativeArraySizeException",
+            "detail: -1",
             "Fix:"
         );
     }

@@ -358,7 +358,8 @@ Current gates:
   `String` inputs, empty and negative `byte[]` inputs, structured borrowed
   `javan_last_error_*` fields, and last-error clear semantics. It also runs a counter
   probe that repeats C ABI `String` and `byte[]` exports, frees every Javan-owned
-  result, calls final `javan_gc_collect()`, validates heap metadata, requires zero
+  result, repeats Java exception/recovery calls, detaches the finished host thread,
+  calls final `javan_gc_collect()`, validates heap metadata, requires zero
   live allocations/bytes and zero open root frames, caps peak live bytes, and requires
   minimum total/GC/collected allocation counters. The script writes the same
   sanitizer proof report with actual live allocation, live byte, peak byte, GC, root
@@ -368,6 +369,9 @@ Current gates:
   The same smoke builds generated Rust/Go/Python binding packages; Python ownership runs when `python3` is available,
   and Rust/Go ownership runs when `rustc` or `go` are available. When
   `JAVAN_SANITIZER_REQUIRED=true`, missing language toolchains fail the gate.
+  Host threads remain attached across calls to preserve Java thread identity and
+  thread-local state. Ownership probes call `javan_thread_detach_current()` when
+  finished; the Go probe pins its goroutine to the same OS thread for that lifecycle.
 - Sanitizer panic probes fail if stderr contains AddressSanitizer, LeakSanitizer, or
   UndefinedBehaviorSanitizer failure signatures even when the expected panic text is also
   present.
