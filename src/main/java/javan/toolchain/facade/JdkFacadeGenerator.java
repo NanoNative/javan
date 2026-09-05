@@ -226,7 +226,7 @@ public final class JdkFacadeGenerator {
         for (int index = 0; index < value.length(); index++) {
             final char character = value.charAt(index);
             if (character == '\'') {
-                literal.append("'\\\"'\\\"'");
+                literal.append("'\"'\"'");
             } else {
                 literal.append(character);
             }

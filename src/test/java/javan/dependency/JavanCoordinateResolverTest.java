@@ -50,6 +50,89 @@ final class JavanCoordinateResolverTest {
     }
 
     @Test
+    void rejectsTraversalBeforeReadingOrWritingOutsideRepositoryAndCache() throws Exception {
+        final Path repository = tempDir.resolve("source/a/repository");
+        final Path cache = tempDir.resolve("cache/a/dependencies");
+        final Path source = tempDir.resolve("source/outside.jar");
+        final Path sentinel = tempDir.resolve("cache/outside.jar");
+        Files.createDirectories(source.getParent());
+        Files.createDirectories(sentinel.getParent());
+        Files.writeString(source, "untrusted source");
+        Files.writeString(sentinel, "untouched sentinel");
+        final JavanModule module = new JavanModuleParser().parse(tempDir, "require com.acme:demo ../../../../outside\n");
+        assertThat(module.warnings()).isEmpty();
+
+        assertThatThrownBy(() -> new JavanCoordinateResolver(List.of(repository), cache).resolve(module))
+            .isInstanceOf(java.io.IOException.class)
+            .hasMessageContaining("Invalid javan.mod coordinate")
+            .hasMessageContaining("line 1");
+
+        assertThat(source).hasContent("untrusted source");
+        assertThat(sentinel).hasContent("untouched sentinel");
+        assertThat(sentinel.resolveSibling("outside.jar.sha256")).doesNotExist();
+        assertThat(repository).doesNotExist();
+        assertThat(cache).doesNotExist();
+    }
+
+    @Test
+    void rejectsFilesystemControlCharactersInEveryCoordinateComponent() {
+        final JavanCoordinateResolver resolver = new JavanCoordinateResolver(List.of(tempDir.resolve("repo")));
+        for (final String notation : List.of(
+            "bad/group:demo:1", "bad\\group:demo:1", "com.acme:bad/artifact:1", "com.acme:bad\\artifact:1",
+            "com.acme:demo ../outside", "com.acme:demo ..\\outside", "com.acme:demo /absolute",
+            "com.acme:demo C:relative", "com.acme:demo .", "com.acme:demo ..", "com.acme:.:1",
+            "com.acme:..:1", "com.acme:demo 1\u0000bad", "com.acme:demo 1\nbad",
+            "com.acme:demo 1<bad", "com.acme:demo 1>bad", "com.acme:demo 1\"bad",
+            "com.acme:demo 1|bad", "com.acme:demo 1?bad", "com.acme:demo 1*bad"
+        )) {
+            final JavanDependency dependency = new JavanDependency("main", notation, "coordinate", Optional.empty(), 7);
+            assertThatThrownBy(() -> resolver.resolve(dependency)).as(notation)
+                .isInstanceOf(java.io.IOException.class)
+                .hasMessageContaining("Invalid javan.mod coordinate")
+                .hasMessageContaining("line 7");
+        }
+    }
+
+    @Test
+    void rejectsGroupPathsThatResolveOutsideTheRepositoryRoot() {
+        final JavanDependency dependency = new JavanDependency("main", ".escape:demo:1", "coordinate", Optional.empty(), 3);
+
+        assertThatThrownBy(() -> new JavanCoordinateResolver(List.of(tempDir.resolve("repo"))).resolve(dependency))
+            .isInstanceOf(java.io.IOException.class)
+            .hasMessageContaining("escapes repository root");
+    }
+
+    @Test
+    void preservesPathSafeMavenCoordinatePunctuationAndSuffixes() throws Exception {
+        final Path repository = tempDir.resolve("repo");
+        for (final String version : List.of("1.0.0-SNAPSHOT", "1.0.0-RC1", "1.0+build.7", "2026.09.05", "1.0_final")) {
+            final Path jar = artifact(repository, "org.example-tools", "library_2.13", version);
+            for (final String separator : List.of(":", " ", "\t")) {
+                final JavanDependency dependency = new JavanDependency(
+                    "main", "org.example-tools:library_2.13" + separator + version, "coordinate", Optional.empty(), 1
+                );
+
+                assertThat(new JavanCoordinateResolver(List.of(repository)).resolve(dependency).path()).contains(jar);
+            }
+        }
+    }
+
+    @Test
+    void rejectsTraversalInTransitivePomCoordinates() throws Exception {
+        final Path repository = tempDir.resolve("repo");
+        final Path app = artifact(repository, "com.acme", "app", "1.0.0");
+        Files.writeString(app.resolveSibling("app-1.0.0.pom"), """
+            <project><dependencies><dependency>
+              <groupId>com.acme</groupId><artifactId>demo</artifactId><version>../../../../outside</version>
+            </dependency></dependencies></project>
+            """);
+
+        assertThatThrownBy(() -> new JavanCoordinateResolver(List.of(repository)).resolve(module("com.acme:app:1.0.0")))
+            .isInstanceOf(java.io.IOException.class)
+            .hasMessageContaining("Invalid javan.mod coordinate");
+    }
+
+    @Test
     void resolvePrefersFirstRepositoryWithExistingArtifact() throws Exception {
         final Path missingRepository = tempDir.resolve("missing-repo");
         final Path existingRepository = tempDir.resolve("existing-repo");
