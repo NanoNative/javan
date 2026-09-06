@@ -1088,6 +1088,217 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeLibraryExportPublishesUncaughtNegativeArraySizeException() throws Exception {
+        final Path project = project("library-negative-array-size");
+        writeJava(project, "com.acme.Failures", """
+            package com.acme;
+
+            public final class Failures {
+                private Failures() {
+                }
+
+                public static int fail() {
+                    return new int[-1].length;
+                }
+            }
+            """);
+
+        final CliRun run = run(
+            tempDir,
+            "build",
+            project.toString(),
+            "--library",
+            "--format",
+            "static",
+            "--export",
+            "com.acme.Failures.fail"
+        );
+
+        assertThat(run.exitCode()).isZero();
+        final Path library = project.resolve(".javan/dist/liblibrary-negative-array-size.a");
+        final Path caller = writeC(project, "call_failure.c", """
+            #include <stdio.h>
+            #include ".javan/dist/bindings/c/library-negative-array-size.h"
+
+            int main(void) {
+                int direct = javan_export_com_acme_Failures_fail_void();
+                printf("direct:%d:%s:%s\\n", direct, javan_last_error_code(), javan_last_error_detail());
+                javan_clear_error();
+                int value = 42;
+                JavanResult result = javan_try_com_acme_Failures_fail_void(&value);
+                printf("try:%d:%s:%s:%d\\n", result.ok, result.code, result.detail, value);
+                javan_result_free(&result);
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-failure");
+
+        assertThat(process(project, List.of("cc", caller.toString(), library.toString(), "-o", binary.toString())).exitCode())
+            .isZero();
+        assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo("""
+            direct:0:JAVAN-RUNTIME-PANIC:-1
+            try:0:JAVAN-RUNTIME-PANIC:-1:0
+            """);
+    }
+
+    @Test
+    void nativeLibraryFailedClassInitializationStaysFailedAcrossExports() throws Exception {
+        assertFailedClassInitialization(-1, "java/lang/ExceptionInInitializerError");
+    }
+
+    @Test
+    void nativeLibraryPanickingClassInitializationStaysFailedAcrossExports() throws Exception {
+        assertFailedClassInitialization(65_536, "out of memory");
+    }
+
+    private void assertFailedClassInitialization(final int length, final String failure) throws Exception {
+        final Path project = project("library-failed-initialization");
+        writeJava(project, "com.acme.Broken", """
+            package com.acme;
+
+            public final class Broken {
+                private static final int VALUE = new int[ARRAY_LENGTH].length;
+
+                public static int read() {
+                    System.out.println("entered-failed-class");
+                    return VALUE;
+                }
+            }
+            """.replace("ARRAY_LENGTH", Integer.toString(length)));
+
+        final CliRun run = run(tempDir, "build", project.toString(), "--library", "--format", "static",
+            "--export", "com.acme.Broken.read");
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Path caller = writeC(project, "call_initialization.c", """
+            #include <stdio.h>
+            #include <string.h>
+            #include ".javan/dist/bindings/c/library-failed-initialization.h"
+
+            int main(void) {
+                int value = javan_export_com_acme_Broken_read_void();
+                const char* summary = javan_last_error();
+                printf("first:%d:%d\\n", value,
+                    summary != NULL && strstr(summary, "EXPECTED_FAILURE") != NULL);
+                javan_clear_error();
+                for (int attempt = 0; attempt < 3; attempt++) {
+                    value = 42;
+                    JavanResult result = javan_try_com_acme_Broken_read_void(&value);
+                    printf("repeat:%d:%d:%d\\n", result.ok, value,
+                        result.summary != NULL && strstr(result.summary, "java/lang/NoClassDefFoundError") != NULL);
+                    javan_result_free(&result);
+                    javan_clear_error();
+                }
+                return 0;
+            }
+            """.replace("EXPECTED_FAILURE", failure));
+        final Path binary = project.resolve("call-initialization");
+        final ProcessResult compile = process(project, List.of("cc", caller.toString(),
+            project.resolve(".javan/dist/liblibrary-failed-initialization.a").toString(), "-o", binary.toString()));
+        assertThat(compile.exitCode()).as(compile.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(binary.toString()), Duration.ofSeconds(10),
+            Map.of("JAVAN_HEAP_LIMIT_BYTES", "8192"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stderr()).isEmpty();
+        assertThat(nativeRun.stdout()).isEqualTo("""
+            first:0:1
+            repeat:0:0:1
+            repeat:0:0:1
+            repeat:0:0:1
+            """);
+    }
+
+    @Test
+    void nativeLibraryConcurrentInitializationFailureReleasesBothCallers() throws Exception {
+        final Path project = project("library-concurrent-initialization");
+        writeJava(project, "com.acme.Warmup", """
+            package com.acme;
+            public final class Warmup { public static int ping() { return 1; } }
+            """);
+        writeJava(project, "com.acme.Broken", """
+            package com.acme;
+            public final class Broken {
+                private static final int VALUE = new int[-1].length;
+                public static int read() {
+                    System.out.println("entered-failed-class");
+                    return VALUE;
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString(), "--library", "--format", "static",
+            "--export", "com.acme.Warmup.ping", "--export", "com.acme.Broken.read");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path caller = writeC(project, "call_concurrent.c", """
+            #include <pthread.h>
+            #include <stdint.h>
+            #include <stdio.h>
+            #include <string.h>
+            #include ".javan/dist/bindings/c/library-concurrent-initialization.h"
+
+            void javan_thread_detach_current(void);
+            void javan_gc_collect(void);
+            unsigned long javan_heap_live_allocations(void);
+            int javan_heap_root_frame_depth(void);
+            int javan_heap_frame_root_count(void);
+            static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+            static pthread_cond_t changed = PTHREAD_COND_INITIALIZER;
+            static int ready = 0;
+            static int released = 0;
+
+            static void* call(void* unused) {
+                (void) unused;
+                pthread_mutex_lock(&lock);
+                ready++;
+                pthread_cond_broadcast(&changed);
+                while (!released) pthread_cond_wait(&changed, &lock);
+                pthread_mutex_unlock(&lock);
+                int value = 42;
+                JavanResult result = javan_try_com_acme_Broken_read_void(&value);
+                intptr_t outcome = 0;
+                if (!result.ok && value == 0 && result.summary != NULL) {
+                    if (strstr(result.summary, "ExceptionInInitializerError")) outcome = 1;
+                    if (strstr(result.summary, "NoClassDefFoundError")) outcome = 2;
+                }
+                javan_result_free(&result);
+                javan_thread_detach_current();
+                return (void*) outcome;
+            }
+
+            int main(void) {
+                if (javan_export_com_acme_Warmup_ping_void() != 1) return 1;
+                pthread_t first, second;
+                if (pthread_create(&first, NULL, call, NULL) != 0
+                    || pthread_create(&second, NULL, call, NULL) != 0) return 2;
+                pthread_mutex_lock(&lock);
+                while (ready != 2) pthread_cond_wait(&changed, &lock);
+                released = 1;
+                pthread_cond_broadcast(&changed);
+                pthread_mutex_unlock(&lock);
+                void* first_result = NULL;
+                void* second_result = NULL;
+                if (pthread_join(first, &first_result) != 0 || pthread_join(second, &second_result) != 0) return 3;
+                if ((intptr_t) first_result + (intptr_t) second_result != 3
+                    || (intptr_t) first_result * (intptr_t) second_result != 2) return 4;
+                javan_thread_detach_current();
+                javan_gc_collect();
+                if (javan_heap_live_allocations() != 0 || javan_heap_root_frame_depth() != 0
+                    || javan_heap_frame_root_count() != 0) return 5;
+                pthread_cond_destroy(&changed);
+                pthread_mutex_destroy(&lock);
+                puts("one-initializer-error:one-class-failed:no-leaks");
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-concurrent");
+        final ProcessResult compile = process(project, List.of("cc", "-pthread", caller.toString(),
+            project.resolve(".javan/dist/liblibrary-concurrent-initialization.a").toString(), "-o", binary.toString()));
+        assertThat(compile.exitCode()).as(compile.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(binary.toString()), Duration.ofSeconds(10));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stderr()).isEmpty();
+        assertThat(nativeRun.stdout()).isEqualTo("one-initializer-error:one-class-failed:no-leaks\n");
+    }
+
+    @Test
     void staticLibraryEmbedsDependencyResourceAndReadsItFromCExport() throws Exception {
         final Path dependency = addJarResource(
             dependencyJar("library-resource", "dep.Library", """
@@ -1713,5 +1924,126 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         final CliRun run = run(tempDir, "build", project.toString(), "--kind", "staticlib", "--export", "com.acme.Bad.nope");
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
+    }
+
+    @Test
+    void staticLibraryObjectPendingExceptionReleasesExportRootsAndRecovers() throws Exception {
+        final Path project = project("library-object-pending");
+        writeJava(project, "com.acme.Handles", """
+            package com.acme;
+
+            public final class Handles {
+                public static Object create(final String text, final byte[] data, final int length) {
+                    final byte[] values = new byte[length];
+                    return text + ":" + data.length + ":" + values.length;
+                }
+
+                public static String describe(final Object value) {
+                    return String.valueOf(value);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString(), "--library", "--format", "static",
+            "--bindings", "c", "--export", "com.acme.Handles.create", "--export", "com.acme.Handles.describe");
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Path library = project.resolve(".javan/dist/liblibrary-object-pending.a");
+        final Path caller = writeC(project, "call_object_pending.c", """
+            #include <stddef.h>
+            #include <stdio.h>
+            #include <string.h>
+            #include ".javan/dist/bindings/c/library-object-pending.h"
+
+            int javan_heap_root_frame_depth(void);
+            int javan_heap_frame_root_count(void);
+            unsigned long javan_heap_live_allocations(void);
+            unsigned long javan_heap_live_bytes(void);
+            void javan_thread_detach_current(void);
+            void javan_gc_collect(void);
+            void javan_validate_heap_metadata(void);
+
+            int main(void) {
+                int8_t data[3] = {1, 2, 3};
+                JavanByteArray input = {data, 3};
+                max_align_t sentinel;
+                for (int attempt = 0; attempt < 128; attempt++) {
+                    for (int owned = 0; owned < 2; owned++) {
+                        JavanObjectHandle* value = (JavanObjectHandle*) &sentinel;
+                        JavanResult result = {0};
+                        if (owned) {
+                            result = javan_try_com_acme_Handles_create_string_bytes_int("fail", input, -1, &value);
+                        } else {
+                            value = javan_export_com_acme_Handles_create_string_bytes_int("fail", input, -1);
+                        }
+                        const char* error = javan_last_error();
+                        if (value != NULL || error == NULL || strstr(error, "NegativeArraySizeException") == NULL
+                                || javan_heap_root_frame_depth() != 0 || javan_heap_frame_root_count() != 0) {
+                            fprintf(stderr, "pending Object failure: attempt=%d owned=%d value=%p roots=%d/%d error=%s\\n",
+                                attempt, owned, (void*) value, javan_heap_root_frame_depth(),
+                                javan_heap_frame_root_count(), error == NULL ? "<none>" : error);
+                            return 1;
+                        }
+                        if (owned) {
+                            if (result.ok != 0 || result.summary == NULL
+                                    || strstr(result.summary, "NegativeArraySizeException") == NULL
+                                    || result.code == NULL || strcmp(result.code, "JAVAN-RUNTIME-PANIC") != 0
+                                    || result.detail == NULL || strcmp(result.detail, "-1") != 0) {
+                                fprintf(stderr, "pending Object result lost diagnostics: attempt=%d\\n", attempt);
+                                return 1;
+                            }
+                            javan_result_free(&result);
+                            if (result.message != NULL || result.code != NULL || result.detail != NULL) {
+                                fputs("pending Object result did not clear after free\\n", stderr);
+                                return 1;
+                            }
+                            result = javan_try_com_acme_Handles_create_string_bytes_int("ok", input, 1, &value);
+                            if (result.ok != 1 || result.message != NULL) {
+                                fprintf(stderr, "Object try recovery failed: attempt=%d\\n", attempt);
+                                return 1;
+                            }
+                            javan_result_free(&result);
+                        } else {
+                            value = javan_export_com_acme_Handles_create_string_bytes_int("ok", input, 1);
+                        }
+                        if (value == NULL || javan_last_error() != NULL) {
+                            fprintf(stderr, "Object recovery failed: attempt=%d owned=%d\\n", attempt, owned);
+                            return 1;
+                        }
+                        char* text = javan_export_com_acme_Handles_describe_object(value);
+                        if (text == NULL || strcmp(text, "ok:3:1") != 0 || javan_last_error() != NULL) {
+                            fprintf(stderr, "Object recovery contents failed: attempt=%d owned=%d\\n", attempt, owned);
+                            return 1;
+                        }
+                        javan_free(text);
+                        javan_object_handle_release(value);
+                        if (javan_heap_root_frame_depth() != 0 || javan_heap_frame_root_count() != 0) {
+                            fprintf(stderr, "Object recovery retained roots: attempt=%d owned=%d\\n", attempt, owned);
+                            return 1;
+                        }
+                    }
+                }
+                javan_thread_detach_current();
+                javan_gc_collect();
+                javan_validate_heap_metadata();
+                if (javan_heap_live_allocations() != 0 || javan_heap_live_bytes() != 0
+                        || javan_heap_root_frame_depth() != 0 || javan_heap_frame_root_count() != 0) {
+                    fprintf(stderr, "Object pending cleanup leaked: allocations=%lu bytes=%lu roots=%d/%d\\n",
+                        javan_heap_live_allocations(), javan_heap_live_bytes(),
+                        javan_heap_root_frame_depth(), javan_heap_frame_root_count());
+                    return 1;
+                }
+                puts("pending-object-ok");
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-object-pending");
+        final ProcessResult compile = process(project, List.of("cc", caller.toString(), library.toString(),
+            "-o", binary.toString()));
+        assertThat(compile.exitCode()).as(compile.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(binary.toString()), Duration.ofSeconds(10),
+            Map.of("JAVAN_HEAP_LIMIT_BYTES", "2048", "JAVAN_GC_STRESS", "1", "JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stderr()).isEmpty();
+        assertThat(nativeRun.stdout()).isEqualTo("pending-object-ok\n");
     }
 }

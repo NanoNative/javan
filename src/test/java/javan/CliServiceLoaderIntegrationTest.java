@@ -18,6 +18,101 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @NativeTest
 final class CliServiceLoaderIntegrationTest extends CliIntegrationSupport {
     @Test
+    void failedProviderInitializationEscapesFindFirstHelper() throws Exception {
+        assertFailedProviderInitializationEscapesHelper(false, false);
+    }
+
+    @Test
+    void failedProviderInitializationEscapesFindFirstHelperInReleaseBuild() throws Exception {
+        assertFailedProviderInitializationEscapesHelper(false, true);
+    }
+
+    @Test
+    void failedProviderInitializationEscapesIteratorNextHelper() throws Exception {
+        assertFailedProviderInitializationEscapesHelper(true, false);
+    }
+
+    @Test
+    void failedProviderInitializationEscapesIteratorNextHelperInReleaseBuild() throws Exception {
+        assertFailedProviderInitializationEscapesHelper(true, true);
+    }
+
+    private void assertFailedProviderInitializationEscapesHelper(final boolean iterator, final boolean release) throws Exception {
+        final String name = iterator ? "service-failure-iterator" : "service-failure-first";
+        final Path project = project(name);
+        writeJava(project, "com.acme.Greeter", "package com.acme; public interface Greeter {}\n");
+        writeJava(project, "com.acme.BrokenProvider", """
+            package com.acme;
+            public final class BrokenProvider implements Greeter {
+                static int value = initialize();
+                public BrokenProvider() { Main.constructors++; }
+                private static int initialize() {
+                    Main.attempts++;
+                    return new int[-1].length;
+                }
+            }
+            """);
+        final String helper = iterator ? """
+                private static Object lookup(Iterator<Greeter> source) {
+                    try { return source.next(); }
+                    catch (NoSuchElementException exhausted) { return "exhausted"; }
+                }
+            """ : """
+                private static Object lookup(ServiceLoader<Greeter> source) {
+                    return source.findFirst();
+                }
+            """;
+        final String source = "ServiceLoader.load(Greeter.class)" + (iterator ? ".iterator()" : "");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Iterator;
+            import java.util.NoSuchElementException;
+            import java.util.ServiceConfigurationError;
+            import java.util.ServiceLoader;
+            public final class Main {
+                public static int attempts;
+                public static int constructors;
+                %s
+                public static void main(String[] args) {
+                    var first = %s;
+                    try {
+                        lookup(first);
+                        System.out.println("unexpected-body");
+                    } catch (ServiceConfigurationError failure) {
+                        System.out.println("first");
+                        System.out.println(failure.getCause().getCause().getMessage());
+                    }
+                    var repeated = %s;
+                    try {
+                        lookup(repeated);
+                        System.out.println("unexpected-body");
+                    } catch (ServiceConfigurationError failure) {
+                        System.out.println("later");
+                    }
+                    System.out.println(attempts);
+                    System.out.println(constructors);
+                }
+            }
+            """.formatted(helper, source, source));
+        writeResource(project, "META-INF/services/com.acme.Greeter", "com.acme.BrokenProvider\n");
+
+        final String jvmOutput = runJvmWithResources(project, "com.acme.Main");
+        assertThat(jvmOutput).isEqualTo("first\n-1\nlater\n1\n0\n");
+        final CliRun run = release
+            ? runSlow(tempDir, "build", project.toString(), "--release")
+            : runSlow(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).withFailMessage(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(
+            project,
+            List.of(project.resolve(".javan/bin/" + name).toString()),
+            Duration.ofSeconds(20),
+            Map.of("JAVAN_GC_STRESS", "1", "JAVAN_GC_SAFEPOINT_INTERVAL", "1")
+        );
+        assertThat(nativeRun.exitCode()).withFailMessage(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void nativeBuildLoadsStandardDescriptorLazilyAndReloads() throws Exception {
         final Path project = project("service-loader");
         writeJava(project, "com.acme.Greeter", """

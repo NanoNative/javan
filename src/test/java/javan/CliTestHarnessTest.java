@@ -241,7 +241,7 @@ final class CliTestHarnessTest {
             assertThat(command.get(0)).isEqualTo("java");
             assertThat(command.get(1))
                 .startsWith("-javaagent:/tmp/org.jacoco.agent.jar=destfile=")
-                .contains("target/jacoco-child-test/child-")
+                .contains(Path.of("target", "jacoco-child-test", "child-").toString())
                 .endsWith(".exec,append=true");
             assertThat(command.subList(2, command.size())).containsExactly(
                 "-cp",

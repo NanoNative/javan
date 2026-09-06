@@ -32,6 +32,11 @@ public final class JavanHostOnlyMethods {
         ),
         new MethodRef(
             "javan/util/ProcessRunner",
+            "deleteCapturedOutput",
+            "(Ljava/util/List;Ljava/lang/Exception;)V"
+        ),
+        new MethodRef(
+            "javan/util/ProcessRunner",
             "stopInterruptedProcess",
             "(Ljava/lang/Process;Ljava/lang/InterruptedException;)V"
         ),

@@ -55,23 +55,23 @@ int main(void) {
     int failed = javan_export_com_acme_Failures_failInt_void();
     const char* error = javan_last_error();
     const char* error_source_line = javan_last_error_source_line();
-    if (error == NULL || strstr(error, "negative array length") == NULL) {
+    if (error == NULL || strstr(error, "NegativeArraySizeException") == NULL) {
         printf("last-error-missing\n");
         return 1;
     }
     if (strcmp(javan_last_error_code(), "JAVAN-RUNTIME-PANIC") != 0
-            || strcmp(javan_last_error_summary(), "runtime helper failure") != 0
+            || strcmp(javan_last_error_summary(), "uncaught Java exception (java/lang/NegativeArraySizeException)") != 0
             || strcmp(javan_last_error_class(), "com.acme.Failures") != 0
             || strstr(javan_last_error_method(), "failInt()I") == NULL
             || strcmp(javan_last_error_file(), "Failures.java") != 0
             || javan_last_error_line() != 8
             || javan_last_error_bytecode_offset() < 0
             || (error_source_line != NULL && strstr(error_source_line, "new int[-1]") == NULL)
-            || strstr(javan_last_error_detail(), "negative array length") == NULL) {
+            || strcmp(javan_last_error_detail(), "-1") != 0) {
         printf("last-error-structured-missing\n");
         return 1;
     }
-    printf("last-error:%d:negative array length\n", failed);
+    printf("last-error:%d:-1\n", failed);
     int try_failed = 42;
     JavanResult fail_result = javan_try_com_acme_Failures_failInt_void(&try_failed);
     if (fail_result.ok != 0
@@ -79,7 +79,7 @@ int main(void) {
             || fail_result.code == NULL
             || strcmp(fail_result.code, "JAVAN-RUNTIME-PANIC") != 0
             || fail_result.detail == NULL
-            || strstr(fail_result.detail, "negative array length") == NULL
+            || strcmp(fail_result.detail, "-1") != 0
             || fail_result.line != 8
             || fail_result.bytecode_offset < 0) {
         printf("result-error-missing\n");

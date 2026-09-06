@@ -1584,23 +1584,7 @@ final class RuntimeSourceIoSections {
                 return;
             }
             javan_record_error(message);
-            jmp_buf* target = javan_panic_target;
-            if (target == NULL) {
-                fputs(message, stderr);
-                fputc('\\n', stderr);
-            }
-            javan_runtime_lock_reset_for_panic();
-            if (target != NULL && javan_panic_scope_recover_current(target) != 0) {
-                longjmp(*target, 1);
-            }
-            javan_source_context_top = NULL;
-            javan_native_resource_cleanup_all();
-            javan_root_frame_cleanup();
-            if (target != NULL) {
-                javan_panic_target = NULL;
-                longjmp(*target, 1);
-            }
-            exit(1);
+            javan_panic_resume();
         }
 
         void javan_panic_at(
@@ -1638,22 +1622,31 @@ final class RuntimeSourceIoSections {
                 safe_fix,
                 safe_detail
             );
+            javan_panic_resume();
+        }
+
+        void javan_panic_resume(void) {
             jmp_buf* target = javan_panic_target;
-            if (target == NULL) {
-                fprintf(stderr, "[%s] %s\\n\\n", safe_code, safe_summary);
+            if (target == NULL && javan_last_error_class_value[0] == '\\0') {
+                fputs(javan_last_error_value, stderr);
+                fputc('\\n', stderr);
+            } else if (target == NULL) {
+                fprintf(stderr, "[%s] %s\\n\\n", javan_last_error_code_value, javan_last_error_summary_value);
                 fprintf(stderr, "Where:\\n");
-                if (line >= 0) {
-                    fprintf(stderr, "  %s.%s(%s:%d)\\n", safe_class, safe_method, safe_file, line);
+                if (javan_last_error_line_value >= 0) {
+                    fprintf(stderr, "  %s.%s(%s:%d)\\n", javan_last_error_class_value,
+                        javan_last_error_method_value, javan_last_error_file_value, javan_last_error_line_value);
                 } else {
-                    fprintf(stderr, "  %s.%s(%s)\\n", safe_class, safe_method, safe_file);
+                    fprintf(stderr, "  %s.%s(%s)\\n", javan_last_error_class_value,
+                        javan_last_error_method_value, javan_last_error_file_value);
                 }
-                fprintf(stderr, "  bytecode offset: %d\\n\\n", bytecode_offset);
-                javan_print_source_code(safe_source_line);
+                fprintf(stderr, "  bytecode offset: %d\\n\\n", javan_last_error_bytecode_offset_value);
+                javan_print_source_code(javan_last_error_source_line_value);
                 fprintf(stderr, "Why:\\n");
-                fprintf(stderr, "  %s\\n", safe_why);
-                fprintf(stderr, "  detail: %s\\n\\n", safe_detail);
+                fprintf(stderr, "  %s\\n", javan_last_error_why_value);
+                fprintf(stderr, "  detail: %s\\n\\n", javan_last_error_detail_value);
                 fprintf(stderr, "Fix:\\n");
-                fprintf(stderr, "  %s\\n", safe_fix);
+                fprintf(stderr, "  %s\\n", javan_last_error_fix_value);
                 fflush(stderr);
             }
             javan_runtime_lock_reset_for_panic();

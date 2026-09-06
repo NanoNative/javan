@@ -40,6 +40,14 @@ final class JavanHostOnlyMethodsTest {
     }
 
     @Test
+    void isHostOnlyMethodAcceptsJvmCapturedOutputCleanup() {
+        assertThat(JavanHostOnlyMethods.isHostOnlyMethod(
+            "javan/util/ProcessRunner",
+            method("deleteCapturedOutput", "(Ljava/util/List;Ljava/lang/Exception;)V")
+        )).isTrue();
+    }
+
+    @Test
     void isHostOnlyMethodAcceptsJvmInterruptionCleanup() {
         assertThat(JavanHostOnlyMethods.isHostOnlyMethod(
             "javan/util/ProcessRunner",

@@ -8,6 +8,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -77,6 +78,69 @@ final class JdkProvisionerTest {
         assertThat(home.resolve("jdks/temurin-25-mac-aarch64.javan-staging")).doesNotExist();
     }
 
+    @Test
+    void usesShasumWhenSha256sumIsUnavailable() throws Exception {
+        final Path home = tempDir.resolve("home");
+        final ArchiveRunner runner = new ArchiveRunner(CHECKSUM, false, false);
+
+        final ToolchainMetadata installed = provisioner(home, runner).provision("25");
+
+        assertThat(runner.checksumTools).containsExactly("shasum");
+        assertThat(installed.checksum()).contains("sha256:" + CHECKSUM);
+        assertThat(manager(home).installedToolchains()).containsExactly(installed);
+    }
+
+    @Test
+    void rejectsChecksumMismatchFromFallbackTool() {
+        final Path home = tempDir.resolve("home");
+        final ArchiveRunner runner = new ArchiveRunner("b".repeat(64), false, false);
+
+        assertThatThrownBy(() -> provisioner(home, runner).provision("25"))
+            .isInstanceOf(IOException.class)
+            .hasMessageContaining("SHA-256 mismatch");
+        assertThat(runner.checksumTools).containsExactly("shasum");
+        assertThat(home.resolve("toolchains")).doesNotExist();
+    }
+
+    @Test
+    void reportsMissingChecksumToolsWithoutRegisteringOrStagingAJdk() {
+        final Path home = tempDir.resolve("home");
+        final ArchiveRunner runner = new ArchiveRunner(CHECKSUM, false, List.of(), 0);
+
+        assertThatThrownBy(() -> provisioner(home, runner).provision("25"))
+            .isInstanceOf(IOException.class)
+            .hasMessage("No SHA-256 checksum tool is available. Install sha256sum (GNU coreutils) or shasum, then retry JDK provisioning.");
+        assertThat(runner.checksumTools).isEmpty();
+        assertThat(home.resolve("toolchains")).doesNotExist();
+        assertThat(home.resolve("jdks/temurin-25-linux-x64")).doesNotExist();
+        assertThat(home.resolve("jdks/temurin-25-linux-x64.javan-staging")).doesNotExist();
+        assertThat(home.resolve("cache/downloads/temurin.tar.gz.partial")).doesNotExist();
+    }
+
+    @Test
+    void preservesFallbackAfterPrimaryChecksumToolReturnsNonzero() throws Exception {
+        final Path home = tempDir.resolve("home");
+        final ArchiveRunner runner = new ArchiveRunner(CHECKSUM, false, List.of("sha256sum", "shasum"), 1);
+
+        final ToolchainMetadata installed = provisioner(home, runner).provision("25");
+
+        assertThat(runner.checksumTools).containsExactly("sha256sum", "shasum");
+        assertThat(manager(home).installedToolchains()).containsExactly(installed);
+    }
+
+    @Test
+    void reportsPrimaryChecksumFailureWhenFallbackToolIsAbsent() {
+        final Path home = tempDir.resolve("home");
+        final ArchiveRunner runner = new ArchiveRunner(CHECKSUM, false, List.of("sha256sum"), 1);
+
+        assertThatThrownBy(() -> provisioner(home, runner).provision("25"))
+            .isInstanceOf(IOException.class)
+            .hasMessage("Unable to calculate SHA-256: primary checksum failure");
+        assertThat(runner.checksumTools).containsExactly("sha256sum");
+        assertThat(home.resolve("toolchains")).doesNotExist();
+        assertThat(home.resolve("jdks/temurin-25-linux-x64.javan-staging")).doesNotExist();
+    }
+
     private JdkProvisioner provisioner(final Path home, final ProcessRunner runner) {
         return new JdkProvisioner(
             home,
@@ -94,6 +158,9 @@ final class JdkProvisionerTest {
     private static final class ArchiveRunner extends ProcessRunner {
         private final String computedChecksum;
         private final boolean macPackage;
+        private final List<String> availableChecksumTools;
+        private final int primaryChecksumExitCode;
+        private final List<String> checksumTools = new ArrayList<>();
         private int invocations;
 
         private ArchiveRunner(final String computedChecksum) {
@@ -101,8 +168,28 @@ final class JdkProvisionerTest {
         }
 
         private ArchiveRunner(final String computedChecksum, final boolean macPackage) {
+            this(computedChecksum, macPackage, true);
+        }
+
+        private ArchiveRunner(final String computedChecksum, final boolean macPackage, final boolean sha256sumAvailable) {
+            this(computedChecksum, macPackage, sha256sumAvailable ? List.of("sha256sum", "shasum") : List.of("shasum"), 0);
+        }
+
+        private ArchiveRunner(
+            final String computedChecksum,
+            final boolean macPackage,
+            final List<String> availableChecksumTools,
+            final int primaryChecksumExitCode
+        ) {
             this.computedChecksum = computedChecksum;
             this.macPackage = macPackage;
+            this.availableChecksumTools = List.copyOf(availableChecksumTools);
+            this.primaryChecksumExitCode = primaryChecksumExitCode;
+        }
+
+        @Override
+        public boolean commandExists(final String executable) {
+            return !("sha256sum".equals(executable) || "shasum".equals(executable)) || availableChecksumTools.contains(executable);
         }
 
         @Override
@@ -118,7 +205,20 @@ final class JdkProvisionerTest {
                 return new Result(0, "", "");
             }
             if ("sha256sum".equals(command.getFirst())) {
-                return new Result(0, computedChecksum + "  " + command.get(1) + "\n", "");
+                checksumTools.add("sha256sum");
+                if (!commandExists("sha256sum")) {
+                    throw new IOException("Cannot run program sha256sum: No such file or directory");
+                }
+                return new Result(primaryChecksumExitCode, computedChecksum + "  " + command.get(1) + "\n",
+                    primaryChecksumExitCode == 0 ? "" : "primary checksum failure");
+            }
+            if ("shasum".equals(command.getFirst())) {
+                checksumTools.add("shasum");
+                if (!commandExists("shasum")) {
+                    throw new IOException("Cannot run program shasum: No such file or directory");
+                }
+                assertThat(command.subList(1, 3)).containsExactly("-a", "256");
+                return new Result(0, computedChecksum + "  " + command.get(3) + "\n", "");
             }
             if ("tar".equals(command.getFirst())) {
                 final Path staging = Path.of(command.get(command.indexOf("-C") + 1));

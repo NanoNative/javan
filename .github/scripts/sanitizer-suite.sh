@@ -375,7 +375,7 @@ if runs_scope failure_exceptions; then
   run_failure 1 boom exception-panic
   run_failure 1 "javan panic" exception-default-panic
   run_gc_failure 4096 left-right panic-string-concat-temporary-root
-  run_failure 1 "negative array length" negative-array-length
+  run_failure 1 "java/lang/NegativeArraySizeException" negative-array-length
 fi
 
 if runs_scope failure_limits; then

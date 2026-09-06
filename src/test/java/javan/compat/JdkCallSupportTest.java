@@ -34,7 +34,10 @@ final class JdkCallSupportTest {
             "java/lang/IllegalAccessException",
             "java/lang/IllegalArgumentException",
             "java/lang/reflect/InvocationTargetException",
-            "java/lang/UnsupportedOperationException"
+            "java/lang/UnsupportedOperationException",
+            "java/lang/ExceptionInInitializerError",
+            "java/lang/NoClassDefFoundError",
+            "java/lang/Error"
         );
         assertThat(JdkCallSupport.isPlatformThrowableAssignable(
             "java/lang/reflect/InvocationTargetException",
@@ -4437,7 +4440,10 @@ final class JdkCallSupportTest {
         assertThat(JdkCallSupport.isSupported(unsupported)).isFalse();
         assertThat(JdkCallSupport.transportedPlatformThrowableTypes(supported)).containsExactly(
             "java/lang/NullPointerException",
-            "java/lang/ClassNotFoundException"
+            "java/lang/ClassNotFoundException",
+            "java/lang/ExceptionInInitializerError",
+            "java/lang/NoClassDefFoundError",
+            "java/lang/Error"
         );
         assertThat(JdkCallSupport.runtimeModules(supported)).containsExactly("reflection-metadata");
         assertThat(JdkCallSupport.transportedPlatformThrowableTypes(unsupported)).isEmpty();

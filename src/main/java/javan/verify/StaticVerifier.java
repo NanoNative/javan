@@ -1,6 +1,7 @@
 package javan.verify;
 
 import javan.analysis.CaughtThrowableRethrowAnalysis;
+import javan.analysis.ClassInitializationGraph;
 import javan.analysis.ThrowableReturnAnalysis;
 import javan.analysis.EntryPoint;
 import javan.analysis.GeneratedObjectCloneSupport;
@@ -2077,6 +2078,12 @@ public final class StaticVerifier {
         if (supportedMathExactHandler(code, handler)) {
             return true;
         }
+        if (supportedNegativeArraySizeHandler(code, handler)) {
+            return true;
+        }
+        if (supportedSingleApplicationNegativeArraySizeHandler(classes, code, handler)) {
+            return true;
+        }
         if (supportedFinallyHandler(classes, method, code, handler)) {
             return true;
         }
@@ -2126,7 +2133,15 @@ public final class StaticVerifier {
             if (supportedTransportedThrowableCall(classes, instruction, catchType)) {
                 hasThrowableTransport = 1;
             }
+            final Optional<String> initializationTarget = ClassInitializationGraph.triggerTarget(classes, instruction);
+            final boolean initialization = initializationTarget.isPresent()
+                && classes.containsKey(initializationTarget.orElseThrow())
+                && initializationTransportsToHandler(classes, initializationTarget.orElseThrow(), catchType);
+            if (initialization) {
+                hasThrowableTransport = 1;
+            }
             if (!supportedInterruptedWaitProtectedInstruction(instruction)
+                && !initialization
                 && !supportedApplicationThrowableInstruction(classes, instruction)
                 && !supportedCheckcastThrowable(instruction, catchType)
                 && !supportedGeneratedThrowableCall(classes, instruction)
@@ -2142,6 +2157,29 @@ public final class StaticVerifier {
         }
         if (hasThrowableTransport == 1) {
             return true;
+        }
+        return false;
+    }
+
+    private static boolean initializationTransportsToHandler(
+        final Map<String, ClassFile> classes,
+        final String owner,
+        final String catchType
+    ) {
+        if (isThrowableAssignable(classes, "java/lang/ExceptionInInitializerError", catchType)
+            || isThrowableAssignable(classes, "java/lang/NoClassDefFoundError", catchType)) {
+            return true;
+        }
+        if (!isThrowableAssignable(classes, catchType, "java/lang/Error")) {
+            return false;
+        }
+        for (final String initializer : ClassInitializationGraph.initializerOwners(classes, owner)) {
+            for (final String type : escapingPlatformExceptionTypes(classes,
+                new MethodRef(initializer, "<clinit>", "()V"), new HashSet<>())) {
+                if (isThrowableAssignable(classes, type, catchType)) {
+                    return true;
+                }
+            }
         }
         return false;
     }
@@ -3273,6 +3311,24 @@ public final class StaticVerifier {
             targetMethod.orElseThrow()
         );
         for (final Instruction instruction : code.instructions()) {
+            final Optional<String> initializationTarget = ClassInitializationGraph.triggerTarget(classes, instruction);
+            if (initializationTarget.isPresent() && classes.containsKey(initializationTarget.orElseThrow())) {
+                for (final String type : List.of("java/lang/Error", "java/lang/ExceptionInInitializerError",
+                    "java/lang/NoClassDefFoundError")) {
+                    if (!caughtByThrowableHandler(classes, code, instruction.offset(), type)) {
+                        result.add(type);
+                    }
+                }
+            }
+            if (BytecodeSupport.isSingleDimensionArrayAllocation(instruction.opcode())
+                && !caughtByThrowableHandler(
+                    classes,
+                    code,
+                    instruction.offset(),
+                    "java/lang/NegativeArraySizeException"
+                )) {
+                result.add("java/lang/NegativeArraySizeException");
+            }
             if (instruction.methodRef().isPresent()) {
                 final MethodRef called = instruction.methodRef().orElseThrow();
                 for (final String throwableType : JdkCallSupport.transportedPlatformThrowableTypes(called)) {
@@ -3688,6 +3744,61 @@ public final class StaticVerifier {
             return true;
         }
         return opcode == 88 || opcode == 133;
+    }
+
+    private static boolean supportedNegativeArraySizeHandler(final CodeAttribute code, final CodeException handler) {
+        if (handler.catchType().isEmpty()
+            || !JdkCallSupport.isPlatformThrowableAssignable(
+                "java/lang/NegativeArraySizeException",
+                handler.catchType().orElseThrow()
+            )) {
+            return false;
+        }
+        int arrayAllocationCount = 0;
+        for (final Instruction instruction : code.instructions()) {
+            if (instruction.offset() < handler.startPc() || instruction.offset() >= handler.endPc()) {
+                continue;
+            }
+            if (BytecodeSupport.isSingleDimensionArrayAllocation(instruction.opcode())) {
+                arrayAllocationCount++;
+                continue;
+            }
+            if (!boundedNonThrowingOpcode(instruction.opcode())) {
+                return false;
+            }
+        }
+        return arrayAllocationCount == 1;
+    }
+
+    private static boolean supportedSingleApplicationNegativeArraySizeHandler(
+        final Map<String, ClassFile> classes,
+        final CodeAttribute code,
+        final CodeException handler
+    ) {
+        if (handler.catchType().isEmpty()
+            || !JdkCallSupport.isPlatformThrowableAssignable(
+                "java/lang/NegativeArraySizeException",
+                handler.catchType().orElseThrow()
+            )) {
+            return false;
+        }
+        final String catchType = handler.catchType().orElseThrow();
+        int transportingCallCount = 0;
+        for (final Instruction instruction : code.instructions()) {
+            if (instruction.offset() < handler.startPc() || instruction.offset() >= handler.endPc()) {
+                continue;
+            }
+            if (instruction.methodRef().isPresent()
+                && classes.containsKey(instruction.methodRef().orElseThrow().owner())
+                && supportedTransportedThrowableCall(classes, instruction, catchType)) {
+                transportingCallCount++;
+                continue;
+            }
+            if (!boundedNonThrowingOpcode(instruction.opcode())) {
+                return false;
+            }
+        }
+        return transportingCallCount == 1;
     }
 
     private static boolean supportedFinallyHandler(

@@ -15875,8 +15875,9 @@ final class CoreBehaviorTest {
             .isLessThan(generated.indexOf("arg0_array = javan_byte_array_from(arg0.data, arg0.length);"));
         assertThat(generated.indexOf("javan_com_acme_Bytes_echo___B__B((void**) &javan_export_object_result, arg0_array);"))
             .isLessThan(generated.indexOf("javan_byte_array_export"));
-        assertThat(generated.indexOf("javan_byte_array_export"))
-            .isLessThan(generated.indexOf("javan_root_frame_pop(javan_export_roots);"));
+        final int byteArrayExport = generated.indexOf("javan_byte_array_export");
+        assertThat(byteArrayExport)
+            .isLessThan(generated.indexOf("javan_root_frame_pop(javan_export_roots);", byteArrayExport));
         assertThat(generated).doesNotContain("javan_free(arg0_array);");
     }
 
@@ -15931,8 +15932,9 @@ final class CoreBehaviorTest {
             .isLessThan(generated.indexOf("javan_com_acme_Text_greet__Ljava_lang_String__Ljava_lang_String_((void**) &javan_export_object_result, arg0_string);"));
         assertThat(generated.indexOf("javan_com_acme_Text_greet__Ljava_lang_String__Ljava_lang_String_((void**) &javan_export_object_result, arg0_string);"))
             .isLessThan(generated.indexOf("javan_string_export"));
-        assertThat(generated.indexOf("javan_string_export"))
-            .isLessThan(generated.indexOf("javan_root_frame_pop(javan_export_roots);"));
+        final int stringExport = generated.indexOf("javan_string_export");
+        assertThat(stringExport)
+            .isLessThan(generated.indexOf("javan_root_frame_pop(javan_export_roots);", stringExport));
     }
 
     @Test

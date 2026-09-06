@@ -47,8 +47,8 @@ public class ProcessRunner {
      * @param workingDirectory process working directory
      * @param command command and arguments
      * @return captured process result
-     * @throws IOException when the process cannot be started or read
-     * @throws InterruptedException when interrupted while waiting
+     * @throws IOException when the process cannot be started, read, or its captured output deleted
+     * @throws InterruptedException when interrupted while waiting; output cleanup failures are suppressed
      */
     public Result run(final Path workingDirectory, final List<String> command) throws IOException, InterruptedException {
         final Path stdoutFile = Files.createTempFile("javan-process-", ".out");
@@ -57,6 +57,7 @@ public class ProcessRunner {
         builder.directory(workingDirectory.toFile());
         builder.redirectOutput(stdoutFile.toFile());
         builder.redirectError(stderrFile.toFile());
+        Exception failure = null;
         try {
             final Process process = builder.start();
             try {
@@ -78,9 +79,33 @@ public class ProcessRunner {
                 stopInterruptedProcess(process, exception);
                 throw exception;
             }
+        } catch (final IOException | InterruptedException exception) {
+            failure = exception;
+            throw exception;
         } finally {
-            Files.deleteIfExists(stdoutFile);
-            Files.deleteIfExists(stderrFile);
+            deleteCapturedOutput(List.of(stdoutFile, stderrFile), failure);
+        }
+    }
+
+    private static void deleteCapturedOutput(final List<Path> files, final Exception failure) throws IOException {
+        IOException cleanupFailure = null;
+        for (final Path file : files) {
+            try {
+                Files.deleteIfExists(file);
+            } catch (final IOException exception) {
+                if (cleanupFailure == null) {
+                    cleanupFailure = exception;
+                } else {
+                    cleanupFailure.addSuppressed(exception);
+                }
+            }
+        }
+        if (cleanupFailure != null) {
+            if (failure != null) {
+                failure.addSuppressed(cleanupFailure);
+            } else {
+                throw cleanupFailure;
+            }
         }
     }
 

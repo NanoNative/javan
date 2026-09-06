@@ -5021,6 +5021,48 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersVariablePrimitiveArrayAllocationWithNegativeArraySizeExceptionRoute() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(I)[I",
+            1,
+            1,
+            plain(0, 26, "iload_0"),
+            plainOperands(1, 188, "newarray", 10),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(
+            new IrLocal(IrType.INT, "int0"),
+            new IrLocal(IrType.OBJECT, "object1")
+        );
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt("int0", IrExpression.intLocal("arg0")),
+            IrInstruction.branchIf(
+                "label_array_length_non_negative_1_0",
+                IrExpression.intComparison(">=", IrExpression.intLocal("int0"), IrExpression.intLiteral(0))
+            ),
+            IrInstruction.throwPending(
+                "java/lang/NegativeArraySizeException",
+                IrExpression.objectCall("javan_string_value_of_int", List.of(IrExpression.intLocal("int0"))),
+                new IrSourceLocation(
+                    "com/acme/Main",
+                    "main",
+                    "(I)[I",
+                    1,
+                    Optional.of("Main.java"),
+                    Optional.empty(),
+                    Optional.empty()
+                )
+            ),
+            IrInstruction.label("label_array_length_non_negative_1_0"),
+            IrInstruction.assignObject("object1", IrExpression.intArrayAllocation(IrExpression.intLocal("int0"))),
+            IrInstruction.returnObject(IrExpression.objectLocal("object1"))
+        );
+    }
+
+    @Test
     void lowersObjectArrayAllocationStoreAndLoad() {
         final IrFunction function = lowerMain(method(
             0x0008,
