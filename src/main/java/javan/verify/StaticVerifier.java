@@ -1,6 +1,7 @@
 package javan.verify;
 
 import javan.analysis.CaughtThrowableRethrowAnalysis;
+import javan.analysis.ClassInitializationGraph;
 import javan.analysis.ThrowableReturnAnalysis;
 import javan.analysis.EntryPoint;
 import javan.analysis.GeneratedObjectCloneSupport;
@@ -2132,7 +2133,15 @@ public final class StaticVerifier {
             if (supportedTransportedThrowableCall(classes, instruction, catchType)) {
                 hasThrowableTransport = 1;
             }
+            final Optional<String> initializationTarget = ClassInitializationGraph.triggerTarget(classes, instruction);
+            final boolean initialization = initializationTarget.isPresent()
+                && classes.containsKey(initializationTarget.orElseThrow())
+                && initializationTransportsToHandler(classes, initializationTarget.orElseThrow(), catchType);
+            if (initialization) {
+                hasThrowableTransport = 1;
+            }
             if (!supportedInterruptedWaitProtectedInstruction(instruction)
+                && !initialization
                 && !supportedApplicationThrowableInstruction(classes, instruction)
                 && !supportedCheckcastThrowable(instruction, catchType)
                 && !supportedGeneratedThrowableCall(classes, instruction)
@@ -2148,6 +2157,29 @@ public final class StaticVerifier {
         }
         if (hasThrowableTransport == 1) {
             return true;
+        }
+        return false;
+    }
+
+    private static boolean initializationTransportsToHandler(
+        final Map<String, ClassFile> classes,
+        final String owner,
+        final String catchType
+    ) {
+        if (isThrowableAssignable(classes, "java/lang/ExceptionInInitializerError", catchType)
+            || isThrowableAssignable(classes, "java/lang/NoClassDefFoundError", catchType)) {
+            return true;
+        }
+        if (!isThrowableAssignable(classes, catchType, "java/lang/Error")) {
+            return false;
+        }
+        for (final String initializer : ClassInitializationGraph.initializerOwners(classes, owner)) {
+            for (final String type : escapingPlatformExceptionTypes(classes,
+                new MethodRef(initializer, "<clinit>", "()V"), new HashSet<>())) {
+                if (isThrowableAssignable(classes, type, catchType)) {
+                    return true;
+                }
+            }
         }
         return false;
     }
@@ -3279,6 +3311,15 @@ public final class StaticVerifier {
             targetMethod.orElseThrow()
         );
         for (final Instruction instruction : code.instructions()) {
+            final Optional<String> initializationTarget = ClassInitializationGraph.triggerTarget(classes, instruction);
+            if (initializationTarget.isPresent() && classes.containsKey(initializationTarget.orElseThrow())) {
+                for (final String type : List.of("java/lang/Error", "java/lang/ExceptionInInitializerError",
+                    "java/lang/NoClassDefFoundError")) {
+                    if (!caughtByThrowableHandler(classes, code, instruction.offset(), type)) {
+                        result.add(type);
+                    }
+                }
+            }
             if (BytecodeSupport.isSingleDimensionArrayAllocation(instruction.opcode())
                 && !caughtByThrowableHandler(
                     classes,

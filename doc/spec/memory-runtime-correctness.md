@@ -17,6 +17,7 @@ The current native runtime is not a JVM heap.
 | FFI returned strings/byte arrays | Javan-owned export copies; caller releases with `javan_free`. |
 | Temporary runtime buffers | Javan-owned; explicitly freed in the runtime path that allocated them. |
 | Static roots | Generated static object-field inventory is registered before class initializers run. |
+| Class initialization failure | Failed classes stay erroneous under the runtime lock. Non-`Error` failures become `ExceptionInInitializerError` with a rooted original cause; later uses raise `NoClassDefFoundError` without rerunning initialization. Native panic also releases ownership and leaves the class erroneous. |
 | Local/parameter roots | Generated root frames register object parameters and object locals until function return. |
 | Local root liveness | Generated methods clear dead object local/parameter root slots at CFG-proven safe-point boundaries across straight-line code, labels, branches, and loops. |
 | Return roots | Generated object calls use a caller-owned result slot that is zeroed and rooted before invocation. The callee publishes into that slot under the runtime lock before its final safe point and frame pops; no process-global return root is shared between threads. |
@@ -372,6 +373,15 @@ Current gates:
   Host threads remain attached across calls to preserve Java thread identity and
   thread-local state. Ownership probes call `javan_thread_detach_current()` when
   finished; the Go probe pins its goroutine to the same OS thread for that lifecycle.
+- [Native-library tests](../../src/test/java/javan/CliPackagingIntegrationTest.java) verify
+  failed initialization across repeated exports and concurrent native callers, including
+  heap-limit panic. They separately exercise C-only object handles with rooted inputs,
+  null/default failure results, successful reuse, and zero final heap/root residue.
+  [CLI tests](../../src/test/java/javan/CliRuntimeTranslationIntegrationTest.java) verify
+  original causes, dependency short-circuiting, main-entry failure, and `Class.forName`;
+  [service-loader tests](../../src/test/java/javan/CliServiceLoaderIntegrationTest.java)
+  verify failure transport through helper calls. These proofs do not broaden the existing
+  supported handler shapes or claim Java `OutOfMemoryError` recovery from native allocation denial.
 - Sanitizer panic probes fail if stderr contains AddressSanitizer, LeakSanitizer, or
   UndefinedBehaviorSanitizer failure signatures even when the expected panic text is also
   present.

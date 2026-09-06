@@ -176,9 +176,16 @@ public final class JdkProvisioner {
         if (isWindows()) {
             return processRunner.run(archive.getParent(), List.of("certutil", "-hashfile", archive.toString(), "SHA256"));
         }
-        final ProcessRunner.Result sha256sum = processRunner.run(archive.getParent(), List.of("sha256sum", archive.toString()));
-        if (sha256sum.exitCode() == 0) {
-            return sha256sum;
+        final boolean sha256sumAvailable = processRunner.commandExists("sha256sum");
+        final boolean shasumAvailable = processRunner.commandExists("shasum");
+        if (!sha256sumAvailable && !shasumAvailable) {
+            throw new IOException("No SHA-256 checksum tool is available. Install sha256sum (GNU coreutils) or shasum, then retry JDK provisioning.");
+        }
+        if (sha256sumAvailable) {
+            final ProcessRunner.Result sha256sum = processRunner.run(archive.getParent(), List.of("sha256sum", archive.toString()));
+            if (sha256sum.exitCode() == 0 || !shasumAvailable) {
+                return sha256sum;
+            }
         }
         return processRunner.run(archive.getParent(), List.of("shasum", "-a", "256", archive.toString()));
     }

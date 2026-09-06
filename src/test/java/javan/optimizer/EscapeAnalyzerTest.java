@@ -270,6 +270,29 @@ final class EscapeAnalyzerTest {
     }
 
     @Test
+    void plansStackAllocationOutsideAnEarlierControlFlowCycle() {
+        final IrFunction function = function(
+            local("value"),
+            IrInstruction.label("loop"),
+            IrInstruction.branchIf("done", IrExpression.intLiteral(1)),
+            IrInstruction.jump("loop"),
+            IrInstruction.label("done"),
+            IrInstruction.assignObject("value", IrExpression.intArrayAllocation(IrExpression.intLiteral(4))),
+            IrInstruction.returnVoid()
+        );
+        final IrProgram program = program(function);
+
+        final EscapeAnalyzer.StackAllocationPlan plan = analyzer.planStackAllocations(
+            program, analyzer.analyze(program), true
+        );
+
+        assertThat(plan.sites()).containsExactly(new EscapeAnalyzer.StackAllocationSite(
+            "example/Main", "run", "()Ljava/lang/Object;", 4,
+            IrExpression.Kind.INT_ARRAY_ALLOCATION, 4
+        ));
+    }
+
+    @Test
     void keepsStackAllocationDisabledOutsideSafeReleaseShape() {
         final IrFunction looped = function(
             local("value"),

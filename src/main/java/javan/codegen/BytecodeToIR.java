@@ -480,6 +480,7 @@ public final class BytecodeToIR {
         for (final Map.Entry<String, Set<String>> entry : materializedTypes.entrySet()) {
             result.put(entry.getKey(), orderedThrowableTypes(entry.getValue()));
         }
+        result.put("javan_exact_enum_lookup", List.of("java/lang/Error"));
         result.put(
             "javan_generated_method_invoke",
             JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
@@ -625,6 +626,15 @@ public final class BytecodeToIR {
         result.addAll(finallyReplacementThrowableTypes(classes, code));
         final Set<String> throwableParameters = applicationThrowableParameters(classes, method);
         for (final Instruction instruction : code.instructions()) {
+            final Optional<String> initializationTarget = ClassInitializationGraph.triggerTarget(classes, instruction);
+            if (initializationTarget.isPresent() && classes.containsKey(initializationTarget.orElseThrow())) {
+                for (final String type : List.of("java/lang/Error", "java/lang/ExceptionInInitializerError",
+                    "java/lang/NoClassDefFoundError")) {
+                    if (!caughtBy(classes, method, instruction.offset(), type)) {
+                        result.add(type);
+                    }
+                }
+            }
             if (BytecodeSupport.isSingleDimensionArrayAllocation(instruction.opcode())
                 && !caughtBy(classes, method, instruction.offset(), "java/lang/NegativeArraySizeException")) {
                 result.add("java/lang/NegativeArraySizeException");
@@ -1177,13 +1187,18 @@ public final class BytecodeToIR {
     private static void initializeClass(
         final Map<String, ClassFile> classes,
         final String currentOwner,
+        final MethodInfo method,
         final Instruction instruction,
         final List<IrInstruction> instructions,
-        final ClassInitializationGraph.Result classInitialization
+        final ClassInitializationGraph.Result classInitialization,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks
     ) {
-        final String owner = classInitializationOwner(classes, instruction);
+        final String owner = ClassInitializationGraph.triggerTarget(classes, instruction).orElseThrow();
         if (!owner.equals(currentOwner) && classInitialization.initializes(owner)) {
             instructions.add(IrInstruction.initializeClass(owner));
+            BytecodeToIRControlFlowSupport.appendPendingExceptionDispatch(
+                classes, method, instruction, instructions, List.of("java/lang/Error"),
+                pendingExceptionHandlerStacks, "label_initialization_continue_" + instruction.offset());
         }
     }
 
@@ -1193,25 +1208,8 @@ public final class BytecodeToIR {
         final Instruction instruction,
         final ClassInitializationGraph.Result classInitialization
     ) {
-        final String owner = classInitializationOwner(classes, instruction);
+        final String owner = ClassInitializationGraph.triggerTarget(classes, instruction).orElseThrow();
         return !owner.equals(currentOwner) && classInitialization.initializes(owner);
-    }
-
-    private static String classInitializationOwner(
-        final Map<String, ClassFile> classes,
-        final Instruction instruction
-    ) {
-        final String owner;
-        if (instruction.opcode() == 178 || instruction.opcode() == 179) {
-            final FieldRef field = instruction.fieldRef().orElseThrow();
-            owner = ClassInitializationGraph.staticFieldOwner(classes, field).orElse(field.owner());
-        } else if (instruction.opcode() == 184) {
-            final MethodRef method = instruction.methodRef().orElseThrow();
-            owner = ClassInitializationGraph.staticMethodOwner(classes, method).orElse(method.owner());
-        } else {
-            owner = instruction.className().orElseThrow();
-        }
-        return owner;
     }
 
     private static StackValue materializePendingHandlerException(
@@ -1257,11 +1255,12 @@ public final class BytecodeToIR {
             final MethodRef reference = bytecodeInstruction.methodRef().orElseThrow();
             if (("java/util/Iterator".equals(reference.owner()) || "java/util/ListIterator".equals(reference.owner()))
                 && "next".equals(reference.name()) && "()Ljava/lang/Object;".equals(reference.descriptor())) {
-                possibleTypes.add("java/util/NoSuchElementException");
+                possibleTypes.addAll(JdkCallSupport.transportedPlatformThrowableTypes(reference));
             }
             if ("java/util/ServiceLoader".equals(reference.owner())
-                && ("load".equals(reference.name()) || "loadInstalled".equals(reference.name()))) {
-                possibleTypes.add("java/util/ServiceConfigurationError");
+                && ("load".equals(reference.name()) || "loadInstalled".equals(reference.name())
+                    || "findFirst".equals(reference.name()))) {
+                possibleTypes.addAll(JdkCallSupport.transportedPlatformThrowableTypes(reference));
             }
         }
         for (int index = instructionStart; index < instructions.size(); index++) {
@@ -2025,13 +2024,13 @@ public final class BytecodeToIR {
                 BytecodeToIRControlFlowSupport.branchObjectNull(classFile, method, instruction, instructions, stack);
                 break;
             case 178:
-                initializeClass(classes, classFile.name(), instruction, instructions, classInitialization);
+                initializeClass(classes, classFile.name(), method, instruction, instructions, classInitialization, pendingExceptionHandlerStacks);
                 BytecodeToIRInvokeSupport.pushField(classes, classFile, method, instruction, stack);
                 break;
             case 179:
                 if (initializesClass(classes, classFile.name(), instruction, classInitialization)) {
                     snapshotOperandStack(instructions, stack, locals, localDeclarations);
-                    initializeClass(classes, classFile.name(), instruction, instructions, classInitialization);
+                    initializeClass(classes, classFile.name(), method, instruction, instructions, classInitialization, pendingExceptionHandlerStacks);
                 }
                 BytecodeToIRInvokeSupport.assignStaticField(classes, classFile, method, instruction, instructions, stack);
                 break;
@@ -2077,7 +2076,7 @@ public final class BytecodeToIR {
             case 184:
                 if (initializesClass(classes, classFile.name(), instruction, classInitialization)) {
                     snapshotOperandStack(instructions, stack, locals, localDeclarations);
-                    initializeClass(classes, classFile.name(), instruction, instructions, classInitialization);
+                    initializeClass(classes, classFile.name(), method, instruction, instructions, classInitialization, pendingExceptionHandlerStacks);
                 }
                 BytecodeToIRInvokeSupport.lowerStaticCall(
                     classes,
@@ -2123,7 +2122,7 @@ public final class BytecodeToIR {
                 );
                 break;
             case 187:
-                initializeClass(classes, classFile.name(), instruction, instructions, classInitialization);
+                initializeClass(classes, classFile.name(), method, instruction, instructions, classInitialization, pendingExceptionHandlerStacks);
                 BytecodeToIRDynamicSupport.newObject(classes, classFile, method, instruction, instructions, stack, localDeclarations);
                 break;
             case 188:

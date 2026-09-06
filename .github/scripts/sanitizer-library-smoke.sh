@@ -163,6 +163,13 @@ JAVAN_GC_SAFEPOINT_INTERVAL= \
     --export com.acme.Store.lastBytes \
     --export com.acme.Store.clear \
     --export com.acme.Failures.failInt \
+    --export com.acme.Failures.failRootedInt \
+    --export com.acme.Failures.failVoid \
+    --export com.acme.Failures.failLong \
+    --export com.acme.Failures.failFloat \
+    --export com.acme.Failures.failDouble \
+    --export com.acme.Failures.failString \
+    --export com.acme.Failures.failBytes \
     --bindings c,rust,go,python >/dev/null
 
 printf '%s\n' 'int main(void) { return 0; }' >"$TMP/sanitizer-support.c"
@@ -285,6 +292,55 @@ JavanByteArray javan_export_com_acme_Store_lastBytes_void(void);
 void javan_export_com_acme_Store_clear_void(void);
 int javan_export_com_acme_Failures_failInt_void(void);
 JavanResult javan_try_com_acme_Failures_failInt_void(int* out);
+int javan_export_com_acme_Failures_failRootedInt_string_bytes(const char* arg0, JavanByteArray arg1);
+JavanResult javan_try_com_acme_Failures_failRootedInt_string_bytes(const char* arg0, JavanByteArray arg1, int* out);
+void javan_export_com_acme_Failures_failVoid_string(const char* arg0);
+JavanResult javan_try_com_acme_Failures_failVoid_string(const char* arg0);
+long long javan_export_com_acme_Failures_failLong_bytes(JavanByteArray arg0);
+JavanResult javan_try_com_acme_Failures_failLong_bytes(JavanByteArray arg0, long long* out);
+float javan_export_com_acme_Failures_failFloat_string(const char* arg0);
+JavanResult javan_try_com_acme_Failures_failFloat_string(const char* arg0, float* out);
+double javan_export_com_acme_Failures_failDouble_bytes(JavanByteArray arg0);
+JavanResult javan_try_com_acme_Failures_failDouble_bytes(JavanByteArray arg0, double* out);
+char* javan_export_com_acme_Failures_failString_void(void);
+JavanResult javan_try_com_acme_Failures_failString_void(char** out);
+JavanByteArray javan_export_com_acme_Failures_failBytes_void(void);
+JavanResult javan_try_com_acme_Failures_failBytes_void(JavanByteArray* out);
+
+static int javan_library_check_pending_exception(const char* label, int default_ok, JavanResult* owned) {
+    const char* error = javan_last_error();
+    const char* code = javan_last_error_code();
+    const char* detail = javan_last_error_detail();
+    if (!default_ok || error == NULL || strstr(error, "NegativeArraySizeException") == NULL
+            || code == NULL || strcmp(code, "JAVAN-RUNTIME-PANIC") != 0
+            || detail == NULL || strcmp(detail, "-1") != 0) {
+        fprintf(stderr, "%s: invalid pending-exception default/error (default=%d, error=%s)\n",
+            label, default_ok, error == NULL ? "<none>" : error);
+        return 1;
+    }
+    if (owned != NULL) {
+        if (owned->ok != 0 || owned->message == NULL
+                || strstr(owned->message, "NegativeArraySizeException") == NULL
+                || owned->code == NULL || strcmp(owned->code, "JAVAN-RUNTIME-PANIC") != 0
+                || owned->detail == NULL || strcmp(owned->detail, "-1") != 0) {
+            fprintf(stderr, "%s: invalid owned pending-exception error\n", label);
+            return 1;
+        }
+        javan_result_free(owned);
+    }
+    if (javan_heap_root_frame_depth() != 0 || javan_heap_frame_root_count() != 0) {
+        fprintf(stderr, "%s: pending exception retained roots (depth=%d, count=%d)\n",
+            label, javan_heap_root_frame_depth(), javan_heap_frame_root_count());
+        return 1;
+    }
+    char* recovered = javan_export_com_acme_Text_greet_string("Loop");
+    if (recovered == NULL || strcmp(recovered, "Hi Loop") != 0 || javan_last_error() != NULL) {
+        fprintf(stderr, "%s: rooted export did not recover after pending exception\n", label);
+        return 1;
+    }
+    javan_free(recovered);
+    return 0;
+}
 
 static unsigned long javan_library_counter_limit(const char* name, unsigned long fallback) {
     const char* value = getenv(name);
@@ -495,6 +551,46 @@ int main(void) {
             fputs("library did not recover after Java exception\n", stderr);
             return 1;
         }
+
+        /* Exercise argument-root and result-only-root cleanup before the pending panic. */
+        if (javan_library_check_pending_exception("int export",
+                javan_export_com_acme_Failures_failRootedInt_string_bytes("Loop", input) == 0, NULL)) return 1;
+        javan_export_com_acme_Failures_failVoid_string("Loop");
+        if (javan_library_check_pending_exception("void export", 1, NULL)) return 1;
+        if (javan_library_check_pending_exception("long export",
+                javan_export_com_acme_Failures_failLong_bytes(input) == 0LL, NULL)) return 1;
+        if (javan_library_check_pending_exception("float export",
+                javan_export_com_acme_Failures_failFloat_string("Loop") == 0.0f, NULL)) return 1;
+        if (javan_library_check_pending_exception("double export",
+                javan_export_com_acme_Failures_failDouble_bytes(input) == 0.0, NULL)) return 1;
+        if (javan_library_check_pending_exception("String export",
+                javan_export_com_acme_Failures_failString_void() == NULL, NULL)) return 1;
+        JavanByteArray failed_bytes = javan_export_com_acme_Failures_failBytes_void();
+        if (javan_library_check_pending_exception("byte[] export",
+                failed_bytes.data == NULL && failed_bytes.length == 0, NULL)) return 1;
+
+        int int_out = 99;
+        JavanResult pending = javan_try_com_acme_Failures_failRootedInt_string_bytes("Loop", input, &int_out);
+        if (javan_library_check_pending_exception("int result", int_out == 0, &pending)) return 1;
+        pending = javan_try_com_acme_Failures_failVoid_string("Loop");
+        if (javan_library_check_pending_exception("void result", 1, &pending)) return 1;
+        long long long_out = 99LL;
+        pending = javan_try_com_acme_Failures_failLong_bytes(input, &long_out);
+        if (javan_library_check_pending_exception("long result", long_out == 0LL, &pending)) return 1;
+        float float_out = 99.0f;
+        pending = javan_try_com_acme_Failures_failFloat_string("Loop", &float_out);
+        if (javan_library_check_pending_exception("float result", float_out == 0.0f, &pending)) return 1;
+        double double_out = 99.0;
+        pending = javan_try_com_acme_Failures_failDouble_bytes(input, &double_out);
+        if (javan_library_check_pending_exception("double result", double_out == 0.0, &pending)) return 1;
+        char sentinel = 0;
+        char* string_out = &sentinel;
+        pending = javan_try_com_acme_Failures_failString_void(&string_out);
+        if (javan_library_check_pending_exception("String result", string_out == NULL, &pending)) return 1;
+        failed_bytes = input;
+        pending = javan_try_com_acme_Failures_failBytes_void(&failed_bytes);
+        if (javan_library_check_pending_exception("byte[] result",
+                failed_bytes.data == NULL && failed_bytes.length == 0, &pending)) return 1;
     }
     javan_thread_detach_current();
     javan_gc_collect();

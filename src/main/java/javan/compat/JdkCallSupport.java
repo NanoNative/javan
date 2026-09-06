@@ -1935,8 +1935,15 @@ public final class JdkCallSupport {
             && "(Ljava/lang/String;)Ljava/lang/Class;".equals(methodRef.descriptor())) {
             return List.of(
                 "java/lang/NullPointerException",
-                "java/lang/ClassNotFoundException"
+                "java/lang/ClassNotFoundException",
+                "java/lang/ExceptionInInitializerError",
+                "java/lang/NoClassDefFoundError",
+                "java/lang/Error"
             );
+        }
+        if ("java/lang/Enum".equals(methodRef.owner()) && "valueOf".equals(methodRef.name())
+            && "(Ljava/lang/Class;Ljava/lang/String;)Ljava/lang/Enum;".equals(methodRef.descriptor())) {
+            return List.of("java/lang/Error");
         }
         if ("java/lang/Class".equals(methodRef.owner())
             && ("getDeclaredMethod".equals(methodRef.name()) || "getMethod".equals(methodRef.name()))
@@ -1978,7 +1985,10 @@ public final class JdkCallSupport {
                 "java/lang/IllegalAccessException",
                 "java/lang/IllegalArgumentException",
                 "java/lang/reflect/InvocationTargetException",
-                "java/lang/UnsupportedOperationException"
+                "java/lang/UnsupportedOperationException",
+                "java/lang/ExceptionInInitializerError",
+                "java/lang/NoClassDefFoundError",
+                "java/lang/Error"
             );
         }
         if ("java/util/Base64$Encoder".equals(methodRef.owner())
@@ -2048,12 +2058,13 @@ public final class JdkCallSupport {
             return List.of("java/lang/InterruptedException");
         }
         if ("java/util/ServiceLoader".equals(methodRef.owner())
-            && ("load".equals(methodRef.name()) || "loadInstalled".equals(methodRef.name()))) {
+            && ("load".equals(methodRef.name()) || "loadInstalled".equals(methodRef.name())
+                || "findFirst".equals(methodRef.name()) && "()Ljava/util/Optional;".equals(methodRef.descriptor()))) {
             return List.of("java/util/ServiceConfigurationError");
         }
         if (("java/util/Iterator".equals(methodRef.owner()) || "java/util/ListIterator".equals(methodRef.owner()))
             && "next".equals(methodRef.name()) && "()Ljava/lang/Object;".equals(methodRef.descriptor())) {
-            return List.of("java/util/NoSuchElementException");
+            return List.of("java/util/NoSuchElementException", "java/util/ServiceConfigurationError");
         }
         return List.of();
     }

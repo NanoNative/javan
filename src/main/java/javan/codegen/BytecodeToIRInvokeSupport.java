@@ -1026,13 +1026,6 @@ final class BytecodeToIRInvokeSupport {
             && "()Ljava/util/Optional;".equals(methodRef.descriptor())) {
             pushObjectCall(instructions, stack, localDeclarations, "javan_service_loader_find_first",
                 List.of(popObject(classFile, method, stack)));
-            BytecodeToIRControlFlowSupport.appendPendingExceptionDispatch(
-                method,
-                instruction,
-                instructions,
-                List.of("java/lang/Throwable"),
-                pendingExceptionHandlerStacks
-            );
             return;
         }
         if ("java/util/ServiceLoader".equals(methodRef.owner())
@@ -2370,6 +2363,7 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if (lowerClassForName(
+            classes,
             classFile,
             method,
             instruction,
@@ -3679,6 +3673,7 @@ final class BytecodeToIRInvokeSupport {
     }
 
     private static boolean lowerClassForName(
+        final Map<String, ClassFile> classes,
         final ClassFile classFile,
         final MethodInfo method,
         final Instruction instruction,
@@ -3724,6 +3719,9 @@ final class BytecodeToIRInvokeSupport {
             resultLocal,
             IrExpression.objectCall("javan_generated_class_for_name", List.of(IrExpression.objectLocal(nameLocal)))
         ));
+        BytecodeToIRControlFlowSupport.appendPendingExceptionDispatch(
+            classes, method, instruction, instructions, List.of("java/lang/Error"),
+            pendingExceptionHandlerStacks, "label_class_for_name_initialized_" + instruction.offset());
         final String classFound = "label_class_for_name_found_" + instruction.offset();
         instructions.add(IrInstruction.branchIf(
             classFound,

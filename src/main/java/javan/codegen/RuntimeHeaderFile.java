@@ -258,8 +258,9 @@ final class RuntimeHeaderFile {
         void javan_root_frame_pop(void*** roots);
         void javan_runtime_lock_enter(void);
         void javan_runtime_lock_leave(void);
-        int javan_class_initialization_enter(int* state, void** owner);
-        void javan_class_initialization_complete(int* state, void** owner);
+        int javan_class_initialization_enter(int* state, void** owner, const char* class_name);
+        void javan_class_initialization_complete(int* state, void** owner, int succeeded);
+        void javan_pending_wrap_initializer(void);
         void javan_register_object(void* value, int type_id);
         void javan_validate_heap_metadata(void);
         void javan_gc_safe_point(void);
@@ -1009,6 +1010,7 @@ final class RuntimeHeaderFile {
         void javan_pending_clear(void);
         void javan_pending_panic(void);
         void javan_panic(const char* value);
+        void javan_panic_resume(void);
         void javan_panic_at(
             const char* code,
             const char* summary,
