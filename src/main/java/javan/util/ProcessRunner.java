@@ -305,19 +305,19 @@ public class ProcessRunner {
                 Thread.sleep(10L);
             }
             stopProcess(root, false);
-            if (waitForProcessesExit(processes, 1L)) {
+            if (waitForProcessesExit(processes, process, 1L)) {
                 return;
             }
             final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2L);
             do {
                 addProcessTree(processes, process);
                 stopProcesses(processes, true);
-                if (allProcessesExited(processes)) {
+                if (allProcessesExited(processes, process)) {
                     return;
                 }
                 Thread.sleep(10L);
             } while (System.nanoTime() < deadline);
-            if (!allProcessesExited(processes)) {
+            if (!allProcessesExited(processes, process)) {
                 throw new IOException("Could not stop child process tree");
             }
         } catch (final RuntimeException unavailable) {
@@ -397,19 +397,23 @@ public class ProcessRunner {
         }
     }
 
-    private static boolean waitForProcessesExit(final List<ProcessHandle> processes, final long seconds)
+    private static boolean waitForProcessesExit(final List<ProcessHandle> processes, final Process root, final long seconds)
         throws InterruptedException {
         final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(seconds);
         while (System.nanoTime() < deadline) {
-            if (allProcessesExited(processes)) {
+            if (allProcessesExited(processes, root)) {
                 return true;
             }
             Thread.sleep(10L);
         }
-        return allProcessesExited(processes);
+        return allProcessesExited(processes, root);
     }
 
-    private static boolean allProcessesExited(final List<ProcessHandle> processes) {
+    private static boolean allProcessesExited(final List<ProcessHandle> processes, final Process root) {
+        // Windows can publish an exit code before signaling termination and releasing redirected files.
+        if (root.isAlive()) {
+            return false;
+        }
         for (final ProcessHandle process : processes) {
             if (process.isAlive()) {
                 return false;

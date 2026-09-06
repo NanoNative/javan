@@ -91,11 +91,11 @@ final class JavanHostOnlyMethodsTest {
         )).isTrue();
         assertThat(JavanHostOnlyMethods.isHostOnlyMethod(
             "javan/util/ProcessRunner",
-            method("waitForProcessesExit", "(Ljava/util/List;J)Z")
+            method("waitForProcessesExit", "(Ljava/util/List;Ljava/lang/Process;J)Z")
         )).isTrue();
         assertThat(JavanHostOnlyMethods.isHostOnlyMethod(
             "javan/util/ProcessRunner",
-            method("allProcessesExited", "(Ljava/util/List;)Z")
+            method("allProcessesExited", "(Ljava/util/List;Ljava/lang/Process;)Z")
         )).isTrue();
     }
 

@@ -88,12 +88,12 @@ public final class JavanHostOnlyMethods {
         new MethodRef(
             "javan/util/ProcessRunner",
             "waitForProcessesExit",
-            "(Ljava/util/List;J)Z"
+            "(Ljava/util/List;Ljava/lang/Process;J)Z"
         ),
         new MethodRef(
             "javan/util/ProcessRunner",
             "allProcessesExited",
-            "(Ljava/util/List;)Z"
+            "(Ljava/util/List;Ljava/lang/Process;)Z"
         )
     );
 
