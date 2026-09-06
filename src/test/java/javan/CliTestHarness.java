@@ -41,29 +41,50 @@ final class CliTestHarness {
                     stdout.toString(StandardCharsets.UTF_8),
                     stderr.toString(StandardCharsets.UTF_8)
                 );
-            } catch (final TimeoutException exception) {
-                task.cancel(true);
-                worker.interrupt();
+            } catch (final TimeoutException | InterruptedException exception) {
+                cancelAndJoin(task, worker, exception);
+                final String output = System.lineSeparator() + "stdout:" + System.lineSeparator()
+                    + stdout.toString(StandardCharsets.UTF_8) + System.lineSeparator()
+                    + "stderr:" + System.lineSeparator() + stderr.toString(StandardCharsets.UTF_8);
+                if (exception instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("Interrupted while waiting for Cli.run." + output, exception);
+                }
                 throw new AssertionFailedError(
                     "Cli.run timed out after "
                         + timeout.toSeconds()
                         + " seconds: "
                         + String.join(" ", args)
-                        + System.lineSeparator()
-                        + "stdout:"
-                        + System.lineSeparator()
-                        + stdout.toString(StandardCharsets.UTF_8)
-                        + System.lineSeparator()
-                        + "stderr:"
-                        + System.lineSeparator()
-                        + stderr.toString(StandardCharsets.UTF_8),
+                        + output,
                     exception
                 );
-            } catch (final InterruptedException exception) {
-                Thread.currentThread().interrupt();
-                throw new IllegalStateException("Interrupted while waiting for Cli.run.", exception);
             } catch (final ExecutionException exception) {
                 throw rethrow(exception.getCause());
+            }
+        }
+    }
+
+    private static void cancelAndJoin(final FutureTask<?> task, final Thread worker, final Exception failure) {
+        task.cancel(true);
+        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        boolean interrupted = false;
+        try {
+            while (worker.isAlive()) {
+                final long remaining = deadline - System.nanoTime();
+                if (remaining <= 0) {
+                    failure.addSuppressed(new IllegalStateException("Cli.run worker did not stop within 5 seconds after cancellation."));
+                    return;
+                }
+                try {
+                    worker.join(Duration.ofNanos(remaining));
+                } catch (final InterruptedException cleanup) {
+                    interrupted = true;
+                    failure.addSuppressed(cleanup);
+                }
+            }
+        } finally {
+            if (interrupted) {
+                Thread.currentThread().interrupt();
             }
         }
     }
