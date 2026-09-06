@@ -535,19 +535,8 @@ accepts_native_library() {
     >"$TMP/native-library-cc.out" 2>"$TMP/native-library-cc.err" || fail "$project C caller compile"
   JAVAN_HEAP_LIMIT_BYTES=2048 "$TMP/native-library-caller" >"$TMP/native-library.out" 2>"$TMP/native-library.err" \
     || fail "$project C caller run"
-  assert_contains "$TMP/native-library.out" "10"
-  assert_contains "$TMP/native-library.out" "try-add:1:10"
-  assert_contains "$TMP/native-library.out" "Hi Yuna"
-  assert_contains "$TMP/native-library.out" "null-greeting:Hi null"
-  assert_contains "$TMP/native-library.out" "4:3:4"
-  assert_contains "$TMP/native-library.out" "empty-bytes:0:clean"
-  assert_contains "$TMP/native-library.out" "merged-bytes:4:3:1"
-  assert_contains "$TMP/native-library.out" "retained:Yuna"
-  assert_contains "$TMP/native-library.out" "retained-bytes:3:1:4"
-  assert_contains "$TMP/native-library.out" "last-error:0:negative array length"
-  assert_contains "$TMP/native-library.out" "result-error:negative array length"
-  assert_contains "$TMP/native-library.out" "byte-error:negative byte array length"
-  assert_contains "$TMP/native-library.out" "byte-result-error:negative byte array length"
+  assert_exact "$TMP/native-library.out" "$(cat "$full_project/expected.stdout")"
+  assert_empty "$TMP/native-library.err"
   pass "$project C ABI smoke"
 }
 
@@ -782,7 +771,7 @@ accepts_readable_native_panic_envs "$NATIVE_PROFILE_PROJECTS/panic-string-concat
   JAVAN_HEAP_LIMIT_BYTES=4096 \
   JAVAN_GC_STRESS=1 \
   JAVAN_GC_SAFEPOINT_INTERVAL=1
-accepts_readable_native_panic "$NATIVE_PROFILE_PROJECTS/negative-array-length" "negative array length"
+accepts_readable_native_panic "$NATIVE_PROFILE_PROJECTS/negative-array-length" "java/lang/NegativeArraySizeException"
 accepts_readable_native_panic_envs "$NATIVE_PROFILE_PROJECTS/allocation-limit-panic" "out of memory" JAVAN_MAX_ALLOCATION_BYTES=64
 accepts_readable_native_panic_envs "$NATIVE_PROFILE_PROJECTS/string-allocation-limit-panic" "out of memory" JAVAN_MAX_ALLOCATION_BYTES=64
 accepts_readable_native_panic_envs "$NATIVE_PROFILE_PROJECTS/exception-catch-allocation-limit-panic" "out of memory" JAVAN_MAX_ALLOCATION_BYTES=64

@@ -805,6 +805,7 @@ public final class CCodegen {
                 if (program.classInitializationDependencies().containsKey(declaration.provider())) {
                     c.append("                    ").append(classInitializationSymbol(declaration.provider())).append("();")
                         .append(System.lineSeparator());
+                    c.append("                    if (javan_pending_has()) break;").append(System.lineSeparator());
                 }
                 if (declaration.factoryMethod()) {
                     final IrFunction factory = serviceProviderFactory(program, declaration.provider());
@@ -1714,6 +1715,10 @@ public final class CCodegen {
             if (staticMethod && program.classInitializationDependencies().containsKey(reflected.declaringJvmName())) {
                 c.append("        ").append(classInitializationSymbol(reflected.declaringJvmName()))
                     .append("();").append(System.lineSeparator());
+                c.append("        if (javan_pending_has()) {").append(System.lineSeparator());
+                c.append("            javan_root_frame_pop(invocation_roots);").append(System.lineSeparator());
+                c.append("            return;").append(System.lineSeparator());
+                c.append("        }").append(System.lineSeparator());
             }
             emitReflectiveCall(c, reflected, targetSymbol, staticMethod);
             c.append("        if (javan_pending_has() != 0) {").append(System.lineSeparator());
@@ -2239,6 +2244,7 @@ public final class CCodegen {
             if (program.classInitializationDependencies().containsKey(function.owner())) {
                 c.append("    ").append(classInitializationSymbol(function.owner())).append("();")
                     .append(System.lineSeparator());
+                c.append("    if (javan_pending_has()) javan_pending_panic();").append(System.lineSeparator());
             }
             c.append("    javan_gc_safe_point();").append(System.lineSeparator());
         } else {
@@ -2505,6 +2511,7 @@ public final class CCodegen {
         if (program.classInitializationDependencies().containsKey(export.entryPoint().className())) {
             c.append("    ").append(classInitializationSymbol(export.entryPoint().className())).append("();")
                 .append(System.lineSeparator());
+            emitExportPendingPanic(List.of(), false, c);
         }
         final List<Integer> objectArguments = objectExportArgumentIndexes(export);
         final AbiType returnType = export.returnType();
@@ -2547,33 +2554,42 @@ public final class CCodegen {
             + ")";
         if (returnType == AbiType.VOID) {
             c.append("    ").append(call).append(";").append(System.lineSeparator());
-            emitExportWrapperCleanup(objectArguments, objectReturn, c);
-            c.append("    javan_panic_clear_target(&javan_export_panic_target);").append(System.lineSeparator());
-        } else if (returnType == AbiType.STRING) {
+        } else if (objectReturn) {
             c.append("    ").append(objectCall).append(";").append(System.lineSeparator());
-            c.append("    char* javan_export_result = javan_string_export((const char*) javan_export_object_result);").append(System.lineSeparator());
-            emitExportWrapperCleanup(objectArguments, objectReturn, c);
-            c.append("    javan_panic_clear_target(&javan_export_panic_target);").append(System.lineSeparator());
-            c.append("    return javan_export_result;").append(System.lineSeparator());
-        } else if (returnType == AbiType.BYTE_ARRAY) {
-            c.append("    ").append(objectCall).append(";").append(System.lineSeparator());
-            c.append("    JavanByteArray javan_export_result = javan_byte_array_export(javan_export_object_result);").append(System.lineSeparator());
-            emitExportWrapperCleanup(objectArguments, objectReturn, c);
-            c.append("    javan_panic_clear_target(&javan_export_panic_target);").append(System.lineSeparator());
-            c.append("    return javan_export_result;").append(System.lineSeparator());
-        } else if (returnType == AbiType.OBJECT) {
-            c.append("    ").append(objectCall).append(";").append(System.lineSeparator());
-            c.append("    JavanObjectHandle* javan_export_result = javan_object_handle_new(javan_export_object_result);").append(System.lineSeparator());
-            emitExportWrapperCleanup(objectArguments, objectReturn, c);
-            c.append("    javan_panic_clear_target(&javan_export_panic_target);").append(System.lineSeparator());
-            c.append("    return javan_export_result;").append(System.lineSeparator());
         } else {
-            c.append("    ").append(returnType.cReturnName()).append(" javan_export_result = ").append(call).append(";").append(System.lineSeparator());
-            emitExportWrapperCleanup(objectArguments, objectReturn, c);
-            c.append("    javan_panic_clear_target(&javan_export_panic_target);").append(System.lineSeparator());
+            c.append("    ").append(returnType.cReturnName()).append(" javan_export_primitive_result = ")
+                .append(call).append(";").append(System.lineSeparator());
+        }
+        emitExportPendingPanic(objectArguments, objectReturn, c);
+        if (returnType == AbiType.STRING) {
+            c.append("    char* javan_export_result = javan_string_export((const char*) javan_export_object_result);")
+                .append(System.lineSeparator());
+        } else if (returnType == AbiType.BYTE_ARRAY) {
+            c.append("    JavanByteArray javan_export_result = javan_byte_array_export(javan_export_object_result);")
+                .append(System.lineSeparator());
+        } else if (returnType == AbiType.OBJECT) {
+            c.append("    JavanObjectHandle* javan_export_result = javan_object_handle_new(javan_export_object_result);")
+                .append(System.lineSeparator());
+        }
+        emitExportWrapperCleanup(objectArguments, objectReturn, "    ", c);
+        c.append("    javan_panic_clear_target(&javan_export_panic_target);").append(System.lineSeparator());
+        if (objectReturn) {
             c.append("    return javan_export_result;").append(System.lineSeparator());
+        } else if (returnType != AbiType.VOID) {
+            c.append("    return javan_export_primitive_result;").append(System.lineSeparator());
         }
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+    }
+
+    private static void emitExportPendingPanic(
+        final List<Integer> objectArguments,
+        final boolean objectReturn,
+        final StringBuilder c
+    ) {
+        c.append("    if (javan_pending_has() != 0) {").append(System.lineSeparator());
+        emitExportWrapperCleanup(objectArguments, objectReturn, "        ", c);
+        c.append("        javan_pending_panic();").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
     }
 
     private static void emitExportWrapperDefaultReturn(final AbiType type, final StringBuilder c) {
@@ -2734,12 +2750,13 @@ public final class CCodegen {
     private static void emitExportWrapperCleanup(
         final List<Integer> objectArguments,
         final boolean objectReturn,
+        final String indent,
         final StringBuilder c
     ) {
         if (objectArguments.isEmpty() && !objectReturn) {
             return;
         }
-        c.append("    javan_root_frame_pop(javan_export_roots);").append(System.lineSeparator());
+        c.append(indent).append("javan_root_frame_pop(javan_export_roots);").append(System.lineSeparator());
     }
 
     private static void emitExportSignature(final ExportedMethod export, final StringBuilder c) {
@@ -4930,20 +4947,37 @@ public final class CCodegen {
             if (isStatic) c.append("static ");
             c.append("void ").append(symbol).append("(void) {").append(System.lineSeparator());
             c.append("    if (!javan_class_initialization_enter(&")
-                .append(symbol).append("_state, &").append(symbol).append("_owner)) {")
+                .append(symbol).append("_state, &").append(symbol).append("_owner, \"")
+                .append(escapeCString(owner)).append("\")) {")
                 .append(System.lineSeparator());
+            c.append("        return;").append(System.lineSeparator());
+            c.append("    }").append(System.lineSeparator());
+            c.append("    JavanPanicScope scope;").append(System.lineSeparator());
+            c.append("    jmp_buf target;").append(System.lineSeparator());
+            c.append("    javan_panic_scope_push(&scope, &target);").append(System.lineSeparator());
+            c.append("    if (setjmp(target) != 0) {").append(System.lineSeparator());
+            c.append("        javan_class_initialization_complete(&").append(symbol)
+                .append("_state, &").append(symbol).append("_owner, 0);").append(System.lineSeparator());
+            c.append("        if (javan_pending_has()) javan_pending_clear();").append(System.lineSeparator());
+            c.append("        javan_panic_resume();").append(System.lineSeparator());
             c.append("        return;").append(System.lineSeparator());
             c.append("    }").append(System.lineSeparator());
             for (final String dependency : dependencies) {
                 c.append("    ").append(classInitializationSymbol(dependency)).append("();").append(System.lineSeparator());
+                c.append("    if (javan_pending_has()) goto complete;").append(System.lineSeparator());
             }
             emitEnumConstantInitializers(classInfo, c);
             final String initializer = classInitializerFunction(program, owner);
             if (!initializer.isEmpty()) {
                 c.append("    ").append(nativeWrapperSymbols.resolve(initializer)).append("();").append(System.lineSeparator());
+                c.append("    javan_pending_wrap_initializer();").append(System.lineSeparator());
             }
+            if (!dependencies.isEmpty()) {
+                c.append("complete:").append(System.lineSeparator());
+            }
+            c.append("    javan_panic_scope_pop(&scope);").append(System.lineSeparator());
             c.append("    javan_class_initialization_complete(&")
-                .append(symbol).append("_state, &").append(symbol).append("_owner);")
+                .append(symbol).append("_state, &").append(symbol).append("_owner, !javan_pending_has());")
                 .append(System.lineSeparator());
             c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
         }
@@ -4966,6 +5000,7 @@ public final class CCodegen {
         if (program.classInitializationDependencies().containsKey(owner)) {
             c.append("            ").append(classInitializationSymbol(owner)).append("();")
                 .append(System.lineSeparator());
+            c.append("            if (javan_pending_has()) return NULL;").append(System.lineSeparator());
         }
     }
 

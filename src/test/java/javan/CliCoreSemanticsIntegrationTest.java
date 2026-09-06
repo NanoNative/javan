@@ -1955,6 +1955,110 @@ final class CliCoreSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void primitiveArrayNegativeLengthThrowsAndPreservesJavaMessage() throws Exception {
+        final Path project = project("primitive-negative-array-size");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(result(args.length));
+                    System.out.println(result(args.length - 1));
+                }
+
+                private static String result(final int length) {
+                    try {
+                        final int[] values = new int[length];
+                        return "ok";
+                    } catch (final NegativeArraySizeException exception) {
+                        return exception.getMessage();
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/primitive-negative-array-size").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("ok\n-1\n");
+    }
+
+    @Test
+    void objectArrayNegativeLengthThrowsAndPreservesJavaMessage() throws Exception {
+        final Path project = project("object-negative-array-size");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(result(args.length));
+                    System.out.println(result(args.length - 1));
+                }
+
+                private static String result(final int length) {
+                    try {
+                        final String[] values = new String[length];
+                        return "ok";
+                    } catch (final NegativeArraySizeException exception) {
+                        return exception.getMessage();
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/object-negative-array-size").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("ok\n-1\n");
+    }
+
+    @Test
+    void negativeArraySizeExceptionPropagatesAcrossApplicationMethods() throws Exception {
+        final Path project = project("negative-array-size-propagation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    try {
+                        allocate(-1);
+                        System.out.println("missing");
+                    } catch (final NegativeArraySizeException exception) {
+                        System.out.println(exception.getMessage());
+                    }
+                }
+
+                private static void allocate(final int length) {
+                    final byte[] values = new byte[length];
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/negative-array-size-propagation").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("-1\n");
+    }
+
+    @Test
     void uncaughtRuntimeExceptionLiteralBuildsAsNativePanic() throws Exception {
         final Path project = project("exception-panic");
         writeJava(project, "com.acme.Main", """

@@ -808,7 +808,7 @@ final class RuntimeSourceMemorySections {
         }
         #endif
 
-        int javan_class_initialization_enter(int* state, void** owner) {
+        int javan_class_initialization_enter(int* state, void** owner, const char* class_name) {
             void* current = (void*) &javan_thread_identity_marker;
             for (;;) {
                 javan_runtime_lock_enter();
@@ -822,15 +822,21 @@ final class RuntimeSourceMemorySections {
                     javan_runtime_lock_leave();
                     return 1;
                 }
+                if (*state == 3) {
+                    javan_runtime_lock_leave();
+                    javan_pending_throw("java/lang/NoClassDefFoundError", NULL,
+                        class_name, "<clinit>", NULL, -1, -1, NULL);
+                    return 0;
+                }
                 javan_runtime_lock_leave();
                 javan_thread_yield();
             }
         }
 
-        void javan_class_initialization_complete(int* state, void** owner) {
+        void javan_class_initialization_complete(int* state, void** owner, int succeeded) {
             javan_runtime_lock_enter();
             *owner = NULL;
-            *state = 2;
+            *state = succeeded ? 2 : 3;
             javan_runtime_lock_leave();
         }
 
@@ -6973,6 +6979,25 @@ final class RuntimeSourceMemorySections {
             return javan_require_caught_throwable(value)->throwable_cause;
         }
 
+        void javan_pending_wrap_initializer(void) {
+            if (!javan_pending_has() || javan_pending_type_assignable_to((void*) "java/lang/Error")) {
+                return;
+            }
+            void* cause = NULL;
+            void** roots[] = { &cause };
+            javan_root_frame_push(roots, 1);
+            javan_pending_catch_into(&cause);
+            javan_caught_throwable* caught = javan_require_caught_throwable(cause);
+            javan_pending_throw("java/lang/ExceptionInInitializerError", NULL,
+                caught->throwable_class, caught->throwable_method, caught->throwable_file,
+                caught->throwable_line, caught->throwable_bytecode_offset, caught->throwable_source_line);
+            javan_thread* thread = javan_current_thread_object();
+            javan_runtime_lock_enter();
+            thread->throwable_state->pending_throwable_cause = cause;
+            javan_runtime_lock_leave();
+            javan_root_frame_pop(roots);
+        }
+
         void javan_pending_rethrow(void* value) {
             javan_caught_throwable* caught = javan_require_caught_throwable(value);
             javan_thread* thread = javan_current_thread_object();
@@ -11543,6 +11568,12 @@ final class RuntimeSourceMemorySections {
                 void* provider = loader->resolver(loader->service_type_id, provider_index);
                 if (provider == NULL) {
                     if (javan_pending_has() != 0) {
+                        void** roots[] = { &provider };
+                        javan_root_frame_push(roots, 1);
+                        javan_pending_catch_into(&provider);
+                        javan_pending_throw_with_cause("java/util/ServiceConfigurationError",
+                            (void*) "service provider failed", provider);
+                        javan_root_frame_pop(roots);
                         return NULL;
                     }
                     javan_panic("service provider returned null");

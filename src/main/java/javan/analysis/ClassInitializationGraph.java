@@ -238,16 +238,23 @@ public final class ClassInitializationGraph {
         return classFile != null;
     }
 
-    private static Optional<String> triggerTarget(
+    /**
+     * Resolves the initialization owner of an active-use instruction.
+     *
+     * @param classes parsed closed-world classes used to resolve inherited members
+     * @param instruction bytecode instruction
+     * @return declaring owner, or empty for instructions that do not trigger initialization
+     */
+    public static Optional<String> triggerTarget(
         final Map<String, ClassFile> classes,
         final Instruction instruction
     ) {
-        if (instruction.opcode() == 178 || instruction.opcode() == 179) {
+        if ((instruction.opcode() == 178 || instruction.opcode() == 179) && instruction.fieldRef().isPresent()) {
             final FieldRef field = instruction.fieldRef().orElseThrow();
             final Optional<String> resolved = staticFieldOwner(classes, field);
             return resolved.isPresent() ? resolved : Optional.of(field.owner());
         }
-        if (instruction.opcode() == 184) {
+        if (instruction.opcode() == 184 && instruction.methodRef().isPresent()) {
             final MethodRef method = instruction.methodRef().orElseThrow();
             final Optional<String> resolved = staticMethodOwner(classes, method);
             return resolved.isPresent() ? resolved : Optional.of(method.owner());

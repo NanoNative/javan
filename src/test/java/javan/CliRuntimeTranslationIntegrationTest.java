@@ -24,6 +24,455 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @NativeTest
 final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     @Test
+    void failedInitializerPreventsObjectConstruction() throws Exception {
+        assertFailedInitializationEntry("class-initializer-new", "", "new Broken();", 0);
+    }
+
+    @Test
+    void failedInitializerPreservesStaticWriteOperandEvaluation() throws Exception {
+        assertFailedInitializationEntry("class-initializer-putstatic", "", "Broken.value = operand();", 2);
+    }
+
+    @Test
+    void reflectedStaticCallPreservesInitializerErrorWithoutInvocationWrapping() throws Exception {
+        assertFailedInitializationEntry("class-initializer-reflection",
+            "final var method = Broken.class.getMethod(\"read\");", "method.invoke(null);", 0);
+    }
+
+    private void assertFailedInitializationEntry(
+        final String name,
+        final String setup,
+        final String operation,
+        final int expectedSideEffects
+    ) throws Exception {
+        final Path project = project(name);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                static int attempts;
+                static int sideEffects;
+
+                private static int operand() {
+                    sideEffects++;
+                    return 7;
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    %s
+                    try {
+                        %s
+                        System.out.println("unexpected-first-success");
+                    } catch (final ExceptionInInitializerError failure) {
+                        System.out.println("first");
+                        System.out.println(failure.getCause().getMessage());
+                    }
+                    try {
+                        %s
+                        System.out.println("unexpected-later-success");
+                    } catch (final NoClassDefFoundError failure) {
+                        System.out.println("later");
+                    }
+                    System.out.println(attempts);
+                    System.out.println(sideEffects);
+                }
+
+                public static final class Broken {
+                    public static int value = initialize();
+
+                    public Broken() { sideEffects++; }
+
+                    private static int initialize() {
+                        attempts++;
+                        return new int[-1].length;
+                    }
+
+                    public static int read() {
+                        sideEffects++;
+                        return value;
+                    }
+                }
+            }
+            """.formatted(setup, operation, operation));
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        assertThat(jvmOutput).isEqualTo("first\n-1\nlater\n1\n" + expectedSideEffects + "\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/" + name).toString()), Duration.ofSeconds(10),
+            Map.of("JAVAN_GC_STRESS", "1", "JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stderr()).isEmpty();
+        assertThat(nativeRun.stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void failedInitializerWrapsOriginalCauseUnderGcStress() throws Exception {
+        final Path project = project("class-initializer-failure-cause");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                static int seed = 41;
+
+                public static void main(final String[] args) {
+                    try {
+                        System.out.println(Broken.value);
+                    } catch (final ExceptionInInitializerError failure) {
+                        System.out.println(failure.getMessage() == null);
+                        System.out.println(failure.getCause().getMessage());
+                    }
+                }
+
+                private static final class Broken {
+                    static int value = initialize();
+
+                    private static int initialize() {
+                        throw new IllegalStateException("initializer-" + Main.seed);
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+
+        assertThat(jvmOutput).isEqualTo("true\ninitializer-41\n");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(
+            project,
+            List.of(project.resolve(".javan/bin/class-initializer-failure-cause").toString()),
+            Duration.ofSeconds(10),
+            Map.of("JAVAN_GC_STRESS", "1", "JAVAN_GC_SAFEPOINT_INTERVAL", "1")
+        );
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stderr()).isEmpty();
+        assertThat(nativeRun.stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void repeatedFailedInitializerAccessDoesNotReenterMethodBody() throws Exception {
+        final Path project = project("class-initializer-failure-repeated");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                static int attempts;
+                static int bodyCalls;
+
+                public static void main(final String[] args) {
+                    try {
+                        System.out.println(Broken.read());
+                    } catch (final ExceptionInInitializerError failure) {
+                        System.out.println("first");
+                    }
+                    for (int attempt = 0; attempt < 3; attempt++) {
+                        try {
+                            System.out.println(Broken.read());
+                        } catch (final NoClassDefFoundError failure) {
+                            System.out.println("later");
+                        }
+                    }
+                    System.out.println(attempts);
+                    System.out.println(bodyCalls);
+                }
+
+                private static final class Broken {
+                    static int value = initialize();
+
+                    private static int initialize() {
+                        Main.attempts++;
+                        return new int[-1].length;
+                    }
+
+                    static int read() {
+                        Main.bodyCalls++;
+                        return value;
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+
+        assertThat(jvmOutput).isEqualTo("first\nlater\nlater\nlater\n1\n0\n");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(
+            project,
+            List.of(project.resolve(".javan/bin/class-initializer-failure-repeated").toString())
+        );
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stderr()).isEmpty();
+        assertThat(nativeRun.stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void failedSuperclassStopsSubclassInitialization() throws Exception {
+        final Path project = project("class-initializer-superclass-failure");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                static int parentAttempts;
+                static int childAttempts;
+                static int bodyCalls;
+
+                public static void main(final String[] args) {
+                    try {
+                        System.out.println(Child.read());
+                    } catch (final ExceptionInInitializerError failure) {
+                        System.out.println(failure.getCause().getMessage());
+                    }
+                    try {
+                        System.out.println(Child.read());
+                    } catch (final NoClassDefFoundError failure) {
+                        System.out.println("child-failed");
+                    }
+                    try {
+                        System.out.println(Parent.value);
+                    } catch (final NoClassDefFoundError failure) {
+                        System.out.println("parent-failed");
+                    }
+                    System.out.println(parentAttempts);
+                    System.out.println(childAttempts);
+                    System.out.println(bodyCalls);
+                }
+
+                private static class Parent {
+                    static int value = initializeParent();
+
+                    private static int initializeParent() {
+                        Main.parentAttempts++;
+                        return new int[-1].length;
+                    }
+                }
+
+                private static final class Child extends Parent {
+                    static int childValue = initializeChild();
+
+                    private static int initializeChild() {
+                        Main.childAttempts++;
+                        return 7;
+                    }
+
+                    static int read() {
+                        Main.bodyCalls++;
+                        return childValue;
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+
+        assertThat(jvmOutput).isEqualTo("-1\nchild-failed\nparent-failed\n1\n0\n0\n");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(
+            project,
+            List.of(project.resolve(".javan/bin/class-initializer-superclass-failure").toString())
+        );
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stderr()).isEmpty();
+        assertThat(nativeRun.stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void initializerErrorPropagatesWithoutExceptionInInitializerErrorWrapping() throws Exception {
+        final Path project = project("class-initializer-error-preserved");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                static int attempts;
+
+                public static void main(final String[] args) {
+                    try {
+                        System.out.println(Broken.value);
+                    } catch (final Error failure) {
+                        System.out.println(failure.getMessage());
+                    }
+                    try {
+                        System.out.println(Broken.value);
+                    } catch (final NoClassDefFoundError failure) {
+                        System.out.println("later");
+                    }
+                    System.out.println(attempts);
+                }
+
+                private static final class Broken {
+                    static int value = initialize();
+
+                    private static int initialize() {
+                        Main.attempts++;
+                        throw new Error("original-error");
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+
+        assertThat(jvmOutput).isEqualTo("original-error\nlater\n1\n");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(
+            project,
+            List.of(project.resolve(".javan/bin/class-initializer-error-preserved").toString())
+        );
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stderr()).isEmpty();
+        assertThat(nativeRun.stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void initializerFailurePropagatesThroughUncaughtHelperToMain() throws Exception {
+        final Path project = project("class-initializer-failure-indirect");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                static int attempts;
+                static int bodyCalls;
+
+                public static void main(final String[] args) {
+                    try {
+                        System.out.println(read());
+                    } catch (final ExceptionInInitializerError failure) {
+                        System.out.println("first");
+                    }
+                    try {
+                        System.out.println(read());
+                    } catch (final NoClassDefFoundError failure) {
+                        System.out.println("later");
+                    }
+                    System.out.println(attempts);
+                    System.out.println(bodyCalls);
+                }
+
+                private static int read() {
+                    final int value = Broken.value;
+                    bodyCalls++;
+                    return value;
+                }
+
+                private static final class Broken {
+                    static int value = initialize();
+
+                    private static int initialize() {
+                        Main.attempts++;
+                        return new int[-1].length;
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+
+        assertThat(jvmOutput).isEqualTo("first\nlater\n1\n0\n");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(
+            project,
+            List.of(project.resolve(".javan/bin/class-initializer-failure-indirect").toString())
+        );
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stderr()).isEmpty();
+        assertThat(nativeRun.stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void failedMainClassInitializerPreventsMainBodyAndReportsException() throws Exception {
+        final Path project = project("class-initializer-main-failure");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                static int value = new int[-1].length;
+
+                public static void main(final String[] args) {
+                    System.out.println("main-body-must-not-run");
+                }
+            }
+            """);
+
+        final CliRun build = run(tempDir, "build", project.toString());
+
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(
+            project,
+            List.of(project.resolve(".javan/bin/class-initializer-main-failure").toString())
+        );
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isEqualTo(1);
+        assertThat(nativeRun.stdout()).isEmpty();
+        assertThat(nativeRun.stderr()).contains(
+            "[JAVAN-RUNTIME-PANIC] uncaught Java exception (java/lang/ExceptionInInitializerError)",
+            "Main.java",
+            "new int[-1]"
+        );
+    }
+
+    @Test
+    void classForNamePreservesInitializerFailureAndMissingClassException() throws Exception {
+        final Path project = project("class-for-name-initializer-failure");
+        writeJava(project, "com.acme.Broken", """
+            package com.acme;
+
+            public final class Broken {
+                static int value = initialize();
+
+                private static int initialize() {
+                    Main.attempts++;
+                    return new int[-1].length;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                static int attempts;
+
+                public static void main(final String[] args) throws ClassNotFoundException {
+                    try {
+                        Class.forName("com.acme.Broken");
+                        System.out.println("unexpected-first-success");
+                    } catch (final ExceptionInInitializerError failure) {
+                        System.out.println("first");
+                    }
+                    try {
+                        Class.forName("com.acme.Broken");
+                        System.out.println("unexpected-later-success");
+                    } catch (final NoClassDefFoundError failure) {
+                        System.out.println("later");
+                    }
+                    try {
+                        Class.forName("com.acme.Missing");
+                        System.out.println("unexpected-missing-success");
+                    } catch (final ClassNotFoundException failure) {
+                        System.out.println("missing");
+                    }
+                    System.out.println(attempts);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+
+        assertThat(jvmOutput).isEqualTo("first\nlater\nmissing\n1\n");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(
+            project,
+            List.of(project.resolve(".javan/bin/class-for-name-initializer-failure").toString())
+        );
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stderr()).isEmpty();
+        assertThat(nativeRun.stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void boundedFunctionReceiverProvenanceBuildsAndFallsBackConservatively() throws Exception {
         final Path project = project("bounded-function-receiver-provenance");
         writeJava(project, "com.acme.Main", """

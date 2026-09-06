@@ -163,6 +163,13 @@ JAVAN_GC_SAFEPOINT_INTERVAL= \
     --export com.acme.Store.lastBytes \
     --export com.acme.Store.clear \
     --export com.acme.Failures.failInt \
+    --export com.acme.Failures.failRootedInt \
+    --export com.acme.Failures.failVoid \
+    --export com.acme.Failures.failLong \
+    --export com.acme.Failures.failFloat \
+    --export com.acme.Failures.failDouble \
+    --export com.acme.Failures.failString \
+    --export com.acme.Failures.failBytes \
     --bindings c,rust,go,python >/dev/null
 
 printf '%s\n' 'int main(void) { return 0; }' >"$TMP/sanitizer-support.c"
@@ -247,26 +254,10 @@ if [ "$run_code" -ne 0 ]; then
   exit 1
 fi
 
-{
-  printf '%s\n' '10'
-  printf '%s\n' 'try-add:1:10'
-  printf '%s\n' 'Hi Yuna'
-  printf '%s\n' 'null-greeting:Hi null'
-  printf '%s\n' '4:3:4'
-  printf '%s\n' 'empty-bytes:0:clean'
-  printf '%s\n' 'merged-bytes:4:3:1'
-  printf '%s\n' 'retained:Yuna'
-  printf '%s\n' 'retained-bytes:3:1:4'
-  printf '%s\n' 'last-error:0:negative array length'
-  printf '%s\n' 'result-error:negative array length'
-  printf '%s\n' 'byte-error:negative byte array length'
-  printf '%s\n' 'byte-result-error:negative byte array length'
-} >"$TMP/expected.out"
-
-if ! cmp "$TMP/expected.out" "$TMP/native.out" >/dev/null; then
+if ! cmp "$FULL_PROJECT/expected.stdout" "$TMP/native.out" >/dev/null; then
   printf '%s\n' "sanitizer library output differed" >&2
   printf '%s\n' "--- expected" >&2
-  cat "$TMP/expected.out" >&2
+  cat "$FULL_PROJECT/expected.stdout" >&2
   printf '%s\n' "--- native" >&2
   cat "$TMP/native.out" >&2
   printf '%s\n' "--- sanitizer stderr" >&2
@@ -301,6 +292,55 @@ JavanByteArray javan_export_com_acme_Store_lastBytes_void(void);
 void javan_export_com_acme_Store_clear_void(void);
 int javan_export_com_acme_Failures_failInt_void(void);
 JavanResult javan_try_com_acme_Failures_failInt_void(int* out);
+int javan_export_com_acme_Failures_failRootedInt_string_bytes(const char* arg0, JavanByteArray arg1);
+JavanResult javan_try_com_acme_Failures_failRootedInt_string_bytes(const char* arg0, JavanByteArray arg1, int* out);
+void javan_export_com_acme_Failures_failVoid_string(const char* arg0);
+JavanResult javan_try_com_acme_Failures_failVoid_string(const char* arg0);
+long long javan_export_com_acme_Failures_failLong_bytes(JavanByteArray arg0);
+JavanResult javan_try_com_acme_Failures_failLong_bytes(JavanByteArray arg0, long long* out);
+float javan_export_com_acme_Failures_failFloat_string(const char* arg0);
+JavanResult javan_try_com_acme_Failures_failFloat_string(const char* arg0, float* out);
+double javan_export_com_acme_Failures_failDouble_bytes(JavanByteArray arg0);
+JavanResult javan_try_com_acme_Failures_failDouble_bytes(JavanByteArray arg0, double* out);
+char* javan_export_com_acme_Failures_failString_void(void);
+JavanResult javan_try_com_acme_Failures_failString_void(char** out);
+JavanByteArray javan_export_com_acme_Failures_failBytes_void(void);
+JavanResult javan_try_com_acme_Failures_failBytes_void(JavanByteArray* out);
+
+static int javan_library_check_pending_exception(const char* label, int default_ok, JavanResult* owned) {
+    const char* error = javan_last_error();
+    const char* code = javan_last_error_code();
+    const char* detail = javan_last_error_detail();
+    if (!default_ok || error == NULL || strstr(error, "NegativeArraySizeException") == NULL
+            || code == NULL || strcmp(code, "JAVAN-RUNTIME-PANIC") != 0
+            || detail == NULL || strcmp(detail, "-1") != 0) {
+        fprintf(stderr, "%s: invalid pending-exception default/error (default=%d, error=%s)\n",
+            label, default_ok, error == NULL ? "<none>" : error);
+        return 1;
+    }
+    if (owned != NULL) {
+        if (owned->ok != 0 || owned->message == NULL
+                || strstr(owned->message, "NegativeArraySizeException") == NULL
+                || owned->code == NULL || strcmp(owned->code, "JAVAN-RUNTIME-PANIC") != 0
+                || owned->detail == NULL || strcmp(owned->detail, "-1") != 0) {
+            fprintf(stderr, "%s: invalid owned pending-exception error\n", label);
+            return 1;
+        }
+        javan_result_free(owned);
+    }
+    if (javan_heap_root_frame_depth() != 0 || javan_heap_frame_root_count() != 0) {
+        fprintf(stderr, "%s: pending exception retained roots (depth=%d, count=%d)\n",
+            label, javan_heap_root_frame_depth(), javan_heap_frame_root_count());
+        return 1;
+    }
+    char* recovered = javan_export_com_acme_Text_greet_string("Loop");
+    if (recovered == NULL || strcmp(recovered, "Hi Loop") != 0 || javan_last_error() != NULL) {
+        fprintf(stderr, "%s: rooted export did not recover after pending exception\n", label);
+        return 1;
+    }
+    javan_free(recovered);
+    return 0;
+}
 
 static unsigned long javan_library_counter_limit(const char* name, unsigned long fallback) {
     const char* value = getenv(name);
@@ -452,19 +492,19 @@ int main(void) {
     javan_clear_error();
     int failed = javan_export_com_acme_Failures_failInt_void();
     const char* error = javan_last_error();
-    if (failed != 0 || error == NULL || strstr(error, "negative array length") == NULL) {
+    if (failed != 0 || error == NULL || strstr(error, "NegativeArraySizeException") == NULL) {
         fputs("missing recoverable library error\n", stderr);
         return 1;
     }
     if (strcmp(javan_last_error_code(), "JAVAN-RUNTIME-PANIC") != 0
-            || strcmp(javan_last_error_summary(), "runtime helper failure") != 0
+            || strcmp(javan_last_error_summary(), "uncaught Java exception (java/lang/NegativeArraySizeException)") != 0
             || strcmp(javan_last_error_class(), "com.acme.Failures") != 0
             || strstr(javan_last_error_method(), "failInt()I") == NULL
             || strcmp(javan_last_error_file(), "Failures.java") != 0
             || javan_last_error_line() != 8
             || javan_last_error_bytecode_offset() < 0
             || strstr(javan_last_error_source_line(), "new int[-1]") == NULL
-            || strstr(javan_last_error_detail(), "negative array length") == NULL) {
+            || strcmp(javan_last_error_detail(), "-1") != 0) {
         fputs("missing structured library error\n", stderr);
         return 1;
     }
@@ -484,14 +524,14 @@ int main(void) {
             || fail_result.code == NULL
             || strcmp(fail_result.code, "JAVAN-RUNTIME-PANIC") != 0
             || fail_result.detail == NULL
-            || strstr(fail_result.detail, "negative array length") == NULL
+            || strcmp(fail_result.detail, "-1") != 0
             || fail_result.line != 8
             || fail_result.bytecode_offset < 0) {
         fputs("missing owned result error\n", stderr);
         return 1;
     }
     javan_clear_error();
-    if (strstr(fail_result.detail, "negative array length") == NULL) {
+    if (strcmp(fail_result.detail, "-1") != 0) {
         fputs("owned result did not survive borrowed error clear\n", stderr);
         return 1;
     }
@@ -500,6 +540,59 @@ int main(void) {
         fputs("owned result did not clear after free\n", stderr);
         return 1;
     }
+    for (int attempt = 0; attempt < 128; attempt++) {
+        JavanResult repeated = javan_try_com_acme_Failures_failInt_void(&try_failed);
+        if (repeated.ok != 0 || repeated.detail == NULL || strcmp(repeated.detail, "-1") != 0) {
+            fputs("repeated failure lost its structured error\n", stderr);
+            return 1;
+        }
+        javan_result_free(&repeated);
+        if (javan_export_com_acme_Math_add_int_int(4, 6) != 10 || javan_last_error() != NULL) {
+            fputs("library did not recover after Java exception\n", stderr);
+            return 1;
+        }
+
+        /* Exercise argument-root and result-only-root cleanup before the pending panic. */
+        if (javan_library_check_pending_exception("int export",
+                javan_export_com_acme_Failures_failRootedInt_string_bytes("Loop", input) == 0, NULL)) return 1;
+        javan_export_com_acme_Failures_failVoid_string("Loop");
+        if (javan_library_check_pending_exception("void export", 1, NULL)) return 1;
+        if (javan_library_check_pending_exception("long export",
+                javan_export_com_acme_Failures_failLong_bytes(input) == 0LL, NULL)) return 1;
+        if (javan_library_check_pending_exception("float export",
+                javan_export_com_acme_Failures_failFloat_string("Loop") == 0.0f, NULL)) return 1;
+        if (javan_library_check_pending_exception("double export",
+                javan_export_com_acme_Failures_failDouble_bytes(input) == 0.0, NULL)) return 1;
+        if (javan_library_check_pending_exception("String export",
+                javan_export_com_acme_Failures_failString_void() == NULL, NULL)) return 1;
+        JavanByteArray failed_bytes = javan_export_com_acme_Failures_failBytes_void();
+        if (javan_library_check_pending_exception("byte[] export",
+                failed_bytes.data == NULL && failed_bytes.length == 0, NULL)) return 1;
+
+        int int_out = 99;
+        JavanResult pending = javan_try_com_acme_Failures_failRootedInt_string_bytes("Loop", input, &int_out);
+        if (javan_library_check_pending_exception("int result", int_out == 0, &pending)) return 1;
+        pending = javan_try_com_acme_Failures_failVoid_string("Loop");
+        if (javan_library_check_pending_exception("void result", 1, &pending)) return 1;
+        long long long_out = 99LL;
+        pending = javan_try_com_acme_Failures_failLong_bytes(input, &long_out);
+        if (javan_library_check_pending_exception("long result", long_out == 0LL, &pending)) return 1;
+        float float_out = 99.0f;
+        pending = javan_try_com_acme_Failures_failFloat_string("Loop", &float_out);
+        if (javan_library_check_pending_exception("float result", float_out == 0.0f, &pending)) return 1;
+        double double_out = 99.0;
+        pending = javan_try_com_acme_Failures_failDouble_bytes(input, &double_out);
+        if (javan_library_check_pending_exception("double result", double_out == 0.0, &pending)) return 1;
+        char sentinel = 0;
+        char* string_out = &sentinel;
+        pending = javan_try_com_acme_Failures_failString_void(&string_out);
+        if (javan_library_check_pending_exception("String result", string_out == NULL, &pending)) return 1;
+        failed_bytes = input;
+        pending = javan_try_com_acme_Failures_failBytes_void(&failed_bytes);
+        if (javan_library_check_pending_exception("byte[] result",
+                failed_bytes.data == NULL && failed_bytes.length == 0, &pending)) return 1;
+    }
+    javan_thread_detach_current();
     javan_gc_collect();
     javan_validate_heap_metadata();
     javan_library_write_proof_counters();
@@ -744,6 +837,8 @@ import native_library as binding
 lib = binding.load(library)
 lib.javan_gc_collect.argtypes = []
 lib.javan_gc_collect.restype = None
+lib.javan_thread_detach_current.argtypes = []
+lib.javan_thread_detach_current.restype = None
 lib.javan_validate_heap_metadata.argtypes = []
 lib.javan_validate_heap_metadata.restype = None
 lib.javan_heap_live_allocations.argtypes = []
@@ -768,7 +863,7 @@ for _ in range(128):
 try:
     binding.try_javan_export_com_acme_Failures_failInt_void(lib)
 except binding.JavanError as error:
-    if error.code != "JAVAN-RUNTIME-PANIC" or "negative array length" not in (error.detail or ""):
+    if error.code != "JAVAN-RUNTIME-PANIC" or error.detail != "-1":
         raise SystemExit("invalid wrapped failure")
 else:
     raise SystemExit("missing wrapped failure")
@@ -776,6 +871,7 @@ else:
 if checksum != 10378:
     raise SystemExit(f"unexpected checksum {checksum}")
 
+lib.javan_thread_detach_current()
 lib.javan_gc_collect()
 lib.javan_validate_heap_metadata()
 if lib.javan_heap_live_allocations() != 0:
@@ -836,6 +932,7 @@ use native_library::{
 use std::ffi::{c_char, CString};
 
 unsafe extern "C" {
+    fn javan_thread_detach_current();
     fn javan_gc_collect();
     fn javan_validate_heap_metadata();
     fn javan_heap_live_allocations() -> usize;
@@ -864,7 +961,7 @@ fn main() {
     }
     let error = unsafe { try_javan_export_com_acme_Failures_failInt_void() }.expect_err("expected failure");
     if error.code.as_deref() != Some("JAVAN-RUNTIME-PANIC")
-            || !error.detail.as_deref().unwrap_or("").contains("negative array length") {
+            || error.detail.as_deref() != Some("-1") {
         eprintln!("invalid wrapped failure");
         std::process::exit(1);
     }
@@ -873,6 +970,7 @@ fn main() {
         std::process::exit(1);
     }
     unsafe {
+        javan_thread_detach_current();
         javan_gc_collect();
         javan_validate_heap_metadata();
         if javan_heap_live_allocations() != 0 {
@@ -968,6 +1066,7 @@ package native_library
 /*
 #include <stdlib.h>
 #include "native-library.h"
+void javan_thread_detach_current(void);
 void javan_gc_collect(void);
 void javan_validate_heap_metadata(void);
 unsigned long javan_heap_live_allocations(void);
@@ -992,6 +1091,7 @@ func javanTestByteArray(values []int8) JavanByteArray {
 }
 
 func javanTestCollectAndValidate() (uint64, uint64) {
+    C.javan_thread_detach_current()
     C.javan_gc_collect()
     C.javan_validate_heap_metadata()
     return uint64(C.javan_heap_live_allocations()), uint64(C.javan_heap_live_bytes())
@@ -1000,9 +1100,14 @@ EOF
   cat >"$GO_PACKAGE/${SAFE_PACKAGE}_ownership_test.go" <<'EOF'
 package native_library
 
-import "testing"
+import (
+    "runtime"
+    "testing"
+)
 
 func TestJavanBindingOwnership(t *testing.T) {
+    runtime.LockOSThread()
+    defer runtime.UnlockOSThread()
     name := javanTestCString("Loop")
     defer javanTestCStringFree(name)
     data := []int8{3, 1, 4, 1, 5, 9, 2, 6}
@@ -1036,7 +1141,7 @@ func TestJavanBindingOwnership(t *testing.T) {
         t.Fatal("missing wrapped failure")
     }
     wrapped, ok := err.(JavanError)
-    if !ok || wrapped.Code != "JAVAN-RUNTIME-PANIC" || wrapped.Detail == "" {
+    if !ok || wrapped.Code != "JAVAN-RUNTIME-PANIC" || wrapped.Detail != "-1" {
         t.Fatalf("invalid wrapped failure %#v", err)
     }
     if checksum != 10378 {
