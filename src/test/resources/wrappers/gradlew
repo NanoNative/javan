@@ -1,0 +1,4 @@
+#!/bin/sh
+[ "$#" -eq 1 ] && [ "$1" = test ] || exit 2
+printf 'gradle-wrapper\n'
+printf 'gradle-stderr\n' >&2
