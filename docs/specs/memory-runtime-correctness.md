@@ -1,5 +1,24 @@
 # Memory And Runtime Correctness
 
+## Human Review
+
+Owns allocation, roots, publication, cleanup and native ownership. Current mark/sweep,
+adaptive collection and scoped thread handoffs do not imply a complete JVM heap or
+general concurrent mutation safety. [Native ABI](native-abi.md) owns the caller-facing boundary.
+
+Before broad concurrent heap mutation, agree one mutator/collector protocol and its lifecycle.
+Before full UTF-16 or new opaque helper returns, define representation and publication ownership.
+These block their dependent runtime slices, not current artifact rehearsal.
+
+## Requirements And Acceptance
+
+| ID | Contract | Public evidence / gap |
+| --- | --- | --- |
+| MEM-001 | Every supported live Java reference MUST survive collection at its permitted allocation/safe-point boundaries. | Native/JVM and forced-GC scenarios in [Tests and gates](#tests-and-gates); general concurrent mutation remains unproven. |
+| MEM-002 | Native ownership MUST specify who releases each resource, including error and repeated-use paths. | [ABI ownership](native-abi.md), package-backed library and sanitizer probes. |
+| MEM-003 | Allocation denial and overflow MUST fail deterministically and release owned runtime resources. | Heap-limit, panic and overflow scenarios below; general Java out-of-memory recovery is not claimed. |
+| MEM-004 | Claimed memory proof MUST exercise nonzero work and check final heap/root residue with sanitizer evidence where required. | [Required proof](#self-host-memory-proof); [historical evidence](../verification.md#self-host-memory-proof-m13r) does not certify a new candidate. |
+
 Goal: make native memory behavior explicit, testable, and impossible to overclaim.
 
 ## Current Contract
@@ -46,20 +65,13 @@ long-running services, allocation-heavy applications, or general thread-heavy pr
 does not yet manage every Java/runtime allocation shape or synchronize every concurrent pointer
 publication during execution.
 
-## M13R Remote Release-Matrix No-Residue Proof
+## Self-Host Memory Proof
 
 Goal: prove the generated native Javan binary itself is sanitizer-clean, counter-clean,
 warning-free, and represented in fresh reports.
 
-Status: Done for the currently enabled release package targets. Accepted remote
-package-backed self-host sanitizer proof passed on Linux x64, Linux ARM64, and macOS
-ARM64 with nonzero tracked allocation/GC counters, zero final live heap/root residue,
-and no sanitizer failure signatures. The reduced `platform-smoke` path reuses the
-just-generated self-host C output and narrows repeated probes to `--version` plus a tiny
-build/check loop while retaining the counter and residue assertions. macOS x64 and
-Windows package rows remain explicitly disabled and are not release support claims.
-
-Exit criteria:
+Acceptance criteria for each candidate, regardless of the
+[historical M13R result](../verification.md#self-host-memory-proof-m13r):
 
 1. Build generated native Javan from `target/classes --main javan.Main` with sanitizer
    instrumentation and counter checks enabled.
@@ -76,13 +88,10 @@ Exit criteria:
 5. Run the proof in CI/release rows for every supported OS/ARCH target before claiming
    release-level no-leak confidence.
 
-This milestone is intentionally smaller than full managed heap. It proves the production
-tool binary under the current runtime contract before expanding into long-running service
-memory behavior.
-
-The package proof records the self-host probes through an exit-safe counter writer. The
-accepted remote package matrix produced nonzero tracked self-host allocations and GC
-collections with zero final tracked heap/root residue on every enabled release target.
+The package proof records self-host probes through an exit-safe counter writer. This proves
+the tool under its current runtime contract, not a full managed heap or general long-running
+service memory behavior. [Release](release.md#first-native-release-scope) owns target scope;
+[testing](testing.md#bootstrap-and-timing) owns portable-C reuse and bootstrap execution.
 
 ## Required Managed Heap Design
 
@@ -118,7 +127,10 @@ The first safe root model should be precise, not conservative scanning:
 | FFI handles | Explicit handle table with ownership rules. |
 | Threads | Platform workers register thread-local generated root frames for locked GC scanning. Full concurrent pointer-publication synchronization remains open. |
 
-## GC Milestones
+## Heap Capability Coverage
+
+This inventory records implemented scope and remaining heap capabilities, not delivery order.
+The [roadmap](../roadmap.md) owns sequencing; unimplemented entries are not release promises.
 
 1. Heap metadata and allocation accounting. Implemented for tracked allocations.
 2. Static root registration. Implemented for generated object static fields.
@@ -177,7 +189,8 @@ The first safe root model should be precise, not conservative scanning:
 32. General mutator/collector synchronization for all concurrent pointer publication and
     root-frame cleanup paths.
 33. Optional arena/request allocation for scoped workloads.
-34. Escape-analysis stack allocation where proven safe.
+34. Escape-analysis stack allocation where proven safe. Implemented for the scoped shapes in
+    [analysis and optimization](analysis-and-optimization.md); not arbitrary escaping objects.
 
 ## Ownership Rules
 

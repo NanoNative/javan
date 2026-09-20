@@ -22,7 +22,7 @@ final class ExternalProbeIsolationTest {
     private static final Path PRODUCTION_SOURCES = Path.of("src/main/java");
     private static final Path TEST_SOURCES = Path.of("src/test/java");
     private static final Path SCRIPT_SOURCES = Path.of(".github/scripts");
-    private static final Path DOC_STATUS = Path.of("doc/status");
+    private static final Path DOC_STATUS = Path.of("docs/status");
     private static final Path TEST_RESOURCES = Path.of("src/test/resources");
     private static final Path EXTERNAL_PROBES = TEST_RESOURCES.resolve("external-probes");
     private static final Path EXTERNAL_ARTIFACTS = TEST_RESOURCES.resolve("external-artifacts");
@@ -100,7 +100,7 @@ final class ExternalProbeIsolationTest {
 
     @Test
     void onlyDedicatedExternalSmokeDocsMayNameExternalProbeIdentities() throws Exception {
-        try (Stream<Path> files = Files.walk(Path.of("doc"))) {
+        try (Stream<Path> files = Files.walk(Path.of("docs"))) {
             final List<Path> markdownFiles = files
                 .filter(path -> path.toString().endsWith(".md"))
                 .sorted(Comparator.comparing(Path::toString))
@@ -114,12 +114,12 @@ final class ExternalProbeIsolationTest {
     @Test
     void onlyDedicatedExternalSmokeDocsMayReferenceProbeInfrastructure() throws Exception {
         final Set<Path> allowedDocs = Set.of(
-            Path.of("doc/status/real-project-readiness.md"),
-            Path.of("doc/spec/examples-and-test-projects.md"),
+            Path.of("docs/status/real-project-readiness.md"),
+            Path.of("docs/specs/examples-and-test-projects.md"),
             Path.of("src/test/resources/projects/README.md")
         );
         final List<Path> scanned = new ArrayList<>();
-        scanned.addAll(markdownFiles(Path.of("doc")));
+        scanned.addAll(markdownFiles(Path.of("docs")));
         scanned.add(TEST_RESOURCES.resolve("projects/README.md"));
         scanned.add(SUPPORT_MATRIX_JSON);
         for (final Path file : scanned) {

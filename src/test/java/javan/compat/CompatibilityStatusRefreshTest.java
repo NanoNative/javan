@@ -42,15 +42,15 @@ final class CompatibilityStatusRefreshTest {
 
         assertThat(first.statusChanged()).isTrue();
         assertThat(first.changedFiles()).containsExactly(
-            Path.of("doc/status/support-matrix.md"),
-            Path.of("doc/status/support-matrix.json"),
-            Path.of("doc/status/jdk-compatibility.md")
+            Path.of("docs/status/support-matrix.md"),
+            Path.of("docs/status/support-matrix.json"),
+            Path.of("docs/status/jdk-compatibility.md")
         );
         assertThat(firstOutput.toString(StandardCharsets.UTF_8)).contains(
             "Refreshed compatibility status documents:",
-            "doc/status/support-matrix.md",
-            "doc/status/support-matrix.json",
-            "doc/status/jdk-compatibility.md"
+            "docs/status/support-matrix.md",
+            "docs/status/support-matrix.json",
+            "docs/status/jdk-compatibility.md"
         );
         assertThatThrownBy(() -> CompatibilityStatusRefresh.failWhenStatusWasStale(first))
             .isInstanceOf(IllegalStateException.class)
@@ -58,9 +58,9 @@ final class CompatibilityStatusRefreshTest {
                 "Compatibility status was stale and has been regenerated.",
                 "Review the generated changes, then rerun mvn verify."
             );
-        assertThat(Files.readString(fixture.root().resolve("doc/status/support-matrix.md"))).isEqualTo("new matrix\n");
-        assertThat(Files.readString(fixture.root().resolve("doc/status/support-matrix.json"))).isEqualTo("new json\n");
-        assertThat(Files.readString(fixture.root().resolve("doc/status/jdk-compatibility.md"))).isEqualTo("new jdk\n");
+        assertThat(Files.readString(fixture.root().resolve("docs/status/support-matrix.md"))).isEqualTo("new matrix\n");
+        assertThat(Files.readString(fixture.root().resolve("docs/status/support-matrix.json"))).isEqualTo("new json\n");
+        assertThat(Files.readString(fixture.root().resolve("docs/status/jdk-compatibility.md"))).isEqualTo("new jdk\n");
 
         final ByteArrayOutputStream secondOutput = new ByteArrayOutputStream();
         final CompatibilityStatusRefresh.RefreshResult second = CompatibilityStatusRefresh.synchronize(
@@ -95,7 +95,7 @@ final class CompatibilityStatusRefreshTest {
             "Compatibility status documents are current.",
             "Tracked JDK compatibility remains owned by the canonical platform."
         );
-        assertThat(Files.readString(fixture.root().resolve("doc/status/jdk-compatibility.md"))).isEqualTo("old jdk\n");
+        assertThat(Files.readString(fixture.root().resolve("docs/status/jdk-compatibility.md"))).isEqualTo("old jdk\n");
         CompatibilityStatusRefresh.failWhenStatusWasStale(result);
     }
 
@@ -116,7 +116,7 @@ final class CompatibilityStatusRefreshTest {
                 "Compatibility generator did not write",
                 "target/classes/doc/status/support-matrix.json"
             );
-        assertThat(Files.readString(fixture.root().resolve("doc/status/support-matrix.md"))).isEqualTo("matrix\n");
+        assertThat(Files.readString(fixture.root().resolve("docs/status/support-matrix.md"))).isEqualTo("matrix\n");
     }
 
     @Test
@@ -241,7 +241,7 @@ final class CompatibilityStatusRefreshTest {
         }))
             .isInstanceOf(IOException.class)
             .hasMessage("Compatibility report generation failed with exit code 2.");
-        assertThat(root.resolve("doc/status")).doesNotExist();
+        assertThat(root.resolve("docs/status")).doesNotExist();
     }
 
     @Test
@@ -266,9 +266,11 @@ final class CompatibilityStatusRefreshTest {
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("Compatibility status was stale and has been regenerated.");
 
-        assertThat(root.resolve("doc/status/support-matrix.md")).isRegularFile();
-        assertThat(root.resolve("doc/status/support-matrix.json")).isRegularFile();
-        assertThat(Files.isRegularFile(root.resolve("doc/status/jdk-compatibility.md")))
+        assertThat(root.resolve("docs/status/support-matrix.md")).isRegularFile();
+        assertThat(root.resolve("docs/status/support-matrix.json")).isRegularFile();
+        assertThat(classes.resolve("doc/status/support-matrix.json")).isRegularFile();
+        assertThat(root.resolve("doc")).doesNotExist();
+        assertThat(Files.isRegularFile(root.resolve("docs/status/jdk-compatibility.md")))
             .isEqualTo(canonicalPlatform);
         assertThat(root.resolve("target/.javan/reports/compatibility-summary.json")).isRegularFile();
 
@@ -285,7 +287,7 @@ final class CompatibilityStatusRefreshTest {
     ) throws Exception {
         final Path root = tempDir.resolve("project");
         final Path classes = root.resolve("target/classes");
-        final Path tracked = root.resolve("doc/status");
+        final Path tracked = root.resolve("docs/status");
         Files.createDirectories(classes.resolve("doc/status"));
         Files.createDirectories(tracked);
         Files.writeString(root.resolve("pom.xml"), "<project/>\n");

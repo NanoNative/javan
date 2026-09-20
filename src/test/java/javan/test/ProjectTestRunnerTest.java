@@ -10,7 +10,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -50,17 +49,14 @@ final class ProjectTestRunnerTest {
         assumeFalse(isWindows());
         final Path root = tempDir.resolve("gradle-wrapper");
         Files.createDirectories(root);
-        writeExecutable(root.resolve("gradlew"), """
-            #!/bin/sh
-            printf 'gradle-wrapper\\n'
-            exit 0
-            """);
+        // Link a checked-in fixture: freshly written executables can hit ETXTBSY during parallel launches.
+        Files.createSymbolicLink(root.resolve("gradlew"), Path.of("src/test/resources/wrappers/gradlew").toAbsolutePath());
 
         final ByteArrayOutputStream output = new ByteArrayOutputStream();
         final int exitCode = new ProjectTestRunner().run(layout(root, BuildTool.GRADLE), new PrintStream(output));
 
         assertThat(exitCode).isZero();
-        assertThat(output.toString()).contains("Running tests:", "./gradlew test", "gradle-wrapper");
+        assertThat(output.toString()).contains("Running tests:", "./gradlew test", "gradle-wrapper", "gradle-stderr");
     }
 
     @Test
@@ -127,15 +123,6 @@ final class ProjectTestRunnerTest {
             "app",
             List.of()
         );
-    }
-
-    private static void writeExecutable(final Path target, final String content) throws Exception {
-        final Path staged = target.resolveSibling(target.getFileName() + ".staged");
-        Files.writeString(staged, content);
-        if (!staged.toFile().setExecutable(true)) {
-            throw new IllegalStateException("Cannot mark test wrapper executable");
-        }
-        Files.move(staged, target, StandardCopyOption.ATOMIC_MOVE);
     }
 
     private static boolean isWindows() {

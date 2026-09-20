@@ -99,13 +99,15 @@ public final class CompatibilityStatusRefresh {
         final List<Path> changed = new ArrayList<>();
         for (final Path relative : trackedFiles(canonicalPlatform)) {
             final Path generated = classes.resolve(relative);
-            final Path tracked = root.resolve(relative);
+            // CLI output paths stay stable; repository documentation has its own home.
+            final Path repositoryPath = Path.of("docs/status").resolve(relative.getFileName());
+            final Path tracked = root.resolve(repositoryPath);
             final String generatedText = Files2.readStringIfExists(generated);
             if (Files.isRegularFile(tracked) && generatedText.equals(Files2.readStringIfExists(tracked))) {
                 continue;
             }
             Files2.writeString(tracked, generatedText);
-            changed.add(relative);
+            changed.add(repositoryPath);
         }
         printResult(root, classes, out, changed, canonicalPlatform);
         return new RefreshResult(List.copyOf(changed));
