@@ -16,8 +16,8 @@ Probe summary:
 | External scheduler/runtime smoke | Smoke | Several bundled scheduler/runtime probes build natively against reproducible jars installed into the local Maven repository and are exercised by the required external-probe acceptance gate plus focused CLI integration. | Broader service graphs and scheduler-adjacent runtime coverage beyond the current lifecycle slice. |
 | External HTTP service smoke | Smoke | A bundled external handler jar serves a native loopback HTTP response through a reproducible probe and a generic dependency integration test. | Broader HTTP service runtime, resources, thread/blocking model, and dev-console/reflection exclusion. |
 
-These external probes are intentionally excluded from `doc/status/support-matrix.*`,
-`doc/status/jdk-compatibility.md`, and the core JDK support ledger. They are compatibility
+These external probes are intentionally excluded from `docs/status/support-matrix.*`,
+`docs/status/jdk-compatibility.md`, and the core JDK support ledger. They are compatibility
 smoke only, driven by per-probe metadata and exact stdout expectations under
 `src/test/resources/external-probes/*`.
 
@@ -151,7 +151,7 @@ Known blockers before broader real-project coverage:
 - more dependency-version variance proof, because reproducible bundled smoke is not the same as broad upstream-version compatibility
 
 This document stays at the compatibility-smoke level. Detailed compiler/runtime support claims
-belong in `doc/status/support-matrix.md`, `doc/status/jdk-compatibility.md`, and the
+belong in `docs/status/support-matrix.md`, `docs/status/jdk-compatibility.md`, and the
 compiler-owned tests under `src/test/java/javan/*`.
 
 Fresh external-service packaging may still fail when a broader external graph pulls in

@@ -1,6 +1,6 @@
 # javan
 
-Minimal native-first Java toolchain.
+A native compiler for ordinary Java build outputs.
 
 `javan` consumes compiled `.class` files, checks reachable code, lowers the supported
 subset to C, and links host-native executables or native libraries without changing
@@ -11,10 +11,10 @@ normal Java source.
 | Question | Current answer |
 | --- | --- |
 | Is it useful today? | Yes for small deterministic native apps and native libraries built from the supported subset. |
-| Which JDK is actively gated? | JDK 25 locally. JDK 21-24 remain planned matrix targets. |
+| Which JDK is actively gated? | Project verification uses JDK 25. A wider JDK matrix remains planned. |
 | What is solid now? | Native app output, JVM jar output, native library packaging, reports, and the current showcase path. |
-| What is still incomplete? | Broad JDK coverage, full exception semantics, thread/runtime breadth, richer library ABI types, and remote release validation across every target row. |
-| Can it rebuild itself? | Locally, yes. Remote package validation for all configured release targets is still open. |
+| What is still incomplete? | Broad JDK coverage, full exception semantics, thread/runtime breadth, richer library ABI types, and package support beyond the three declared release targets. |
+| Can it rebuild itself? | Yes, within the supported subset; historical package-backed proof is linked in [verification](docs/verification.md). A new release still needs candidate-specific evidence. |
 
 ## Quick Start
 
@@ -73,7 +73,7 @@ default_jdk = "25"
 
 Javan never changes shell profiles, `PATH`, `JAVA_HOME`, or the vendor JDK automatically.
 The detailed behavior and currently unsupported integration proof are documented in the
-[JDK facade contract](doc/spec/toolchains.md#installed-facade).
+[JDK facade contract](docs/specs/toolchains.md#installed-facade).
 
 ## Commands And Outputs
 
@@ -109,7 +109,7 @@ Current supported output shapes:
 
 - Native executables from the supported bytecode/JDK subset.
 - Configured static Java-to-C native imports and project-local link inputs, with a narrow
-  primitive/borrowed-`byte[]` ABI: [native ABI contract](doc/spec/native-abi.md#generic-java-to-c-native-imports).
+  primitive/borrowed-`byte[]` ABI: [native ABI contract](docs/specs/native-abi.md#generic-java-to-c-native-imports).
 - JVM jar output as a first-class build kind.
 - Native libraries with C ABI plus generated C, Rust, Go, and Python bindings for
   primitives, `String`, `byte[]`, and the current result/error ABI.
@@ -125,20 +125,24 @@ Current visible gaps:
 
 For current support and release state, use:
 
-- [doc/status/support-matrix.md](doc/status/support-matrix.md)
-- [doc/status/jdk-compatibility.md](doc/status/jdk-compatibility.md)
-- [doc/spec/release.md](doc/spec/release.md)
+- [docs/status/support-matrix.md](docs/status/support-matrix.md)
+- [docs/status/jdk-compatibility.md](docs/status/jdk-compatibility.md)
+- [docs/specs/release.md](docs/specs/release.md)
 
 ## Showcase
 
 - Public showcase: [example/README.md](example/README.md)
-- Long-form example policy and probes: [doc/spec/examples-and-test-projects.md](doc/spec/examples-and-test-projects.md)
+- Long-form example policy and probes: [docs/specs/examples-and-test-projects.md](docs/specs/examples-and-test-projects.md)
 
-## Docs
+## Documentation
 
-- Documentation index: [doc/README.md](doc/README.md)
+- Start here: [documentation map](docs/README.md)
+- What JavaN promises: [compiler specification](docs/specs/compiler.md)
+- What comes next: [roadmap](docs/roadmap.md#current-sequence)
+- Why it works this way: [architecture decisions](docs/README.md#decisions)
+- What has been proved: [verification history](docs/verification.md)
 - Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
-- Roadmap and status: [doc/spec/roadmap.md](doc/spec/roadmap.md), [doc/status/support-matrix.md](doc/status/support-matrix.md), [doc/status/jdk-compatibility.md](doc/status/jdk-compatibility.md)
-- Native library ABI: [doc/spec/native-abi.md](doc/spec/native-abi.md)
-- Release and verification: [doc/spec/release.md](doc/spec/release.md), [doc/spec/cross-platform-verification.md](doc/spec/cross-platform-verification.md)
-- Runtime and packaging specs: [doc/spec/runtime-feature-selection.md](doc/spec/runtime-feature-selection.md), [doc/spec/container-images.md](doc/spec/container-images.md)
+- Generated support: [scenario matrix](docs/status/support-matrix.md), [JDK inventory](docs/status/jdk-compatibility.md)
+- Native library ABI: [docs/specs/native-abi.md](docs/specs/native-abi.md)
+- Release and verification: [release](docs/specs/release.md), [testing](docs/specs/testing.md)
+- Runtime and packaging specs: [docs/specs/runtime-feature-selection.md](docs/specs/runtime-feature-selection.md), [docs/specs/container-images.md](docs/specs/container-images.md)

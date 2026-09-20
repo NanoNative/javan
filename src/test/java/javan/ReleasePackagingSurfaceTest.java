@@ -1,6 +1,8 @@
 package javan;
 
+import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -11,6 +13,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -23,7 +26,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     private static final Path PACKAGE_BASELINES_WORKFLOW = Path.of(".github/workflows/package-build-baselines.yml");
     private static final Path RELEASE_WORKFLOW = Path.of(".github/workflows/release.yml");
     private static final Path CONTAINER_WORKFLOW = Path.of(".github/workflows/container-images.yml");
-    private static final Path ROADMAP = Path.of("doc/spec/roadmap.md");
+    private static final Path ROADMAP = Path.of("docs/roadmap.md");
     private static final Path VERIFY_RELEASE = Path.of(".github/scripts/verify-release.sh");
     private static final Path VERIFY_CI_PACKAGE_SMOKE = Path.of(".github/scripts/verify-ci-package-smoke.sh");
     private static final Path VERIFY_PACKAGE_NATIVE_IMPORTS = Path.of(".github/scripts/verify-package-native-imports.sh");
@@ -32,6 +35,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     private static final Path VERIFY_IMAGE = Path.of(".github/scripts/verify-image.sh");
     private static final Path VERSION_TEMPLATE = Path.of("src/main/version/javan/cli/Version.java");
     private static final Path REPO_ROOT = Path.of("").toAbsolutePath().normalize();
+    private static final String UPLOAD_VERSION = "2031.2.3";
 
     @Test
     void mavenOwnsDateVersionAndGeneratesTheCliConstant() throws Exception {
@@ -187,24 +191,17 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     }
 
     @Test
-    void firstNativeReleaseQueueKeepsFiveLinkedCoreGates() throws Exception {
+    void firstNativeReleaseMilestonesKeepTheirStableReferences() throws Exception {
         final String roadmap = Files.readString(ROADMAP);
-        final String activeQueue = roadmap.substring(
-            roadmap.indexOf("## Active First Native Release Queue"),
-            roadmap.indexOf("Supplemental evidence must not compete")
-        );
 
-        assertThat(activeQueue)
+        assertThat(roadmap)
             .contains(
                 "issues/103",
                 "issues/116",
                 "issues/117",
                 "issues/130",
                 "issues/250"
-            )
-            .doesNotContain("issues/115");
-        assertThat(Pattern.compile("https://github.com/NanoNative/javan/issues/").matcher(activeQueue).results().count())
-            .isEqualTo(5);
+            );
         assertThat(roadmap).contains("REL-CONTAINER-01", "issues/115");
     }
 
@@ -563,6 +560,116 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             .contains("- name: \"🚀 Publish")
             .contains("TARGET_SHA: ${{ needs.build.outputs.commit_sha }}")
             .doesNotContain("git push", "git tag", "BOT_TOKEN");
+    }
+
+    @TestFactory
+    Stream<DynamicTest> releaseUploadSelectsOnlyPublicAssetsOnCreationAndRetry() {
+        return Stream.of(false, true).map(existingRelease -> DynamicTest.dynamicTest(
+            existingRelease ? "existing release" : "new release", () -> {
+                final Path root = prepareReleaseUpload();
+                final Path calls = root.resolve("gh-recordings");
+                if (existingRelease) {
+                    Files.createFile(calls.resolve("exists"));
+                }
+                final Map<String, String> evidence = Map.of(
+                    "javan-" + UPLOAD_VERSION + "-linux-x64-rehearsal.tar.gz", "internal compiled inputs",
+                    "javan-" + UPLOAD_VERSION + "-linux-x64-rehearsal.tar.gz.sha256", "internal checksum",
+                    "javan-" + UPLOAD_VERSION + "-linux-x64.rehearsal.json", "internal report",
+                    "javan-" + UPLOAD_VERSION + "-linux-x64.rehearsal.md", "internal report",
+                    "javan-2030.1.2-linux-x64.tar.gz", "stale package",
+                    "javan-" + UPLOAD_VERSION + "-windows-x64.tar.gz", "excluded target",
+                    "notes with spaces.txt", "unrelated file"
+                );
+                for (final var entry : evidence.entrySet()) {
+                    Files.writeString(root.resolve("dist/release").resolve(entry.getKey()), entry.getValue());
+                }
+
+                for (int attempt = 0; attempt < 2; attempt++) {
+                    final ProcessResult run = runReleaseUpload(root);
+                    assertThat(run.exitCode()).as(run.stderr()).isZero();
+                    final List<String> upload = Files.readAllLines(calls.resolve("upload"));
+                    assertThat(upload).startsWith(UPLOAD_VERSION).endsWith("--clobber");
+                    assertThat(upload.subList(1, upload.size() - 1))
+                        .containsExactlyInAnyOrderElementsOf(publicReleaseAssets().toList());
+                }
+
+                if (existingRelease) {
+                    assertThat(calls.resolve("create")).doesNotExist();
+                } else {
+                    assertThat(Files.readAllLines(calls.resolve("create"))).containsExactly(
+                        UPLOAD_VERSION, "--target", "7".repeat(40), "--title", UPLOAD_VERSION, "--generate-notes"
+                    );
+                }
+                assertThat(Files.readAllLines(calls.resolve("commands")))
+                    .containsExactlyElementsOf(existingRelease
+                        ? List.of("view", "upload", "view", "upload")
+                        : List.of("view", "create", "upload", "view", "upload"));
+                for (final var entry : evidence.entrySet()) {
+                    assertThat(Files.readString(root.resolve("dist/release").resolve(entry.getKey())))
+                        .isEqualTo(entry.getValue());
+                }
+            }));
+    }
+
+    @TestFactory
+    Stream<DynamicTest> releaseUploadRejectsMissingAssetsBeforeContactingGitHub() {
+        return publicReleaseAssets().map(asset -> DynamicTest.dynamicTest(asset, () -> {
+            final Path root = prepareReleaseUpload();
+            Files.delete(root.resolve(asset));
+
+            final ProcessResult run = runReleaseUpload(root);
+
+            assertThat(run.exitCode()).isNotZero();
+            assertThat(run.stderr()).contains(asset);
+            assertThat(root.resolve("gh-recordings/commands")).doesNotExist();
+        }));
+    }
+
+    @TestFactory
+    Stream<DynamicTest> releaseUploadRejectsEmptyAssetsBeforeContactingGitHub() {
+        return publicReleaseAssets().map(asset -> DynamicTest.dynamicTest(asset, () -> {
+            final Path root = prepareReleaseUpload();
+            Files.writeString(root.resolve(asset), "");
+
+            final ProcessResult run = runReleaseUpload(root);
+
+            assertThat(run.exitCode()).isNotZero();
+            assertThat(run.stderr()).contains(asset);
+            assertThat(root.resolve("gh-recordings/commands")).doesNotExist();
+        }));
+    }
+
+    @TestFactory
+    Stream<DynamicTest> releaseUploadRejectsAnotherVersionsPackage() {
+        return Stream.of("linux-x64", "linux-aarch64", "macos-aarch64")
+            .map(target -> DynamicTest.dynamicTest(target, () -> {
+                final Path root = prepareReleaseUpload();
+                for (final String suffix : List.of(".tar.gz", ".tar.gz.sha256")) {
+                    Files.move(root.resolve("dist/release/javan-" + UPLOAD_VERSION + "-" + target + suffix),
+                        root.resolve("dist/release/javan-2030.1.2-" + target + suffix));
+                }
+
+                final ProcessResult run = runReleaseUpload(root);
+
+                assertThat(run.exitCode()).isNotZero();
+                assertThat(run.stderr()).contains("javan-" + UPLOAD_VERSION + "-" + target + ".tar.gz");
+                assertThat(root.resolve("gh-recordings/commands")).doesNotExist();
+            }));
+    }
+
+    @TestFactory
+    Stream<DynamicTest> releaseUploadPropagatesPublicationFailures() {
+        return Stream.of("create", "upload").map(command -> DynamicTest.dynamicTest(command, () -> {
+            final Path root = prepareReleaseUpload();
+            Files.createFile(root.resolve("gh-recordings/fail-" + command));
+
+            final ProcessResult run = runReleaseUpload(root);
+
+            assertThat(run.exitCode()).isEqualTo(73);
+            assertThat(Files.readAllLines(root.resolve("gh-recordings/commands")))
+                .containsExactlyElementsOf(command.equals("create")
+                    ? List.of("view", "create") : List.of("view", "create", "upload"));
+        }));
     }
 
     @Test
@@ -1298,6 +1405,61 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         final String script = Files.readString(Path.of(".github/scripts/verify-showcase.sh"));
         assertThat(script).contains("-v \"$project:/workspace\"", "check classes --main com.acme.showcase.Main", "report . >/dev/null", "SHOWCASE_REPORT=$project/.javan/reports/report.json")
             .doesNotContain("-v \"$ROOT:/workspace\"", "rm -rf \"$SHOWCASE_ROOT/target\"");
+    }
+
+    private static Stream<String> publicReleaseAssets() {
+        return Stream.concat(Stream.of("dist/release/javan.rb"),
+            Stream.of("linux-x64", "linux-aarch64", "macos-aarch64").flatMap(target -> {
+                final String archive = "dist/release/javan-" + UPLOAD_VERSION + "-" + target + ".tar.gz";
+                return Stream.of(archive, archive + ".sha256");
+            }));
+    }
+
+    private Path prepareReleaseUpload() throws Exception {
+        final Path root = Files.createTempDirectory(tempDir, "release fixture ");
+        final Path bin = Files.createDirectories(root.resolve("bin"));
+        Files.createDirectories(root.resolve("dist/release"));
+        Files.createDirectories(root.resolve("gh-recordings"));
+        for (final String asset : publicReleaseAssets().toList()) {
+            Files.writeString(root.resolve(asset), "verified fixture " + asset);
+        }
+        writeExecutableScript(bin.resolve("gh"), """
+            #!/bin/sh
+            set -eu
+            [ "$1" = release ] || exit 97
+            command=$2
+            shift 2
+            printf '%s\\n' "$command" >> gh-recordings/commands
+            printf '%s\\n' "$@" > "gh-recordings/$command"
+            [ ! -f "gh-recordings/fail-$command" ] || exit 73
+            case "$command" in
+              view) test -f gh-recordings/exists ;;
+              create) touch gh-recordings/exists ;;
+              upload) : ;;
+              *) exit 98 ;;
+            esac
+            """);
+        return root;
+    }
+
+    private static ProcessResult runReleaseUpload(final Path root) throws Exception {
+        final String workflow = Files.readString(RELEASE_WORKFLOW);
+        final int publishStart = workflow.indexOf("      - name: \"🚀 Publish");
+        assertThat(publishStart).as("release publication step").isNotNegative();
+        final String step = workflow.substring(publishStart);
+        final String runBlock = "        run: |\n";
+        final int runStart = step.indexOf(runBlock);
+        assertThat(runStart).as("executable publication body").isNotNegative();
+        final String script = step.substring(runStart + runBlock.length()).lines()
+            .takeWhile(line -> line.isBlank() || line.startsWith("          "))
+            .map(line -> line.isBlank() ? "" : line.substring(10))
+            .collect(java.util.stream.Collectors.joining("\n"));
+        assertThat(script).contains("gh release upload");
+        return process(root, List.of("sh", "-c", script), Duration.ofSeconds(20), Map.of(
+            "PATH", root.resolve("bin") + java.io.File.pathSeparator + System.getenv("PATH"),
+            "GH_TOKEN", "", "GITHUB_TOKEN", "", "GH_REPO", "fixture/repository",
+            "RELEASE_VERSION", UPLOAD_VERSION, "TARGET_SHA", "7".repeat(40)
+        ));
     }
 
     private static void writeReleaseArtifact(final Path releaseDir, final String name, final String content) throws Exception {

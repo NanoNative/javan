@@ -123,6 +123,19 @@ jobs:
           TARGET_SHA: ${{ needs.build.outputs.commit_sha }}
         run: |
           set -eu
+          # Publish only the declared release targets, never rehearsal evidence or stale files.
+          set -- dist/release/javan.rb
+          for target in linux-x64 linux-aarch64 macos-aarch64; do
+            archive="dist/release/javan-$RELEASE_VERSION-$target.tar.gz"
+            set -- "$@" "$archive" "$archive.sha256"
+          done
+          for asset in "$@"; do
+            if [ ! -f "$asset" ] || [ ! -s "$asset" ]; then
+              printf '%s\n' "Missing or empty release asset: $asset" >&2
+              exit 1
+            fi
+          done
+          printf 'Release asset: %s\n' "$@"
           if gh release view "$RELEASE_VERSION" >/dev/null 2>&1; then
             printf '%s\n' "GitHub release already exists for $RELEASE_VERSION"
           else
@@ -131,7 +144,7 @@ jobs:
               --title "$RELEASE_VERSION" \
               --generate-notes
           fi
-          gh release upload "$RELEASE_VERSION" dist/release/* --clobber
+          gh release upload "$RELEASE_VERSION" "$@" --clobber
 
   containers:
     name: Containers

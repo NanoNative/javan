@@ -1,13 +1,28 @@
 # Full Concurrency Runtime And Thread Analysis
 
-Status: roadmap.
+## Human Review
 
-Existing research input:
+Owns thread/task execution and lifecycle. This document describes the wider target;
+the [generated support ledger](../status/support-matrix.md) and
+[thread CLI tests](../../src/test/java/javan/CliThreadRuntimeIntegrationTest.java) define
+the existing slices. The complete scheduler/profiling feature set below is not shipped.
 
-- `/Users/yuna/projects/javan-project/javan-virtual-threads-native-spike`
+Before a new concurrent slice, define accepted task/receiver shapes, admission bounds,
+cancellation, interruption, shutdown and GC ownership. General virtual-thread scheduling
+and carrier-aware blocking need those decisions before implementation. They do not block
+existing supported platform-thread behavior.
 
-The spike is migration material only. It does not change production status until slices
-are moved into `javan`, tested, and accepted through the normal gates.
+## Requirements And Acceptance
+
+| ID | Contract | Public evidence / gap |
+| --- | --- | --- |
+| CONC-001 | A supported thread/task lifecycle MUST preserve its supported Java start, join, interrupt, failure and cleanup semantics. | [Thread CLI](../../src/test/java/javan/CliThreadRuntimeIntegrationTest.java), [memory gates](memory-runtime-correctness.md#tests-and-gates); complete API breadth remains planned. |
+| CONC-002 | Thread diagnostics MUST describe only reachable, evidenced behavior and distinguish unknown blocking from proven safety. | Proposed wider analysis/profiling below needs public diagnostics and lifecycle proof before claiming completion. |
+| CONC-003 | Enabling parallel native compilation MUST bound workers and prove cancellation, owned-child cleanup, cache integrity, self-host and packaged behavior. | Current [NativeLinker](../../src/main/java/javan/codegen/NativeLinker.java) is serial; [linker tests](../../src/test/java/javan/codegen/NativeLinkerTest.java) and [CLI command tests](../../src/test/java/javan/CliCommandIntegrationTest.java) assert the effective cap of one. This prerequisite is blocked pending the executor/runtime proof. |
+
+Status: Partial. The complete behavior below remains planned beyond the generated ledger's
+proven slices. Historical research checkouts are not a repository dependency or support claim;
+production status requires accepted code and public proof in this repository.
 
 ## Goal
 
@@ -147,7 +162,10 @@ Thread diagnostics should feed the same report model as other analysis tracks:
 - thread-specific public flags are not first-choice UX; prefer project/global settings
   unless an interactive workflow truly needs a flag
 
-## Acceptance
+## Acceptance For The Planned Complete Runtime
+
+These are completion criteria for the wider concurrency scope, not claims about current support.
+The requirements table above identifies existing proof and the current boundary.
 
 - full virtual-thread APIs are supported
 - thread diagnostics are emitted only for reachable code

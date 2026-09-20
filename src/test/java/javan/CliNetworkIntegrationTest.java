@@ -678,14 +678,16 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void socketSoLingerClampBuildsAndMatchesJvmOutput() throws Exception {
+    void socketSoLingerClampBuildsAndMatchesPlatformOutcome() throws Exception {
         try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
             final int port = server.getLocalPort();
             final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
-                try (java.net.Socket socket = server.accept()) {
-                    socket.getOutputStream().flush();
-                } catch (final Exception exception) {
-                    throw new IllegalStateException(exception);
+                for (int connection = 0; connection < 2; connection++) {
+                    try (java.net.Socket socket = server.accept()) {
+                        socket.getOutputStream().flush();
+                    } catch (final Exception exception) {
+                        throw new IllegalStateException(exception);
+                    }
                 }
             });
             final Path project = project("socket-so-linger-clamp");
@@ -702,19 +704,72 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                         final Socket socket = new Socket("127.0.0.1", %d);
                         socket.setSoLinger(true, 65_536);
                         System.out.println(socket.getSoLinger());
+                        socket.setSoLinger(false, 0);
                         socket.close();
                     }
                 }
                 """.formatted(port));
 
-            final String jvmOutput = runJvm(project, "com.acme.Main");
+            // The maximum linger timeout is platform-specific; rejection is an outcome, not a skipped test.
+            final ProcessResult jvmRun = process(project, List.of(
+                CliTestHarness.currentJavaCommand(), project.resolve("src/main/java/com/acme/Main.java").toString()
+            ));
             final CliRun run = run(tempDir, "build", project.toString());
 
             assertThat(run.exitCode()).as(run.stderr()).isZero();
-            assertThat(process(project, List.of(project.resolve(".javan/bin/socket-so-linger-clamp").toString())).stdout())
-                .isEqualTo(jvmOutput);
+            final ProcessResult nativeRun = process(project, List.of(nativeBinary(project, "socket-so-linger-clamp").toString()));
+            if (jvmRun.exitCode() == 0) {
+                assertThat(jvmRun.stderr()).isEmpty();
+                assertThat(jvmRun.stdout()).isEqualTo("65535\n");
+                assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+                assertThat(nativeRun.stderr()).isEmpty();
+                assertThat(nativeRun.stdout()).isEqualTo(jvmRun.stdout());
+            } else {
+                assertThat(jvmRun.stderr()).contains("java.net.SocketException", "java.net.Socket.setSoLinger(");
+                assertThat(jvmRun.stdout()).isEmpty();
+                assertThat(nativeRun.exitCode()).isNotZero();
+                assertThat(nativeRun.stderr()).contains("socket SO_LINGER update failed");
+                assertThat(nativeRun.stdout()).isEmpty();
+            }
             accepted.get(5, TimeUnit.SECONDS);
         }
+    }
+
+    @Test
+    void socketSoLingerClampBeforeConnectBuildsAndRuns() throws Exception {
+        final Path project = project("socket-so-linger-clamp-before-connect");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.Socket;
+
+            public final class Main {
+                public static void main(final String[] args) throws Exception {
+                    final Socket socket = new Socket();
+                    socket.setSoLinger(true, 65_534);
+                    System.out.println(socket.getSoLinger());
+                    socket.setSoLinger(true, 65_535);
+                    System.out.println(socket.getSoLinger());
+                    socket.setSoLinger(true, 65_536);
+                    System.out.println(socket.getSoLinger());
+                    socket.setSoLinger(true, Integer.MAX_VALUE);
+                    System.out.println(socket.getSoLinger());
+                    socket.setSoLinger(false, -1);
+                    System.out.println(socket.getSoLinger());
+                    socket.setSoLinger(true, 0);
+                    System.out.println(socket.getSoLinger());
+                    socket.close();
+                }
+            }
+            """);
+
+        // JavaN stores options until connect: prove the clamp even when the OS rejects a large timeout.
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(nativeBinary(project, "socket-so-linger-clamp-before-connect").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stderr()).isEmpty();
+        assertThat(nativeRun.stdout()).isEqualTo("65534\n65535\n65535\n65535\n-1\n0\n");
     }
 
     @Test

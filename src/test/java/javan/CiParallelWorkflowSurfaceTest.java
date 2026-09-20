@@ -444,7 +444,7 @@ final class CiParallelWorkflowSurfaceTest {
             .contains("<id>quick</id>", "<id>standard</id>")
             .contains("<javan.test.excluded-groups>native,packaging,external</javan.test.excluded-groups>")
             .contains("<javan.test.excluded-groups>packaging,external</javan.test.excluded-groups>");
-        assertThat(Files.readString(Path.of("doc/spec/testing.md")))
+        assertThat(Files.readString(Path.of("docs/specs/testing.md")))
             .contains("./mvnw -Pquick verify")
             .contains("./mvnw -Pstandard verify")
             .contains("./mvnw clean verify")

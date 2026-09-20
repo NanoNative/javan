@@ -1,5 +1,21 @@
 # Toolchains
 
+## Human Review
+
+Owns JDK discovery, explicit managed installation and the optional JDK facade.
+The existing source/build/CLI behavior is retained. It does not authorize changing the
+user's environment automatically. New providers require verified metadata, provenance
+and failure/rollback behavior before implementation.
+
+## Requirements And Acceptance
+
+| ID | Contract | Public evidence / gap |
+| --- | --- | --- |
+| JDK-001 | Ordinary Java/Javac invocation through the facade MUST delegate to the selected real JDK with the documented reserved-option behavior. | [Facade launcher integration](../../src/test/java/javan/toolchain/facade/JdkFacadeLauncherIntegrationTest.java); failed compilation is not analyzed. |
+| JDK-002 | Installation MUST preserve vendor JDKs, existing non-JavaN paths and user environment settings. | [Facade store](../../src/test/java/javan/toolchain/facade/JdkFacadeStoreTest.java), [toolchain manager](../../src/test/java/javan/toolchain/ToolchainManagerTest.java); no automatic profile edits. |
+| JDK-003 | Native toolchain failure or target mismatch MUST be visible before native generation; managed downloads MUST validate their provenance/checksum. | [Toolchain foundation](../../src/test/java/javan/toolchain/ToolchainFoundationTest.java), [provisioner tests](../../src/test/java/javan/toolchain/JdkProvisionerTest.java); wider provider proof remains scoped. |
+| DIST-002 | Integrations MUST delegate compilation and reports rather than maintain a second support model. | Facade tests above; external plugins remain separate products under [ADR 0001](../adr/0001-core-repo-boundary.md). |
+
 Javan uses real local tools. It does not replace `javac`, ship fake JDK classes, or
 silently change `PATH` or `JAVA_HOME`.
 
@@ -94,6 +110,19 @@ javac --release 25 -d target/classes --class-path libs/acme.jar \
 
 A failed compile is never analyzed. A successful compile without `-d` gets an invocation
 report but no guessed class directory. Reports are written below `.javan/reports/`.
+
+## Integration Boundary
+
+Optional Maven/Gradle plugins find or download JavaN, run the normal Java build, pass its
+output folders to the CLI, attach requested artifacts and surface the same reports. An IDE
+integration renders report JSON and may invoke that build sequence; it must not infer support
+independently. These adapters must not duplicate compiler logic. Their product details belong
+outside this repository under [ADR 0001](../adr/0001-core-repo-boundary.md).
+
+Additional installers and integrations need their own public smoke before support is claimed;
+they add no implicit first-release blocker. Global installations remain explicit, versioned,
+checksummed and reproducible. [Compiler](compiler.md#proposed-extensions) owns proposed build
+discovery/output extensions, and [release](release.md) owns shipping artifacts.
 
 ## Boundaries
 

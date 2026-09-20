@@ -1,5 +1,24 @@
 # Native ABI Contract
 
+## Human Review
+
+Owns supported exports/imports, C value representation, handles, caller ownership and
+cross-boundary failures. The detailed ABI versions below remain authoritative; the
+documentation reorganization changes none of them. [Memory](memory-runtime-correctness.md)
+owns collector behavior.
+
+Before wider object types, callbacks or unsupported thread use, agree representation,
+lifetime, error transport and binding compatibility. Do not infer general JNI support
+from configured primitive imports.
+
+## Requirements And Acceptance
+
+| ID | Contract | Public evidence / gap |
+| --- | --- | --- |
+| ABI-001 | Supported exports MUST preserve values, ownership and explicit failure results across repeated native calls. | [Native-library package tests](../../src/test/java/javan/CliPackagingIntegrationTest.java), [library sanitizer](../../.github/scripts/sanitizer-library-smoke.sh). |
+| ABI-002 | Borrowed inputs and owned results MUST follow the exact lifetime/free rules below, including retained Java references and failure cleanup. | Constrained-heap, reuse, handle and thread-detach cases in those public proofs; unsupported binding types remain excluded. |
+| ABI-003 | Configured native imports MUST compile, link and execute with their declared shape, or fail early for an invalid reachable declaration. | [Import CLI tests](../../src/test/java/javan/CliNativeImportBuildIntegrationTest.java), [package import proof](../../.github/scripts/verify-package-native-imports.sh), [recorded target evidence](../verification.md#release-foundation). |
+
 Status: implemented C ABI v2 baseline for primitive, `String`, `byte[]`, `void`, and
 opaque GC-rooted object-handle exports. ABI v1 direct export symbols remain available
 for compatibility, and ABI v2 adds C `javan_try_*` result wrappers with owned diagnostic
@@ -378,6 +397,14 @@ Planned gates:
 - virtual-thread scheduler support
 - carrier pinning and blocking diagnostics
 - per-export reentrancy/thread-safety report
+
+## Host Math Linkage
+
+Static C consumers reaching `Math.floor(double)` do not need `-lm`: its generated binary64
+implementation uses integer masks. Consumers reaching `Math.atan2(double, double)` must link
+the host math library on Linux. Generated Rust and Go bindings declare that Linux-only
+dependency; direct C consumers own their linker command. Earlier platform proof is scoped in
+[verification history](../verification.md#static-library-linkage).
 
 ## Generated Tests
 

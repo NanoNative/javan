@@ -14,7 +14,7 @@ javan is a minimal native-first Java toolchain. Contributions should keep Java s
 - Use Java 25. Compatibility verification rejects another feature release before it can
   rewrite versioned matrix keys.
 - Use Maven for local verification. The canonical quick, standard, and full commands are in
-  [Testing Policy](doc/spec/testing.md#local-verification).
+  [Testing Policy](docs/specs/testing.md#local-verification).
 - Install a native C toolchain when testing generated binaries or the full release gate.
 - The release gate builds Javan through Javan's own native backend.
 
@@ -31,20 +31,32 @@ required.
 When a tested behavior becomes supported, register its named scenario with the appropriate
 `pass(...)`, `scoped(...)`, or `target(...)` entry in
 `CompatibilityReports.supportRows()` and cover that entry in `CompatibilityReportsTest`.
-Do not edit `doc/status/support-matrix.md` or `doc/status/support-matrix.json` directly:
+Do not edit `docs/status/support-matrix.md` or `docs/status/support-matrix.json` directly:
 `mvn verify` generates both files from that canonical ledger. Commit the generated changes,
 then rerun `mvn verify`; the second run must report that compatibility status is current.
 
-The tracked JDK inventory is pinned in `pom.xml` to Eclipse Temurin 25.0.1 on Linux x64.
-Other Java 25 environments leave that reference snapshot unchanged while still producing
-their active-JDK reports. CI requires the exact reference environment and gates the snapshot
-through the same Maven lifecycle.
+The tracked JDK inventory describes Java 25 and is refreshed only on canonical Linux x64.
+Other Java 25 environments produce active-JDK reports without rewriting that snapshot.
+It is not pinned to a vendor or patch version. The complete source/destination and
+stale-report behavior lives in [Testing Policy](docs/specs/testing.md#generated-compatibility-status).
 
 Full local release gate:
 
 ```sh
 sh .github/scripts/verify-release.sh
 ```
+
+## Specifications And Decisions
+
+Start with the [documentation map](docs/README.md) and [current roadmap](docs/roadmap.md).
+Behavior and acceptance belong in `docs/specs/`; significant rationale belongs in `docs/adr/`.
+Keep requirement and decision IDs stable. Mark a proposal or unresolved choice explicitly;
+do not turn a passing implementation test into approval for a new product contract.
+The roadmap links those requirements and owns delivery sequence. Historical measurements
+belong in `docs/verification.md`, with their commit, command, scope and limitations.
+
+Generated support files remain owned by `CompatibilityReports.supportRows()` and Maven
+verification. Moving documentation does not change `javan compat`'s public output paths.
 
 ## Code Standards
 
