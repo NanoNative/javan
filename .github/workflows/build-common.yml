@@ -36,6 +36,11 @@ on:
         required: false
         default: ''
         type: string
+      prepare_publication:
+        description: Prepare verified artifacts without publishing
+        required: false
+        default: false
+        type: boolean
       snapshot:
         description: Append -SNAPSHOT to the UTC date version
         required: false

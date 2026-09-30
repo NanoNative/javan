@@ -233,6 +233,29 @@ final class WorkflowPolicySurfaceTest {
     }
 
     @Test
+    void manualVerificationCanPrepareReleaseEvidenceWithoutPublishing() throws Exception {
+        final String common = Files.readString(BUILD_COMMON);
+        final String dispatch = common.substring(common.indexOf("  workflow_dispatch:"), common.indexOf("\npermissions:"));
+
+        assertThat(dispatch).contains("""
+                  prepare_publication:
+                    description: Prepare verified artifacts without publishing
+                    required: false
+                    default: false
+                    type: boolean
+            """);
+        assertThat(common)
+            .contains("package_scope: ${{ inputs.prepare_publication && 'full' || 'bootstrap' }}")
+            .contains("enabled: ${{ inputs.prepare_publication }}")
+            .contains("name: build-workspace");
+        for (final Path workflow : List.of(BUILD_COMMON, NATIVE_PROOF, PLATFORM_PROOF)) {
+            assertThat(Files.readString(workflow))
+                .as(workflow + " verifies and stages artifacts without publishing")
+                .doesNotContain(": write", "gh release", "git tag", "publish-github-packages.yml", "publish-central.yml", "container-images.yml");
+        }
+    }
+
+    @Test
     void publicationWaitsForEnabledProofsButAllowsTheDisabledPackageMatrix() throws Exception {
         final String common = Files.readString(BUILD_COMMON);
         final String publication = common.substring(common.indexOf("  prepare-publication:"));
