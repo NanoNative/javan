@@ -256,6 +256,17 @@ final class WorkflowPolicySurfaceTest {
     }
 
     @Test
+    void reusablePackageCallsConvertManualGenerationToANumber() throws Exception {
+        assertThat(Files.readAllLines(BUILD_COMMON).stream()
+            .filter(line -> line.stripLeading().startsWith("bootstrap_generation:"))
+            .filter(line -> line.contains("inputs.bootstrap_generation")))
+            .as("manual dispatch can supply a string even for a number input")
+            .isNotEmpty()
+            .allSatisfy(line -> assertThat(line)
+                .contains("${{ fromJSON(format('{0}', inputs.bootstrap_generation)) }}"));
+    }
+
+    @Test
     void publicationWaitsForEnabledProofsButAllowsTheDisabledPackageMatrix() throws Exception {
         final String common = Files.readString(BUILD_COMMON);
         final String publication = common.substring(common.indexOf("  prepare-publication:"));

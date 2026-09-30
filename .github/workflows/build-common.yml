@@ -394,7 +394,8 @@ jobs:
       proof: package-self-host
       enabled: true
       version: ${{ needs.build-info.outputs.resolved_version }}
-      bootstrap_generation: ${{ inputs.bootstrap_generation }}
+      # Manual dispatch can deliver numeric inputs as strings; reusable calls are strict.
+      bootstrap_generation: ${{ fromJSON(format('{0}', inputs.bootstrap_generation)) }}
       bootstrap_source_artifact: ${{ inputs.bootstrap_generation == 3 && 'bootstrap-source-linux-x64' || '' }}
       package_scope: ${{ inputs.prepare_publication && 'full' || 'bootstrap' }}
       timeout_minutes: 90
@@ -441,7 +442,7 @@ jobs:
       proof: package-self-host
       enabled: ${{ matrix.enabled }}
       version: ${{ needs.build-info.outputs.resolved_version }}
-      bootstrap_generation: ${{ inputs.bootstrap_generation }}
+      bootstrap_generation: ${{ fromJSON(format('{0}', inputs.bootstrap_generation)) }}
       package_scope: ${{ inputs.prepare_publication && matrix.enabled && 'full' || 'bootstrap' }}
       # Generation three package proofs have measured at nearly an hour before the full ARM64 proof completes.
       timeout_minutes: ${{ inputs.bootstrap_generation == 3 && 90 || 60 }}
@@ -465,7 +466,7 @@ jobs:
       proof: package-self-host
       enabled: true
       version: ${{ needs.build-info.outputs.resolved_version }}
-      bootstrap_generation: ${{ inputs.bootstrap_generation }}
+      bootstrap_generation: ${{ fromJSON(format('{0}', inputs.bootstrap_generation)) }}
       bootstrap_source_artifact: ${{ inputs.bootstrap_generation == 3 && 'bootstrap-source-linux-x64' || '' }}
       # Snapshot publication needs the native artifact proof. Keep the heavier
       # full self-host proof for manual releases, where every target is gated.
