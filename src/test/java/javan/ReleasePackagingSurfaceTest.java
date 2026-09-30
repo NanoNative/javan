@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
@@ -1114,7 +1115,8 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     @TestFactory
     Stream<DynamicTest> selfHostCompilerDiagnosticsSurviveFailureAndSignals() {
         return Stream.of(
-            "success", "failure", "HUP", "INT", "TERM", "support-failure", "support-TERM", "probe-failure"
+            "success", "failure", "HUP", "INT", "TERM", "support-failure", "support-TERM", "probe-failure",
+            "resource-success", "resource-failure", "resource-HUP", "resource-INT", "resource-TERM", "resource-unavailable"
         ).map(mode -> DynamicTest.dynamicTest(mode, () -> {
             final Path root = Files.createTempDirectory(tempDir, "compiler diagnostics ");
             final Path scripts = Files.createDirectories(root.resolve(".github/scripts"));
@@ -1142,6 +1144,16 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
                 printf '%s\\n' 'compiler stdout retained'
                 printf '%s\\n' 'compiler stderr retained' >&2
                 case "$COMPILER_MODE" in
+                  resource-*)
+                    attempts=0
+                    while [ ! -f "$PROBE_CALLS.samples-ready" ]; do
+                      attempts=$((attempts + 1))
+                      [ "$attempts" -lt 200 ] || exit 24
+                      sleep 0.01
+                    done
+                    COMPILER_MODE=${COMPILER_MODE#resource-} ;;
+                esac
+                case "$COMPILER_MODE" in
                   failure) exit 23 ;;
                   HUP|INT|TERM) kill -"$COMPILER_MODE" "$PROOF_PID"; exit 23 ;;
                 esac
@@ -1166,21 +1178,44 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             writeExecutableScript(javan, "#!/bin/sh\nexit 0\n");
             final Path calls = root.resolve("probe-calls");
             final Path timings = root.resolve("timings.tsv");
-            final ProcessResult run = process(root, List.of("sh", "-c", """
-                export PROOF_PID=$$
-                exec sh .github/scripts/sanitizer-self-host-smoke.sh
-                """), Duration.ofSeconds(20), Map.of(
+            final Map<String, String> environment = new HashMap<>(Map.of(
                 "CC", compiler.toString(), "COMPILER_MODE", mode, "PROBE_FIXTURE", probe.toString(),
                 "PROBE_CALLS", calls.toString(), "JAVAN_BIN", javan.toString(), "TMPDIR", temporary.toString(),
                 "JAVAN_TIMING_LOG", timings.toString(), "JAVAN_SELF_HOST_REUSE_GENERATED", "true",
                 "JAVAN_SANITIZER_REQUIRED", "true", "ASAN_OPTIONS", "detect_leaks=1:halt_on_error=1"
             ));
+            if (mode.startsWith("resource-")) {
+                final Path bin = Files.createDirectories(root.resolve("bin"));
+                writeExecutableScript(bin.resolve("ps"), """
+                    #!/bin/sh
+                    printf '%s\\n' "$PPID" >> "$PROBE_CALLS.monitor-pids"
+                    [ "$COMPILER_MODE" != resource-unavailable ] || exit 1
+                    printf '%s\\n' '42 1 2048 compiler-fixture'
+                    """);
+                writeExecutableScript(bin.resolve("sleep"), """
+                    #!/bin/sh
+                    if [ "$1" = 10 ]; then
+                      printf '%s\\n' "$$" >> "$PROBE_CALLS.sleep-pids"
+                      if [ "$(wc -l < "$PROBE_CALLS.sleep-pids")" -ge 2 ]; then
+                        : > "$PROBE_CALLS.samples-ready"
+                        exec /bin/sleep 30
+                      fi
+                      exec /bin/sleep 0.01
+                    fi
+                    exec /bin/sleep "$@"
+                    """);
+                environment.put("PATH", bin + java.io.File.pathSeparator + System.getenv("PATH"));
+            }
+            final ProcessResult run = process(root, List.of("sh", "-c", """
+                export PROOF_PID=$$
+                exec sh .github/scripts/sanitizer-self-host-smoke.sh
+                """), Duration.ofSeconds(20), environment);
             final int expectedExit = switch (mode) {
-                case "success" -> 0;
-                case "failure", "support-failure" -> 1;
-                case "HUP" -> 129;
-                case "INT" -> 130;
-                case "TERM", "support-TERM" -> 143;
+                case "success", "resource-success", "resource-unavailable" -> 0;
+                case "failure", "support-failure", "resource-failure" -> 1;
+                case "HUP", "resource-HUP" -> 129;
+                case "INT", "resource-INT" -> 130;
+                case "TERM", "support-TERM", "resource-TERM" -> 143;
                 case "probe-failure" -> 19;
                 default -> throw new IllegalArgumentException(mode);
             };
@@ -1192,7 +1227,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             } else {
                 timing = Files.readString(timings);
                 assertThat(timing.lines().toList()).hasSize(1);
-                final String status = mode.equals("success") || mode.equals("probe-failure") ? "pass" : "fail";
+                final String status = expectedExit == 0 || mode.equals("probe-failure") ? "pass" : "fail";
                 assertThat(timing).containsPattern("sanitizer_compile\\t\\d+\\t" + status + "\\tfalse\\t");
             }
             if (mode.equals("success") || mode.equals("failure")) {
@@ -1218,6 +1253,28 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
                     assertThat(run.stderr()).contains("probe failed");
                 } else {
                     assertThat(calls).doesNotExist();
+                }
+            }
+            if (mode.startsWith("resource-")) {
+                assertThat(run.stdout().lines().filter(line -> line.startsWith("Resource sample:")).count())
+                    .isGreaterThanOrEqualTo(2);
+                assertThat(run.stdout()).contains(mode.equals("resource-unavailable")
+                    ? "process_memory=unavailable" : "compiler-fixture");
+                if (Files.isReadable(Path.of("/proc/meminfo"))) {
+                    assertThat(run.stdout()).containsPattern("MemAvailable:\\s+\\d+ kB");
+                } else {
+                    assertThat(run.stdout()).contains("host_memory=unavailable");
+                }
+                if (Files.isReadable(Path.of("/proc/vmstat"))) {
+                    assertThat(run.stdout()).containsPattern("oom_kill \\d+");
+                }
+                for (final String suffix : List.of("monitor-pids", "sleep-pids")) {
+                    final List<String> pids = Files.readAllLines(root.resolve("probe-calls." + suffix));
+                    assertThat(pids).hasSizeGreaterThanOrEqualTo(2);
+                    for (final String pid : pids.stream().distinct().toList()) {
+                        assertThat(ProcessHandle.of(Long.parseLong(pid)).map(ProcessHandle::isAlive).orElse(false))
+                            .as("resource observer process %s must be reaped", pid).isFalse();
+                    }
                 }
             }
             try (final Stream<Path> remaining = Files.list(temporary)) {

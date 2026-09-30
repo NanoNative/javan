@@ -18,11 +18,32 @@ REPORTS=$ROOT/$TARGET_PROJECT/.javan/reports
 
 mkdir -p "$TMP"
 sanitizer_compile_started=
+resource_monitor_pid=
+resource_monitor_starting=false
+interrupted_code=
+handle_signal() {
+  printf 'self-host sanitizer interrupted (%s)\n' "$1" >&2
+  interrupted_code=$2
+  # Capture the new child before cleanup, even if interrupted during its launch.
+  if [ "$resource_monitor_starting" = false ]; then
+    exit "$interrupted_code"
+  fi
+}
+
+stop_resource_monitor() {
+  if [ -n "$resource_monitor_pid" ]; then
+    kill -TERM "$resource_monitor_pid" 2>/dev/null || :
+    wait "$resource_monitor_pid" 2>/dev/null || :
+    resource_monitor_pid=
+  fi
+}
+
 cleanup() {
   cleanup_code=$?
   trap - EXIT
   trap '' HUP INT TERM
   set +e
+  stop_resource_monitor
   if [ -n "$sanitizer_compile_started" ]; then
     javan_timing_record sanitizer_compile "$sanitizer_compile_started" fail false
     if [ -s "${javan_timing_measure_file:-}" ]; then
@@ -46,9 +67,9 @@ cleanup() {
   exit "$cleanup_code"
 }
 trap cleanup EXIT
-trap 'printf "%s\n" "self-host sanitizer interrupted (HUP)" >&2; exit 129' HUP
-trap 'printf "%s\n" "self-host sanitizer interrupted (INT)" >&2; exit 130' INT
-trap 'printf "%s\n" "self-host sanitizer interrupted (TERM)" >&2; exit 143' TERM
+trap 'handle_signal HUP 129' HUP
+trap 'handle_signal INT 130' INT
+trap 'handle_signal TERM 143' TERM
 
 counter_value() {
   file=$1
@@ -501,6 +522,52 @@ EOF
 
 set +e
 sanitizer_compile_started=$(javan_timing_now)
+# Report while the compiler is alive: a runner shutdown can also kill the final timing report.
+resource_monitor_starting=true
+(
+  monitor_sleep_pid=
+  monitor_stopped=false
+  trap 'trap "" HUP INT TERM
+    if [ -n "$monitor_sleep_pid" ]; then
+      kill -TERM "$monitor_sleep_pid" 2>/dev/null || :
+      wait "$monitor_sleep_pid" 2>/dev/null || :
+    fi' EXIT
+  trap 'monitor_stopped=true' HUP INT TERM
+  while [ "$monitor_stopped" = false ]; do
+    printf '\nResource sample: sanitizer_compile elapsed_seconds=%s\n' \
+      "$(( $(javan_timing_now) - sanitizer_compile_started ))"
+    if [ -r /proc/meminfo ]; then
+      awk '/^(MemTotal|MemAvailable|SwapTotal|SwapFree):/ { print; fields++ }
+        END { if (fields < 4) print "host_memory=incomplete" }' /proc/meminfo
+    else
+      printf '%s\n' 'host_memory=unavailable'
+    fi
+    if [ -r /proc/vmstat ]; then
+      awk '$1 == "oom_kill" { print; found=1 }
+        END { if (!found) print "oom_kill=unavailable" }' /proc/vmstat
+    else
+      printf '%s\n' 'oom_kill=unavailable'
+    fi
+    if ps -eo pid=,ppid=,rss=,comm= > "$TMP/compiler-processes" 2>/dev/null; then
+      printf '%s\n' 'Largest processes: PID PPID RSS_KiB COMMAND'
+      LC_ALL=C sort -k3,3nr "$TMP/compiler-processes" | head -n 6
+    else
+      printf '%s\n' 'process_memory=unavailable'
+    fi
+    sleep 10 >/dev/null 2>&1 &
+    monitor_sleep_pid=$!
+    if [ "$monitor_stopped" = true ]; then
+      exit 0
+    fi
+    wait "$monitor_sleep_pid" || exit 0
+    monitor_sleep_pid=
+  done
+) &
+resource_monitor_pid=$!
+resource_monitor_starting=false
+if [ -n "$interrupted_code" ]; then
+  exit "$interrupted_code"
+fi
 # shellcheck disable=SC2016,SC2086
 TMPDIR=$TMP javan_timing_measure sh -c '
   cd "$1" || exit
@@ -513,6 +580,7 @@ TMPDIR=$TMP javan_timing_measure sh -c '
   "$TMP/self-host-counter-wrapper.c" $PROGRAM_SOURCES javan_runtime.c \
   -o "$TMP/javan-self-host-sanitizer-probe"
 compile_code=$?
+stop_resource_monitor
 compile_status=pass
 if [ "$compile_code" -ne 0 ]; then
   compile_status=fail
