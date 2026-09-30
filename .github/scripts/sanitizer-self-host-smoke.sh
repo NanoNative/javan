@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-ROOT=$(CDPATH= cd "$(dirname "$0")/../.." && pwd)
+ROOT=$(CDPATH='' cd "$(dirname "$0")/../.." && pwd)
 . "$ROOT/.github/scripts/timing-report.sh"
 . "$ROOT/.github/scripts/sanitizer-common.sh"
 . "$ROOT/.github/scripts/generated-sources.sh"
@@ -17,7 +17,38 @@ REUSE_GENERATED=${JAVAN_SELF_HOST_REUSE_GENERATED:-false}
 REPORTS=$ROOT/$TARGET_PROJECT/.javan/reports
 
 mkdir -p "$TMP"
-trap 'rm -rf "$TMP"' EXIT HUP INT TERM
+sanitizer_compile_started=
+cleanup() {
+  cleanup_code=$?
+  trap - EXIT
+  trap '' HUP INT TERM
+  set +e
+  if [ -n "$sanitizer_compile_started" ]; then
+    javan_timing_record sanitizer_compile "$sanitizer_compile_started" fail false
+    if [ -s "${javan_timing_measure_file:-}" ]; then
+      printf '\n--- interrupted compiler resource report\n' >&2
+      cat "$javan_timing_measure_file" >&2
+    fi
+  fi
+  if [ "$cleanup_code" -ne 0 ]; then
+    # Print diagnostics before removing them, including when compilation was interrupted.
+    for compiler in support-cc cc leak-cc; do
+      for stream in out err; do
+        diagnostic=$TMP/$compiler.$stream
+        if [ -s "$diagnostic" ]; then
+          printf '\n--- %s\n' "$compiler.$stream" >&2
+          cat "$diagnostic" >&2
+        fi
+      done
+    done
+  fi
+  rm -rf "$TMP"
+  exit "$cleanup_code"
+}
+trap cleanup EXIT
+trap 'printf "%s\n" "self-host sanitizer interrupted (HUP)" >&2; exit 129' HUP
+trap 'printf "%s\n" "self-host sanitizer interrupted (INT)" >&2; exit 130' INT
+trap 'printf "%s\n" "self-host sanitizer interrupted (TERM)" >&2; exit 143' TERM
 
 counter_value() {
   file=$1
@@ -346,7 +377,6 @@ reset_aggregate
 if [ "$support_compile_code" -ne 0 ]; then
   if [ "$SANITIZER_REQUIRED" = "true" ]; then
     printf '%s\n' "sanitizer compiler flags unavailable for required self-host run: $CC" >&2
-    cat "$TMP/support-cc.err" >&2
     exit 1
   fi
   write_sanitizer_proof "skipped" -1 "sanitizer compiler flags unavailable" "false"
@@ -470,25 +500,30 @@ int main(int argc, char** argv) {
 EOF
 
 set +e
-# shellcheck disable=SC2086
 sanitizer_compile_started=$(javan_timing_now)
-# shellcheck disable=SC2086
-(cd "$GENERATED" && "$CC" $SANITIZER_FLAGS \
+# shellcheck disable=SC2016,SC2086
+TMPDIR=$TMP javan_timing_measure sh -c '
+  cd "$1" || exit
+  compiler_out=$2
+  compiler_err=$3
+  shift 3
+  exec "$@" >"$compiler_out" 2>"$compiler_err"
+' javan-cc "$GENERATED" "$TMP/cc.out" "$TMP/cc.err" "$CC" $SANITIZER_FLAGS \
   -DJAVAN_PROGRAM_MAIN=javan_generated_main -I . \
   "$TMP/self-host-counter-wrapper.c" $PROGRAM_SOURCES javan_runtime.c \
-  -o "$TMP/javan-self-host-sanitizer-probe") \
-  >"$TMP/cc.out" 2>"$TMP/cc.err"
+  -o "$TMP/javan-self-host-sanitizer-probe"
 compile_code=$?
 compile_status=pass
 if [ "$compile_code" -ne 0 ]; then
   compile_status=fail
 fi
-javan_timing_record sanitizer_compile "$sanitizer_compile_started" "$compile_status" false
+javan_timing_record sanitizer_compile "$sanitizer_compile_started" "$compile_status" false \
+  "$javan_timing_measure_cpu_seconds" "$javan_timing_measure_max_rss_bytes" "$javan_timing_measure_source"
+sanitizer_compile_started=
 set -e
 
 if [ "$compile_code" -ne 0 ]; then
   printf '%s\n' "sanitizer self-host runtime compile failed" >&2
-  cat "$TMP/cc.err" >&2
   exit 1
 fi
 
@@ -527,7 +562,6 @@ if [ "$probe_run_code" -eq 88 ] || grep -F "detect_leaks is not supported" "$TMP
     if [ "$leak_compile_code" -ne 0 ]; then
       if [ "$SANITIZER_REQUIRED" = "true" ]; then
         printf '%s\n' "macOS self-host leaks fallback compile failed for required run" >&2
-        cat "$TMP/leak-cc.err" >&2
         exit 1
       fi
       printf '%s\n' "warning - macOS self-host leaks fallback compile failed" >&2

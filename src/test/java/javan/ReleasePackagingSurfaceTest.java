@@ -1111,6 +1111,121 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         }
     }
 
+    @TestFactory
+    Stream<DynamicTest> selfHostCompilerDiagnosticsSurviveFailureAndSignals() {
+        return Stream.of(
+            "success", "failure", "HUP", "INT", "TERM", "support-failure", "support-TERM", "probe-failure"
+        ).map(mode -> DynamicTest.dynamicTest(mode, () -> {
+            final Path root = Files.createTempDirectory(tempDir, "compiler diagnostics ");
+            final Path scripts = Files.createDirectories(root.resolve(".github/scripts"));
+            for (final String name : List.of("sanitizer-self-host-smoke.sh", "sanitizer-common.sh",
+                "generated-sources.sh", "timing-report.sh")) {
+                Files.copy(REPO_ROOT.resolve(".github/scripts/" + name), scripts.resolve(name));
+            }
+            final Path generated = Files.createDirectories(root.resolve("target/.javan/generated"));
+            for (final String name : List.of("javan_program.h", "javan_runtime.c", "main.c")) {
+                Files.writeString(generated.resolve(name), "fixture\n");
+            }
+            Files.writeString(generated.resolve("javan_program.sources"), "javan-generated-sources-v1\nmain.c\n");
+            final Path temporary = Files.createDirectories(root.resolve("temporary"));
+            final Path compiler = root.resolve("compiler");
+            writeExecutableScript(compiler, """
+                #!/bin/sh
+                set -eu
+                case "$*" in
+                  *sanitizer-support.c*)
+                    case "$COMPILER_MODE" in
+                      support-*) COMPILER_MODE=${COMPILER_MODE#support-} ;;
+                      *) exit 0 ;;
+                    esac ;;
+                esac
+                printf '%s\\n' 'compiler stdout retained'
+                printf '%s\\n' 'compiler stderr retained' >&2
+                case "$COMPILER_MODE" in
+                  failure) exit 23 ;;
+                  HUP|INT|TERM) kill -"$COMPILER_MODE" "$PROOF_PID"; exit 23 ;;
+                esac
+                while [ "$1" != -o ]; do shift; done
+                cp "$PROBE_FIXTURE" "$2"
+                chmod +x "$2"
+                """);
+            final Path probe = root.resolve("probe");
+            writeExecutableScript(probe, """
+                #!/bin/sh
+                set -eu
+                printf '%s\\n' "$1" >> "$PROBE_CALLS"
+                if [ "$COMPILER_MODE" = probe-failure ]; then
+                  printf '%s\\n' 'probe failed' >&2
+                  exit 19
+                fi
+                printf '%s\\n' live_allocations=0 live_bytes=0 peak_live_bytes=16 total_allocations=1 \\
+                  gc_collections=1 gc_collected_allocations=0 gc_collected_bytes=0 root_frame_depth=0 \\
+                  frame_root_count=0 > "$JAVAN_SANITIZER_PROOF_COUNTERS"
+                """);
+            final Path javan = root.resolve("javan");
+            writeExecutableScript(javan, "#!/bin/sh\nexit 0\n");
+            final Path calls = root.resolve("probe-calls");
+            final Path timings = root.resolve("timings.tsv");
+            final ProcessResult run = process(root, List.of("sh", "-c", """
+                export PROOF_PID=$$
+                exec sh .github/scripts/sanitizer-self-host-smoke.sh
+                """), Duration.ofSeconds(20), Map.of(
+                "CC", compiler.toString(), "COMPILER_MODE", mode, "PROBE_FIXTURE", probe.toString(),
+                "PROBE_CALLS", calls.toString(), "JAVAN_BIN", javan.toString(), "TMPDIR", temporary.toString(),
+                "JAVAN_TIMING_LOG", timings.toString(), "JAVAN_SELF_HOST_REUSE_GENERATED", "true",
+                "JAVAN_SANITIZER_REQUIRED", "true", "ASAN_OPTIONS", "detect_leaks=1:halt_on_error=1"
+            ));
+            final int expectedExit = switch (mode) {
+                case "success" -> 0;
+                case "failure", "support-failure" -> 1;
+                case "HUP" -> 129;
+                case "INT" -> 130;
+                case "TERM", "support-TERM" -> 143;
+                case "probe-failure" -> 19;
+                default -> throw new IllegalArgumentException(mode);
+            };
+            assertThat(run.exitCode()).as("stdout=%s stderr=%s", run.stdout(), run.stderr()).isEqualTo(expectedExit);
+            final String timing;
+            if (mode.startsWith("support-")) {
+                assertThat(timings).doesNotExist();
+                timing = "";
+            } else {
+                timing = Files.readString(timings);
+                assertThat(timing.lines().toList()).hasSize(1);
+                final String status = mode.equals("success") || mode.equals("probe-failure") ? "pass" : "fail";
+                assertThat(timing).containsPattern("sanitizer_compile\\t\\d+\\t" + status + "\\tfalse\\t");
+            }
+            if (mode.equals("success") || mode.equals("failure")) {
+                final ProcessResult measurement = process(root, List.of("sh", "-c", """
+                    . .github/scripts/timing-report.sh
+                    javan_timing_measure true
+                    printf '%s' "$javan_timing_measure_source"
+                    """), Duration.ofSeconds(20), Map.of());
+                assertThat(measurement.exitCode()).isZero();
+                if (!measurement.stdout().equals("unavailable")) {
+                    assertThat(timing).containsPattern("\\t[0-9.]+\\t[0-9]+\\t(?:gnu|bsd)-time\\n");
+                }
+            }
+            if (expectedExit == 0) {
+                assertThat(run.stdout()).contains("ok - self-host sanitizer smoke passed");
+                assertThat(run.stderr()).isEmpty();
+                assertThat(Files.readAllLines(calls)).containsExactly("--version", "check", "report", "check", "build");
+            } else {
+                assertThat(run.stderr()).contains("compiler stdout retained", "compiler stderr retained")
+                    .doesNotContain("No such file", "cannot open");
+                if (mode.equals("probe-failure")) {
+                    assertThat(Files.readAllLines(calls)).containsExactly("--version");
+                    assertThat(run.stderr()).contains("probe failed");
+                } else {
+                    assertThat(calls).doesNotExist();
+                }
+            }
+            try (final Stream<Path> remaining = Files.list(temporary)) {
+                assertThat(remaining.toList()).isEmpty();
+            }
+        }));
+    }
+
     @Test
     void timingReporterWritesMachineAndHumanReadablePhaseComparisons() throws Exception {
         final Path runner = tempDir.resolve("timing-report-test.sh");
@@ -1118,7 +1233,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         final Path json = tempDir.resolve("timings.json");
         final Path markdown = tempDir.resolve("timings.md");
         final Path gnuTime = tempDir.resolve("gnu-time.txt");
-        Files.writeString(gnuTime, "0.12 0.34 1024\n");
+        Files.writeString(gnuTime, "Command exited with non-zero status 7\n0.12 0.34 1024\n");
         Files.writeString(runner, """
             set -eu
             . "$1"
