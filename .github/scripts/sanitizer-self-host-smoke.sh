@@ -667,5 +667,6 @@ assert_at_least "GC collected allocations" "$AGG_GC_COLLECTED_ALLOCATIONS" "${JA
 assert_at_least "GC collected bytes" "$AGG_GC_COLLECTED_BYTES" "${JAVAN_SANITIZER_SELF_HOST_MIN_GC_COLLECTED_BYTES:-0}"
 
 write_sanitizer_proof "pass" 0 "$LEAK_STATUS" "false"
+cat "$REPORTS/sanitizer-proof.json"
 "$JAVAN" report "$TARGET_PROJECT" >/dev/null
 printf '%s\n' "ok - self-host sanitizer smoke passed for $TARGET_CLASSES ($LEAK_STATUS)"

@@ -1255,6 +1255,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
                 assertThat(Files.readAllLines(calls)).containsExactly("--version", "check", "report", "check", "build");
                 assertThat(Files.readString(root.resolve("target/.javan/reports/sanitizer-proof.json")))
                     .contains("\"cc\": \"" + (mode.equals("default-compiler") ? "clang" : compiler) + "\"");
+                assertThat(run.stdout()).contains(Files.readString(root.resolve("target/.javan/reports/sanitizer-proof.json")));
             } else {
                 assertThat(run.stderr()).contains("compiler stdout retained", "compiler stderr retained")
                     .doesNotContain("No such file", "cannot open");
