@@ -6,7 +6,8 @@ ROOT=$(CDPATH='' cd "$(dirname "$0")/../.." && pwd)
 . "$ROOT/.github/scripts/sanitizer-common.sh"
 . "$ROOT/.github/scripts/generated-sources.sh"
 TMP=${TMPDIR:-/tmp}/javan-self-host-sanitizer-$$
-CC=${CC:-cc}
+# GCC's sanitizer compilation of the generated self-host exhausts hosted-runner memory.
+CC=${CC:-clang}
 SANITIZER_FLAGS=${SANITIZER_FLAGS:-"-fsanitize=address,undefined -fno-omit-frame-pointer"}
 SANITIZER_REQUIRED=${JAVAN_SANITIZER_REQUIRED:-false}
 TARGET_PROJECT=${JAVAN_SELF_HOST_TARGET_PROJECT:-target}

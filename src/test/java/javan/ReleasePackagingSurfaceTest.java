@@ -1116,7 +1116,8 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     Stream<DynamicTest> selfHostCompilerDiagnosticsSurviveFailureAndSignals() {
         return Stream.of(
             "success", "failure", "HUP", "INT", "TERM", "support-failure", "support-TERM", "probe-failure",
-            "resource-success", "resource-failure", "resource-HUP", "resource-INT", "resource-TERM", "resource-unavailable"
+            "resource-success", "resource-failure", "resource-HUP", "resource-INT", "resource-TERM", "resource-unavailable",
+            "default-compiler"
         ).map(mode -> DynamicTest.dynamicTest(mode, () -> {
             final Path root = Files.createTempDirectory(tempDir, "compiler diagnostics ");
             final Path scripts = Files.createDirectories(root.resolve(".github/scripts"));
@@ -1184,6 +1185,13 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
                 "JAVAN_TIMING_LOG", timings.toString(), "JAVAN_SELF_HOST_REUSE_GENERATED", "true",
                 "JAVAN_SANITIZER_REQUIRED", "true", "ASAN_OPTIONS", "detect_leaks=1:halt_on_error=1"
             ));
+            if (mode.equals("default-compiler")) {
+                final Path bin = Files.createDirectories(root.resolve("bin"));
+                Files.copy(compiler, bin.resolve("clang"));
+                writeExecutableScript(bin.resolve("cc"), "#!/bin/sh\nexit 25\n");
+                environment.put("CC", "");
+                environment.put("PATH", bin + java.io.File.pathSeparator + System.getenv("PATH"));
+            }
             if (mode.startsWith("resource-")) {
                 final Path bin = Files.createDirectories(root.resolve("bin"));
                 writeExecutableScript(bin.resolve("ps"), """
@@ -1211,7 +1219,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
                 exec sh .github/scripts/sanitizer-self-host-smoke.sh
                 """), Duration.ofSeconds(20), environment);
             final int expectedExit = switch (mode) {
-                case "success", "resource-success", "resource-unavailable" -> 0;
+                case "success", "resource-success", "resource-unavailable", "default-compiler" -> 0;
                 case "failure", "support-failure", "resource-failure" -> 1;
                 case "HUP", "resource-HUP" -> 129;
                 case "INT", "resource-INT" -> 130;
@@ -1245,6 +1253,8 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
                 assertThat(run.stdout()).contains("ok - self-host sanitizer smoke passed");
                 assertThat(run.stderr()).isEmpty();
                 assertThat(Files.readAllLines(calls)).containsExactly("--version", "check", "report", "check", "build");
+                assertThat(Files.readString(root.resolve("target/.javan/reports/sanitizer-proof.json")))
+                    .contains("\"cc\": \"" + (mode.equals("default-compiler") ? "clang" : compiler) + "\"");
             } else {
                 assertThat(run.stderr()).contains("compiler stdout retained", "compiler stderr retained")
                     .doesNotContain("No such file", "cannot open");
