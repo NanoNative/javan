@@ -3591,7 +3591,13 @@ public final class CCodegen {
             if (expression.kind() != javan.ir.IrExpression.Kind.CALL) {
                 return true;
             }
-            return "javan_atomic_reference_get".equals(expression.value());
+            // These in-memory calls cannot block; keep their result protected until the caller roots it.
+            return switch (expression.value()) {
+                case "javan_atomic_reference_get",
+                    "javan_inet_socket_address_from_host",
+                    "javan_inet_socket_address_from_address" -> true;
+                default -> false;
+            };
         }
 
         private boolean isGeneratedObjectResultCall(final javan.ir.IrExpression expression) {

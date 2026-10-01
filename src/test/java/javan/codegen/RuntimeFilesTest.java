@@ -10483,6 +10483,68 @@ final class RuntimeFilesTest {
         assertThat(stdout).isEqualTo(windows ? "not-posix\n" : "124:0\n");
     }
 
+    @TestFactory
+    @Execution(org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD)
+    java.util.stream.Stream<DynamicTest> runtimeProcessRequiresOwnedCleanupGroup() {
+        assumeTrue(!System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win"));
+        return List.of("child", "parent", "both", "denied", "timeout").stream().map(mode ->
+            dynamicTest(mode, () -> {
+                final boolean denied = mode.equals("denied");
+                final boolean timeout = mode.equals("timeout");
+                final String output = runInstrumentedRuntimeProbe(
+                    List.of(new RuntimeReplacement("#include <unistd.h>", """
+                        #include <unistd.h>
+
+                        /* Simulate an error after successful group creation, or a genuine denial. */
+                        static int javan_test_setpgid(pid_t pid, pid_t group) {
+                            if (%s) {
+                                errno = EPERM;
+                                return -1;
+                            }
+                            int result = setpgid(pid, group);
+                            if (result == 0 && (%s)) {
+                                errno = EPERM;
+                                return -1;
+                            }
+                            return result;
+                        }
+                        #define setpgid javan_test_setpgid
+                        """.formatted(denied ? "1" : "0",
+                            mode.equals("child") ? "pid == 0" : mode.equals("parent") ? "pid != 0" : "1"))),
+                    "",
+                    """
+                    #include "javan_runtime.h"
+                    #include <stdio.h>
+                    #include <unistd.h>
+
+                    int main(void) {
+                        javan_register_static_roots(0, 0);
+                        void* command = javan_arraylist_new();
+                        (void) javan_arraylist_add(command, (void*) "sh");
+                        (void) javan_arraylist_add(command, (void*) "-c");
+                        (void) javan_arraylist_add(command, (void*) "%s");
+                        void* result = javan_process_run(NULL, command, %d);
+                        printf("%%d:%%s\\n", javan_process_result_exit_code(result),
+                            (char*) javan_process_result_stdout(result));
+                        if (%s) {
+                            sleep(3);
+                            printf("descendant=%%d\\n", access("descendant-alive", F_OK) == 0);
+                        }
+                        javan_free(result);
+                        javan_free(command);
+                        return 0;
+                    }
+                    """.formatted(timeout ? "sleep 2 & wait; touch descendant-alive" : "printf ready",
+                        timeout ? 10 : 10000, timeout ? "1" : "0"),
+                    "512",
+                    Map.of(),
+                    java.time.Duration.ofSeconds(30)
+                );
+                assertThat(output).isEqualTo(denied ? "0\n127:\n"
+                    : timeout ? "0\n124:\ndescendant=0\n" : "0\n0:ready\n");
+            }));
+    }
+
     @Test
     @WindowsCompatibilityProof
     void runtimeWindowsProcessUsesUtf8WorkingDirectoryUnderGcStress() throws Exception {

@@ -15006,7 +15006,8 @@ final class RuntimeSourceMemorySections {
                 return javan_process_result_new(127, "", "process fork failed");
             }
             if (child == 0) {
-                if (setpgid(0, 0) != 0) {
+                /* The parent may already have established this cleanup group. */
+                if (setpgid(0, 0) != 0 && getpgrp() != getpid()) {
                     _exit(127);
                 }
                 if (cwd != NULL && chdir((const char*) cwd) != 0) {
@@ -15018,15 +15019,19 @@ final class RuntimeSourceMemorySections {
                 _exit(127);
             }
             if (setpgid(child, child) != 0 && errno != EACCES && errno != ESRCH) {
-                (void) kill(-child, SIGKILL);
-                kill(child, SIGKILL);
-                waitpid(child, NULL, 0);
-                javan_native_resource_pop(&stderr_resource);
-                fclose(stderr_file);
-                javan_native_resource_pop(&stdout_resource);
-                fclose(stdout_file);
-                javan_free(argv);
-                return javan_process_result_new(127, "", "process cleanup setup failed");
+                /* Accept an already-owned group, or a child that exited during the check. */
+                pid_t group = getpgid(child);
+                if (group != child && !(group < 0 && errno == ESRCH)) {
+                    (void) kill(-child, SIGKILL);
+                    kill(child, SIGKILL);
+                    waitpid(child, NULL, 0);
+                    javan_native_resource_pop(&stderr_resource);
+                    fclose(stderr_file);
+                    javan_native_resource_pop(&stdout_resource);
+                    fclose(stdout_file);
+                    javan_free(argv);
+                    return javan_process_result_new(127, "", "process cleanup setup failed");
+                }
             }
 
             int status = 0;

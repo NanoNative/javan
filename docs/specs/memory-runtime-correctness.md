@@ -93,6 +93,11 @@ the tool under its current runtime contract, not a full managed heap or general 
 service memory behavior. [Release](release.md#first-native-release-scope) owns target scope;
 [testing](testing.md#bootstrap-and-timing) owns portable-C reuse and bootstrap execution.
 
+Self-host sanitizer checks, including package-backed checks, use Clang by default: GCC's
+instrumentation of the large generated program exhausted the Linux runner's memory.
+Install Clang for this proof or select a compiler explicitly with `CC`; the proof report records
+the selection. Normal package builds and the other sanitizer checks keep their existing compiler.
+
 ## Required Managed Heap Design
 
 Before claiming managed Java memory, Javan still needs:

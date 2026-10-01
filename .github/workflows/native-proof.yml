@@ -258,3 +258,57 @@ jobs:
           path: |
             dist/release/javan-${{ inputs.target }}-package-build-baseline.json
             dist/release/javan-${{ inputs.target }}-package-build-baseline.md
+
+      - name: "CI Collect [diagnostics_${{ inputs.target }}]"
+        if: ${{ always() && inputs.proof == 'package-self-host' && runner.os != 'Windows' }}
+        timeout-minutes: 2
+        shell: sh
+        env:
+          JAVAN_PACKAGE_TARGET: ${{ inputs.target }}
+          JAVAN_PACKAGE_PROOF_SCOPE: ${{ inputs.package_scope }}
+          JAVAN_PACKAGE_SANITIZER_SCOPE: ${{ inputs.sanitizer_scope }}
+        run: |
+          set -eu
+          diagnostics=target/package-diagnostics
+          mkdir -p "$diagnostics"
+          {
+            printf 'commit=%s\n' "$(git rev-parse --verify HEAD 2>/dev/null || printf unavailable)"
+            printf 'run_id=%s\n' "${GITHUB_RUN_ID:-unavailable}"
+            printf 'run_attempt=%s\n' "${GITHUB_RUN_ATTEMPT:-unavailable}"
+            printf 'target=%s\n' "$JAVAN_PACKAGE_TARGET"
+            printf 'proof_scope=%s\n' "$JAVAN_PACKAGE_PROOF_SCOPE"
+            printf 'sanitizer_scope=%s\n' "$JAVAN_PACKAGE_SANITIZER_SCOPE"
+            printf 'runner_os=%s\n' "${RUNNER_OS:-unavailable}"
+            printf 'runner_arch=%s\n' "${RUNNER_ARCH:-unavailable}"
+            printf 'image_os=%s\n' "${ImageOS:-unavailable}"
+            printf 'image_version=%s\n' "${ImageVersion:-unavailable}"
+            if [ -f target/.javan/reports/sanitizer-proof.json ]; then
+              printf '%s\n' 'sanitizer_proof=present'
+            else
+              printf '%s\n' 'sanitizer_proof=missing'
+            fi
+            printf '%s\n' 'process_fields=pid,ppid,pgid,stat,comm'
+          } > "$diagnostics/context.txt"
+          # Capture executable names only, never command arguments or environments.
+          # This foreground snapshot precedes post-actions and runner-owned finalization.
+          if ps -axo pid=,ppid=,pgid=,stat=,comm= > "$diagnostics/processes.txt" 2>/dev/null; then
+            printf '%s\n' 'process_snapshot=available' >> "$diagnostics/context.txt"
+          else
+            printf '%s\n' unavailable > "$diagnostics/processes.txt"
+            printf '%s\n' 'process_snapshot=unavailable' >> "$diagnostics/context.txt"
+          fi
+
+      - name: "CI Upload [diagnostics_${{ inputs.target }}]"
+        if: ${{ always() && inputs.proof == 'package-self-host' && runner.os != 'Windows' }}
+        timeout-minutes: 2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: package-diagnostics-${{ inputs.target }}-gen${{ inputs.bootstrap_generation }}-attempt${{ github.run_attempt }}
+          retention-days: 7
+          if-no-files-found: error
+          include-hidden-files: true
+          path: |
+            target/package-diagnostics/context.txt
+            target/package-diagnostics/processes.txt
+            target/.javan/reports/sanitizer-proof.json
+            target/.javan/reports/sanitizer-proof.md
