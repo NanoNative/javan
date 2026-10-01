@@ -1005,6 +1005,109 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     }
 
     @Test
+    void packageDiagnosticsUploadOnlyExplicitProofAndProcessFilesBeforeFinalization() throws Exception {
+        final String workflow = Files.readString(NATIVE_PROOF);
+        final int collectStart = workflow.indexOf("      - name: \"CI Collect [diagnostics_");
+        final int uploadStart = workflow.indexOf("      - name: \"CI Upload [diagnostics_");
+        assertThat(collectStart).as("diagnostics collection step").isNotNegative();
+        assertThat(uploadStart).isGreaterThan(collectStart);
+        assertThat(collectStart).isGreaterThan(workflow.indexOf("name: timings-${{ inputs.target }}"));
+        final String collection = workflow.substring(collectStart, uploadStart);
+        final String upload = workflow.substring(uploadStart);
+        for (final String step : List.of(collection, upload)) {
+            assertThat(step).contains(
+                "if: ${{ always() && inputs.proof == 'package-self-host' && runner.os != 'Windows' }}",
+                "timeout-minutes: 2"
+            ).doesNotContain("continue-on-error", "RUNNER_TRACKING_ID", "process.clean");
+        }
+        assertThat(upload)
+            .contains("uses: actions/upload-artifact@", "include-hidden-files: true", "if-no-files-found: error")
+            .contains("name: package-diagnostics-${{ inputs.target }}-gen${{ inputs.bootstrap_generation }}-attempt${{ github.run_attempt }}")
+            .contains("retention-days: 7");
+        final String paths = upload.substring(upload.indexOf("          path: |\n") + "          path: |\n".length());
+        assertThat(paths.lines().filter(line -> !line.isBlank()).map(String::strip).toList()).containsExactly(
+            "target/package-diagnostics/context.txt",
+            "target/package-diagnostics/processes.txt",
+            "target/.javan/reports/sanitizer-proof.json",
+            "target/.javan/reports/sanitizer-proof.md"
+        );
+    }
+
+    @TestFactory
+    Stream<DynamicTest> packageDiagnosticsRetainSafeContextWithMissingProofOrProcessAccess() {
+        return Stream.of("available", "missing-proof", "ps-unavailable", "checkout-unavailable").map(scenario ->
+            DynamicTest.dynamicTest(scenario, () -> {
+                final Path root = Files.createTempDirectory(tempDir, "package diagnostics ");
+                final Path bin = Files.createDirectories(root.resolve("bin"));
+                final Path diagnostics = Files.createDirectories(root.resolve("target/package-diagnostics"));
+                Files.writeString(diagnostics.resolve("context.txt"), "stale-context\n");
+                Files.writeString(diagnostics.resolve("processes.txt"), "stale-process\n");
+                final Path proof = root.resolve("target/.javan/reports/sanitizer-proof.json");
+                if (!scenario.equals("missing-proof")) {
+                    Files.createDirectories(proof.getParent());
+                    Files.writeString(proof, "{\"status\":\"pass\",\"actualTotalAllocations\":50751}\n");
+                }
+                writeExecutableScript(bin.resolve("git"), """
+                    #!/bin/sh
+                    [ "$*" = 'rev-parse --verify HEAD' ] || exit 97
+                    [ "$DIAGNOSTIC_SCENARIO" != checkout-unavailable ] || exit 1
+                    printf '%s\\n' '7777777777777777777777777777777777777777'
+                    """);
+                writeExecutableScript(bin.resolve("ps"), """
+                    #!/bin/sh
+                    printf '%s\\n' "$@" > ps-arguments
+                    [ "$*" = '-axo pid=,ppid=,pgid=,stat=,comm=' ] || exit 97
+                    if [ "$DIAGNOSTIC_SCENARIO" = ps-unavailable ]; then
+                      printf '%s\\n' partial-process-output
+                      printf '%s\\n' "$DIAGNOSTIC_SECRET" >&2
+                      exit 1
+                    fi
+                    printf '%s\\n' '123 1 123 S /tmp/javan-package/bin/javan'
+                    """);
+                final Map<String, String> environment = Map.ofEntries(
+                    Map.entry("PATH", bin + java.io.File.pathSeparator + System.getenv("PATH")),
+                    Map.entry("DIAGNOSTIC_SCENARIO", scenario),
+                    Map.entry("DIAGNOSTIC_SECRET", "do-not-publish-this-value"),
+                    Map.entry("GITHUB_RUN_ID", "12345"), Map.entry("GITHUB_RUN_ATTEMPT", "2"),
+                    Map.entry("JAVAN_PACKAGE_TARGET", "macos-aarch64"),
+                    Map.entry("JAVAN_PACKAGE_PROOF_SCOPE", "full"),
+                    Map.entry("JAVAN_PACKAGE_SANITIZER_SCOPE", "platform-smoke"),
+                    Map.entry("RUNNER_OS", "macOS"), Map.entry("RUNNER_ARCH", "ARM64"),
+                    Map.entry("ImageOS", "macos15-arm64"), Map.entry("ImageVersion", "20260907.0337")
+                );
+                final String script = workflowStepScript(NATIVE_PROOF, "      - name: \"CI Collect [diagnostics_");
+                final ProcessResult run = process(root, List.of("sh", "-c", script), Duration.ofSeconds(20), environment);
+
+                assertThat(run.exitCode()).as(run.stderr()).isZero();
+                assertThat(run.stderr()).isEmpty();
+                assertThat(Files.readString(root.resolve("ps-arguments")))
+                    .isEqualTo("-axo\npid=,ppid=,pgid=,stat=,comm=\n");
+                final String context = Files.readString(diagnostics.resolve("context.txt"));
+                assertThat(context).contains(
+                    "commit=" + (scenario.equals("checkout-unavailable") ? "unavailable" : "7".repeat(40)) + "\n",
+                    "run_id=12345\n", "run_attempt=2\n", "target=macos-aarch64\n", "proof_scope=full\n",
+                    "sanitizer_scope=platform-smoke\n", "runner_os=macOS\n", "runner_arch=ARM64\n",
+                    "image_os=macos15-arm64\n", "image_version=20260907.0337\n",
+                    "sanitizer_proof=" + (scenario.equals("missing-proof") ? "missing" : "present") + "\n",
+                    "process_fields=pid,ppid,pgid,stat,comm\n",
+                    "process_snapshot=" + (scenario.equals("ps-unavailable") ? "unavailable" : "available") + "\n"
+                );
+                final String processes = Files.readString(diagnostics.resolve("processes.txt"));
+                assertThat(processes).isEqualTo(scenario.equals("ps-unavailable")
+                    ? "unavailable\n" : "123 1 123 S /tmp/javan-package/bin/javan\n");
+                assertThat(context + processes + run.stdout() + run.stderr())
+                    .doesNotContain("do-not-publish-this-value", "stale-", "partial-process-output");
+                if (scenario.equals("missing-proof")) {
+                    assertThat(proof).doesNotExist();
+                } else {
+                    assertThat(Files.readString(proof))
+                        .isEqualTo("{\"status\":\"pass\",\"actualTotalAllocations\":50751}\n");
+                }
+            })
+        );
+    }
+
+    @Test
     void packageBuildBaselineMeasuresTheVersionedPublicShowcaseWithoutInventingThresholds() throws Exception {
         final Path script = Path.of(".github/scripts/measure-package-build-baseline.sh");
         final String content = Files.readString(script);
@@ -1626,23 +1729,27 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     }
 
     private static ProcessResult runReleaseUpload(final Path root) throws Exception {
-        final String workflow = Files.readString(RELEASE_WORKFLOW);
-        final int publishStart = workflow.indexOf("      - name: \"🚀 Publish");
-        assertThat(publishStart).as("release publication step").isNotNegative();
-        final String step = workflow.substring(publishStart);
-        final String runBlock = "        run: |\n";
-        final int runStart = step.indexOf(runBlock);
-        assertThat(runStart).as("executable publication body").isNotNegative();
-        final String script = step.substring(runStart + runBlock.length()).lines()
-            .takeWhile(line -> line.isBlank() || line.startsWith("          "))
-            .map(line -> line.isBlank() ? "" : line.substring(10))
-            .collect(java.util.stream.Collectors.joining("\n"));
+        final String script = workflowStepScript(RELEASE_WORKFLOW, "      - name: \"🚀 Publish");
         assertThat(script).contains("gh release upload");
         return process(root, List.of("sh", "-c", script), Duration.ofSeconds(20), Map.of(
             "PATH", root.resolve("bin") + java.io.File.pathSeparator + System.getenv("PATH"),
             "GH_TOKEN", "", "GITHUB_TOKEN", "", "GH_REPO", "fixture/repository",
             "RELEASE_VERSION", UPLOAD_VERSION, "TARGET_SHA", "7".repeat(40)
         ));
+    }
+
+    private static String workflowStepScript(final Path workflowPath, final String stepName) throws Exception {
+        final String workflow = Files.readString(workflowPath);
+        final int stepStart = workflow.indexOf(stepName);
+        assertThat(stepStart).as(stepName).isNotNegative();
+        final String step = workflow.substring(stepStart);
+        final String runBlock = "        run: |\n";
+        final int runStart = step.indexOf(runBlock);
+        assertThat(runStart).as("executable workflow step body").isNotNegative();
+        return step.substring(runStart + runBlock.length()).lines()
+            .takeWhile(line -> line.isBlank() || line.startsWith("          "))
+            .map(line -> line.isBlank() ? "" : line.substring(10))
+            .collect(java.util.stream.Collectors.joining("\n"));
     }
 
     private static void writeReleaseArtifact(final Path releaseDir, final String name, final String content) throws Exception {
