@@ -1,12 +1,13 @@
 #!/bin/sh
 set -eu
 
-ROOT=$(CDPATH= cd "$(dirname "$0")/../.." && pwd)
+ROOT=$(CDPATH='' cd "$(dirname "$0")/../.." && pwd)
 . "$ROOT/.github/scripts/timing-report.sh"
 . "$ROOT/.github/scripts/sanitizer-common.sh"
 . "$ROOT/.github/scripts/generated-sources.sh"
 TMP=${TMPDIR:-/tmp}/javan-self-host-sanitizer-$$
-CC=${CC:-cc}
+# GCC's sanitizer compilation of the generated self-host exhausts hosted-runner memory.
+CC=${CC:-clang}
 SANITIZER_FLAGS=${SANITIZER_FLAGS:-"-fsanitize=address,undefined -fno-omit-frame-pointer"}
 SANITIZER_REQUIRED=${JAVAN_SANITIZER_REQUIRED:-false}
 TARGET_PROJECT=${JAVAN_SELF_HOST_TARGET_PROJECT:-target}
@@ -17,7 +18,59 @@ REUSE_GENERATED=${JAVAN_SELF_HOST_REUSE_GENERATED:-false}
 REPORTS=$ROOT/$TARGET_PROJECT/.javan/reports
 
 mkdir -p "$TMP"
-trap 'rm -rf "$TMP"' EXIT HUP INT TERM
+sanitizer_compile_started=
+resource_monitor_pid=
+resource_monitor_starting=false
+interrupted_code=
+handle_signal() {
+  printf 'self-host sanitizer interrupted (%s)\n' "$1" >&2
+  interrupted_code=$2
+  # Capture the new child before cleanup, even if interrupted during its launch.
+  if [ "$resource_monitor_starting" = false ]; then
+    exit "$interrupted_code"
+  fi
+}
+
+stop_resource_monitor() {
+  if [ -n "$resource_monitor_pid" ]; then
+    kill -TERM "$resource_monitor_pid" 2>/dev/null || :
+    wait "$resource_monitor_pid" 2>/dev/null || :
+    resource_monitor_pid=
+  fi
+}
+
+cleanup() {
+  cleanup_code=$?
+  trap - EXIT
+  trap '' HUP INT TERM
+  set +e
+  stop_resource_monitor
+  if [ -n "$sanitizer_compile_started" ]; then
+    javan_timing_record sanitizer_compile "$sanitizer_compile_started" fail false
+    if [ -s "${javan_timing_measure_file:-}" ]; then
+      printf '\n--- interrupted compiler resource report\n' >&2
+      cat "$javan_timing_measure_file" >&2
+    fi
+  fi
+  if [ "$cleanup_code" -ne 0 ]; then
+    # Print diagnostics before removing them, including when compilation was interrupted.
+    for compiler in support-cc cc leak-cc; do
+      for stream in out err; do
+        diagnostic=$TMP/$compiler.$stream
+        if [ -s "$diagnostic" ]; then
+          printf '\n--- %s\n' "$compiler.$stream" >&2
+          cat "$diagnostic" >&2
+        fi
+      done
+    done
+  fi
+  rm -rf "$TMP"
+  exit "$cleanup_code"
+}
+trap cleanup EXIT
+trap 'handle_signal HUP 129' HUP
+trap 'handle_signal INT 130' INT
+trap 'handle_signal TERM 143' TERM
 
 counter_value() {
   file=$1
@@ -346,7 +399,6 @@ reset_aggregate
 if [ "$support_compile_code" -ne 0 ]; then
   if [ "$SANITIZER_REQUIRED" = "true" ]; then
     printf '%s\n' "sanitizer compiler flags unavailable for required self-host run: $CC" >&2
-    cat "$TMP/support-cc.err" >&2
     exit 1
   fi
   write_sanitizer_proof "skipped" -1 "sanitizer compiler flags unavailable" "false"
@@ -470,25 +522,77 @@ int main(int argc, char** argv) {
 EOF
 
 set +e
-# shellcheck disable=SC2086
 sanitizer_compile_started=$(javan_timing_now)
-# shellcheck disable=SC2086
-(cd "$GENERATED" && "$CC" $SANITIZER_FLAGS \
+# Report while the compiler is alive: a runner shutdown can also kill the final timing report.
+resource_monitor_starting=true
+(
+  monitor_sleep_pid=
+  monitor_stopped=false
+  trap 'trap "" HUP INT TERM
+    if [ -n "$monitor_sleep_pid" ]; then
+      kill -TERM "$monitor_sleep_pid" 2>/dev/null || :
+      wait "$monitor_sleep_pid" 2>/dev/null || :
+    fi' EXIT
+  trap 'monitor_stopped=true' HUP INT TERM
+  while [ "$monitor_stopped" = false ]; do
+    printf '\nResource sample: sanitizer_compile elapsed_seconds=%s\n' \
+      "$(( $(javan_timing_now) - sanitizer_compile_started ))"
+    if [ -r /proc/meminfo ]; then
+      awk '/^(MemTotal|MemAvailable|SwapTotal|SwapFree):/ { print; fields++ }
+        END { if (fields < 4) print "host_memory=incomplete" }' /proc/meminfo
+    else
+      printf '%s\n' 'host_memory=unavailable'
+    fi
+    if [ -r /proc/vmstat ]; then
+      awk '$1 == "oom_kill" { print; found=1 }
+        END { if (!found) print "oom_kill=unavailable" }' /proc/vmstat
+    else
+      printf '%s\n' 'oom_kill=unavailable'
+    fi
+    if ps -eo pid=,ppid=,rss=,comm= > "$TMP/compiler-processes" 2>/dev/null; then
+      printf '%s\n' 'Largest processes: PID PPID RSS_KiB COMMAND'
+      LC_ALL=C sort -k3,3nr "$TMP/compiler-processes" | head -n 6
+    else
+      printf '%s\n' 'process_memory=unavailable'
+    fi
+    sleep 10 >/dev/null 2>&1 &
+    monitor_sleep_pid=$!
+    if [ "$monitor_stopped" = true ]; then
+      exit 0
+    fi
+    wait "$monitor_sleep_pid" || exit 0
+    monitor_sleep_pid=
+  done
+) &
+resource_monitor_pid=$!
+resource_monitor_starting=false
+if [ -n "$interrupted_code" ]; then
+  exit "$interrupted_code"
+fi
+# shellcheck disable=SC2016,SC2086
+TMPDIR=$TMP javan_timing_measure sh -c '
+  cd "$1" || exit
+  compiler_out=$2
+  compiler_err=$3
+  shift 3
+  exec "$@" >"$compiler_out" 2>"$compiler_err"
+' javan-cc "$GENERATED" "$TMP/cc.out" "$TMP/cc.err" "$CC" $SANITIZER_FLAGS \
   -DJAVAN_PROGRAM_MAIN=javan_generated_main -I . \
   "$TMP/self-host-counter-wrapper.c" $PROGRAM_SOURCES javan_runtime.c \
-  -o "$TMP/javan-self-host-sanitizer-probe") \
-  >"$TMP/cc.out" 2>"$TMP/cc.err"
+  -o "$TMP/javan-self-host-sanitizer-probe"
 compile_code=$?
+stop_resource_monitor
 compile_status=pass
 if [ "$compile_code" -ne 0 ]; then
   compile_status=fail
 fi
-javan_timing_record sanitizer_compile "$sanitizer_compile_started" "$compile_status" false
+javan_timing_record sanitizer_compile "$sanitizer_compile_started" "$compile_status" false \
+  "$javan_timing_measure_cpu_seconds" "$javan_timing_measure_max_rss_bytes" "$javan_timing_measure_source"
+sanitizer_compile_started=
 set -e
 
 if [ "$compile_code" -ne 0 ]; then
   printf '%s\n' "sanitizer self-host runtime compile failed" >&2
-  cat "$TMP/cc.err" >&2
   exit 1
 fi
 
@@ -527,7 +631,6 @@ if [ "$probe_run_code" -eq 88 ] || grep -F "detect_leaks is not supported" "$TMP
     if [ "$leak_compile_code" -ne 0 ]; then
       if [ "$SANITIZER_REQUIRED" = "true" ]; then
         printf '%s\n' "macOS self-host leaks fallback compile failed for required run" >&2
-        cat "$TMP/leak-cc.err" >&2
         exit 1
       fi
       printf '%s\n' "warning - macOS self-host leaks fallback compile failed" >&2
@@ -564,5 +667,6 @@ assert_at_least "GC collected allocations" "$AGG_GC_COLLECTED_ALLOCATIONS" "${JA
 assert_at_least "GC collected bytes" "$AGG_GC_COLLECTED_BYTES" "${JAVAN_SANITIZER_SELF_HOST_MIN_GC_COLLECTED_BYTES:-0}"
 
 write_sanitizer_proof "pass" 0 "$LEAK_STATUS" "false"
+cat "$REPORTS/sanitizer-proof.json"
 "$JAVAN" report "$TARGET_PROJECT" >/dev/null
 printf '%s\n' "ok - self-host sanitizer smoke passed for $TARGET_CLASSES ($LEAK_STATUS)"
