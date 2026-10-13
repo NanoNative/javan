@@ -99,7 +99,7 @@ jobs:
 
       - name: "🔍 Java"
         id: java_info
-        uses: YunaBraska/java-info-action@085d09be3659b484e0a6d0c95aac6612687ce8d9 # 3.0.13
+        uses: YunaBraska/java-info-action@7a178ff2b0222107efbaab0c457c2ff09a84a801 # 3.0.14
 
       - name: "☕ JDK [${{ steps.java_info.outputs.java_version }}]"
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
@@ -167,7 +167,7 @@ jobs:
 
       - name: "🔍 Java"
         id: java_info
-        uses: YunaBraska/java-info-action@085d09be3659b484e0a6d0c95aac6612687ce8d9 # 3.0.13
+        uses: YunaBraska/java-info-action@7a178ff2b0222107efbaab0c457c2ff09a84a801 # 3.0.14
 
       - name: "☕ JDK [${{ steps.java_info.outputs.java_version }}]"
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
@@ -223,7 +223,7 @@ jobs:
 
       - name: "📈 Timings [native_${{ matrix.worker_index }}]"
         if: ${{ always() && matrix.suite == 'native' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: native-test-timings-${{ matrix.worker_index }}-linux-x64
           path: target/surefire-reports/TEST-*.xml
@@ -541,7 +541,7 @@ jobs:
 
       - name: "🔍 Java"
         id: java_info
-        uses: YunaBraska/java-info-action@085d09be3659b484e0a6d0c95aac6612687ce8d9 # 3.0.13
+        uses: YunaBraska/java-info-action@7a178ff2b0222107efbaab0c457c2ff09a84a801 # 3.0.14
 
       - name: "☕ JDK [${{ steps.java_info.outputs.java_version }}]"
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
@@ -618,7 +618,7 @@ jobs:
 
       - name: "🔍 Java"
         id: java_info
-        uses: YunaBraska/java-info-action@085d09be3659b484e0a6d0c95aac6612687ce8d9 # 3.0.13
+        uses: YunaBraska/java-info-action@7a178ff2b0222107efbaab0c457c2ff09a84a801 # 3.0.14
 
       - name: "☕ JDK [${{ steps.java_info.outputs.java_version }}]"
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
@@ -638,7 +638,7 @@ jobs:
           -Dproject.build.outputTimestamp="$BUILD_OUTPUT_TIMESTAMP" package
 
       - name: "📤 Upload [maven]"
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: build-workspace
           retention-days: 1
