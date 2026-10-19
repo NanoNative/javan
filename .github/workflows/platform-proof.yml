@@ -47,7 +47,7 @@ jobs:
         uses: YunaBraska/java-info-action@7a178ff2b0222107efbaab0c457c2ff09a84a801 # 3.0.14
 
       - name: "☕ JDK [${{ steps.java_info.outputs.java_version }}]"
-        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           java-version: ${{ steps.java_info.outputs.java_version }}
           distribution: temurin
