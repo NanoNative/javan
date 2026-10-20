@@ -101,8 +101,9 @@ public final class ClassFileScanner {
         Files.createDirectories(cache);
         Path classFile = extractedRuntimeClass(cache, resource);
         if (classFile == null) {
+            final String jimage = CurrentJdkTools.jimage();
             final ProcessRunner.Result extraction = processRunner.run(cache, List.of(
-                CurrentJdkTools.jimage(),
+                jimage,
                 "extract",
                 "--dir",
                 cache.toAbsolutePath().toString(),
@@ -111,7 +112,10 @@ public final class ClassFileScanner {
                 modules.toAbsolutePath().toString()
             ));
             if (extraction.exitCode() != 0) {
-                throw new IOException("Unable to extract runtime class " + jvmName + ": " + extraction.stderr());
+                throw new IOException("Unable to extract runtime class " + jvmName
+                    + " using " + jimage + " on " + modules.toAbsolutePath()
+                    + " (exit " + extraction.exitCode() + ")\nstdout:\n"
+                    + extraction.stdout() + "\nstderr:\n" + extraction.stderr());
             }
             classFile = extractedRuntimeClass(cache, resource);
         }

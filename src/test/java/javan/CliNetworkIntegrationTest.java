@@ -4593,6 +4593,66 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void inetSocketAddressConstructionSurvivesConcurrentCollection() throws Exception {
+        final Path project = project("inet-socket-address-publication");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetAddress;
+            import java.net.InetSocketAddress;
+            import java.util.concurrent.atomic.AtomicBoolean;
+
+            public final class Main {
+                private static final AtomicBoolean RUNNING = new AtomicBoolean(true);
+                private static final AtomicBoolean READY = new AtomicBoolean();
+                private static final InetAddress LOOPBACK = InetAddress.getLoopbackAddress();
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread collector = new Thread(new Collector());
+                    collector.start();
+                    while (!READY.get()) {
+                        Thread.yield();
+                    }
+                    int checksum = 0;
+                    for (int index = 0; index < 4096; index++) {
+                        final InetSocketAddress host = new InetSocketAddress("127.0.0.1", 8080);
+                        final InetSocketAddress address = new InetSocketAddress(LOOPBACK, 8081);
+                        checksum += host.getPort() + host.getHostString().length();
+                        checksum += host.getAddress().getHostAddress().length();
+                        checksum += address.getPort() + address.getAddress().getHostAddress().length();
+                    }
+                    RUNNING.set(false);
+                    collector.join();
+                    System.out.println(checksum);
+                }
+
+                private static final class Collector implements Runnable {
+                    @Override
+                    public void run() {
+                        READY.set(true);
+                        while (RUNNING.get()) {
+                            Thread.yield();
+                        }
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(
+            project,
+            List.of(nativeBinary(project, "inet-socket-address-publication").toString()),
+            Duration.ofSeconds(30),
+            Map.of("JAVAN_HEAP_LIMIT_BYTES", "65536", "JAVAN_GC_STRESS", "1", "JAVAN_GC_SAFEPOINT_INTERVAL", "1")
+        );
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(jvmOutput);
+        assertThat(nativeRun.stderr()).isEmpty();
+    }
+
+    @Test
     void inetSocketAddressGetPortBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("inet-socket-address-get-port");
         writeJava(project, "com.acme.Main", """

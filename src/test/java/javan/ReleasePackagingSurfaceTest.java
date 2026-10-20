@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
@@ -1004,6 +1005,109 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     }
 
     @Test
+    void packageDiagnosticsUploadOnlyExplicitProofAndProcessFilesBeforeFinalization() throws Exception {
+        final String workflow = Files.readString(NATIVE_PROOF);
+        final int collectStart = workflow.indexOf("      - name: \"CI Collect [diagnostics_");
+        final int uploadStart = workflow.indexOf("      - name: \"CI Upload [diagnostics_");
+        assertThat(collectStart).as("diagnostics collection step").isNotNegative();
+        assertThat(uploadStart).isGreaterThan(collectStart);
+        assertThat(collectStart).isGreaterThan(workflow.indexOf("name: timings-${{ inputs.target }}"));
+        final String collection = workflow.substring(collectStart, uploadStart);
+        final String upload = workflow.substring(uploadStart);
+        for (final String step : List.of(collection, upload)) {
+            assertThat(step).contains(
+                "if: ${{ always() && inputs.proof == 'package-self-host' && runner.os != 'Windows' }}",
+                "timeout-minutes: 2"
+            ).doesNotContain("continue-on-error", "RUNNER_TRACKING_ID", "process.clean");
+        }
+        assertThat(upload)
+            .contains("uses: actions/upload-artifact@", "include-hidden-files: true", "if-no-files-found: error")
+            .contains("name: package-diagnostics-${{ inputs.target }}-gen${{ inputs.bootstrap_generation }}-attempt${{ github.run_attempt }}")
+            .contains("retention-days: 7");
+        final String paths = upload.substring(upload.indexOf("          path: |\n") + "          path: |\n".length());
+        assertThat(paths.lines().filter(line -> !line.isBlank()).map(String::strip).toList()).containsExactly(
+            "target/package-diagnostics/context.txt",
+            "target/package-diagnostics/processes.txt",
+            "target/.javan/reports/sanitizer-proof.json",
+            "target/.javan/reports/sanitizer-proof.md"
+        );
+    }
+
+    @TestFactory
+    Stream<DynamicTest> packageDiagnosticsRetainSafeContextWithMissingProofOrProcessAccess() {
+        return Stream.of("available", "missing-proof", "ps-unavailable", "checkout-unavailable").map(scenario ->
+            DynamicTest.dynamicTest(scenario, () -> {
+                final Path root = Files.createTempDirectory(tempDir, "package diagnostics ");
+                final Path bin = Files.createDirectories(root.resolve("bin"));
+                final Path diagnostics = Files.createDirectories(root.resolve("target/package-diagnostics"));
+                Files.writeString(diagnostics.resolve("context.txt"), "stale-context\n");
+                Files.writeString(diagnostics.resolve("processes.txt"), "stale-process\n");
+                final Path proof = root.resolve("target/.javan/reports/sanitizer-proof.json");
+                if (!scenario.equals("missing-proof")) {
+                    Files.createDirectories(proof.getParent());
+                    Files.writeString(proof, "{\"status\":\"pass\",\"actualTotalAllocations\":50751}\n");
+                }
+                writeExecutableScript(bin.resolve("git"), """
+                    #!/bin/sh
+                    [ "$*" = 'rev-parse --verify HEAD' ] || exit 97
+                    [ "$DIAGNOSTIC_SCENARIO" != checkout-unavailable ] || exit 1
+                    printf '%s\\n' '7777777777777777777777777777777777777777'
+                    """);
+                writeExecutableScript(bin.resolve("ps"), """
+                    #!/bin/sh
+                    printf '%s\\n' "$@" > ps-arguments
+                    [ "$*" = '-axo pid=,ppid=,pgid=,stat=,comm=' ] || exit 97
+                    if [ "$DIAGNOSTIC_SCENARIO" = ps-unavailable ]; then
+                      printf '%s\\n' partial-process-output
+                      printf '%s\\n' "$DIAGNOSTIC_SECRET" >&2
+                      exit 1
+                    fi
+                    printf '%s\\n' '123 1 123 S /tmp/javan-package/bin/javan'
+                    """);
+                final Map<String, String> environment = Map.ofEntries(
+                    Map.entry("PATH", bin + java.io.File.pathSeparator + System.getenv("PATH")),
+                    Map.entry("DIAGNOSTIC_SCENARIO", scenario),
+                    Map.entry("DIAGNOSTIC_SECRET", "do-not-publish-this-value"),
+                    Map.entry("GITHUB_RUN_ID", "12345"), Map.entry("GITHUB_RUN_ATTEMPT", "2"),
+                    Map.entry("JAVAN_PACKAGE_TARGET", "macos-aarch64"),
+                    Map.entry("JAVAN_PACKAGE_PROOF_SCOPE", "full"),
+                    Map.entry("JAVAN_PACKAGE_SANITIZER_SCOPE", "platform-smoke"),
+                    Map.entry("RUNNER_OS", "macOS"), Map.entry("RUNNER_ARCH", "ARM64"),
+                    Map.entry("ImageOS", "macos15-arm64"), Map.entry("ImageVersion", "20260907.0337")
+                );
+                final String script = workflowStepScript(NATIVE_PROOF, "      - name: \"CI Collect [diagnostics_");
+                final ProcessResult run = process(root, List.of("sh", "-c", script), Duration.ofSeconds(20), environment);
+
+                assertThat(run.exitCode()).as(run.stderr()).isZero();
+                assertThat(run.stderr()).isEmpty();
+                assertThat(Files.readString(root.resolve("ps-arguments")))
+                    .isEqualTo("-axo\npid=,ppid=,pgid=,stat=,comm=\n");
+                final String context = Files.readString(diagnostics.resolve("context.txt"));
+                assertThat(context).contains(
+                    "commit=" + (scenario.equals("checkout-unavailable") ? "unavailable" : "7".repeat(40)) + "\n",
+                    "run_id=12345\n", "run_attempt=2\n", "target=macos-aarch64\n", "proof_scope=full\n",
+                    "sanitizer_scope=platform-smoke\n", "runner_os=macOS\n", "runner_arch=ARM64\n",
+                    "image_os=macos15-arm64\n", "image_version=20260907.0337\n",
+                    "sanitizer_proof=" + (scenario.equals("missing-proof") ? "missing" : "present") + "\n",
+                    "process_fields=pid,ppid,pgid,stat,comm\n",
+                    "process_snapshot=" + (scenario.equals("ps-unavailable") ? "unavailable" : "available") + "\n"
+                );
+                final String processes = Files.readString(diagnostics.resolve("processes.txt"));
+                assertThat(processes).isEqualTo(scenario.equals("ps-unavailable")
+                    ? "unavailable\n" : "123 1 123 S /tmp/javan-package/bin/javan\n");
+                assertThat(context + processes + run.stdout() + run.stderr())
+                    .doesNotContain("do-not-publish-this-value", "stale-", "partial-process-output");
+                if (scenario.equals("missing-proof")) {
+                    assertThat(proof).doesNotExist();
+                } else {
+                    assertThat(Files.readString(proof))
+                        .isEqualTo("{\"status\":\"pass\",\"actualTotalAllocations\":50751}\n");
+                }
+            })
+        );
+    }
+
+    @Test
     void packageBuildBaselineMeasuresTheVersionedPublicShowcaseWithoutInventingThresholds() throws Exception {
         final Path script = Path.of(".github/scripts/measure-package-build-baseline.sh");
         final String content = Files.readString(script);
@@ -1111,6 +1215,188 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         }
     }
 
+    @TestFactory
+    Stream<DynamicTest> selfHostCompilerDiagnosticsSurviveFailureAndSignals() {
+        return Stream.of(
+            "success", "failure", "HUP", "INT", "TERM", "support-failure", "support-TERM", "probe-failure",
+            "resource-success", "resource-failure", "resource-HUP", "resource-INT", "resource-TERM", "resource-unavailable",
+            "default-compiler"
+        ).map(mode -> DynamicTest.dynamicTest(mode, () -> {
+            final Path root = Files.createTempDirectory(tempDir, "compiler diagnostics ");
+            final Path scripts = Files.createDirectories(root.resolve(".github/scripts"));
+            for (final String name : List.of("sanitizer-self-host-smoke.sh", "sanitizer-common.sh",
+                "generated-sources.sh", "timing-report.sh")) {
+                Files.copy(REPO_ROOT.resolve(".github/scripts/" + name), scripts.resolve(name));
+            }
+            final Path generated = Files.createDirectories(root.resolve("target/.javan/generated"));
+            for (final String name : List.of("javan_program.h", "javan_runtime.c", "main.c")) {
+                Files.writeString(generated.resolve(name), "fixture\n");
+            }
+            Files.writeString(generated.resolve("javan_program.sources"), "javan-generated-sources-v1\nmain.c\n");
+            final Path temporary = Files.createDirectories(root.resolve("temporary"));
+            final Path compiler = root.resolve("compiler");
+            writeExecutableScript(compiler, """
+                #!/bin/sh
+                set -eu
+                case "$*" in
+                  *sanitizer-support.c*)
+                    case "$COMPILER_MODE" in
+                      support-*) COMPILER_MODE=${COMPILER_MODE#support-} ;;
+                      *) exit 0 ;;
+                    esac ;;
+                esac
+                printf '%s\\n' 'compiler stdout retained'
+                printf '%s\\n' 'compiler stderr retained' >&2
+                case "$COMPILER_MODE" in
+                  resource-*)
+                    attempts=0
+                    while [ ! -f "$PROBE_CALLS.samples-ready" ]; do
+                      attempts=$((attempts + 1))
+                      [ "$attempts" -lt 200 ] || exit 24
+                      sleep 0.01
+                    done
+                    COMPILER_MODE=${COMPILER_MODE#resource-} ;;
+                esac
+                case "$COMPILER_MODE" in
+                  failure) exit 23 ;;
+                  HUP|INT|TERM) kill -"$COMPILER_MODE" "$PROOF_PID"; exit 23 ;;
+                esac
+                while [ "$1" != -o ]; do shift; done
+                cp "$PROBE_FIXTURE" "$2"
+                chmod +x "$2"
+                """);
+            final Path probe = root.resolve("probe");
+            writeExecutableScript(probe, """
+                #!/bin/sh
+                set -eu
+                printf '%s\\n' "$1" >> "$PROBE_CALLS"
+                if [ "$COMPILER_MODE" = probe-failure ]; then
+                  printf '%s\\n' 'probe failed' >&2
+                  exit 19
+                fi
+                printf '%s\\n' live_allocations=0 live_bytes=0 peak_live_bytes=16 total_allocations=1 \\
+                  gc_collections=1 gc_collected_allocations=0 gc_collected_bytes=0 root_frame_depth=0 \\
+                  frame_root_count=0 > "$JAVAN_SANITIZER_PROOF_COUNTERS"
+                """);
+            final Path javan = root.resolve("javan");
+            writeExecutableScript(javan, "#!/bin/sh\nexit 0\n");
+            final Path calls = root.resolve("probe-calls");
+            final Path timings = root.resolve("timings.tsv");
+            final Map<String, String> environment = new HashMap<>(Map.of(
+                "CC", compiler.toString(), "COMPILER_MODE", mode, "PROBE_FIXTURE", probe.toString(),
+                "PROBE_CALLS", calls.toString(), "JAVAN_BIN", javan.toString(), "TMPDIR", temporary.toString(),
+                "JAVAN_TIMING_LOG", timings.toString(), "JAVAN_SELF_HOST_REUSE_GENERATED", "true",
+                "JAVAN_SANITIZER_REQUIRED", "true", "ASAN_OPTIONS", "detect_leaks=1:halt_on_error=1"
+            ));
+            if (mode.equals("default-compiler")) {
+                final Path bin = Files.createDirectories(root.resolve("bin"));
+                Files.copy(compiler, bin.resolve("clang"));
+                writeExecutableScript(bin.resolve("cc"), "#!/bin/sh\nexit 25\n");
+                environment.put("CC", "");
+                environment.put("PATH", bin + java.io.File.pathSeparator + System.getenv("PATH"));
+            }
+            if (mode.startsWith("resource-")) {
+                final Path bin = Files.createDirectories(root.resolve("bin"));
+                writeExecutableScript(bin.resolve("ps"), """
+                    #!/bin/sh
+                    printf '%s\\n' "$PPID" >> "$PROBE_CALLS.monitor-pids"
+                    [ "$COMPILER_MODE" != resource-unavailable ] || exit 1
+                    printf '%s\\n' '42 1 2048 compiler-fixture'
+                    """);
+                writeExecutableScript(bin.resolve("sleep"), """
+                    #!/bin/sh
+                    if [ "$1" = 10 ]; then
+                      printf '%s\\n' "$$" >> "$PROBE_CALLS.sleep-pids"
+                      if [ "$(wc -l < "$PROBE_CALLS.sleep-pids")" -ge 2 ]; then
+                        : > "$PROBE_CALLS.samples-ready"
+                        exec /bin/sleep 30
+                      fi
+                      exec /bin/sleep 0.01
+                    fi
+                    exec /bin/sleep "$@"
+                    """);
+                environment.put("PATH", bin + java.io.File.pathSeparator + System.getenv("PATH"));
+            }
+            final ProcessResult run = process(root, List.of("sh", "-c", """
+                export PROOF_PID=$$
+                exec sh .github/scripts/sanitizer-self-host-smoke.sh
+                """), Duration.ofSeconds(20), environment);
+            final int expectedExit = switch (mode) {
+                case "success", "resource-success", "resource-unavailable", "default-compiler" -> 0;
+                case "failure", "support-failure", "resource-failure" -> 1;
+                case "HUP", "resource-HUP" -> 129;
+                case "INT", "resource-INT" -> 130;
+                case "TERM", "support-TERM", "resource-TERM" -> 143;
+                case "probe-failure" -> 19;
+                default -> throw new IllegalArgumentException(mode);
+            };
+            assertThat(run.exitCode()).as("stdout=%s stderr=%s", run.stdout(), run.stderr()).isEqualTo(expectedExit);
+            final String timing;
+            if (mode.startsWith("support-")) {
+                assertThat(timings).doesNotExist();
+                timing = "";
+            } else {
+                timing = Files.readString(timings);
+                assertThat(timing.lines().toList()).hasSize(1);
+                final String status = expectedExit == 0 || mode.equals("probe-failure") ? "pass" : "fail";
+                assertThat(timing).containsPattern("sanitizer_compile\\t\\d+\\t" + status + "\\tfalse\\t");
+            }
+            if (mode.equals("success") || mode.equals("failure")) {
+                final ProcessResult measurement = process(root, List.of("sh", "-c", """
+                    . .github/scripts/timing-report.sh
+                    javan_timing_measure true
+                    printf '%s' "$javan_timing_measure_source"
+                    """), Duration.ofSeconds(20), Map.of());
+                assertThat(measurement.exitCode()).isZero();
+                if (!measurement.stdout().equals("unavailable")) {
+                    assertThat(timing).containsPattern("\\t[0-9.]+\\t[0-9]+\\t(?:gnu|bsd)-time\\n");
+                }
+            }
+            if (expectedExit == 0) {
+                assertThat(run.stdout()).contains("ok - self-host sanitizer smoke passed");
+                assertThat(run.stderr()).isEmpty();
+                assertThat(Files.readAllLines(calls)).containsExactly("--version", "check", "report", "check", "build");
+                assertThat(Files.readString(root.resolve("target/.javan/reports/sanitizer-proof.json")))
+                    .contains("\"cc\": \"" + (mode.equals("default-compiler") ? "clang" : compiler) + "\"");
+                assertThat(run.stdout()).contains(Files.readString(root.resolve("target/.javan/reports/sanitizer-proof.json")));
+            } else {
+                assertThat(run.stderr()).contains("compiler stdout retained", "compiler stderr retained")
+                    .doesNotContain("No such file", "cannot open");
+                if (mode.equals("probe-failure")) {
+                    assertThat(Files.readAllLines(calls)).containsExactly("--version");
+                    assertThat(run.stderr()).contains("probe failed");
+                } else {
+                    assertThat(calls).doesNotExist();
+                }
+            }
+            if (mode.startsWith("resource-")) {
+                assertThat(run.stdout().lines().filter(line -> line.startsWith("Resource sample:")).count())
+                    .isGreaterThanOrEqualTo(2);
+                assertThat(run.stdout()).contains(mode.equals("resource-unavailable")
+                    ? "process_memory=unavailable" : "compiler-fixture");
+                if (Files.isReadable(Path.of("/proc/meminfo"))) {
+                    assertThat(run.stdout()).containsPattern("MemAvailable:\\s+\\d+ kB");
+                } else {
+                    assertThat(run.stdout()).contains("host_memory=unavailable");
+                }
+                if (Files.isReadable(Path.of("/proc/vmstat"))) {
+                    assertThat(run.stdout()).containsPattern("oom_kill \\d+");
+                }
+                for (final String suffix : List.of("monitor-pids", "sleep-pids")) {
+                    final List<String> pids = Files.readAllLines(root.resolve("probe-calls." + suffix));
+                    assertThat(pids).hasSizeGreaterThanOrEqualTo(2);
+                    for (final String pid : pids.stream().distinct().toList()) {
+                        assertThat(ProcessHandle.of(Long.parseLong(pid)).map(ProcessHandle::isAlive).orElse(false))
+                            .as("resource observer process %s must be reaped", pid).isFalse();
+                    }
+                }
+            }
+            try (final Stream<Path> remaining = Files.list(temporary)) {
+                assertThat(remaining.toList()).isEmpty();
+            }
+        }));
+    }
+
     @Test
     void timingReporterWritesMachineAndHumanReadablePhaseComparisons() throws Exception {
         final Path runner = tempDir.resolve("timing-report-test.sh");
@@ -1118,7 +1404,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         final Path json = tempDir.resolve("timings.json");
         final Path markdown = tempDir.resolve("timings.md");
         final Path gnuTime = tempDir.resolve("gnu-time.txt");
-        Files.writeString(gnuTime, "0.12 0.34 1024\n");
+        Files.writeString(gnuTime, "Command exited with non-zero status 7\n0.12 0.34 1024\n");
         Files.writeString(runner, """
             set -eu
             . "$1"
@@ -1443,23 +1729,27 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     }
 
     private static ProcessResult runReleaseUpload(final Path root) throws Exception {
-        final String workflow = Files.readString(RELEASE_WORKFLOW);
-        final int publishStart = workflow.indexOf("      - name: \"🚀 Publish");
-        assertThat(publishStart).as("release publication step").isNotNegative();
-        final String step = workflow.substring(publishStart);
-        final String runBlock = "        run: |\n";
-        final int runStart = step.indexOf(runBlock);
-        assertThat(runStart).as("executable publication body").isNotNegative();
-        final String script = step.substring(runStart + runBlock.length()).lines()
-            .takeWhile(line -> line.isBlank() || line.startsWith("          "))
-            .map(line -> line.isBlank() ? "" : line.substring(10))
-            .collect(java.util.stream.Collectors.joining("\n"));
+        final String script = workflowStepScript(RELEASE_WORKFLOW, "      - name: \"🚀 Publish");
         assertThat(script).contains("gh release upload");
         return process(root, List.of("sh", "-c", script), Duration.ofSeconds(20), Map.of(
             "PATH", root.resolve("bin") + java.io.File.pathSeparator + System.getenv("PATH"),
             "GH_TOKEN", "", "GITHUB_TOKEN", "", "GH_REPO", "fixture/repository",
             "RELEASE_VERSION", UPLOAD_VERSION, "TARGET_SHA", "7".repeat(40)
         ));
+    }
+
+    private static String workflowStepScript(final Path workflowPath, final String stepName) throws Exception {
+        final String workflow = Files.readString(workflowPath);
+        final int stepStart = workflow.indexOf(stepName);
+        assertThat(stepStart).as(stepName).isNotNegative();
+        final String step = workflow.substring(stepStart);
+        final String runBlock = "        run: |\n";
+        final int runStart = step.indexOf(runBlock);
+        assertThat(runStart).as("executable workflow step body").isNotNegative();
+        return step.substring(runStart + runBlock.length()).lines()
+            .takeWhile(line -> line.isBlank() || line.startsWith("          "))
+            .map(line -> line.isBlank() ? "" : line.substring(10))
+            .collect(java.util.stream.Collectors.joining("\n"));
     }
 
     private static void writeReleaseArtifact(final Path releaseDir, final String name, final String content) throws Exception {

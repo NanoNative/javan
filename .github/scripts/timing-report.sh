@@ -45,7 +45,7 @@ javan_timing_run() {
 javan_timing_parse_gnu() {
   javan_timing_measure_file=$1
   javan_timing_measure_cpu_seconds=$(LC_NUMERIC=C awk '
-    NR == 1 && $1 ~ /^[0-9]+([.,][0-9]+)?$/ && $2 ~ /^[0-9]+([.,][0-9]+)?$/ {
+    NF == 3 && $1 ~ /^[0-9]+([.,][0-9]+)?$/ && $2 ~ /^[0-9]+([.,][0-9]+)?$/ {
       gsub(/,/, ".", $1)
       gsub(/,/, ".", $2)
       printf "%.6f", $1 + $2
@@ -54,7 +54,7 @@ javan_timing_parse_gnu() {
   ' "$javan_timing_measure_file")
   javan_timing_measure_cpu_seconds=${javan_timing_measure_cpu_seconds:-unknown}
   javan_timing_measure_max_rss_bytes=$(LC_NUMERIC=C awk '
-    NR == 1 && $3 ~ /^[0-9]+$/ {
+    NF == 3 && $3 ~ /^[0-9]+$/ {
       printf "%.0f", $3 * 1024
       exit
     }
