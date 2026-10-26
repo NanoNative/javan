@@ -3,7 +3,11 @@ package javan.classfile;
 import javan.detect.BuildTool;
 import javan.detect.InputKind;
 import javan.detect.ProjectLayout;
+import javan.toolchain.CurrentJdkTools;
+import javan.util.ProcessRunner;
+import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestFactory;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
 
@@ -13,6 +17,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 
@@ -22,6 +27,31 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 
 @Execution(CONCURRENT)
 final class ClassFileScannerTest {
+    @TestFactory
+    Stream<DynamicTest> runtimeClassExtractionRetainsFailureDetails(@TempDir final Path tempDir) {
+        return Stream.of(
+            new ProcessRunner.Result(3, "image error on stdout", ""),
+            new ProcessRunner.Result(4, "", "image error on stderr"),
+            new ProcessRunner.Result(5, "image output", "image error"),
+            new ProcessRunner.Result(127, "", "")
+        ).map(result -> DynamicTest.dynamicTest("exit " + result.exitCode(), () -> {
+            final ProcessRunner runner = new ProcessRunner() {
+                @Override
+                public Result run(final Path workingDirectory, final List<String> command) {
+                    return result;
+                }
+            };
+            assertThatThrownBy(() -> new ClassFileScanner(runner).readRuntimeClass("java/lang/String", tempDir))
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("java/lang/String")
+                .hasMessageContaining("exit " + result.exitCode())
+                .hasMessageContaining(CurrentJdkTools.home().resolve("lib/modules").toString())
+                .hasMessageContaining("jimage")
+                .hasMessageContaining(result.stdout())
+                .hasMessageContaining(result.stderr());
+        }));
+    }
+
     @Test
     void scanReadsClassFromJarInput(@TempDir final Path tempDir) throws Exception {
         final String className = "example/app/Main";

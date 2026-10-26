@@ -75,6 +75,20 @@ This is the executable acceptance procedure for REL-001/002/004, not another imp
 project. Use one clean candidate commit across all required hosts and record its full SHA.
 Historical runs and archives with unknown or different commit metadata cannot certify it.
 
+To collect the full evidence set on the existing CI runners, dispatch `Verify` from the
+branch containing the clean candidate:
+
+```sh
+gh workflow run build-common.yml --ref "<candidate-branch>" \
+  -F prepare_publication=true -F snapshot=false -F bootstrap_generation=3
+```
+
+`--ref` selects the workflow branch; do not also pass a `-f ref=...` input. Every job then
+uses the dispatch's immutable commit. Confirm that `Metadata` reports the intended SHA.
+`prepare_publication` enables the existing full proofs and stages artifacts; it does not
+publish them. This workflow has read-only repository permissions and calls no publisher.
+Do not dispatch `Release` for this procedure.
+
 1. Prepare matching host toolchains using [native host verification](testing.md#native-host-verification).
    Acquire candidate archives, checksums and matching rehearsal sidecars from a recorded full
    package build. A normal PR's `bootstrap` package is not sufficient evidence.
