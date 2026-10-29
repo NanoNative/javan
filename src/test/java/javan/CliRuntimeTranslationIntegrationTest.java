@@ -3,7 +3,9 @@ package javan;
 import javan.testing.TestSuite.NativeTest;
 
 import javan.util.Json;
+import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestFactory;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ResourceAccessMode;
 import org.junit.jupiter.api.parallel.ResourceLock;
@@ -14,6 +16,8 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
@@ -23,6 +27,43 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @ResourceLock(value = Resources.SYSTEM_PROPERTIES, mode = ResourceAccessMode.READ)
 @NativeTest
 final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
+    @TestFactory
+    Stream<DynamicTest> nativeJsonEscapingPreservesOutput() throws Exception {
+        final Path project = project("json-escaping");
+        writeJava(project, "javan.util.Json", Files.readString(Path.of("src/main/java/javan/util/Json.java")));
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import javan.util.Json;
+            public final class Main {
+                public static void main(final String[] args) {
+                    final String[] values = {
+                        "", "plain ASCII", new String(new char[] {34, 92}),
+                        new String(new char[] {0, 8, 9, 10, 12, 13, 31}),
+                        new String(new char[] {0x00e4, 0x4e2d, 0xd83d, 0xde03}),
+                        "a".repeat(8192)
+                    };
+                    final String value = values[Integer.parseInt(args[0])];
+                    System.out.println(Json.string(value));
+                    System.out.println(Json.string(value));
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final List<String> names = List.of("empty", "ascii", "quote-backslash", "controls", "unicode", "long");
+        final List<String> expected = List.of("\"\"", "\"plain ASCII\"", "\"\\\"\\\\\"",
+            "\"\\u0000\\u0008\\t\\n\\u000c\\r\\u001f\"", "\"\u00e4\u4e2d\ud83d\ude03\"", "\"" + "a".repeat(8192) + "\"");
+        return IntStream.range(0, names.size()).mapToObj(index ->
+            DynamicTest.dynamicTest(names.get(index), () -> {
+                final ProcessResult nativeRun = process(project,
+                    List.of(project.resolve(".javan/bin/json-escaping").toString(), Integer.toString(index)),
+                    Duration.ofSeconds(30), Map.of("JAVAN_GC_STRESS", "1", "JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+                assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+                assertThat(nativeRun.stderr()).isEmpty();
+                assertThat(nativeRun.stdout()).isEqualTo(expected.get(index) + "\n" + expected.get(index) + "\n");
+            }));
+    }
+
     @Test
     void failedInitializerPreventsObjectConstruction() throws Exception {
         assertFailedInitializationEntry("class-initializer-new", "", "new Broken();", 0);

@@ -17,7 +17,8 @@ public final class Json {
      */
     public static String string(final String value) {
         final StringBuilder result = new StringBuilder("\"");
-        for (int index = 0; index < value.length(); index++) {
+        final int length = value.length();
+        for (int index = 0; index < length; index++) {
             final char ch = value.charAt(index);
             if (ch == '\\') {
                 result.append("\\\\");

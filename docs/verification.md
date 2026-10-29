@@ -67,6 +67,33 @@ The earlier testing document also recorded `CliPackagingIntegrationTest` moving 
 about 31 s versus 88 s. Those notes did not identify a commit or run; retain them only as
 historical context, not reproducible acceptance evidence.
 
+## Native JSON Escaping
+
+On 2026-10-29, a native comparison against main `13132ec8` measured hoisting the
+immutable input length out of [Json.string](../src/main/java/javan/util/Json.java)'s
+escaping loop. Native String.length scans the encoded string. Sequential charAt
+already uses the runtime cursor cache, so repeating length caused quadratic work.
+
+Both variants compiled the real Json.java and the same small Main through the
+same packaged Javan compiler, using Apple Clang 21.0.0 on macOS ARM64
+(Apple M1 Max, 64 GiB RAM). Main constructs an ASCII string, calls Json.string
+eight times and prints the sum of the rendered lengths. Every run checked that
+sum against `(inputLength + 2) * 8`. The managed heap limit was 1 GiB with GC
+stress unset. Three runs per variant and size were interleaved, without another
+owned verification workload. Values below are medians from `/usr/bin/time -lp`.
+
+| Input characters | Before wall / CPU | After wall / CPU | Before / after peak RSS |
+| ---: | ---: | ---: | ---: |
+| 8,000 | 0.72s / 0.71s | 0.05s / 0.04s | 2.16 / 2.16 MiB |
+| 16,000 | 2.79s / 2.76s | 0.09s / 0.09s | 2.34 / 2.34 MiB |
+| 32,000 | 10.94s / 10.79s | 0.18s / 0.18s | 2.80 / 2.80 MiB |
+
+These are serialization-workload measurements, not a whole-compiler speedup or
+a memory-reduction claim. The [native CLI regressions](../src/test/java/javan/CliRuntimeTranslationIntegrationTest.java)
+independently check exact JSON output for empty, ASCII, quoting, control,
+Unicode and long strings, including repeated calls under GC stress. No timing
+threshold is imposed on ordinary tests.
+
 ## Test Worker Balance
 
 CI-SHARD-01 was accepted on 2026-08-29 in the
