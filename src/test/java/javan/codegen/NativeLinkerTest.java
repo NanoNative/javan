@@ -323,6 +323,59 @@ final class NativeLinkerTest {
     }
 
     @Test
+    void cachedLinkPreservesSourcePathsEmbeddedInTheExecutable() throws Exception {
+        assertPathSensitiveCompilerInput(true);
+    }
+
+    @Test
+    void cachedLinkPreservesIncludePathsEmbeddedInTheExecutable() throws Exception {
+        assertPathSensitiveCompilerInput(false);
+    }
+
+    private void assertPathSensitiveCompilerInput(final boolean sourcePath) throws Exception {
+        final Path firstDirectory = Files.createDirectory(tempDir.resolve("first"));
+        final Path secondDirectory = Files.createDirectory(tempDir.resolve("second"));
+        final String source = sourcePath
+            ? "#include <stdio.h>\nint main(void) { puts(__FILE__); return 0; }\n"
+            : "#include <stdio.h>\n#include \"selected.h\"\nint main(void) { puts(compiled_path); return 0; }\n";
+        final Path firstMain = Files.writeString((sourcePath ? firstDirectory : tempDir).resolve("main.c"), source);
+        final Path secondMain = sourcePath ? Files.writeString(secondDirectory.resolve("main.c"), source) : firstMain;
+        final Path firstHeader = Files.writeString(firstDirectory.resolve("selected.h"), "static const char* compiled_path = __FILE__;\n");
+        final Path secondHeader = Files.writeString(secondDirectory.resolve("selected.h"), "static const char* compiled_path = __FILE__;\n");
+        final Path firstRuntime = Files.writeString((sourcePath ? tempDir : firstDirectory).resolve("runtime.c"), "\n");
+        final Path secondRuntime = sourcePath ? firstRuntime : Files.writeString(secondDirectory.resolve("runtime.c"), "\n");
+        final List<Path> firstHeaders = sourcePath ? List.of() : List.of(firstHeader);
+        final List<Path> secondHeaders = sourcePath ? List.of() : List.of(secondHeader);
+        final Path cache = tempDir.resolve("cache");
+        final NativeLinker linker = new NativeLinker();
+        final NativeLinker.CacheLinkResult first = linker.linkCached(
+            tempDir, List.of(firstMain), firstHeaders, firstRuntime,
+            nativeOutput("first"), cache, NativeLinkInputs.empty(), List.of(), 1
+        );
+        final NativeLinker.CacheLinkResult second = linker.linkCached(
+            tempDir, List.of(secondMain), secondHeaders, secondRuntime,
+            nativeOutput("second"), cache, NativeLinkInputs.empty(), List.of(), 1
+        );
+
+        final ProcessRunner.Result firstRun = new ProcessRunner().run(tempDir, List.of(first.artifact().toString()));
+        final ProcessRunner.Result secondRun = new ProcessRunner().run(tempDir, List.of(second.artifact().toString()));
+        assertThat(firstRun.exitCode()).as(firstRun.stderr()).isZero();
+        assertThat(secondRun.exitCode()).as(secondRun.stderr()).isZero();
+        assertThat(firstRun.stdout()).isEqualToNormalizingNewlines((sourcePath ? firstMain : firstHeader) + "\n");
+        assertThat(secondRun.stdout()).isEqualToNormalizingNewlines((sourcePath ? secondMain : secondHeader) + "\n");
+        assertThat(second.objects().getFirst().reused()).isFalse();
+        assertThat(second.objects().getFirst().object()).isNotEqualTo(first.objects().getFirst().object());
+        final NativeLinker.CacheLinkResult warm = linker.linkCached(
+            tempDir, List.of(secondMain), secondHeaders, secondRuntime,
+            nativeOutput("warm"), cache, NativeLinkInputs.empty(), List.of(), 1
+        );
+        assertThat(warm.objects()).hasSize(2).allMatch(NativeLinker.CacheEntry::reused);
+        final ProcessRunner.Result warmRun = new ProcessRunner().run(tempDir, List.of(warm.artifact().toString()));
+        assertThat(warmRun.exitCode()).as(warmRun.stderr()).isZero();
+        assertThat(warmRun.stdout()).isEqualTo(secondRun.stdout());
+    }
+
+    @Test
     void cachedLinkCompilesOrderedProgramUnitsAndInvalidatesTheirSharedHeader() throws Exception {
         final Path generated = Files.createDirectories(tempDir.resolve("generated"));
         final Path units = Files.createDirectories(generated.resolve("units"));
