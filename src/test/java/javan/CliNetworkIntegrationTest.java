@@ -3517,6 +3517,75 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void httpServerRequestConstructionSurvivesConcurrentCollection() throws Exception {
+        final Path project = project("http-request-roots");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import com.sun.net.httpserver.HttpServer;
+            import com.sun.net.httpserver.HttpHandler;
+            import com.sun.net.httpserver.HttpExchange;
+            import java.net.InetSocketAddress;
+            import java.net.Socket;
+            import java.nio.charset.StandardCharsets;
+
+            public final class Main {
+                public static void main(final String[] args) throws Exception {
+                    final int port = %d;
+                    final HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
+                    server.createContext("/health", new Handler());
+                    server.start();
+                    for (int request = 0; request < 64; request++) {
+                        final Socket socket = new Socket("127.0.0.1", port);
+                        socket.getOutputStream().write(("POST /health?mode=strict HTTP/1.1\\r\\n"
+                            + "Host: localhost\\r\\nConnection: close\\r\\nX-Test: keep\\r\\n"
+                            + "Content-Length: 5\\r\\n\\r\\nhello").getBytes(StandardCharsets.UTF_8));
+                        socket.getOutputStream().flush();
+                        final StringBuilder response = new StringBuilder();
+                        int value = socket.getInputStream().read();
+                        while (value != -1) {
+                            response.append((char) value);
+                            value = socket.getInputStream().read();
+                        }
+                        socket.close();
+                        final String text = response.toString();
+                        if (!text.startsWith("HTTP/1.1 200") || !text.endsWith("ok")) {
+                            throw new IllegalStateException(text);
+                        }
+                    }
+                    server.stop(0);
+                    System.out.println("64 requests passed");
+                }
+
+                private static final class Handler implements HttpHandler {
+                    public void handle(final HttpExchange exchange) throws java.io.IOException {
+                        final byte[] request = exchange.getRequestBody().readAllBytes();
+                        final boolean valid = "POST".equals(exchange.getRequestMethod())
+                            && "/health".equals(exchange.getRequestURI().getRawPath())
+                            && "mode=strict".equals(exchange.getRequestURI().getRawQuery())
+                            && "keep".equals(exchange.getRequestHeaders().getFirst("x-test"))
+                            && request.length == 5 && request[0] == 104 && request[1] == 101
+                            && request[2] == 108 && request[3] == 108 && request[4] == 111;
+                        final byte[] response = new byte[] {111, 107};
+                        exchange.sendResponseHeaders(valid ? 200 : 400, response.length);
+                        exchange.getResponseBody().write(response);
+                        exchange.close();
+                    }
+                }
+            }
+            """.formatted(freeTcpPort()));
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        assertThat(jvmOutput).isEqualTo("64 requests passed\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(nativeBinary(project, "http-request-roots").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_HEAP_LIMIT_BYTES", "65536", "JAVAN_GC_STRESS", "1",
+                "JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(jvmOutput);
+        assertThat(nativeRun.stderr()).isEmpty();
+    }
+
+    @Test
     @WindowsCompatibilityProof
     void httpServerLoopbackBuildsServesAndStopsCleanly() throws Exception {
         final int port = freeTcpPort();

@@ -9,7 +9,9 @@ import org.junit.jupiter.api.parallel.ResourceLock;
 import org.junit.jupiter.api.parallel.Resources;
 
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
@@ -19,6 +21,65 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @ResourceLock(value = Resources.SYSTEM_PROPERTIES, mode = ResourceAccessMode.READ)
 @NativeTest
 final class CliStringBuilderIntegrationTest extends CliIntegrationSupport {
+    @Test
+    void stringBuilderMutationsSurviveConcurrentCollection() throws Exception {
+        final Path project = project("stringbuilder-concurrent-gc");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main implements Runnable {
+                boolean completed;
+
+                public static void main(final String[] args) throws Exception {
+                    final Main job = new Main();
+                    final Thread worker = new Thread(job);
+                    worker.start();
+                    new Main().run();
+                    worker.join();
+                    if (!job.completed) {
+                        throw new IllegalStateException("worker failed");
+                    }
+                    System.out.println("mutations passed");
+                }
+
+                public void run() {
+                    for (int iteration = 0; iteration < 128; iteration++) {
+                        final StringBuilder value = new StringBuilder();
+                        value.append("abcdefghijklmnop").append('X');
+                        value.insert(0, "yz").insert(2, '!');
+                        value.delete(0, 3);
+                        value.setCharAt(16, 'Z');
+                        value.reverse().replace(0, 1, "Q");
+                        if (!"Qponmlkjihgfedcba".equals(value.toString())) {
+                            throw new IllegalStateException("content changed");
+                        }
+                        final char[] chars = new char[] {'a', 'b'};
+                        value.append(chars).insert(0, chars);
+                        value.setLength(3);
+                        value.setLength(5);
+                        value.ensureCapacity(1024);
+                        value.trimToSize();
+                        if (value.length() != 5 || value.charAt(3) != 0 || value.charAt(4) != 0
+                            || value.charAt(0) != 'a' || value.charAt(1) != 'b' || value.charAt(2) != 'Q') {
+                            throw new IllegalStateException("length or content changed");
+                        }
+                    }
+                    completed = true;
+                }
+            }
+            """);
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        assertThat(jvmOutput).isEqualTo("mutations passed\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/stringbuilder-concurrent-gc").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_HEAP_LIMIT_BYTES", "65536", "JAVAN_GC_STRESS", "1", "JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(jvmOutput);
+        assertThat(nativeRun.stderr()).isEmpty();
+    }
+
     @Test
     void stringBuilderAppendBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("stringbuilder-append");

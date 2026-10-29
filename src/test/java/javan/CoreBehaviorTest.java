@@ -51,6 +51,8 @@ import javan.verify.ForbiddenApiRules;
 import javan.classfile.MethodRef;
 import javan.verify.StaticVerifier;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.DynamicTest;
+import org.junit.jupiter.api.TestFactory;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
@@ -15827,6 +15829,37 @@ final class CoreBehaviorTest {
                 + "        javan_runtime_lock_enter();\n"
                 + "        current = javan_expr_tmp_0;"
         );
+    }
+
+    @TestFactory
+    java.util.stream.Stream<DynamicTest> cCodegenRootsNonBlockingRequestValuesBeforeReleasingTheLock() {
+        return List.of(
+            Map.entry("javan_stringbuilder_new", 0),
+            Map.entry("javan_stringbuilder_to_string", 1),
+            Map.entry("javan_string_get_bytes_charset", 2),
+            Map.entry("javan_http_exchange_input_stream_read_all_bytes", 1),
+            Map.entry("javan_uri_get_raw_path", 1),
+            Map.entry("javan_uri_get_raw_query", 1),
+            Map.entry("javan_http_headers_get_first", 2)
+        ).stream().map(entry -> DynamicTest.dynamicTest(entry.getKey(), () -> {
+            final List<IrParameter> parameters = java.util.stream.IntStream.range(0, entry.getValue())
+                .mapToObj(index -> new IrParameter(IrType.OBJECT, "arg" + index)).toList();
+            final List<IrExpression> arguments = parameters.stream()
+                .map(parameter -> IrExpression.objectLocal(parameter.name())).toList();
+            final String descriptor = "(" + "Ljava/lang/Object;".repeat(entry.getValue()) + ")V";
+            final IrFunction function = new IrFunction("com/acme/Main", "main", descriptor, "main_symbol", IrType.VOID,
+                parameters, List.of(new IrLocal(IrType.OBJECT, "value")), List.of(
+                    IrInstruction.assignObject("value", IrExpression.objectCall(entry.getKey(), arguments)),
+                    IrInstruction.returnVoid()));
+            final String generated = Files.readString(new CCodegen().generate(
+                new IrProgram(List.of(), List.of(function), "main_symbol"), tempDir.resolve(entry.getKey())));
+            final String callArguments = parameters.stream().map(IrParameter::name)
+                .collect(java.util.stream.Collectors.joining(", "));
+
+            assertThat(generated).contains("javan_runtime_lock_enter();\n"
+                + "        javan_expr_tmp_0 = " + entry.getKey() + "(" + callArguments + ");\n"
+                + "        javan_runtime_lock_leave();");
+        }));
     }
 
     @Test
