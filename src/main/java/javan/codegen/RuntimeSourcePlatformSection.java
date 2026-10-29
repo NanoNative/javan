@@ -3542,6 +3542,8 @@ final class RuntimeSourcePlatformSection {
             }
             char after_headers = request[header_length];
             request[header_length] = '\\0';
+            // Keep newly collectible values alive until their caller-owned roots are assigned.
+            javan_runtime_lock_enter();
             *headers_out = javan_string_from(request);
             request[header_length] = after_headers;
             *body_out = javan_byte_array_from(body, body_length);
@@ -3551,6 +3553,7 @@ final class RuntimeSourcePlatformSection {
             *(char*) target_end = '\\0';
             *method_out = javan_string_from(request);
             *target_out = javan_string_from(target);
+            javan_runtime_lock_leave();
             return 1;
         }
 
@@ -3622,11 +3625,11 @@ final class RuntimeSourcePlatformSection {
                     javan_socket_close(socket_value);
                 } else {
                     if (javan_http_server_request_values(socket, server->path, &request_method, &request_target, &request_text, &request_body_bytes, &request_body_length) != 0) {
+                        javan_runtime_lock_enter();
                         request_uri = javan_uri_from_request_target(request_target);
                         request_headers = (void*) javan_http_headers_new(request_text);
                         request_body = (void*) javan_http_exchange_input_stream_new(request_body_bytes, request_body_length);
                         exchange_value = (void*) javan_http_exchange_new(socket, request_method, request_uri, request_headers, request_body);
-                        javan_runtime_lock_enter();
                         server->active_exchange = exchange_value;
                         javan_runtime_lock_leave();
                         if (javan_http_server_stopped(server) == 0) {

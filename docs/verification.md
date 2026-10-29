@@ -94,6 +94,21 @@ independently check exact JSON output for empty, ASCII, quoting, control,
 Unicode and long strings, including repeated calls under GC stress. No timing
 threshold is imposed on ordinary tests.
 
+## HTTP Request Root Handoff
+
+On 2026-10-29, the existing `http-server-loopback` sanitizer fixture reproduced
+`unknown array allocation` with main `13132ec8` on native Linux ARM64. With Clang
+21.1.8, ASan/UBSan, a 65,536-byte managed heap and GC stress/safepoint interval 1,
+the baseline failed on repetition 10. The JSON-only candidate emitted identical
+C for this fixture, so the race predates that optimization.
+
+The runtime now holds its recursive lock from request/exchange construction until
+publication into registered roots. Socket reads and handler callbacks remain
+outside that lock. Newly generated C passed 200 repetitions under the same Linux
+settings, without emulation. The [CLI regression](../src/test/java/javan/CliNetworkIntegrationTest.java)
+also checks 64 real POST requests with both client and server in the generated
+program. This is stress evidence, not a deterministic scheduling guarantee.
+
 ## Test Worker Balance
 
 CI-SHARD-01 was accepted on 2026-08-29 in the
