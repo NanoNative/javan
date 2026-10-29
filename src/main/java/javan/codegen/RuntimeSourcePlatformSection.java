@@ -45,6 +45,7 @@ final class RuntimeSourcePlatformSection {
             int next_byte_capacity = javan_stringbuilder_grown_capacity(builder->byte_capacity, required_bytes);
             int old_byte_capacity = builder->byte_capacity;
             int created_buffer = builder->values == NULL;
+            javan_runtime_lock_enter();
             void** javan_builder_growth_roots[] = {
                 (void**) &builder
             };
@@ -70,6 +71,7 @@ final class RuntimeSourcePlatformSection {
                 memset(next + old_byte_capacity + 1, 0, (unsigned long) (next_byte_capacity - old_byte_capacity));
             }
             javan_root_frame_pop(javan_builder_growth_roots);
+            javan_runtime_lock_leave();
         }
 
         void javan_stringbuilder_reserve_for_string(void* builder_value, void* string_value) {
@@ -165,6 +167,8 @@ final class RuntimeSourcePlatformSection {
                 (void**) &source_root
             };
             javan_root_frame_push(javan_builder_append_roots, 2);
+            // The collector must see the buffer, length and terminator as one update.
+            javan_runtime_lock_enter();
             javan_stringbuilder_ensure_capacity(
                 builder,
                 builder->length + source_length,
@@ -181,6 +185,7 @@ final class RuntimeSourcePlatformSection {
             builder->byte_length += source_bytes;
             *out = '\\0';
             javan_root_frame_pop(javan_builder_append_roots);
+            javan_runtime_lock_leave();
         }
 
         static void javan_stringbuilder_append_char_value(javan_string_builder* builder, int value) {
@@ -193,12 +198,14 @@ final class RuntimeSourcePlatformSection {
                 (void**) &builder
             };
             javan_root_frame_push(roots, 1);
+            javan_runtime_lock_enter();
             javan_stringbuilder_ensure_capacity(builder, builder->length + 1, builder_bytes + char_bytes);
             char* end = javan_modified_utf8_write_char(builder->values + builder_bytes, value);
             builder->length++;
             builder->byte_length += char_bytes;
             *end = '\\0';
             javan_root_frame_pop(roots);
+            javan_runtime_lock_leave();
         }
 
         static void javan_stringbuilder_insert_string_value(javan_string_builder* builder, int index, const char* value) {
@@ -220,6 +227,7 @@ final class RuntimeSourcePlatformSection {
             };
             javan_root_frame_push(javan_builder_insert_roots, 2);
             int byte_index = javan_stringbuilder_byte_offset(builder, index);
+            javan_runtime_lock_enter();
             javan_stringbuilder_ensure_capacity(
                 builder,
                 builder->length + source_length,
@@ -239,6 +247,7 @@ final class RuntimeSourcePlatformSection {
             builder->length += source_length;
             builder->byte_length += source_bytes;
             javan_root_frame_pop(javan_builder_insert_roots);
+            javan_runtime_lock_leave();
         }
 
         static void javan_stringbuilder_insert_char_value(javan_string_builder* builder, int index, int value) {
@@ -255,6 +264,7 @@ final class RuntimeSourcePlatformSection {
                 (void**) &builder
             };
             javan_root_frame_push(roots, 1);
+            javan_runtime_lock_enter();
             javan_stringbuilder_ensure_capacity(builder, builder->length + 1, builder_bytes + char_bytes);
             memmove(
                 builder->values + byte_index + char_bytes,
@@ -265,6 +275,7 @@ final class RuntimeSourcePlatformSection {
             builder->length++;
             builder->byte_length += char_bytes;
             javan_root_frame_pop(roots);
+            javan_runtime_lock_leave();
         }
 
         void* javan_stringbuilder_new(void) {
@@ -294,6 +305,7 @@ final class RuntimeSourcePlatformSection {
             if (capacity <= builder->capacity) {
                 return;
             }
+            javan_runtime_lock_enter();
             void** javan_builder_owner_roots[] = {
                 (void**) &builder
             };
@@ -321,6 +333,7 @@ final class RuntimeSourcePlatformSection {
             builder->byte_capacity = next_byte_capacity;
             javan_heap_maybe_validate();
             javan_root_frame_pop(javan_builder_owner_roots);
+            javan_runtime_lock_leave();
         }
 
         void* javan_stringbuilder_append_string(void* builder_value, void* value) {
@@ -337,9 +350,11 @@ final class RuntimeSourcePlatformSection {
                 (void**) &chars
             };
             javan_root_frame_push(javan_builder_append_chars_roots, 2);
+            javan_runtime_lock_enter();
             void* text = javan_string_from_chars(chars, offset, count);
             javan_stringbuilder_append_string_value(builder, (const char*) text);
             javan_root_frame_pop(javan_builder_append_chars_roots);
+            javan_runtime_lock_leave();
             return builder_value;
         }
 
@@ -582,6 +597,7 @@ final class RuntimeSourcePlatformSection {
             int byte_start = javan_stringbuilder_byte_offset(builder, start);
             int byte_end = javan_stringbuilder_byte_offset(builder, effective_end);
             int byte_length = builder->byte_length;
+            javan_runtime_lock_enter();
             memmove(
                 builder->values + byte_start,
                 builder->values + byte_end,
@@ -589,6 +605,7 @@ final class RuntimeSourcePlatformSection {
             );
             builder->length -= effective_end - start;
             builder->byte_length -= byte_end - byte_start;
+            javan_runtime_lock_leave();
             return builder_value;
         }
 
@@ -642,9 +659,11 @@ final class RuntimeSourcePlatformSection {
                 (void**) &chars
             };
             javan_root_frame_push(javan_builder_insert_chars_roots, 2);
+            javan_runtime_lock_enter();
             void* text = javan_string_from_chars(chars, offset, count);
             javan_stringbuilder_insert_string_value(builder, index, (const char*) text);
             javan_root_frame_pop(javan_builder_insert_chars_roots);
+            javan_runtime_lock_leave();
             return builder_value;
         }
 
@@ -687,6 +706,7 @@ final class RuntimeSourcePlatformSection {
                 (void**) &source
             };
             javan_root_frame_push(roots, 2);
+            javan_runtime_lock_enter();
             source = javan_string_copy(builder->values);
             builder->length = 0;
             builder->byte_length = 0;
@@ -706,6 +726,7 @@ final class RuntimeSourcePlatformSection {
                 javan_stringbuilder_append_char(builder, value);
             }
             javan_root_frame_pop(roots);
+            javan_runtime_lock_leave();
             return builder_value;
         }
 
@@ -733,6 +754,7 @@ final class RuntimeSourcePlatformSection {
                 (void**) &builder
             };
             javan_root_frame_push(javan_builder_trim_roots, 1);
+            javan_runtime_lock_enter();
             char* next = (char*) javan_realloc_owned_buffer(
                 builder->values,
                 (unsigned long) target_byte_capacity + 1UL
@@ -746,6 +768,7 @@ final class RuntimeSourcePlatformSection {
             builder->values[target_byte_capacity] = '\\0';
             javan_heap_maybe_validate();
             javan_root_frame_pop(javan_builder_trim_roots);
+            javan_runtime_lock_leave();
         }
 
         void javan_stringbuilder_set_char_at(void* builder_value, int index, int value) {
@@ -766,6 +789,7 @@ final class RuntimeSourcePlatformSection {
                 (void**) &builder
             };
             javan_root_frame_push(javan_builder_set_length_roots, 1);
+            javan_runtime_lock_enter();
             int current_length = builder->length;
             int current_bytes = builder->byte_length;
             if (length < current_length) {
@@ -774,6 +798,7 @@ final class RuntimeSourcePlatformSection {
                 builder->length = length;
                 builder->byte_length = byte_offset;
                 javan_root_frame_pop(javan_builder_set_length_roots);
+                javan_runtime_lock_leave();
                 return;
             }
             int added = length - current_length;
@@ -789,6 +814,7 @@ final class RuntimeSourcePlatformSection {
             builder->byte_length = current_bytes + (added * 2);
             *out = '\\0';
             javan_root_frame_pop(javan_builder_set_length_roots);
+            javan_runtime_lock_leave();
         }
 
         int javan_stringbuilder_capacity(void* builder_value) {

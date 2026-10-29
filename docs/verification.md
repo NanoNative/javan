@@ -75,7 +75,7 @@ escaping loop. Native String.length scans the encoded string. Sequential charAt
 already uses the runtime cursor cache, so repeating length caused quadratic work.
 
 Both variants compiled the real Json.java and the same small Main through the
-same packaged Javan compiler, using Apple Clang 21.0.0 on macOS ARM64
+same Javan CLI, including the GC fixes below, using Apple Clang 21.0.0 on macOS ARM64
 (Apple M1 Max, 64 GiB RAM). Main constructs an ASCII string, calls Json.string
 eight times and prints the sum of the rendered lengths. Every run checked that
 sum against `(inputLength + 2) * 8`. The managed heap limit was 1 GiB with GC
@@ -84,9 +84,12 @@ owned verification workload. Values below are medians from `/usr/bin/time -lp`.
 
 | Input characters | Before wall / CPU | After wall / CPU | Before / after peak RSS |
 | ---: | ---: | ---: | ---: |
-| 8,000 | 0.72s / 0.71s | 0.05s / 0.04s | 2.16 / 2.16 MiB |
-| 16,000 | 2.79s / 2.76s | 0.09s / 0.09s | 2.34 / 2.34 MiB |
-| 32,000 | 10.94s / 10.79s | 0.18s / 0.18s | 2.80 / 2.80 MiB |
+| 8,000 | 0.69s / 0.68s | 0.05s / 0.04s | 2.16 / 2.16 MiB |
+| 16,000 | 2.67s / 2.65s | 0.09s / 0.09s | 2.34 / 2.33 MiB |
+| 32,000 | 10.56s / 10.50s | 0.18s / 0.18s | 2.81 / 2.81 MiB |
+
+For 100,000 renders of short inputs, three paired runs measured median wall
+0.35/0.93/5.44s before and 0.35/0.93/5.07s after for 0/8/64 characters.
 
 These are serialization-workload measurements, not a whole-compiler speedup or
 a memory-reduction claim. The [native CLI regressions](../src/test/java/javan/CliRuntimeTranslationIntegrationTest.java)
@@ -108,6 +111,20 @@ outside that lock. Newly generated C passed 200 repetitions under the same Linux
 settings, without emulation. The [CLI regression](../src/test/java/javan/CliNetworkIntegrationTest.java)
 also checks 64 real POST requests with both client and server in the generated
 program. This is stress evidence, not a deterministic scheduling guarantee.
+
+The POST regression also exposed allocation-to-root handoff gaps in nonblocking
+StringBuilder, request-body, URI and header helpers. Code generation now keeps
+their results protected until assignment to a registered root. Blocking socket
+operations retain their existing unlocked behavior.
+
+The [StringBuilder concurrency regression](../src/test/java/javan/CliStringBuilderIntegrationTest.java)
+mutates separate builders on two threads, including growth, insert, delete,
+reverse, replacement, char arrays, length changes and trimming. With the prior
+runtime, its generated program failed on the first Linux ASan/UBSan repetition.
+Protecting buffer/length/terminator updates with the existing runtime lock passed
+all 200 repetitions under the same small-heap GC stress settings.
+The final combined runtime/codegen also passed 200 repetitions of the 64-request
+POST program, totaling 12,800 requests, with ASan/UBSan and leak detection enabled.
 
 ## Test Worker Balance
 

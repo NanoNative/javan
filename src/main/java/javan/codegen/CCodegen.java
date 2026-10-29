@@ -3591,7 +3591,18 @@ public final class CCodegen {
             if (expression.kind() != javan.ir.IrExpression.Kind.CALL) {
                 return true;
             }
-            return "javan_atomic_reference_get".equals(expression.value());
+            // Only nonblocking calls may hold the lock through publication into a root.
+            return switch (expression.value()) {
+                case "javan_atomic_reference_get",
+                    "javan_stringbuilder_new",
+                    "javan_stringbuilder_to_string",
+                    "javan_string_get_bytes_charset",
+                    "javan_http_exchange_input_stream_read_all_bytes",
+                    "javan_uri_get_raw_path",
+                    "javan_uri_get_raw_query",
+                    "javan_http_headers_get_first" -> true;
+                default -> false;
+            };
         }
 
         private boolean isGeneratedObjectResultCall(final javan.ir.IrExpression expression) {
