@@ -26,7 +26,7 @@ public class ProcessRunner {
     /**
      * Creates a process runner.
      *
-     * @param timeoutMillis maximum process duration in milliseconds
+     * @param timeoutMillis maximum wait in milliseconds; zero or negative means no wait for completion
      */
     public ProcessRunner(final long timeoutMillis) {
         this.timeoutMillis = timeoutMillis;
@@ -35,7 +35,7 @@ public class ProcessRunner {
     /**
      * Creates a process runner.
      *
-     * @param timeout maximum process duration
+     * @param timeout maximum wait; zero or negative means no wait for completion
      */
     public ProcessRunner(final Duration timeout) {
         this(timeout.toMillis());
@@ -47,18 +47,23 @@ public class ProcessRunner {
      * @param workingDirectory process working directory
      * @param command command and arguments
      * @return captured process result
-     * @throws IOException when the process cannot be started, read, or its captured output deleted
+     * @throws IOException when the process cannot be started, or captured output cannot be created, read or deleted
      * @throws InterruptedException when interrupted while waiting; output cleanup failures are suppressed
+     * @throws NullPointerException when the directory, command or a command argument is null
+     * @throws IndexOutOfBoundsException when the command is empty
      */
     public Result run(final Path workingDirectory, final List<String> command) throws IOException, InterruptedException {
-        final Path stdoutFile = Files.createTempFile("javan-process-", ".out");
-        final Path stderrFile = Files.createTempFile("javan-process-", ".err");
-        final ProcessBuilder builder = new ProcessBuilder(new ArrayList<>(command));
+        final ProcessBuilder builder = new ProcessBuilder(List.copyOf(command));
         builder.directory(workingDirectory.toFile());
-        builder.redirectOutput(stdoutFile.toFile());
-        builder.redirectError(stderrFile.toFile());
+        final List<Path> capturedOutput = new ArrayList<>(2);
         Exception failure = null;
         try {
+            final Path stdoutFile = Files.createTempFile("javan-process-", ".out");
+            capturedOutput.add(stdoutFile);
+            final Path stderrFile = Files.createTempFile("javan-process-", ".err");
+            capturedOutput.add(stderrFile);
+            builder.redirectOutput(stdoutFile.toFile());
+            builder.redirectError(stderrFile.toFile());
             final Process process = builder.start();
             try {
                 final boolean completed = process.waitFor(timeoutMillis, TimeUnit.MILLISECONDS);
@@ -79,11 +84,11 @@ public class ProcessRunner {
                 stopInterruptedProcess(process, exception);
                 throw exception;
             }
-        } catch (final IOException | InterruptedException exception) {
+        } catch (final IOException | InterruptedException | RuntimeException exception) {
             failure = exception;
             throw exception;
         } finally {
-            deleteCapturedOutput(List.of(stdoutFile, stderrFile), failure);
+            deleteCapturedOutput(capturedOutput, failure);
         }
     }
 
@@ -112,8 +117,9 @@ public class ProcessRunner {
     /**
      * Runs a command and returns launcher or interruption failures as deterministic process results.
      *
-     * <p>This is the concurrent-worker boundary. Exit code {@code 125} means interruption and
-     * {@code 126} means the process could not be started or read.</p>
+     * <p>This is the concurrent-worker boundary. Interrupted waits restore the calling thread's
+     * interrupt status and return code {@code 125} with {@code Interrupted while running process}.
+     * Launcher or output-capture failures return {@code 126}. Normal child exit codes are unchanged.</p>
      *
      * @param workingDirectory process working directory
      * @param command command and arguments

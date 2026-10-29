@@ -36,6 +36,30 @@ final class ProcessRunnerTest {
 
     @Test
     @PlatformTest
+    void nullCommandDoesNotLeaveCapturedOutputFiles() throws Exception {
+        assertCaptureProbe("invalid-null-command", "invalid-input:rejected\nremaining-output-files:0\n");
+    }
+
+    @Test
+    @PlatformTest
+    void nullDirectoryDoesNotLeaveCapturedOutputFiles() throws Exception {
+        assertCaptureProbe("invalid-null-directory", "invalid-input:rejected\nremaining-output-files:0\n");
+    }
+
+    @Test
+    @PlatformTest
+    void nullArgumentDoesNotLeaveCapturedOutputFiles() throws Exception {
+        assertCaptureProbe("invalid-null-argument", "invalid-input:rejected\nremaining-output-files:0\n");
+    }
+
+    @Test
+    @PlatformTest
+    void emptyCommandDoesNotLeaveCapturedOutputFiles() throws Exception {
+        assertCaptureProbe("invalid-empty-command", "invalid-input:rejected\nremaining-output-files:0\n");
+    }
+
+    @Test
+    @PlatformTest
     void interruptionReleasesCapturedOutputFilesBeforeReturning() throws Exception {
         assertCaptureProbe("interrupt", "interrupted:0\nremaining-output-files:0\n");
     }
@@ -55,12 +79,13 @@ final class ProcessRunnerTest {
     }
 
     private void assertCaptureProbe(final String mode, final String expectedOutput) throws Exception {
-        final Path capture = Files.createDirectory(tempDir.resolve("capture"));
+        final Path directory = Files.createDirectory(tempDir.resolve(mode));
+        final Path capture = Files.createDirectory(directory.resolve("capture"));
         final String classpath = Path.of("target/classes").toAbsolutePath() + java.io.File.pathSeparator
             + Path.of("target/test-classes").toAbsolutePath();
-        final ProcessRunner.Result result = new ProcessRunner(Duration.ofSeconds(20)).run(tempDir, List.of(
+        final ProcessRunner.Result result = new ProcessRunner(Duration.ofSeconds(20)).run(directory, List.of(
             ProcessHandle.current().info().command().orElseThrow(), "-Djava.io.tmpdir=" + capture,
-            "-cp", classpath, CaptureProbe.class.getName(), tempDir.toString(), mode
+            "-cp", classpath, CaptureProbe.class.getName(), directory.toString(), mode
         ));
 
         assertThat(result.exitCode()).as(result.stderr()).isZero();
@@ -77,6 +102,27 @@ final class ProcessRunnerTest {
             final Path ready = directory.resolve("ready");
             final Path complete = directory.resolve("complete");
             final String mode = args[1];
+            if (mode.startsWith("invalid-")) {
+                final List<String> command = switch (mode) {
+                    case "invalid-null-command" -> null;
+                    case "invalid-null-argument" -> java.util.Arrays.asList("unused-command", (String) null);
+                    case "invalid-empty-command" -> List.of();
+                    default -> List.of("unused-command");
+                };
+                try {
+                    new ProcessRunner().run(mode.equals("invalid-null-directory") ? null : directory, command);
+                    throw new AssertionError("Expected invalid process input to be rejected");
+                } catch (final RuntimeException failure) {
+                    if (mode.equals("invalid-empty-command")
+                        ? !(failure instanceof IndexOutOfBoundsException)
+                        : !(failure instanceof NullPointerException)) {
+                        throw new AssertionError("Unexpected invalid-input failure", failure);
+                    }
+                    System.out.println("invalid-input:rejected");
+                    printRemainingOutputFiles();
+                }
+                return;
+            }
             if ("wait".equals(mode)) {
                 Files.createFile(ready);
                 awaitFile(complete);
