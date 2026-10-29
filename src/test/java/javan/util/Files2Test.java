@@ -1,13 +1,20 @@
 package javan.util;
 
+import javan.testing.TestSuite.PlatformTest;
+
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
 
+import java.io.IOException;
+import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -17,6 +24,82 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 final class Files2Test {
     @TempDir
     private Path tempDir;
+
+    @Test
+    @PlatformTest
+    @EnabledOnOs({OS.LINUX, OS.MAC})
+    void failedSourceScanClosesParentDirectoryStreams() throws Exception {
+        assertFailedTraversalReleasesHandles("scan");
+    }
+
+    @Test
+    @PlatformTest
+    @EnabledOnOs({OS.LINUX, OS.MAC})
+    void failedTimestampScanClosesParentDirectoryStreams() throws Exception {
+        assertFailedTraversalReleasesHandles("time");
+    }
+
+    @Test
+    @PlatformTest
+    @EnabledOnOs({OS.LINUX, OS.MAC})
+    void failedRecursiveDeleteClosesParentDirectoryStreams() throws Exception {
+        assertFailedTraversalReleasesHandles("delete");
+    }
+
+    private void assertFailedTraversalReleasesHandles(final String mode) throws Exception {
+        final Path root = Files.createDirectory(tempDir.resolve(mode));
+        final Path blocked = Files.createDirectory(root.resolve("blocked"));
+        final var permissions = Files.getPosixFilePermissions(blocked);
+        try {
+            Files.setPosixFilePermissions(blocked, Set.of());
+            assumeTrue(!Files.isReadable(blocked), "Host bypasses directory permissions");
+            final String classpath = Path.of("target/classes").toAbsolutePath() + java.io.File.pathSeparator
+                + Path.of("target/test-classes").toAbsolutePath();
+            final ProcessRunner.Result result = new ProcessRunner(20_000).run(tempDir, List.of(
+                ProcessHandle.current().info().command().orElseThrow(), "-Xms64m", "-Xmx64m", "-cp", classpath,
+                DirectoryProbe.class.getName(), root.toString(), mode
+            ));
+            assertThat(result.exitCode()).as(result.stderr()).isZero();
+            assertThat(result.stderr()).isEmpty();
+            assertThat(result.stdout()).isEqualToNormalizingNewlines("failures:32\nretained-handles:0\n");
+            assertThat(root).isDirectory();
+        } finally {
+            Files.setPosixFilePermissions(blocked, permissions);
+        }
+    }
+
+    public static final class DirectoryProbe {
+        public static void main(final String[] args) throws Exception {
+            final Path root = Path.of(args[0]);
+            final var os = (com.sun.management.UnixOperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();
+            for (int attempt = 0; attempt < 5; attempt++) {
+                expectAccessFailure(root, args[1]);
+            }
+            final long before = os.getOpenFileDescriptorCount();
+            for (int attempt = 0; attempt < 32; attempt++) {
+                expectAccessFailure(root, args[1]);
+            }
+            final long retained = os.getOpenFileDescriptorCount() - before;
+            System.out.println("failures:32");
+            System.out.println("retained-handles:" + retained);
+        }
+
+        private static void expectAccessFailure(final Path root, final String mode) throws IOException {
+            try {
+                switch (mode) {
+                    case "scan" -> Files2.findJavaSources(root);
+                    case "time" -> Files2.newestModified(List.of(root), ".java");
+                    case "delete" -> Files2.deleteRecursive(root);
+                    default -> throw new AssertionError("Unknown operation: " + mode);
+                }
+                throw new AssertionError("Expected inaccessible child directory");
+            } catch (final java.nio.file.AccessDeniedException expected) {
+                if (!root.resolve("blocked").toString().equals(expected.getFile())) {
+                    throw new AssertionError("Unexpected access failure", expected);
+                }
+            }
+        }
+    }
 
     @Test
     void writeStringCreatesParentDirectories() throws Exception {

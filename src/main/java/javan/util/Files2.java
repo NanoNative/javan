@@ -112,10 +112,17 @@ public final class Files2 {
             return;
         }
         final DirectoryStream<Path> children = Files.newDirectoryStream(path);
+        try {
+            collectTree(children, result);
+        } finally {
+            children.close();
+        }
+    }
+
+    private static void collectTree(final DirectoryStream<Path> children, final List<Path> result) throws IOException {
         for (final Path child : children) {
             collectTree(child, result);
         }
-        children.close();
     }
 
     private static void collectMatchingFiles(
@@ -130,14 +137,26 @@ public final class Files2 {
                 return;
             }
             final DirectoryStream<Path> children = Files.newDirectoryStream(current);
-            for (final Path child : children) {
-                collectMatchingFiles(root, child, matchKind, result);
+            try {
+                collectMatchingFiles(root, children, matchKind, result);
+            } finally {
+                children.close();
             }
-            children.close();
             return;
         }
         if (Files.isRegularFile(current) && matches(current, matchKind)) {
             result.add(current);
+        }
+    }
+
+    private static void collectMatchingFiles(
+        final Path root,
+        final DirectoryStream<Path> children,
+        final int matchKind,
+        final List<Path> result
+    ) throws IOException {
+        for (final Path child : children) {
+            collectMatchingFiles(root, child, matchKind, result);
         }
     }
 
@@ -281,18 +300,25 @@ public final class Files2 {
 
     private static long newestModified(final Path path, final String suffix) throws IOException {
         if (Files.isDirectory(path)) {
-            long newest = 0;
             final DirectoryStream<Path> children = Files.newDirectoryStream(path);
-            for (final Path child : children) {
-                newest = Math.max(newest, newestModified(child, suffix));
+            try {
+                return newestModified(children, suffix);
+            } finally {
+                children.close();
             }
-            children.close();
-            return newest;
         }
         if (Files.isRegularFile(path) && path.getFileName().toString().endsWith(suffix)) {
             return Files.getLastModifiedTime(path).toMillis();
         }
         return 0;
+    }
+
+    private static long newestModified(final DirectoryStream<Path> children, final String suffix) throws IOException {
+        long newest = 0;
+        for (final Path child : children) {
+            newest = Math.max(newest, newestModified(child, suffix));
+        }
+        return newest;
     }
 
     /**
