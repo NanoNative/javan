@@ -1111,6 +1111,36 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         }
     }
 
+    @TestFactory
+    Stream<DynamicTest> sanitizerToolchainCommandsIsolateRuntimeStress() {
+        return Stream.of("child-environment", "parent-environment", "failure-propagation").map(scenario ->
+            DynamicTest.dynamicTest(scenario, () -> {
+                final String command = switch (scenario) {
+                    case "child-environment" -> """
+                        run_toolchain_command sh -ec '
+                          test -z "${JAVAN_MAX_ALLOCATION_BYTES+set}${JAVAN_HEAP_LIMIT_BYTES+set}${JAVAN_GC_STRESS+set}${JAVAN_GC_SAFEPOINT_INTERVAL+set}"
+                          test "$ASAN_OPTIONS" = detect_leaks=1
+                        '
+                        """;
+                    case "parent-environment" -> """
+                        run_toolchain_command true
+                        test "$JAVAN_MAX_ALLOCATION_BYTES:$JAVAN_HEAP_LIMIT_BYTES:$JAVAN_GC_STRESS:$JAVAN_GC_SAFEPOINT_INTERVAL" = 17:1024:64:1
+                        """;
+                    default -> "run_toolchain_command sh -c 'exit 23'\nprintf unexpected";
+                };
+                final ProcessResult run = process(
+                    REPO_ROOT,
+                    List.of("sh", "-c", "set -eu\n. \"$1\"\n" + command, "sanitizer-test",
+                        REPO_ROOT.resolve(".github/scripts/sanitizer-common.sh").toString()),
+                    Duration.ofSeconds(20),
+                    Map.of("JAVAN_MAX_ALLOCATION_BYTES", "17", "JAVAN_HEAP_LIMIT_BYTES", "1024",
+                        "JAVAN_GC_STRESS", "64", "JAVAN_GC_SAFEPOINT_INTERVAL", "1", "ASAN_OPTIONS", "detect_leaks=1")
+                );
+                assertThat(run.exitCode()).as(run.stderr()).isEqualTo(scenario.equals("failure-propagation") ? 23 : 0);
+                assertThat(run.stdout()).isEmpty();
+            }));
+    }
+
     @Test
     void timingReporterWritesMachineAndHumanReadablePhaseComparisons() throws Exception {
         final Path runner = tempDir.resolve("timing-report-test.sh");

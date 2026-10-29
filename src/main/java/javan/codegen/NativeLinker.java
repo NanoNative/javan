@@ -815,7 +815,7 @@ public final class NativeLinker {
         final Path displayRoot,
         final boolean release
     ) throws IOException, InterruptedException {
-        final String fingerprint = objectFingerprint(compiler, compilerIdentity, source, dependencies, release);
+        final String fingerprint = objectFingerprint(compiler, compilerIdentity, source, dependencies, includeDirectories, release);
         final Path object = cacheDirectory.resolve(fingerprint + ".o");
         final Path checksum = cacheDirectory.resolve(fingerprint + ".fnv64");
         if (Files.isRegularFile(object) && Files.isRegularFile(checksum)
@@ -938,10 +938,11 @@ public final class NativeLinker {
         final String compilerIdentity,
         final Path source,
         final List<Path> dependencies,
+        final List<Path> includeDirectories,
         final boolean release
     ) throws IOException {
         long hash = FNV_OFFSET_BASIS;
-        hash = fingerprint(hash, "javan-native-object-v2");
+        hash = fingerprint(hash, "javan-native-object-v3");
         hash = fingerprint(hash, System.getProperty("os.name", ""));
         hash = fingerprint(hash, System.getProperty("os.arch", ""));
         hash = fingerprint(hash, compiler);
@@ -956,6 +957,12 @@ public final class NativeLinker {
             hash = fingerprint(hash, flag);
         }
         hash = fingerprint(hash, "-fPIC");
+        for (final Path includeDirectory : includeDirectories) {
+            hash = fingerprint(hash, "-I");
+            hash = fingerprint(hash, includeDirectory.toString());
+        }
+        // Preserve the compiler's path spelling because __FILE__ can make it observable.
+        hash = fingerprint(hash, source.toString());
         hash = fingerprint(hash, Files.readAllBytes(source));
         for (final Path dependency : dependencies) {
             hash = fingerprint(hash, dependency.getFileName().toString());

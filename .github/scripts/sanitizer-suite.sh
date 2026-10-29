@@ -3,6 +3,7 @@ set -eu
 
 ROOT=$(CDPATH= cd "$(dirname "$0")/../.." && pwd)
 cd "$ROOT"
+. "$ROOT/.github/scripts/sanitizer-common.sh"
 
 SANITIZER_SCOPE=${JAVAN_SANITIZER_SCOPE:-full}
 case "$SANITIZER_SCOPE" in
@@ -100,13 +101,13 @@ assert_json_number_at_least() {
 run_javan_report() {
   project=$1
   if [ -n "${JAVAN_BIN:-}" ]; then
-    "$JAVAN_BIN" report "$project" >/dev/null
+    run_toolchain_command "$JAVAN_BIN" report "$project" >/dev/null
   elif [ -d "$ROOT/target/classes" ]; then
-    java -cp "$ROOT/target/classes" javan.Main report "$project" >/dev/null
+    run_toolchain_command java -cp "$ROOT/target/classes" javan.Main report "$project" >/dev/null
   elif [ -x "$ROOT/dist/javan" ]; then
-    "$ROOT/dist/javan" report "$project" >/dev/null
+    run_toolchain_command "$ROOT/dist/javan" report "$project" >/dev/null
   elif [ -x "$ROOT/target/.javan/bin/javan-verified" ]; then
-    "$ROOT/target/.javan/bin/javan-verified" report "$project" >/dev/null
+    run_toolchain_command "$ROOT/target/.javan/bin/javan-verified" report "$project" >/dev/null
   else
     printf '%s\n' "Missing javan runtime for report proof: build target/classes or set JAVAN_BIN=/path/to/javan." >&2
     exit 2
