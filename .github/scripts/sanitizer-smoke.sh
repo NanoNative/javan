@@ -134,23 +134,11 @@ else
   exit 2
 fi
 
-JAVAN_MAX_ALLOCATION_BYTES= \
-JAVAN_HEAP_LIMIT_BYTES= \
-JAVAN_GC_STRESS= \
-JAVAN_GC_SAFEPOINT_INTERVAL= \
-  "$JAVAN_BIN" clean "$FULL_PROJECT" >/dev/null 2>&1 || true
-JAVAN_MAX_ALLOCATION_BYTES= \
-JAVAN_HEAP_LIMIT_BYTES= \
-JAVAN_GC_STRESS= \
-JAVAN_GC_SAFEPOINT_INTERVAL= \
-  "$JAVAN_BIN" build "$FULL_PROJECT" >/dev/null
+run_toolchain_command "$JAVAN_BIN" clean "$FULL_PROJECT" >/dev/null 2>&1 || true
+run_toolchain_command "$JAVAN_BIN" build "$FULL_PROJECT" >/dev/null
 
 if [ "$COMPARE_JVM" = "true" ]; then
-  JAVAN_MAX_ALLOCATION_BYTES= \
-  JAVAN_HEAP_LIMIT_BYTES= \
-  JAVAN_GC_STRESS= \
-  JAVAN_GC_SAFEPOINT_INTERVAL= \
-    java -cp "$FULL_PROJECT/.javan/classes" com.acme.Main >"$TMP/expected.out"
+  run_toolchain_command java -cp "$FULL_PROJECT/.javan/classes" com.acme.Main >"$TMP/expected.out"
 else
   printf '%s' "$EXPECTED_STDOUT" >"$TMP/expected.out"
 fi

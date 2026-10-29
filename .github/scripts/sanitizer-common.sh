@@ -1,5 +1,11 @@
 #!/bin/sh
 
+# Probe limits belong to generated programs, not the tools preparing their evidence.
+run_toolchain_command() (
+  unset JAVAN_MAX_ALLOCATION_BYTES JAVAN_HEAP_LIMIT_BYTES JAVAN_GC_STRESS JAVAN_GC_SAFEPOINT_INTERVAL
+  "$@"
+)
+
 json_escape() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
