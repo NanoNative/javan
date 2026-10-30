@@ -4,13 +4,16 @@ import javan.classfile.ClassFile;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
 import javan.testing.TestSuite.PlatformTest;
+import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestFactory;
 import org.junit.jupiter.api.parallel.Execution;
 
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -4406,6 +4409,24 @@ final class JdkCallSupportTest {
     @Test
     void unknownJdkThrowableIsNotAdmittedWithoutAnExactHierarchyEdge() {
         assertThat(JdkCallSupport.isPlatformThrowable("java/nio/file/NoSuchFileException")).isFalse();
+    }
+
+    @TestFactory
+    Stream<DynamicTest> everyDeclaredThrowableRetainsItsParent() {
+        return JdkCallSupport.platformThrowableParents().stream().map(edge ->
+            DynamicTest.dynamicTest(edge.type(), () ->
+                assertThat(JdkCallSupport.isPlatformThrowableAssignable(edge.type(), edge.parent())).isTrue()
+            ));
+    }
+
+    @TestFactory
+    Stream<DynamicTest> throwableLookupRequiresAnExactOwner() {
+        return Stream.of("", "Exception", "lang/Exception", "java/lang/Exceptions", "java/lang/",
+            "java/lang/Exception=", "java/lang/Exception\n", "com/acme/\u20acException",
+            "java/lang/Exception=java/lang/Throwable\njava/lang/Error")
+            .map(owner -> DynamicTest.dynamicTest("reject [" + owner.replace("\n", "\\n") + "]", () ->
+                assertThat(JdkCallSupport.isPlatformThrowable(owner)).isFalse()
+            ));
     }
 
     @Test

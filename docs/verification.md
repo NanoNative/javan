@@ -97,6 +97,69 @@ independently check exact JSON output for empty, ASCII, quoting, control,
 Unicode and long strings, including repeated calls under GC stress. No timing
 threshold is imposed on ordinary tests.
 
+## Whole-Compiler Scanning
+
+On 2026-10-29 and 2026-10-30, main `f028bf40` was compared with `a96dc965` through
+native `javan check` and `javan build`, not a helper microbenchmark. Profiling found
+boxed instruction-boundary sets, alternating UTF-16 character cursors and repeated
+throwable-hierarchy scans. The changes use a method-local boolean boundary table,
+two local string cursors and exact-key searching in the existing hierarchy text.
+They add no persistent index, dependency or parallel compiler execution.
+
+Both native compilers used the same JDK 25.0.4 seed, Apple Clang 21.0.0 and default
+non-release C flags on macOS ARM64 (Apple M1 Max, 64 GiB RAM). Inputs were the same
+frozen 473-class compiler snapshot, with 468 reachable classes and 5,407 reachable
+methods. Its sorted SHA-256 file manifest
+hash was `65ad39e350e9a8b5180edfec87c89bada611bceb77a9dc8490a7b7fdf8ec2b3b`.
+Each command used a 1 GiB managed heap, no GC stress and `/usr/bin/time -lp`:
+
+```sh
+JAVAN_HEAP_LIMIT_BYTES=1073741824 javan check input/classes --main javan.Main
+JAVAN_HEAP_LIMIT_BYTES=1073741824 javan build input/classes --main javan.Main --output compiler-proof
+```
+
+| Workload | Before wall / CPU | After wall / CPU | Before / after peak RSS |
+| --- | ---: | ---: | ---: |
+| Full self-check, median of three | 366.24s / 363.80s | 276.96s / 276.74s | 5.05 / 5.03 GiB |
+| Cold native self-build, one run each | 1095.82s / 1094.77s | 891.44s / 890.49s | 7.54 / 7.57 GiB |
+
+Self-check wall time fell 24.4% and CPU time 23.9%. Cold build wall/CPU time fell
+18.7%, saving 204 seconds in this workload. Memory was essentially unchanged.
+Baseline self-check wall range was 361.63-424.29s; final candidate range was
+276.55-278.54s. Final candidate measurements followed the retained baseline runs,
+not an interleaved final comparison. The host was shared, with no other owned
+verification workload during measurements. One cold pair is not a universal speed
+guarantee or a regression threshold.
+
+All compared diagnostic, control-flow and class-initialization JSON reports were
+byte-identical. Both cold builds rebuilt all 66 objects and produced runnable
+compilers. Generated application C was byte-identical except the deliberately
+changed runtime helper. The [UTF-16 CLI tests](../src/test/java/javan/CliUtf16StringIntegrationTest.java)
+cover 21 independently executed comparison scenarios across modified/standard
+UTF-8 representations under GC stress. Sharing their fixture compilation reduced
+the 22-test suite from 30.26s to approximately 4s. The
+[reader tests](../src/test/java/javan/classfile/ClassFileReaderTest.java) preserve
+invalid-offset errors, and [support tests](../src/test/java/javan/compat/JdkCallSupportTest.java)
+check all 59 declared throwable parent edges and nine partial/malformed names.
+These performance measurements do not certify another host or expand JDK support.
+
+The clean full Maven verification succeeded with 7,212 tests, no failures/errors
+and three Windows-specific skips on macOS. The focused reader, throwable and UTF-16
+repeat passed all 649 tests. Scoped JaCoCo coverage was 94.5% line / 83.6% branch
+overall, 96.5% / 92.1% for `ClassFileReader` and 99.7% / 94.5% for `JdkCallSupport`.
+The overall advisory targets remain unmet. Java coverage of runtime source-string
+emission does not measure execution of the generated C.
+
+The 22 UTF-16 CLI tests also passed with the generated binaries compiled by LLVM
+Clang with AddressSanitizer, UndefinedBehaviorSanitizer and leak detection enabled.
+The native generation-2/3 package build passed with byte-identical generated C.
+Archive validation, extracted `doctor`/help/version and five native malformed-class
+boundary probes passed for `2026.10.30-SNAPSHOT` on macOS ARM64.
+The full five-probe self-host sanitizer run passed with leak detection enabled,
+41,541,932 allocations and six GC collections. Its final live allocation/byte and
+root-frame counters were all zero. Component verification and CI evidence are
+tracked in [PR #326](https://github.com/NanoNative/javan/pull/326).
+
 ## HTTP Request Root Handoff
 
 On 2026-10-29, the existing `http-server-loopback` sanitizer fixture reproduced
