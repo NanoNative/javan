@@ -2134,36 +2134,22 @@ public final class JdkCallSupport {
     }
 
     private static String platformThrowableParent(final String owner) {
-        if ("java/lang/Throwable".equals(owner)) {
+        if ("java/lang/Throwable".equals(owner) || owner.isEmpty()
+            || owner.indexOf('\n') >= 0 || owner.indexOf('=') >= 0) {
             return "";
         }
-        int start = 0;
-        while (start < PLATFORM_THROWABLE_HIERARCHY.length()) {
-            final int separator = PLATFORM_THROWABLE_HIERARCHY.indexOf('=', start);
-            final int end = PLATFORM_THROWABLE_HIERARCHY.indexOf('\n', separator + 1);
-            if (asciiSliceEquals(owner, PLATFORM_THROWABLE_HIERARCHY, start, separator)) {
+        final int ownerLength = owner.length();
+        final int hierarchyLength = PLATFORM_THROWABLE_HIERARCHY.length();
+        for (int start = PLATFORM_THROWABLE_HIERARCHY.indexOf(owner); start >= 0;
+             start = PLATFORM_THROWABLE_HIERARCHY.indexOf(owner, start + 1)) {
+            final int separator = start + ownerLength;
+            if ((start == 0 || PLATFORM_THROWABLE_HIERARCHY.charAt(start - 1) == '\n')
+                && separator < hierarchyLength && PLATFORM_THROWABLE_HIERARCHY.charAt(separator) == '=') {
+                final int end = PLATFORM_THROWABLE_HIERARCHY.indexOf('\n', separator + 1);
                 return PLATFORM_THROWABLE_HIERARCHY.substring(separator + 1, end);
             }
-            start = end + 1;
         }
         return "";
-    }
-
-    private static boolean asciiSliceEquals(
-        final String value,
-        final String source,
-        final int start,
-        final int end
-    ) {
-        if (value.length() != end - start) {
-            return false;
-        }
-        for (int index = 0; index < value.length(); index++) {
-            if (value.charAt(index) != source.charAt(start + index)) {
-                return false;
-            }
-        }
-        return true;
     }
 
     private static List<String> systemRuntimeModules(final String name) {
