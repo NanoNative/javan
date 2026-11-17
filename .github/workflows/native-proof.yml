@@ -83,29 +83,6 @@ jobs:
           distribution: temurin
           cache: maven
 
-      - name: "🏷️ Version [${{ inputs.version }}]"
-        shell: sh
-        run: |
-          set -eu
-          attempt=1
-          while :; do
-            if output=$(./mvnw -B org.codehaus.mojo:versions-maven-plugin:2.25.1:set -DnewVersion="$JAVAN_VERSION" -DgenerateBackupPoms=false 2>&1); then
-              printf '%s\n' "$output"
-              break
-            fi
-            printf '%s\n' "$output" >&2
-            case "$output" in
-              *'HTTP Status: 429'*)
-                if [ "$attempt" -lt 3 ]; then
-                  sleep "$((attempt * 5))"
-                  attempt=$((attempt + 1))
-                  continue
-                fi
-                ;;
-            esac
-            exit 1
-          done
-
       - name: "🐹 Go [1.26.4]"
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
