@@ -346,7 +346,9 @@ jobs:
       version: ${{ needs.build-info.outputs.resolved_version }}
       bootstrap_generation: 2
       timeout_minutes: 60
-      package_scope: ${{ inputs.prepare_publication && 'full' || 'bootstrap' }}
+      # Snapshot publication proves the native artifact without repeating the
+      # full self-host rehearsal reserved for immutable stable releases.
+      package_scope: ${{ inputs.snapshot && 'bootstrap' || inputs.prepare_publication && 'full' || 'bootstrap' }}
     secrets: inherit
 
   linux-package-generation3:
@@ -367,7 +369,9 @@ jobs:
       version: ${{ needs.build-info.outputs.resolved_version }}
       bootstrap_generation: 3
       timeout_minutes: 90
-      package_scope: ${{ inputs.prepare_publication && 'full' || 'bootstrap' }}
+      # Snapshot publication proves the native artifact without repeating the
+      # full self-host rehearsal reserved for immutable stable releases.
+      package_scope: ${{ inputs.snapshot && 'bootstrap' || inputs.prepare_publication && 'full' || 'bootstrap' }}
       upload_bootstrap_source: true
     secrets: inherit
 
@@ -391,7 +395,9 @@ jobs:
       version: ${{ needs.build-info.outputs.resolved_version }}
       bootstrap_generation: ${{ inputs.bootstrap_generation }}
       bootstrap_source_artifact: ${{ inputs.bootstrap_generation == 3 && 'bootstrap-source-linux-x64' || '' }}
-      package_scope: ${{ inputs.prepare_publication && 'full' || 'bootstrap' }}
+      # Snapshot publication proves the native artifact without repeating the
+      # full self-host rehearsal reserved for immutable stable releases.
+      package_scope: ${{ inputs.snapshot && 'bootstrap' || inputs.prepare_publication && 'full' || 'bootstrap' }}
       timeout_minutes: 90
     secrets: inherit
 
