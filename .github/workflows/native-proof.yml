@@ -85,7 +85,7 @@ jobs:
 
       - name: "🏷️ Version [${{ inputs.version }}]"
         shell: sh
-        run: ./mvnw -B versions:set -DnewVersion="$JAVAN_VERSION" -DgenerateBackupPoms=false
+        run: ./mvnw -B org.codehaus.mojo:versions-maven-plugin:2.25.1:set -DnewVersion="$JAVAN_VERSION" -DgenerateBackupPoms=false
 
       - name: "🐹 Go [1.26.4]"
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
