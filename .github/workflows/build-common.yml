@@ -37,7 +37,7 @@ on:
         default: ''
         type: string
       snapshot:
-        description: Append -SNAPSHOT to the UTC date version
+        description: Use the next snapshot version from the latest stable tag
         required: false
         default: false
         type: boolean
@@ -67,22 +67,42 @@ jobs:
           fetch-depth: 0
           ref: ${{ inputs.ref || github.sha }}
 
+      - name: "🏷️ Tag"
+        id: latest_tag
+        shell: sh
+        run: |
+          set -eu
+          latest_tag=$(git tag --merged HEAD --sort=-creatordate | awk '/^v?[0-9]+\.[0-9]+\.[0-9]+$/ { print; exit }')
+          printf 'latest_tag=%s\n' "${latest_tag}" | tee -a "$GITHUB_OUTPUT"
+
+      - name: "🔢 Snapshot"
+        id: semver_info
+        uses: YunaBraska/semver-info-action@180ebf79b3c81785c50cf1f198ee236fc5591504 # v3.0.4
+        with:
+          semver-a: ${{ steps.latest_tag.outputs.latest_tag || '0.0.1' }}
+          semver-b: 0.0.1
+          fallBack-semver-a: 0.0.1
+          fallBack-semver-b: 0.0.1
+
       - name: "🏷️ Resolve [${{ inputs.snapshot && 'snapshot' || 'release' }}]"
         id: info
         shell: sh
         env:
           SNAPSHOT: ${{ inputs.snapshot }}
+          SNAPSHOT_VERSION: ${{ steps.semver_info.outputs.next_snapshot }}
         run: |
           set -eu
           version=$(date -u '+%Y.%m.%d' | sed -E 's/\.0+([0-9])/\.\1/g')
           if [ "$SNAPSHOT" = "true" ]; then
-            version=$version-SNAPSHOT
+            version=$SNAPSHOT_VERSION
+            test -n "$version"
           fi
           {
             printf 'resolved_version=%s\n' "$version"
             printf 'commit_sha=%s\n' "$(git rev-parse HEAD)"
             printf 'build_output_timestamp=%s\n' "$(git log -1 --format=%cI HEAD)"
           } | tee -a "$GITHUB_OUTPUT"
+          printf 'latest_tag=%s\n' "${{ steps.latest_tag.outputs.latest_tag || 'none' }}"
 
   verify-core:
     name: core_linux_x64
@@ -206,12 +226,17 @@ jobs:
         run: |
           ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -DskipTests test-compile
           selector_file=$(mktemp)
-          trap 'rm -f "$selector_file"' EXIT
-          ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" \
+          planner_log=$(mktemp)
+          trap 'rm -f "$selector_file" "$planner_log"' EXIT
+          if ! ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" \
             -Dexec.classpathScope=test \
             -Dexec.mainClass=javan.testing.CiTestWorkerPlanner \
             -Dexec.args='${{ matrix.suite }} ${{ matrix.worker_index }} ${{ matrix.worker_count }}' \
-            exec:java > "$selector_file"
+            exec:java > "$selector_file" 2> "$planner_log"; then
+            cat "$planner_log" >&2
+            cat "$selector_file" >&2
+            exit 1
+          fi
           selector=$(cat "$selector_file")
           printf 'test_selector=%s\n' "$selector" | tee -a "$GITHUB_OUTPUT"
 

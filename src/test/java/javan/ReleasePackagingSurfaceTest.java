@@ -511,7 +511,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     }
 
     @Test
-    void mainPushBuildsDateSnapshotArtifactsOnceWithoutInvokingManualRelease() throws Exception {
+    void mainPushBuildsNextSemverSnapshotArtifactsOnceWithoutInvokingManualRelease() throws Exception {
         final String ciWorkflow = Files.readString(BUILD_MERGE);
 
         assertThat(ciWorkflow)
@@ -520,7 +520,11 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             .doesNotContain("release_strategy")
             .doesNotContain("uses: ./.github/workflows/release.yml");
         assertThat(Files.readString(BUILD_COMMON))
-            .contains("version=$version-SNAPSHOT")
+            .contains("name: \"🏷️ Tag\"")
+            .contains("uses: YunaBraska/semver-info-action@")
+            .contains("SNAPSHOT_VERSION: ${{ steps.semver_info.outputs.next_snapshot }}")
+            .contains("version=$SNAPSHOT_VERSION")
+            .doesNotContain("version=$version-SNAPSHOT")
             .contains("prepare-publication:")
             .contains("name: build-workspace");
         assertThat(Files.readString(RELEASE_WORKFLOW))
