@@ -137,8 +137,9 @@ jobs:
 
       - name: "🔨 Compile [${{ inputs.target }}]"
         shell: sh
-        run: >-
-          ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -DskipTests compile test-compile
+        run: |
+          set -eu
+          ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" "-Djavan.version=$JAVAN_VERSION" -DskipTests compile test-compile
 
       - name: "📥 Source [${{ inputs.target }}]"
         if: inputs.bootstrap_source_artifact != ''
