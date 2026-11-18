@@ -543,6 +543,40 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanRejectsSecureRandomSubclass() throws Exception {
+        final Path project = tempDir.resolve("selfhost-secure-random-subclass");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                static final class Custom extends SecureRandom {
+                    @Override public int nextInt() { return 123; }
+                }
+                public static void main(String[] args) {
+                    SecureRandom random = new Custom();
+                    System.out.println(random.nextInt());
+                }
+            }
+            """);
+        final ProcessResult javac = process(
+            tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()),
+            Duration.ofSeconds(30)
+        );
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult check = process(
+            tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "check", classes.toString(), "--main", "com.acme.Main"),
+            Duration.ofSeconds(120)
+        );
+        assertThat(check.exitCode()).isEqualTo(2);
+        assertThat(check.stderr()).contains("unsupported SecureRandom subclass");
+    }
+
+    @Test
     void nativeBuiltJavanBuildsSecureRandomNumbers() throws Exception {
         final Path project = tempDir.resolve("selfhost-secure-random-integers");
         final Path classes = project.resolve("classes");

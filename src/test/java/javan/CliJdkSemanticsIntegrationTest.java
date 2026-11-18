@@ -9622,6 +9622,96 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void secureRandomSubclassIsRejectedBeforeNativeExecution() throws Exception {
+        final Path project = project("secure-random-subclass");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                static final class Custom extends SecureRandom {
+                    @Override public int nextInt() { return 123; }
+                }
+                public static void main(String[] args) {
+                    SecureRandom random = new Custom();
+                    System.out.println(random.nextInt());
+                }
+            }
+            """);
+        assertThat(runJvm(project, "com.acme.Main")).isEqualTo("123\n");
+        final CliRun check = run(tempDir, "check", project.toString());
+        assertThat(check.exitCode()).isEqualTo(2);
+        assertThat(check.stderr()).contains("unsupported SecureRandom subclass");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).isEqualTo(2);
+        assertThat(build.stderr()).contains("unsupported SecureRandom subclass");
+    }
+
+    @Test
+    void secureRandomSubclassWithInheritedMethodsIsRejected() throws Exception {
+        final Path project = project("secure-random-inherited-subclass");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                static final class Custom extends SecureRandom { }
+                public static void main(String[] args) {
+                    SecureRandom random = new Custom();
+                    System.out.println(random.nextInt(1));
+                }
+            }
+            """);
+        assertThat(runJvm(project, "com.acme.Main")).isEqualTo("0\n");
+        final CliRun check = run(tempDir, "check", project.toString());
+        assertThat(check.exitCode()).isEqualTo(2);
+        assertThat(check.stderr()).contains("unsupported SecureRandom subclass");
+    }
+
+    @Test
+    void indirectSecureRandomSubclassIsRejectedBeforeNativeExecution() throws Exception {
+        final Path project = project("secure-random-indirect-subclass");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                static class Parent extends SecureRandom { }
+                static final class Custom extends Parent {
+                    @Override public boolean nextBoolean() { return true; }
+                }
+                public static void main(String[] args) {
+                    SecureRandom random = new Custom();
+                    System.out.println(random.nextBoolean());
+                }
+            }
+            """);
+        assertThat(runJvm(project, "com.acme.Main")).isEqualTo("true\n");
+        final CliRun check = run(tempDir, "check", project.toString());
+        assertThat(check.exitCode()).isEqualTo(2);
+        assertThat(check.stderr()).contains("unsupported SecureRandom subclass");
+    }
+
+    @Test
+    void unreachableSecureRandomSubclassDoesNotBlockDefaultGenerator() throws Exception {
+        final Path project = project("secure-random-unused-subclass");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                static final class Unused extends SecureRandom { }
+                public static void main(String[] args) {
+                    SecureRandom random = new SecureRandom();
+                    System.out.println(random.nextInt(1));
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/secure-random-unused-subclass").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
     void secureRandomFloatingBoundsStayInsideFiniteIntervals() throws Exception {
         final Path project = project("secure-random-floating-bounds");
         writeJava(project, "com.acme.Main", """

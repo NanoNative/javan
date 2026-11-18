@@ -284,6 +284,29 @@ public final class StaticVerifier {
         final ReachableEntries configuredNativeEntries
     ) {
         final List<Diagnostic> diagnostics = new ArrayList<>();
+        if (reachable == 1 && "<init>".equals(method.name())) {
+            String ancestor = classFile.superName();
+            int remaining = classes.size() + 1;
+            while (ancestor != null && !ancestor.isEmpty() && remaining-- > 0) {
+                if ("java/security/SecureRandom".equals(ancestor)) {
+                    diagnostics.add(error(
+                        classFile,
+                        method,
+                        "JAVAN031",
+                        "unsupported SecureRandom subclass",
+                        classFile.name(),
+                        "The native SecureRandom representation does not yet support subclass state or overridden methods.",
+                        "Use a direct SecureRandom instance until subclass dispatch is supported."
+                    ));
+                    break;
+                }
+                final ClassFile parent = classes.get(ancestor);
+                if (parent == null) {
+                    break;
+                }
+                ancestor = parent.superName();
+            }
+        }
         if (reachable == 1 && method.isNative()) {
             final EntryPoint nativeMethod = new EntryPoint(classFile.name(), method.name(), method.descriptor());
             final boolean configuredNative = configuredNativeEntries.contains(
