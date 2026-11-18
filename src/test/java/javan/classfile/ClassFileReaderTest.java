@@ -314,6 +314,27 @@ final class ClassFileReaderTest {
     }
 
     @Test
+    void readerRejectsStackMapFrameAtCodeEnd() {
+        assertThatThrownBy(() -> new ClassFileReader().read(
+            classfileWithStackMapAttributes("()V", new byte[]{(byte) 177}, new byte[]{0, 1, 1}), SOURCE
+        )).isInstanceOf(IOException.class).hasMessage("Invalid StackMapTable frame offset 1");
+    }
+
+    @Test
+    void readerRejectsStackMapFrameBeyondCodeEnd() {
+        assertThatThrownBy(() -> new ClassFileReader().read(
+            classfileWithStackMapAttributes("()V", new byte[]{(byte) 177}, new byte[]{0, 1, (byte) 251, -1, -1}), SOURCE
+        )).isInstanceOf(IOException.class).hasMessage("Invalid StackMapTable frame offset 65535");
+    }
+
+    @Test
+    void readerRejectsUninitializedStackMapValueBeyondCodeEnd() {
+        assertThatThrownBy(() -> new ClassFileReader().read(
+            classfileWithStackMapAttributes(new byte[]{0, 1, 64, 8, -1, -1}), SOURCE
+        )).isInstanceOf(IOException.class).hasMessage("Invalid StackMapTable uninitialized offset 65535");
+    }
+
+    @Test
     void readerRejectsUninitializedStackMapValueThatDoesNotTargetNew() {
         assertThatThrownBy(() -> new ClassFileReader().read(
             classfileWithStackMapAttributes(new byte[]{0, 1, 64, 8, 0, 0}), SOURCE

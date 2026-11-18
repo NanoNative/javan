@@ -10091,9 +10091,23 @@ final class RuntimeSourceMemorySections {
         }
 
         static int javan_string_region_matches(const char* left, int left_offset, const char* right, int right_offset, int count) {
+            /* Callers validate the UTF-16 ranges. Keep each string's decoding position local. */
+            if (count == 0) {
+                return 1;
+            }
+            const unsigned char* left_cursor = (const unsigned char*) left;
+            const unsigned char* right_cursor = (const unsigned char*) right;
+            int left_pending = -1;
+            int right_pending = -1;
+            for (int index = 0; index < left_offset; index++) {
+                (void) javan_utf16_next_char(&left_cursor, &left_pending);
+            }
+            for (int index = 0; index < right_offset; index++) {
+                (void) javan_utf16_next_char(&right_cursor, &right_pending);
+            }
             for (int index = 0; index < count; index++) {
-                if (javan_utf16_char_at_utf8(left, left_offset + index)
-                    != javan_utf16_char_at_utf8(right, right_offset + index)) {
+                if (javan_utf16_next_char(&left_cursor, &left_pending)
+                    != javan_utf16_next_char(&right_cursor, &right_pending)) {
                     return 0;
                 }
             }

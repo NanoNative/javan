@@ -187,7 +187,7 @@ public final class ClassFileReader {
         final byte[] bytecode = in.bytes(codeLength);
         final int exceptionTableLength = in.u2();
         final List<CodeException> exceptionTable = readExceptionTable(in, constantPool, exceptionTableLength);
-        final Set<Integer> instructionOffsets = instructionOffsets(bytecode);
+        final boolean[] instructionOffsets = instructionOffsets(bytecode);
         final CodeAttributes attributes = readCodeAttributes(
             in,
             constantPool,
@@ -221,7 +221,7 @@ public final class ClassFileReader {
         final String methodName,
         final String descriptor,
         final byte[] bytecode,
-        final Set<Integer> instructionOffsets,
+        final boolean[] instructionOffsets,
         final int maxLocals,
         final int maxStack
     ) throws IOException {
@@ -277,7 +277,7 @@ public final class ClassFileReader {
         final ConstantPool constantPool,
         final List<FrameValue> initialLocals,
         final byte[] bytecode,
-        final Set<Integer> instructionOffsets,
+        final boolean[] instructionOffsets,
         final int maxLocals,
         final int maxStack
     ) throws IOException {
@@ -336,8 +336,8 @@ public final class ClassFileReader {
                 throw new IOException("Invalid StackMapTable frame type " + frameType);
             }
             final long calculatedOffset = (long) previousOffset + offsetDelta + 1L;
-            if (calculatedOffset > Integer.MAX_VALUE
-                || !instructionOffsets.contains(Integer.valueOf((int) calculatedOffset))) {
+            if (calculatedOffset >= instructionOffsets.length
+                || !instructionOffsets[(int) calculatedOffset]) {
                 throw new IOException("Invalid StackMapTable frame offset " + calculatedOffset);
             }
             final int offset = (int) calculatedOffset;
@@ -352,7 +352,7 @@ public final class ClassFileReader {
         final ClassByteCursor in,
         final ConstantPool constantPool,
         final byte[] bytecode,
-        final Set<Integer> instructionOffsets
+        final boolean[] instructionOffsets
     ) throws IOException {
         final int tag = in.u1();
         if (tag == 0 || tag == 1 || tag == 2 || tag == 5 || tag == 6) {
@@ -371,7 +371,7 @@ public final class ClassFileReader {
         }
         if (tag == 8) {
             final int offset = in.u2();
-            if (!instructionOffsets.contains(Integer.valueOf(offset))
+            if (offset >= instructionOffsets.length || !instructionOffsets[offset]
                 || unsigned(bytecode[offset]) != 187) {
                 throw new IOException("Invalid StackMapTable uninitialized offset " + offset);
             }
@@ -472,17 +472,17 @@ public final class ClassFileReader {
         return List.copyOf(result);
     }
 
-    private static Set<Integer> instructionOffsets(final byte[] bytecode) throws IOException {
-        final Set<Integer> result = new HashSet<>();
+    private static boolean[] instructionOffsets(final byte[] bytecode) throws IOException {
+        final boolean[] result = new boolean[bytecode.length];
         int offset = 0;
         while (offset < bytecode.length) {
-            result.add(Integer.valueOf(offset));
+            result[offset] = true;
             offset += instructionLength(bytecode, offset);
         }
         if (offset != bytecode.length) {
             throw new IOException("Invalid bytecode length");
         }
-        return Set.copyOf(result);
+        return result;
     }
 
     private static void validateHandlerStackFrames(
