@@ -1066,7 +1066,7 @@ final class CliRuntimeFeatureIntegrationTest extends CliIntegrationSupport {
             import java.security.SecureRandom;
             public final class Main {
                 public static void main(final String[] args) {
-                    new SecureRandom().nextInt(17);
+                    new SecureRandom().nextInt(-3, 17);
                 }
             }
             """);

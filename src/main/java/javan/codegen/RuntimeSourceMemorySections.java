@@ -8870,14 +8870,28 @@ final class RuntimeSourceMemorySections {
             javan_os_random_bytes((unsigned char*) bytes->values, bytes->length);
         }
 
-        int javan_secure_random_next_int(void* value) {
-            javan_secure_random_check(value);
-            uint32_t bits;
-            javan_os_random_bytes((unsigned char*) &bits, sizeof(bits));
+        static int javan_secure_random_signed_int(uint32_t bits) {
             if (bits <= INT32_MAX) {
                 return (int) bits;
             }
             return -1 - (int) (UINT32_MAX - bits);
+        }
+
+        static uint32_t javan_secure_random_in_range(uint32_t range) {
+            /* Discard the incomplete prefix before reducing to avoid modulo bias. */
+            const uint32_t threshold = ((UINT32_MAX % range) + 1U) % range;
+            uint32_t bits;
+            do {
+                javan_os_random_bytes((unsigned char*) &bits, sizeof(bits));
+            } while (bits < threshold);
+            return bits % range;
+        }
+
+        int javan_secure_random_next_int(void* value) {
+            javan_secure_random_check(value);
+            uint32_t bits;
+            javan_os_random_bytes((unsigned char*) &bits, sizeof(bits));
+            return javan_secure_random_signed_int(bits);
         }
 
         int javan_secure_random_next_int_bound(void* value, int bound) {
@@ -8885,14 +8899,17 @@ final class RuntimeSourceMemorySections {
             if (bound <= 0) {
                 javan_panic("invalid SecureRandom bound");
             }
-            const uint32_t range = (uint32_t) bound;
-            /* Discard the incomplete prefix before reducing to avoid modulo bias. */
-            const uint32_t threshold = ((UINT32_MAX % range) + 1U) % range;
-            uint32_t bits;
-            do {
-                javan_os_random_bytes((unsigned char*) &bits, sizeof(bits));
-            } while (bits < threshold);
-            return (int) (bits % range);
+            return (int) javan_secure_random_in_range((uint32_t) bound);
+        }
+
+        int javan_secure_random_next_int_range(void* value, int origin, int bound) {
+            javan_secure_random_check(value);
+            if (origin >= bound) {
+                javan_panic("invalid SecureRandom range");
+            }
+            const uint32_t range = (uint32_t) bound - (uint32_t) origin;
+            const uint32_t bits = (uint32_t) origin + javan_secure_random_in_range(range);
+            return javan_secure_random_signed_int(bits);
         }
 
         void* javan_uuid_random(void) {

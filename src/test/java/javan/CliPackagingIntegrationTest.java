@@ -473,9 +473,12 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static void main(final String[] args) {
                     final SecureRandom random = new SecureRandom();
                     final int value = random.nextInt(17);
-                    System.out.println(value >= 0 && value < 17);
+                    final int wide = random.nextInt(Integer.MIN_VALUE, Integer.MAX_VALUE);
+                    System.out.println(value >= 0 && value < 17 && wide < Integer.MAX_VALUE);
                     try { random.nextInt(0); }
                     catch (IllegalArgumentException expected) { System.out.println("invalid"); }
+                    try { random.nextInt(1, 1); }
+                    catch (IllegalArgumentException expected) { System.out.println("range-invalid"); }
                 }
             }
             """);
@@ -496,7 +499,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         final Path executable = project.resolve(".javan/bin/selfhost-secure-random-integers");
         final ProcessResult nativeRun = process(tempDir, List.of(executable.toString()));
         assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
-        assertThat(nativeRun.stdout()).isEqualTo("true\ninvalid\n");
+        assertThat(nativeRun.stdout()).isEqualTo("true\ninvalid\nrange-invalid\n");
     }
 
     @Test

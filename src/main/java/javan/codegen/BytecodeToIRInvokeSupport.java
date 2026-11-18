@@ -1063,12 +1063,21 @@ final class BytecodeToIRInvokeSupport {
         }
         if ("java/security/SecureRandom".equals(methodRef.owner())
             && "nextInt".equals(methodRef.name())
-            && ("()I".equals(methodRef.descriptor()) || "(I)I".equals(methodRef.descriptor()))) {
-            final boolean bounded = "(I)I".equals(methodRef.descriptor());
+            && ("()I".equals(methodRef.descriptor()) || "(I)I".equals(methodRef.descriptor())
+                || "(II)I".equals(methodRef.descriptor()))) {
+            final boolean ranged = "(II)I".equals(methodRef.descriptor());
+            final boolean bounded = ranged || "(I)I".equals(methodRef.descriptor());
             final IrExpression bound = bounded ? popInt(classFile, method, stack) : IrExpression.intLiteral(0);
+            final IrExpression origin = ranged ? popInt(classFile, method, stack) : IrExpression.intLiteral(0);
             final IrExpression receiver = popObject(classFile, method, stack);
             final String receiverLocal = newObjectLocal(localDeclarations);
             instructions.add(IrInstruction.assignObject(receiverLocal, receiver));
+            final int originIndex = localDeclarations.size();
+            final String originLocal = "int" + originIndex;
+            if (ranged) {
+                localDeclarations.put(Integer.MIN_VALUE + originIndex, new IrLocal(IrType.INT, originLocal));
+                instructions.add(IrInstruction.assignInt(originLocal, origin));
+            }
             final int boundIndex = localDeclarations.size();
             final String boundLocal = "int" + boundIndex;
             if (bounded) {
@@ -1086,19 +1095,23 @@ final class BytecodeToIRInvokeSupport {
             stack.addAll(successStack);
             if (bounded) {
                 final String boundValid = "label_secure_random_int_bound_" + instruction.offset();
-                instructions.add(IrInstruction.branchIf(boundValid,
-                    IrExpression.intComparison(">", IrExpression.intLocal(boundLocal), IrExpression.intLiteral(0))));
+                final IrExpression condition = ranged
+                    ? IrExpression.intComparison("<", IrExpression.intLocal(originLocal), IrExpression.intLocal(boundLocal))
+                    : IrExpression.intComparison(">", IrExpression.intLocal(boundLocal), IrExpression.intLiteral(0));
+                instructions.add(IrInstruction.branchIf(boundValid, condition));
                 routePendingPlatformException(classFile, method, instruction, instructions, stack,
                     pendingExceptionHandlerStacks, sourceLines, "java/lang/IllegalArgumentException",
-                    IrExpression.stringLiteral("bound must be positive"));
+                    IrExpression.stringLiteral(ranged ? "bound must be greater than origin" : "bound must be positive"));
                 instructions.add(IrInstruction.label(boundValid));
                 stack.addAll(successStack);
             }
-            final List<IrExpression> arguments = bounded
-                ? List.of(IrExpression.objectLocal(receiverLocal), IrExpression.intLocal(boundLocal))
+            final List<IrExpression> arguments = ranged
+                ? List.of(IrExpression.objectLocal(receiverLocal), IrExpression.intLocal(originLocal), IrExpression.intLocal(boundLocal))
+                : bounded ? List.of(IrExpression.objectLocal(receiverLocal), IrExpression.intLocal(boundLocal))
                 : List.of(IrExpression.objectLocal(receiverLocal));
-            pushIntCall(instructions, stack, localDeclarations,
-                bounded ? "javan_secure_random_next_int_bound" : "javan_secure_random_next_int", arguments);
+            final String symbol = ranged ? "javan_secure_random_next_int_range"
+                : bounded ? "javan_secure_random_next_int_bound" : "javan_secure_random_next_int";
+            pushIntCall(instructions, stack, localDeclarations, symbol, arguments);
             return;
         }
         if ("java/security/SecureRandom".equals(methodRef.owner())

@@ -9711,20 +9711,70 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void secureRandomIntegerGenerationRejectsUnsupportedOriginBoundOverload() throws Exception {
-        final Path project = project("secure-random-origin-bound-unsupported");
+    void secureRandomIntegerGenerationRespectsOriginAndBound() throws Exception {
+        final Path project = project("secure-random-origin-bound");
         writeJava(project, "com.acme.Main", """
             package com.acme;
             import java.security.SecureRandom;
             public final class Main {
+                private static final SecureRandom RANDOM = new SecureRandom();
                 public static void main(final String[] args) {
-                    new SecureRandom().nextInt(1, 5);
+                    final SecureRandom random = RANDOM;
+                    boolean valid = true;
+                    for (int index = 0; index < 64; index++) {
+                        final int small = random.nextInt(-17, 17);
+                        final int full = random.nextInt(Integer.MIN_VALUE, Integer.MAX_VALUE);
+                        final int wide = random.nextInt(-1_073_741_824, 1);
+                        final int lowest = random.nextInt(Integer.MIN_VALUE, Integer.MIN_VALUE + 1);
+                        final int highest = random.nextInt(Integer.MAX_VALUE - 1, Integer.MAX_VALUE);
+                        if (small < -17 || small >= 17 || full == Integer.MAX_VALUE || wide < -1_073_741_824
+                            || wide >= 1 || lowest != Integer.MIN_VALUE || highest != Integer.MAX_VALUE - 1) {
+                            valid = false;
+                        }
+                    }
+                    System.out.println(valid);
                 }
             }
             """);
-        final CliRun check = run(tempDir, "check", project.toString());
-        assertThat(check.exitCode()).isEqualTo(2);
-        assertThat(check.stderr()).contains("error[JAVAN031]", "nextInt(II)I");
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/secure-random-origin-bound").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("true\n");
+    }
+
+    @Test
+    void secureRandomIntegerGenerationRejectsInvalidOriginAndBound() throws Exception {
+        final Path project = project("secure-random-invalid-origin-bound");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                static int trace;
+                static int origin() { trace = trace * 10 + 1; return 0; }
+                static int bound() { trace = trace * 10 + 2; return 0; }
+                public static void main(final String[] args) {
+                    final SecureRandom random = new SecureRandom();
+                    try { random.nextInt(0, 0); }
+                    catch (IllegalArgumentException expected) { System.out.println("equal"); }
+                    try { random.nextInt(1, 0); }
+                    catch (IllegalArgumentException expected) { System.out.println("reversed"); }
+                    final SecureRandom missing = null;
+                    try { missing.nextInt(origin(), bound()); }
+                    catch (NullPointerException expected) { System.out.println(trace); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/secure-random-invalid-origin-bound").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("equal\nreversed\n12\n");
     }
 
     @Test
