@@ -36,7 +36,7 @@ and C generation consumes the same facts as reachability.
 
 Class structs/descriptors are emitted for reachable code, instantiated types, initialization
 and required hierarchies. Stable type IDs preserve gaps when unused classes are omitted.
-Incomplete analysis or reachable `Class.forName(String)` retains the parsed set conservatively.
+Incomplete analysis or reachable supported `Class.forName` retains the parsed set conservatively.
 
 Direct `Function.apply` and `Supplier.get` refine receivers through locals, casts, final fields,
 direct arguments/returns and merges. `receiver-provenance.json` and `.md` report bounded sets
@@ -163,8 +163,9 @@ Constraints relevant to transformations remain explicit:
 - Basic Base64 supports byte arrays/encoded strings, strict basic-alphabet validation, padding
   and legal unpadded final units. URL, MIME, streams, no-padding mode and destination-buffer
   overloads remain outside that slice.
-- `Class.forName(String)` covers compiled classes/valid arrays, one-time initialization and
-  catchable lookup failures. Loader-selecting overloads remain outside that slice; the
+- `Class.forName` covers compiled classes/valid arrays and catchable lookup failures. The
+  loader-selecting overload supports the system and bootstrap loaders, including deferred
+  initialization. Custom loaders remain outside the slice; the
   [compiler contract](compiler.md#current-boundary) owns broader lookup semantics.
 
 ## Optimization Reports

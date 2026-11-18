@@ -8097,6 +8097,137 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void classForNameWithSystemLoaderHonorsInitializationFlag() throws Exception {
+        final Path project = project("class-for-name-system-loader");
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target {
+                static { System.out.println("initialized"); }
+            }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(final String[] args) throws Exception {
+                    final ClassLoader loader = ClassLoader.getSystemClassLoader();
+                    System.out.println(Class.forName("com.acme.Target", false, loader).getName());
+                    System.out.println("before initialization");
+                    System.out.println(Class.forName("com.acme.Target", true, loader).getName());
+                    System.out.println(Class.forName("com.acme.Target", true, loader).getName());
+                    try { Class.forName("com.acme.Missing", false, loader); }
+                    catch (ClassNotFoundException expected) { System.out.println("missing"); }
+                }
+            }
+            """);
+
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(
+            project,
+            List.of(project.resolve(".javan/bin/class-for-name-system-loader").toString()),
+            Duration.ofSeconds(10),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1")
+        );
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected)
+            .isEqualTo("com.acme.Target\nbefore initialization\ninitialized\ncom.acme.Target\ncom.acme.Target\nmissing\n");
+    }
+
+    @Test
+    void classForNameWithBootstrapLoaderOnlyFindsBootstrapClasses() throws Exception {
+        final Path project = project("class-for-name-bootstrap-loader");
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target { }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(final String[] args) throws Exception {
+                    System.out.println(Class.forName("java.lang.String", false, null) == String.class);
+                    System.out.println(Class.forName("[[I", false, null) == int[][].class);
+                    try { Class.forName("com.acme.Target", false, null); }
+                    catch (ClassNotFoundException expected) { System.out.println("application missing"); }
+                    try { Class.forName("[Lcom.acme.Target;", false, null); }
+                    catch (ClassNotFoundException expected) { System.out.println("application array missing"); }
+                    try { Class.forName(null, false, null); }
+                    catch (NullPointerException expected) { System.out.println("null name"); }
+                }
+            }
+            """);
+
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/class-for-name-bootstrap-loader").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected)
+            .isEqualTo("true\ntrue\napplication missing\napplication array missing\nnull name\n");
+    }
+
+    @Test
+    void classForNameWithLoaderEvaluatesArgumentsOnceInOrder() throws Exception {
+        final Path project = project("class-for-name-loader-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int trace;
+                static String name() { trace = trace * 10 + 1; return "java.lang.String"; }
+                static boolean initialize() { trace = trace * 10 + 2; return false; }
+                static ClassLoader loader() { trace = trace * 10 + 3; return ClassLoader.getSystemClassLoader(); }
+                public static void main(final String[] args) throws Exception {
+                    System.out.println(Class.forName(name(), initialize(), loader()).getName());
+                    System.out.println(trace);
+                }
+            }
+            """);
+
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/class-for-name-loader-order").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("java.lang.String\n123\n");
+    }
+
+    @Test
+    void classForNameWithSystemLoaderRestrictsRuntimeNamesToCompiledClasses() throws Exception {
+        final Path project = project("class-for-name-runtime-loader-name");
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target { }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(final String[] args) {
+                    final String name = args[0];
+                    final ClassLoader loader = ClassLoader.getSystemClassLoader();
+                    final Class<?> result;
+                    try {
+                        result = Class.forName(name, false, loader);
+                    } catch (ClassNotFoundException expected) {
+                        System.out.println("missing");
+                        return;
+                    }
+                    System.out.println(result.getName());
+                }
+            }
+            """);
+
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final String executable = project.resolve(".javan/bin/class-for-name-runtime-loader-name").toString();
+        final ProcessResult present = process(project, List.of(executable, "com.acme.Target"));
+        assertThat(present.exitCode()).as(present.stderr()).isZero();
+        assertThat(present.stdout()).isEqualTo("com.acme.Target\n");
+        final ProcessResult missing = process(project, List.of(executable, "outside.Plugin"));
+        assertThat(missing.exitCode()).as(missing.stderr()).isZero();
+        assertThat(missing.stdout()).isEqualTo("missing\n");
+    }
+
+    @Test
     void classForNameFindsClosedWorldClassInitializesOnceAndMatchesJvmFailures() throws Exception {
         final Path project = project("class-for-name");
         writeJava(project, "com.acme.Plugin", """

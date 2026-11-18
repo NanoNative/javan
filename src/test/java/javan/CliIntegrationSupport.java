@@ -483,9 +483,9 @@ abstract class CliIntegrationSupport {
     protected static String repeatedReflectionSource(final int count) {
         final StringBuilder calls = new StringBuilder();
         for (int index = 0; index < count; index++) {
-            calls.append("        Class.forName(\"com.acme.Plugin")
+            calls.append("        Class.forName((Module) null, \"com.acme.Plugin")
                 .append(index)
-                .append("\", true, ClassLoader.getSystemClassLoader());\n");
+                .append("\");\n");
         }
         return """
             package com.acme;

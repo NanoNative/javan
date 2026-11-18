@@ -9000,16 +9000,16 @@ final class RuntimeFilesTest {
 
             int main(void) {
                 javan_register_static_roots(0, 0);
-                void* string_class = javan_runtime_class_for_name_known("java.lang.String");
-                void* string_array = javan_runtime_class_for_name_known("[[Ljava.lang.String;");
-                void* int_array = javan_runtime_class_for_name_known("[[I");
+                void* string_class = javan_runtime_class_for_name_known("java.lang.String", 0);
+                void* string_array = javan_runtime_class_for_name_known("[[Ljava.lang.String;", 0);
+                void* int_array = javan_runtime_class_for_name_known("[[I", 0);
                 printf("%s:%s:%s:%d:%d:%d\\n",
                     (const char*) javan_runtime_class_get_name(string_class),
                     (const char*) javan_runtime_class_get_name(string_array),
                     (const char*) javan_runtime_class_get_name(int_array),
-                    javan_runtime_class_for_name_known("int") == NULL,
-                    javan_runtime_class_for_name_known("com.acme.Missing") == NULL,
-                    javan_runtime_class_for_name_known("[[Lcom.acme.Missing;") == NULL);
+                    javan_runtime_class_for_name_known("int", 0) == NULL,
+                    javan_runtime_class_for_name_known("com.acme.Missing", 0) == NULL,
+                    javan_runtime_class_for_name_known("[[Lcom.acme.Missing;", 0) == NULL);
                 return 0;
             }
             """,

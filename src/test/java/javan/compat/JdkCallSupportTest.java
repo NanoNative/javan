@@ -4445,20 +4445,20 @@ final class JdkCallSupportTest {
     }
 
     @Test
-    void oneArgumentClassForNameSupportsClosedWorldLookupAndPlatformFailures() {
+    void classForNameSupportsClosedWorldLookupAndPlatformFailures() {
         final MethodRef supported = new MethodRef(
             "java/lang/Class",
             "forName",
             "(Ljava/lang/String;)Ljava/lang/Class;"
         );
-        final MethodRef unsupported = new MethodRef(
+        final MethodRef withLoader = new MethodRef(
             "java/lang/Class",
             "forName",
             "(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;"
         );
 
         assertThat(JdkCallSupport.isSupported(supported)).isTrue();
-        assertThat(JdkCallSupport.isSupported(unsupported)).isFalse();
+        assertThat(JdkCallSupport.isSupported(withLoader)).isTrue();
         assertThat(JdkCallSupport.transportedPlatformThrowableTypes(supported)).containsExactly(
             "java/lang/NullPointerException",
             "java/lang/ClassNotFoundException",
@@ -4467,7 +4467,8 @@ final class JdkCallSupportTest {
             "java/lang/Error"
         );
         assertThat(JdkCallSupport.runtimeModules(supported)).containsExactly("reflection-metadata");
-        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(unsupported)).isEmpty();
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(withLoader))
+            .isEqualTo(JdkCallSupport.transportedPlatformThrowableTypes(supported));
     }
 
     @Test

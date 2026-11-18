@@ -11,8 +11,8 @@
     "rule": "a broad JDK-compatibility release requires zero unknown leftovers; the first native release is scenario-bounded and requires declared reachable behavior to be supported or rejected"
   },
   "counts": {
-    "rows": 317,
-    "pass": 316,
+    "rows": 318,
+    "pass": 317,
     "scoped": 1,
     "target": 0,
     "rejected": 0
@@ -45,6 +45,7 @@
     {"feature": "polymorphic-virtual", "jdk25": "pass"},
     {"feature": "interface-polymorphic", "jdk25": "pass"},
     {"feature": "closed-world-application-method-invocation", "jdk25": "pass"},
+    {"feature": "closed-world-class-for-name-loader", "jdk25": "pass"},
     {"feature": "string-intrinsics", "jdk25": "pass"},
     {"feature": "non-ascii-string-semantic-rejection", "jdk25": "pass"},
     {"feature": "operand-object-compare-temporary-root", "jdk25": "pass"},

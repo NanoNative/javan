@@ -552,7 +552,8 @@ final class BytecodeToIRMetadataSupport {
     private static boolean isClassForName(final String owner, final String name, final String descriptor) {
         return "java/lang/Class".equals(owner)
             && "forName".equals(name)
-            && "(Ljava/lang/String;)Ljava/lang/Class;".equals(descriptor);
+            && ("(Ljava/lang/String;)Ljava/lang/Class;".equals(descriptor)
+                || "(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;".equals(descriptor));
     }
 
     private static void addClass(

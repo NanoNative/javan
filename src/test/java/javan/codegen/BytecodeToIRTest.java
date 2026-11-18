@@ -11940,7 +11940,7 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).anySatisfy(instruction ->
             assertThat(instruction.expression()).contains(IrExpression.objectCall(
                 "javan_generated_class_for_name",
-                List.of(IrExpression.objectLocal("object0"))
+                List.of(IrExpression.objectLocal("object0"), IrExpression.intLocal("int1"), IrExpression.objectLocal("object2"))
             ))
         );
         assertThat(function.instructions()).extracting(IrInstruction::op).contains(

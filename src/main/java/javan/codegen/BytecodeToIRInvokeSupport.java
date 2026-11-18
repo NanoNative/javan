@@ -3686,13 +3686,25 @@ final class BytecodeToIRInvokeSupport {
     ) {
         if (!"java/lang/Class".equals(methodRef.owner())
             || !"forName".equals(methodRef.name())
-            || !"(Ljava/lang/String;)Ljava/lang/Class;".equals(methodRef.descriptor())) {
+            || !("(Ljava/lang/String;)Ljava/lang/Class;".equals(methodRef.descriptor())
+                || "(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;".equals(methodRef.descriptor()))) {
             return false;
         }
 
+        final boolean explicitLoader = "(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;".equals(methodRef.descriptor());
+        final IrExpression loader = explicitLoader
+            ? popObject(classFile, method, stack)
+            : IrExpression.objectCall("javan_class_loader_system", List.of());
+        final IrExpression initialize = explicitLoader ? popInt(classFile, method, stack) : IrExpression.intLiteral(1);
         final IrExpression name = popObject(classFile, method, stack);
         final String nameLocal = newObjectLocal(localDeclarations);
         instructions.add(IrInstruction.assignObject(nameLocal, name));
+        final int initializeIndex = localDeclarations.size();
+        final String initializeLocal = "int" + initializeIndex;
+        localDeclarations.put(Integer.MIN_VALUE + initializeIndex, new IrLocal(IrType.INT, initializeLocal));
+        instructions.add(IrInstruction.assignInt(initializeLocal, initialize));
+        final String loaderLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(loaderLocal, loader));
         final List<StackValue> successStack = List.copyOf(stack);
 
         final String namePresent = "label_class_for_name_present_" + instruction.offset();
@@ -3717,7 +3729,9 @@ final class BytecodeToIRInvokeSupport {
         final String resultLocal = newObjectLocal(localDeclarations);
         instructions.add(IrInstruction.assignObject(
             resultLocal,
-            IrExpression.objectCall("javan_generated_class_for_name", List.of(IrExpression.objectLocal(nameLocal)))
+            IrExpression.objectCall("javan_generated_class_for_name", List.of(
+                IrExpression.objectLocal(nameLocal), IrExpression.intLocal(initializeLocal), IrExpression.objectLocal(loaderLocal)
+            ))
         ));
         BytecodeToIRControlFlowSupport.appendPendingExceptionDispatch(
             classes, method, instruction, instructions, List.of("java/lang/Error"),

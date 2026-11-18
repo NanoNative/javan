@@ -4150,7 +4150,7 @@ final class RuntimeSourceMemorySections {
             return 0;
         }
 
-        void* javan_runtime_class_for_name_known(void* name_value) {
+        void* javan_runtime_class_for_name_known(void* name_value, int bootstrap_only) {
             if (name_value == NULL) {
                 return NULL;
             }
@@ -4195,7 +4195,7 @@ final class RuntimeSourceMemorySections {
             memcpy(base_name, component + 1, base_length);
             base_name[base_length] = '\\0';
             int base_exact_type_id = javan_runtime_class_known_exact_type_id(base_name);
-            int base_type_id = javan_runtime_class_type_id_for_binary_name(base_name);
+            int base_type_id = bootstrap_only ? 0 : javan_runtime_class_type_id_for_binary_name(base_name);
             free(base_name);
             if (base_exact_type_id == 0 && base_type_id == 0) {
                 goto complete;

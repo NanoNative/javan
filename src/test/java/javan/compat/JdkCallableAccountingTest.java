@@ -51,12 +51,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksClassLoaderSelectingLookupAsExplicitRejected() {
+    void marksClosedWorldClassLoaderLookupAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef(
             "java/lang/Class",
             "forName",
             "(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;"
-        ))).isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+        ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test

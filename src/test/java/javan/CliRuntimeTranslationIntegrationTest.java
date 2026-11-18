@@ -455,6 +455,46 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void classForNameWithSystemLoaderDefersAndPreservesInitializerFailure() throws Exception {
+        final Path project = project("class-for-name-loader-initializer-failure");
+        writeJava(project, "com.acme.Broken", """
+            package com.acme;
+            public final class Broken {
+                static int value = initialize();
+                private static int initialize() {
+                    Main.attempts++;
+                    return new int[-1].length;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int attempts;
+                public static void main(final String[] args) throws ClassNotFoundException {
+                    final ClassLoader loader = ClassLoader.getSystemClassLoader();
+                    System.out.println(Class.forName("com.acme.Broken", false, loader).getName());
+                    System.out.println(attempts);
+                    try { Class.forName("com.acme.Broken", true, loader); }
+                    catch (ExceptionInInitializerError expected) { System.out.println("first"); }
+                    try { Class.forName("com.acme.Broken", true, loader); }
+                    catch (NoClassDefFoundError expected) { System.out.println("later"); }
+                    System.out.println(attempts);
+                }
+            }
+            """);
+
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(
+            project, List.of(project.resolve(".javan/bin/class-for-name-loader-initializer-failure").toString())
+        );
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("com.acme.Broken\n0\nfirst\nlater\n1\n");
+    }
+
+    @Test
     void classForNamePreservesInitializerFailureAndMissingClassException() throws Exception {
         final Path project = project("class-for-name-initializer-failure");
         writeJava(project, "com.acme.Broken", """

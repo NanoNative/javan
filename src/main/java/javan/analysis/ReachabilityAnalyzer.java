@@ -1929,7 +1929,8 @@ public final class ReachabilityAnalyzer {
         final MethodRef method = instruction.methodRef().orElseThrow();
         if (!"java/lang/Class".equals(method.owner())
             || !"forName".equals(method.name())
-            || !"(Ljava/lang/String;)Ljava/lang/Class;".equals(method.descriptor())) {
+            || !("(Ljava/lang/String;)Ljava/lang/Class;".equals(method.descriptor())
+                || "(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;".equals(method.descriptor()))) {
             return;
         }
         final List<String> owners = new ArrayList<>(classes.keySet());

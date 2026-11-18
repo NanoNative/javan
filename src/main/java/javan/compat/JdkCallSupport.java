@@ -129,7 +129,8 @@ public final class JdkCallSupport {
         runtime("Object.equals", "java/lang/Object", "equals", "(Ljava/lang/Object;)Z"),
         runtime("Object.getClass", "java/lang/Object", "getClass", "()Ljava/lang/Class;"),
         runtime("Object.clone", "java/lang/Object", "clone", "()Ljava/lang/Object;"),
-        runtime("Class.forName", "java/lang/Class", "forName", "(Ljava/lang/String;)Ljava/lang/Class;"),
+        runtime("Class.forName", "java/lang/Class", "forName", "(Ljava/lang/String;)Ljava/lang/Class;",
+            "(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;"),
         runtime("Class.isInstance", "java/lang/Class", "isInstance", "(Ljava/lang/Object;)Z"),
         runtime("Class.cast", "java/lang/Class", "cast", "(Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Class.isEnum", "java/lang/Class", "isEnum", "()Z"),
@@ -1934,7 +1935,8 @@ public final class JdkCallSupport {
         }
         if ("java/lang/Class".equals(methodRef.owner())
             && "forName".equals(methodRef.name())
-            && "(Ljava/lang/String;)Ljava/lang/Class;".equals(methodRef.descriptor())) {
+            && ("(Ljava/lang/String;)Ljava/lang/Class;".equals(methodRef.descriptor())
+                || "(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;".equals(methodRef.descriptor()))) {
             return List.of(
                 "java/lang/NullPointerException",
                 "java/lang/ClassNotFoundException",

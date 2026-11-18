@@ -446,6 +446,9 @@ final class CoreBehaviorTest {
             "java/lang/Class",
             "forName",
             "(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;"
+        ))).isEmpty();
+        assertThat(rules.forbiddenReason(new MethodRef(
+            "java/lang/Class", "forName", "(Ljava/lang/Module;Ljava/lang/String;)Ljava/lang/Class;"
         ))).isPresent();
         assertThat(rules.forbiddenReason(new MethodRef(
             "java/lang/Class",
@@ -16593,7 +16596,7 @@ final class CoreBehaviorTest {
             List.of(),
             List.of(IrInstruction.returnObject(IrExpression.objectCall(
                 "javan_generated_class_for_name",
-                List.of(IrExpression.objectLocal("name"))
+                List.of(IrExpression.objectLocal("name"), IrExpression.intLiteral(1), IrExpression.objectNull())
             )))
         );
         final String lookupGenerated = Files.readString(new CCodegen().generate(
@@ -16602,9 +16605,9 @@ final class CoreBehaviorTest {
         ));
 
         assertThat(lookupGenerated).contains(
-            "JAVAN_PROGRAM_LINKAGE void* javan_generated_class_for_name(void* name_value) {",
+            "JAVAN_PROGRAM_LINKAGE void* javan_generated_class_for_name(void* name_value, int initialize, void* loader) {",
             "javan_string_equals(name, \"com.acme.Main\")",
-            "return javan_runtime_class_for_name_known(name_value);"
+            "return javan_runtime_class_for_name_known(name_value, bootstrap_only);"
         );
     }
 

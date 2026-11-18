@@ -52,7 +52,9 @@ Native allocation denial still has an explicit panic boundary; it is not general
 
 Closed-world support includes:
 
-- One-argument `Class.forName`, compiled class/array lookup and once-only initialization.
+- `Class.forName` with one argument or the system/bootstrap loader, compiled class/array
+  lookup, optional initialization and once-only initialization failures. Custom loaders remain
+  outside the supported closed world.
 - Declared/public method lookup, supported metadata and access checks, and generated
   application `Method.invoke` with dispatch, supported boxing/widening and wrapped causes.
   Metadata-only platform methods are not automatically invocable.

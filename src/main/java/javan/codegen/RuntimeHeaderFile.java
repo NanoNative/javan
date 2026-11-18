@@ -806,7 +806,7 @@ final class RuntimeHeaderFile {
         void* javan_virtual_thread_factory_get_class(void* value);
         void* javan_virtual_thread_executor_get_class(void* value);
         void* javan_runtime_class_literal(const char* binary_name, int exact_type_id, int is_enum, int is_array, int assignable_count, ...);
-        void* javan_runtime_class_for_name_known(void* name_value);
+        void* javan_runtime_class_for_name_known(void* name_value, int bootstrap_only);
         void* javan_runtime_class_get_name(void* value);
         int javan_class_name_equals(void* value, const char* expected);
         void* javan_method_get_name(void* value);

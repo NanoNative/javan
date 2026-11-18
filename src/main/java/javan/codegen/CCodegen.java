@@ -364,7 +364,7 @@ public final class CCodegen {
     ) {
         header.append("void* javan_generated_object_get_class(void* value);\n");
         if (features.classForName()) {
-            header.append("void* javan_generated_class_for_name(void* name_value);\n");
+            header.append("void* javan_generated_class_for_name(void* name_value, int initialize, void* loader);\n");
         }
         if (features.declaredMethodMetadata()) {
             header.append("void* javan_generated_class_get_declared_method(void* class_value, void* name_value, void* parameter_types);\n");
@@ -1522,19 +1522,24 @@ public final class CCodegen {
 
     private static void emitClassForNameHelper(final IrProgram program, final StringBuilder c) {
         final java.util.Map<String, Integer> typeIds = typeIds(program);
-        c.append("JAVAN_PROGRAM_LINKAGE void* javan_generated_class_for_name(void* name_value) {")
+        c.append("JAVAN_PROGRAM_LINKAGE void* javan_generated_class_for_name(void* name_value, int initialize, void* loader) {")
             .append(System.lineSeparator());
         c.append("    if (name_value == NULL) {").append(System.lineSeparator());
         c.append("        return NULL;").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
+        c.append("    if (loader != NULL && !javan_is_system_class_loader(loader)) return NULL;")
+            .append(System.lineSeparator());
+        c.append("    int bootstrap_only = loader == NULL;").append(System.lineSeparator());
         c.append("    const char* name = (const char*) name_value;").append(System.lineSeparator());
         for (final IrClass classInfo : program.classes()) {
             final int typeId = typeIds.get(classInfo.jvmName()).intValue();
-            c.append("    if (javan_string_equals(name, ")
+            c.append("    if (!bootstrap_only && javan_string_equals(name, ")
                 .append(emitCStringLiteral(displayClassName(classInfo.jvmName())))
                 .append(")) {")
                 .append(System.lineSeparator());
+            c.append("        if (initialize) {").append(System.lineSeparator());
             emitClassInitialization(program, classInfo.jvmName(), c);
+            c.append("        }").append(System.lineSeparator());
             c.append("        return javan_runtime_class_literal(")
                 .append(emitCStringLiteral(displayClassName(classInfo.jvmName())))
                 .append(", ")
@@ -1547,7 +1552,7 @@ public final class CCodegen {
                 .append(System.lineSeparator());
             c.append("    }").append(System.lineSeparator());
         }
-        c.append("    return javan_runtime_class_for_name_known(name_value);")
+        c.append("    return javan_runtime_class_for_name_known(name_value, bootstrap_only);")
             .append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
     }
