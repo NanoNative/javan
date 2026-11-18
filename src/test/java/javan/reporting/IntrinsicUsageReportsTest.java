@@ -35,6 +35,7 @@ final class IntrinsicUsageReportsTest {
                 "([Ljava/lang/String;)V",
                 instruction("java/lang/Math", "max", "(II)I"),
                 instruction("java/lang/Math", "abs", "(I)I"),
+                instruction("java/lang/Math", "floorDiv", "(II)I"),
                 instruction("java/lang/System", "nanoTime", "()J"),
                 instruction("java/lang/System", "nanoTime", "()J"),
                 instruction("java/lang/System", "arraycopy", "(Ljava/lang/Object;ILjava/lang/Object;II)V"),
@@ -69,6 +70,7 @@ final class IntrinsicUsageReportsTest {
             new IntrinsicCallCount("Objects.toString", 0),
             new IntrinsicCallCount("Math.abs", 1),
             new IntrinsicCallCount("Math.round", 0),
+            new IntrinsicCallCount("Math.floorDiv", 1),
             new IntrinsicCallCount("Math.floor", 0),
             new IntrinsicCallCount("Math.ceil", 0),
             new IntrinsicCallCount("Math.atan2", 0),
@@ -124,7 +126,7 @@ final class IntrinsicUsageReportsTest {
         assertThat(report.runtimeCallSiteCount()).isEqualTo(4);
         assertThat(report.supportedDirectJdkCalls()).isEmpty();
         assertThat(report.supportedDirectJdkCallSiteCount()).isZero();
-        assertThat(report.supportedJdkCallSiteCount()).isEqualTo(16);
+        assertThat(report.supportedJdkCallSiteCount()).isEqualTo(17);
         assertThat(report.unsupportedJdkCallCandidateCount()).isZero();
         assertThat(report.unsupportedJdkCallCandidates()).isEmpty();
         assertThat(Files.readString(tempDir.resolve("reports/intrinsics.json")))
@@ -135,6 +137,7 @@ final class IntrinsicUsageReportsTest {
                 "{\"name\": \"Objects.nonNull\", \"count\": 0}",
                 "{\"name\": \"Objects.toString\", \"count\": 0}",
                 "{\"name\": \"Math.abs\", \"count\": 1}",
+                "{\"name\": \"Math.floorDiv\", \"count\": 1}",
                 "{\"name\": \"Arrays.copyOf\", \"count\": 1}",
                 "{\"name\": \"Integer.toString\", \"count\": 1}",
                 "{\"name\": \"Character.isWhitespace\", \"count\": 0}",
@@ -142,19 +145,20 @@ final class IntrinsicUsageReportsTest {
                 "{\"name\": \"Short.toString\", \"count\": 1}",
                 "{\"name\": \"Character.toString\", \"count\": 1}",
                 "{\"name\": \"String.valueOf\", \"count\": 1}",
-                "\"intrinsicCallSiteCount\": 12",
+                "\"intrinsicCallSiteCount\": 13",
                 "{\"name\": \"List.getFirst\", \"count\": 1}",
                 "{\"name\": \"List.of\", \"count\": 1}",
                 "{\"name\": \"PrintStream.println\", \"count\": 1}",
                 "{\"name\": \"Thread.currentThread\", \"count\": 1}",
                 "\"runtimeCallSiteCount\": 4",
                 "\"supportedDirectJdkCallSiteCount\": 0",
-                "\"supportedJdkCallSiteCount\": 16",
+                "\"supportedJdkCallSiteCount\": 17",
                 "\"unsupportedJdkCallCandidateCount\": 0"
             );
         assertThat(Files.readString(tempDir.resolve("reports/intrinsics.md")))
             .contains(
-                "Supported reachable JDK call sites: `16`",
+                "Supported reachable JDK call sites: `17`",
+                "| `Math.floorDiv` | 1 |",
                 "Runtime-registry reachable call sites: `4`",
                 "Supported-direct reachable call sites: `0`",
                 "| `System.nanoTime` | 2 |",

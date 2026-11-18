@@ -1141,6 +1141,28 @@ final class RuntimeSourceCoreSection {
             return left >= right ? left : right;
         }
 
+        int javan_math_floor_div_int(int left, int right) {
+            if (left == INT_MIN && right == -1) {
+                return INT_MIN;
+            }
+            int quotient = left / right;
+            if ((left < 0) != (right < 0) && left % right != 0) {
+                quotient--;
+            }
+            return quotient;
+        }
+
+        long long javan_math_floor_div_long(long long left, long long right) {
+            if (left == LLONG_MIN && right == -1) {
+                return LLONG_MIN;
+            }
+            long long quotient = left / right;
+            if ((left < 0) != (right < 0) && left % right != 0) {
+                quotient--;
+            }
+            return quotient;
+        }
+
         int javan_math_add_exact_int_overflows(int left, int right) {
             const long long result = (long long) left + (long long) right;
             return result < INT_MIN || result > INT_MAX;

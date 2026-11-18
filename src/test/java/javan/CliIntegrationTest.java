@@ -3518,7 +3518,7 @@ final class CliIntegrationTest extends CliIntegrationSupport {
             "com.acme.Main"
         );
 
-        assertThat(run.exitCode()).isZero();
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(run.stderr()).isEmpty();
     }
 

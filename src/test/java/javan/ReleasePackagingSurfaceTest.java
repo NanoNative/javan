@@ -46,7 +46,8 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             .contains("<!-- ########## TEST ########## -->")
             .contains("<!-- ########## BUILD ########## -->")
             .contains("<!-- ########## RELEASE ########## -->")
-            .contains("<version>1.0.0</version>")
+            .containsPattern("<artifactId>javan</artifactId>\\s*<version>"
+                + "(?:1\\.0\\.0|[0-9]{4}\\.(?:[1-9]|1[0-2])\\.(?:[1-9]|[12][0-9]|3[01])(?:-SNAPSHOT)?)</version>")
             .contains("<project.build.outputTimestamp>${git.commit.time}</project.build.outputTimestamp>")
             .contains("<id>git-commit-time</id>")
             .contains("<id>generate-version-source</id>")

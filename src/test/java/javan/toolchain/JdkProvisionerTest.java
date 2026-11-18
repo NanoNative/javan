@@ -38,7 +38,7 @@ final class JdkProvisionerTest {
     }
 
     @Test
-    void neverRegistersAnArchiveWhenItsChecksumDoesNotMatch() {
+    void neverRegistersAnArchiveWhenItsChecksumDoesNotMatch() throws Exception {
         final Path home = tempDir.resolve("home");
         final JdkProvisioner provisioner = provisioner(home, new ArchiveRunner("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"));
 
@@ -63,7 +63,7 @@ final class JdkProvisionerTest {
         final Path home = tempDir.resolve("home");
         final JdkProvisioner provisioner = new JdkProvisioner(
             home,
-            new ManagedJdkStore(home, tempDir.resolve("temporary"), "Mac OS X", Map.of()),
+            userStore(home),
             new ArchiveRunner(CHECKSUM, true),
             "Mac OS X",
             "aarch64"
@@ -141,13 +141,24 @@ final class JdkProvisionerTest {
         assertThat(home.resolve("jdks/temurin-25-linux-x64.javan-staging")).doesNotExist();
     }
 
-    private JdkProvisioner provisioner(final Path home, final ProcessRunner runner) {
+    private JdkProvisioner provisioner(final Path home, final ProcessRunner runner) throws IOException {
         return new JdkProvisioner(
             home,
-            new ManagedJdkStore(home, tempDir.resolve("temporary"), "Linux", Map.of()),
+            userStore(home),
             runner,
             "Linux",
             "x86_64"
+        );
+    }
+
+    private ManagedJdkStore userStore(final Path home) throws IOException {
+        final Path blockedMachineRoot = tempDir.resolve("not-a-directory");
+        Files.writeString(blockedMachineRoot, "");
+        return new ManagedJdkStore(
+            home,
+            tempDir.resolve("temporary"),
+            "Windows",
+            Map.of("ProgramFiles", blockedMachineRoot.toString(), "ProgramData", blockedMachineRoot.toString())
         );
     }
 

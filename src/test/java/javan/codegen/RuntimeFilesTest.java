@@ -506,8 +506,8 @@ final class RuntimeFilesTest {
 
             static void* javan_test_snapshot_target = NULL;
             static javan_allocation_node* javan_test_deferred_node = NULL;
-            static atomic_int javan_test_snapshot_ready = ATOMIC_VAR_INIT(0);
-            static atomic_int javan_test_node_disposed = ATOMIC_VAR_INIT(0);
+            static atomic_int javan_test_snapshot_ready = 0;
+            static atomic_int javan_test_node_disposed = 0;
 
             static void javan_test_thread_yield(void) {
                 #if defined(_WIN32)
@@ -564,7 +564,7 @@ final class RuntimeFilesTest {
             #endif
 
             static void* value;
-            static atomic_int instance_result = ATOMIC_VAR_INIT(0);
+            static atomic_int instance_result = 0;
 
             extern void javan_test_set_snapshot_target(void* value);
             extern int javan_test_snapshot_ready_value(void);
@@ -762,13 +762,13 @@ final class RuntimeFilesTest {
             } javan_test_worker;
 
             static char borrowed_values[MISS_COUNT];
-            static atomic_int miss_failed = ATOMIC_VAR_INIT(0);
-            static atomic_int mutation_failed = ATOMIC_VAR_INIT(0);
-            static atomic_int workers_ready = ATOMIC_VAR_INIT(0);
-            static atomic_int workers_started = ATOMIC_VAR_INIT(0);
-            static atomic_int workers_active = ATOMIC_VAR_INIT(0);
-            static atomic_int workers_overlapped = ATOMIC_VAR_INIT(0);
-            static atomic_int workers_cancelled = ATOMIC_VAR_INIT(0);
+            static atomic_int miss_failed = 0;
+            static atomic_int mutation_failed = 0;
+            static atomic_int workers_ready = 0;
+            static atomic_int workers_started = 0;
+            static atomic_int workers_active = 0;
+            static atomic_int workers_overlapped = 0;
+            static atomic_int workers_cancelled = 0;
 
             extern int javan_test_authoritative_allocation_miss(void* value);
             extern int javan_test_allocation_lookup_was_serialized(void);
@@ -10487,16 +10487,25 @@ final class RuntimeFilesTest {
     @Execution(org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD)
     java.util.stream.Stream<DynamicTest> runtimeProcessRequiresOwnedCleanupGroup() {
         assumeTrue(!System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win"));
-        return List.of("child", "parent", "both", "denied", "timeout").stream().map(mode ->
+        return List.of("child", "denied", "timeout", "deferred", "deferred-timeout", "deferred-interrupted").stream().map(mode ->
             dynamicTest(mode, () -> {
                 final boolean denied = mode.equals("denied");
-                final boolean timeout = mode.equals("timeout");
+                final boolean deferred = mode.startsWith("deferred");
+                final boolean timeout = mode.equals("timeout") || mode.equals("deferred-timeout");
+                final boolean interrupted = mode.equals("deferred-interrupted");
                 final String output = runInstrumentedRuntimeProbe(
                     List.of(new RuntimeReplacement("#include <unistd.h>", """
                         #include <unistd.h>
 
                         /* Simulate an error after successful group creation, or a genuine denial. */
                         static int javan_test_setpgid(pid_t pid, pid_t group) {
+                            if (%s && pid == 0) {
+                                sleep(1);
+                            }
+                            if (%s && pid != 0) {
+                                errno = EPERM;
+                                return -1;
+                            }
                             if (%s) {
                                 errno = EPERM;
                                 return -1;
@@ -10509,8 +10518,8 @@ final class RuntimeFilesTest {
                             return result;
                         }
                         #define setpgid javan_test_setpgid
-                        """.formatted(denied ? "1" : "0",
-                            mode.equals("child") ? "pid == 0" : mode.equals("parent") ? "pid != 0" : "1"))),
+                        """.formatted(deferred ? "1" : "0", deferred ? "1" : "0", denied ? "1" : "0",
+                            mode.equals("child") ? "pid == 0" : "0"))),
                     "",
                     """
                     #include "javan_runtime.h"
@@ -10523,9 +10532,15 @@ final class RuntimeFilesTest {
                         (void) javan_arraylist_add(command, (void*) "sh");
                         (void) javan_arraylist_add(command, (void*) "-c");
                         (void) javan_arraylist_add(command, (void*) "%s");
+                        if (%s) {
+                            javan_thread_interrupt(javan_thread_current());
+                        }
                         void* result = javan_process_run(NULL, command, %d);
                         printf("%%d:%%s\\n", javan_process_result_exit_code(result),
                             (char*) javan_process_result_stdout(result));
+                        if (%s) {
+                            printf("error=%%s\\n", (char*) javan_process_result_stderr(result));
+                        }
                         if (%s) {
                             sleep(3);
                             printf("descendant=%%d\\n", access("descendant-alive", F_OK) == 0);
@@ -10534,14 +10549,16 @@ final class RuntimeFilesTest {
                         javan_free(command);
                         return 0;
                     }
-                    """.formatted(timeout ? "sleep 2 & wait; touch descendant-alive" : "printf ready",
-                        timeout ? 10 : 10000, timeout ? "1" : "0"),
+                    """.formatted(timeout || interrupted ? "sleep 2 & wait; touch descendant-alive" : "printf ready",
+                        interrupted ? "1" : "0", timeout ? 10 : 10000, denied ? "1" : "0",
+                        timeout || interrupted ? "1" : "0"),
                     "512",
                     Map.of(),
                     java.time.Duration.ofSeconds(30)
                 );
-                assertThat(output).isEqualTo(denied ? "0\n127:\n"
-                    : timeout ? "0\n124:\ndescendant=0\n" : "0\n0:ready\n");
+                assertThat(output).isEqualTo(denied ? "0\n127:\nerror=process cleanup setup failed\n"
+                    : timeout ? "0\n124:\ndescendant=0\n"
+                    : interrupted ? "0\n125:\ndescendant=0\n" : "0\n0:ready\n");
             }));
     }
 

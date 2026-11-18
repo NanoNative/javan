@@ -20,6 +20,13 @@ existing supported platform-thread behavior.
 | CONC-002 | Thread diagnostics MUST describe only reachable, evidenced behavior and distinguish unknown blocking from proven safety. | Proposed wider analysis/profiling below needs public diagnostics and lifecycle proof before claiming completion. |
 | CONC-003 | Enabling parallel native compilation MUST bound workers and prove cancellation, owned-child cleanup, cache integrity, self-host and packaged behavior. | Current [NativeLinker](../../src/main/java/javan/codegen/NativeLinker.java) is serial; [linker tests](../../src/test/java/javan/codegen/NativeLinkerTest.java) and [CLI command tests](../../src/test/java/javan/CliCommandIntegrationTest.java) assert the effective cap of one. This prerequisite is blocked pending the executor/runtime proof. |
 
+For native `ProcessRunner` calls on POSIX, the child establishes its own process group before
+executing the command. On timeout or interruption, cleanup targets both that group and the child,
+including when group setup has not finished. A failed group setup is reported and the command is
+not executed. The [runtime process tests](../../src/test/java/javan/codegen/RuntimeFilesTest.java)
+cover delayed setup, failure, timeout, interruption and descendant cleanup. This does not claim
+general `ProcessBuilder` support.
+
 Status: Partial. The complete behavior below remains planned beyond the generated ledger's
 proven slices. Historical research checkouts are not a repository dependency or support claim;
 production status requires accepted code and public proof in this repository.

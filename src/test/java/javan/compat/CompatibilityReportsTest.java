@@ -151,6 +151,7 @@ final class CompatibilityReportsTest {
             "| `eclipse-compiler-enum-switch-self-host` | pass |",
             "| `string-intrinsics` | pass |",
             "| `jdk-intrinsics-math-round` | pass |",
+            "| `jdk-intrinsics-math-floor-div` | pass |",
             "| `jdk-intrinsics-math-atan2` | pass |",
             "| `jdk-intrinsics-boolean-parse` | pass |",
             "| `resource-dependency-jar` | pass |",
@@ -601,10 +602,10 @@ final class CompatibilityReportsTest {
             "A broad JDK-compatibility release must report:",
             "The first native release is scenario-bounded.",
             "not a release-completion percentage.",
-            "| support rows | 315 |",
-            "| pass rows | 314 |",
+            "| support rows | 316 |",
+            "| pass rows | 315 |",
             "| scoped rows | 1 |",
-            "| accounted rows | 314 |",
+            "| accounted rows | 315 |",
             "| unaccounted rows | 1 |"
         );
         assertThat(matrix).contains(

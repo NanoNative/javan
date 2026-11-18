@@ -30,6 +30,55 @@ final class BytecodeToIRMathSupport {
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final SourceLineIndex sourceLines
     ) {
+        if ("floorDiv".equals(methodRef.name())
+            && ("(II)I".equals(methodRef.descriptor()) || "(JI)J".equals(methodRef.descriptor())
+                || "(JJ)J".equals(methodRef.descriptor()))) {
+            final boolean leftLong = !"(II)I".equals(methodRef.descriptor());
+            final boolean rightLong = "(JJ)J".equals(methodRef.descriptor());
+            final IrExpression right = rightLong ? popLong(classFile, method, stack) : popInt(classFile, method, stack);
+            final IrExpression left = leftLong ? popLong(classFile, method, stack) : popInt(classFile, method, stack);
+            final int leftIndex = localDeclarations.size();
+            final String leftName = (leftLong ? "long" : "int") + leftIndex;
+            localDeclarations.put(Integer.MIN_VALUE + leftIndex, new IrLocal(leftLong ? IrType.LONG : IrType.INT, leftName));
+            instructions.add(leftLong ? IrInstruction.assignLong(leftName, left) : IrInstruction.assignInt(leftName, left));
+            final int rightIndex = localDeclarations.size();
+            final String rightName = (rightLong ? "long" : "int") + rightIndex;
+            localDeclarations.put(Integer.MIN_VALUE + rightIndex, new IrLocal(rightLong ? IrType.LONG : IrType.INT, rightName));
+            instructions.add(rightLong ? IrInstruction.assignLong(rightName, right) : IrInstruction.assignInt(rightName, right));
+            final IrExpression checkedLeft = leftLong ? IrExpression.longLocal(leftName) : IrExpression.intLocal(leftName);
+            final IrExpression checkedRight = rightLong ? IrExpression.longLocal(rightName) : IrExpression.intLocal(rightName);
+            final String successLabel = "label_math_floor_div_success_" + instruction.offset() + "_" + rightIndex;
+            instructions.add(IrInstruction.branchIf(
+                successLabel,
+                IrExpression.intComparison(
+                    "!=", checkedRight, rightLong ? IrExpression.longLiteral(0) : IrExpression.intLiteral(0)
+                )
+            ));
+            final List<StackValue> successStack = List.copyOf(stack);
+            routePendingPlatformException(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                pendingExceptionHandlerStacks,
+                sourceLines,
+                "java/lang/ArithmeticException",
+                IrExpression.stringLiteral("/ by zero")
+            );
+            instructions.add(IrInstruction.label(successLabel));
+            stack.addAll(successStack);
+            if (leftLong) {
+                stack.add(StackValue.longExpression(IrExpression.longCall(
+                    "javan_math_floor_div_long", List.of(checkedLeft, checkedRight)
+                )));
+            } else {
+                stack.add(StackValue.intExpression(IrExpression.intCall(
+                    "javan_math_floor_div_int", List.of(checkedLeft, checkedRight)
+                )));
+            }
+            return true;
+        }
         if ("atan2".equals(methodRef.name()) && "(DD)D".equals(methodRef.descriptor())) {
             final IrExpression x = popDouble(classFile, method, stack);
             final IrExpression y = popDouble(classFile, method, stack);

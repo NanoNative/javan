@@ -2075,7 +2075,7 @@ public final class StaticVerifier {
         if (supportedStringLocaleCaseHandler(code, handler)) {
             return true;
         }
-        if (supportedMathExactHandler(code, handler)) {
+        if (supportedMathArithmeticHandler(code, handler)) {
             return true;
         }
         if (supportedNegativeArraySizeHandler(code, handler)) {
@@ -3674,7 +3674,7 @@ public final class StaticVerifier {
             && "Ljava/util/Locale;".equals(target.descriptor());
     }
 
-    private static boolean supportedMathExactHandler(final CodeAttribute code, final CodeException handler) {
+    private static boolean supportedMathArithmeticHandler(final CodeAttribute code, final CodeException handler) {
         if (handler.catchType().isEmpty()
             || !JdkCallSupport.isPlatformThrowableAssignable(
                 "java/lang/ArithmeticException",
@@ -3682,7 +3682,7 @@ public final class StaticVerifier {
             )) {
             return false;
         }
-        int hasExactCall = 0;
+        int hasMathCall = 0;
         for (final Instruction instruction : code.instructions()) {
             if (instruction.offset() < handler.startPc()) {
                 continue;
@@ -3690,18 +3690,18 @@ public final class StaticVerifier {
             if (instruction.offset() >= handler.endPc()) {
                 continue;
             }
-            if (isSupportedMathExactCall(instruction)) {
-                hasExactCall = 1;
+            if (isSupportedMathArithmeticCall(instruction)) {
+                hasMathCall = 1;
                 continue;
             }
-            if (!supportedMathExactProtectedInstruction(instruction)) {
+            if (!supportedMathArithmeticProtectedInstruction(instruction)) {
                 return false;
             }
         }
-        return hasExactCall == 1;
+        return hasMathCall == 1;
     }
 
-    private static boolean isSupportedMathExactCall(final Instruction instruction) {
+    private static boolean isSupportedMathArithmeticCall(final Instruction instruction) {
         if (instruction.opcode() != 184 || instruction.methodRef().isEmpty()) {
             return false;
         }
@@ -3726,13 +3726,18 @@ public final class StaticVerifier {
         if ("toIntExact".equals(target.name()) && "(J)I".equals(target.descriptor())) {
             return true;
         }
+        if ("floorDiv".equals(target.name())
+            && ("(II)I".equals(target.descriptor()) || "(JI)J".equals(target.descriptor())
+                || "(JJ)J".equals(target.descriptor()))) {
+            return true;
+        }
         return "multiplyExact".equals(target.name())
             && ("(II)I".equals(target.descriptor())
                 || "(JI)J".equals(target.descriptor())
                 || "(JJ)J".equals(target.descriptor()));
     }
 
-    private static boolean supportedMathExactProtectedInstruction(final Instruction instruction) {
+    private static boolean supportedMathArithmeticProtectedInstruction(final Instruction instruction) {
         final int opcode = instruction.opcode();
         if (opcode >= 2 && opcode <= 10) {
             return true;

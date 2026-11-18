@@ -78,11 +78,19 @@ Historical runs and archives with unknown or different commit metadata cannot ce
 1. Prepare matching host toolchains using [native host verification](testing.md#native-host-verification).
    Acquire candidate archives, checksums and matching rehearsal sidecars from a recorded full
    package build. A normal PR's `bootstrap` package is not sufficient evidence.
-2. If that candidate has no full artifact set, run the existing package proof from its clean
-   checkout on each required host. This example is for macOS ARM64; use the table's matching
-   script target on the other hosts:
+2. If that candidate has no full artifact set, prepare a disposable checkout of the clean
+   candidate on each required host. The POM's local default `1.0.0` is not a valid package
+   version. As in CI, temporarily set a date version and recompile before building the package,
+   so the executable, archive and `VERSION` file agree. This example is for macOS ARM64;
+   use the same candidate version and the table's matching script target on the other hosts:
 
    ```sh
+   JAVAN_VERSION=2026.11.18-SNAPSHOT
+   export JAVAN_VERSION
+   ./mvnw -B org.codehaus.mojo:versions-maven-plugin:2.25.1:set \
+     -DnewVersion="$JAVAN_VERSION" -DgenerateBackupPoms=false \
+     -DupdateBuildOutputTimestampPolicy=never
+   ./mvnw -q -DskipTests clean package
    JAVAN_PACKAGE_TARGET=macos-aarch64 JAVAN_PACKAGE_PROOF_SCOPE=full \
      sh .github/scripts/verify-ci-package-smoke.sh
    ```
@@ -133,7 +141,8 @@ candidate evidence and separate approval; `dry_run=true` is not the local test h
 
 ## Local Gate
 
-For the combined local checkout gate, run:
+For the combined local checkout gate, first set a date version in a disposable checkout as
+described in the [candidate procedure](#candidate-evidence-procedure), then run:
 
 ```sh
 .github/scripts/verify-release.sh

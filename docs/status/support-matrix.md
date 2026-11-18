@@ -9,8 +9,8 @@ External project names do not belong in this matrix; this ledger stays compiler-
 
 | Measure | Count |
 | --- | ---: |
-| rows | 315 |
-| pass | 314 |
+| rows | 316 |
+| pass | 315 |
 | scoped | 1 |
 | target | 0 |
 | rejected | 0 |
@@ -61,6 +61,7 @@ Status mapping:
 | `operand-chained-call-receiver-temporary-root` | pass |
 | `jdk-intrinsics-math-abs-min-max` | pass |
 | `jdk-intrinsics-math-round` | pass |
+| `jdk-intrinsics-math-floor-div` | pass |
 | `jdk-intrinsics-math-atan2` | pass |
 | `jdk-intrinsics-math-exact` | pass |
 | `jdk-intrinsics-objects-require-non-null` | pass |
