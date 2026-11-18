@@ -18,6 +18,10 @@ or [publication](release.md).
 The current implementation is a supported subset, not a complete JVM. The
 [generated support ledger](../status/support-matrix.md) names its exact scenarios.
 Finding a class or method in the JDK inventory does not establish native support.
+Native execution need not reproduce a JVM's internal representation, ABI or unspecified
+provider and platform choices. Supported Java contracts still apply to observable results,
+failures and ordering. Where an API permits operating-system-dependent results, tests verify
+its contract instead of requiring identical values from separate executions.
 
 ## Requirements
 
@@ -60,8 +64,9 @@ Closed-world support includes:
 
 This summary does not replace exact callable/shape entries in the generated ledger.
 Broader exceptions/finally, UTF-16 operations, collections, networking and threading require
-their own native/JVM behavior proofs. Unrestricted runtime class definition, arbitrary loaders,
-proxies, instrumentation, JNI and unrestricted accessibility are outside the current contract.
+their own public-boundary proofs of supported Java contracts. Unrestricted runtime class
+definition, arbitrary loaders, proxies, instrumentation, JNI and unrestricted accessibility
+are outside the current contract.
 Scoped accessibility already implemented for known methods is not a blanket rejection.
 
 ## Build Inputs And Outputs
@@ -102,11 +107,11 @@ documentation update. [Testing](testing.md#local-verification) owns the commands
 
 | Requirements | Given / when / then at the public boundary | Evidence / remaining gap |
 | --- | --- | --- |
-| COMP-001/002 | Given a supported source, class directory or JAR, when built and run, then native output matches its JVM result. | [CLI behavior](../../src/test/java/javan/CliRuntimeTranslationIntegrationTest.java), [dependency projects](../../src/test/java/javan/CliDependencyProjectIntegrationTest.java), [acceptance harness](../../.github/scripts/acceptance.sh). |
+| COMP-001/002 | Given a supported source, class directory or JAR, when built and run, then the native result satisfies the supported Java contract. | [CLI behavior](../../src/test/java/javan/CliRuntimeTranslationIntegrationTest.java), [dependency projects](../../src/test/java/javan/CliDependencyProjectIntegrationTest.java), [acceptance harness](../../.github/scripts/acceptance.sh). |
 | COMP-003/007 | Given reachable unsupported bytecode or a proven hazard, when checked, then diagnostics explain failure before native generation; unreachable findings remain visible without inventing a reachable edge. | [Safety diagnostics](../../src/test/java/javan/CliSafetyDiagnosticsIntegrationTest.java), [control-flow CLI](../../src/test/java/javan/ControlFlowCliTest.java), [compatibility CLI](../../src/test/java/javan/CliCompatIntegrationTest.java). |
 | COMP-004 | Given direct, inherited or unknown receivers, when analyzed and built, then valid dispatch survives and emitted facts remain conservative. | [Core behavior](../../src/test/java/javan/CoreBehaviorTest.java), [runtime translation](../../src/test/java/javan/CliRuntimeTranslationIntegrationTest.java). |
 | COMP-005 | Given ordered, re-entered or failing initializers, when the artifact starts or an export invokes them, then Java ordering and subsequent failure state hold. | [Runtime translation](../../src/test/java/javan/CliRuntimeTranslationIntegrationTest.java), [package/native-library tests](../../src/test/java/javan/CliPackagingIntegrationTest.java). |
-| COMP-006 | Given compiled classes/resources/providers, when used through native Java APIs, then lookup, absence, ownership and failure match the supported JVM slice. | [JDK semantics](../../src/test/java/javan/CliJdkSemanticsIntegrationTest.java), [resources](../../src/test/java/javan/CliResourceRuntimeIntegrationTest.java), [services](../../src/test/java/javan/CliServiceLoaderIntegrationTest.java). |
+| COMP-006 | Given compiled classes/resources/providers, when used through native Java APIs, then lookup, absence, ownership and failure satisfy the supported Java API contract. | [JDK semantics](../../src/test/java/javan/CliJdkSemanticsIntegrationTest.java), [resources](../../src/test/java/javan/CliResourceRuntimeIntegrationTest.java), [services](../../src/test/java/javan/CliServiceLoaderIntegrationTest.java). |
 | DIST-001 | Given ordinary Java build output, when consumed through an extracted JavaN package, then the same CLI behavior and reports remain available. | [Package proof](../../.github/scripts/verify-package.sh), [dependency projects](../../src/test/java/javan/CliDependencyProjectIntegrationTest.java). |
 
 ## Open Decisions
