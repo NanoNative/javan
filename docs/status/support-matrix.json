@@ -11,8 +11,8 @@
     "rule": "a broad JDK-compatibility release requires zero unknown leftovers; the first native release is scenario-bounded and requires declared reachable behavior to be supported or rejected"
   },
   "counts": {
-    "rows": 318,
-    "pass": 317,
+    "rows": 321,
+    "pass": 320,
     "scoped": 1,
     "target": 0,
     "rejected": 0
@@ -65,6 +65,8 @@
     {"feature": "jdk-intrinsics-number-to-string", "jdk25": "pass"},
     {"feature": "jdk-intrinsics-boolean-parse", "jdk25": "pass"},
     {"feature": "if-else", "jdk25": "pass"},
+    {"feature": "nested-conditional-values", "jdk25": "pass"},
+    {"feature": "nested-switch-conditional-values", "jdk25": "pass"},
     {"feature": "while-loop", "jdk25": "pass"},
     {"feature": "records-basic", "jdk25": "pass"},
     {"feature": "object-fields", "jdk25": "pass"},
@@ -90,6 +92,7 @@
     {"feature": "native-import-configured-static-abi", "jdk25": "pass"},
     {"feature": "resource-system-loader-stream", "jdk25": "pass"},
     {"feature": "resource-loader-instance-stream", "jdk25": "pass"},
+    {"feature": "resource-runtime-name-and-null-check", "jdk25": "pass"},
     {"feature": "service-loader-closed-world", "jdk25": "pass"},
     {"feature": "library-static-int-export", "jdk25": "pass"},
     {"feature": "library-string-export", "jdk25": "pass"},

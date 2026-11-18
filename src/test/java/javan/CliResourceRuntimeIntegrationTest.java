@@ -192,6 +192,170 @@ final class CliResourceRuntimeIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void systemClassLoaderReadsNestedResourceNamedAtRuntime() throws Exception {
+        final Path project = project("resource-runtime-name");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.io.InputStream;
+
+            public final class Main {
+                public static void main(final String[] args) throws Exception {
+                    final InputStream stream = ClassLoader.getSystemResourceAsStream(args[0]);
+                    if (stream == null) {
+                        System.out.println("missing");
+                        return;
+                    }
+                    final byte[] bytes = stream.readAllBytes();
+                    System.out.println(bytes.length);
+                    System.out.println(bytes[0]);
+                    stream.close();
+                }
+            }
+            """);
+        writeResource(project, "assets/nested/message.txt", "OK!");
+
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final String executable = project.resolve(".javan/bin/resource-runtime-name").toString();
+        final ProcessResult found = process(project, List.of(executable, "assets/nested/message.txt"));
+        assertThat(found.exitCode()).as(found.stderr()).isZero();
+        assertThat(found.stdout()).isEqualTo("3\n79\n");
+        final ProcessResult missing = process(project, List.of(executable, "assets/nested/missing.txt"));
+        assertThat(missing.exitCode()).as(missing.stderr()).isZero();
+        assertThat(missing.stdout()).isEqualTo("missing\n");
+    }
+
+    @Test
+    void systemClassLoaderNullResourceNameThrowsCatchableNullPointer() throws Exception {
+        final Path project = project("resource-system-loader-null-name");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(final String[] args) {
+                    try {
+                        ClassLoader.getSystemResourceAsStream(null);
+                        System.out.println("unexpected");
+                    } catch (NullPointerException expected) {
+                        System.out.println("null name");
+                    }
+                }
+            }
+            """);
+
+        final String expected = runJvmWithResources(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/resource-system-loader-null-name").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("null name\n");
+    }
+
+    @Test
+    void instanceResourceLookupRejectsNullNamesAndReceivers() throws Exception {
+        final Path project = project("resource-instance-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(final String[] args) {
+                    final ClassLoader loader = ClassLoader.getSystemClassLoader();
+                    final Class<?> type = Main.class;
+                    final ClassLoader missingLoader = null;
+                    final Class<?> missingClass = null;
+                    try { loader.getResourceAsStream(null); }
+                    catch (NullPointerException expected) { System.out.println("loader name"); }
+                    try { type.getResourceAsStream(null); }
+                    catch (NullPointerException expected) { System.out.println("class name"); }
+                    try { missingLoader.getResourceAsStream("asset.txt"); }
+                    catch (NullPointerException expected) { System.out.println("loader receiver"); }
+                    try { missingClass.getResourceAsStream("asset.txt"); }
+                    catch (NullPointerException expected) { System.out.println("class receiver"); }
+                }
+            }
+            """);
+
+        final String expected = runJvmWithResources(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/resource-instance-null").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected)
+            .isEqualTo("loader name\nclass name\nloader receiver\nclass receiver\n");
+    }
+
+    @Test
+    void resourceLookupEvaluatesReceiverAndNameBeforeNullCheck() throws Exception {
+        final Path project = project("resource-null-evaluation-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int trace;
+                static ClassLoader loader() { trace = trace * 10 + 1; return null; }
+                static String name() { trace = trace * 10 + 2; return "asset.txt"; }
+                public static void main(final String[] args) {
+                    try { loader().getResourceAsStream(name()); }
+                    catch (NullPointerException expected) { System.out.println(trace); }
+                }
+            }
+            """);
+
+        final String expected = runJvmWithResources(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/resource-null-evaluation-order").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("12\n");
+    }
+
+    @Test
+    void uncaughtNullResourceNameFailsAtRuntime() throws Exception {
+        final Path project = project("resource-system-loader-null-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(final String[] args) {
+                    ClassLoader.getSystemResourceAsStream(null);
+                }
+            }
+            """);
+
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/resource-system-loader-null-uncaught").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("java/lang/NullPointerException");
+    }
+
+    @Test
+    void classResourceLookupResolvesRelativeNameAtRuntime() throws Exception {
+        final Path project = project("resource-class-runtime-name");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.io.InputStream;
+            public final class Main {
+                public static void main(final String[] args) throws Exception {
+                    final InputStream stream = Main.class.getResourceAsStream(args[0]);
+                    if (stream == null) { System.out.println("missing"); return; }
+                    final byte[] bytes = stream.readAllBytes();
+                    System.out.println(bytes.length);
+                    System.out.println(bytes[0]);
+                    stream.close();
+                }
+            }
+            """);
+        writeResource(project, "com/acme/nested/message.txt", "OK!");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final String executable = project.resolve(".javan/bin/resource-class-runtime-name").toString();
+        final ProcessResult found = process(project, List.of(executable, "nested/message.txt"));
+        assertThat(found.exitCode()).as(found.stderr()).isZero();
+        assertThat(found.stdout()).isEqualTo("3\n79\n");
+        final ProcessResult missing = process(project, List.of(executable, "nested/missing.txt"));
+        assertThat(missing.exitCode()).as(missing.stderr()).isZero();
+        assertThat(missing.stdout()).isEqualTo("missing\n");
+    }
+
+    @Test
     void nativeBuildReadsResourceFromSystemClassLoader() throws Exception {
         final Path project = project("resource-system-loader");
         writeJava(project, "com.acme.Main", """

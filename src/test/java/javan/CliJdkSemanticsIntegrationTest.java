@@ -8307,6 +8307,440 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nestedConditionalValuesPreserveEveryBranch() throws Exception {
+        final Path project = project("nested-conditional-values");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static String text(final int value) {
+                    return value == 0 ? "first" : value == 1 ? "second" : "third";
+                }
+                static int number(final int value) {
+                    return value == 0 ? 10 : value == 1 ? 20 : 30;
+                }
+                static String left(final int outer, final int inner) {
+                    return outer == 0 ? (inner == 0 ? "left-first" : "left-second") : "right";
+                }
+                public static void main(final String[] args) {
+                    System.out.println(text(0));
+                    System.out.println(text(1));
+                    System.out.println(text(2));
+                    System.out.println(number(0));
+                    System.out.println(number(1));
+                    System.out.println(number(2));
+                    System.out.println(left(0, 0));
+                    System.out.println(left(0, 1));
+                    System.out.println(left(1, 0));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/nested-conditional-values").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("first\nsecond\nthird\n10\n20\n30\nleft-first\nleft-second\nright\n");
+    }
+
+    @Test
+    void nestedConditionalEvaluatesOnlySelectedBranchAsCallArgument() throws Exception {
+        final Path project = project("nested-conditional-evaluation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int trace;
+                static String mark(final int value) {
+                    trace = trace * 10 + value;
+                    return Integer.toString(value);
+                }
+                static void print(final int value) {
+                    System.out.println(value == 0 ? mark(1) : value == 1 ? mark(2) : mark(3));
+                }
+                public static void main(final String[] args) {
+                    print(0);
+                    print(1);
+                    print(2);
+                    System.out.println(trace);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/nested-conditional-evaluation").toString()),
+            Duration.ofSeconds(10), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("1\n2\n3\n123\n");
+    }
+
+    @Test
+    void nestedConditionalPreservesWideAndNullValues() throws Exception {
+        final Path project = project("nested-conditional-wide");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static long wide(final int value) {
+                    return value == 0 ? Long.MIN_VALUE : value == 1 ? 2L : Long.MAX_VALUE;
+                }
+                static double fraction(final int value) {
+                    return value == 0 ? -1.5 : value == 1 ? 0.25 : 3.5;
+                }
+                static String optional(final int value) {
+                    return value == 0 ? null : value == 1 ? "middle" : "last";
+                }
+                public static void main(final String[] args) {
+                    System.out.println(wide(0)); System.out.println(wide(1)); System.out.println(wide(2));
+                    System.out.println(fraction(0)); System.out.println(fraction(1)); System.out.println(fraction(2));
+                    System.out.println(optional(0)); System.out.println(optional(1)); System.out.println(optional(2));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/nested-conditional-wide").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void switchExpressionPreservesNestedConditionalValues() throws Exception {
+        final Path project = project("switch-nested-conditional");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static String choose(final int outer, final int inner) {
+                    return switch (outer) {
+                        case 0 -> inner == 0 ? "first" : "second";
+                        default -> "other";
+                    };
+                }
+                public static void main(final String[] args) {
+                    System.out.println(choose(0, 0));
+                    System.out.println(choose(0, 1));
+                    System.out.println(choose(1, 0));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/switch-nested-conditional").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("first\nsecond\nother\n");
+    }
+
+    @Test
+    void switchDefaultPreservesNestedConditionalValues() throws Exception {
+        final Path project = project("switch-default-nested-conditional");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static String choose(final int outer, final int inner) {
+                    return switch (outer) {
+                        case 0 -> "first";
+                        default -> inner == 0 ? "second" : "third";
+                    };
+                }
+                public static void main(final String[] args) {
+                    System.out.println(choose(0, 0));
+                    System.out.println(choose(1, 0));
+                    System.out.println(choose(1, 1));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/switch-default-nested-conditional").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("first\nsecond\nthird\n");
+    }
+
+    @Test
+    void nestedConditionalPreservesLocalAssignments() throws Exception {
+        final Path project = project("nested-conditional-local-assignment");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int choose(final int value) {
+                    int result = 0;
+                    final int selected = value == 0 ? (result = 10) : value == 1 ? (result = 20) : (result = 30);
+                    return selected + result;
+                }
+                public static void main(final String[] args) {
+                    System.out.println(choose(0));
+                    System.out.println(choose(1));
+                    System.out.println(choose(2));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/nested-conditional-local-assignment").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("20\n40\n60\n");
+    }
+
+    @Test
+    void nestedConditionalPreservesObjectAssignments() throws Exception {
+        final Path project = project("nested-conditional-object-assignment");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static String mark(final String value) { return value.concat("!"); }
+                static String choose(final int value) {
+                    String result = "before";
+                    final String selected = value == 0 ? (result = mark("a"))
+                        : value == 1 ? (result = mark("b")) : (result = mark("c"));
+                    return selected.concat(result);
+                }
+                public static void main(final String[] args) {
+                    System.out.println(choose(0));
+                    System.out.println(choose(1));
+                    System.out.println(choose(2));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/nested-conditional-object-assignment").toString()),
+            Duration.ofSeconds(10), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("a!a!\nb!b!\nc!c!\n");
+    }
+
+    @Test
+    void mixedBooleanGuardsPreserveEveryResult() throws Exception {
+        final Path project = project("nested-boolean-guards");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static boolean check(final boolean a, final boolean b, final boolean c, final boolean d) {
+                    return (a && b) || (c && d);
+                }
+                public static void main(final String[] args) {
+                    for (int bits = 0; bits < 16; bits++) {
+                        System.out.println(check((bits & 1) != 0, (bits & 2) != 0,
+                            (bits & 4) != 0, (bits & 8) != 0));
+                    }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/nested-boolean-guards").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void switchCasesPreserveMultiwayNestedConditionalValues() throws Exception {
+        final Path project = project("switch-multiway-nested-conditional");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static String choose(final int outer, final int inner) {
+                    return switch (outer) {
+                        case 0 -> inner == 0 ? "a" : inner == 1 ? "b" : "c";
+                        default -> inner == 0 ? "d" : inner == 1 ? "e" : "f";
+                    };
+                }
+                public static void main(final String[] args) {
+                    System.out.println(choose(0, 0)); System.out.println(choose(0, 1)); System.out.println(choose(0, 2));
+                    System.out.println(choose(1, 0)); System.out.println(choose(1, 1)); System.out.println(choose(1, 2));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/switch-multiway-nested-conditional").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("a\nb\nc\nd\ne\nf\n");
+    }
+
+    @Test
+    void nestedConditionalInitializesObjectAssignmentInCallArgument() throws Exception {
+        final Path project = project("nested-conditional-untracked-assignment");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static void print(final int value) {
+                    String result;
+                    System.out.println(value == 0 ? (result = "a") : value == 1 ? (result = "b") : (result = "c"));
+                    System.out.println(result);
+                }
+                public static void main(final String[] args) { print(0); print(1); print(2); }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/nested-conditional-untracked-assignment").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo("a\na\nb\nb\nc\nc\n");
+    }
+
+    @Test
+    void nestedConditionalRejectsPartiallyInitializedNewObjectLocal() throws Exception {
+        final Path project = project("nested-conditional-partial-object-local");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(final String[] args) {
+                    String result;
+                    final int value = args.length;
+                    System.out.println(value == 0 ? (result = "a") : value == 1 ? "b" : "c");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).isEqualTo(2);
+        assertThat(build.stderr()).contains("error[JAVAN051]");
+    }
+
+    @Test
+    void nestedConditionalInitializesPrimitiveAssignmentInCallArgument() throws Exception {
+        final Path project = project("nested-conditional-new-int-assignment");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static void print(final int value) {
+                    int result;
+                    System.out.println(value == 0 ? (result = 10) : value == 1 ? (result = 20) : (result = 30));
+                    System.out.println(result);
+                }
+                public static void main(final String[] args) { print(0); print(1); print(2); }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/nested-conditional-new-int-assignment").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("10\n10\n20\n20\n30\n30\n");
+    }
+
+    @Test
+    void nestedConditionalInitializesWideLocalAssignments() throws Exception {
+        final Path project = project("nested-conditional-new-wide-assignment");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static long wide(final int value) {
+                    long result;
+                    final long selected = value == 0 ? (result = 10L) : value == 1 ? (result = 20L) : (result = 30L);
+                    return selected + result;
+                }
+                static double fraction(final int value) {
+                    double result;
+                    final double selected = value == 0 ? (result = 1.25) : value == 1 ? (result = 2.5) : (result = 4.0);
+                    return selected + result;
+                }
+                public static void main(final String[] args) {
+                    System.out.println(wide(0)); System.out.println(wide(1)); System.out.println(wide(2));
+                    System.out.println(fraction(0)); System.out.println(fraction(1)); System.out.println(fraction(2));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/nested-conditional-new-wide-assignment").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("20\n40\n60\n2.5\n5.0\n8.0\n");
+    }
+
+    @Test
+    void nestedConditionalMatchesJavaAcrossDeterministicBranchTrees() throws Exception {
+        final Path project = project("nested-conditional-branch-trees");
+        final java.util.Random random = new java.util.Random(25L);
+        final StringBuilder methods = new StringBuilder();
+        final StringBuilder calls = new StringBuilder();
+        for (int method = 0; method < 40; method++) {
+            List<String> values = new java.util.ArrayList<>();
+            for (int leaf = 0; leaf < 16; leaf++) {
+                values.add(Integer.toString(random.nextInt(181) - 90));
+            }
+            while (values.size() > 1) {
+                final List<String> next = new java.util.ArrayList<>();
+                for (int leaf = 0; leaf < values.size(); leaf += 2) {
+                    final int mask = 1 << random.nextInt(4);
+                    next.add("((value & " + mask + ") == 0 ? " + values.get(leaf)
+                        + " : " + values.get(leaf + 1) + ")");
+                }
+                values = next;
+            }
+            methods.append("static int f").append(method).append("(int value) { return ")
+                .append(values.getFirst()).append("; }\n");
+            calls.append("System.out.println(f").append(method).append("(value));\n");
+        }
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                %s
+                public static void main(final String[] args) {
+                    for (int value = 0; value < 16; value++) {
+                        %s
+                    }
+                }
+            }
+            """.formatted(methods, calls));
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/nested-conditional-branch-trees").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void switchNestedValuesPreserveSideEffectsAndWideResults() throws Exception {
+        final Path project = project("switch-nested-side-effects");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int trace;
+                static String mark(final int value) { trace = trace * 10 + value; return Integer.toString(value); }
+                static String choose(final int outer, final int inner) {
+                    return switch (outer) {
+                        case 0 -> inner == 0 ? mark(1) : mark(2);
+                        default -> inner == 0 ? mark(3) : mark(4);
+                    };
+                }
+                static long wide(final int outer, final int inner) {
+                    return switch (outer) {
+                        case 0 -> inner == 0 ? 10L : 20L;
+                        default -> inner == 0 ? 30L : 40L;
+                    };
+                }
+                public static void main(final String[] args) {
+                    System.out.println(choose(0, 0)); System.out.println(choose(0, 1));
+                    System.out.println(choose(1, 0)); System.out.println(choose(1, 1));
+                    System.out.println(trace);
+                    System.out.println(wide(0, 0)); System.out.println(wide(0, 1));
+                    System.out.println(wide(1, 0)); System.out.println(wide(1, 1));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/switch-nested-side-effects").toString()),
+            Duration.ofSeconds(10), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("1\n2\n3\n4\n1234\n10\n20\n30\n40\n");
+    }
+
+    @Test
     void classForNameFindsClosedWorldClassInitializesOnceAndMatchesJvmFailures() throws Exception {
         final Path project = project("class-for-name");
         writeJava(project, "com.acme.Plugin", """

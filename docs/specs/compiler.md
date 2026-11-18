@@ -58,8 +58,9 @@ Closed-world support includes:
 - Declared/public method lookup, supported metadata and access checks, and generated
   application `Method.invoke` with dispatch, supported boxing/widening and wrapped causes.
   Metadata-only platform methods are not automatically invocable.
-- Application/dependency resource streams, application-first lookup, hashes, missing-resource
-  behavior and embedded app/library resources. URL-returning lookup remains outside the slice.
+- Application/dependency resource streams, application-first lookup, hashes, runtime resource
+  names, null-name failures and embedded app/library resources. URL-returning lookup remains
+  outside the slice.
 - Services from `META-INF/services` and module declarations, lazy cached provider construction,
   supported provider factories, iteration, `findFirst` and `reload`. `loadInstalled` uses the
   platform view. Dynamic loader discovery and provider streams are not implied.
@@ -67,6 +68,10 @@ Closed-world support includes:
 This summary does not replace exact callable/shape entries in the generated ledger.
 A typed handler can include a direct `Class.forName(...).getName()` sequence when control flow
 cannot bypass the lookup. Other exception ranges remain subject to their own supported shapes.
+Nested conditional values and nested switch results support ordinary values and previously
+initialized primitive or ordinary object locals. A single new local in a nested conditional is
+supported when each value-producing branch assigns it at its exit. Partially initialized shapes
+are rejected during lowering.
 Broader exceptions/finally, UTF-16 operations, collections, networking and threading require
 their own public-boundary proofs of supported Java contracts. Unrestricted runtime class
 definition, arbitrary loaders, proxies, instrumentation, JNI and unrestricted accessibility

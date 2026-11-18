@@ -462,6 +462,43 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsResourceNullCatch() throws Exception {
+        final Path project = tempDir.resolve("selfhost-resource-null-catch");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(final String[] args) {
+                    try {
+                        ClassLoader.getSystemResourceAsStream(null);
+                    } catch (NullPointerException expected) {
+                        System.out.println("null name");
+                    }
+                }
+            }
+            """);
+        final ProcessResult javac = process(
+            tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()),
+            Duration.ofSeconds(30)
+        );
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult build = process(
+            tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-resource-null-catch"),
+            Duration.ofSeconds(120)
+        );
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path executable = project.resolve(".javan/bin/selfhost-resource-null-catch");
+        final ProcessResult nativeRun = process(tempDir, List.of(executable.toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo("null name\n");
+    }
+
+    @Test
     @WindowsCompatibilityProof
     void nativeBuiltJavanBuildsPlainSourceProject() throws Exception {
         final Path sourceProject = tempDir.resolve("selfhost-source-pr\u00f6ject");

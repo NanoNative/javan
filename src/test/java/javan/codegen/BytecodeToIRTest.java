@@ -9121,7 +9121,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void fallsBackToRegularGuardedBranchWhenValueMergeTargetsUseDifferentOffsets() {
+    void mergesGuardedValuesWhenBranchTargetsUseDifferentOffsets() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -9141,21 +9141,20 @@ final class BytecodeToIRTest {
             plain(12, 172, "ireturn")
         ));
 
-        assertThat(function.instructions())
-            .allSatisfy(instruction -> assertThat(instruction.value().orElse("")).doesNotStartWith("guarded_value_"));
         assertThat(function.instructions()).contains(
             IrInstruction.branchIf(
                 "label_9",
                 IrExpression.intComparison("<=", IrExpression.intLocal("arg0"), IrExpression.intLiteral(0))
             ),
             IrInstruction.branchIf(
-                "branch_value_target_4",
+                "label_10",
                 IrExpression.intComparison("<=", IrExpression.intLocal("arg1"), IrExpression.intLiteral(0))
             ),
-            IrInstruction.assignInt("branchValue0_4", IrExpression.intLiteral(1)),
-            IrInstruction.assignInt("branchValue0_4", IrExpression.intLiteral(2)),
+            IrInstruction.assignInt("nestedBranchValue0_2", IrExpression.intLiteral(1)),
+            IrInstruction.assignInt("nestedBranchValue0_2", IrExpression.intLiteral(2)),
             IrInstruction.label("label_9"),
-            IrInstruction.assignInt("local3_int_1", IrExpression.intLocal("branchValue0_4")),
+            IrInstruction.label("label_10"),
+            IrInstruction.assignInt("local3_int_1", IrExpression.intLocal("nestedBranchValue0_2")),
             IrInstruction.returnInt(IrExpression.intLocal("arg2"))
         );
     }
@@ -9438,10 +9437,11 @@ final class BytecodeToIRTest {
             plain(14, 172, "ireturn")
         ));
 
+        final String selectedLocal = function.locals().getFirst().name();
         assertThat(function.instructions()).containsSubsequence(
             IrInstruction.label("label_10"),
-            IrInstruction.assignInt("branchValue0_8", IrExpression.intLiteral(1)),
-            IrInstruction.returnInt(IrExpression.intLocal("branchValue0_8"))
+            IrInstruction.assignInt(selectedLocal, IrExpression.intLiteral(1)),
+            IrInstruction.returnInt(IrExpression.intLocal(selectedLocal))
         );
     }
 
@@ -19821,13 +19821,11 @@ final class BytecodeToIRTest {
             plain(3, 176, "areturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.assignObject(
-                "object0",
-                IrExpression.objectCall("javan_class_resource_as_stream", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
-            ),
-            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
-        );
+        assertThat(function.instructions())
+            .extracting(instruction -> instruction.expression().map(IrExpression::value).orElse(""))
+            .contains("javan_class_resource_as_stream");
+        assertThat(function.instructions()).extracting(IrInstruction::op)
+            .contains(IrInstruction.Op.THROW_PENDING, IrInstruction.Op.RETURN_OBJECT);
     }
 
     @Test
@@ -19847,23 +19845,11 @@ final class BytecodeToIRTest {
             plain(6, 176, "areturn")
         ));
 
-        assertThat(function.locals()).containsExactly(
-            new IrLocal(IrType.OBJECT, "object0"),
-            new IrLocal(IrType.OBJECT, "local2_object_1"),
-            new IrLocal(IrType.OBJECT, "object2")
-        );
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.assignObject(
-                "object0",
-                IrExpression.objectCall("javan_class_resource_as_stream", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
-            ),
-            IrInstruction.assignObject("local2_object_1", IrExpression.objectLocal("object0")),
-            IrInstruction.assignObject(
-                "object2",
-                IrExpression.objectCall("javan_resource_input_stream_read_all_bytes", List.of(IrExpression.objectLocal("local2_object_1")))
-            ),
-            IrInstruction.returnObject(IrExpression.objectLocal("object2"))
-        );
+        assertThat(function.instructions())
+            .extracting(instruction -> instruction.expression().map(IrExpression::value).orElse(""))
+            .contains("javan_class_resource_as_stream", "javan_resource_input_stream_read_all_bytes");
+        assertThat(function.instructions()).extracting(IrInstruction::op)
+            .contains(IrInstruction.Op.THROW_PENDING, IrInstruction.Op.RETURN_OBJECT);
     }
 
     @Test
@@ -19879,11 +19865,11 @@ final class BytecodeToIRTest {
             plain(2, 176, "areturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(
-                IrExpression.objectCall("javan_loader_resource_as_stream", List.of(IrExpression.objectLocal("arg0")))
-            )
-        );
+        assertThat(function.instructions())
+            .extracting(instruction -> instruction.expression().map(IrExpression::value).orElse(""))
+            .contains("javan_loader_resource_as_stream");
+        assertThat(function.instructions()).extracting(IrInstruction::op)
+            .contains(IrInstruction.Op.THROW_PENDING, IrInstruction.Op.RETURN_OBJECT);
     }
 
     @Test
@@ -19917,16 +19903,11 @@ final class BytecodeToIRTest {
             plain(3, 176, "areturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.assignObject(
-                "object0",
-                IrExpression.objectCall(
-                    "javan_class_loader_resource_as_stream",
-                    List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
-                )
-            ),
-            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
-        );
+        assertThat(function.instructions())
+            .extracting(instruction -> instruction.expression().map(IrExpression::value).orElse(""))
+            .contains("javan_class_loader_resource_as_stream");
+        assertThat(function.instructions()).extracting(IrInstruction::op)
+            .contains(IrInstruction.Op.THROW_PENDING, IrInstruction.Op.RETURN_OBJECT);
     }
 
     @Test

@@ -9,8 +9,8 @@ External project names do not belong in this matrix; this ledger stays compiler-
 
 | Measure | Count |
 | --- | ---: |
-| rows | 318 |
-| pass | 317 |
+| rows | 321 |
+| pass | 320 |
 | scoped | 1 |
 | target | 0 |
 | rejected | 0 |
@@ -73,6 +73,8 @@ Status mapping:
 | `jdk-intrinsics-number-to-string` | pass |
 | `jdk-intrinsics-boolean-parse` | pass |
 | `if-else` | pass |
+| `nested-conditional-values` | pass |
+| `nested-switch-conditional-values` | pass |
 | `while-loop` | pass |
 | `records-basic` | pass |
 | `object-fields` | pass |
@@ -98,6 +100,7 @@ Status mapping:
 | `native-import-configured-static-abi` | pass |
 | `resource-system-loader-stream` | pass |
 | `resource-loader-instance-stream` | pass |
+| `resource-runtime-name-and-null-check` | pass |
 | `service-loader-closed-world` | pass |
 | `library-static-int-export` | pass |
 | `library-string-export` | pass |

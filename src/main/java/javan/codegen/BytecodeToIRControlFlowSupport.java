@@ -19,10 +19,12 @@ import javan.verify.DiagnosticException;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static javan.codegen.BytecodeToIR.*;
 
@@ -602,6 +604,14 @@ final class BytecodeToIRControlFlowSupport {
         )) {
             return true;
         }
+        if (lowerNestedBranchValueSelection(
+            classes, classFile, method, bytecode, index, instructions, stack, locals,
+            objectLocalKinds, objectLocalThrowableTypes, objectLocalLambdas, localDeclarations,
+            dispatches, functionOrNullTargetIds, materializedLambdaMethods, functionValueFlow,
+            pendingExceptionHandlerStacks, sourceLines, skippedOffsets, replacementLabelOffsets, -1, false
+        )) {
+            return true;
+        }
         final int targetOffset = branchTarget(instruction);
         final int targetIndex = instructionIndex(bytecode, targetOffset);
         if (targetIndex < 0 || targetIndex <= index + 1) {
@@ -709,6 +719,440 @@ final class BytecodeToIRControlFlowSupport {
         addInstructionOffsets(bytecode, targetIndex, doneIndex, skippedOffsets);
         return true;
     }
+    static boolean lowerNestedBranchValueSelection(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final List<Instruction> bytecode,
+        final int index,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrExpression> locals,
+        final Map<Integer, StackKind> objectLocalKinds,
+        final Map<Integer, ThrowableValue> objectLocalThrowableTypes,
+        final Map<Integer, DynamicLambda> objectLocalLambdas,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<String, IrDispatch> dispatches,
+        final Map<String, Integer> functionOrNullTargetIds,
+        final Map<String, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final FunctionValueFlow.Result functionValueFlow,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines,
+        final List<Integer> skippedOffsets,
+        final List<Integer> replacementLabelOffsets,
+        final int boundedEndIndex,
+        final boolean allowSimple
+    ) {
+        final Instruction first = bytecode.get(index);
+        final int targetOffset = branchTarget(first);
+        final int targetIndex = instructionIndex(bytecode, targetOffset);
+        if (targetIndex <= index + 1) {
+            return false;
+        }
+        int doneOffset = -1;
+        boolean conditionalBeforeTarget = false;
+        for (int cursor = index + 1; cursor < targetIndex; cursor++) {
+            final Instruction candidate = bytecode.get(cursor);
+            if (isConditionalBranch(candidate.opcode())) {
+                conditionalBeforeTarget = true;
+            }
+            if (candidate.opcode() == 167 && branchTarget(candidate) > targetOffset) {
+                doneOffset = branchTarget(candidate);
+                break;
+            }
+        }
+        if (doneOffset < 0 && !conditionalBeforeTarget) {
+            return false;
+        }
+        if (doneOffset < 0) {
+            for (int cursor = targetIndex; cursor < bytecode.size(); cursor++) {
+                final Instruction candidate = bytecode.get(cursor);
+                if (candidate.opcode() == 167) {
+                    if (branchTarget(candidate) > targetOffset) {
+                        doneOffset = branchTarget(candidate);
+                    }
+                    break;
+                }
+                if (candidate.opcode() == 168 || candidate.opcode() == 169
+                    || candidate.opcode() == 170 || candidate.opcode() == 171
+                    || candidate.opcode() >= 172 && candidate.opcode() <= 177 || candidate.opcode() == 191
+                    || candidate.opcode() == 200 || candidate.opcode() == 201) {
+                    break;
+                }
+            }
+        }
+        final int doneIndex = instructionIndex(bytecode, doneOffset);
+        final int selectionEndIndex = boundedEndIndex < 0 ? doneIndex : boundedEndIndex;
+        if (doneIndex <= targetIndex || selectionEndIndex <= targetIndex || selectionEndIndex > doneIndex) {
+            return false;
+        }
+        final int selectionEndOffset = bytecode.get(selectionEndIndex).offset();
+        boolean nested = allowSimple;
+        boolean unsupportedStore = false;
+        int newValueSlot = -1;
+        IrType newValueType = null;
+        for (int cursor = index + 1; cursor < selectionEndIndex; cursor++) {
+            final Instruction candidate = bytecode.get(cursor);
+            final int opcode = candidate.opcode();
+            if (isConditionalBranch(opcode)) {
+                final int target = branchTarget(candidate);
+                if (target <= candidate.offset() || target >= selectionEndOffset) {
+                    return false;
+                }
+                if (target != targetOffset) {
+                    nested = true;
+                }
+            } else if (opcode == 167) {
+                if (branchTarget(candidate) != doneOffset) {
+                    return false;
+                }
+            } else if (opcode >= 54 && opcode <= 78) {
+                if (!existingValueStore(candidate, locals, objectLocalKinds,
+                    objectLocalThrowableTypes, objectLocalLambdas)) {
+                    final int slot = uninitializedValueStoreSlot(candidate, locals, objectLocalKinds,
+                        objectLocalThrowableTypes, objectLocalLambdas);
+                    final Optional<IrType> type = valueStoreType(candidate);
+                    if (boundedEndIndex >= 0 || slot < 0 || type.isEmpty()
+                        || newValueSlot >= 0 && (newValueSlot != slot || newValueType != type.orElseThrow())) {
+                        unsupportedStore = true;
+                    } else {
+                        newValueSlot = slot;
+                        newValueType = type.orElseThrow();
+                    }
+                }
+            } else if (isControlTransfer(opcode) || opcode >= 168 && opcode <= 177 || opcode == 132
+                || opcode == 191 || opcode == 194 || opcode == 195 || opcode == 196 || opcode == 200 || opcode == 201) {
+                return false;
+            }
+        }
+        if (!nested) {
+            return false;
+        }
+        if (newValueSlot >= 0 && !unsupportedStore) {
+            final Set<Integer> conditionalTargets = new HashSet<>();
+            for (int cursor = index; cursor < selectionEndIndex; cursor++) {
+                final Instruction branch = bytecode.get(cursor);
+                if (isConditionalBranch(branch.opcode())) {
+                    conditionalTargets.add(branchTarget(branch));
+                }
+            }
+            for (int cursor = index + 1; cursor < selectionEndIndex; cursor++) {
+                final Instruction exit = bytecode.get(cursor);
+                if (exit.opcode() != 167) {
+                    continue;
+                }
+                if (cursor == index + 1 || uninitializedValueStoreSlot(bytecode.get(cursor - 1), locals,
+                    objectLocalKinds, objectLocalThrowableTypes, objectLocalLambdas) != newValueSlot) {
+                    unsupportedStore = true;
+                }
+                if (conditionalTargets.contains(exit.offset())) {
+                    unsupportedStore = true;
+                }
+            }
+            final Instruction last = bytecode.get(selectionEndIndex - 1);
+            if (last.opcode() != 167 && uninitializedValueStoreSlot(last, locals,
+                objectLocalKinds, objectLocalThrowableTypes, objectLocalLambdas) != newValueSlot) {
+                unsupportedStore = true;
+            }
+        }
+        if (unsupportedStore) {
+            boolean valueAtJoin = isValueConsumer(bytecode.get(doneIndex).opcode());
+            final List<StackValue> conditionStack = new ArrayList<>(stack);
+            branchCondition(classFile, method, first, conditionStack);
+            if (method.code().isPresent()) {
+                for (final javan.classfile.StackMapFrame frame : method.code().orElseThrow().stackMapFrames()) {
+                    if (frame.offset() == doneOffset && frame.stackTypes().size() > conditionStack.size()) {
+                        valueAtJoin = true;
+                    }
+                }
+            }
+            if (valueAtJoin) {
+                throw unsupportedBranchValueMerge(classFile, method, first);
+            }
+            return false;
+        }
+
+        boolean externalEntry = false;
+        for (int cursor = 0; cursor < bytecode.size(); cursor++) {
+            if (cursor >= index && cursor < selectionEndIndex) {
+                continue;
+            }
+            final Instruction source = bytecode.get(cursor);
+            if (isSimpleBranch(source.opcode())) {
+                final int target = branchTarget(source);
+                if (target > first.offset() && (target < selectionEndOffset
+                    || boundedEndIndex < 0 && target == selectionEndOffset)) {
+                    externalEntry = true;
+                }
+            } else if (source.opcode() == 170 || source.opcode() == 171) {
+                for (final SwitchEntry entry : switchEntries(source)) {
+                    if (entry.targetOffset() > first.offset() && (entry.targetOffset() < selectionEndOffset
+                        || boundedEndIndex < 0 && entry.targetOffset() == selectionEndOffset)) {
+                        externalEntry = true;
+                    }
+                }
+            }
+        }
+        if (method.code().isPresent()) {
+            for (final javan.classfile.CodeException handler : method.code().orElseThrow().exceptionTable()) {
+                if (handler.handlerPc() > first.offset() && handler.handlerPc() < selectionEndOffset) {
+                    externalEntry = true;
+                }
+            }
+        }
+
+        if (externalEntry) {
+            return false;
+        }
+
+        final int declarationCount = localDeclarations.size();
+        final Map<Integer, IrLocal> workingDeclarations = copyLocalDeclarations(localDeclarations);
+        final Map<Integer, IrExpression> workingLocals = copyExpressionLocals(locals);
+        final Map<Integer, StackKind> workingKinds = copyObjectLocalKinds(objectLocalKinds);
+        final Map<Integer, ThrowableValue> workingThrowables = copyObjectLocalThrowableTypes(objectLocalThrowableTypes);
+        final Map<Integer, DynamicLambda> workingLambdas = copyObjectLocalLambdas(objectLocalLambdas);
+        if (newValueSlot >= 0) {
+            localOrCreate(workingLocals, workingDeclarations, newValueSlot, newValueType);
+        }
+        final Map<Integer, StackValue> workingHandlers = new HashMap<>(pendingExceptionHandlerStacks);
+        final List<IrInstruction> workingInstructions = new ArrayList<>();
+        final List<StackValue> workingStack = new ArrayList<>(stack);
+        final IrExpression firstCondition = branchCondition(classFile, method, first, workingStack);
+        final List<StackValue> prefix = List.copyOf(workingStack);
+        final Map<Integer, List<StackValue>> branchEntries = new HashMap<>();
+        branchEntries.put(targetOffset, prefix);
+        final List<Integer> replacementOffsets = new ArrayList<>();
+        final String doneLabel = "nested_branch_value_done_" + first.offset();
+        workingInstructions.add(IrInstruction.branchIf(label(targetOffset), firstCondition));
+        final int lastDuplicate = BytecodeToIR.lastMaterializingDuplicateOffset(bytecode);
+        boolean active = true;
+        StackValue selected = null;
+        StackKind selectedKind = null;
+        IrType selectedType = null;
+        String selectedLocal = "";
+        for (int cursor = index + 1; cursor < selectionEndIndex; cursor++) {
+            final Instruction current = bytecode.get(cursor);
+            if (branchEntries.containsKey(current.offset())) {
+                if (active) {
+                    if (workingStack.size() != prefix.size()) {
+                        if (selected != null || isValueConsumer(bytecode.get(doneIndex).opcode())) {
+                            throw unsupportedBranchValueMerge(classFile, method, current);
+                        }
+                        return false;
+                    }
+                    for (int slot = 0; slot < prefix.size(); slot++) {
+                        if (workingStack.get(slot) != prefix.get(slot)) {
+                            throw unsupportedBranchValueMerge(classFile, method, current);
+                        }
+                    }
+                }
+                clearStack(workingStack);
+                workingStack.addAll(branchEntries.get(current.offset()));
+                workingInstructions.add(IrInstruction.label(label(current.offset())));
+                addInt(replacementOffsets, current.offset());
+                active = true;
+            }
+            if (!active) {
+                if (selected != null || isValueConsumer(bytecode.get(doneIndex).opcode())) {
+                    throw unsupportedBranchValueMerge(classFile, method, current);
+                }
+                return false;
+            }
+            if (isConditionalBranch(current.opcode())) {
+                final IrExpression condition = branchCondition(classFile, method, current, workingStack);
+                final int target = branchTarget(current);
+                if (target <= current.offset() || target >= selectionEndOffset || instructionIndex(bytecode, target) < 0
+                    || workingStack.size() != prefix.size()) {
+                    if (selected != null || isValueConsumer(bytecode.get(doneIndex).opcode())) {
+                        throw unsupportedBranchValueMerge(classFile, method, current);
+                    }
+                    return false;
+                }
+                for (int slot = 0; slot < prefix.size(); slot++) {
+                    if (workingStack.get(slot) != prefix.get(slot)) {
+                        if (selected != null || isValueConsumer(bytecode.get(doneIndex).opcode())) {
+                            throw unsupportedBranchValueMerge(classFile, method, current);
+                        }
+                        return false;
+                    }
+                }
+                branchEntries.put(target, prefix);
+                workingInstructions.add(IrInstruction.branchIf(label(target), condition));
+                continue;
+            }
+            if (current.opcode() == 167) {
+                if (branchTarget(current) != doneOffset || !hasSelectedValue(prefix, workingStack)) {
+                    if (selected != null || isValueConsumer(bytecode.get(doneIndex).opcode())) {
+                        throw unsupportedBranchValueMerge(classFile, method, current);
+                    }
+                    return false;
+                }
+                final StackValue value = workingStack.getLast();
+                if (value.expression().isEmpty()) {
+                    throw unsupportedBranchValueMerge(classFile, method, current);
+                }
+                if (selected == null) {
+                    selected = value;
+                    selectedKind = value.kind();
+                    selectedType = stackKindType(selectedKind);
+                    selectedLocal = "nestedBranchValue" + workingDeclarations.size() + "_" + first.offset();
+                    workingDeclarations.put(Integer.MIN_VALUE + workingDeclarations.size(),
+                        new IrLocal(selectedType, selectedLocal));
+                } else if (selectedKind != value.kind()) {
+                    throw unsupportedBranchValueMerge(classFile, method, current);
+                } else {
+                    selected = mergedValue(classes, selected, value,
+                        localExpression(selectedType, new IrLocal(selectedType, selectedLocal)));
+                }
+                workingInstructions.add(assignLocal(selectedKind, selectedLocal, value.expression().orElseThrow()));
+                workingInstructions.add(IrInstruction.jump(doneLabel));
+                active = false;
+                continue;
+            }
+            if (isControlTransfer(current.opcode())
+                || current.opcode() >= 168 && current.opcode() <= 177 || current.opcode() == 191
+                || current.opcode() == 194 || current.opcode() == 195 || current.opcode() == 196
+                || current.opcode() == 200 || current.opcode() == 201 || current.opcode() == 132) {
+                if (selected != null || isValueConsumer(bytecode.get(doneIndex).opcode())) {
+                    throw unsupportedBranchValueMerge(classFile, method, current);
+                }
+                return false;
+            }
+            if (current.opcode() == 58 || current.opcode() >= 75 && current.opcode() <= 78) {
+                if (workingStack.isEmpty()) {
+                    throw unsupportedBranchValueMerge(classFile, method, current);
+                }
+                final StackValue value = workingStack.getLast();
+                if (value.kind() != StackKind.OBJECT || value.throwable().isPresent()
+                    || value.dynamicLambda().isPresent()) {
+                    throw unsupportedBranchValueMerge(classFile, method, current);
+                }
+            }
+            lowerInstruction(classes, classFile, method, current, workingInstructions, workingStack,
+                workingHandlers, workingLocals, workingKinds, workingThrowables, workingLambdas,
+                workingDeclarations, dispatches, functionOrNullTargetIds, materializedLambdaMethods,
+                functionValueFlow, sourceLines, lastDuplicate);
+        }
+        if (active) {
+            if (!hasSelectedValue(prefix, workingStack)) {
+                if (selected != null || isValueConsumer(bytecode.get(doneIndex).opcode())) {
+                    throw unsupportedBranchValueMerge(classFile, method, first);
+                }
+                return false;
+            }
+            final StackValue value = workingStack.getLast();
+            if (value.expression().isEmpty() || selected == null || selectedKind != value.kind()) {
+                throw unsupportedBranchValueMerge(classFile, method, first);
+            }
+            selected = mergedValue(classes, selected, value,
+                localExpression(selectedType, new IrLocal(selectedType, selectedLocal)));
+            workingInstructions.add(assignLocal(selectedKind, selectedLocal, value.expression().orElseThrow()));
+        }
+        if (selected == null) {
+            return false;
+        }
+        workingInstructions.add(IrInstruction.label(doneLabel));
+        appendNewLocalDeclarations(localDeclarations, workingDeclarations, declarationCount);
+        pendingExceptionHandlerStacks.putAll(workingHandlers);
+        if (newValueSlot >= 0) {
+            locals.put(newValueSlot, workingLocals.get(newValueSlot));
+            if (newValueType == IrType.OBJECT) {
+                objectLocalKinds.put(newValueSlot, StackKind.OBJECT);
+                objectLocalThrowableTypes.put(newValueSlot, null);
+                objectLocalLambdas.remove(newValueSlot);
+            }
+        }
+        instructions.addAll(workingInstructions);
+        replacementLabelOffsets.addAll(replacementOffsets);
+        clearStack(stack);
+        stack.addAll(prefix);
+        stack.add(mergedValue(classes, selected, selected,
+            localExpression(selectedType, new IrLocal(selectedType, selectedLocal))));
+        addInstructionOffsets(bytecode, index + 1, selectionEndIndex, skippedOffsets);
+        return true;
+    }
+
+    static int valueStoreSlot(final Instruction instruction) {
+        final int opcode = instruction.opcode();
+        if (opcode >= 54 && opcode <= 58 && instruction.operands().length == 1) {
+            return unsigned(instruction.operands()[0]);
+        }
+        if (opcode >= 59 && opcode <= 78) {
+            return (opcode - 59) % 4;
+        }
+        return -1;
+    }
+
+    static Optional<IrType> valueStoreType(final Instruction instruction) {
+        final int opcode = instruction.opcode();
+        if (opcode >= 54 && opcode <= 58 && instruction.operands().length == 1) {
+            return Optional.of(switch (opcode) {
+                case 54 -> IrType.INT;
+                case 55 -> IrType.LONG;
+                case 56 -> IrType.FLOAT;
+                case 57 -> IrType.DOUBLE;
+                default -> IrType.OBJECT;
+            });
+        }
+        if (opcode >= 59 && opcode <= 78) {
+            return Optional.of(switch ((opcode - 59) / 4) {
+                case 0 -> IrType.INT;
+                case 1 -> IrType.LONG;
+                case 2 -> IrType.FLOAT;
+                case 3 -> IrType.DOUBLE;
+                default -> IrType.OBJECT;
+            });
+        }
+        return Optional.empty();
+    }
+
+    static int uninitializedValueStoreSlot(
+        final Instruction instruction,
+        final Map<Integer, IrExpression> locals,
+        final Map<Integer, StackKind> objectLocalKinds,
+        final Map<Integer, ThrowableValue> objectLocalThrowableTypes,
+        final Map<Integer, DynamicLambda> objectLocalLambdas
+    ) {
+        final int slot = valueStoreSlot(instruction);
+        final Optional<IrType> type = valueStoreType(instruction);
+        if (slot < 0 || type.isEmpty() || locals.get(slot) != null) {
+            return -1;
+        }
+        if (type.orElseThrow() != IrType.OBJECT) {
+            return slot;
+        }
+        final StackKind kind = objectLocalKinds.get(slot);
+        if (kind != null && kind != StackKind.OBJECT || objectLocalThrowableTypes.get(slot) != null
+            || objectLocalLambdas.get(slot) != null) {
+            return -1;
+        }
+        return slot;
+    }
+
+    static boolean existingValueStore(
+        final Instruction instruction,
+        final Map<Integer, IrExpression> locals,
+        final Map<Integer, StackKind> objectLocalKinds,
+        final Map<Integer, ThrowableValue> objectLocalThrowableTypes,
+        final Map<Integer, DynamicLambda> objectLocalLambdas
+    ) {
+        final int slot = valueStoreSlot(instruction);
+        final Optional<IrType> type = valueStoreType(instruction);
+        if (slot < 0 || type.isEmpty()) {
+            return false;
+        }
+        final IrExpression local = locals.get(slot);
+        if (local == null || local.type() != type.orElseThrow()) {
+            return false;
+        }
+        if (type.orElseThrow() != IrType.OBJECT) {
+            return true;
+        }
+        final StackKind kind = objectLocalKinds.get(slot);
+        return (kind == null || kind == StackKind.OBJECT)
+            && objectLocalThrowableTypes.get(slot) == null && objectLocalLambdas.get(slot) == null;
+    }
+
     static boolean lowerGuardedValueSelection(
         final Map<String, ClassFile> classes,
         final ClassFile classFile,
@@ -1101,6 +1545,7 @@ final class BytecodeToIRControlFlowSupport {
         int doneOffset = -1;
         final Map<Integer, Integer> blockEnds = new HashMap<>();
         final List<Integer> terminalThrowTargets = new ArrayList<>();
+        final List<Integer> nestedValueTargets = new ArrayList<>();
         for (int targetCursor = 0; targetCursor < targetOffsets.size(); targetCursor++) {
             final int targetOffset = targetOffsets.get(targetCursor);
             final int targetIndex = instructionIndex(bytecode, targetOffset);
@@ -1120,8 +1565,55 @@ final class BytecodeToIRControlFlowSupport {
                     return false;
                 }
                 doneOffset = candidateDoneOffset;
-                blockEnds.put(targetOffset, jumpIndex);
+                boolean nestedLastBlock = false;
+                if (targetCursor + 1 == targetOffsets.size()) {
+                    for (int cursor = targetIndex; cursor < jumpIndex; cursor++) {
+                        if (isConditionalBranch(bytecode.get(cursor).opcode())) {
+                            nestedLastBlock = true;
+                            break;
+                        }
+                    }
+                }
+                if (nestedLastBlock) {
+                    final int caseEndIndex = instructionIndex(bytecode, candidateDoneOffset);
+                    if (caseEndIndex <= jumpIndex) {
+                        return false;
+                    }
+                    blockEnds.put(targetOffset, caseEndIndex);
+                    nestedValueTargets.add(targetOffset);
+                } else {
+                    blockEnds.put(targetOffset, jumpIndex);
+                }
                 continue;
+            }
+            final int nestedEndIndex = targetCursor + 1 < targetOffsets.size()
+                ? nextTargetIndex : instructionIndex(bytecode, doneOffset);
+            if (nestedEndIndex > targetIndex) {
+                int candidateDoneOffset = -1;
+                int jumpCount = 0;
+                boolean hasConditional = false;
+                for (int cursor = targetIndex; cursor < nestedEndIndex; cursor++) {
+                    final Instruction candidate = bytecode.get(cursor);
+                    if (isConditionalBranch(candidate.opcode())) {
+                        hasConditional = true;
+                    } else if (candidate.opcode() == 167) {
+                        final int target = branchTarget(candidate);
+                        if (candidateDoneOffset >= 0 && candidateDoneOffset != target) {
+                            return false;
+                        }
+                        candidateDoneOffset = target;
+                        jumpCount++;
+                    }
+                }
+                if (jumpCount > 1 && hasConditional && candidateDoneOffset > targetOffset) {
+                    if (doneOffset >= 0 && doneOffset != candidateDoneOffset) {
+                        return false;
+                    }
+                    doneOffset = candidateDoneOffset;
+                    blockEnds.put(targetOffset, nestedEndIndex);
+                    nestedValueTargets.add(targetOffset);
+                    continue;
+                }
             }
             if (endsWithThrow(bytecode, targetIndex, nextTargetIndex)) {
                 blockEnds.put(targetOffset, nextTargetIndex);
@@ -1156,30 +1648,53 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, StackValue> workingPendingExceptionHandlerStacks =
             new HashMap<>(pendingExceptionHandlerStacks);
         final List<SwitchBlock> blocks = new ArrayList<>();
+        final List<Integer> nestedReplacementOffsets = new ArrayList<>();
         StackKind selectedKind = null;
         for (final int targetOffset : targetOffsets) {
             final int targetIndex = instructionIndex(bytecode, targetOffset);
             final int blockEndIndex = blockEnds.get(targetOffset);
-            final BlockResult block = lowerLinearBlock(
-                classes,
-                classFile,
-                method,
-                bytecode,
-                targetIndex,
-                blockEndIndex,
-                prefix,
-                locals,
-                objectLocalKinds,
-                objectLocalThrowableTypes,
-                objectLocalLambdas,
-                workingDeclarations,
-                dispatches,
-                functionOrNullTargetIds,
-                materializedLambdaMethods,
-                functionValueFlow,
-                workingPendingExceptionHandlerStacks,
-                sourceLines
-            );
+            final BlockResult block;
+            if (nestedValueTargets.contains(targetOffset)) {
+                int conditionalIndex = targetIndex;
+                while (conditionalIndex < blockEndIndex
+                    && !isConditionalBranch(bytecode.get(conditionalIndex).opcode())) {
+                    final int opcode = bytecode.get(conditionalIndex).opcode();
+                    if (isControlTransfer(opcode) || opcode >= 54 && opcode <= 78
+                        || opcode == 132 || opcode == 196) {
+                        throw unsupportedBranchValueMerge(classFile, method, bytecode.get(conditionalIndex));
+                    }
+                    conditionalIndex++;
+                }
+                if (conditionalIndex >= blockEndIndex) {
+                    throw unsupportedBranchValueMerge(classFile, method, instruction);
+                }
+                final BlockResult preparation = lowerLinearBlock(
+                    classes, classFile, method, bytecode, targetIndex, conditionalIndex, prefix, locals,
+                    objectLocalKinds, objectLocalThrowableTypes, objectLocalLambdas, workingDeclarations,
+                    dispatches, functionOrNullTargetIds, materializedLambdaMethods, functionValueFlow,
+                    workingPendingExceptionHandlerStacks, sourceLines
+                );
+                final List<IrInstruction> blockInstructions = new ArrayList<>(preparation.instructions());
+                final List<StackValue> blockStack = new ArrayList<>(preparation.stack());
+                final List<Integer> nestedSkippedOffsets = new ArrayList<>();
+                if (!lowerNestedBranchValueSelection(
+                    classes, classFile, method, bytecode, conditionalIndex, blockInstructions, blockStack,
+                    locals, objectLocalKinds, objectLocalThrowableTypes, objectLocalLambdas, workingDeclarations,
+                    dispatches, functionOrNullTargetIds, materializedLambdaMethods, functionValueFlow,
+                    workingPendingExceptionHandlerStacks, sourceLines, nestedSkippedOffsets,
+                    nestedReplacementOffsets, blockEndIndex, true
+                )) {
+                    throw unsupportedBranchValueMerge(classFile, method, bytecode.get(conditionalIndex));
+                }
+                block = new BlockResult(List.copyOf(blockInstructions), List.copyOf(blockStack));
+            } else {
+                block = lowerLinearBlock(
+                    classes, classFile, method, bytecode, targetIndex, blockEndIndex, prefix, locals,
+                    objectLocalKinds, objectLocalThrowableTypes, objectLocalLambdas, workingDeclarations,
+                    dispatches, functionOrNullTargetIds, materializedLambdaMethods, functionValueFlow,
+                    workingPendingExceptionHandlerStacks, sourceLines
+                );
+            }
             if (terminalThrowTargets.contains(targetOffset)) {
                 blocks.add(new SwitchBlock(targetOffset, blockEndIndex, block.instructions(), Optional.empty()));
                 continue;
@@ -1200,6 +1715,7 @@ final class BytecodeToIRControlFlowSupport {
         }
         appendNewLocalDeclarations(localDeclarations, workingDeclarations, originalLocalDeclarationCount);
         pendingExceptionHandlerStacks.putAll(workingPendingExceptionHandlerStacks);
+        replacementLabelOffsets.addAll(nestedReplacementOffsets);
         final IrExpression selector = switchSelector(classFile, method, instructions, stack, localDeclarations);
         final IrType valueType = stackKindType(selectedKind);
         final String localName = "switchValue" + localDeclarations.size() + "_" + instruction.offset();

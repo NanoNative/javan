@@ -1933,6 +1933,13 @@ public final class JdkCallSupport {
             }
             return List.of("java/lang/NullPointerException");
         }
+        if ("(Ljava/lang/String;)Ljava/io/InputStream;".equals(methodRef.descriptor())
+            && (("java/lang/Class".equals(methodRef.owner()) && "getResourceAsStream".equals(methodRef.name()))
+                || ("java/lang/ClassLoader".equals(methodRef.owner())
+                    && ("getSystemResourceAsStream".equals(methodRef.name())
+                        || "getResourceAsStream".equals(methodRef.name()))))) {
+            return List.of("java/lang/NullPointerException");
+        }
         if ("java/lang/Class".equals(methodRef.owner())
             && "forName".equals(methodRef.name())
             && ("(Ljava/lang/String;)Ljava/lang/Class;".equals(methodRef.descriptor())

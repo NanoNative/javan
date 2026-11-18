@@ -497,6 +497,10 @@ final class BytecodeToIRInvokeSupport {
         final MethodRef rawMethodRef = instruction.methodRef().orElseThrow();
         final MethodRef methodRef = JdkCallSupport.normalizeInheritedSupportedJdkCall(classes, rawMethodRef)
             .orElse(rawMethodRef);
+        if (lowerResourceAsStream(classFile, method, instruction, methodRef, instructions, stack,
+            localDeclarations, pendingExceptionHandlerStacks, sourceLines)) {
+            return;
+        }
         if (lowerPrintStreamCall(classFile, method, instruction, methodRef, instructions, stack)) {
             return;
         }
@@ -764,38 +768,6 @@ final class BytecodeToIRInvokeSupport {
             && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
             final IrExpression receiver = popObject(classFile, method, stack);
             pushObjectCall(instructions, stack, localDeclarations, "javan_runtime_class_get_name", List.of(receiver));
-            return;
-        }
-        if ("java/lang/Class".equals(methodRef.owner())
-            && "getResourceAsStream".equals(methodRef.name())
-            && "(Ljava/lang/String;)Ljava/io/InputStream;".equals(methodRef.descriptor())) {
-            final IrExpression name = popObject(classFile, method, stack);
-            final IrExpression receiver = popObject(classFile, method, stack);
-            final String localName = "object" + localDeclarations.size();
-            localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
-            instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall("javan_class_resource_as_stream", List.of(receiver, name))));
-            stack.add(StackValue.resourceInputStream(IrExpression.objectLocal(localName)));
-            return;
-        }
-        if ("java/lang/ClassLoader".equals(methodRef.owner())
-            && "getSystemResourceAsStream".equals(methodRef.name())
-            && "(Ljava/lang/String;)Ljava/io/InputStream;".equals(methodRef.descriptor())) {
-            final IrExpression name = popObject(classFile, method, stack);
-            final String localName = "object" + localDeclarations.size();
-            localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
-            instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall("javan_loader_resource_as_stream", List.of(name))));
-            stack.add(StackValue.resourceInputStream(IrExpression.objectLocal(localName)));
-            return;
-        }
-        if ("java/lang/ClassLoader".equals(methodRef.owner())
-            && "getResourceAsStream".equals(methodRef.name())
-            && "(Ljava/lang/String;)Ljava/io/InputStream;".equals(methodRef.descriptor())) {
-            final IrExpression name = popObject(classFile, method, stack);
-            final IrExpression receiver = popObject(classFile, method, stack);
-            final String localName = "object" + localDeclarations.size();
-            localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
-            instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall("javan_class_loader_resource_as_stream", List.of(receiver, name))));
-            stack.add(StackValue.resourceInputStream(IrExpression.objectLocal(localName)));
             return;
         }
         if ("java/lang/Class".equals(methodRef.owner())
@@ -2359,6 +2331,10 @@ final class BytecodeToIRInvokeSupport {
         final SourceLineIndex sourceLines
     ) {
         final MethodRef methodRef = instruction.methodRef().orElseThrow();
+        if (lowerResourceAsStream(classFile, method, instruction, methodRef, instructions, stack,
+            localDeclarations, pendingExceptionHandlerStacks, sourceLines)) {
+            return;
+        }
         if (lowerEnumValues(classes, classFile, method, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
@@ -2860,14 +2836,6 @@ final class BytecodeToIRInvokeSupport {
         if ("getSystemClassLoader".equals(methodRef.name())
             && "()Ljava/lang/ClassLoader;".equals(methodRef.descriptor())) {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_class_loader_system", List.of())));
-            return true;
-        }
-        if ("getSystemResourceAsStream".equals(methodRef.name())
-            && "(Ljava/lang/String;)Ljava/io/InputStream;".equals(methodRef.descriptor())) {
-            stack.add(StackValue.resourceInputStream(IrExpression.objectCall(
-                "javan_loader_resource_as_stream",
-                List.of(popObject(classFile, method, stack))
-            )));
             return true;
         }
         return false;
@@ -3669,6 +3637,77 @@ final class BytecodeToIRInvokeSupport {
             symbol,
             List.of(IrExpression.objectLocal(receiverLocal), IrExpression.objectLocal(inputLocal))
         );
+        return true;
+    }
+
+    static boolean lowerResourceAsStream(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final MethodRef methodRef,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
+    ) {
+        if (!"(Ljava/lang/String;)Ljava/io/InputStream;".equals(methodRef.descriptor())) {
+            return false;
+        }
+        final boolean system = instruction.opcode() == 184 && "java/lang/ClassLoader".equals(methodRef.owner())
+            && "getSystemResourceAsStream".equals(methodRef.name());
+        final boolean classResource = instruction.opcode() == 182 && "java/lang/Class".equals(methodRef.owner())
+            && "getResourceAsStream".equals(methodRef.name());
+        final boolean loaderResource = instruction.opcode() == 182 && "java/lang/ClassLoader".equals(methodRef.owner())
+            && "getResourceAsStream".equals(methodRef.name());
+        if (!system && !classResource && !loaderResource) {
+            return false;
+        }
+
+        final IrExpression name = popObject(classFile, method, stack);
+        final IrExpression receiver = system ? IrExpression.objectNull() : popObject(classFile, method, stack);
+        if (classResource && name.kind() == IrExpression.Kind.STRING_LITERAL
+            && receiver.kind() == IrExpression.Kind.CALL && "javan_runtime_class_literal".equals(receiver.value())) {
+            final String result = newObjectLocal(localDeclarations);
+            instructions.add(IrInstruction.assignObject(result,
+                IrExpression.objectCall("javan_class_resource_as_stream", List.of(receiver, name))));
+            stack.add(StackValue.resourceInputStream(IrExpression.objectLocal(result)));
+            return true;
+        }
+        final String receiverLocal = system ? "" : newObjectLocal(localDeclarations);
+        if (!system) {
+            instructions.add(IrInstruction.assignObject(receiverLocal, receiver));
+        }
+        final String nameLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(nameLocal, name));
+        final List<StackValue> successStack = List.copyOf(stack);
+        if (!system) {
+            final String receiverPresent = "label_resource_receiver_" + instruction.offset();
+            instructions.add(IrInstruction.branchIf(receiverPresent,
+                IrExpression.objectComparison("!=", IrExpression.objectLocal(receiverLocal), IrExpression.objectNull())));
+            routePendingPlatformException(classFile, method, instruction, instructions, stack,
+                pendingExceptionHandlerStacks, sourceLines, "java/lang/NullPointerException",
+                IrExpression.stringLiteral("resource receiver"));
+            instructions.add(IrInstruction.label(receiverPresent));
+            stack.addAll(successStack);
+        }
+        final String namePresent = "label_resource_name_" + instruction.offset();
+        instructions.add(IrInstruction.branchIf(namePresent,
+            IrExpression.objectComparison("!=", IrExpression.objectLocal(nameLocal), IrExpression.objectNull())));
+        routePendingPlatformException(classFile, method, instruction, instructions, stack,
+            pendingExceptionHandlerStacks, sourceLines, "java/lang/NullPointerException",
+            IrExpression.stringLiteral("name"));
+        instructions.add(IrInstruction.label(namePresent));
+        stack.addAll(successStack);
+
+        final String result = newObjectLocal(localDeclarations);
+        final String function = system ? "javan_loader_resource_as_stream"
+            : classResource ? "javan_class_resource_as_stream" : "javan_class_loader_resource_as_stream";
+        final List<IrExpression> arguments = system
+            ? List.of(IrExpression.objectLocal(nameLocal))
+            : List.of(IrExpression.objectLocal(receiverLocal), IrExpression.objectLocal(nameLocal));
+        instructions.add(IrInstruction.assignObject(result, IrExpression.objectCall(function, arguments)));
+        stack.add(StackValue.resourceInputStream(IrExpression.objectLocal(result)));
         return true;
     }
 
