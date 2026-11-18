@@ -510,6 +510,7 @@ public final class CompatibilityReports {
             pass("resource-system-loader-stream"),
             pass("resource-loader-instance-stream"),
             pass("resource-runtime-name-and-null-check"),
+            pass("secure-random-integers"),
             pass("service-loader-closed-world"),
             pass("library-static-int-export"),
             pass("library-string-export"),

@@ -11,8 +11,8 @@
     "rule": "a broad JDK-compatibility release requires zero unknown leftovers; the first native release is scenario-bounded and requires declared reachable behavior to be supported or rejected"
   },
   "counts": {
-    "rows": 321,
-    "pass": 320,
+    "rows": 322,
+    "pass": 321,
     "scoped": 1,
     "target": 0,
     "rejected": 0
@@ -93,6 +93,7 @@
     {"feature": "resource-system-loader-stream", "jdk25": "pass"},
     {"feature": "resource-loader-instance-stream", "jdk25": "pass"},
     {"feature": "resource-runtime-name-and-null-check", "jdk25": "pass"},
+    {"feature": "secure-random-integers", "jdk25": "pass"},
     {"feature": "service-loader-closed-world", "jdk25": "pass"},
     {"feature": "library-static-int-export", "jdk25": "pass"},
     {"feature": "library-string-export", "jdk25": "pass"},

@@ -9622,6 +9622,112 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void secureRandomIntegerGenerationRespectsBounds() throws Exception {
+        final Path project = project("secure-random-integers");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                private static final SecureRandom RANDOM = new SecureRandom();
+                public static void main(final String[] args) {
+                    final SecureRandom random = RANDOM;
+                    boolean valid = true;
+                    for (int index = 0; index < 64; index++) {
+                        final int any = random.nextInt();
+                        final int one = random.nextInt(1);
+                        final int small = random.nextInt(17);
+                        final int highRejection = random.nextInt(1_073_741_825);
+                        final int large = random.nextInt(Integer.MAX_VALUE);
+                        if (one != 0 || small < 0 || small >= 17 || highRejection < 0
+                            || highRejection >= 1_073_741_825 || large < 0 || large >= Integer.MAX_VALUE) {
+                            valid = false;
+                        }
+                    }
+                    System.out.println(valid);
+                    System.out.println(10 + random.nextInt(1));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/secure-random-integers").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("true\n10\n");
+    }
+
+    @Test
+    void secureRandomIntegerGenerationReportsInvalidInputs() throws Exception {
+        final Path project = project("secure-random-invalid-integers");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                static int trace;
+                static int invalidBound() { trace++; return 0; }
+                public static void main(final String[] args) {
+                    final SecureRandom random = new SecureRandom();
+                    try { random.nextInt(0); }
+                    catch (IllegalArgumentException expected) { System.out.println("zero"); }
+                    try { random.nextInt(-1); }
+                    catch (IllegalArgumentException expected) { System.out.println("negative"); }
+                    final SecureRandom missing = null;
+                    try { missing.nextInt(); }
+                    catch (NullPointerException expected) { System.out.println("null"); }
+                    try { missing.nextInt(invalidBound()); }
+                    catch (NullPointerException expected) { System.out.println(trace); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/secure-random-invalid-integers").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("zero\nnegative\nnull\n1\n");
+    }
+
+    @Test
+    void secureRandomIntegerGenerationPropagatesUncaughtInvalidBound() throws Exception {
+        final Path project = project("secure-random-uncaught-invalid-bound");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                public static void main(final String[] args) {
+                    new SecureRandom().nextInt(0);
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/secure-random-uncaught-invalid-bound").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("java/lang/IllegalArgumentException");
+    }
+
+    @Test
+    void secureRandomIntegerGenerationRejectsUnsupportedOriginBoundOverload() throws Exception {
+        final Path project = project("secure-random-origin-bound-unsupported");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                public static void main(final String[] args) {
+                    new SecureRandom().nextInt(1, 5);
+                }
+            }
+            """);
+        final CliRun check = run(tempDir, "check", project.toString());
+        assertThat(check.exitCode()).isEqualTo(2);
+        assertThat(check.stderr()).contains("error[JAVAN031]", "nextInt(II)I");
+    }
+
+    @Test
     void secureRandomStaticInitializerSurvivesGcAndFillsBytes() throws Exception {
         final Path project = project("secure-random-next-bytes");
         writeJava(project, "com.acme.Main", """

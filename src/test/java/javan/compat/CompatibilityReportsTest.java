@@ -153,6 +153,7 @@ final class CompatibilityReportsTest {
             "| `jdk-intrinsics-math-round` | pass |",
             "| `closed-world-class-for-name-loader` | pass |",
             "| `resource-runtime-name-and-null-check` | pass |",
+            "| `secure-random-integers` | pass |",
             "| `nested-conditional-values` | pass |",
             "| `nested-switch-conditional-values` | pass |",
             "| `jdk-intrinsics-math-floor-div` | pass |",
@@ -607,10 +608,10 @@ final class CompatibilityReportsTest {
             "A broad JDK-compatibility release must report:",
             "The first native release is scenario-bounded.",
             "not a release-completion percentage.",
-            "| support rows | 321 |",
-            "| pass rows | 320 |",
+            "| support rows | 322 |",
+            "| pass rows | 321 |",
             "| scoped rows | 1 |",
-            "| accounted rows | 320 |",
+            "| accounted rows | 321 |",
             "| unaccounted rows | 1 |"
         );
         assertThat(matrix).contains(

@@ -1059,6 +1059,39 @@ final class CliRuntimeFeatureIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void checkReportsSecureRandomIntegerRuntimeModule() throws Exception {
+        final Path project = project("secure-random-integer-runtime-module");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                public static void main(final String[] args) {
+                    new SecureRandom().nextInt(17);
+                }
+            }
+            """);
+        final CliRun check = run(tempDir, "check", project.toString());
+        assertThat(check.exitCode()).as(check.stderr()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/runtime-features.json"))).contains(
+            "\"reachableRuntimeModules\": [\"core\", \"random\"]",
+            "\"status\": \"pass\""
+        );
+    }
+
+    @Test
+    void buildRejectsSecureRandomIntegerWhenRandomModuleIsDisabled() throws Exception {
+        assertBuildRejectsDisabledRuntimeModule("secure-random-integer-disabled", "random", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                public static void main(final String[] args) {
+                    new SecureRandom().nextInt(17);
+                }
+            }
+            """);
+    }
+
+    @Test
     void checkReportsUuidRandomRuntimeModule() throws Exception {
         final Path project = project("uuid-random-runtime-module");
         writeJava(project, "com.acme.Main", """

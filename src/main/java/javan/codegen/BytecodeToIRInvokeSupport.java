@@ -1062,6 +1062,46 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if ("java/security/SecureRandom".equals(methodRef.owner())
+            && "nextInt".equals(methodRef.name())
+            && ("()I".equals(methodRef.descriptor()) || "(I)I".equals(methodRef.descriptor()))) {
+            final boolean bounded = "(I)I".equals(methodRef.descriptor());
+            final IrExpression bound = bounded ? popInt(classFile, method, stack) : IrExpression.intLiteral(0);
+            final IrExpression receiver = popObject(classFile, method, stack);
+            final String receiverLocal = newObjectLocal(localDeclarations);
+            instructions.add(IrInstruction.assignObject(receiverLocal, receiver));
+            final int boundIndex = localDeclarations.size();
+            final String boundLocal = "int" + boundIndex;
+            if (bounded) {
+                localDeclarations.put(Integer.MIN_VALUE + boundIndex, new IrLocal(IrType.INT, boundLocal));
+                instructions.add(IrInstruction.assignInt(boundLocal, bound));
+            }
+            final List<StackValue> successStack = List.copyOf(stack);
+            final String receiverPresent = "label_secure_random_int_receiver_" + instruction.offset();
+            instructions.add(IrInstruction.branchIf(receiverPresent,
+                IrExpression.objectComparison("!=", IrExpression.objectLocal(receiverLocal), IrExpression.objectNull())));
+            routePendingPlatformException(classFile, method, instruction, instructions, stack,
+                pendingExceptionHandlerStacks, sourceLines, "java/lang/NullPointerException",
+                IrExpression.stringLiteral("SecureRandom"));
+            instructions.add(IrInstruction.label(receiverPresent));
+            stack.addAll(successStack);
+            if (bounded) {
+                final String boundValid = "label_secure_random_int_bound_" + instruction.offset();
+                instructions.add(IrInstruction.branchIf(boundValid,
+                    IrExpression.intComparison(">", IrExpression.intLocal(boundLocal), IrExpression.intLiteral(0))));
+                routePendingPlatformException(classFile, method, instruction, instructions, stack,
+                    pendingExceptionHandlerStacks, sourceLines, "java/lang/IllegalArgumentException",
+                    IrExpression.stringLiteral("bound must be positive"));
+                instructions.add(IrInstruction.label(boundValid));
+                stack.addAll(successStack);
+            }
+            final List<IrExpression> arguments = bounded
+                ? List.of(IrExpression.objectLocal(receiverLocal), IrExpression.intLocal(boundLocal))
+                : List.of(IrExpression.objectLocal(receiverLocal));
+            pushIntCall(instructions, stack, localDeclarations,
+                bounded ? "javan_secure_random_next_int_bound" : "javan_secure_random_next_int", arguments);
+            return;
+        }
+        if ("java/security/SecureRandom".equals(methodRef.owner())
             && "nextBytes".equals(methodRef.name())
             && "([B)V".equals(methodRef.descriptor())) {
             final IrExpression bytes = popObject(classFile, method, stack);

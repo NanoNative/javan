@@ -9,8 +9,8 @@ External project names do not belong in this matrix; this ledger stays compiler-
 
 | Measure | Count |
 | --- | ---: |
-| rows | 321 |
-| pass | 320 |
+| rows | 322 |
+| pass | 321 |
 | scoped | 1 |
 | target | 0 |
 | rejected | 0 |
@@ -101,6 +101,7 @@ Status mapping:
 | `resource-system-loader-stream` | pass |
 | `resource-loader-instance-stream` | pass |
 | `resource-runtime-name-and-null-check` | pass |
+| `secure-random-integers` | pass |
 | `service-loader-closed-world` | pass |
 | `library-static-int-export` | pass |
 | `library-string-export` | pass |

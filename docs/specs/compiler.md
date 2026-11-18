@@ -65,6 +65,13 @@ Closed-world support includes:
   supported provider factories, iteration, `findFirst` and `reload`. `loadInstalled` uses the
   platform view. Dynamic loader discovery and provider streams are not implied.
 
+The default `SecureRandom` constructor supports calls resolved as `SecureRandom.nextBytes`
+and the zero-argument and single-bound `SecureRandom.nextInt` overloads using operating-system
+entropy during execution.
+Entropy-source failures retain the native runtime panic boundary. Provider selection, explicit
+seeding, calls resolved through other random types and other random APIs remain subject to their
+own supported callable entries.
+
 This summary does not replace exact callable/shape entries in the generated ledger.
 A typed handler can include a direct `Class.forName(...).getName()` sequence when control flow
 cannot bypass the lookup. Other exception ranges remain subject to their own supported shapes.

@@ -8857,13 +8857,42 @@ final class RuntimeSourceMemorySections {
         #endif
         }
 
-        void javan_secure_random_next_bytes(void* value, void* array) {
+        static void javan_secure_random_check(void* value) {
             if (value == NULL || ((javan_secure_random_state*) value)->magic != JAVAN_SECURE_RANDOM_MAGIC) {
                 javan_panic("invalid SecureRandom state");
             }
+        }
+
+        void javan_secure_random_next_bytes(void* value, void* array) {
+            javan_secure_random_check(value);
             javan_byte_array* bytes = (javan_byte_array*) javan_array_checked(array);
             javan_array_kind_checked((javan_array_header*) bytes, JAVAN_ARRAY_KIND_BYTE);
             javan_os_random_bytes((unsigned char*) bytes->values, bytes->length);
+        }
+
+        int javan_secure_random_next_int(void* value) {
+            javan_secure_random_check(value);
+            uint32_t bits;
+            javan_os_random_bytes((unsigned char*) &bits, sizeof(bits));
+            if (bits <= INT32_MAX) {
+                return (int) bits;
+            }
+            return -1 - (int) (UINT32_MAX - bits);
+        }
+
+        int javan_secure_random_next_int_bound(void* value, int bound) {
+            javan_secure_random_check(value);
+            if (bound <= 0) {
+                javan_panic("invalid SecureRandom bound");
+            }
+            const uint32_t range = (uint32_t) bound;
+            /* Discard the incomplete prefix before reducing to avoid modulo bias. */
+            const uint32_t threshold = ((UINT32_MAX % range) + 1U) % range;
+            uint32_t bits;
+            do {
+                javan_os_random_bytes((unsigned char*) &bits, sizeof(bits));
+            } while (bits < threshold);
+            return (int) (bits % range);
         }
 
         void* javan_uuid_random(void) {

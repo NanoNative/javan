@@ -4579,8 +4579,10 @@ final class JdkCallSupportTest {
     void secureRandomDefaultConstructionAndByteGenerationAreSupported() {
         assertThat(List.of(
             JdkCallSupport.isSupported(new MethodRef("java/security/SecureRandom", "<init>", "()V")),
-            JdkCallSupport.isSupported(new MethodRef("java/security/SecureRandom", "nextBytes", "([B)V"))
-        )).containsExactly(true, true);
+            JdkCallSupport.isSupported(new MethodRef("java/security/SecureRandom", "nextBytes", "([B)V")),
+            JdkCallSupport.isSupported(new MethodRef("java/security/SecureRandom", "nextInt", "()I")),
+            JdkCallSupport.isSupported(new MethodRef("java/security/SecureRandom", "nextInt", "(I)I"))
+        )).containsExactly(true, true, true, true);
     }
 
     @Test
@@ -4599,6 +4601,19 @@ final class JdkCallSupportTest {
             "nextBytes",
             "([B)V"
         ))).containsExactly("java/lang/NullPointerException");
+    }
+
+    @Test
+    void secureRandomIntegersTransportInputFailures() {
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/security/SecureRandom", "nextInt", "()I"
+        ))).containsExactly("java/lang/NullPointerException");
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/security/SecureRandom", "nextInt", "(I)I"
+        ))).containsExactly("java/lang/NullPointerException", "java/lang/IllegalArgumentException");
+        assertThat(JdkCallSupport.runtimeModules(new MethodRef(
+            "java/security/SecureRandom", "nextInt", "(I)I"
+        ))).containsExactly("random");
     }
 
     @Test
