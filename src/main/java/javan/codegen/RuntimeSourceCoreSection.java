@@ -1163,6 +1163,26 @@ final class RuntimeSourceCoreSection {
             return quotient;
         }
 
+        int javan_math_floor_mod_int(int left, int right) {
+            if (left == INT_MIN && right == -1) {
+                return 0;
+            }
+            int remainder = left % right;
+            return remainder != 0 && ((left < 0) != (right < 0)) ? remainder + right : remainder;
+        }
+
+        long long javan_math_floor_mod_long(long long left, long long right) {
+            if (left == LLONG_MIN && right == -1) {
+                return 0;
+            }
+            long long remainder = left % right;
+            return remainder != 0 && ((left < 0) != (right < 0)) ? remainder + right : remainder;
+        }
+
+        int javan_math_floor_mod_long_int(long long left, int right) {
+            return (int) javan_math_floor_mod_long(left, right);
+        }
+
         int javan_math_add_exact_int_overflows(int left, int right) {
             const long long result = (long long) left + (long long) right;
             return result < INT_MIN || result > INT_MAX;

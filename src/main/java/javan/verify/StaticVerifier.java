@@ -3726,9 +3726,12 @@ public final class StaticVerifier {
         if ("toIntExact".equals(target.name()) && "(J)I".equals(target.descriptor())) {
             return true;
         }
-        if ("floorDiv".equals(target.name())
-            && ("(II)I".equals(target.descriptor()) || "(JI)J".equals(target.descriptor())
-                || "(JJ)J".equals(target.descriptor()))) {
+        if (("floorDiv".equals(target.name())
+                && ("(II)I".equals(target.descriptor()) || "(JI)J".equals(target.descriptor())
+                    || "(JJ)J".equals(target.descriptor())))
+            || ("floorMod".equals(target.name())
+                && ("(II)I".equals(target.descriptor()) || "(JI)I".equals(target.descriptor())
+                    || "(JJ)J".equals(target.descriptor())))) {
             return true;
         }
         return "multiplyExact".equals(target.name())

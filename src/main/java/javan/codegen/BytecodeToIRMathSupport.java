@@ -30,9 +30,13 @@ final class BytecodeToIRMathSupport {
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final SourceLineIndex sourceLines
     ) {
-        if ("floorDiv".equals(methodRef.name())
-            && ("(II)I".equals(methodRef.descriptor()) || "(JI)J".equals(methodRef.descriptor())
-                || "(JJ)J".equals(methodRef.descriptor()))) {
+        if (("floorDiv".equals(methodRef.name())
+                && ("(II)I".equals(methodRef.descriptor()) || "(JI)J".equals(methodRef.descriptor())
+                    || "(JJ)J".equals(methodRef.descriptor())))
+            || ("floorMod".equals(methodRef.name())
+                && ("(II)I".equals(methodRef.descriptor()) || "(JI)I".equals(methodRef.descriptor())
+                    || "(JJ)J".equals(methodRef.descriptor())))) {
+            final boolean floorMod = "floorMod".equals(methodRef.name());
             final boolean leftLong = !"(II)I".equals(methodRef.descriptor());
             final boolean rightLong = "(JJ)J".equals(methodRef.descriptor());
             final IrExpression right = rightLong ? popLong(classFile, method, stack) : popInt(classFile, method, stack);
@@ -68,14 +72,15 @@ final class BytecodeToIRMathSupport {
             );
             instructions.add(IrInstruction.label(successLabel));
             stack.addAll(successStack);
-            if (leftLong) {
+            if (leftLong && (!floorMod || rightLong)) {
                 stack.add(StackValue.longExpression(IrExpression.longCall(
-                    "javan_math_floor_div_long", List.of(checkedLeft, checkedRight)
+                    floorMod ? "javan_math_floor_mod_long" : "javan_math_floor_div_long", List.of(checkedLeft, checkedRight)
                 )));
             } else {
-                stack.add(StackValue.intExpression(IrExpression.intCall(
-                    "javan_math_floor_div_int", List.of(checkedLeft, checkedRight)
-                )));
+                final String function = floorMod
+                    ? (leftLong ? "javan_math_floor_mod_long_int" : "javan_math_floor_mod_int")
+                    : "javan_math_floor_div_int";
+                stack.add(StackValue.intExpression(IrExpression.intCall(function, List.of(checkedLeft, checkedRight))));
             }
             return true;
         }

@@ -97,6 +97,7 @@ public final class JdkCallSupport {
         intrinsic("Math.abs", "java/lang/Math", "abs", "(I)I", "(J)J", "(F)F", "(D)D"),
         intrinsic("Math.round", "java/lang/Math", "round", "(F)I", "(D)J"),
         intrinsic("Math.floorDiv", "java/lang/Math", "floorDiv", "(II)I", "(JI)J", "(JJ)J"),
+        intrinsic("Math.floorMod", "java/lang/Math", "floorMod", "(II)I", "(JI)I", "(JJ)J"),
         intrinsic("Math.floor", "java/lang/Math", "floor", "(D)D"),
         intrinsic("Math.ceil", "java/lang/Math", "ceil", "(D)D"),
         intrinsic("Math.atan2", "java/lang/Math", "atan2", "(DD)D"),
@@ -2039,6 +2040,7 @@ public final class JdkCallSupport {
                 || "decrementExact".equals(methodRef.name())
                 || "negateExact".equals(methodRef.name())
                 || "floorDiv".equals(methodRef.name())
+                || "floorMod".equals(methodRef.name())
                 || "toIntExact".equals(methodRef.name()))) {
             return List.of("java/lang/ArithmeticException");
         }

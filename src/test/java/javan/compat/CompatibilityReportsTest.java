@@ -152,6 +152,7 @@ final class CompatibilityReportsTest {
             "| `string-intrinsics` | pass |",
             "| `jdk-intrinsics-math-round` | pass |",
             "| `jdk-intrinsics-math-floor-div` | pass |",
+            "| `jdk-intrinsics-math-floor-mod` | pass |",
             "| `jdk-intrinsics-math-atan2` | pass |",
             "| `jdk-intrinsics-boolean-parse` | pass |",
             "| `resource-dependency-jar` | pass |",
@@ -602,10 +603,10 @@ final class CompatibilityReportsTest {
             "A broad JDK-compatibility release must report:",
             "The first native release is scenario-bounded.",
             "not a release-completion percentage.",
-            "| support rows | 316 |",
-            "| pass rows | 315 |",
+            "| support rows | 317 |",
+            "| pass rows | 316 |",
             "| scoped rows | 1 |",
-            "| accounted rows | 315 |",
+            "| accounted rows | 316 |",
             "| unaccounted rows | 1 |"
         );
         assertThat(matrix).contains(

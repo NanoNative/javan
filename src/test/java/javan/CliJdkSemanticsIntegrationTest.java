@@ -11351,6 +11351,111 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mathFloorModSupportsSignsAndBoundaries() throws Exception {
+        final Path project = project("math-floor-mod");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                public static void main(final String[] args) {
+                    System.out.println(Math.floorMod(4, 3));
+                    System.out.println(Math.floorMod(-4, 3));
+                    System.out.println(Math.floorMod(4, -3));
+                    System.out.println(Math.floorMod(-4, -3));
+                    System.out.println(Math.floorMod(Integer.MIN_VALUE, -1));
+                    System.out.println(Math.floorMod(Integer.MIN_VALUE, 3));
+                    System.out.println(Math.floorMod(Long.MIN_VALUE, -1));
+                    System.out.println(Math.floorMod(Long.MIN_VALUE, 3));
+                    System.out.println(Math.floorMod(Long.MIN_VALUE, -1L));
+                    System.out.println(Math.floorMod(Long.MIN_VALUE, 3L));
+                    System.out.println(Math.floorMod(Long.MAX_VALUE, Long.MIN_VALUE));
+                    System.out.println(Math.floorMod(-4L, 3));
+                    System.out.println(Math.floorMod(4L, -3L));
+                    System.out.println(Math.floorMod(6L, -3L));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/math-floor-mod").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void mathFloorModThrowsForZeroDivisors() throws Exception {
+        final Path project = project("math-floor-mod-zero");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                public static void main(final String[] args) {
+                    try { System.out.println(Math.floorMod(5, 0)); }
+                    catch (ArithmeticException ex) { System.out.println(ex.getMessage()); }
+                    try { System.out.println(Math.floorMod(5L, 0)); }
+                    catch (ArithmeticException ex) { System.out.println(ex.getMessage()); }
+                    try { System.out.println(Math.floorMod(5L, 0L)); }
+                    catch (ArithmeticException ex) { System.out.println(ex.getMessage()); }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/math-floor-mod-zero").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void mathFloorModEvaluatesOperandsOnceInOrder() throws Exception {
+        final Path project = project("math-floor-mod-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                static int trace;
+                static int left() { trace = trace * 10 + 1; return -4; }
+                static int right() { trace = trace * 10 + 2; return 3; }
+                public static void main(final String[] args) {
+                    System.out.println(Math.floorMod(left(), right()));
+                    System.out.println(trace);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/math-floor-mod-order").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void mathFloorModUncaughtZeroDivisorFailsAtRuntime() throws Exception {
+        final Path project = project("math-floor-mod-uncaught-zero");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                public static void main(final String[] args) {
+                    System.out.println(Math.floorMod(5, 0));
+                }
+            }
+            """);
+
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/math-floor-mod-uncaught-zero").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("java/lang/ArithmeticException", "/ by zero");
+    }
+
+    @Test
     void mathToIntExactBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("math-to-int-exact");
         writeJava(project, "com.acme.Main", """
