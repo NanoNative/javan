@@ -353,7 +353,7 @@ public final class StaticVerifier {
                     reachable
                 ));
             }
-            if (unsupportedExceptionHandlers(classes, method, reachableEntries)
+            if (unsupportedExceptionHandlers(classes, classFile.name(), method, reachableEntries)
                 && !supportedSyntheticSwitchMapClass(classFile, method, methodCode)
                 && !supportedSyntheticSwitchTableMethod(classes, classFile, method, methodCode)) {
                 diagnostics.add(exceptionHandlerDiagnostic(classFile, method, methodCode.exceptionTableLength(), reachable));
@@ -1646,6 +1646,7 @@ public final class StaticVerifier {
 
     private static boolean unsupportedExceptionHandlers(
         final Map<String, ClassFile> classes,
+        final String currentOwner,
         final MethodInfo method,
         final ReachableEntries reachableEntries
     ) {
@@ -1657,11 +1658,11 @@ public final class StaticVerifier {
             return true;
         }
         if (boundedTypedHandlerSetCandidate(code)
-            && hasUnsupportedIndividualHandler(classes, method, code, reachableEntries)) {
+            && hasUnsupportedIndividualHandler(classes, currentOwner, method, code, reachableEntries)) {
             return !supportedBoundedTypedHandlerSet(classes, method, code);
         }
         for (final CodeException handler : code.exceptionTable()) {
-            if (!supportedExceptionHandler(classes, method, code, handler, reachableEntries)) {
+            if (!supportedExceptionHandler(classes, currentOwner, method, code, handler, reachableEntries)) {
                 return true;
             }
         }
@@ -1670,12 +1671,13 @@ public final class StaticVerifier {
 
     private static boolean hasUnsupportedIndividualHandler(
         final Map<String, ClassFile> classes,
+        final String currentOwner,
         final MethodInfo method,
         final CodeAttribute code,
         final ReachableEntries reachableEntries
     ) {
         for (final CodeException handler : code.exceptionTable()) {
-            if (!supportedExceptionHandler(classes, method, code, handler, reachableEntries)) {
+            if (!supportedExceptionHandler(classes, currentOwner, method, code, handler, reachableEntries)) {
                 return true;
             }
         }
@@ -2055,6 +2057,7 @@ public final class StaticVerifier {
 
     private static boolean supportedExceptionHandler(
         final Map<String, ClassFile> classes,
+        final String currentOwner,
         final MethodInfo method,
         final CodeAttribute code,
         final CodeException handler,
@@ -2177,6 +2180,7 @@ public final class StaticVerifier {
                 }
             }
             if (!supportedInterruptedWaitProtectedInstruction(instruction)
+                && !sameClassFinalStaticRead(classes, currentOwner, code, handler, instruction)
                 && !classNameAfterLookup
                 && !initialization
                 && !supportedApplicationThrowableInstruction(classes, instruction)
@@ -2194,6 +2198,76 @@ public final class StaticVerifier {
         }
         if (hasThrowableTransport == 1) {
             return true;
+        }
+        return false;
+    }
+
+    private static boolean sameClassFinalStaticRead(
+        final Map<String, ClassFile> classes,
+        final String currentOwner,
+        final CodeAttribute code,
+        final CodeException handler,
+        final Instruction instruction
+    ) {
+        if (instruction.opcode() != 178 || instruction.offset() != handler.startPc()
+            || instruction.fieldRef().isEmpty() || !boundedProtectedRangeEntryIsIsolated(code, handler)) {
+            return false;
+        }
+        final FieldRef field = instruction.fieldRef().orElseThrow();
+        final ClassFile owner = classes.get(currentOwner);
+        if (owner == null || !currentOwner.equals(field.owner())) {
+            return false;
+        }
+        for (final Instruction candidate : code.instructions()) {
+            final int opcode = candidate.opcode();
+            if (opcode == 168 || opcode == 169 || opcode == 170 || opcode == 171
+                || opcode == 200 || opcode == 201) {
+                return false;
+            }
+        }
+        boolean finalField = false;
+        for (final javan.classfile.FieldInfo candidate : owner.fields()) {
+            if (candidate.isStatic() && (candidate.accessFlags() & 0x0010) != 0
+                && candidate.name().equals(field.name()) && candidate.descriptor().equals(field.descriptor())) {
+                finalField = true;
+            }
+        }
+        if (!finalField) {
+            return false;
+        }
+        for (final CodeException candidate : code.exceptionTable()) {
+            if (candidate.handlerPc() >= handler.startPc() && candidate.handlerPc() < handler.endPc()) {
+                return false;
+            }
+        }
+        final List<Instruction> instructions = code.instructions();
+        final int fieldIndex = instructionIndex(instructions, instruction.offset());
+        for (int index = fieldIndex + 1; index < instructions.size(); index++) {
+            final Instruction candidate = instructions.get(index);
+            if (candidate.offset() >= handler.endPc()) {
+                return false;
+            }
+            if (candidate.opcode() == 182 && candidate.methodRef().isPresent()) {
+                final MethodRef target = candidate.methodRef().orElseThrow();
+                if (!("L" + target.owner() + ";").equals(field.descriptor())
+                    || !JdkCallSupport.isSupported(target)
+                    || !supportedTransportedThrowableCall(classes, candidate, handler.catchType().orElseThrow())) {
+                    return false;
+                }
+                for (final IrType parameter : MethodDescriptor.parse(target.descriptor()).parameterTypes()) {
+                    if (parameter == IrType.OBJECT) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            final int opcode = candidate.opcode();
+            final boolean numericConstant = opcode >= 18 && opcode <= 20
+                && (candidate.intValue().isPresent() || candidate.longValue().isPresent()
+                    || candidate.floatValue().isPresent() || candidate.doubleValue().isPresent());
+            if (!(opcode >= 1 && opcode <= 17 || opcode >= 21 && opcode <= 45 || numericConstant)) {
+                return false;
+            }
         }
         return false;
     }

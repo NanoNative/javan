@@ -4,6 +4,8 @@ import javan.analysis.EntryPoint;
 import javan.classfile.ClassFile;
 import javan.classfile.CodeAttribute;
 import javan.classfile.CodeException;
+import javan.classfile.FieldInfo;
+import javan.classfile.FieldRef;
 import javan.classfile.Instruction;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
@@ -201,6 +203,45 @@ final class EntryAnchoredTypedHandlerAdmissionTest {
     }
 
     @Test
+    void acceptsIsolatedFinalStaticReceiverInTypedCatch() {
+        final List<Instruction> instructions = List.of(
+            plain(0, 0, "nop"),
+            staticRandom(1),
+            plain(4, 3, "iconst_0"),
+            invoke(5, 182, "invokevirtual", new MethodRef(
+                "java/security/SecureRandom", "nextInt", "(I)I"
+            )),
+            plain(8, 87, "pop"),
+            plain(9, 177, "return"),
+            plain(10, 75, "astore_0"),
+            plain(11, 177, "return")
+        );
+        assertThat(verifyStaticFinal(instructions, new CodeException(
+            1, 8, 10, Optional.of("java/lang/IllegalArgumentException")
+        ))).extracting(Diagnostic::code).doesNotContain("JAVAN014");
+    }
+
+    @Test
+    void rejectsBranchThatBypassesFinalStaticReceiver() {
+        final List<Instruction> instructions = List.of(
+            plain(0, 1, "aconst_null"),
+            branch(1, 167, "goto", 7),
+            staticRandom(4),
+            plain(7, 3, "iconst_0"),
+            invoke(8, 182, "invokevirtual", new MethodRef(
+                "java/security/SecureRandom", "nextInt", "(I)I"
+            )),
+            plain(11, 87, "pop"),
+            plain(12, 177, "return"),
+            plain(13, 75, "astore_0"),
+            plain(14, 177, "return")
+        );
+        assertThat(verifyStaticFinal(instructions, new CodeException(
+            4, 11, 13, Optional.of("java/lang/IllegalArgumentException")
+        ))).extracting(Diagnostic::code).contains("JAVAN014");
+    }
+
+    @Test
     void rejectsBranchInsideProtectedRange() {
         final List<Instruction> instructions = List.of(
             branch(0, 167, "goto", 14),
@@ -361,6 +402,34 @@ final class EntryAnchoredTypedHandlerAdmissionTest {
         return new StaticVerifier().verify(
             Map.of(classFile.name(), classFile),
             List.of(new EntryPoint(classFile.name(), method.name(), method.descriptor()))
+        );
+    }
+
+    private static List<Diagnostic> verifyStaticFinal(
+        final List<Instruction> instructions,
+        final CodeException handler
+    ) {
+        final MethodInfo method = new MethodInfo(
+            0x0008, "test", "()V", Optional.of(new CodeAttribute(
+                2, 1, new byte[16], 1, List.of(handler), instructions
+            ))
+        );
+        final ClassFile classFile = new ClassFile(
+            69, "com/acme/Main", "java/lang/Object", 0x0011, List.of(),
+            List.of(new FieldInfo(0x0018, "RANDOM", "Ljava/security/SecureRandom;")),
+            List.of(method), Path.of("Main.class"), true
+        );
+        return new StaticVerifier().verify(
+            Map.of(classFile.name(), classFile),
+            List.of(new EntryPoint(classFile.name(), method.name(), method.descriptor()))
+        );
+    }
+
+    private static Instruction staticRandom(final int offset) {
+        return new Instruction(
+            offset, 178, "getstatic", new byte[]{0, 1}, Optional.empty(),
+            Optional.of(new FieldRef("com/acme/Main", "RANDOM", "Ljava/security/SecureRandom;")),
+            Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()
         );
     }
 

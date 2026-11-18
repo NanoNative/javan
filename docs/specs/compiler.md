@@ -74,7 +74,10 @@ own supported callable entries.
 
 This summary does not replace exact callable/shape entries in the generated ledger.
 A typed handler can include a direct `Class.forName(...).getName()` sequence when control flow
-cannot bypass the lookup. Other exception ranges remain subject to their own supported shapes.
+cannot bypass the lookup. An isolated protected range can start with a same-class `static final`
+field and a direct supported JDK instance call using numeric literals or local loads as primitive
+arguments. Field reads with intervening calls, mutable fields and unproven control flow remain
+subject to their own supported shapes.
 Nested conditional values and nested switch results support ordinary values and previously
 initialized primitive or ordinary object locals. A single new local in a nested conditional is
 supported when each value-producing branch assigns it at its exit. Partially initialized shapes

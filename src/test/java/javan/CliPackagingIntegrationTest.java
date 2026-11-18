@@ -470,14 +470,15 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             package com.acme;
             import java.security.SecureRandom;
             public final class Main {
+                private static final SecureRandom RANDOM = new SecureRandom();
                 public static void main(final String[] args) {
-                    final SecureRandom random = new SecureRandom();
+                    final SecureRandom random = RANDOM;
                     final int value = random.nextInt(17);
                     final int wide = random.nextInt(Integer.MIN_VALUE, Integer.MAX_VALUE);
                     System.out.println(value >= 0 && value < 17 && wide < Integer.MAX_VALUE);
                     try { random.nextInt(0); }
                     catch (IllegalArgumentException expected) { System.out.println("invalid"); }
-                    try { random.nextInt(1, 1); }
+                    try { RANDOM.nextInt(1, 1); }
                     catch (IllegalArgumentException expected) { System.out.println("range-invalid"); }
                 }
             }
