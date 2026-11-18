@@ -37,7 +37,7 @@ on:
         default: ''
         type: string
       snapshot:
-        description: Append -SNAPSHOT to the UTC date version
+        description: Use the next snapshot version from the latest stable tag
         required: false
         default: false
         type: boolean
@@ -67,22 +67,42 @@ jobs:
           fetch-depth: 0
           ref: ${{ inputs.ref || github.sha }}
 
+      - name: "🏷️ Tag"
+        id: latest_tag
+        shell: sh
+        run: |
+          set -eu
+          latest_tag=$(git tag --merged HEAD --sort=-creatordate | awk '/^v?[0-9]+\.[0-9]+\.[0-9]+$/ { print; exit }')
+          printf 'latest_tag=%s\n' "${latest_tag}" | tee -a "$GITHUB_OUTPUT"
+
+      - name: "🔢 Snapshot"
+        id: semver_info
+        uses: YunaBraska/semver-info-action@180ebf79b3c81785c50cf1f198ee236fc5591504 # v3.0.4
+        with:
+          semver-a: ${{ steps.latest_tag.outputs.latest_tag || '0.0.1' }}
+          semver-b: 0.0.1
+          fallBack-semver-a: 0.0.1
+          fallBack-semver-b: 0.0.1
+
       - name: "🏷️ Resolve [${{ inputs.snapshot && 'snapshot' || 'release' }}]"
         id: info
         shell: sh
         env:
           SNAPSHOT: ${{ inputs.snapshot }}
+          SNAPSHOT_VERSION: ${{ steps.semver_info.outputs.next_snapshot }}
         run: |
           set -eu
           version=$(date -u '+%Y.%m.%d' | sed -E 's/\.0+([0-9])/\.\1/g')
           if [ "$SNAPSHOT" = "true" ]; then
-            version=$version-SNAPSHOT
+            version=$SNAPSHOT_VERSION
+            test -n "$version"
           fi
           {
             printf 'resolved_version=%s\n' "$version"
             printf 'commit_sha=%s\n' "$(git rev-parse HEAD)"
             printf 'build_output_timestamp=%s\n' "$(git log -1 --format=%cI HEAD)"
           } | tee -a "$GITHUB_OUTPUT"
+          printf 'latest_tag=%s\n' "${{ steps.latest_tag.outputs.latest_tag || 'none' }}"
 
   verify-core:
     name: core_linux_x64
@@ -102,7 +122,7 @@ jobs:
         uses: YunaBraska/java-info-action@7a178ff2b0222107efbaab0c457c2ff09a84a801 # 3.0.14
 
       - name: "☕ JDK [${{ steps.java_info.outputs.java_version }}]"
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:
           java-version: ${{ steps.java_info.outputs.java_version }}
           distribution: temurin
@@ -170,7 +190,7 @@ jobs:
         uses: YunaBraska/java-info-action@7a178ff2b0222107efbaab0c457c2ff09a84a801 # 3.0.14
 
       - name: "☕ JDK [${{ steps.java_info.outputs.java_version }}]"
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:
           java-version: ${{ steps.java_info.outputs.java_version }}
           distribution: temurin
@@ -206,12 +226,17 @@ jobs:
         run: |
           ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -DskipTests test-compile
           selector_file=$(mktemp)
-          trap 'rm -f "$selector_file"' EXIT
-          ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" \
+          planner_log=$(mktemp)
+          trap 'rm -f "$selector_file" "$planner_log"' EXIT
+          if ! ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" \
             -Dexec.classpathScope=test \
             -Dexec.mainClass=javan.testing.CiTestWorkerPlanner \
             -Dexec.args='${{ matrix.suite }} ${{ matrix.worker_index }} ${{ matrix.worker_count }}' \
-            exec:java > "$selector_file"
+            org.codehaus.mojo:exec-maven-plugin:3.6.4:java > "$selector_file" 2> "$planner_log"; then
+            cat "$planner_log" >&2
+            cat "$selector_file" >&2
+            exit 1
+          fi
           selector=$(cat "$selector_file")
           printf 'test_selector=%s\n' "$selector" | tee -a "$GITHUB_OUTPUT"
 
@@ -346,7 +371,9 @@ jobs:
       version: ${{ needs.build-info.outputs.resolved_version }}
       bootstrap_generation: 2
       timeout_minutes: 60
-      package_scope: ${{ inputs.prepare_publication && 'full' || 'bootstrap' }}
+      # Snapshot publication proves the native artifact without repeating the
+      # full self-host rehearsal reserved for immutable stable releases.
+      package_scope: ${{ inputs.snapshot && 'bootstrap' || inputs.prepare_publication && 'full' || 'bootstrap' }}
     secrets: inherit
 
   linux-package-generation3:
@@ -367,7 +394,9 @@ jobs:
       version: ${{ needs.build-info.outputs.resolved_version }}
       bootstrap_generation: 3
       timeout_minutes: 90
-      package_scope: ${{ inputs.prepare_publication && 'full' || 'bootstrap' }}
+      # Snapshot publication proves the native artifact without repeating the
+      # full self-host rehearsal reserved for immutable stable releases.
+      package_scope: ${{ inputs.snapshot && 'bootstrap' || inputs.prepare_publication && 'full' || 'bootstrap' }}
       upload_bootstrap_source: true
     secrets: inherit
 
@@ -391,7 +420,9 @@ jobs:
       version: ${{ needs.build-info.outputs.resolved_version }}
       bootstrap_generation: ${{ inputs.bootstrap_generation }}
       bootstrap_source_artifact: ${{ inputs.bootstrap_generation == 3 && 'bootstrap-source-linux-x64' || '' }}
-      package_scope: ${{ inputs.prepare_publication && 'full' || 'bootstrap' }}
+      # Snapshot publication proves the native artifact without repeating the
+      # full self-host rehearsal reserved for immutable stable releases.
+      package_scope: ${{ inputs.snapshot && 'bootstrap' || inputs.prepare_publication && 'full' || 'bootstrap' }}
       timeout_minutes: 90
     secrets: inherit
 
@@ -544,7 +575,7 @@ jobs:
         uses: YunaBraska/java-info-action@7a178ff2b0222107efbaab0c457c2ff09a84a801 # 3.0.14
 
       - name: "☕ JDK [${{ steps.java_info.outputs.java_version }}]"
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:
           java-version: ${{ steps.java_info.outputs.java_version }}
           distribution: temurin
@@ -621,7 +652,7 @@ jobs:
         uses: YunaBraska/java-info-action@7a178ff2b0222107efbaab0c457c2ff09a84a801 # 3.0.14
 
       - name: "☕ JDK [${{ steps.java_info.outputs.java_version }}]"
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:
           java-version: ${{ steps.java_info.outputs.java_version }}
           distribution: temurin
