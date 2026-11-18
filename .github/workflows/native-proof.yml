@@ -83,10 +83,6 @@ jobs:
           distribution: temurin
           cache: maven
 
-      - name: "🏷️ Version [${{ inputs.version }}]"
-        shell: sh
-        run: ./mvnw -B org.codehaus.mojo:versions-maven-plugin:2.25.1:set -DnewVersion="$JAVAN_VERSION" -DgenerateBackupPoms=false
-
       - name: "🐹 Go [1.26.4]"
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -141,8 +137,9 @@ jobs:
 
       - name: "🔨 Compile [${{ inputs.target }}]"
         shell: sh
-        run: >-
-          ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -DskipTests compile test-compile
+        run: |
+          set -eu
+          ./mvnw -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" "-Djavan.version=$JAVAN_VERSION" -DskipTests compile test-compile
 
       - name: "📥 Source [${{ inputs.target }}]"
         if: inputs.bootstrap_source_artifact != ''
