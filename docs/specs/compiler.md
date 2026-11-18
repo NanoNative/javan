@@ -81,7 +81,9 @@ subject to their own supported shapes.
 Nested conditional values and nested switch results support ordinary values and previously
 initialized primitive or ordinary object locals. A single new local in a nested conditional is
 supported when each value-producing branch assigns it at its exit. Partially initialized shapes
-are rejected during lowering.
+are rejected during lowering. Some nested expressions that combine an earlier operand with a
+conditional also remain unsupported and fail during lowering. Within supported control-flow
+shapes, an earlier static-field read is preserved across later calls, writes and class initialization.
 Broader exceptions/finally, UTF-16 operations, collections, networking and threading require
 their own public-boundary proofs of supported Java contracts. Unrestricted runtime class
 definition, arbitrary loaders, proxies, instrumentation, JNI and unrestricted accessibility

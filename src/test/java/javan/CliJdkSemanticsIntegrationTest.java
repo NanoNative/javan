@@ -9778,6 +9778,344 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mutableStaticPrimitiveReadPrecedesLaterMethodCall() throws Exception {
+        final Path project = project("mutable-static-primitive-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int value = 10;
+                static int replace() { value = 20; return 2; }
+                public static void main(String[] args) { System.out.println(value + replace()); }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/mutable-static-primitive-order").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("12\n");
+    }
+
+    @Test
+    void priorMethodCallPrecedesMutableStaticPrimitiveRead() throws Exception {
+        final Path project = project("prior-call-static-primitive-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int value = 10;
+                static int replace() { value = 20; return 2; }
+                public static void main(String[] args) { System.out.println(replace() + value); }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/prior-call-static-primitive-order").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("22\n");
+    }
+
+    @Test
+    void nestedMutableStaticReadPrecedesLaterMethodCall() throws Exception {
+        final Path project = project("nested-mutable-static-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int value = 10;
+                static int replace() { value = 20; return 2; }
+                public static void main(String[] args) { System.out.println((value + 1) + replace()); }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/nested-mutable-static-order").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("13\n");
+    }
+
+    @Test
+    void intrinsicOverStaticReadPrecedesLaterMethodCall() throws Exception {
+        final Path project = project("intrinsic-static-read-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int value = -10;
+                static int replace() { value = -20; return 2; }
+                public static void main(String[] args) { System.out.println(Math.abs(value) + replace()); }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/intrinsic-static-read-order").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("12\n");
+    }
+
+    @Test
+    void mutableStaticReadPrecedesEffectfulMathArgument() throws Exception {
+        final Path project = project("mutable-static-math-argument-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int value = 10;
+                static int replace() { value = 20; return -2; }
+                public static void main(String[] args) { System.out.println(value + Math.abs(replace())); }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/mutable-static-math-argument-order").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("12\n");
+    }
+
+    @Test
+    void mutableStaticReadPrecedesEffectfulMultiArgumentMathCall() throws Exception {
+        final Path project = project("mutable-static-math-multi-argument-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int value = 10;
+                static int replace() { value = 20; return 2; }
+                public static void main(String[] args) { System.out.println(value + Math.min(5, replace())); }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/mutable-static-math-multi-argument-order").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("12\n");
+    }
+
+    @Test
+    void mutableStaticReadPrecedesConditionalSideEffects() throws Exception {
+        final Path project = project("mutable-static-conditional-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int value = 10;
+                static int replace() { value = 20; return 2; }
+                public static void main(String[] args) {
+                    System.out.println(value + (args.length == 0 ? replace() : 3));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final String executable = project.resolve(".javan/bin/mutable-static-conditional-order").toString();
+        final ProcessResult withCall = process(project, List.of(executable));
+        assertThat(withCall.exitCode()).as(withCall.stderr()).isZero();
+        assertThat(withCall.stdout()).isEqualTo(expected).isEqualTo("12\n");
+        final ProcessResult withoutCall = process(project, List.of(executable, "argument"));
+        assertThat(withoutCall.exitCode()).as(withoutCall.stderr()).isZero();
+        assertThat(withoutCall.stdout()).isEqualTo("13\n");
+    }
+
+    @Test
+    void nestedStaticReadWithinConditionalIsRejectedExplicitly() throws Exception {
+        final Path project = project("mutable-static-nested-conditional-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int value = 10;
+                static int replace() { value = 20; return 2; }
+                public static void main(String[] args) {
+                    System.out.println(args.length < 2 ? value + (args.length == 0 ? replace() : 3) : 42);
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).isEqualTo(2);
+        assertThat(build.stderr()).contains("error[JAVAN049]");
+    }
+
+    @Test
+    void mutableStaticReadPrecedesSwitchSideEffects() throws Exception {
+        final Path project = project("mutable-static-switch-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int value = 10;
+                static int replace() { value = 20; return 2; }
+                public static void main(String[] args) {
+                    System.out.println(value + switch (args.length) { case 0 -> replace(); default -> 3; });
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final String executable = project.resolve(".javan/bin/mutable-static-switch-order").toString();
+        final ProcessResult withCall = process(project, List.of(executable));
+        assertThat(withCall.exitCode()).as(withCall.stderr()).isZero();
+        assertThat(withCall.stdout()).isEqualTo(expected).isEqualTo("12\n");
+        final ProcessResult withoutCall = process(project, List.of(executable, "argument"));
+        assertThat(withoutCall.exitCode()).as(withoutCall.stderr()).isZero();
+        assertThat(withoutCall.stdout()).isEqualTo("13\n");
+    }
+
+    @Test
+    void mutableStaticWideReadsPrecedeSwitchSideEffects() throws Exception {
+        final Path project = project("mutable-static-wide-switch-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static long wide = 10L;
+                static double decimal = 1.25;
+                static int bits = 15;
+                static long replaceWide() { wide = 20L; return 2L; }
+                static double replaceDecimal() { decimal = 5.0; return 2.0; }
+                static int replaceBits() { bits = 0; return 3; }
+                public static void main(String[] args) {
+                    System.out.println(wide + switch (args.length) { case 0 -> replaceWide(); default -> 3L; });
+                    System.out.println(decimal + switch (args.length) { case 0 -> replaceDecimal(); default -> 3.0; });
+                    System.out.println(bits & switch (args.length) { case 0 -> replaceBits(); default -> 7; });
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final String executable = project.resolve(".javan/bin/mutable-static-wide-switch-order").toString();
+        final ProcessResult withCall = process(project, List.of(executable));
+        assertThat(withCall.exitCode()).as(withCall.stderr()).isZero();
+        assertThat(withCall.stdout()).isEqualTo(expected).isEqualTo("12\n3.25\n3\n");
+        final ProcessResult withoutCall = process(project, List.of(executable, "argument"));
+        assertThat(withoutCall.exitCode()).as(withoutCall.stderr()).isZero();
+        assertThat(withoutCall.stdout()).isEqualTo("13\n4.25\n7\n");
+    }
+
+    @Test
+    void mutableStaticReadPrecedesLaterAssignment() throws Exception {
+        final Path project = project("mutable-static-assignment-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int value = 10;
+                public static void main(String[] args) { System.out.println(value + (value = 20)); }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/mutable-static-assignment-order").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("30\n");
+    }
+
+    @Test
+    void mutableStaticReadPrecedesNewObjectClassInitialization() throws Exception {
+        final Path project = project("static-read-before-new-initialization");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int value = 10;
+                public static void main(String[] args) { System.out.println(value + new Holder().value); }
+            }
+            final class Holder {
+                static { Main.value = 20; }
+                int value = 2;
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/static-read-before-new-initialization").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("12\n");
+    }
+
+    @Test
+    void mutableStaticWideAndFloatingReadsPrecedeLaterCalls() throws Exception {
+        final Path project = project("mutable-static-wide-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static long wide = 10L;
+                static float single = 1.0f;
+                static double decimal = 1.25;
+                static long replaceWide() { wide = 20L; return 2L; }
+                static float replaceSingle() { single = 5.0f; return 2.0f; }
+                static double replaceDecimal() { decimal = 5.0; return 2.0; }
+                public static void main(String[] args) {
+                    System.out.println(wide + replaceWide() == 12L);
+                    System.out.println(single + replaceSingle() == 3.0f);
+                    System.out.println(decimal + replaceDecimal() == 3.25);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/mutable-static-wide-order").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("true\ntrue\ntrue\n");
+    }
+
+    @Test
+    void priorCallPrecedesStaticFieldClassInitialization() throws Exception {
+        final Path project = project("static-field-initialization-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int trace;
+                static int before() { trace = trace * 10 + 1; return 10; }
+                public static void main(String[] args) {
+                    System.out.println(before() + Holder.value);
+                    System.out.println(trace);
+                }
+            }
+            final class Holder {
+                static int value = load();
+                static int load() { Main.trace = Main.trace * 10 + 2; return 2; }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/static-field-initialization-order").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("12\n12\n");
+    }
+
+    @Test
+    void mutableStaticReceiverReadPrecedesArgumentMethodCall() throws Exception {
+        final Path project = project("mutable-static-receiver-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                static SecureRandom random = new SecureRandom();
+                static int replace() { random = null; return 1; }
+                public static void main(String[] args) { System.out.println(random.nextInt(replace())); }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/mutable-static-receiver-order").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("0\n");
+    }
+
+    @Test
     void secureRandomStaticFinalFieldSupportsTypedCatch() throws Exception {
         final Path project = project("secure-random-static-final-catch");
         writeJava(project, "com.acme.Main", """

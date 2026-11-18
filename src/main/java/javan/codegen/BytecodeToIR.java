@@ -1045,6 +1045,13 @@ public final class BytecodeToIR {
                 instruction,
                 sourceLines
             );
+            final int branchOperands = instruction.opcode() >= 159 && instruction.opcode() <= 166 ? 2
+                : BytecodeToIRControlFlowSupport.isConditionalBranch(instruction.opcode())
+                    || instruction.opcode() == 170 || instruction.opcode() == 171 ? 1 : 0;
+            if (branchOperands > 0 && stack.size() > branchOperands
+                && containsNontrivialDeferredValue(stack, stack.size() - branchOperands)) {
+                snapshotOperandStack(instructions, stack, locals, localDeclarations);
+            }
             if (BytecodeToIRControlFlowSupport.lowerBranchValueSelection(
                 classes,
                 classFile,
@@ -1601,6 +1608,29 @@ public final class BytecodeToIR {
         final SourceLineIndex sourceLines,
         final int lastMaterializingDuplicateOffset
     ) {
+        final int opcode = instruction.opcode();
+        if ((opcode >= 79 && opcode <= 86 || opcode == 179 || opcode == 181
+            || opcode >= 182 && opcode <= 187 || opcode == 194 || opcode == 195)
+            && containsDeferredStaticField(stack, stack.size())
+            && !isNonThrowingMathIntrinsic(instruction)) {
+            int consumed = 0;
+            if (opcode >= 79 && opcode <= 86) {
+                consumed = 3;
+            } else if (opcode == 179) {
+                consumed = 1;
+            } else if (opcode == 181) {
+                consumed = 2;
+            } else if (opcode >= 182 && opcode <= 185 && instruction.methodRef().isPresent()) {
+                consumed = MethodDescriptor.parse(instruction.methodRef().orElseThrow().descriptor()).parameterTypes().size();
+                if (opcode != 184) {
+                    consumed++;
+                }
+            }
+            final int prefixEnd = opcode == 186 || consumed > stack.size() ? stack.size() : stack.size() - consumed;
+            if (containsDeferredStaticField(stack, prefixEnd)) {
+                snapshotOperandStack(instructions, stack, locals, localDeclarations);
+            }
+        }
         BytecodeToIRInvokeSupport.guardTypedReceiver(
             classes,
             classFile,
@@ -2024,6 +2054,9 @@ public final class BytecodeToIR {
                 BytecodeToIRControlFlowSupport.branchObjectNull(classFile, method, instruction, instructions, stack);
                 break;
             case 178:
+                if (containsNontrivialDeferredValue(stack, stack.size())) {
+                    snapshotOperandStack(instructions, stack, locals, localDeclarations);
+                }
                 initializeClass(classes, classFile.name(), method, instruction, instructions, classInitialization, pendingExceptionHandlerStacks);
                 BytecodeToIRInvokeSupport.pushField(classes, classFile, method, instruction, stack);
                 break;
@@ -3353,6 +3386,61 @@ public final class BytecodeToIR {
             return StackValue.objectExpression(materializedExpression);
         }
         return new StackValue(value.kind(), value.throwable(), Optional.of(materializedExpression), value.dynamicLambda());
+    }
+
+    private static boolean isNonThrowingMathIntrinsic(final Instruction instruction) {
+        if (instruction.opcode() != 184 || instruction.methodRef().isEmpty()) {
+            return false;
+        }
+        final MethodRef method = instruction.methodRef().orElseThrow();
+        if (!"java/lang/Math".equals(method.owner()) || !JdkCallSupport.isSupported(method)) {
+            return false;
+        }
+        final String name = method.name();
+        return "abs".equals(name) || "round".equals(name) || "floor".equals(name) || "ceil".equals(name)
+            || "atan2".equals(name) || "min".equals(name) || "max".equals(name);
+    }
+
+    private static boolean containsNontrivialDeferredValue(final List<StackValue> stack, final int endIndex) {
+        for (int index = 0; index < endIndex; index++) {
+            final StackValue value = stack.get(index);
+            if (value.expression().isEmpty()) {
+                continue;
+            }
+            final IrExpression.Kind kind = value.expression().orElseThrow().kind();
+            if (kind != IrExpression.Kind.LOCAL && kind != IrExpression.Kind.INT_LITERAL
+                && kind != IrExpression.Kind.LONG_LITERAL && kind != IrExpression.Kind.FLOAT_LITERAL
+                && kind != IrExpression.Kind.DOUBLE_LITERAL && kind != IrExpression.Kind.OBJECT_NULL
+                && kind != IrExpression.Kind.STRING_LITERAL) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean containsDeferredStaticField(final List<StackValue> stack, final int endIndex) {
+        for (int index = 0; index < endIndex; index++) {
+            final StackValue value = stack.get(index);
+            if (value.expression().isPresent() && containsStaticField(value.expression().orElseThrow())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean containsStaticField(final IrExpression expression) {
+        final IrExpression.Kind kind = expression.kind();
+        if (kind == IrExpression.Kind.STATIC_FIELD_INT || kind == IrExpression.Kind.STATIC_FIELD_LONG
+            || kind == IrExpression.Kind.STATIC_FIELD_FLOAT || kind == IrExpression.Kind.STATIC_FIELD_DOUBLE
+            || kind == IrExpression.Kind.STATIC_FIELD_OBJECT) {
+            return true;
+        }
+        for (final IrExpression argument : expression.arguments()) {
+            if (containsStaticField(argument)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void snapshotOperandStack(

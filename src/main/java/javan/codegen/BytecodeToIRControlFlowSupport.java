@@ -1552,9 +1552,10 @@ final class BytecodeToIRControlFlowSupport {
             if (targetIndex < 0 || targetIndex <= index) {
                 return false;
             }
+            final int knownDoneIndex = instructionIndex(bytecode, doneOffset);
             final int nextTargetIndex = targetCursor + 1 < targetOffsets.size()
                 ? instructionIndex(bytecode, targetOffsets.get(targetCursor + 1))
-                : bytecode.size();
+                : knownDoneIndex > targetIndex ? knownDoneIndex : bytecode.size();
             final int jumpIndex = unconditionalJumpBefore(bytecode, targetIndex, nextTargetIndex);
             if (jumpIndex >= 0) {
                 final int candidateDoneOffset = branchTarget(bytecode.get(jumpIndex));
@@ -1628,7 +1629,11 @@ final class BytecodeToIRControlFlowSupport {
             return false;
         }
         final int doneIndex = instructionIndex(bytecode, doneOffset);
-        if (doneIndex < 0 || doneIndex <= index || !isValueConsumer(bytecode.get(doneIndex).opcode())) {
+        if (doneIndex < 0 || doneIndex <= index) {
+            return false;
+        }
+        final int consumer = bytecode.get(doneIndex).opcode();
+        if (!isValueConsumer(consumer) && !(consumer >= 96 && consumer <= 131)) {
             return false;
         }
         final int lastTargetOffset = targetOffsets.getLast();

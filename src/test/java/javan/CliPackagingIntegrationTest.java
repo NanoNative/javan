@@ -462,6 +462,46 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanPreservesMutableStaticReadOrder() throws Exception {
+        final Path project = tempDir.resolve("selfhost-static-read-order");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                static int value = 10;
+                static SecureRandom random = new SecureRandom();
+                static int replace() { value = 20; return 2; }
+                static int clear() { random = null; return 1; }
+                public static void main(final String[] args) {
+                    System.out.println(value + replace());
+                    System.out.println(random.nextInt(clear()));
+                }
+            }
+            """);
+        final ProcessResult javac = process(
+            tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()),
+            Duration.ofSeconds(30)
+        );
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult build = process(
+            tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-static-read-order"),
+            Duration.ofSeconds(120)
+        );
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path executable = project.resolve(".javan/bin/selfhost-static-read-order");
+        final ProcessResult nativeRun = process(tempDir, List.of(executable.toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo("12\n0\n");
+    }
+
+    @Test
     void nativeBuiltJavanBuildsSecureRandomIntegers() throws Exception {
         final Path project = tempDir.resolve("selfhost-secure-random-integers");
         final Path classes = project.resolve("classes");
