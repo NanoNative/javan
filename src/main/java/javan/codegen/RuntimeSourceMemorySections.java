@@ -8912,6 +8912,47 @@ final class RuntimeSourceMemorySections {
             return javan_secure_random_signed_int(bits);
         }
 
+        static long long javan_secure_random_signed_long(uint64_t bits) {
+            if (bits <= INT64_MAX) {
+                return (long long) bits;
+            }
+            return -1LL - (long long) (UINT64_MAX - bits);
+        }
+
+        static uint64_t javan_secure_random_long_in_range(uint64_t range) {
+            const uint64_t threshold = ((UINT64_MAX % range) + UINT64_C(1)) % range;
+            uint64_t bits;
+            do {
+                javan_os_random_bytes((unsigned char*) &bits, sizeof(bits));
+            } while (bits < threshold);
+            return bits % range;
+        }
+
+        long long javan_secure_random_next_long(void* value) {
+            javan_secure_random_check(value);
+            uint64_t bits;
+            javan_os_random_bytes((unsigned char*) &bits, sizeof(bits));
+            return javan_secure_random_signed_long(bits);
+        }
+
+        long long javan_secure_random_next_long_bound(void* value, long long bound) {
+            javan_secure_random_check(value);
+            if (bound <= 0) {
+                javan_panic("invalid SecureRandom bound");
+            }
+            return (long long) javan_secure_random_long_in_range((uint64_t) bound);
+        }
+
+        long long javan_secure_random_next_long_range(void* value, long long origin, long long bound) {
+            javan_secure_random_check(value);
+            if (origin >= bound) {
+                javan_panic("invalid SecureRandom range");
+            }
+            const uint64_t range = (uint64_t) bound - (uint64_t) origin;
+            const uint64_t bits = (uint64_t) origin + javan_secure_random_long_in_range(range);
+            return javan_secure_random_signed_long(bits);
+        }
+
         void* javan_uuid_random(void) {
             javan_uuid_state* uuid = (javan_uuid_state*) javan_alloc(sizeof(javan_uuid_state));
             uuid->magic = JAVAN_UUID_MAGIC;

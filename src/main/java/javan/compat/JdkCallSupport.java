@@ -120,6 +120,7 @@ public final class JdkCallSupport {
         runtime("SecureRandom.<init>", "java/security/SecureRandom", "<init>", "()V"),
         runtime("SecureRandom.nextBytes", "java/security/SecureRandom", "nextBytes", "([B)V"),
         runtime("SecureRandom.nextInt", "java/security/SecureRandom", "nextInt", "()I", "(I)I", "(II)I"),
+        runtime("SecureRandom.nextLong", "java/security/SecureRandom", "nextLong", "()J", "(J)J", "(JJ)J"),
         runtime("UUID.randomUUID", "java/util/UUID", "randomUUID", "()Ljava/util/UUID;"),
         runtime("UUID.toString", "java/util/UUID", "toString", "()Ljava/lang/String;"),
         runtime("Base64.getEncoder", "java/util/Base64", "getEncoder", "()Ljava/util/Base64$Encoder;"),
@@ -2029,6 +2030,15 @@ public final class JdkCallSupport {
                 return List.of("java/lang/NullPointerException");
             }
             if ("(I)I".equals(methodRef.descriptor()) || "(II)I".equals(methodRef.descriptor())) {
+                return List.of("java/lang/NullPointerException", "java/lang/IllegalArgumentException");
+            }
+        }
+        if ("java/security/SecureRandom".equals(methodRef.owner())
+            && "nextLong".equals(methodRef.name())) {
+            if ("()J".equals(methodRef.descriptor())) {
+                return List.of("java/lang/NullPointerException");
+            }
+            if ("(J)J".equals(methodRef.descriptor()) || "(JJ)J".equals(methodRef.descriptor())) {
                 return List.of("java/lang/NullPointerException", "java/lang/IllegalArgumentException");
             }
         }

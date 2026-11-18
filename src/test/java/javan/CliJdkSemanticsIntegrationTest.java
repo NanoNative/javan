@@ -9622,6 +9622,128 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void secureRandomLongGenerationRespectsBounds() throws Exception {
+        final Path project = project("secure-random-long-bounds");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                public static void main(String[] args) {
+                    SecureRandom random = new SecureRandom();
+                    boolean valid = true;
+                    for (int i = 0; i < 64; i++) {
+                        long any = random.nextLong();
+                        long one = random.nextLong(1L);
+                        long small = random.nextLong(17L);
+                        long highRejection = random.nextLong(4_611_686_018_427_387_905L);
+                        long large = random.nextLong(Long.MAX_VALUE);
+                        long full = random.nextLong(Long.MIN_VALUE, Long.MAX_VALUE);
+                        long lowest = random.nextLong(Long.MIN_VALUE, Long.MIN_VALUE + 1);
+                        long highest = random.nextLong(Long.MAX_VALUE - 1, Long.MAX_VALUE);
+                        if (one != 0 || small < 0 || small >= 17 || highRejection < 0
+                            || highRejection >= 4_611_686_018_427_387_905L || large < 0
+                            || full == Long.MAX_VALUE || lowest != Long.MIN_VALUE || highest != Long.MAX_VALUE - 1) {
+                            valid = false;
+                        }
+                    }
+                    System.out.println(valid);
+                    System.out.println(10L + random.nextLong(1L));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/secure-random-long-bounds").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("true\n10\n");
+    }
+
+    @Test
+    void secureRandomLongGenerationReportsInvalidInputsInOrder() throws Exception {
+        final Path project = project("secure-random-long-invalid");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                static int trace;
+                static long origin() { trace = trace * 10 + 1; return 0L; }
+                static long bound() { trace = trace * 10 + 2; return 0L; }
+                public static void main(String[] args) {
+                    SecureRandom random = new SecureRandom();
+                    try { random.nextLong(0L); }
+                    catch (IllegalArgumentException expected) { System.out.println("zero"); }
+                    try { random.nextLong(-1L); }
+                    catch (IllegalArgumentException expected) { System.out.println("negative"); }
+                    try { random.nextLong(0L, 0L); }
+                    catch (IllegalArgumentException expected) { System.out.println("equal"); }
+                    try { random.nextLong(1L, 0L); }
+                    catch (IllegalArgumentException expected) { System.out.println("reversed"); }
+                    SecureRandom missing = null;
+                    try { missing.nextLong(); }
+                    catch (NullPointerException expected) { System.out.println("null"); }
+                    try { missing.nextLong(origin(), bound()); }
+                    catch (NullPointerException expected) { System.out.println(trace); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/secure-random-long-invalid").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("zero\nnegative\nequal\nreversed\nnull\n12\n");
+    }
+
+    @Test
+    void secureRandomLongGenerationSupportsStaticReceiverInTypedCatch() throws Exception {
+        final Path project = project("secure-random-long-static-catch");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                static SecureRandom random = new SecureRandom();
+                public static void main(String[] args) {
+                    try { random.nextLong(0L, 0L); }
+                    catch (IllegalArgumentException expected) { System.out.println("invalid"); }
+                    random = null;
+                    try { random.nextLong(1L); }
+                    catch (NullPointerException expected) { System.out.println("null"); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/secure-random-long-static-catch").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("invalid\nnull\n");
+    }
+
+    @Test
+    void secureRandomLongGenerationPropagatesUncaughtInvalidBound() throws Exception {
+        final Path project = project("secure-random-long-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                public static void main(String[] args) { new SecureRandom().nextLong(0L); }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/secure-random-long-uncaught").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("java/lang/IllegalArgumentException");
+    }
+
+    @Test
     void secureRandomIntegerGenerationRespectsBounds() throws Exception {
         final Path project = project("secure-random-integers");
         writeJava(project, "com.acme.Main", """
