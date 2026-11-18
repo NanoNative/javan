@@ -8228,6 +8228,85 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void classForNameCatchAllowsPrintingTheResolvedClassName() throws Exception {
+        final Path project = project("class-for-name-catch-and-print");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(final String[] args) {
+                    final String name = args[0];
+                    final ClassLoader loader = ClassLoader.getSystemClassLoader();
+                    try {
+                        System.out.println(Class.forName(name, false, loader).getName());
+                        System.out.println(Class.forName(name).getName());
+                    } catch (ClassNotFoundException expected) {
+                        System.out.println("missing");
+                    }
+                }
+            }
+            """);
+
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final String executable = project.resolve(".javan/bin/class-for-name-catch-and-print").toString();
+        final ProcessResult present = process(project, List.of(executable, "java.lang.String"));
+        assertThat(present.exitCode()).as(present.stderr()).isZero();
+        assertThat(present.stdout()).isEqualTo("java.lang.String\njava.lang.String\n");
+        final ProcessResult missing = process(project, List.of(executable, "outside.Plugin"));
+        assertThat(missing.exitCode()).as(missing.stderr()).isZero();
+        assertThat(missing.stdout()).isEqualTo("missing\n");
+    }
+
+    @Test
+    void classForNameCatchRejectsAClassValueThatCanBypassLookup() throws Exception {
+        final Path project = project("class-for-name-catch-bypass");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(final String[] args) {
+                    final Class<?> fallback = null;
+                    final ClassLoader loader = ClassLoader.getSystemClassLoader();
+                    try {
+                        System.out.println((args.length > 0 ? fallback
+                            : Class.forName("java.lang.String", false, loader)).getName());
+                    } catch (ClassNotFoundException expected) {
+                        System.out.println("missing");
+                    }
+                }
+            }
+            """);
+
+        final CliRun check = run(tempDir, "check", project.toString());
+        assertThat(check.exitCode()).isEqualTo(2);
+        assertThat(check.stderr()).contains("error[JAVAN014]");
+    }
+
+    @Test
+    void classForNameCatchDoesNotSwallowUnrelatedNullPointer() throws Exception {
+        final Path project = project("class-for-name-catch-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(final String[] args) {
+                    final String name = null;
+                    try {
+                        System.out.println(Class.forName(name).getName());
+                    } catch (ClassNotFoundException expected) {
+                        System.out.println("missing");
+                    }
+                }
+            }
+            """);
+
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/class-for-name-catch-null").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stdout()).isEmpty();
+        assertThat(nativeRun.stderr()).contains("java/lang/NullPointerException");
+    }
+
+    @Test
     void classForNameFindsClosedWorldClassInitializesOnceAndMatchesJvmFailures() throws Exception {
         final Path project = project("class-for-name");
         writeJava(project, "com.acme.Plugin", """

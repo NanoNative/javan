@@ -65,6 +65,8 @@ Closed-world support includes:
   platform view. Dynamic loader discovery and provider streams are not implied.
 
 This summary does not replace exact callable/shape entries in the generated ledger.
+A typed handler can include a direct `Class.forName(...).getName()` sequence when control flow
+cannot bypass the lookup. Other exception ranges remain subject to their own supported shapes.
 Broader exceptions/finally, UTF-16 operations, collections, networking and threading require
 their own public-boundary proofs of supported Java contracts. Unrestricted runtime class
 definition, arbitrary loaders, proxies, instrumentation, JNI and unrestricted accessibility

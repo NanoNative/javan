@@ -172,6 +172,35 @@ final class EntryAnchoredTypedHandlerAdmissionTest {
     }
 
     @Test
+    void rejectsClassNameCallWhenBranchCanBypassClassLookup() {
+        final List<Instruction> instructions = List.of(
+            plain(0, 3, "iconst_0"),
+            branch(1, 153, "ifeq", 8),
+            plain(4, 1, "aconst_null"),
+            branch(5, 167, "goto", 13),
+            string(8, "java.lang.String"),
+            invoke(10, 184, "invokestatic", new MethodRef(
+                "java/lang/Class", "forName", "(Ljava/lang/String;)Ljava/lang/Class;"
+            )),
+            invoke(13, 182, "invokevirtual", new MethodRef(
+                "java/lang/Class", "getName", "()Ljava/lang/String;"
+            )),
+            plain(16, 87, "pop"),
+            plain(17, 9, "lconst_0"),
+            plain(18, 173, "lreturn"),
+            plain(19, 76, "astore_1"),
+            plain(20, 9, "lconst_0"),
+            plain(21, 173, "lreturn")
+        );
+        final CodeException handler =
+            new CodeException(8, 16, 19, Optional.of("java/lang/ClassNotFoundException"));
+
+        assertThat(verify(instructions, List.of(handler), 2, 2))
+            .extracting(Diagnostic::code)
+            .contains("JAVAN014");
+    }
+
+    @Test
     void rejectsBranchInsideProtectedRange() {
         final List<Instruction> instructions = List.of(
             branch(0, 167, "goto", 14),
