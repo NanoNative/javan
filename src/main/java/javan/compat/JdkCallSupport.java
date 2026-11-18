@@ -121,6 +121,9 @@ public final class JdkCallSupport {
         runtime("SecureRandom.nextBytes", "java/security/SecureRandom", "nextBytes", "([B)V"),
         runtime("SecureRandom.nextInt", "java/security/SecureRandom", "nextInt", "()I", "(I)I", "(II)I"),
         runtime("SecureRandom.nextLong", "java/security/SecureRandom", "nextLong", "()J", "(J)J", "(JJ)J"),
+        runtime("SecureRandom.nextBoolean", "java/security/SecureRandom", "nextBoolean", "()Z"),
+        runtime("SecureRandom.nextFloat", "java/security/SecureRandom", "nextFloat", "()F"),
+        runtime("SecureRandom.nextDouble", "java/security/SecureRandom", "nextDouble", "()D"),
         runtime("UUID.randomUUID", "java/util/UUID", "randomUUID", "()Ljava/util/UUID;"),
         runtime("UUID.toString", "java/util/UUID", "toString", "()Ljava/lang/String;"),
         runtime("Base64.getEncoder", "java/util/Base64", "getEncoder", "()Ljava/util/Base64$Encoder;"),
@@ -2041,6 +2044,12 @@ public final class JdkCallSupport {
             if ("(J)J".equals(methodRef.descriptor()) || "(JJ)J".equals(methodRef.descriptor())) {
                 return List.of("java/lang/NullPointerException", "java/lang/IllegalArgumentException");
             }
+        }
+        if ("java/security/SecureRandom".equals(methodRef.owner())
+            && ("nextBoolean".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())
+                || "nextFloat".equals(methodRef.name()) && "()F".equals(methodRef.descriptor())
+                || "nextDouble".equals(methodRef.name()) && "()D".equals(methodRef.descriptor()))) {
+            return List.of("java/lang/NullPointerException");
         }
         if (isDecimalParseCall(methodRef)) {
             return List.of("java/lang/NumberFormatException");

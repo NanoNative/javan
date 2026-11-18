@@ -8953,6 +8953,27 @@ final class RuntimeSourceMemorySections {
             return javan_secure_random_signed_long(bits);
         }
 
+        int javan_secure_random_next_boolean(void* value) {
+            javan_secure_random_check(value);
+            uint32_t bits;
+            javan_os_random_bytes((unsigned char*) &bits, sizeof(bits));
+            return (int) (bits >> 31);
+        }
+
+        float javan_secure_random_next_float(void* value) {
+            javan_secure_random_check(value);
+            uint32_t bits;
+            javan_os_random_bytes((unsigned char*) &bits, sizeof(bits));
+            return (float) (bits >> 8) * 0x1.0p-24f;
+        }
+
+        double javan_secure_random_next_double(void* value) {
+            javan_secure_random_check(value);
+            uint64_t bits;
+            javan_os_random_bytes((unsigned char*) &bits, sizeof(bits));
+            return (double) (bits >> 11) * 0x1.0p-53;
+        }
+
         void* javan_uuid_random(void) {
             javan_uuid_state* uuid = (javan_uuid_state*) javan_alloc(sizeof(javan_uuid_state));
             uuid->magic = JAVAN_UUID_MAGIC;

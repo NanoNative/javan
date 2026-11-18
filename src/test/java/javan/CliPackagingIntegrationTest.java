@@ -552,20 +552,28 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             import java.security.SecureRandom;
             public final class Main {
                 private static final SecureRandom RANDOM = new SecureRandom();
+                private static SecureRandom EMPTY;
                 public static void main(final String[] args) {
                     final SecureRandom random = RANDOM;
                     final int value = random.nextInt(17);
                     final int wide = random.nextInt(Integer.MIN_VALUE, Integer.MAX_VALUE);
                     final long longValue = random.nextLong(17L);
                     final long longWide = random.nextLong(Long.MIN_VALUE, Long.MAX_VALUE);
+                    final boolean bit = random.nextBoolean();
+                    final float fraction = random.nextFloat();
+                    final double doubleFraction = random.nextDouble();
                     System.out.println(value >= 0 && value < 17 && wide < Integer.MAX_VALUE
-                        && longValue >= 0 && longValue < 17 && longWide < Long.MAX_VALUE);
+                        && longValue >= 0 && longValue < 17 && longWide < Long.MAX_VALUE
+                        && (bit || !bit) && fraction >= 0.0f && fraction < 1.0f
+                        && doubleFraction >= 0.0 && doubleFraction < 1.0);
                     try { random.nextInt(0); }
                     catch (IllegalArgumentException expected) { System.out.println("invalid"); }
                     try { RANDOM.nextInt(1, 1); }
                     catch (IllegalArgumentException expected) { System.out.println("range-invalid"); }
                     try { random.nextLong(1L, 1L); }
                     catch (IllegalArgumentException expected) { System.out.println("long-range-invalid"); }
+                    try { EMPTY.nextDouble(); }
+                    catch (NullPointerException expected) { System.out.println("null-scalar"); }
                 }
             }
             """);
@@ -586,7 +594,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         final Path executable = project.resolve(".javan/bin/selfhost-secure-random-integers");
         final ProcessResult nativeRun = process(tempDir, List.of(executable.toString()));
         assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
-        assertThat(nativeRun.stdout()).isEqualTo("true\ninvalid\nrange-invalid\nlong-range-invalid\n");
+        assertThat(nativeRun.stdout()).isEqualTo("true\ninvalid\nrange-invalid\nlong-range-invalid\nnull-scalar\n");
     }
 
     @Test

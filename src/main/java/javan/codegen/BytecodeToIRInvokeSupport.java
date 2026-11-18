@@ -1123,6 +1123,39 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if ("java/security/SecureRandom".equals(methodRef.owner())
+            && ("nextBoolean".equals(methodRef.name()) || "nextFloat".equals(methodRef.name())
+                || "nextDouble".equals(methodRef.name())) && JdkCallSupport.isSupported(methodRef)) {
+            final IrExpression receiver = popObject(classFile, method, stack);
+            final String receiverLocal = newObjectLocal(localDeclarations);
+            instructions.add(IrInstruction.assignObject(receiverLocal, receiver));
+            final List<StackValue> successStack = List.copyOf(stack);
+            final String receiverPresent = "label_secure_random_scalar_receiver_" + instruction.offset();
+            instructions.add(IrInstruction.branchIf(receiverPresent,
+                IrExpression.objectComparison("!=", IrExpression.objectLocal(receiverLocal), IrExpression.objectNull())));
+            routePendingPlatformException(classFile, method, instruction, instructions, stack,
+                pendingExceptionHandlerStacks, sourceLines, "java/lang/NullPointerException",
+                IrExpression.stringLiteral("SecureRandom"));
+            instructions.add(IrInstruction.label(receiverPresent));
+            stack.addAll(successStack);
+            final List<IrExpression> arguments = List.of(IrExpression.objectLocal(receiverLocal));
+            if ("nextBoolean".equals(methodRef.name())) {
+                pushIntCall(instructions, stack, localDeclarations, "javan_secure_random_next_boolean", arguments);
+            } else if ("nextFloat".equals(methodRef.name())) {
+                final int index = localDeclarations.size();
+                final String name = "float" + index;
+                localDeclarations.put(Integer.MIN_VALUE + index, new IrLocal(IrType.FLOAT, name));
+                instructions.add(IrInstruction.assignFloat(name, IrExpression.floatCall("javan_secure_random_next_float", arguments)));
+                stack.add(StackValue.floatExpression(IrExpression.floatLocal(name)));
+            } else {
+                final int index = localDeclarations.size();
+                final String name = "double" + index;
+                localDeclarations.put(Integer.MIN_VALUE + index, new IrLocal(IrType.DOUBLE, name));
+                instructions.add(IrInstruction.assignDouble(name, IrExpression.doubleCall("javan_secure_random_next_double", arguments)));
+                stack.add(StackValue.doubleExpression(IrExpression.doubleLocal(name)));
+            }
+            return;
+        }
+        if ("java/security/SecureRandom".equals(methodRef.owner())
             && "nextBytes".equals(methodRef.name())
             && "([B)V".equals(methodRef.descriptor())) {
             final IrExpression bytes = popObject(classFile, method, stack);

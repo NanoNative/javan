@@ -9622,6 +9622,86 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void secureRandomScalarGenerationRespectsValueRanges() throws Exception {
+        final Path project = project("secure-random-scalars");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                public static void main(String[] args) {
+                    SecureRandom random = new SecureRandom();
+                    boolean valid = true;
+                    for (int index = 0; index < 128; index++) {
+                        boolean value = random.nextBoolean();
+                        float small = random.nextFloat();
+                        double large = random.nextDouble();
+                        if (!(small >= 0.0f && small < 1.0f) || !(large >= 0.0 && large < 1.0)) {
+                            valid = false;
+                        }
+                    }
+                    System.out.println(valid);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/secure-random-scalars").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("true\n");
+    }
+
+    @Test
+    void secureRandomScalarGenerationReportsNullReceiver() throws Exception {
+        final Path project = project("secure-random-scalars-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                public static void main(String[] args) {
+                    SecureRandom missing = null;
+                    try { missing.nextBoolean(); }
+                    catch (NullPointerException expected) { System.out.println("boolean"); }
+                    try { missing.nextFloat(); }
+                    catch (NullPointerException expected) { System.out.println("float"); }
+                    try { missing.nextDouble(); }
+                    catch (NullPointerException expected) { System.out.println("double"); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/secure-random-scalars-null").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("boolean\nfloat\ndouble\n");
+    }
+
+    @Test
+    void secureRandomScalarGenerationPropagatesUncaughtNull() throws Exception {
+        final Path project = project("secure-random-scalars-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                public static void main(String[] args) {
+                    SecureRandom missing = args.length == 0 ? null : new SecureRandom();
+                    missing.nextDouble();
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/secure-random-scalars-uncaught").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("java/lang/NullPointerException");
+    }
+
+    @Test
     void secureRandomLongGenerationRespectsBounds() throws Exception {
         final Path project = project("secure-random-long-bounds");
         writeJava(project, "com.acme.Main", """

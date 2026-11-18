@@ -66,7 +66,8 @@ Closed-world support includes:
   platform view. Dynamic loader discovery and provider streams are not implied.
 
 The default `SecureRandom` constructor supports calls resolved as `SecureRandom.nextBytes`
-and the zero-argument, single-bound and origin-bound `SecureRandom.nextInt` and `nextLong` overloads using
+and the zero-argument, single-bound and origin-bound `SecureRandom.nextInt` and `nextLong` overloads,
+as well as the zero-argument `nextBoolean`, `nextFloat` and `nextDouble` overloads, using
 operating-system entropy during execution.
 Entropy-source failures retain the native runtime panic boundary. Provider selection, explicit
 seeding, calls resolved through other random types and other random APIs remain subject to their
