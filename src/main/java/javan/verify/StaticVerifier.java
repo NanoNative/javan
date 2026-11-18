@@ -2116,6 +2116,9 @@ public final class StaticVerifier {
         int hasThrowableTransport = 0;
         final List<Instruction> instructions = code.instructions();
         final boolean reflectiveInvocationRange = containsMethodInvocation(instructions, handler);
+        final Optional<Instruction> protectedEntry = instructionAtOffset(code, handler.startPc());
+        final boolean staticReceiverRange = protectedEntry.isPresent()
+            && sameClassStaticRead(classes, currentOwner, code, handler, protectedEntry.orElseThrow());
         Set<Integer> classNameBranchTargets = null;
         boolean classNameHasUnknownBranch = false;
         for (int instructionIndex = 0; instructionIndex < instructions.size(); instructionIndex++) {
@@ -2180,7 +2183,8 @@ public final class StaticVerifier {
                 }
             }
             if (!supportedInterruptedWaitProtectedInstruction(instruction)
-                && !sameClassFinalStaticRead(classes, currentOwner, code, handler, instruction)
+                && !(staticReceiverRange && instruction.offset() == handler.startPc())
+                && !(staticReceiverRange && sameClassStaticArgumentCall(classes, currentOwner, instruction))
                 && !classNameAfterLookup
                 && !initialization
                 && !supportedApplicationThrowableInstruction(classes, instruction)
@@ -2202,7 +2206,7 @@ public final class StaticVerifier {
         return false;
     }
 
-    private static boolean sameClassFinalStaticRead(
+    private static boolean sameClassStaticRead(
         final Map<String, ClassFile> classes,
         final String currentOwner,
         final CodeAttribute code,
@@ -2225,14 +2229,14 @@ public final class StaticVerifier {
                 return false;
             }
         }
-        boolean finalField = false;
+        boolean staticField = false;
         for (final javan.classfile.FieldInfo candidate : owner.fields()) {
-            if (candidate.isStatic() && (candidate.accessFlags() & 0x0010) != 0
-                && candidate.name().equals(field.name()) && candidate.descriptor().equals(field.descriptor())) {
-                finalField = true;
+            if (candidate.isStatic() && candidate.name().equals(field.name())
+                && candidate.descriptor().equals(field.descriptor())) {
+                staticField = true;
             }
         }
-        if (!finalField) {
+        if (!staticField) {
             return false;
         }
         for (final CodeException candidate : code.exceptionTable()) {
@@ -2261,6 +2265,14 @@ public final class StaticVerifier {
                 }
                 return true;
             }
+            if (candidate.opcode() == 184 && candidate.methodRef().isPresent()) {
+                final MethodRef argumentCall = candidate.methodRef().orElseThrow();
+                if (currentOwner.equals(argumentCall.owner()) && "()I".equals(argumentCall.descriptor())
+                    && sameClassStaticArgumentCall(classes, currentOwner, candidate)) {
+                    continue;
+                }
+                return false;
+            }
             final int opcode = candidate.opcode();
             final boolean numericConstant = opcode >= 18 && opcode <= 20
                 && (candidate.intValue().isPresent() || candidate.longValue().isPresent()
@@ -2270,6 +2282,56 @@ public final class StaticVerifier {
             }
         }
         return false;
+    }
+
+    private static boolean sameClassStaticArgumentCall(
+        final Map<String, ClassFile> classes,
+        final String currentOwner,
+        final Instruction instruction
+    ) {
+        if (instruction.opcode() != 184 || instruction.methodRef().isEmpty()) {
+            return false;
+        }
+        final MethodRef target = instruction.methodRef().orElseThrow();
+        final ClassFile owner = classes.get(currentOwner);
+        if (owner == null || !currentOwner.equals(target.owner()) || !"()I".equals(target.descriptor())) {
+            return false;
+        }
+        if (supportedGeneratedThrowableCall(classes, instruction)) {
+            return true;
+        }
+        final Optional<MethodInfo> method = owner.method(target.name(), target.descriptor());
+        if (method.isEmpty() || method.orElseThrow().code().isEmpty()) {
+            return false;
+        }
+        for (final Instruction candidate : method.orElseThrow().code().orElseThrow().instructions()) {
+            final int opcode = candidate.opcode();
+            if ((opcode == 178 || opcode == 179) && candidate.fieldRef().isPresent()) {
+                final FieldRef field = candidate.fieldRef().orElseThrow();
+                boolean allowed = false;
+                if (owner.name().equals(field.owner())) {
+                    for (final javan.classfile.FieldInfo declared : owner.fields()) {
+                        if (declared.isStatic() && declared.name().equals(field.name())
+                            && declared.descriptor().equals(field.descriptor())
+                            && (opcode != 179 || (declared.accessFlags() & 0x0010) == 0)) {
+                            allowed = true;
+                        }
+                    }
+                }
+                if (!allowed) {
+                    return false;
+                }
+                continue;
+            }
+            if (opcode == 0 || opcode == 1 || opcode >= 2 && opcode <= 20
+                || opcode >= 21 && opcode <= 45 || opcode >= 54 && opcode <= 78
+                || opcode >= 87 && opcode <= 107 || opcode >= 116 && opcode <= 152
+                || opcode >= 153 && opcode <= 177) {
+                continue;
+            }
+            return false;
+        }
+        return true;
     }
 
     private static boolean initializationTransportsToHandler(

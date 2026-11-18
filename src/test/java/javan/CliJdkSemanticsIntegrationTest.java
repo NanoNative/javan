@@ -10116,6 +10116,117 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mutableStaticReceiverSurvivesArgumentMutationInTypedCatch() throws Exception {
+        final Path project = project("mutable-static-typed-catch-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                static final SecureRandom OTHER = new SecureRandom();
+                static SecureRandom random = OTHER;
+                static int clear() { random = null; return 0; }
+                static int restore() { random = OTHER; return 1; }
+                static void nonnull() {
+                    try { random.nextInt(clear()); }
+                    catch (IllegalArgumentException expected) { System.out.println("invalid"); }
+                }
+                static void missing() {
+                    try { random.nextInt(restore()); }
+                    catch (NullPointerException expected) { System.out.println("null"); }
+                }
+                public static void main(String[] args) { nonnull(); missing(); }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/mutable-static-typed-catch-order").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("invalid\nnull\n");
+    }
+
+    @Test
+    void mutableStaticReceiverInTypedCatchSeesDefaultDuringInitialization() throws Exception {
+        final Path project = project("mutable-static-early-catch");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                static SecureRandom random;
+                static int restore() { random = new SecureRandom(); return 1; }
+                static {
+                    try { random.nextInt(restore()); }
+                    catch (NullPointerException expected) { System.out.println("early"); }
+                }
+                public static void main(String[] args) {
+                    try { random.nextInt(0); }
+                    catch (IllegalArgumentException expected) { System.out.println("later"); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/mutable-static-early-catch").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("early\nlater\n");
+    }
+
+    @Test
+    void mutableStaticReceiverEvaluatesThrowingArgumentBeforeNullCheckInTypedCatch() throws Exception {
+        final Path project = project("mutable-static-throwing-argument-catch");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                static SecureRandom random = null;
+                static int fail() { throw new IllegalArgumentException("argument"); }
+                public static void main(String[] args) {
+                    try { random.nextInt(fail()); }
+                    catch (IllegalArgumentException expected) { System.out.println("argument"); }
+                    catch (NullPointerException expected) { System.out.println("receiver"); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/mutable-static-throwing-argument-catch").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("argument\n");
+    }
+
+    @Test
+    void mutableStaticReceiverDoesNotCatchUnrelatedArgumentException() throws Exception {
+        final Path project = project("mutable-static-unmatched-argument-catch");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                static SecureRandom random = null;
+                static int fail() { throw new IllegalArgumentException("argument"); }
+                public static void main(String[] args) {
+                    try { random.nextInt(fail()); }
+                    catch (NullPointerException expected) { System.out.println("wrong"); }
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/mutable-static-unmatched-argument-catch").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stdout()).doesNotContain("wrong");
+        assertThat(nativeRun.stderr()).contains("java/lang/IllegalArgumentException");
+    }
+
+    @Test
     void secureRandomStaticFinalFieldSupportsTypedCatch() throws Exception {
         final Path project = project("secure-random-static-final-catch");
         writeJava(project, "com.acme.Main", """
@@ -10177,7 +10288,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void mutableStaticFieldInTypedCatchIsRejectedWhenArgumentChangesIt() throws Exception {
+    void mutableStaticFieldInTypedCatchSurvivesArgumentMutation() throws Exception {
         final Path project = project("mutable-static-field-catch");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -10191,13 +10302,18 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                 }
             }
             """);
-        final CliRun check = run(tempDir, "check", project.toString());
-        assertThat(check.exitCode()).isEqualTo(2);
-        assertThat(check.stderr()).contains("error[JAVAN014]");
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/mutable-static-field-catch").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("invalid\n");
     }
 
     @Test
-    void mutableStaticFieldInTypedCatchIsRejectedEvenWithConstantArgument() throws Exception {
+    void mutableStaticFieldInTypedCatchSupportsConstantArgument() throws Exception {
         final Path project = project("mutable-static-field-constant-catch");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -10210,13 +10326,18 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                 }
             }
             """);
-        final CliRun check = run(tempDir, "check", project.toString());
-        assertThat(check.exitCode()).isEqualTo(2);
-        assertThat(check.stderr()).contains("error[JAVAN014]");
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/mutable-static-field-constant-catch").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("invalid\n");
     }
 
     @Test
-    void staticFinalFieldWithSideEffectingArgumentRemainsRejected() throws Exception {
+    void staticFinalFieldWithSideEffectingArgumentPreservesOrder() throws Exception {
         final Path project = project("static-final-side-effect-catch");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -10230,6 +10351,31 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                     catch (IllegalArgumentException expected) { System.out.println("invalid"); }
                 }
             }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/static-final-side-effect-catch").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("invalid\n");
+    }
+
+    @Test
+    void staticFieldWithArgumentCallFromAnotherClassRemainsRejected() throws Exception {
+        final Path project = project("static-field-external-argument-catch");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                static SecureRandom random = new SecureRandom();
+                public static void main(String[] args) {
+                    try { random.nextInt(Other.bound()); }
+                    catch (IllegalArgumentException expected) { System.out.println("invalid"); }
+                }
+            }
+            final class Other { static int bound() { return 0; } }
             """);
         final CliRun check = run(tempDir, "check", project.toString());
         assertThat(check.exitCode()).isEqualTo(2);
