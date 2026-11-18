@@ -562,10 +562,13 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     final boolean bit = random.nextBoolean();
                     final float fraction = random.nextFloat();
                     final double doubleFraction = random.nextDouble();
+                    final float narrow = random.nextFloat(Float.MIN_VALUE);
+                    final double wideFraction = random.nextDouble(-Double.MAX_VALUE, Double.MAX_VALUE);
                     System.out.println(value >= 0 && value < 17 && wide < Integer.MAX_VALUE
                         && longValue >= 0 && longValue < 17 && longWide < Long.MAX_VALUE
                         && (bit || !bit) && fraction >= 0.0f && fraction < 1.0f
-                        && doubleFraction >= 0.0 && doubleFraction < 1.0);
+                        && doubleFraction >= 0.0 && doubleFraction < 1.0 && narrow == 0.0f
+                        && wideFraction >= -Double.MAX_VALUE && wideFraction < Double.MAX_VALUE);
                     try { random.nextInt(0); }
                     catch (IllegalArgumentException expected) { System.out.println("invalid"); }
                     try { RANDOM.nextInt(1, 1); }
@@ -574,6 +577,8 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     catch (IllegalArgumentException expected) { System.out.println("long-range-invalid"); }
                     try { EMPTY.nextDouble(); }
                     catch (NullPointerException expected) { System.out.println("null-scalar"); }
+                    try { random.nextDouble(Double.NaN); }
+                    catch (IllegalArgumentException expected) { System.out.println("floating-invalid"); }
                 }
             }
             """);
@@ -594,7 +599,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         final Path executable = project.resolve(".javan/bin/selfhost-secure-random-integers");
         final ProcessResult nativeRun = process(tempDir, List.of(executable.toString()));
         assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
-        assertThat(nativeRun.stdout()).isEqualTo("true\ninvalid\nrange-invalid\nlong-range-invalid\nnull-scalar\n");
+        assertThat(nativeRun.stdout()).isEqualTo("true\ninvalid\nrange-invalid\nlong-range-invalid\nnull-scalar\nfloating-invalid\n");
     }
 
     @Test

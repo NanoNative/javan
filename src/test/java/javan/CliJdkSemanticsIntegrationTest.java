@@ -9622,6 +9622,123 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void secureRandomFloatingBoundsStayInsideFiniteIntervals() throws Exception {
+        final Path project = project("secure-random-floating-bounds");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                public static void main(String[] args) {
+                    SecureRandom random = new SecureRandom();
+                    boolean valid = true;
+                    for (int index = 0; index < 128; index++) {
+                        float narrowF = random.nextFloat(Float.MIN_VALUE);
+                        double narrowD = random.nextDouble(Double.MIN_VALUE);
+                        float wideF = random.nextFloat(-Float.MAX_VALUE, Float.MAX_VALUE);
+                        double wideD = random.nextDouble(-Double.MAX_VALUE, Double.MAX_VALUE);
+                        float crossingF = random.nextFloat(-1.0f, 1.0f);
+                        double crossingD = random.nextDouble(-1.0, 1.0);
+                        float belowZeroF = random.nextFloat(-Float.MIN_VALUE, 0.0f);
+                        double belowZeroD = random.nextDouble(-Double.MIN_VALUE, 0.0);
+                        float highestF = random.nextFloat(0x1.fffffcp127f, Float.MAX_VALUE);
+                        double highestD = random.nextDouble(0x1.ffffffffffffep1023, Double.MAX_VALUE);
+                        if (narrowF != 0.0f || narrowD != 0.0
+                            || belowZeroF != -Float.MIN_VALUE || belowZeroD != -Double.MIN_VALUE
+                            || highestF != 0x1.fffffcp127f || highestD != 0x1.ffffffffffffep1023
+                            || !(wideF >= -Float.MAX_VALUE && wideF < Float.MAX_VALUE)
+                            || !(wideD >= -Double.MAX_VALUE && wideD < Double.MAX_VALUE)
+                            || !(crossingF >= -1.0f && crossingF < 1.0f)
+                            || !(crossingD >= -1.0 && crossingD < 1.0)) {
+                            valid = false;
+                        }
+                    }
+                    System.out.println(valid);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/secure-random-floating-bounds").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("true\n");
+    }
+
+    @Test
+    void secureRandomFloatingBoundsRejectInvalidValuesAndPreserveNullOrder() throws Exception {
+        final Path project = project("secure-random-floating-invalid");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                static int trace;
+                static float originF() { trace = trace * 10 + 1; return 0.0f; }
+                static float boundF() { trace = trace * 10 + 2; return 0.0f; }
+                static double originD() { trace = trace * 10 + 3; return 0.0; }
+                static double boundD() { trace = trace * 10 + 4; return 0.0; }
+                public static void main(String[] args) {
+                    SecureRandom random = new SecureRandom();
+                    try { random.nextFloat(0.0f); }
+                    catch (IllegalArgumentException expected) { System.out.println("zero-f"); }
+                    try { random.nextFloat(Float.NaN); }
+                    catch (IllegalArgumentException expected) { System.out.println("nan-f"); }
+                    try { random.nextFloat(Float.POSITIVE_INFINITY); }
+                    catch (IllegalArgumentException expected) { System.out.println("inf-f"); }
+                    try { random.nextFloat(1.0f, 1.0f); }
+                    catch (IllegalArgumentException expected) { System.out.println("equal-f"); }
+                    try { random.nextFloat(Float.NEGATIVE_INFINITY, 1.0f); }
+                    catch (IllegalArgumentException expected) { System.out.println("origin-f"); }
+                    try { random.nextDouble(-0.0); }
+                    catch (IllegalArgumentException expected) { System.out.println("zero-d"); }
+                    try { random.nextDouble(Double.NaN); }
+                    catch (IllegalArgumentException expected) { System.out.println("nan-d"); }
+                    try { random.nextDouble(Double.POSITIVE_INFINITY); }
+                    catch (IllegalArgumentException expected) { System.out.println("inf-d"); }
+                    try { random.nextDouble(2.0, 1.0); }
+                    catch (IllegalArgumentException expected) { System.out.println("reverse-d"); }
+                    try { random.nextDouble(Double.NEGATIVE_INFINITY, 1.0); }
+                    catch (IllegalArgumentException expected) { System.out.println("origin-d"); }
+                    SecureRandom missing = null;
+                    try { missing.nextFloat(originF(), boundF()); }
+                    catch (NullPointerException expected) { System.out.println(trace); }
+                    try { missing.nextDouble(originD(), boundD()); }
+                    catch (NullPointerException expected) { System.out.println(trace); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/secure-random-floating-invalid").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo(
+            "zero-f\nnan-f\ninf-f\nequal-f\norigin-f\nzero-d\nnan-d\ninf-d\nreverse-d\norigin-d\n12\n1234\n");
+    }
+
+    @Test
+    void secureRandomFloatingBoundsPropagateUncaughtInvalidInput() throws Exception {
+        final Path project = project("secure-random-floating-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                public static void main(String[] args) {
+                    new SecureRandom().nextDouble(Double.POSITIVE_INFINITY);
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/secure-random-floating-uncaught").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("java/lang/IllegalArgumentException");
+    }
+
+    @Test
     void secureRandomScalarGenerationRespectsValueRanges() throws Exception {
         final Path project = project("secure-random-scalars");
         writeJava(project, "com.acme.Main", """

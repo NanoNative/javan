@@ -759,6 +759,10 @@ final class RuntimeHeaderFile {
         int javan_secure_random_next_boolean(void* value);
         float javan_secure_random_next_float(void* value);
         double javan_secure_random_next_double(void* value);
+        int javan_secure_random_float_range_valid(float origin, float bound);
+        int javan_secure_random_double_range_valid(double origin, double bound);
+        float javan_secure_random_next_float_range(void* value, float origin, float bound);
+        double javan_secure_random_next_double_range(void* value, double origin, double bound);
         void* javan_uuid_random(void);
         void* javan_uuid_to_string(void* value);
         void* javan_base64_get_encoder(void);

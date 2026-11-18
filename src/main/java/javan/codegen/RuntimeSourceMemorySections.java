@@ -8974,6 +8974,34 @@ final class RuntimeSourceMemorySections {
             return (double) (bits >> 11) * 0x1.0p-53;
         }
 
+        int javan_secure_random_float_range_valid(float origin, float bound) {
+            return isfinite(origin) && isfinite(bound) && origin < bound;
+        }
+
+        int javan_secure_random_double_range_valid(double origin, double bound) {
+            return isfinite(origin) && isfinite(bound) && origin < bound;
+        }
+
+        float javan_secure_random_next_float_range(void* value, float origin, float bound) {
+            const float unit = javan_secure_random_next_float(value);
+            const float span = bound - origin;
+            float result = isfinite(span) ? origin + unit * span : (1.0f - unit) * origin + unit * bound;
+            if (result >= bound) {
+                result = nextafterf(bound, -INFINITY);
+            }
+            return result;
+        }
+
+        double javan_secure_random_next_double_range(void* value, double origin, double bound) {
+            const double unit = javan_secure_random_next_double(value);
+            const double span = bound - origin;
+            double result = isfinite(span) ? origin + unit * span : (1.0 - unit) * origin + unit * bound;
+            if (result >= bound) {
+                result = nextafter(bound, -INFINITY);
+            }
+            return result;
+        }
+
         void* javan_uuid_random(void) {
             javan_uuid_state* uuid = (javan_uuid_state*) javan_alloc(sizeof(javan_uuid_state));
             uuid->magic = JAVAN_UUID_MAGIC;

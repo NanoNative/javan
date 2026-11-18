@@ -1125,9 +1125,31 @@ final class BytecodeToIRInvokeSupport {
         if ("java/security/SecureRandom".equals(methodRef.owner())
             && ("nextBoolean".equals(methodRef.name()) || "nextFloat".equals(methodRef.name())
                 || "nextDouble".equals(methodRef.name())) && JdkCallSupport.isSupported(methodRef)) {
+            final boolean wide = "nextDouble".equals(methodRef.name());
+            final boolean ranged = "(FF)F".equals(methodRef.descriptor()) || "(DD)D".equals(methodRef.descriptor());
+            final boolean bounded = ranged || "(F)F".equals(methodRef.descriptor()) || "(D)D".equals(methodRef.descriptor());
+            final IrExpression zero = wide ? IrExpression.doubleLiteral(0.0) : IrExpression.floatLiteral(0.0f);
+            final IrExpression bound = bounded ? wide ? popDouble(classFile, method, stack) : popFloat(classFile, method, stack) : zero;
+            final IrExpression origin = ranged ? wide ? popDouble(classFile, method, stack) : popFloat(classFile, method, stack) : zero;
             final IrExpression receiver = popObject(classFile, method, stack);
             final String receiverLocal = newObjectLocal(localDeclarations);
             instructions.add(IrInstruction.assignObject(receiverLocal, receiver));
+            final String prefix = wide ? "double" : "float";
+            final IrType valueType = wide ? IrType.DOUBLE : IrType.FLOAT;
+            final int originIndex = localDeclarations.size();
+            final String originName = prefix + originIndex;
+            if (ranged) {
+                localDeclarations.put(Integer.MIN_VALUE + originIndex, new IrLocal(valueType, originName));
+                instructions.add(wide ? IrInstruction.assignDouble(originName, origin) : IrInstruction.assignFloat(originName, origin));
+            }
+            final int boundIndex = localDeclarations.size();
+            final String boundName = prefix + boundIndex;
+            if (bounded) {
+                localDeclarations.put(Integer.MIN_VALUE + boundIndex, new IrLocal(valueType, boundName));
+                instructions.add(wide ? IrInstruction.assignDouble(boundName, bound) : IrInstruction.assignFloat(boundName, bound));
+            }
+            final IrExpression savedOrigin = ranged ? wide ? IrExpression.doubleLocal(originName) : IrExpression.floatLocal(originName) : zero;
+            final IrExpression savedBound = wide ? IrExpression.doubleLocal(boundName) : IrExpression.floatLocal(boundName);
             final List<StackValue> successStack = List.copyOf(stack);
             final String receiverPresent = "label_secure_random_scalar_receiver_" + instruction.offset();
             instructions.add(IrInstruction.branchIf(receiverPresent,
@@ -1137,20 +1159,36 @@ final class BytecodeToIRInvokeSupport {
                 IrExpression.stringLiteral("SecureRandom"));
             instructions.add(IrInstruction.label(receiverPresent));
             stack.addAll(successStack);
-            final List<IrExpression> arguments = List.of(IrExpression.objectLocal(receiverLocal));
+            if (bounded) {
+                final String boundValid = "label_secure_random_scalar_bound_" + instruction.offset();
+                final IrExpression valid = IrExpression.intCall("javan_secure_random_" + prefix + "_range_valid",
+                    List.of(savedOrigin, savedBound));
+                instructions.add(IrInstruction.branchIf(boundValid,
+                    IrExpression.intComparison("!=", valid, IrExpression.intLiteral(0))));
+                routePendingPlatformException(classFile, method, instruction, instructions, stack,
+                    pendingExceptionHandlerStacks, sourceLines, "java/lang/IllegalArgumentException",
+                    IrExpression.stringLiteral("bounds must be finite and origin less than bound"));
+                instructions.add(IrInstruction.label(boundValid));
+                stack.addAll(successStack);
+            }
+            final List<IrExpression> arguments = bounded
+                ? List.of(IrExpression.objectLocal(receiverLocal), savedOrigin, savedBound)
+                : List.of(IrExpression.objectLocal(receiverLocal));
             if ("nextBoolean".equals(methodRef.name())) {
                 pushIntCall(instructions, stack, localDeclarations, "javan_secure_random_next_boolean", arguments);
-            } else if ("nextFloat".equals(methodRef.name())) {
+            } else if (!wide) {
                 final int index = localDeclarations.size();
                 final String name = "float" + index;
                 localDeclarations.put(Integer.MIN_VALUE + index, new IrLocal(IrType.FLOAT, name));
-                instructions.add(IrInstruction.assignFloat(name, IrExpression.floatCall("javan_secure_random_next_float", arguments)));
+                instructions.add(IrInstruction.assignFloat(name, IrExpression.floatCall(
+                    bounded ? "javan_secure_random_next_float_range" : "javan_secure_random_next_float", arguments)));
                 stack.add(StackValue.floatExpression(IrExpression.floatLocal(name)));
             } else {
                 final int index = localDeclarations.size();
                 final String name = "double" + index;
                 localDeclarations.put(Integer.MIN_VALUE + index, new IrLocal(IrType.DOUBLE, name));
-                instructions.add(IrInstruction.assignDouble(name, IrExpression.doubleCall("javan_secure_random_next_double", arguments)));
+                instructions.add(IrInstruction.assignDouble(name, IrExpression.doubleCall(
+                    bounded ? "javan_secure_random_next_double_range" : "javan_secure_random_next_double", arguments)));
                 stack.add(StackValue.doubleExpression(IrExpression.doubleLocal(name)));
             }
             return;
