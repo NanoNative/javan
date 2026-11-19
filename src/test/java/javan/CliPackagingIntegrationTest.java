@@ -1939,6 +1939,8 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     System.out.println("".equals(new int[0]));
                     System.out.println("\\0\\ud800\\udc00".equals(new String(new char[] {0, (char) 0xd800, (char) 0xdc00})));
                     System.out.println(nullEquals(null));
+                    System.out.println("alphabet".contains(new StringBuilder("pha")));
+                    System.out.println("alphabet".contains(new StringBuilder()));
                     System.out.println(nullSubstring(null));
                 }
             }
@@ -3761,6 +3763,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static int prefix(String value, String prefix, int from) { return value.startsWith(prefix, from) ? 1 : 0; }
                 public static int suffix(String value, String suffix) { return value.endsWith(suffix) ? 1 : 0; }
                 public static int same(String value, String other) { return value.equals(other) ? 1 : 0; }
+                public static int contains(String value, String needle) { return value.contains(needle) ? 1 : 0; }
                 public static String fail(String value) { throw new IllegalArgumentException(value); }
                 public static String literal() { return "a\\0b"; }
                 public static String fromCodePoint(int value) { return Character.toString(value); }
@@ -3785,7 +3788,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "--export", "com.acme.Text.substringLast", "--export", "com.acme.Text.boundedPoint",
             "--export", "com.acme.Text.boundedString", "--export", "com.acme.Text.slice", "--export", "com.acme.Text.tail",
             "--export", "com.acme.Text.sequence", "--export", "com.acme.Text.prefix", "--export", "com.acme.Text.suffix",
-            "--export", "com.acme.Text.same");
+            "--export", "com.acme.Text.same", "--export", "com.acme.Text.contains");
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         final Path library = project.resolve(".javan/dist/liblibrary-utf16.a");
         final Path caller = writeC(project, "call_utf16.c", """
@@ -3886,6 +3889,15 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 result = javan_utf16_try_com_acme_Text_same_string_string(input, needle, &search);
                 if (!result.ok || search != 0) return 65;
                 javan_result_free(&result);
+                needle.data = data + 2; needle.length = 2;
+                result = javan_utf16_try_com_acme_Text_contains_string_string(input, needle, &search);
+                if (!result.ok || search != 1) return 67;
+                javan_result_free(&result);
+                needle.data = NULL; needle.length = 0;
+                result = javan_utf16_try_com_acme_Text_contains_string_string(input, needle, &search);
+                if (result.ok || search != 0 || result.message == NULL
+                    || strstr(result.message, "NullPointerException") == NULL) return 68;
+                javan_result_free(&result);
                 int point = -1;
                 result = javan_try_com_acme_Text_literalCodePointAt_int(1, &point);
                 if (!result.ok || point != 0x10000) return 38;
@@ -3958,6 +3970,10 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 result = javan_utf16_try_com_acme_Text_same_string_string(input, input, &search);
                 if (result.ok || search != 0 || result.message == NULL
                     || strstr(result.message, "NullPointerException") == NULL) return 66;
+                javan_result_free(&result);
+                result = javan_utf16_try_com_acme_Text_contains_string_string(input, input, &search);
+                if (result.ok || search != 0 || result.message == NULL
+                    || strstr(result.message, "NullPointerException") == NULL) return 69;
                 javan_result_free(&result);
                 needle.data = data; needle.length = 1;
                 result = javan_utf16_try_com_acme_Text_substringLast_string_string_int(input, needle, -1, &search);

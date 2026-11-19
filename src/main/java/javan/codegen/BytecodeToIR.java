@@ -569,6 +569,9 @@ public final class BytecodeToIR {
         result.put("javan_string_equals_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/lang/String", "equals", "(Ljava/lang/Object;)Z"
         )));
+        result.put("javan_string_contains_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/lang/String", "contains", "(Ljava/lang/CharSequence;)Z"
+        )));
         result.put("javan_string_to_char_array", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/lang/String", "toCharArray", "()[C"
         )));
@@ -1249,6 +1252,7 @@ public final class BytecodeToIR {
                             || "(II)I".equals(reference.descriptor())
                             || ("indexOf".equals(reference.name()) && ("(III)I".equals(reference.descriptor())
                                 || "(Ljava/lang/String;II)I".equals(reference.descriptor())))
+                            || ("contains".equals(reference.name()) && "(Ljava/lang/CharSequence;)Z".equals(reference.descriptor()))
                             || ("equals".equals(reference.name()) && "(Ljava/lang/Object;)Z".equals(reference.descriptor()))
                             || (("startsWith".equals(reference.name()) || "endsWith".equals(reference.name()))
                                 && ("(Ljava/lang/String;)Z".equals(reference.descriptor())

@@ -11049,6 +11049,37 @@ final class RuntimeSourceMemorySections {
             return javan_string_index_of_string(left, right) >= 0;
         }
 
+        int javan_string_contains_java(const char* left, void* needle) {
+            if (left == NULL || needle == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            javan_allocation_metadata allocation;
+            if (javan_find_allocation(needle, &allocation) == 0) {
+                if (javan_runtime_class_registry_contains(needle) != 0 || javan_registered_type_id(needle) != 0) {
+                    javan_panic("unsupported CharSequence implementation in String.contains");
+                }
+                return javan_string_index_of_string(left, (const char*) needle) >= 0;
+            }
+            if (allocation.kind == JAVAN_HEAP_KIND_RUNTIME && allocation.runtime_kind == JAVAN_RUNTIME_KIND_STRING) {
+                return javan_string_index_of_string(left, (const char*) needle) >= 0;
+            }
+            if (allocation.kind != JAVAN_HEAP_KIND_RUNTIME || allocation.runtime_kind != JAVAN_RUNTIME_KIND_STRING_BUILDER) {
+                javan_panic("unsupported CharSequence implementation in String.contains");
+            }
+            void* left_root = (void*) left;
+            void* needle_root = needle;
+            void* text_root = NULL;
+            void** roots[] = { &left_root, &needle_root, &text_root };
+            javan_root_frame_push(roots, 3);
+            javan_runtime_lock_enter();
+            text_root = javan_stringbuilder_to_string(needle_root);
+            javan_runtime_lock_leave();
+            int result = javan_string_index_of_string((const char*) left_root, (const char*) text_root) >= 0;
+            javan_root_frame_pop(roots);
+            return result;
+        }
+
         int javan_string_starts_with_java(const char* left, const char* prefix, int from_index) {
             if (left == NULL) {
                 javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
