@@ -319,6 +319,7 @@ public final class JdkCallSupport {
         runtime("CharSequence.charAt", "java/lang/CharSequence", "charAt", "(I)C"),
         intrinsic("Character.isWhitespace", "java/lang/Character", "isWhitespace", "(C)Z", "(I)Z"),
         intrinsic("Character.isSpaceChar", "java/lang/Character", "isSpaceChar", "(C)Z", "(I)Z"),
+        runtime("Character.toChars", "java/lang/Character", "toChars", "(I)[C"),
         intrinsic("Character.isValidCodePoint", "java/lang/Character", "isValidCodePoint", "(I)Z"),
         intrinsic("Character.isBmpCodePoint", "java/lang/Character", "isBmpCodePoint", "(I)Z"),
         intrinsic("Character.isSupplementaryCodePoint", "java/lang/Character", "isSupplementaryCodePoint", "(I)Z"),
@@ -1997,6 +1998,10 @@ public final class JdkCallSupport {
             && ("codePointCount".equals(methodRef.name()) || "offsetByCodePoints".equals(methodRef.name()))
             && "(II)I".equals(methodRef.descriptor())) {
             return List.of("java/lang/IndexOutOfBoundsException", "java/lang/NullPointerException");
+        }
+        if ("java/lang/Character".equals(methodRef.owner()) && "toChars".equals(methodRef.name())
+            && "(I)[C".equals(methodRef.descriptor())) {
+            return List.of("java/lang/IllegalArgumentException");
         }
         if (("java/nio/file/Path".equals(methodRef.owner()) && "of".equals(methodRef.name())
                 || "java/nio/file/Paths".equals(methodRef.owner()) && "get".equals(methodRef.name()))

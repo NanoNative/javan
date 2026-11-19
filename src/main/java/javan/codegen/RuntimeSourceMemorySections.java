@@ -8800,6 +8800,35 @@ final class RuntimeSourceMemorySections {
             return array;
         }
 
+        void javan_character_to_chars_into(void** result, int value) {
+            if (result == NULL) {
+                javan_panic("invalid character array result");
+            }
+            javan_runtime_lock_enter();
+            *result = NULL;
+            if (!javan_character_is_valid_code_point(value)) {
+                javan_pending_throw("java/lang/IllegalArgumentException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                javan_runtime_lock_leave();
+                return;
+            }
+            int length = javan_character_char_count(value);
+            javan_char_array* chars = (javan_char_array*) javan_char_array_new(length);
+            *result = chars;
+            if (length == 1) {
+                chars->values[0] = (unsigned short) value;
+            } else {
+                chars->values[0] = (unsigned short) javan_character_high_surrogate(value);
+                chars->values[1] = (unsigned short) javan_character_low_surrogate(value);
+            }
+            javan_runtime_lock_leave();
+        }
+
+        void* javan_character_to_chars(int value) {
+            void* result = NULL;
+            javan_character_to_chars_into(&result, value);
+            return result;
+        }
+
         static javan_array_header* javan_array_checked(void* array) {
             if (array == NULL) {
                 javan_panic("null array");

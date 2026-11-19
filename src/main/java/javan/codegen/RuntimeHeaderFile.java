@@ -363,6 +363,8 @@ final class RuntimeHeaderFile {
         int javan_short_array_get(void* array, int index);
         void javan_short_array_set(void* array, int index, int value);
         void* javan_char_array_new(int length);
+        void* javan_character_to_chars(int value);
+        void javan_character_to_chars_into(void** result, int value);
         int javan_char_array_get(void* array, int index);
         void javan_char_array_set(void* array, int index, int value);
         int javan_array_length(void* array);

@@ -3598,6 +3598,12 @@ final class BytecodeToIRInvokeSupport {
         final MethodRef methodRef,
         final List<StackValue> stack
     ) {
+        if ("toChars".equals(methodRef.name()) && "(I)[C".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_character_to_chars", List.of(popInt(classFile, method, stack))
+            )));
+            return true;
+        }
         if ("toString".equals(methodRef.name()) && "(C)Ljava/lang/String;".equals(methodRef.descriptor())) {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_string_value_of_char", List.of(popInt(classFile, method, stack)))));
             return true;

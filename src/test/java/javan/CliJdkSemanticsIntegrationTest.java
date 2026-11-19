@@ -13654,6 +13654,150 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void characterToCharsMatchesJavaAcrossUnicode() throws Exception {
+        final Path project = project("character-to-chars-unicode");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    long result = 1;
+                    for (int value = 0; value <= 0x10ffff; value += 31) {
+                        char[] chars = Character.toChars(value);
+                        result = result * 31 + chars.length;
+                        for (char ch : chars) result = result * 31 + ch;
+                    }
+                    System.out.println(result);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/character-to-chars-unicode").toString()),
+            Duration.ofSeconds(60));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void characterToCharsRemainsValidDuringConcurrentCollection() throws Exception {
+        final Path project = project("character-to-chars-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static boolean rejectsInvalid() {
+                    try { Character.toChars(-1); return false; }
+                    catch (IllegalArgumentException ex) { return true; }
+                }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            int value = i % 2 == 0 ? 0x1f600 : 0xd800;
+                            char[] chars = i % 2 == 0 ? Character.toChars(0x1f600) : Character.toChars(0xd800);
+                            if (chars.length != (value > 0xffff ? 2 : 1)) errors.incrementAndGet();
+                            if (new String(chars).codePointAt(0) != value) errors.incrementAndGet();
+                            if (!rejectsInvalid()) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/character-to-chars-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
+    void characterToCharsMatchesJavaAndTransportsExceptions() throws Exception {
+        final Path project = project("character-to-chars");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int order = 0;
+                static int first() { order = order * 10 + 1; return 5; }
+                static int value() { order = order * 10 + 2; return 0x1f600; }
+                static char[] convert(int value) {
+                    try { return Character.toChars(value); }
+                    catch (IllegalArgumentException ex) { System.out.println("invalid"); return null; }
+                }
+                static void print(int value) {
+                    char[] chars = convert(value);
+                    if (chars == null) return;
+                    System.out.println(chars.length);
+                    for (char ch : chars) System.out.println((int) ch);
+                }
+                public static void main(String[] args) {
+                    int[] values = {Integer.MIN_VALUE, -1, 0, 'a', 0xd7ff, 0xd800, 0xdfff, 0xe000,
+                        0xffff, 0x10000, 0x1f600, 0x10ffff, 0x110000, Integer.MAX_VALUE};
+                    for (int value : values) print(value);
+                    System.out.println(first() + Character.toChars(value()).length);
+                    System.out.println(order);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/character-to-chars").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void characterToCharsUncaughtConditionalFailureStopsBeforeUse() throws Exception {
+        final Path project = project("character-to-chars-conditional-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    System.out.println("before");
+                    char[] value = args.length == 0 ? Character.toChars(-1) : Character.toChars(65);
+                    System.out.println(value.length);
+                    System.out.println("after");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/character-to-chars-conditional-uncaught").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("before\n");
+        assertThat(result.stderr()).contains("IllegalArgumentException");
+    }
+
+    @Test
+    void characterToCharsUncaughtFailureStopsBeforeArrayLength() throws Exception {
+        final Path project = project("character-to-chars-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    System.out.println("before");
+                    System.out.println(Character.toChars(args.length - 1).length);
+                    System.out.println("after");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/character-to-chars-uncaught").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("before\n");
+        assertThat(result.stderr()).contains("IllegalArgumentException");
+    }
+
+    @Test
     void characterConversionPrimitivesMatchJava() throws Exception {
         final Path project = project("character-conversion-primitives");
         writeJava(project, "com.acme.Main", """

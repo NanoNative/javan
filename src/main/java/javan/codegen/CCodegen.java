@@ -5340,6 +5340,7 @@ public final class CCodegen {
             return false;
         }
         return GENERATED_OBJECT_CLONE_SYMBOL.equals(expression.value())
+            || "javan_character_to_chars".equals(expression.value())
             || isArrayCopyIntoCall(expression.value())
             || isStringResultIntoCall(expression.value())
             || isSocketStreamResultIntoCall(expression.value())
