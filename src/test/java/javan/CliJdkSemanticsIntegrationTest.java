@@ -13815,6 +13815,110 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void characterArrayCodePointAccessWithLimitsMatchesJava() throws Exception {
+        final Path project = project("character-array-codepoint-limits");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int order;
+                static int first() { order = order * 10 + 1; return 7; }
+                static char[] array() { order = order * 10 + 2; return new char[]{'a'}; }
+                static int index() { order = order * 10 + 3; return 0; }
+                static int bound() { order = order * 10 + 4; return 1; }
+                static int at(char[] value, int index, int limit) {
+                    try { return Character.codePointAt(value, index, limit); }
+                    catch (NullPointerException ex) { return -1; }
+                    catch (IndexOutOfBoundsException ex) { return -2; }
+                }
+                static int before(char[] value, int index, int start) {
+                    try { return Character.codePointBefore(value, index, start); }
+                    catch (NullPointerException ex) { return -1; }
+                    catch (IndexOutOfBoundsException ex) { return -2; }
+                }
+                public static void main(String[] args) {
+                    char[] value = {'a', '\\ud800', '\\udc00', '\\udfff', '\\udbff', 'z', 0};
+                    for (int index = -1; index <= value.length + 1; index++) {
+                        for (int boundary = -1; boundary <= value.length + 1; boundary++) {
+                            System.out.println(at(value, index, boundary));
+                            System.out.println(before(value, index, boundary));
+                            System.out.println(at(null, index, boundary));
+                            System.out.println(before(null, index, boundary));
+                        }
+                    }
+                    System.out.println(at(value, Integer.MAX_VALUE, Integer.MAX_VALUE));
+                    System.out.println(before(value, Integer.MIN_VALUE, Integer.MIN_VALUE));
+                    System.out.println(at(null, Integer.MIN_VALUE, Integer.MAX_VALUE));
+                    System.out.println(before(null, Integer.MAX_VALUE, Integer.MIN_VALUE));
+                    System.out.println(first() + Character.codePointAt(array(), index(), bound()));
+                    System.out.println(order);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/character-array-codepoint-limits").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void characterArrayCodePointAccessWithLimitsUncaughtFailureStopsBeforeUse() throws Exception {
+        final Path project = project("character-array-codepoint-limits-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    System.out.println("before");
+                    int value = args.length == 0 ? Character.codePointAt(new char[0], 0, 0) : 1;
+                    System.out.println(value);
+                    System.out.println("after");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/character-array-codepoint-limits-uncaught").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("before\n");
+        assertThat(result.stderr()).contains("IndexOutOfBoundsException");
+    }
+
+    @Test
+    void characterArrayCodePointAccessWithLimitsAcrossSurrogates() throws Exception {
+        final Path project = project("character-array-codepoint-limits-surrogates");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    char[] candidates = {'a', '\\ud800', '\\udbff', '\\udc00', '\\udfff'};
+                    char[] value = new char[4];
+                    long hash = 1;
+                    for (int a = 0; a < candidates.length; a++)
+                        for (int b = 0; b < candidates.length; b++)
+                            for (int c = 0; c < candidates.length; c++)
+                                for (int d = 0; d < candidates.length; d++) {
+                                    value[0] = candidates[a]; value[1] = candidates[b];
+                                    value[2] = candidates[c]; value[3] = candidates[d];
+                                    for (int index = 0; index < value.length; index++)
+                                        for (int bound = index + 1; bound <= value.length; bound++) {
+                                            hash = hash * 31 + Character.codePointAt(value, index, bound);
+                                            hash = hash * 31 + Character.codePointBefore(value, bound, index);
+                                        }
+                                }
+                    System.out.println(hash);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/character-array-codepoint-limits-surrogates").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void characterArrayCodePointAccessMatchesJava() throws Exception {
         final Path project = project("character-array-codepoint-access");
         writeJava(project, "com.acme.Main", """
@@ -13905,6 +14009,8 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                         for (int i = 0; i < 100; i++) {
                             if (Character.codePointAt(pair(), index(0)) != 0x1f600) errors.incrementAndGet();
                             if (Character.codePointBefore(pair(), index(2)) != 0x1f600) errors.incrementAndGet();
+                            if (Character.codePointAt(pair(), index(0), index(2)) != 0x1f600) errors.incrementAndGet();
+                            if (Character.codePointBefore(pair(), index(2), index(0)) != 0x1f600) errors.incrementAndGet();
                         }
                     }
                 }

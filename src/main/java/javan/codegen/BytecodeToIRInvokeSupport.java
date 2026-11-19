@@ -3599,6 +3599,16 @@ final class BytecodeToIRInvokeSupport {
         final List<StackValue> stack
     ) {
         if (("codePointAt".equals(methodRef.name()) || "codePointBefore".equals(methodRef.name()))
+            && "([CII)I".equals(methodRef.descriptor())) {
+            final IrExpression bound = popInt(classFile, method, stack);
+            final IrExpression index = popInt(classFile, method, stack);
+            final IrExpression value = popObject(classFile, method, stack);
+            final String symbol = "codePointAt".equals(methodRef.name())
+                ? "javan_character_array_code_point_at_limit" : "javan_character_array_code_point_before_start";
+            stack.add(StackValue.intExpression(IrExpression.intCall(symbol, List.of(value, index, bound))));
+            return true;
+        }
+        if (("codePointAt".equals(methodRef.name()) || "codePointBefore".equals(methodRef.name()))
             && "([CI)I".equals(methodRef.descriptor())) {
             final IrExpression index = popInt(classFile, method, stack);
             final IrExpression value = popObject(classFile, method, stack);

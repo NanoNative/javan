@@ -506,6 +506,12 @@ public final class BytecodeToIR {
         result.put("javan_character_array_code_point_before", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/lang/Character", "codePointBefore", "([CI)I"
         )));
+        result.put("javan_character_array_code_point_at_limit", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/lang/Character", "codePointAt", "([CII)I"
+        )));
+        result.put("javan_character_array_code_point_before_start", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/lang/Character", "codePointBefore", "([CII)I"
+        )));
         result.put("javan_character_to_chars", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/lang/Character", "toChars", "(I)[C"
         )));
@@ -1191,7 +1197,7 @@ public final class BytecodeToIR {
                             || "toString".equals(reference.name())
                                 && "(I)Ljava/lang/String;".equals(reference.descriptor())
                             || ("codePointAt".equals(reference.name()) || "codePointBefore".equals(reference.name()))
-                                && "([CI)I".equals(reference.descriptor())))
+                                && ("([CI)I".equals(reference.descriptor()) || "([CII)I".equals(reference.descriptor()))))
                     && !JdkCallSupport.transportedPlatformThrowableTypes(reference).isEmpty()) {
                     snapshotOperandStack(instructions, stack, locals, localDeclarations, true);
                 }

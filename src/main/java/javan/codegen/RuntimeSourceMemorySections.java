@@ -8829,6 +8829,24 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        static int javan_character_array_code_point_at_valid(javan_char_array* chars, int index, int limit) {
+            int first = chars->values[index];
+            if (javan_character_is_high_surrogate(first) && index + 1 < limit) {
+                int second = chars->values[index + 1];
+                if (javan_character_is_low_surrogate(second)) return javan_character_to_code_point(first, second);
+            }
+            return first;
+        }
+
+        static int javan_character_array_code_point_before_valid(javan_char_array* chars, int index, int start) {
+            int last = chars->values[index - 1];
+            if (javan_character_is_low_surrogate(last) && index - 1 > start) {
+                int previous = chars->values[index - 2];
+                if (javan_character_is_high_surrogate(previous)) return javan_character_to_code_point(previous, last);
+            }
+            return last;
+        }
+
         int javan_character_array_code_point_at(void* value, int index) {
             if (value == NULL) {
                 javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
@@ -8839,12 +8857,7 @@ final class RuntimeSourceMemorySections {
                 javan_pending_throw("java/lang/ArrayIndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
                 return 0;
             }
-            int first = chars->values[index];
-            if (javan_character_is_high_surrogate(first) && index + 1 < chars->length) {
-                int second = chars->values[index + 1];
-                if (javan_character_is_low_surrogate(second)) return javan_character_to_code_point(first, second);
-            }
-            return first;
+            return javan_character_array_code_point_at_valid(chars, index, chars->length);
         }
 
         int javan_character_array_code_point_before(void* value, int index) {
@@ -8857,12 +8870,41 @@ final class RuntimeSourceMemorySections {
                 javan_pending_throw("java/lang/ArrayIndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
                 return 0;
             }
-            int last = chars->values[index - 1];
-            if (javan_character_is_low_surrogate(last) && index >= 2) {
-                int previous = chars->values[index - 2];
-                if (javan_character_is_high_surrogate(previous)) return javan_character_to_code_point(previous, last);
+            return javan_character_array_code_point_before_valid(chars, index, 0);
+        }
+
+        int javan_character_array_code_point_at_limit(void* value, int index, int limit) {
+            if (index >= limit || index < 0) {
+                javan_pending_throw("java/lang/IndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
             }
-            return last;
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            javan_char_array* chars = (javan_char_array*) value;
+            if (limit > chars->length) {
+                javan_pending_throw("java/lang/IndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            return javan_character_array_code_point_at_valid(chars, index, limit);
+        }
+
+        int javan_character_array_code_point_before_start(void* value, int index, int start) {
+            if (index <= start || start < 0) {
+                javan_pending_throw("java/lang/IndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            javan_char_array* chars = (javan_char_array*) value;
+            if (index > chars->length) {
+                javan_pending_throw("java/lang/IndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            return javan_character_array_code_point_before_valid(chars, index, start);
         }
 
         int javan_character_write_chars(int value, void* destination, int index) {
