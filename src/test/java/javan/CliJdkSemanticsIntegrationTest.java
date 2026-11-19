@@ -13229,6 +13229,149 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void floatingDecimalStringsRemainCorrectAcrossThreads() throws Exception {
+        final Path project = project("floating-decimal-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 500; i++) {
+                            if (!Double.toString(1.0 / 3.0).equals("0.3333333333333333")) errors.incrementAndGet();
+                            if (!Double.toString(Double.MIN_VALUE).equals("4.9E-324")) errors.incrementAndGet();
+                            if (!Float.toString(0.1f).equals("0.1")) errors.incrementAndGet();
+                            if (!Float.toString(-0.0f).equals("-0.0")) errors.incrementAndGet();
+                            if (!Double.toString(9999999.0).equals("9999999.0")) errors.incrementAndGet();
+                            if (!Float.toString(100.0f).equals("100.0")) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker());
+                    Thread second = new Thread(new Worker());
+                    Thread third = new Thread(new Worker());
+                    Thread fourth = new Thread(new Worker());
+                    first.start(); second.start(); third.start(); fourth.start();
+                    first.join(); second.join(); third.join(); fourth.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/floating-decimal-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
+    void floatingDecimalStringsMatchJavaAtExponentBoundaries() throws Exception {
+        final Path project = project("floating-decimal-boundaries");
+        final StringBuilder source = new StringBuilder("""
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    for (int exponent = 1; exponent < 2047; exponent++) {
+                        long bits = (long) exponent << 52;
+                        System.out.println(Double.toString(Double.longBitsToDouble(bits - 1)));
+                        System.out.println(Double.toString(Double.longBitsToDouble(bits)));
+                        System.out.println(Double.toString(Double.longBitsToDouble(bits + 1)));
+                    }
+                    for (int exponent = 1; exponent < 255; exponent++) {
+                        int bits = exponent << 23;
+                        System.out.println(Float.toString(Float.intBitsToFloat(bits - 1)));
+                        System.out.println(Float.toString(Float.intBitsToFloat(bits)));
+                        System.out.println(Float.toString(Float.intBitsToFloat(bits + 1)));
+                    }
+                    for (int bits = 1; bits <= 1024; bits++) {
+                        System.out.println(Double.toString(Double.longBitsToDouble(bits)));
+                        System.out.println(Float.toString(Float.intBitsToFloat(bits)));
+                    }
+                    long[] decimalDoubles = {
+            """);
+        for (int exponent = -323; exponent <= 308; exponent++) {
+            source.append(Double.doubleToRawLongBits(Double.parseDouble("1e" + exponent))).append("L,");
+        }
+        source.append("""
+                    };
+                    for (long bits : decimalDoubles) {
+                        System.out.println(Double.toString(Double.longBitsToDouble(bits - 1)));
+                        System.out.println(Double.toString(Double.longBitsToDouble(bits)));
+                        System.out.println(Double.toString(Double.longBitsToDouble(bits + 1)));
+                    }
+                    int[] decimalFloats = {
+            """);
+        for (int exponent = -45; exponent <= 38; exponent++) {
+            source.append(Float.floatToRawIntBits(Float.parseFloat("1e" + exponent))).append(',');
+        }
+        source.append("""
+                    };
+                    for (int bits : decimalFloats) {
+                        System.out.println(Float.toString(Float.intBitsToFloat(bits - 1)));
+                        System.out.println(Float.toString(Float.intBitsToFloat(bits)));
+                        System.out.println(Float.toString(Float.intBitsToFloat(bits + 1)));
+                    }
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Main", source.toString());
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/floating-decimal-boundaries").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void floatingDecimalStringsMatchJavaAcrossPublicOutputPaths() throws Exception {
+        final Path project = project("floating-decimal-format");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    double[] doubles = { 0.0, -0.0, 0.1, 1.0 / 3.0, -1.0 / 3.0, 1.0, 0.001, 0.0001, 9999999.0, -9999999.0, 9999999.5, 10000000.0, -10000000.0,
+                        Double.MIN_VALUE, Double.MIN_NORMAL, Double.MAX_VALUE, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.NaN };
+                    float[] floats = { 0.0f, -0.0f, 0.1f, 1.0f / 3.0f, -1.0f / 3.0f, 1.0f, 0.001f, 0.0001f, 9999999.0f, -9999999.0f, 10000000.0f, -10000000.0f,
+                        Float.MIN_VALUE, Float.MIN_NORMAL, Float.MAX_VALUE, Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY, Float.NaN };
+                    for (double value : doubles) {
+                        System.out.println(value);
+                        System.out.println(Double.toString(value));
+                        System.out.println(new StringBuilder().append(value).toString());
+                        System.out.println("d=" + value);
+                    }
+                    for (float value : floats) {
+                        System.out.println(value);
+                        System.out.println(Float.toString(value));
+                        System.out.println(new StringBuilder().append(value).toString());
+                        System.out.println("f=" + value);
+                    }
+                    long bits = 0x123456789abcdefL;
+                    int floatBits = 0x12345678;
+                    for (int i = 0; i < 256; i++) {
+                        bits = bits * 6364136223846793005L + 1442695040888963407L;
+                        floatBits = floatBits * 1664525 + 1013904223;
+                        System.out.println(Double.toString(Double.longBitsToDouble(bits)));
+                        System.out.println(Float.toString(Float.intBitsToFloat(floatBits)));
+                    }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/floating-decimal-format").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void integerBitOperationsMatchJavaAtBoundaries() throws Exception {
         final Path project = project("integer-bit-operations");
         writeJava(project, "com.acme.Main", """

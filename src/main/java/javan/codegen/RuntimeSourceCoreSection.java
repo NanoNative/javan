@@ -6,6 +6,7 @@ final class RuntimeSourceCoreSection {
         #include <dirent.h>
         #include <errno.h>
         #include <float.h>
+        #include <fenv.h>
         #include <limits.h>
         #include <math.h>
         #include <signal.h>
@@ -771,47 +772,209 @@ final class RuntimeSourceCoreSection {
             javan_eprintln(buffer);
         }
 
-        static void javan_format_real(char* buffer, unsigned long size, double value, const char* format) {
-            if (isnan(value)) {
-                snprintf(buffer, size, "NaN");
-                return;
+        """;
+
+    private static final String DECIMAL = """
+        static int javan_decimal_candidate(
+            double value, int is_float, int precision, int asymmetric, uint64_t* selected, int* selected_exponent
+        ) {
+            char scientific[64];
+            char candidate[64];
+            snprintf(scientific, sizeof(scientific), "%.*e", precision - 1, value);
+            char* exponent_marker = strchr(scientific, 'e');
+            if (exponent_marker == NULL) {
+                javan_panic("floating-point decimal formatting failed");
             }
-            if (isinf(value)) {
-                snprintf(buffer, size, value < 0.0 ? "-Infinity" : "Infinity");
-                return;
-            }
-            snprintf(buffer, size, format, value);
-            if (strchr(buffer, '.') == NULL && strchr(buffer, 'e') == NULL && strchr(buffer, 'E') == NULL) {
-                unsigned long length = strlen(buffer);
-                if (length + 2 < size) {
-                    buffer[length] = '.';
-                    buffer[length + 1] = '0';
-                    buffer[length + 2] = '\\0';
+            int exponent = (int) strtol(exponent_marker + 1, NULL, 10) - (precision - 1);
+            uint64_t digits = UINT64_C(0);
+            for (char* cursor = scientific; cursor < exponent_marker; cursor++) {
+                if (*cursor >= '0' && *cursor <= '9') {
+                    digits = digits * UINT64_C(10) + (uint64_t) (*cursor - '0');
                 }
             }
+            uint64_t base = UINT64_C(1);
+            for (int index = 1; index < precision; index++) {
+                base *= UINT64_C(10);
+            }
+            for (int offset = 0; offset < (asymmetric ? 3 : 1); offset++) {
+                uint64_t test = digits;
+                int test_exponent = exponent;
+                if (offset == 1) {
+                    if (digits == base) {
+                        test = base * UINT64_C(10) - UINT64_C(1);
+                        test_exponent--;
+                    } else {
+                        test--;
+                    }
+                } else if (offset == 2) {
+                    test++;
+                }
+                snprintf(candidate, sizeof(candidate), "%llue%d", (unsigned long long) test, test_exponent);
+                double parsed = is_float ? (double) strtof(candidate, NULL) : strtod(candidate, NULL);
+                if (parsed == value) {
+                    *selected = test;
+                    *selected_exponent = test_exponent;
+                    return 1;
+                }
+            }
+            return 0;
         }
 
+        static void javan_format_real(char* buffer, unsigned long size, double value, int is_float) {
+            int saved_errno = errno;
+            fenv_t saved_environment;
+            if (feholdexcept(&saved_environment) != 0 || fesetround(FE_TONEAREST) != 0) {
+                javan_panic("floating-point environment could not be saved");
+            }
+            char result[64];
+            if (isnan(value)) {
+                strcpy(result, "NaN");
+            } else if (isinf(value)) {
+                strcpy(result, signbit(value) ? "-Infinity" : "Infinity");
+            } else if (value == 0.0) {
+                strcpy(result, signbit(value) ? "-0.0" : "0.0");
+            } else if (value > -10000000.0 && value < 10000000.0 && value == (double) (int) value) {
+                snprintf(result, sizeof(result), "%d.0", (int) value);
+            } else {
+                int negative = signbit(value);
+                double magnitude = negative ? -value : value;
+                int asymmetric;
+                if (is_float) {
+                    float single = (float) magnitude;
+                    uint32_t bits;
+                    memcpy(&bits, &single, sizeof(bits));
+                    asymmetric = (bits & UINT32_C(0x007fffff)) == 0
+                        && (bits & UINT32_C(0x7f800000)) != 0;
+                } else {
+                    uint64_t bits;
+                    memcpy(&bits, &magnitude, sizeof(bits));
+                    asymmetric = (bits & UINT64_C(0x000fffffffffffff)) == 0
+                        && (bits & UINT64_C(0x7ff0000000000000)) != 0;
+                }
+                int maximum_precision = is_float ? 9 : 17;
+                int high = maximum_precision - 1;
+                uint64_t selected = UINT64_C(0);
+                int selected_exponent = 0;
+                /* Decimal grids become finer as precision grows. Powers of two can have asymmetric rounding ranges. */
+                if (!javan_decimal_candidate(magnitude, is_float, high, asymmetric, &selected, &selected_exponent)) {
+                    if (!javan_decimal_candidate(magnitude, is_float, maximum_precision, asymmetric,
+                        &selected, &selected_exponent)) {
+                        javan_panic("floating-point decimal conversion failed");
+                    }
+                } else {
+                    uint64_t trial;
+                    int trial_exponent;
+                    if (javan_decimal_candidate(magnitude, is_float, high - 1, asymmetric, &trial, &trial_exponent)) {
+                        high--;
+                        selected = trial;
+                        selected_exponent = trial_exponent;
+                        int low = 1;
+                        while (low < high) {
+                            int middle = (low + high) / 2;
+                            if (javan_decimal_candidate(magnitude, is_float, middle, asymmetric, &trial, &trial_exponent)) {
+                                high = middle;
+                                selected = trial;
+                                selected_exponent = trial_exponent;
+                            } else {
+                                low = middle + 1;
+                            }
+                        }
+                        /* Java chooses the closest one- or two-digit decimal when one digit suffices. */
+                        if (high == 1 && !javan_decimal_candidate(magnitude, is_float, 2, asymmetric,
+                            &selected, &selected_exponent)) {
+                            javan_panic("floating-point decimal conversion failed");
+                        }
+                    }
+                }
+                while (selected % UINT64_C(10) == 0) {
+                    selected /= UINT64_C(10);
+                    selected_exponent++;
+                }
+                char digits[32];
+                snprintf(digits, sizeof(digits), "%llu", (unsigned long long) selected);
+                int length = (int) strlen(digits);
+                int exponent = length + selected_exponent - 1;
+                char* output = result;
+                if (negative) {
+                    *output++ = '-';
+                }
+                if (exponent >= -3 && exponent < 0) {
+                    *output++ = '0';
+                    *output++ = '.';
+                    for (int index = 0; index < -exponent - 1; index++) {
+                        *output++ = '0';
+                    }
+                    memcpy(output, digits, (size_t) length);
+                    output += length;
+                } else if (exponent >= 0 && exponent < 7) {
+                    if (selected_exponent >= 0) {
+                        memcpy(output, digits, (size_t) length);
+                        output += length;
+                        for (int index = 0; index < selected_exponent; index++) {
+                            *output++ = '0';
+                        }
+                        *output++ = '.';
+                        *output++ = '0';
+                    } else {
+                        int before = length + selected_exponent;
+                        memcpy(output, digits, (size_t) before);
+                        output += before;
+                        *output++ = '.';
+                        memcpy(output, digits + before, (size_t) (length - before));
+                        output += length - before;
+                    }
+                } else {
+                    *output++ = digits[0];
+                    *output++ = '.';
+                    if (length == 1) {
+                        *output++ = '0';
+                    } else {
+                        memcpy(output, digits + 1, (size_t) (length - 1));
+                        output += length - 1;
+                    }
+                    *output++ = 'E';
+                    output += snprintf(output, (size_t) (result + sizeof(result) - output), "%d", exponent);
+                }
+                *output = '\\0';
+            }
+            if (fesetenv(&saved_environment) != 0) {
+                javan_panic("floating-point environment could not be restored");
+            }
+            if (size != 0) {
+                size_t length = strlen(result);
+                if (length >= size) {
+                    length = size - 1;
+                }
+                memcpy(buffer, result, length);
+                buffer[length] = '\\0';
+            }
+            errno = saved_errno;
+        }
+
+        """;
+
+    private static final String MAIN_TAIL = """
         void javan_println_float(float value) {
             char buffer[64];
-            javan_format_real(buffer, sizeof(buffer), value, "%.9g");
+            javan_format_real(buffer, sizeof(buffer), value, 1);
             javan_println(buffer);
         }
 
         void javan_eprintln_float(float value) {
             char buffer[64];
-            javan_format_real(buffer, sizeof(buffer), value, "%.9g");
+            javan_format_real(buffer, sizeof(buffer), value, 1);
             javan_eprintln(buffer);
         }
 
         void javan_println_double(double value) {
             char buffer[128];
-            javan_format_real(buffer, sizeof(buffer), value, "%.17g");
+            javan_format_real(buffer, sizeof(buffer), value, 0);
             javan_println(buffer);
         }
 
         void javan_eprintln_double(double value) {
             char buffer[128];
-            javan_format_real(buffer, sizeof(buffer), value, "%.17g");
+            javan_format_real(buffer, sizeof(buffer), value, 0);
             javan_eprintln(buffer);
         }
 
@@ -2024,6 +2187,6 @@ final class RuntimeSourceCoreSection {
     }
 
     static String main() {
-        return MAIN;
+        return new StringBuilder().append(MAIN).append(DECIMAL).append(MAIN_TAIL).toString();
     }
 }

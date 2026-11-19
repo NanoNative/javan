@@ -440,14 +440,14 @@ final class RuntimeSourcePlatformSection {
 
         void* javan_stringbuilder_append_float(void* builder_value, float value) {
             char buffer[64];
-            javan_format_real(buffer, sizeof(buffer), value, "%.9g");
+            javan_format_real(buffer, sizeof(buffer), value, 1);
             javan_stringbuilder_append_string_value(javan_stringbuilder_checked(builder_value), buffer);
             return builder_value;
         }
 
         void* javan_stringbuilder_append_double(void* builder_value, double value) {
             char buffer[128];
-            javan_format_real(buffer, sizeof(buffer), value, "%.17g");
+            javan_format_real(buffer, sizeof(buffer), value, 0);
             javan_stringbuilder_append_string_value(javan_stringbuilder_checked(builder_value), buffer);
             return builder_value;
         }
@@ -639,14 +639,14 @@ final class RuntimeSourcePlatformSection {
 
         void* javan_stringbuilder_insert_float(void* builder_value, int index, float value) {
             char buffer[64];
-            javan_format_real(buffer, sizeof(buffer), value, "%.9g");
+            javan_format_real(buffer, sizeof(buffer), value, 1);
             javan_stringbuilder_insert_string_value(javan_stringbuilder_checked(builder_value), index, buffer);
             return builder_value;
         }
 
         void* javan_stringbuilder_insert_double(void* builder_value, int index, double value) {
             char buffer[128];
-            javan_format_real(buffer, sizeof(buffer), value, "%.17g");
+            javan_format_real(buffer, sizeof(buffer), value, 0);
             javan_stringbuilder_insert_string_value(javan_stringbuilder_checked(builder_value), index, buffer);
             return builder_value;
         }

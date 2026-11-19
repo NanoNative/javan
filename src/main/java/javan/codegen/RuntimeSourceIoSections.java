@@ -1298,13 +1298,13 @@ final class RuntimeSourceIoSections {
 
         void* javan_string_value_of_float(float value) {
             char buffer[64];
-            javan_format_real(buffer, sizeof(buffer), value, "%.9g");
+            javan_format_real(buffer, sizeof(buffer), value, 1);
             return javan_string_copy(buffer);
         }
 
         void* javan_string_value_of_double(double value) {
             char buffer[128];
-            javan_format_real(buffer, sizeof(buffer), value, "%.17g");
+            javan_format_real(buffer, sizeof(buffer), value, 0);
             return javan_string_copy(buffer);
         }
 
