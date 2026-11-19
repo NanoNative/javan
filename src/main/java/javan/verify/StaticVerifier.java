@@ -2145,8 +2145,8 @@ public final class StaticVerifier {
         final Optional<Instruction> protectedEntry = instructionAtOffset(code, handler.startPc());
         final boolean staticReceiverRange = protectedEntry.isPresent()
             && sameClassStaticRead(classes, currentOwner, code, handler, protectedEntry.orElseThrow());
-        Set<Integer> classNameBranchTargets = null;
-        boolean classNameHasUnknownBranch = false;
+        Set<Integer> protectedBranchTargets = null;
+        boolean protectedHasUnknownBranch = false;
         for (int instructionIndex = 0; instructionIndex < instructions.size(); instructionIndex++) {
             final Instruction instruction = instructions.get(instructionIndex);
             if (instruction.offset() < handler.startPc()) {
@@ -2174,6 +2174,16 @@ public final class StaticVerifier {
             if (initialization) {
                 hasThrowableTransport = 1;
             }
+            boolean freshCharacterArrayLength = false;
+            if (instruction.opcode() == 190 && instructionIndex > 0) {
+                final Instruction previous = instructions.get(instructionIndex - 1);
+                if (previous.offset() >= handler.startPc() && previous.opcode() == 184
+                    && previous.methodRef().isPresent()) {
+                    final MethodRef producer = previous.methodRef().orElseThrow();
+                    freshCharacterArrayLength = "java/lang/Character".equals(producer.owner())
+                        && "toChars".equals(producer.name()) && "(I)[C".equals(producer.descriptor());
+                }
+            }
             boolean classNameAfterLookup = false;
             if (instruction.opcode() == 182 && instruction.methodRef().isPresent()
                 && instructionIndex > 0) {
@@ -2184,34 +2194,38 @@ public final class StaticVerifier {
                     && previous.offset() >= handler.startPc() && previous.opcode() == 184
                     && previous.methodRef().isPresent()) {
                     final MethodRef lookup = previous.methodRef().orElseThrow();
-                    if ("java/lang/Class".equals(lookup.owner()) && "forName".equals(lookup.name())
-                        && JdkCallSupport.isSupported(lookup)) {
-                        if (classNameBranchTargets == null) {
-                            classNameBranchTargets = new HashSet<>();
-                            for (final Instruction source : instructions) {
-                                if (source.opcode() == 168 || source.opcode() == 169
-                                    || source.opcode() == 170 || source.opcode() == 171
-                                    || source.opcode() == 200 || source.opcode() == 201) {
-                                    classNameHasUnknownBranch = true;
-                                }
-                                final int branchTarget = boundedBranchTarget(source);
-                                if (branchTarget >= 0) {
-                                    classNameBranchTargets.add(branchTarget);
-                                }
-                            }
-                            for (final CodeException exception : code.exceptionTable()) {
-                                classNameBranchTargets.add(exception.handlerPc());
-                            }
+                    classNameAfterLookup = "java/lang/Class".equals(lookup.owner())
+                        && "forName".equals(lookup.name()) && JdkCallSupport.isSupported(lookup);
+                }
+            }
+            if (freshCharacterArrayLength || classNameAfterLookup) {
+                if (protectedBranchTargets == null) {
+                    protectedBranchTargets = new HashSet<>();
+                    for (final Instruction source : instructions) {
+                        if (source.opcode() == 168 || source.opcode() == 169
+                            || source.opcode() == 170 || source.opcode() == 171
+                            || source.opcode() == 200 || source.opcode() == 201) {
+                            protectedHasUnknownBranch = true;
                         }
-                        classNameAfterLookup = !classNameHasUnknownBranch
-                            && !classNameBranchTargets.contains(instruction.offset());
+                        final int branchTarget = boundedBranchTarget(source);
+                        if (branchTarget >= 0) {
+                            protectedBranchTargets.add(branchTarget);
+                        }
+                    }
+                    for (final CodeException exception : code.exceptionTable()) {
+                        protectedBranchTargets.add(exception.handlerPc());
                     }
                 }
+                final boolean isolated = !protectedHasUnknownBranch
+                    && !protectedBranchTargets.contains(instruction.offset());
+                freshCharacterArrayLength = freshCharacterArrayLength && isolated;
+                classNameAfterLookup = classNameAfterLookup && isolated;
             }
             if (!supportedInterruptedWaitProtectedInstruction(instruction)
                 && !(staticReceiverRange && instruction.offset() == handler.startPc())
                 && !(staticReceiverRange && sameClassStaticArgumentCall(classes, currentOwner, instruction))
                 && !classNameAfterLookup
+                && !freshCharacterArrayLength
                 && !initialization
                 && !supportedApplicationThrowableInstruction(classes, instruction)
                 && !supportedCheckcastThrowable(instruction, catchType)

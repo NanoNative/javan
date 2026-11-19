@@ -1004,6 +1004,44 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsCharacterToCharsArrayLengthInsideTry() throws Exception {
+        final Path project = tempDir.resolve("selfhost-character-to-chars-handler-length");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static void print(int value) {
+                    try { System.out.println(Character.toChars(value).length); }
+                    catch (IllegalArgumentException ex) { System.out.println("invalid"); }
+                }
+                static void printSuper(int value) {
+                    try { System.out.println(Character.toChars(value).length); }
+                    catch (RuntimeException ex) { System.out.println("runtime"); }
+                }
+                public static void main(String[] args) {
+                    print(-1); print(0); print(0x1f600); print(0x110000); printSuper(-1); printSuper(0x1f600);
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-character-to-chars-handler-length"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-character-to-chars-handler-length").toString()), Duration.ofSeconds(30));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout());
+    }
+
+    @Test
     void nativeBuiltJavanBuildsCharacterToChars() throws Exception {
         final Path project = tempDir.resolve("selfhost-character-to-chars");
         final Path classes = project.resolve("classes");

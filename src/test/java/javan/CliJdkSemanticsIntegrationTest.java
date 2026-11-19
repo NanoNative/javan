@@ -13769,6 +13769,52 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void characterToCharsHandlerDoesNotAssumeAnotherArrayIsNonNull() throws Exception {
+        final Path project = project("character-to-chars-handler-conditional-array");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static void print(boolean useOther, char[] other, int value) {
+                    try { System.out.println((useOther ? other : Character.toChars(value)).length); }
+                    catch (IllegalArgumentException ex) { System.out.println("invalid"); }
+                }
+                public static void main(String[] args) { print(true, null, 0); }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).isEqualTo(2);
+        assertThat(build.stderr()).contains("JAVAN014");
+    }
+
+    @Test
+    void characterToCharsArrayLengthInsideTryMatchesJava() throws Exception {
+        final Path project = project("character-to-chars-handler-length");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static void print(int value) {
+                    try { System.out.println(Character.toChars(value).length); }
+                    catch (IllegalArgumentException ex) { System.out.println("invalid"); }
+                }
+                static void printSuper(int value) {
+                    try { System.out.println(Character.toChars(value).length); }
+                    catch (RuntimeException ex) { System.out.println("runtime"); }
+                }
+                public static void main(String[] args) {
+                    print(-1); print(0); print(0x1f600); print(0x110000);
+                    printSuper(-1); printSuper(0x1f600);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/character-to-chars-handler-length").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void characterToCharsMatchesJavaAcrossUnicode() throws Exception {
         final Path project = project("character-to-chars-unicode");
         writeJava(project, "com.acme.Main", """
