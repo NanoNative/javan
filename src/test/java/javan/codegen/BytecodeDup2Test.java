@@ -139,6 +139,26 @@ final class BytecodeDup2Test {
     }
 
     @Test
+    void dupX1RejectsCategoryTwoLowerOperand() {
+        assertThatThrownBy(() -> lower(method(
+            0x0008, "main", "()V", 3, 0,
+            longConstant(0, 1L), intConstant(1, 2), plain(2, 90, "dup_x1"), plain(3, 177, "return")
+        )))
+            .isInstanceOf(DiagnosticException.class)
+            .hasMessageContaining("dup_x1 requires two category-1 values");
+    }
+
+    @Test
+    void dupX1RejectsCategoryTwoTopOperand() {
+        assertThatThrownBy(() -> lower(method(
+            0x0008, "main", "()V", 3, 0,
+            intConstant(0, 2), longConstant(1, 1L), plain(2, 90, "dup_x1"), plain(3, 177, "return")
+        )))
+            .isInstanceOf(DiagnosticException.class)
+            .hasMessageContaining("dup_x1 requires two category-1 values");
+    }
+
+    @Test
     void opcodeIsPublishedAsNativeSupported() {
         assertThat(new Dup2Support(
             BytecodeSupport.classify(92),

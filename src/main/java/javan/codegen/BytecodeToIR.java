@@ -2005,6 +2005,17 @@ public final class BytecodeToIR {
             case 89:
                 stack.add(stack.getLast());
                 break;
+            case 90:
+                duplicateTopSlotUnderOneSlot(
+                    classFile,
+                    method,
+                    instruction,
+                    instructions,
+                    stack,
+                    locals,
+                    localDeclarations
+                );
+                break;
             case 91:
                 duplicateTopSlotUnderTwoSlots(
                     classFile,
@@ -3377,6 +3388,37 @@ public final class BytecodeToIR {
         }
     }
 
+    private static void duplicateTopSlotUnderOneSlot(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrExpression> locals,
+        final Map<Integer, IrLocal> localDeclarations
+    ) {
+        if (stack.size() < 2) {
+            throw invalidStack(classFile, method, instruction, "dup_x1 requires two category-1 values.");
+        }
+        final int topIndex = stack.size() - 1;
+        final int lowerIndex = topIndex - 1;
+        final StackValue top = stack.get(topIndex);
+        final StackValue lower = stack.get(lowerIndex);
+        if (isCategoryTwo(top.kind()) || isCategoryTwo(lower.kind())) {
+            throw invalidStack(classFile, method, instruction, "dup_x1 requires two category-1 values.");
+        }
+        requireMaterializableDuplicateValue(classFile, method, instruction, lower);
+        requireMaterializableDuplicateValue(classFile, method, instruction, top);
+        final StackValue materializedLower =
+            materializeDuplicateValueIfNeeded(lower, instructions, locals, localDeclarations);
+        final StackValue materializedTop = top == lower
+            ? materializedLower
+            : materializeDuplicateValueIfNeeded(top, instructions, locals, localDeclarations);
+        stack.set(lowerIndex, materializedTop);
+        stack.set(topIndex, materializedLower);
+        stack.add(materializedTop);
+    }
+
     private static void duplicateTopSlotUnderTwoSlots(
         final ClassFile classFile,
         final MethodInfo method,
@@ -3685,7 +3727,8 @@ public final class BytecodeToIR {
 
     static int lastMaterializingDuplicateOffset(final List<Instruction> instructions) {
         for (int index = instructions.size() - 1; index >= 0; index--) {
-            if (instructions.get(index).opcode() == 91 || instructions.get(index).opcode() == 92) {
+            if (instructions.get(index).opcode() == 90 || instructions.get(index).opcode() == 91
+                || instructions.get(index).opcode() == 92) {
                 return instructions.get(index).offset();
             }
         }
