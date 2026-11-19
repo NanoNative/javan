@@ -5372,6 +5372,12 @@ public final class CCodegen {
         return switch (symbol) {
             case "javan_path_of",
                 "javan_path_resolve_java",
+                "javan_path_to_absolute",
+                "javan_path_normalize",
+                "javan_path_get_parent",
+                "javan_path_get_file_name",
+                "javan_path_get_name",
+                "javan_path_relativize",
                 "javan_string_from_chars",
                 "javan_integer_to_radix",
                 "javan_long_to_radix",

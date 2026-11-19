@@ -13444,6 +13444,44 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void derivedPathsStayValidDuringConcurrentCollection() throws Exception {
+        final Path project = project("path-derived-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.nio.file.Path;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() {
+                        Path base = Path.of("a", "b", "c");
+                        for (int i = 0; i < 100; i++) {
+                            if (!base.getFileName().toString().equals("c")) errors.incrementAndGet();
+                            if (!base.getParent().getFileName().toString().equals("b")) errors.incrementAndGet();
+                            if (!base.getName(0).toString().equals("a")) errors.incrementAndGet();
+                            if (!base.resolve("..").normalize().getFileName().toString().equals("b")) errors.incrementAndGet();
+                            if (!base.toAbsolutePath().isAbsolute()) errors.incrementAndGet();
+                            if (!base.relativize(base.resolve("d")).toString().equals("d")) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/path-derived-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
     void integerRadixStringsMatchJavaAcrossValidAndInvalidRadices() throws Exception {
         final Path project = project("integer-radix-strings");
         writeJava(project, "com.acme.Main", """

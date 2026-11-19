@@ -1426,6 +1426,49 @@ final class RuntimeSourcePlatformSection {
             return NULL;
         }
 
+        static void javan_path_unary_into(void** result, void* path, void* (*operation)(void*)) {
+            if (result == NULL) {
+                javan_panic("invalid path result");
+            }
+            javan_runtime_lock_enter();
+            *result = operation(path);
+            javan_runtime_lock_leave();
+        }
+
+        void javan_path_to_absolute_into(void** result, void* path) {
+            javan_path_unary_into(result, path, javan_path_to_absolute);
+        }
+
+        void javan_path_normalize_into(void** result, void* path) {
+            javan_path_unary_into(result, path, javan_path_normalize);
+        }
+
+        void javan_path_get_parent_into(void** result, void* path) {
+            javan_path_unary_into(result, path, javan_path_get_parent);
+        }
+
+        void javan_path_get_file_name_into(void** result, void* path) {
+            javan_path_unary_into(result, path, javan_path_get_file_name);
+        }
+
+        void javan_path_get_name_into(void** result, void* path, int index) {
+            if (result == NULL) {
+                javan_panic("invalid path result");
+            }
+            javan_runtime_lock_enter();
+            *result = javan_path_get_name(path, index);
+            javan_runtime_lock_leave();
+        }
+
+        void javan_path_relativize_into(void** result, void* path, void* child) {
+            if (result == NULL) {
+                javan_panic("invalid path result");
+            }
+            javan_runtime_lock_enter();
+            *result = javan_path_relativize(path, child);
+            javan_runtime_lock_leave();
+        }
+
         static javan_inet_address* javan_inet_address_checked(void* value) {
             if (value == NULL) {
                 javan_panic("null inet address");

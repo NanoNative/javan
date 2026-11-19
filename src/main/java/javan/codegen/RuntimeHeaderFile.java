@@ -568,6 +568,12 @@ final class RuntimeHeaderFile {
         void* javan_path_resolve_java(void* path, void* child);
         void javan_path_of_into(void** result, void* first, void* more);
         void javan_path_resolve_java_into(void** result, void* path, void* child);
+        void javan_path_to_absolute_into(void** result, void* path);
+        void javan_path_normalize_into(void** result, void* path);
+        void javan_path_get_parent_into(void** result, void* path);
+        void javan_path_get_file_name_into(void** result, void* path);
+        void javan_path_get_name_into(void** result, void* path, int index);
+        void javan_path_relativize_into(void** result, void* path, void* child);
         void* javan_path_to_absolute(void* path);
         void* javan_path_normalize(void* path);
         void* javan_path_get_parent(void* path);
