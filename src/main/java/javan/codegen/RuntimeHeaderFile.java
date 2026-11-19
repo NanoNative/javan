@@ -414,6 +414,7 @@ final class RuntimeHeaderFile {
         void* javan_string_replace_char(const char* value, int old_ch, int new_ch);
         void* javan_string_repeat(const char* value, int count);
         void* javan_string_trim(const char* value);
+        void* javan_string_strip(const char* value);
         void* javan_string_strip_leading(const char* value);
         void* javan_string_strip_trailing(const char* value);
         void* javan_string_to_lower_case(const char* value);
@@ -428,6 +429,7 @@ final class RuntimeHeaderFile {
         void javan_string_substring_into(void** result, const char* value, int begin);
         void javan_string_substring_range_into(void** result, const char* value, int begin, int end);
         void javan_string_trim_into(void** result, const char* value);
+        void javan_string_strip_into(void** result, const char* value);
         void javan_string_strip_leading_into(void** result, const char* value);
         void javan_string_strip_trailing_into(void** result, const char* value);
         void javan_string_replace_char_into(void** result, const char* value, int old_ch, int new_ch);

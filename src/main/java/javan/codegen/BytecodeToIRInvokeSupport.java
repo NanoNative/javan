@@ -888,7 +888,7 @@ final class BytecodeToIRInvokeSupport {
         if ("java/lang/String".equals(methodRef.owner())
             && "strip".equals(methodRef.name())
             && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
-            pushObjectCall(instructions, stack, localDeclarations, "javan_string_trim", List.of(popObject(classFile, method, stack)));
+            pushObjectCall(instructions, stack, localDeclarations, "javan_string_strip", List.of(popObject(classFile, method, stack)));
             return;
         }
         if ("java/lang/String".equals(methodRef.owner())

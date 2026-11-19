@@ -18088,7 +18088,7 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).containsExactly(
             IrInstruction.assignObject(
                 "object0",
-                IrExpression.objectCall("javan_string_trim", List.of(IrExpression.objectLocal("arg0")))
+                IrExpression.objectCall("javan_string_strip", List.of(IrExpression.objectLocal("arg0")))
             ),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );

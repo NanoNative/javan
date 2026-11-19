@@ -5382,6 +5382,7 @@ public final class CCodegen {
                 "javan_string_substring",
                 "javan_string_substring_range",
                 "javan_string_trim",
+                "javan_string_strip",
                 "javan_string_strip_leading",
                 "javan_string_strip_trailing",
                 "javan_string_replace_char",

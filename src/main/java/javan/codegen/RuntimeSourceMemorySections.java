@@ -10647,6 +10647,31 @@ final class RuntimeSourceMemorySections {
             return javan_string_substring_range(value, begin, end);
         }
 
+        void* javan_string_strip(const char* value) {
+            if (value == NULL) {
+                javan_panic("null string");
+            }
+            const unsigned char* cursor = (const unsigned char*) value;
+            int length = 0;
+            int begin = -1;
+            int end = 0;
+            while (*cursor != 0U) {
+                unsigned int code_point = javan_utf8_next_code_point(&cursor, 1);
+                int width = code_point > 0xFFFFU ? 2 : 1;
+                if (length > INT_MAX - width) {
+                    javan_panic("string length overflow");
+                }
+                if (!javan_character_is_whitespace((int) code_point)) {
+                    if (begin < 0) {
+                        begin = length;
+                    }
+                    end = length + width;
+                }
+                length += width;
+            }
+            return javan_string_substring_range(value, begin < 0 ? 0 : begin, end);
+        }
+
         void* javan_string_strip_leading(const char* value) {
             if (value == NULL) {
                 javan_panic("null string");
@@ -10937,6 +10962,9 @@ final class RuntimeSourceMemorySections {
         }
         void javan_string_trim_into(void** result, const char* value) {
             javan_string_unary_into(result, value, javan_string_trim);
+        }
+        void javan_string_strip_into(void** result, const char* value) {
+            javan_string_unary_into(result, value, javan_string_strip);
         }
         void javan_string_strip_leading_into(void** result, const char* value) {
             javan_string_unary_into(result, value, javan_string_strip_leading);
