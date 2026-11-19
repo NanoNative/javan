@@ -109,8 +109,9 @@ supported handler shapes.
 to the diagnostics policy.
 `String.codePointAt`, `codePointBefore`, `codePointCount`, and `offsetByCodePoints` also accept
 Unicode literals.
-The integer and String overloads of `String.indexOf` and `lastIndexOf` accept Unicode literals and
-transport null-receiver and null-argument exceptions within supported handler shapes.
+The supported integer and String overloads of `String.indexOf` and `lastIndexOf` accept Unicode
+literals and transport null-receiver and null-argument exceptions within supported handler shapes.
+The bounded `String.indexOf` overloads also transport invalid-range exceptions.
 Both `Character.toChars` overloads produce UTF-16 code units and transport invalid-code-point
 and destination errors within supported handler shapes. A direct `Character.toChars(...).length`
 can be used in a typed handler when control flow cannot bypass the array creation.

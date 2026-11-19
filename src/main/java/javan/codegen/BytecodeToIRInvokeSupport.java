@@ -601,6 +601,17 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.intExpression(IrExpression.intCall(symbol, List.of(receiver, first, second))));
             return;
         }
+        if ("java/lang/String".equals(methodRef.owner()) && "indexOf".equals(methodRef.name())
+            && ("(III)I".equals(methodRef.descriptor()) || "(Ljava/lang/String;II)I".equals(methodRef.descriptor()))) {
+            final IrExpression endIndex = popInt(classFile, method, stack);
+            final IrExpression beginIndex = popInt(classFile, method, stack);
+            final boolean codePoint = "(III)I".equals(methodRef.descriptor());
+            final IrExpression needle = codePoint ? popInt(classFile, method, stack) : popObject(classFile, method, stack);
+            final IrExpression receiver = popObject(classFile, method, stack);
+            final String symbol = codePoint ? "javan_string_index_of_code_point_range" : "javan_string_index_of_string_range";
+            stack.add(StackValue.intExpression(IrExpression.intCall(symbol, List.of(receiver, needle, beginIndex, endIndex))));
+            return;
+        }
         if ("java/lang/String".equals(methodRef.owner())
             && ("indexOf".equals(methodRef.name()) || "lastIndexOf".equals(methodRef.name()))
             && ("(I)I".equals(methodRef.descriptor()) || "(II)I".equals(methodRef.descriptor()))) {

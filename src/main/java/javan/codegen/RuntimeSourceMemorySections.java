@@ -10854,6 +10854,96 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        static int javan_string_range_start(const char* value, int begin, int end,
+            const unsigned char** start, int* start_pending) {
+            if (begin < 0 || begin > end) {
+                javan_pending_throw("java/lang/StringIndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            const unsigned char* cursor = (const unsigned char*) value;
+            int pending = -1;
+            for (int index = 0; index < end; index++) {
+                if (index == begin) {
+                    *start = cursor;
+                    *start_pending = pending;
+                }
+                if (*cursor == 0U && pending < 0) {
+                    javan_pending_throw("java/lang/StringIndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                    return 0;
+                }
+                (void) javan_utf16_next_char(&cursor, &pending);
+            }
+            if (begin == end) {
+                *start = cursor;
+                *start_pending = pending;
+            }
+            return 1;
+        }
+
+        int javan_string_index_of_code_point_range(const char* value, int ch, int begin, int end) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            const unsigned char* cursor = NULL;
+            int pending = -1;
+            if (!javan_string_range_start(value, begin, end, &cursor, &pending)) {
+                return 0;
+            }
+            if (ch < 0 || ch > 0x10ffff) {
+                return -1;
+            }
+            int high = ch > 0xffff ? 0xd800 + ((ch - 0x10000) >> 10) : -1;
+            int low = ch > 0xffff ? 0xdc00 + ((ch - 0x10000) & 0x3ff) : -1;
+            int previous = -1;
+            for (int index = begin; index < end; index++) {
+                int current = javan_utf16_next_char(&cursor, &pending);
+                if (ch <= 0xffff && current == ch) {
+                    return index;
+                }
+                if (ch > 0xffff && previous == high && current == low) {
+                    return index - 1;
+                }
+                previous = current;
+            }
+            return -1;
+        }
+
+        int javan_string_index_of_string_range(const char* value, const char* needle, int begin, int end) {
+            if (value == NULL || needle == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            const unsigned char* cursor = NULL;
+            int pending = -1;
+            if (!javan_string_range_start(value, begin, end, &cursor, &pending)) {
+                return 0;
+            }
+            if (*needle == 0) {
+                return begin;
+            }
+            for (int index = begin; index < end; index++) {
+                const unsigned char* candidate = cursor;
+                const unsigned char* sought = (const unsigned char*) needle;
+                int candidate_pending = pending;
+                int sought_pending = -1;
+                int position = index;
+                int matches = 1;
+                while (position < end && (*sought != 0U || sought_pending >= 0)) {
+                    if (javan_utf16_next_char(&candidate, &candidate_pending) != javan_utf16_next_char(&sought, &sought_pending)) {
+                        matches = 0;
+                        break;
+                    }
+                    position++;
+                }
+                if (matches && *sought == 0U && sought_pending < 0) {
+                    return index;
+                }
+                (void) javan_utf16_next_char(&cursor, &pending);
+            }
+            return -1;
+        }
+
         int javan_string_search_code_point_java(const char* value, int ch, int from_index, int backwards) {
             if (value == NULL) {
                 javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);

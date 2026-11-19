@@ -16123,6 +16123,114 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void boundedStringSearchMatchesJavaForRangesAndFailures() throws Exception {
+        final Path project = project("bounded-string-search");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int codePoint(String value, int point, int begin, int end) {
+                    try { return value.indexOf(point, begin, end); }
+                    catch (StringIndexOutOfBoundsException ex) { return -8; }
+                    catch (NullPointerException ex) { return -9; }
+                }
+                static int substring(String value, String needle, int begin, int end) {
+                    try { return value.indexOf(needle, begin, end); }
+                    catch (StringIndexOutOfBoundsException ex) { return -8; }
+                    catch (NullPointerException ex) { return -9; }
+                }
+                public static void main(String[] args) {
+                    String value = "a\\0\\ud800\\udc00\\udfff\\ud800a";
+                    int[] points = {-1, 0, 'a', 0xd800, 0xdc00, 0x10000, 0x110000};
+                    String[] needles = {"", "a", "\\0", "\\ud800", "\\udc00", "\\ud800\\udc00", "\\udfff", "x", null};
+                    int[] indices = {Integer.MIN_VALUE, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, Integer.MAX_VALUE};
+                    int hash = 1;
+                    for (int begin : indices) for (int end : indices) {
+                        for (int point : points) hash = 31 * hash + codePoint(value, point, begin, end);
+                        for (String needle : needles) hash = 31 * hash + substring(value, needle, begin, end);
+                    }
+                    System.out.println(hash);
+                    System.out.println(codePoint(null, 0x10000, -1, 99));
+                    System.out.println(substring(null, null, -1, 99));
+                    System.out.println(substring(null, "x", -1, 99));
+                    System.out.println(substring("x", null, -1, 99));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/bounded-string-search").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void boundedStringSearchEvaluatesArgumentsBeforeUncaughtFailure() throws Exception {
+        final Path project = project("bounded-string-search-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static String needle() { System.out.println("needle"); return "x"; }
+                static int begin() { System.out.println("begin"); return -1; }
+                static int end() { System.out.println("end"); return 9; }
+                static int later() { System.out.println("later"); return 1; }
+                public static void main(String[] args) {
+                    System.out.println("before");
+                    String value = args.length == 0 ? null : "text";
+                    System.out.println(value.indexOf(needle(), begin(), end()) + later());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/bounded-string-search-uncaught").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("before\nneedle\nbegin\nend\n");
+        assertThat(result.stderr()).contains("NullPointerException");
+    }
+
+    @Test
+    void boundedStringSearchSurvivesConcurrentCollection() throws Exception {
+        final Path project = project("bounded-string-search-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static String needle() { return new String(new char[] {(char) 0xd800, (char) 0xdc00}); }
+                static int invalid(String value) {
+                    try { return value.indexOf(0x10000, 0, 9); }
+                    catch (StringIndexOutOfBoundsException ex) { return -9; }
+                }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            if ("\\0\\ud800\\udc00\\udfff".indexOf(0x10000, 1, 3) != 1) errors.incrementAndGet();
+                            if ("\\0\\ud800\\udc00\\udfff".indexOf(0x10000, 1, 2) != -1) errors.incrementAndGet();
+                            if ("\\0\\ud800\\udc00\\udfff".indexOf(needle(), 1, 3) != 1) errors.incrementAndGet();
+                            if (invalid("x") != -9) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/bounded-string-search-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
     void substringSearchAcceptsUnicodeLiterals() throws Exception {
         final Path project = project("substring-search-unicode");
         writeJava(project, "com.acme.Main", """

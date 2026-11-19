@@ -559,8 +559,10 @@ public final class JdkCallSupport {
         runtime("String.offsetByCodePoints", "java/lang/String", "offsetByCodePoints", "(II)I"),
         runtime("String.indexOf", "java/lang/String", "indexOf", "(I)I"),
         runtime("String.indexOf", "java/lang/String", "indexOf", "(II)I"),
+        runtime("String.indexOf", "java/lang/String", "indexOf", "(III)I"),
         runtime("String.indexOf", "java/lang/String", "indexOf", "(Ljava/lang/String;)I"),
         runtime("String.indexOf", "java/lang/String", "indexOf", "(Ljava/lang/String;I)I"),
+        runtime("String.indexOf", "java/lang/String", "indexOf", "(Ljava/lang/String;II)I"),
         runtime("String.lastIndexOf", "java/lang/String", "lastIndexOf", "(I)I"),
         runtime("String.lastIndexOf", "java/lang/String", "lastIndexOf", "(II)I"),
         runtime("String.lastIndexOf", "java/lang/String", "lastIndexOf", "(Ljava/lang/String;)I"),
@@ -1994,6 +1996,10 @@ public final class JdkCallSupport {
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
+        if ("java/lang/String".equals(methodRef.owner()) && "indexOf".equals(methodRef.name())
+            && ("(III)I".equals(methodRef.descriptor()) || "(Ljava/lang/String;II)I".equals(methodRef.descriptor()))) {
+            return List.of("java/lang/StringIndexOutOfBoundsException", "java/lang/NullPointerException");
+        }
         if ("java/lang/String".equals(methodRef.owner())
             && ("indexOf".equals(methodRef.name()) || "lastIndexOf".equals(methodRef.name()))
             && ("(I)I".equals(methodRef.descriptor()) || "(II)I".equals(methodRef.descriptor())

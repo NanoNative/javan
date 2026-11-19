@@ -4463,6 +4463,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void boundedStringSearchTransportsRangeAndNullFailures() {
+        for (final String descriptor : List.of("(III)I", "(Ljava/lang/String;II)I")) {
+            assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
+                "java/lang/String", "indexOf", descriptor
+            ))).containsExactly("java/lang/StringIndexOutOfBoundsException", "java/lang/NullPointerException");
+        }
+    }
+
+    @Test
     void unknownJdkThrowableIsNotAdmittedWithoutAnExactHierarchyEdge() {
         assertThat(JdkCallSupport.isPlatformThrowable("java/nio/file/NoSuchFileException")).isFalse();
     }

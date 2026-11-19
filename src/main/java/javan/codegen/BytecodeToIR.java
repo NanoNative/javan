@@ -548,6 +548,12 @@ public final class BytecodeToIR {
         result.put("javan_string_search_string_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/lang/String", "indexOf", "(Ljava/lang/String;)I"
         )));
+        result.put("javan_string_index_of_code_point_range", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/lang/String", "indexOf", "(III)I"
+        )));
+        result.put("javan_string_index_of_string_range", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/lang/String", "indexOf", "(Ljava/lang/String;II)I"
+        )));
         result.put("javan_string_to_char_array", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/lang/String", "toCharArray", "()[C"
         )));
@@ -1226,6 +1232,8 @@ public final class BytecodeToIR {
                 if (("java/lang/String".equals(reference.owner())
                         && ("(I)C".equals(reference.descriptor()) || "(I)I".equals(reference.descriptor())
                             || "(II)I".equals(reference.descriptor())
+                            || ("indexOf".equals(reference.name()) && ("(III)I".equals(reference.descriptor())
+                                || "(Ljava/lang/String;II)I".equals(reference.descriptor())))
                             || (("indexOf".equals(reference.name()) || "lastIndexOf".equals(reference.name()))
                                 && ("(Ljava/lang/String;)I".equals(reference.descriptor())
                                     || "(Ljava/lang/String;I)I".equals(reference.descriptor())))
