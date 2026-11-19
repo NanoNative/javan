@@ -13654,6 +13654,70 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void characterCodePointAndSurrogatePrimitivesMatchJava() throws Exception {
+        final Path project = project("character-codepoint-primitives");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int order = 0;
+                static char next(char value, int digit) { order = order * 10 + digit; return value; }
+                static long hash(long value, int item) { return value * 31 + item; }
+                public static void main(String[] args) {
+                    long result = 1;
+                    int[] boundary = {Integer.MIN_VALUE, -1, 0, 0x7f, 0x80, 0x9f, 0xa0, 0xd7ff,
+                        0xd800, 0xdbff, 0xdc00, 0xdfff, 0xe000, 0xffff, 0x10000, 0x10ffff,
+                        0x110000, Integer.MAX_VALUE};
+                    for (int value : boundary) {
+                        System.out.println(Character.isValidCodePoint(value));
+                        System.out.println(Character.isBmpCodePoint(value));
+                        System.out.println(Character.isSupplementaryCodePoint(value));
+                        System.out.println(Character.charCount(value));
+                        System.out.println(Character.isISOControl(value));
+                    }
+                    for (int value = 0; value <= 0x10ffff; value++) {
+                        result = hash(result, Character.isValidCodePoint(value) ? 1 : 0);
+                        result = hash(result, Character.isBmpCodePoint(value) ? 1 : 0);
+                        result = hash(result, Character.isSupplementaryCodePoint(value) ? 1 : 0);
+                        result = hash(result, Character.charCount(value));
+                        result = hash(result, Character.isISOControl(value) ? 1 : 0);
+                        if (value <= 0xffff) {
+                            char ch = (char) value;
+                            result = hash(result, Character.isHighSurrogate(ch) ? 1 : 0);
+                            result = hash(result, Character.isLowSurrogate(ch) ? 1 : 0);
+                            result = hash(result, Character.isSurrogate(ch) ? 1 : 0);
+                            result = hash(result, Character.isISOControl(ch) ? 1 : 0);
+                        }
+                    }
+                    for (int high = 0xd800; high <= 0xdbff; high++) {
+                        for (int low = 0xdc00; low <= 0xdfff; low++) {
+                            result = hash(result, Character.isSurrogatePair((char) high, (char) low) ? 1 : 0);
+                            result = hash(result, Character.toCodePoint((char) high, (char) low));
+                        }
+                    }
+                    char[] edges = {0, 0xd7ff, 0xd800, 0xdbff, 0xdc00, 0xdfff, 0xe000, 0xffff};
+                    for (char high : edges) for (char low : edges) {
+                        result = hash(result, Character.isSurrogatePair(high, low) ? 1 : 0);
+                        result = hash(result, Character.toCodePoint(high, low));
+                    }
+                    System.out.println(result);
+                    System.out.println(Character.isSurrogatePair(next((char) 0xd800, 1), next((char) 0xdc00, 2)));
+                    System.out.println(order);
+                    order = 0;
+                    System.out.println(Character.toCodePoint(next((char) 0xd800, 1), next((char) 0xdc00, 2)));
+                    System.out.println(order);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/character-codepoint-primitives").toString()),
+            Duration.ofSeconds(60));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void characterWhitespaceIntMatchesJavaAcrossUnicode() throws Exception {
         final Path project = project("character-whitespace-int");
         writeJava(project, "com.acme.Main", """

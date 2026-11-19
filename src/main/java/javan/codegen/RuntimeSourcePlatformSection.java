@@ -511,6 +511,21 @@ final class RuntimeSourcePlatformSection {
             return 0;
         }
 
+        int javan_character_is_valid_code_point(int value) { return value >= 0 && value <= 0x10ffff; }
+        int javan_character_is_bmp_code_point(int value) { return value >= 0 && value <= 0xffff; }
+        int javan_character_is_supplementary_code_point(int value) { return value >= 0x10000 && value <= 0x10ffff; }
+        int javan_character_char_count(int value) { return value >= 0x10000 ? 2 : 1; }
+        int javan_character_is_high_surrogate(int value) { return value >= 0xd800 && value <= 0xdbff; }
+        int javan_character_is_low_surrogate(int value) { return value >= 0xdc00 && value <= 0xdfff; }
+        int javan_character_is_surrogate(int value) { return value >= 0xd800 && value <= 0xdfff; }
+        int javan_character_is_iso_control(int value) { return (value >= 0 && value <= 0x1f) || (value >= 0x7f && value <= 0x9f); }
+        int javan_character_is_surrogate_pair(int high, int low) {
+            return javan_character_is_high_surrogate(high) && javan_character_is_low_surrogate(low);
+        }
+        int javan_character_to_code_point(int high, int low) {
+            return ((high - 0xd800) * 1024) + (low - 0xdc00) + 0x10000;
+        }
+
         int javan_character_is_space_char(int value) {
             return value == 0x20 || value == 0xa0 || value == 0x1680
                 || (value >= 0x2000 && value <= 0x200a)

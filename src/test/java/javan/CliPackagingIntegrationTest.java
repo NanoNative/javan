@@ -938,11 +938,23 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             package com.acme;
             public final class Main {
                 public static void main(String[] args) {
-                    int[] values = {-1, 0x09, 0x20, 0xa0, 0x2003, 0x1f600, 0x110000};
+                    int[] values = {-1, 0x09, 0x20, 0xa0, 0x2003, 0xd800, 0xdc00, 0x1f600, 0x110000};
                     for (int value : values) {
                         System.out.println(Character.isWhitespace(value));
                         System.out.println(Character.isSpaceChar(value));
                         System.out.println(Character.isSpaceChar((char) value));
+                        System.out.println(Character.isValidCodePoint(value));
+                        System.out.println(Character.isBmpCodePoint(value));
+                        System.out.println(Character.isSupplementaryCodePoint(value));
+                        System.out.println(Character.charCount(value));
+                        System.out.println(Character.isISOControl(value));
+                        char ch = (char) value;
+                        System.out.println(Character.isISOControl(ch));
+                        System.out.println(Character.isHighSurrogate(ch));
+                        System.out.println(Character.isLowSurrogate(ch));
+                        System.out.println(Character.isSurrogate(ch));
+                        System.out.println(Character.isSurrogatePair(ch, (char) 0xdc00));
+                        System.out.println(Character.toCodePoint(ch, (char) 0xdc00));
                     }
                 }
             }

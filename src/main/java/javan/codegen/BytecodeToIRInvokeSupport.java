@@ -3583,6 +3583,51 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_character_value_of", List.of(popInt(classFile, method, stack)))));
             return true;
         }
+        if ("isValidCodePoint".equals(methodRef.name()) && "(I)Z".equals(methodRef.descriptor())) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_character_is_valid_code_point", List.of(popInt(classFile, method, stack)))));
+            return true;
+        }
+        if ("isBmpCodePoint".equals(methodRef.name()) && "(I)Z".equals(methodRef.descriptor())) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_character_is_bmp_code_point", List.of(popInt(classFile, method, stack)))));
+            return true;
+        }
+        if ("isSupplementaryCodePoint".equals(methodRef.name()) && "(I)Z".equals(methodRef.descriptor())) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_character_is_supplementary_code_point", List.of(popInt(classFile, method, stack)))));
+            return true;
+        }
+        if ("charCount".equals(methodRef.name()) && "(I)I".equals(methodRef.descriptor())) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_character_char_count", List.of(popInt(classFile, method, stack)))));
+            return true;
+        }
+        if ("isHighSurrogate".equals(methodRef.name()) && "(C)Z".equals(methodRef.descriptor())) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_character_is_high_surrogate", List.of(popInt(classFile, method, stack)))));
+            return true;
+        }
+        if ("isLowSurrogate".equals(methodRef.name()) && "(C)Z".equals(methodRef.descriptor())) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_character_is_low_surrogate", List.of(popInt(classFile, method, stack)))));
+            return true;
+        }
+        if ("isSurrogate".equals(methodRef.name()) && "(C)Z".equals(methodRef.descriptor())) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_character_is_surrogate", List.of(popInt(classFile, method, stack)))));
+            return true;
+        }
+        if ("isSurrogatePair".equals(methodRef.name()) && "(CC)Z".equals(methodRef.descriptor())) {
+            final IrExpression low = popInt(classFile, method, stack);
+            final IrExpression high = popInt(classFile, method, stack);
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_character_is_surrogate_pair", List.of(high, low))));
+            return true;
+        }
+        if ("toCodePoint".equals(methodRef.name()) && "(CC)I".equals(methodRef.descriptor())) {
+            final IrExpression low = popInt(classFile, method, stack);
+            final IrExpression high = popInt(classFile, method, stack);
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_character_to_code_point", List.of(high, low))));
+            return true;
+        }
+        if ("isISOControl".equals(methodRef.name())
+            && ("(C)Z".equals(methodRef.descriptor()) || "(I)Z".equals(methodRef.descriptor()))) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_character_is_iso_control", List.of(popInt(classFile, method, stack)))));
+            return true;
+        }
         if ("isSpaceChar".equals(methodRef.name())
             && ("(C)Z".equals(methodRef.descriptor()) || "(I)Z".equals(methodRef.descriptor()))) {
             stack.add(StackValue.intExpression(IrExpression.intCall(
