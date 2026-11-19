@@ -4452,9 +4452,9 @@ final class JdkCallSupportTest {
     }
 
     @Test
-    void stringCodePointSearchTransportsNullReceiverFailure() {
+    void stringSearchTransportsNullFailure() {
         for (final String name : List.of("indexOf", "lastIndexOf")) {
-            for (final String descriptor : List.of("(I)I", "(II)I")) {
+            for (final String descriptor : List.of("(I)I", "(II)I", "(Ljava/lang/String;)I", "(Ljava/lang/String;I)I")) {
                 assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
                     "java/lang/String", name, descriptor
                 ))).containsExactly("java/lang/NullPointerException");

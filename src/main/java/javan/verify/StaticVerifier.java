@@ -1636,23 +1636,10 @@ public final class StaticVerifier {
             && ("(I)Ljava/lang/String;".equals(target.descriptor()) || "(II)Ljava/lang/String;".equals(target.descriptor()))) {
             return true;
         }
-        if ("indexOf".equals(target.name())) {
-            return stringIndexDescriptor(target.descriptor());
-        }
-        if ("lastIndexOf".equals(target.name())) {
-            return stringIndexDescriptor(target.descriptor());
-        }
         if ("toLowerCase".equals(target.name())) {
             return "(Ljava/util/Locale;)Ljava/lang/String;".equals(target.descriptor());
         }
         return false;
-    }
-
-    private static boolean stringIndexDescriptor(final String descriptor) {
-        if ("(Ljava/lang/String;)I".equals(descriptor)) {
-            return true;
-        }
-        return "(Ljava/lang/String;I)I".equals(descriptor);
     }
 
     private static boolean unsupportedExceptionHandlers(

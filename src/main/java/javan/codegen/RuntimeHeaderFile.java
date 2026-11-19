@@ -423,6 +423,7 @@ final class RuntimeHeaderFile {
         int javan_string_index_of_char(const char* value, int ch);
         int javan_string_search_code_point_java(const char* value, int ch, int from_index, int backwards);
         int javan_string_index_of_char_from(const char* value, int ch, int from_index);
+        int javan_string_search_string_java(const char* value, const char* needle, int from_index, int backwards);
         int javan_string_index_of_string(const char* value, const char* needle);
         int javan_string_index_of_string_from(const char* value, const char* needle, int from_index);
         int javan_string_last_index_of_char(const char* value, int ch);

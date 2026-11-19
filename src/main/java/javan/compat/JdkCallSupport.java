@@ -1996,7 +1996,9 @@ public final class JdkCallSupport {
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
         if ("java/lang/String".equals(methodRef.owner())
             && ("indexOf".equals(methodRef.name()) || "lastIndexOf".equals(methodRef.name()))
-            && ("(I)I".equals(methodRef.descriptor()) || "(II)I".equals(methodRef.descriptor()))) {
+            && ("(I)I".equals(methodRef.descriptor()) || "(II)I".equals(methodRef.descriptor())
+                || "(Ljava/lang/String;)I".equals(methodRef.descriptor())
+                || "(Ljava/lang/String;I)I".equals(methodRef.descriptor()))) {
             return List.of("java/lang/NullPointerException");
         }
         if ("java/lang/String".equals(methodRef.owner()) && "getChars".equals(methodRef.name())

@@ -614,45 +614,16 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if ("java/lang/String".equals(methodRef.owner())
-            && "indexOf".equals(methodRef.name())
-            && "(Ljava/lang/String;)I".equals(methodRef.descriptor())) {
+            && ("indexOf".equals(methodRef.name()) || "lastIndexOf".equals(methodRef.name()))
+            && ("(Ljava/lang/String;)I".equals(methodRef.descriptor())
+                || "(Ljava/lang/String;I)I".equals(methodRef.descriptor()))) {
+            final boolean backwards = "lastIndexOf".equals(methodRef.name());
+            final IrExpression fromIndex = "(Ljava/lang/String;I)I".equals(methodRef.descriptor())
+                ? popInt(classFile, method, stack) : IrExpression.intLiteral(backwards ? Integer.MAX_VALUE : 0);
             final IrExpression needle = popObject(classFile, method, stack);
             final IrExpression receiver = popObject(classFile, method, stack);
-            rejectUnsupportedStringSemantic(classFile, method, instruction, receiver);
-            rejectUnsupportedStringSemantic(classFile, method, instruction, needle);
-            stack.add(StackValue.intExpression(IrExpression.intCall("javan_string_index_of_string", List.of(receiver, needle))));
-            return;
-        }
-        if ("java/lang/String".equals(methodRef.owner())
-            && "indexOf".equals(methodRef.name())
-            && "(Ljava/lang/String;I)I".equals(methodRef.descriptor())) {
-            final IrExpression fromIndex = popInt(classFile, method, stack);
-            final IrExpression needle = popObject(classFile, method, stack);
-            final IrExpression receiver = popObject(classFile, method, stack);
-            rejectUnsupportedStringSemantic(classFile, method, instruction, receiver);
-            rejectUnsupportedStringSemantic(classFile, method, instruction, needle);
-            stack.add(StackValue.intExpression(IrExpression.intCall("javan_string_index_of_string_from", List.of(receiver, needle, fromIndex))));
-            return;
-        }
-        if ("java/lang/String".equals(methodRef.owner())
-            && "lastIndexOf".equals(methodRef.name())
-            && "(Ljava/lang/String;)I".equals(methodRef.descriptor())) {
-            final IrExpression needle = popObject(classFile, method, stack);
-            final IrExpression receiver = popObject(classFile, method, stack);
-            rejectUnsupportedStringSemantic(classFile, method, instruction, receiver);
-            rejectUnsupportedStringSemantic(classFile, method, instruction, needle);
-            stack.add(StackValue.intExpression(IrExpression.intCall("javan_string_last_index_of_string", List.of(receiver, needle))));
-            return;
-        }
-        if ("java/lang/String".equals(methodRef.owner())
-            && "lastIndexOf".equals(methodRef.name())
-            && "(Ljava/lang/String;I)I".equals(methodRef.descriptor())) {
-            final IrExpression fromIndex = popInt(classFile, method, stack);
-            final IrExpression needle = popObject(classFile, method, stack);
-            final IrExpression receiver = popObject(classFile, method, stack);
-            rejectUnsupportedStringSemantic(classFile, method, instruction, receiver);
-            rejectUnsupportedStringSemantic(classFile, method, instruction, needle);
-            stack.add(StackValue.intExpression(IrExpression.intCall("javan_string_last_index_of_string_from", List.of(receiver, needle, fromIndex))));
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_string_search_string_java",
+                List.of(receiver, needle, fromIndex, IrExpression.intLiteral(backwards ? 1 : 0)))));
             return;
         }
         if ("java/lang/String".equals(methodRef.owner())

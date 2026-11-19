@@ -16123,6 +16123,171 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void substringSearchAcceptsUnicodeLiterals() throws Exception {
+        final Path project = project("substring-search-unicode");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    String[] needles = {"", "\\0", "\\ud800", "\\udc00", "\\ud800\\udc00", "\\udfff", "x"};
+                    int[] positions = {Integer.MIN_VALUE, -1, 0, 1, 2, 3, 4, 5, Integer.MAX_VALUE};
+                    for (String needle : needles) {
+                        System.out.println("\\0\\ud800\\udc00\\udfff\\ud800".indexOf(needle));
+                        System.out.println("\\0\\ud800\\udc00\\udfff\\ud800".lastIndexOf(needle));
+                        for (int from : positions) {
+                            System.out.println("\\0\\ud800\\udc00\\udfff\\ud800".indexOf(needle, from));
+                            System.out.println("\\0\\ud800\\udc00\\udfff\\ud800".lastIndexOf(needle, from));
+                        }
+                    }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/substring-search-unicode").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void substringSearchMatchesUtf16AcrossRepresentations() throws Exception {
+        final Path project = project("substring-search-utf16-representations");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    String[] values = {"", "a", "\\0", "\\ud800", "\\udc00", "\\ud800\\udc00",
+                        "a\\ud800\\udc00a", "\\udc00\\ud800", "\\0a\\0", "\\u00e9\\u20ac",
+                        new String(new char[] {(char) 0xd800, (char) 0xdc00}),
+                        new String(Character.toChars(0x10000)),
+                        new String(new char[] {'a', 0, (char) 0xd800, 'a'})};
+                    int[] positions = {Integer.MIN_VALUE, -1, 0, 1, 2, 3, 4, 5, Integer.MAX_VALUE};
+                    int hash = 1;
+                    for (String value : values) {
+                        for (String needle : values) {
+                            hash = 31 * hash + value.indexOf(needle);
+                            hash = 31 * hash + value.lastIndexOf(needle);
+                            for (int from : positions) {
+                                hash = 31 * hash + value.indexOf(needle, from);
+                                hash = 31 * hash + value.lastIndexOf(needle, from);
+                            }
+                        }
+                    }
+                    System.out.println(hash);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/substring-search-utf16-representations").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void substringSearchTransportsNullFailures() throws Exception {
+        final Path project = project("substring-search-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int first(String text, String needle) {
+                    try { return text.indexOf(needle); } catch (NullPointerException ex) { return -9; }
+                }
+                static int firstFrom(String text, String needle, int from) {
+                    try { return text.indexOf(needle, from); } catch (NullPointerException ex) { return -9; }
+                }
+                static int last(String text, String needle) {
+                    try { return text.lastIndexOf(needle); } catch (NullPointerException ex) { return -9; }
+                }
+                static int lastFrom(String text, String needle, int from) {
+                    try { return text.lastIndexOf(needle, from); } catch (NullPointerException ex) { return -9; }
+                }
+                public static void main(String[] args) {
+                    System.out.println(first(null, "x")); System.out.println(first("x", null));
+                    System.out.println(firstFrom(null, "x", -1)); System.out.println(firstFrom("x", null, 100));
+                    System.out.println(last(null, "x")); System.out.println(last("x", null));
+                    System.out.println(lastFrom(null, "x", -1)); System.out.println(lastFrom("x", null, -1));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/substring-search-null").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void substringSearchUncaughtNullEvaluatesArgumentsBeforeFailure() throws Exception {
+        final Path project = project("substring-search-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static String needle() { System.out.println("needle"); return "x"; }
+                static int from() { System.out.println("from"); return 0; }
+                static int later() { System.out.println("later"); return 1; }
+                public static void main(String[] args) {
+                    System.out.println("before");
+                    String value = args.length == 0 ? null : "text";
+                    System.out.println(value.lastIndexOf(needle(), from()) + later());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/substring-search-uncaught").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("before\nneedle\nfrom\n");
+        assertThat(result.stderr()).contains("NullPointerException");
+    }
+
+    @Test
+    void substringSearchSurvivesConcurrentCollection() throws Exception {
+        final Path project = project("substring-search-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static String needle() { return new String(new char[] {(char) 0xd800, (char) 0xdc00}); }
+                static int nullSearch(String value) {
+                    try { return "text".indexOf(value); } catch (NullPointerException ex) { return -9; }
+                }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            if ("\\0\\ud800\\udc00\\udfff".indexOf(needle(), 1) != 1) errors.incrementAndGet();
+                            if ("\\0\\ud800\\udc00\\udfff".lastIndexOf(needle(), 1) != 1) errors.incrementAndGet();
+                            if (nullSearch(null) != -9) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/substring-search-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
     void stringCodePointSearchAcceptsUnicodeLiteralsAndNullFailures() throws Exception {
         final Path project = project("string-codepoint-search-literal-null");
         writeJava(project, "com.acme.Main", """

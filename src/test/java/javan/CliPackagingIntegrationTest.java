@@ -1904,6 +1904,9 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 static int nullSearch(String value) {
                     try { return value.lastIndexOf(-1, -1); } catch (NullPointerException ex) { return -9; }
                 }
+                static int nullSubstring(String value) {
+                    try { return "text".indexOf(value); } catch (NullPointerException ex) { return -9; }
+                }
                 public static void main(String[] args) {
                     String value = new String(new char[]{'a', (char) 0xd83d, (char) 0xde00, 'b', (char) 0xd83d, (char) 0xde00});
                     int[] targets = {-1, 0xd83d, 0xde00, 0x1f600, 0x110000};
@@ -1919,6 +1922,9 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     System.out.println("\\0\\ud800\\udc00\\udfff".lastIndexOf(0x10000));
                     System.out.println("\\0\\ud800\\udc00\\udfff".lastIndexOf(0x10000, 1));
                     System.out.println(nullSearch(null));
+                    System.out.println("\\0\\ud800\\udc00\\udfff".indexOf("\\ud800\\udc00"));
+                    System.out.println("\\0\\ud800\\udc00\\udfff".lastIndexOf("\\udfff", 3));
+                    System.out.println(nullSubstring(null));
                 }
             }
             """);
@@ -3730,6 +3736,8 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static int literalCodePointOffset(int index) { return "\\0\\ud800\\udc00\\udfff".offsetByCodePoints(index, 1); }
                 public static int search(String value, int point) { return value.indexOf(point); }
                 public static int lastSearch(String value, int point, int from) { return value.lastIndexOf(point, from); }
+                public static int substringFirst(String value, String needle) { return value.indexOf(needle); }
+                public static int substringLast(String value, String needle, int from) { return value.lastIndexOf(needle, from); }
                 public static String fail(String value) { throw new IllegalArgumentException(value); }
                 public static String literal() { return "a\\0b"; }
                 public static String fromCodePoint(int value) { return Character.toString(value); }
@@ -3750,7 +3758,8 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "--export", "com.acme.Text.literalCharAt", "--export", "com.acme.Text.literalCodePointAt",
             "--export", "com.acme.Text.literalCodePointBefore", "--export", "com.acme.Text.literalCodePointCount",
             "--export", "com.acme.Text.literalCodePointOffset", "--export", "com.acme.Text.search",
-            "--export", "com.acme.Text.lastSearch");
+            "--export", "com.acme.Text.lastSearch", "--export", "com.acme.Text.substringFirst",
+            "--export", "com.acme.Text.substringLast");
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         final Path library = project.resolve(".javan/dist/liblibrary-utf16.a");
         final Path caller = writeC(project, "call_utf16.c", """
@@ -3784,6 +3793,19 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 javan_result_free(&result);
                 result = javan_utf16_try_com_acme_Text_lastSearch_string_int_int(input, 0x1f600, 6, &search);
                 if (!result.ok || search != 2) return 44;
+                javan_result_free(&result);
+                JavanUtf16View needle = { data + 2, 2 };
+                result = javan_utf16_try_com_acme_Text_substringFirst_string_string(input, needle, &search);
+                if (!result.ok || search != 2) return 46;
+                javan_result_free(&result);
+                needle.data = data + 6; needle.length = 1;
+                result = javan_utf16_try_com_acme_Text_substringLast_string_string_int(input, needle, 6, &search);
+                if (!result.ok || search != 6) return 47;
+                javan_result_free(&result);
+                needle.data = NULL; needle.length = 0;
+                result = javan_utf16_try_com_acme_Text_substringFirst_string_string(input, needle, &search);
+                if (result.ok || search != 0 || result.message == NULL
+                    || strstr(result.message, "java/lang/NullPointerException") == NULL) return 48;
                 javan_result_free(&result);
                 int point = -1;
                 result = javan_try_com_acme_Text_literalCodePointAt_int(1, &point);
@@ -3850,6 +3872,11 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 if (!result.ok || blank != 0) return 33;
                 javan_result_free(&result);
                 input.data = NULL; input.length = 0;
+                needle.data = data; needle.length = 1;
+                result = javan_utf16_try_com_acme_Text_substringLast_string_string_int(input, needle, -1, &search);
+                if (result.ok || search != 0 || result.message == NULL
+                    || strstr(result.message, "java/lang/NullPointerException") == NULL) return 49;
+                javan_result_free(&result);
                 result = javan_utf16_try_com_acme_Text_search_string_int(input, -1, &search);
                 if (result.ok || search != 0 || result.message == NULL
                     || strstr(result.message, "java/lang/NullPointerException") == NULL) return 45;

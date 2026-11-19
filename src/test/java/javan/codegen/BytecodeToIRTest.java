@@ -17468,7 +17468,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersStringIndexOfStringToRuntimeCall() {
+    void propagatesStringIndexOfStringFailure() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -17481,16 +17481,11 @@ final class BytecodeToIRTest {
             plain(3, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnInt(IrExpression.intCall(
-                "javan_string_index_of_string",
-                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
-            ))
-        );
+        assertThat(function.instructions()).contains(IrInstruction.propagatePending());
     }
 
     @Test
-    void lowersStringIndexOfStringFromIndexToRuntimeCall() {
+    void propagatesStringIndexOfStringFromIndexFailure() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -17504,12 +17499,7 @@ final class BytecodeToIRTest {
             plain(4, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnInt(IrExpression.intCall(
-                "javan_string_index_of_string_from",
-                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.intLocal("arg2"))
-            ))
-        );
+        assertThat(function.instructions()).contains(IrInstruction.propagatePending());
     }
 
     @Test
@@ -17568,7 +17558,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersStringLastIndexOfStringToRuntimeCall() {
+    void propagatesStringLastIndexOfStringFailure() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -17581,16 +17571,11 @@ final class BytecodeToIRTest {
             plain(3, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnInt(IrExpression.intCall(
-                "javan_string_last_index_of_string",
-                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
-            ))
-        );
+        assertThat(function.instructions()).contains(IrInstruction.propagatePending());
     }
 
     @Test
-    void lowersStringLastIndexOfStringFromIndexToRuntimeCall() {
+    void propagatesStringLastIndexOfStringFromIndexFailure() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -17604,12 +17589,7 @@ final class BytecodeToIRTest {
             plain(4, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnInt(IrExpression.intCall(
-                "javan_string_last_index_of_string_from",
-                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.intLocal("arg2"))
-            ))
-        );
+        assertThat(function.instructions()).contains(IrInstruction.propagatePending());
     }
 
     @Test

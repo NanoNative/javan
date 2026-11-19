@@ -6576,7 +6576,7 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void staticVerifierRejectsReachableNonAsciiStringIndexOfSubstringCall() {
+    void staticVerifierAcceptsReachableNonAsciiStringIndexOfSubstringCall() {
         final List<Diagnostic> diagnostics = verifyStringSemanticMethod(
             new MethodRef("java/lang/String", "indexOf", "(Ljava/lang/String;)I"),
             true,
@@ -6587,14 +6587,11 @@ final class CoreBehaviorTest {
             instruction(4, 177, "return")
         );
 
-        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
-            assertThat(diagnostic.code()).isEqualTo("JAVAN046");
-            assertThat(diagnostic.subject()).isEqualTo("java/lang/String.indexOf(Ljava/lang/String;)I");
-        });
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test
-    void staticVerifierRejectsReachableNonAsciiStringIndexOfSubstringFromIndexCall() {
+    void staticVerifierAcceptsReachableNonAsciiStringIndexOfSubstringFromIndexCall() {
         final List<Diagnostic> diagnostics = verifyStringSemanticMethod(
             new MethodRef("java/lang/String", "indexOf", "(Ljava/lang/String;I)I"),
             true,
@@ -6606,10 +6603,7 @@ final class CoreBehaviorTest {
             instruction(5, 177, "return")
         );
 
-        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
-            assertThat(diagnostic.code()).isEqualTo("JAVAN046");
-            assertThat(diagnostic.subject()).isEqualTo("java/lang/String.indexOf(Ljava/lang/String;I)I");
-        });
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test
