@@ -1274,6 +1274,14 @@ public final class ReachabilityAnalyzer {
             diagnostics.add(unsupportedEnumValueOfDiagnostic(current, target.display()));
             return;
         }
+        if ("java/lang/String".equals(target.owner()) && "contains".equals(target.name())
+            && "(Ljava/lang/CharSequence;)Z".equals(target.descriptor())) {
+            final MethodRef toString = new MethodRef("java/lang/CharSequence", "toString", "()Ljava/lang/String;");
+            final List<EntryPoint> targetMethods = dispatchTargets.interfaceTargets(toString);
+            enqueueAll(work, workSet, targetMethods);
+            addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
+            return;
+        }
         if (isJdkCall(target) || NetworkApiSupport.isNetworkCall(target)) {
             return;
         }

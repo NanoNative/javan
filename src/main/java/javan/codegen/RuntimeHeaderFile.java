@@ -436,6 +436,7 @@ final class RuntimeHeaderFile {
         int javan_string_equals_java(const char* left, void* right);
         int javan_string_contains(const char* left, const char* right);
         int javan_string_contains_java(const char* left, void* needle);
+        int javan_string_contains_use_builtin(const char* left, void* needle);
         int javan_string_starts_with_java(const char* left, const char* prefix, int from_index);
         int javan_string_ends_with_java(const char* left, const char* suffix);
         int javan_string_starts_with(const char* left, const char* prefix);

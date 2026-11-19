@@ -16153,7 +16153,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void stringContainsRejectsUnsupportedApplicationCharSequence() throws Exception {
+    void stringContainsUsesApplicationCharSequenceToString() throws Exception {
         final Path project = project("string-contains-custom-sequence");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -16169,12 +16169,253 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                 }
             }
             """);
+        final String expected = runJvm(project, "com.acme.Main");
         final CliRun build = run(tempDir, "build", project.toString());
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final ProcessResult result = process(project,
             List.of(project.resolve(".javan/bin/string-contains-custom-sequence").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringContainsDispatchesApplicationCharSequencesAndExceptions() throws Exception {
+        final Path project = project("string-contains-custom-dispatch");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static class Sequence implements CharSequence {
+                    public int length() { return 3; }
+                    public char charAt(int index) { return 'x'; }
+                    public CharSequence subSequence(int begin, int end) { return this; }
+                    public String toString() { System.out.println("convert"); return new String(new char[] {'p', 'h', 'a'}); }
+                }
+                static final class Child extends Sequence { }
+                static final class NullSequence extends Sequence {
+                    public String toString() { System.out.println("null-result"); return null; }
+                }
+                static final class ThrowSequence extends Sequence {
+                    public String toString() { System.out.println("throw"); throw new IllegalStateException(); }
+                }
+                static boolean invoke(String value, CharSequence needle) { return value.contains(needle); }
+                static int contains(String value, CharSequence needle) {
+                    boolean result;
+                    try { result = invoke(value, needle); }
+                    catch (NullPointerException ex) { return -9; }
+                    catch (IllegalStateException ex) { return -8; }
+                    return result ? 1 : 0;
+                }
+                public static void main(String[] args) {
+                    System.out.println(contains("alphabet", new Sequence()));
+                    System.out.println(contains("alphabet", new Child()));
+                    System.out.println(contains("alphabet", new NullSequence()));
+                    System.out.println(contains("alphabet", new ThrowSequence()));
+                    System.out.println(contains(null, new Sequence()));
+                    System.out.println(contains("alphabet", new StringBuilder("pha")));
+                    System.out.println(contains("alphabet", "pha"));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-contains-custom-dispatch").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringContainsPropagatesUnmatchedApplicationFailureAcrossLocalHandler() throws Exception {
+        final Path project = project("string-contains-custom-handler");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static final class Sequence implements CharSequence {
+                    public int length() { return 1; }
+                    public char charAt(int index) { return 'x'; }
+                    public CharSequence subSequence(int begin, int end) { return this; }
+                    public String toString() { System.out.println("convert"); throw new IllegalStateException(); }
+                }
+                static boolean contains(String value, CharSequence needle) {
+                    try { return value.contains(needle); }
+                    catch (NullPointerException ex) { return false; }
+                }
+                public static void main(String[] args) {
+                    Sequence needle = new Sequence();
+                    try { contains("alphabet", needle); }
+                    catch (IllegalStateException ex) { System.out.println("caught"); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-contains-custom-handler").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringContainsCatchesApplicationToStringFailureDirectly() throws Exception {
+        final Path project = project("string-contains-custom-direct-handler");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static final class Sequence implements CharSequence {
+                    public int length() { return 1; }
+                    public char charAt(int index) { return 'x'; }
+                    public CharSequence subSequence(int begin, int end) { return this; }
+                    public String toString() { System.out.println("convert"); throw new IllegalStateException(); }
+                }
+                static boolean contains(String value, CharSequence needle) {
+                    try { return value.contains(needle); }
+                    catch (IllegalStateException ex) { System.out.println("caught"); return false; }
+                }
+                public static void main(String[] args) {
+                    System.out.println(contains("alphabet", new Sequence()));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-contains-custom-direct-handler").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringContainsCustomSequenceWorksInConditionalExpressions() throws Exception {
+        final Path project = project("string-contains-custom-conditional");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static final class Sequence implements CharSequence {
+                    public int length() { return 3; }
+                    public char charAt(int index) { return 'x'; }
+                    public CharSequence subSequence(int begin, int end) { return this; }
+                    public String toString() { System.out.println("convert"); return "pha"; }
+                }
+                static int select(boolean enabled, String value, CharSequence needle) {
+                    return enabled ? (value.contains(needle) ? 1 : 2) : 3;
+                }
+                public static void main(String[] args) {
+                    Sequence needle = new Sequence();
+                    System.out.println(select(true, "alphabet", needle));
+                    System.out.println(select(false, "alphabet", needle));
+                    System.out.println(select(true, "different", needle));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-contains-custom-conditional").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringContainsStopsBeforeArgumentWhenReceiverEvaluationThrows() throws Exception {
+        final Path project = project("string-contains-receiver-failure");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static final class Sequence implements CharSequence {
+                    public int length() { return 1; }
+                    public char charAt(int index) { return 'x'; }
+                    public CharSequence subSequence(int begin, int end) { return this; }
+                    public String toString() { System.out.println("convert"); return "x"; }
+                }
+                static String receiver() { System.out.println("receiver"); throw new IllegalArgumentException(); }
+                static CharSequence needle() { System.out.println("needle"); return new Sequence(); }
+                public static void main(String[] args) {
+                    System.out.println("before");
+                    System.out.println(receiver().contains(needle()));
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-contains-receiver-failure").toString()));
         assertThat(result.exitCode()).isNotZero();
-        assertThat(result.stderr()).contains("unsupported CharSequence implementation in String.contains");
+        assertThat(result.stdout()).isEqualTo("before\nreceiver\n");
+        assertThat(result.stderr()).contains("IllegalArgumentException");
+    }
+
+    @Test
+    void stringContainsStopsAfterApplicationToStringFailure() throws Exception {
+        final Path project = project("string-contains-custom-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static final class Sequence implements CharSequence {
+                    public int length() { return 1; }
+                    public char charAt(int index) { return 'x'; }
+                    public CharSequence subSequence(int begin, int end) { return this; }
+                    public String toString() { System.out.println("convert"); throw new IllegalArgumentException(); }
+                }
+                static String value() { System.out.println("value"); return "alphabet"; }
+                static CharSequence needle() { System.out.println("needle"); return new Sequence(); }
+                static boolean later() { System.out.println("later"); return true; }
+                public static void main(String[] args) {
+                    System.out.println("before");
+                    System.out.println(value().contains(needle()) | later());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-contains-custom-uncaught").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("before\nvalue\nneedle\nconvert\n");
+        assertThat(result.stderr()).contains("IllegalArgumentException");
+    }
+
+    @Test
+    void stringContainsCustomSequenceSurvivesConcurrentCollection() throws Exception {
+        final Path project = project("string-contains-custom-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static final class Sequence implements CharSequence {
+                    public int length() { return 2; }
+                    public char charAt(int index) { return 'x'; }
+                    public CharSequence subSequence(int begin, int end) { return this; }
+                    public String toString() { return new String(new char[] {(char) 0xd800, (char) 0xdc00}); }
+                }
+                static String source() { return new String(new char[] {0, (char) 0xd800, (char) 0xdc00, 'x'}); }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            if (!source().contains(new Sequence())) errors.incrementAndGet();
+                            if (!source().contains(new StringBuilder().append((char) 0xd800).append((char) 0xdc00))) errors.incrementAndGet();
+                            if (source().contains("z")) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-contains-custom-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
     }
 
     @Test

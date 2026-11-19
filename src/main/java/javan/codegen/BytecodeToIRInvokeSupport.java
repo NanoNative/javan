@@ -650,7 +650,45 @@ final class BytecodeToIRInvokeSupport {
             && "(Ljava/lang/CharSequence;)Z".equals(methodRef.descriptor())) {
             final IrExpression argument = popObject(classFile, method, stack);
             final IrExpression receiver = popObject(classFile, method, stack);
-            stack.add(StackValue.intExpression(IrExpression.intCall("javan_string_contains_java", List.of(receiver, argument))));
+            final MethodRef toString = new MethodRef("java/lang/CharSequence", "toString", "()Ljava/lang/String;");
+            final List<EntryPoint> targets = interfaceTargets(classes, toString, instantiatedTypes);
+            if (targets.isEmpty()) {
+                stack.add(StackValue.intExpression(IrExpression.intCall("javan_string_contains_java", List.of(receiver, argument))));
+                return;
+            }
+            IrExpression receiverValue = receiver;
+            if (receiver.kind() != IrExpression.Kind.LOCAL && receiver.kind() != IrExpression.Kind.STRING_LITERAL
+                && receiver.kind() != IrExpression.Kind.OBJECT_NULL) {
+                final String local = newObjectLocal(localDeclarations);
+                instructions.add(IrInstruction.assignObject(local, receiver));
+                receiverValue = IrExpression.objectLocal(local);
+            }
+            IrExpression argumentValue = argument;
+            if (argument.kind() != IrExpression.Kind.LOCAL && argument.kind() != IrExpression.Kind.STRING_LITERAL
+                && argument.kind() != IrExpression.Kind.OBJECT_NULL) {
+                final String local = newObjectLocal(localDeclarations);
+                instructions.add(IrInstruction.assignObject(local, argument));
+                argumentValue = IrExpression.objectLocal(local);
+            }
+            final String convertedLocal = newObjectLocal(localDeclarations);
+            final String resultLocal = newIntLocal(localDeclarations);
+            final String builtinLabel = "label_contains_builtin_" + instruction.offset() + "_" + resultLocal;
+            final String doneLabel = "label_contains_done_" + instruction.offset() + "_" + resultLocal;
+            final String dispatchSymbol = dispatchSymbol(toString);
+            dispatches.putIfAbsent(dispatchSymbol, dispatch(classes, dispatchSymbol, MethodDescriptor.parse(toString.descriptor()), targets));
+            instructions.add(IrInstruction.branchIf(builtinLabel, IrExpression.intCall("javan_string_contains_use_builtin",
+                List.of(receiverValue, argumentValue))));
+            instructions.add(IrInstruction.assignObject(convertedLocal,
+                IrExpression.objectCall(dispatchSymbol, List.of(argumentValue))));
+            instructions.add(IrInstruction.branchIf(doneLabel, IrExpression.intCall("javan_pending_has", List.of())));
+            instructions.add(IrInstruction.assignInt(resultLocal, IrExpression.intCall("javan_string_contains_java",
+                List.of(receiverValue, IrExpression.objectLocal(convertedLocal)))));
+            instructions.add(IrInstruction.jump(doneLabel));
+            instructions.add(IrInstruction.label(builtinLabel));
+            instructions.add(IrInstruction.assignInt(resultLocal, IrExpression.intCall("javan_string_contains_java",
+                List.of(receiverValue, argumentValue))));
+            instructions.add(IrInstruction.label(doneLabel));
+            stack.add(StackValue.intExpression(IrExpression.intLocal(resultLocal)));
             return;
         }
         if ("java/lang/String".equals(methodRef.owner()) && "startsWith".equals(methodRef.name())

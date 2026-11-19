@@ -11049,6 +11049,10 @@ final class RuntimeSourceMemorySections {
             return javan_string_index_of_string(left, right) >= 0;
         }
 
+        int javan_string_contains_use_builtin(const char* left, void* needle) {
+            return left == NULL || needle == NULL || javan_registered_type_id(needle) == 0;
+        }
+
         int javan_string_contains_java(const char* left, void* needle) {
             if (left == NULL || needle == NULL) {
                 javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);

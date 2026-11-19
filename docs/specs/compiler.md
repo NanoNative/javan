@@ -118,9 +118,10 @@ and invalid-range exceptions within supported handler shapes.
 within supported handler shapes; a negative start offset returns false for a non-null receiver.
 `String.equals` compares only strings and transports null-receiver failures within supported
 handler shapes.
-`String.contains` supports String and StringBuilder arguments and transports null failures within
-supported handler shapes. Other CharSequence implementations fail explicitly at runtime until
-closed-world `toString` dispatch is supported.
+`String.contains` supports String, StringBuilder and closed-world application CharSequence
+implementations with a supported `toString` override. Null failures and exceptions from the
+application override are transported within supported handler shapes. Unsupported runtime
+CharSequence shapes fail explicitly.
 Both `Character.toChars` overloads produce UTF-16 code units and transport invalid-code-point
 and destination errors within supported handler shapes. A direct `Character.toChars(...).length`
 can be used in a typed handler when control flow cannot bypass the array creation.

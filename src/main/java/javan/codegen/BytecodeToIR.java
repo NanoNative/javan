@@ -432,8 +432,14 @@ public final class BytecodeToIR {
                     }
                     final MethodRef calledMethod = instruction.methodRef().orElseThrow();
                     for (final EntryPoint callee : calleesByCaller.getOrDefault(caller, List.of())) {
-                        if (!calledMethod.name().equals(callee.methodName())
-                            || !calledMethod.descriptor().equals(callee.descriptor())) {
+                        final boolean directCall = calledMethod.name().equals(callee.methodName())
+                            && calledMethod.descriptor().equals(callee.descriptor());
+                        final boolean charSequenceConversion = "java/lang/String".equals(calledMethod.owner())
+                            && "contains".equals(calledMethod.name())
+                            && "(Ljava/lang/CharSequence;)Z".equals(calledMethod.descriptor())
+                            && "toString".equals(callee.methodName())
+                            && "()Ljava/lang/String;".equals(callee.descriptor());
+                        if (!directCall && !charSequenceConversion) {
                             continue;
                         }
                         for (final String throwableType : typesByMethod.getOrDefault(callee, Set.of())) {
