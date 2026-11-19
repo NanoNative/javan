@@ -95,6 +95,8 @@ and destination errors within supported handler shapes. A direct `Character.toCh
 can be used in a typed handler when control flow cannot bypass the array creation.
 `Character.toString(int)` preserves UTF-16 code units and transports invalid-code-point errors
 within supported handler shapes.
+`Character.codePointAt(char[], int)` and `Character.codePointBefore(char[], int)` read surrogate
+pairs and transport null-array and invalid-index errors within supported handler shapes.
 `Path.of`, `Paths.get`, and `Path.resolve` report supported null inputs and embedded
 U+0000 through typed exceptions. Some inline varargs inside `catch` ranges still fail
 verification and can be moved outside the protected range.

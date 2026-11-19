@@ -8829,6 +8829,42 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        int javan_character_array_code_point_at(void* value, int index) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            javan_char_array* chars = (javan_char_array*) value;
+            if (index < 0 || index >= chars->length) {
+                javan_pending_throw("java/lang/ArrayIndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            int first = chars->values[index];
+            if (javan_character_is_high_surrogate(first) && index + 1 < chars->length) {
+                int second = chars->values[index + 1];
+                if (javan_character_is_low_surrogate(second)) return javan_character_to_code_point(first, second);
+            }
+            return first;
+        }
+
+        int javan_character_array_code_point_before(void* value, int index) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            javan_char_array* chars = (javan_char_array*) value;
+            if (index <= 0 || index > chars->length) {
+                javan_pending_throw("java/lang/ArrayIndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            int last = chars->values[index - 1];
+            if (javan_character_is_low_surrogate(last) && index >= 2) {
+                int previous = chars->values[index - 2];
+                if (javan_character_is_high_surrogate(previous)) return javan_character_to_code_point(previous, last);
+            }
+            return last;
+        }
+
         int javan_character_write_chars(int value, void* destination, int index) {
             if (!javan_character_is_valid_code_point(value)) {
                 javan_pending_throw("java/lang/IllegalArgumentException", NULL, NULL, NULL, NULL, -1, -1, NULL);

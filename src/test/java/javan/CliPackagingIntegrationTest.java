@@ -1042,6 +1042,53 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsCharacterArrayCodePointAccess() throws Exception {
+        final Path project = tempDir.resolve("selfhost-character-array-codepoints");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int at(char[] value, int index) {
+                    try { return Character.codePointAt(value, index); }
+                    catch (NullPointerException ex) { return -1; }
+                    catch (ArrayIndexOutOfBoundsException ex) { return -2; }
+                }
+                static int before(char[] value, int index) {
+                    try { return Character.codePointBefore(value, index); }
+                    catch (NullPointerException ex) { return -1; }
+                    catch (ArrayIndexOutOfBoundsException ex) { return -2; }
+                }
+                public static void main(String[] args) {
+                    char[] value = {'a', '\\ud800', '\\udc00', '\\udfff', 0};
+                    for (int i = -1; i <= value.length + 1; i++) {
+                        System.out.println(at(value, i));
+                        System.out.println(before(value, i));
+                    }
+                    System.out.println(at(null, 0));
+                    System.out.println(before(null, 0));
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-character-array-codepoints"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-character-array-codepoints").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout());
+    }
+
+    @Test
     void nativeBuiltJavanBuildsCharacterCodePointToString() throws Exception {
         final Path project = tempDir.resolve("selfhost-character-codepoint-string");
         final Path classes = project.resolve("classes");
