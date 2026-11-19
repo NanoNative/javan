@@ -396,6 +396,15 @@ final class BytecodeToIRLangSupport {
             ));
             return true;
         }
+        if ("([BLjava/nio/charset/Charset;)V".equals(methodRef.descriptor())
+            || "([BIILjava/nio/charset/Charset;)V".equals(methodRef.descriptor())) {
+            final boolean ranged = "([BIILjava/nio/charset/Charset;)V".equals(methodRef.descriptor());
+            instructions.add(IrInstruction.assignObject(receiver.value(), IrExpression.objectCall("javan_string_from_utf8_charset_java",
+                List.of(arguments.getFirst(), ranged ? arguments.get(1) : IrExpression.intLiteral(0),
+                    ranged ? arguments.get(2) : IrExpression.intLiteral(0), IrExpression.intLiteral(ranged ? 1 : 0),
+                    arguments.get(ranged ? 3 : 1)))));
+            return true;
+        }
         if ("([B)V".equals(methodRef.descriptor()) || "([BII)V".equals(methodRef.descriptor())) {
             final boolean ranged = "([BII)V".equals(methodRef.descriptor());
             instructions.add(IrInstruction.assignObject(receiver.value(), IrExpression.objectCall("javan_string_from_utf8_java",

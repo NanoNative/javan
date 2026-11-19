@@ -120,9 +120,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksStringCharsetConstructorAsExplicitRejected() {
+    void marksStringCharsetConstructorAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/String", "<init>", "([BLjava/nio/charset/Charset;)V")))
-            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test

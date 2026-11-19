@@ -545,7 +545,7 @@ public final class JdkCallSupport {
         runtime("Duration.toMillis", "java/time/Duration", "toMillis", "()J"),
         runtime("PrintStream.print", "java/io/PrintStream", "print", "(Ljava/lang/String;)V", "(Ljava/lang/Object;)V", "([C)V", "(C)V", "(Z)V", "(I)V", "(J)V", "(F)V", "(D)V"),
         runtime("PrintStream.println", "java/io/PrintStream", "println", "()V", "(Ljava/lang/String;)V", "(Ljava/lang/Object;)V", "([C)V", "(I)V", "(J)V", "(F)V", "(D)V", "(Z)V", "(C)V"),
-        runtime("String.<init>", "java/lang/String", "<init>", "()V", "(Ljava/lang/String;)V", "(Ljava/lang/StringBuilder;)V", "([C)V", "([CII)V", "([B)V", "([BII)V"),
+        runtime("String.<init>", "java/lang/String", "<init>", "()V", "(Ljava/lang/String;)V", "(Ljava/lang/StringBuilder;)V", "([C)V", "([CII)V", "([B)V", "([BII)V", "([BLjava/nio/charset/Charset;)V", "([BIILjava/nio/charset/Charset;)V"),
         runtime("String.length", "java/lang/String", "length", "()I"),
         runtime("String.hashCode", "java/lang/String", "hashCode", "()I"),
         runtime("String.isEmpty", "java/lang/String", "isEmpty", "()Z"),
@@ -2003,7 +2003,9 @@ public final class JdkCallSupport {
             return List.of("java/lang/NullPointerException");
         }
         if ("java/lang/String".equals(methodRef.owner()) && "<init>".equals(methodRef.name())
-            && ("([B)V".equals(methodRef.descriptor()) || "([BII)V".equals(methodRef.descriptor()))) {
+            && ("([B)V".equals(methodRef.descriptor()) || "([BII)V".equals(methodRef.descriptor())
+                || "([BLjava/nio/charset/Charset;)V".equals(methodRef.descriptor())
+                || "([BIILjava/nio/charset/Charset;)V".equals(methodRef.descriptor()))) {
             return List.of("java/lang/NullPointerException", "java/lang/StringIndexOutOfBoundsException");
         }
         if ("java/lang/String".equals(methodRef.owner()) && "replace".equals(methodRef.name())

@@ -582,6 +582,9 @@ public final class BytecodeToIR {
         result.put("javan_string_replace_sequence_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/lang/String", "replace", "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;"
         )));
+        result.put("javan_string_from_utf8_charset_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/lang/String", "<init>", "([BIILjava/nio/charset/Charset;)V"
+        )));
         result.put("javan_string_from_utf8_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/lang/String", "<init>", "([BII)V"
         )));

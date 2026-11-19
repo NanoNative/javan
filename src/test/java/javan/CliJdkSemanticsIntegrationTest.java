@@ -13773,6 +13773,57 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void stringConstructorsUseExplicitUtf8CharsetAndCheckArguments() throws Exception {
+        final Path project = project("string-explicit-utf8-constructors");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.nio.charset.Charset;
+            import java.nio.charset.StandardCharsets;
+            public final class Main {
+                static String full(byte[] bytes, Charset charset) {
+                    try { return new String(bytes, charset); }
+                    catch (NullPointerException ex) { return "null"; }
+                }
+                static String slice(byte[] bytes, int offset, int length, Charset charset) {
+                    try { return new String(bytes, offset, length, charset); }
+                    catch (NullPointerException ex) { return "null"; }
+                    catch (IndexOutOfBoundsException ex) { return "range"; }
+                }
+                static int order;
+                static byte[] bytes() { order = order * 10 + 1; return new byte[] {65}; }
+                static int offset() { order = order * 10 + 2; return 0; }
+                static int length() { order = order * 10 + 3; return 1; }
+                static Charset charset() { order = order * 10 + 4; return StandardCharsets.UTF_8; }
+                static void show(String value) {
+                    System.out.println(value.length());
+                    for (int i = 0; i < value.length(); i++) System.out.println((int) value.charAt(i));
+                }
+                public static void main(String[] args) {
+                    byte[] bytes = {65, 0, (byte) 0xf0, (byte) 0x9f, (byte) 0x98, (byte) 0x80,
+                        (byte) 0xed, (byte) 0xa0, (byte) 0x80, 66};
+                    show(full(bytes, StandardCharsets.UTF_8));
+                    show(slice(bytes, 1, 8, Charset.defaultCharset()));
+                    System.out.println(full(null, StandardCharsets.UTF_8));
+                    System.out.println(full(bytes, null));
+                    System.out.println(slice(bytes, -1, 1, StandardCharsets.UTF_8));
+                    System.out.println(slice(bytes, -1, 1, null));
+                    System.out.println(slice(null, -1, 1, StandardCharsets.UTF_8));
+                    System.out.println(new String(bytes(), offset(), length(), charset()));
+                    System.out.println(order);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-explicit-utf8-constructors").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void stringUtf8ConstructorMatchesInterpretedJavaAcrossBytePairs() throws Exception {
         final Path project = project("string-utf8-byte-pairs");
         writeJava(project, "com.acme.Main", """
@@ -13830,10 +13881,11 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                                 (byte) 0xed, (byte) 0xa0, (byte) 0x80, 66};
                             String value = new String(bytes, 1, 8);
                             String all = new String(bytes);
+                            String explicit = new String(bytes, 1, 8, java.nio.charset.StandardCharsets.UTF_8);
                             new String(new char[] {'x', 'y'});
                             if (value.length() != 4 || value.charAt(0) != 0 || value.charAt(1) != (char) 0xd83d
                                 || value.charAt(2) != (char) 0xde00 || value.charAt(3) != (char) 0xfffd
-                                || all.length() != 6 || all.charAt(5) != 'B') errors.incrementAndGet();
+                                || all.length() != 6 || all.charAt(5) != 'B' || !explicit.equals(value)) errors.incrementAndGet();
                         }
                     }
                 }

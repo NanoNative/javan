@@ -10352,6 +10352,22 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        void* javan_string_from_utf8_charset_java(void* array, int offset, int count, int ranged, void* charset) {
+            if (charset == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
+            }
+            (void) javan_charset_utf8_checked(charset);
+            return javan_string_from_utf8_java(array, offset, count, ranged);
+        }
+
+        void javan_string_from_utf8_charset_java_into(void** result, void* array, int offset, int count, int ranged, void* charset) {
+            if (result == NULL) javan_panic("invalid String result");
+            javan_runtime_lock_enter();
+            *result = javan_string_from_utf8_charset_java(array, offset, count, ranged, charset);
+            javan_runtime_lock_leave();
+        }
+
         void javan_string_from_utf8_java_into(void** result, void* array, int offset, int count, int ranged) {
             if (result == NULL) javan_panic("invalid String result");
             javan_runtime_lock_enter();
