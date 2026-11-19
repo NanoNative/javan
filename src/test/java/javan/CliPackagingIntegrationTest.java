@@ -965,6 +965,44 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsStringCodePointSearch() throws Exception {
+        final Path project = tempDir.resolve("selfhost-string-codepoint-search");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    String value = new String(new char[]{'a', (char) 0xd83d, (char) 0xde00, 'b', (char) 0xd83d, (char) 0xde00});
+                    int[] targets = {-1, 0xd83d, 0xde00, 0x1f600, 0x110000};
+                    for (int target : targets) {
+                        System.out.println(value.indexOf(target));
+                        System.out.println(value.lastIndexOf(target));
+                        System.out.println(value.indexOf(target, 2));
+                        System.out.println(value.lastIndexOf(target, 2));
+                    }
+                    System.out.println("a".repeat(100000).lastIndexOf('z'));
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-string-codepoint-search"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-string-codepoint-search").toString()), Duration.ofSeconds(30));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout());
+    }
+
+    @Test
     void nativeBuiltJavanBuildsCharacterWhitespaceInt() throws Exception {
         final Path project = tempDir.resolve("selfhost-character-whitespace-int");
         final Path classes = project.resolve("classes");

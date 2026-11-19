@@ -13764,6 +13764,100 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void stringCodePointSearchMatchesJavaAcrossSurrogateCombinations() throws Exception {
+        final Path project = project("string-codepoint-search-combinations");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    char[] alphabet = {0, 'a', (char) 0xd800, (char) 0xdbff, (char) 0xdc00, (char) 0xdfff, (char) 0xffff};
+                    int[] targets = {-1, 0, 'a', 0xd800, 0xdbff, 0xdc00, 0xdfff, 0xffff,
+                        0x10000, 0x103ff, 0x10fc00, 0x10ffff, 0x110000};
+                    long result = 1;
+                    for (int combination = 0; combination < 2401; combination++) {
+                        char[] chars = new char[4];
+                        int digits = combination;
+                        for (int index = 0; index < chars.length; index++) {
+                            chars[index] = alphabet[digits % alphabet.length];
+                            digits /= alphabet.length;
+                        }
+                        String value = new String(chars);
+                        for (int target : targets) for (int start = -1; start <= 5; start++) {
+                            result = result * 31 + value.indexOf(target, start);
+                            result = result * 31 + value.lastIndexOf(target, start);
+                        }
+                    }
+                    System.out.println(result);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-codepoint-search-combinations").toString()),
+            Duration.ofSeconds(60));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void longStringLastIndexSearchCompletesWithinBoundedTime() throws Exception {
+        final Path project = project("string-long-last-index");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    String value = "a".repeat(100000);
+                    System.out.println(value.lastIndexOf('z'));
+                    System.out.println(value.lastIndexOf(0x1f600));
+                    System.out.println(value.lastIndexOf('a', 0));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-long-last-index").toString()),
+            Duration.ofSeconds(5));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringCodePointSearchMatchesJava() throws Exception {
+        final Path project = project("string-codepoint-search");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    String[] values = {
+                        "", "abc", new String(new char[]{0, 'a', 0}),
+                        new String(new char[]{'a', (char) 0xd83d, (char) 0xde00, 'b', (char) 0xd83d, (char) 0xde00}),
+                        new String(new char[]{(char) 0xd83d, 'x', (char) 0xde00, (char) 0xffff})
+                    };
+                    int[] targets = {Integer.MIN_VALUE, -1, 0, 'a', 'b', 0xd83d, 0xde00,
+                        0xffff, 0x10000, 0x1f600, 0x10ffff, 0x110000, Integer.MAX_VALUE};
+                    int[] starts = {Integer.MIN_VALUE, -1, 0, 1, 2, 3, 5, 6, 7, Integer.MAX_VALUE};
+                    for (String value : values) for (int target : targets) {
+                        System.out.println(value.indexOf(target));
+                        System.out.println(value.lastIndexOf(target));
+                        for (int start : starts) {
+                            System.out.println(value.indexOf(target, start));
+                            System.out.println(value.lastIndexOf(target, start));
+                        }
+                    }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-codepoint-search").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void characterCodePointAndSurrogatePrimitivesMatchJava() throws Exception {
         final Path project = project("character-codepoint-primitives");
         writeJava(project, "com.acme.Main", """

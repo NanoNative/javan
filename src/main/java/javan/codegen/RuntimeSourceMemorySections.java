@@ -10392,18 +10392,45 @@ final class RuntimeSourceMemorySections {
             return javan_string_index_of_char_from(value, ch, 0);
         }
 
-        int javan_string_index_of_char_from(const char* value, int ch, int from_index) {
+        static int javan_string_search_code_point(const char* value, int ch, int from_index, int backwards) {
             int length = javan_string_length(value);
-            int start = from_index < 0 ? 0 : from_index;
-            if (start >= length) {
+            if (length == 0 || ch < 0 || ch > 0x10ffff || (backwards && from_index < 0)) {
                 return -1;
             }
-            for (int index = start; index < length; index++) {
-                if (javan_utf16_char_at_utf8(value, index) == (ch & 0xffff)) {
-                    return index;
+            int start = from_index < 0 ? 0 : from_index;
+            if (!backwards && start >= length) {
+                return -1;
+            }
+            int limit = length - 1;
+            if (backwards && from_index < limit) {
+                limit = from_index;
+                if (ch > 0xffff) {
+                    limit++;
                 }
             }
-            return -1;
+            int high = ch > 0xffff ? 0xd800 + ((ch - 0x10000) >> 10) : -1;
+            int low = ch > 0xffff ? 0xdc00 + ((ch - 0x10000) & 0x3ff) : -1;
+            int previous = -1;
+            int result = -1;
+            const unsigned char* cursor = (const unsigned char*) value;
+            int pending_low_surrogate = -1;
+            for (int index = 0; index <= limit; index++) {
+                int current = javan_utf16_next_char(&cursor, &pending_low_surrogate);
+                int candidate = ch > 0xffff ? index - 1 : index;
+                int match = ch > 0xffff ? previous == high && current == low : current == ch;
+                if (match && (backwards ? candidate <= from_index : candidate >= start)) {
+                    if (!backwards) {
+                        return candidate;
+                    }
+                    result = candidate;
+                }
+                previous = current;
+            }
+            return result;
+        }
+
+        int javan_string_index_of_char_from(const char* value, int ch, int from_index) {
+            return javan_string_search_code_point(value, ch, from_index, 0);
         }
 
         int javan_string_index_of_string(const char* value, const char* needle) {
@@ -10438,22 +10465,11 @@ final class RuntimeSourceMemorySections {
         }
 
         int javan_string_last_index_of_char(const char* value, int ch) {
-            int length = javan_string_length(value);
-            return javan_string_last_index_of_char_from(value, ch, length - 1);
+            return javan_string_last_index_of_char_from(value, ch, INT_MAX);
         }
 
         int javan_string_last_index_of_char_from(const char* value, int ch, int from_index) {
-            int length = javan_string_length(value);
-            if (length == 0 || from_index < 0) {
-                return -1;
-            }
-            int start = from_index >= length ? length - 1 : from_index;
-            for (int index = start; index >= 0; index--) {
-                if (javan_utf16_char_at_utf8(value, index) == (ch & 0xffff)) {
-                    return index;
-                }
-            }
-            return -1;
+            return javan_string_search_code_point(value, ch, from_index, 1);
         }
 
         int javan_string_last_index_of_string(const char* value, const char* needle) {
