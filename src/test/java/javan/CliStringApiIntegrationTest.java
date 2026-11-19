@@ -495,7 +495,7 @@ final class CliStringApiIntegrationTest extends CliIntegrationSupport {
 
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/string-concat-null-argument").toString()));
         assertThat(nativeRun.exitCode()).isNotZero();
-        assertThat(nativeRun.stderr()).contains("[JAVAN-RUNTIME-PANIC]", "detail: null object");
+        assertThat(nativeRun.stderr()).contains("[JAVAN-RUNTIME-PANIC]", "java/lang/NullPointerException");
     }
 
     @Test
