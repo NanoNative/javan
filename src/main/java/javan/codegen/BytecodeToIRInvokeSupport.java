@@ -3583,6 +3583,28 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_character_value_of", List.of(popInt(classFile, method, stack)))));
             return true;
         }
+        if ("highSurrogate".equals(methodRef.name()) && "(I)C".equals(methodRef.descriptor())) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_character_high_surrogate", List.of(popInt(classFile, method, stack)))));
+            return true;
+        }
+        if ("lowSurrogate".equals(methodRef.name()) && "(I)C".equals(methodRef.descriptor())) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_character_low_surrogate", List.of(popInt(classFile, method, stack)))));
+            return true;
+        }
+        if ("reverseBytes".equals(methodRef.name()) && "(C)C".equals(methodRef.descriptor())) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_character_reverse_bytes", List.of(popInt(classFile, method, stack)))));
+            return true;
+        }
+        if ("hashCode".equals(methodRef.name()) && "(C)I".equals(methodRef.descriptor())) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_character_hash_code", List.of(popInt(classFile, method, stack)))));
+            return true;
+        }
+        if ("compare".equals(methodRef.name()) && "(CC)I".equals(methodRef.descriptor())) {
+            final IrExpression right = popInt(classFile, method, stack);
+            final IrExpression left = popInt(classFile, method, stack);
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_character_compare", List.of(left, right))));
+            return true;
+        }
         if ("isValidCodePoint".equals(methodRef.name()) && "(I)Z".equals(methodRef.descriptor())) {
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_character_is_valid_code_point", List.of(popInt(classFile, method, stack)))));
             return true;

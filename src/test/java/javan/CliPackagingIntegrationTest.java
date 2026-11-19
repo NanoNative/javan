@@ -955,6 +955,11 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                         System.out.println(Character.isSurrogate(ch));
                         System.out.println(Character.isSurrogatePair(ch, (char) 0xdc00));
                         System.out.println(Character.toCodePoint(ch, (char) 0xdc00));
+                        System.out.println((int) Character.highSurrogate(value));
+                        System.out.println((int) Character.lowSurrogate(value));
+                        System.out.println((int) Character.reverseBytes(ch));
+                        System.out.println(Character.hashCode(ch));
+                        System.out.println(Character.compare(ch, (char) 0xffff));
                     }
                 }
             }

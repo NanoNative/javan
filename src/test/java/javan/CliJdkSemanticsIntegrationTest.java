@@ -13654,6 +13654,48 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void characterConversionPrimitivesMatchJava() throws Exception {
+        final Path project = project("character-conversion-primitives");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int order = 0;
+                static char next(char value, int digit) { order = order * 10 + digit; return value; }
+                static long hash(long value, int item) { return value * 31 + item; }
+                public static void main(String[] args) {
+                    int[] boundary = {Integer.MIN_VALUE, -1, 0, 0xffff, 0x10000, 0x10ffff, 0x110000, Integer.MAX_VALUE};
+                    long result = 1;
+                    for (int value : boundary) {
+                        System.out.println((int) Character.highSurrogate(value));
+                        System.out.println((int) Character.lowSurrogate(value));
+                    }
+                    for (int value = 0; value <= 0x10ffff; value++) {
+                        result = hash(result, Character.highSurrogate(value));
+                        result = hash(result, Character.lowSurrogate(value));
+                        if (value <= 0xffff) {
+                            char ch = (char) value;
+                            result = hash(result, Character.reverseBytes(ch));
+                            result = hash(result, Character.hashCode(ch));
+                            result = hash(result, Character.compare(ch, (char) 0));
+                            result = hash(result, Character.compare(ch, (char) 0xffff));
+                        }
+                    }
+                    System.out.println(result);
+                    System.out.println(Character.compare(next((char) 1, 1), next((char) 2, 2)));
+                    System.out.println(order);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/character-conversion-primitives").toString()),
+            Duration.ofSeconds(60));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void characterCodePointAndSurrogatePrimitivesMatchJava() throws Exception {
         final Path project = project("character-codepoint-primitives");
         writeJava(project, "com.acme.Main", """

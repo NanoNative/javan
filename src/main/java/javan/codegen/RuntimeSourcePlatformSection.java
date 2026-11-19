@@ -519,6 +519,13 @@ final class RuntimeSourcePlatformSection {
         int javan_character_is_low_surrogate(int value) { return value >= 0xdc00 && value <= 0xdfff; }
         int javan_character_is_surrogate(int value) { return value >= 0xd800 && value <= 0xdfff; }
         int javan_character_is_iso_control(int value) { return (value >= 0 && value <= 0x1f) || (value >= 0x7f && value <= 0x9f); }
+        int javan_character_high_surrogate(int value) {
+            return (int) ((((unsigned int) value >> 10) + 0xd7c0U) & 0xffffU);
+        }
+        int javan_character_low_surrogate(int value) { return (value & 0x3ff) + 0xdc00; }
+        int javan_character_reverse_bytes(int value) { return ((value & 0xff) << 8) | ((value >> 8) & 0xff); }
+        int javan_character_hash_code(int value) { return value; }
+        int javan_character_compare(int left, int right) { return left - right; }
         int javan_character_is_surrogate_pair(int high, int low) {
             return javan_character_is_high_surrogate(high) && javan_character_is_low_surrogate(low);
         }

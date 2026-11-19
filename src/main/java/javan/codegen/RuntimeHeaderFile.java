@@ -433,6 +433,11 @@ final class RuntimeHeaderFile {
         int javan_character_is_low_surrogate(int value);
         int javan_character_is_surrogate(int value);
         int javan_character_is_iso_control(int value);
+        int javan_character_high_surrogate(int value);
+        int javan_character_low_surrogate(int value);
+        int javan_character_reverse_bytes(int value);
+        int javan_character_hash_code(int value);
+        int javan_character_compare(int left, int right);
         int javan_character_is_surrogate_pair(int high, int low);
         int javan_character_to_code_point(int high, int low);
         void* javan_string_substring(const char* value, int begin);
