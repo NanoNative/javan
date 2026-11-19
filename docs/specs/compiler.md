@@ -105,6 +105,8 @@ supported handler shapes.
 supported handler shapes.
 `String.charAt` supports Unicode literals. Provably invalid ASCII literal indices remain subject
 to the diagnostics policy.
+`String.codePointAt`, `codePointBefore`, `codePointCount`, and `offsetByCodePoints` also accept
+Unicode literals.
 Both `Character.toChars` overloads produce UTF-16 code units and transport invalid-code-point
 and destination errors within supported handler shapes. A direct `Character.toChars(...).length`
 can be used in a typed handler when control flow cannot bypass the array creation.

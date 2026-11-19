@@ -1764,6 +1764,10 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     String value = new String(new char[]{'a', (char) 0xd83d, (char) 0xde00, (char) 0xd800});
                     for (int index = -1; index <= 5; index++) { at(value, index); before(value, index); }
                     at(null, 0); before(null, 0);
+                    System.out.println("\\0\\ud800\\udc00\\udfff".codePointAt(1));
+                    System.out.println("\\0\\ud800\\udc00\\udfff".codePointBefore(3));
+                    System.out.println("\\0\\ud800\\udc00\\udfff".codePointCount(0, 4));
+                    System.out.println("\\0\\ud800\\udc00\\udfff".offsetByCodePoints(1, 1));
                 }
             }
             """);
@@ -3607,6 +3611,10 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static int strictEmpty(String value) { return value.isEmpty() ? 1 : 0; }
                 public static int strictBlank(String value) { return value.isBlank() ? 1 : 0; }
                 public static int literalCharAt(int index) { return "\\0\\ud800\\udc00\\udfff".charAt(index); }
+                public static int literalCodePointAt(int index) { return "\\0\\ud800\\udc00\\udfff".codePointAt(index); }
+                public static int literalCodePointBefore(int index) { return "\\0\\ud800\\udc00\\udfff".codePointBefore(index); }
+                public static int literalCodePointCount(int begin) { return "\\0\\ud800\\udc00\\udfff".codePointCount(begin, 4); }
+                public static int literalCodePointOffset(int index) { return "\\0\\ud800\\udc00\\udfff".offsetByCodePoints(index, 1); }
                 public static String fail(String value) { throw new IllegalArgumentException(value); }
                 public static String literal() { return "a\\0b"; }
                 public static String fromCodePoint(int value) { return Character.toString(value); }
@@ -3624,7 +3632,9 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "--export", "com.acme.Text.literal", "--export", "com.acme.Text.fromCodePoint", "--export", "com.acme.Text.copy",
             "--export", "com.acme.Text.repeat", "--export", "com.acme.Text.strictLength", "--export", "com.acme.Text.getChars",
             "--export", "com.acme.Text.strictHash", "--export", "com.acme.Text.strictEmpty", "--export", "com.acme.Text.strictBlank",
-            "--export", "com.acme.Text.literalCharAt");
+            "--export", "com.acme.Text.literalCharAt", "--export", "com.acme.Text.literalCodePointAt",
+            "--export", "com.acme.Text.literalCodePointBefore", "--export", "com.acme.Text.literalCodePointCount",
+            "--export", "com.acme.Text.literalCodePointOffset");
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         final Path library = project.resolve(".javan/dist/liblibrary-utf16.a");
         final Path caller = writeC(project, "call_utf16.c", """
@@ -3651,6 +3661,23 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 result = javan_try_com_acme_Text_literalCharAt_int(4, &invalid_character);
                 if (result.ok || invalid_character != 0 || result.message == NULL
                     || strstr(result.message, "java/lang/StringIndexOutOfBoundsException") == NULL) return 37;
+                javan_result_free(&result);
+                int point = -1;
+                result = javan_try_com_acme_Text_literalCodePointAt_int(1, &point);
+                if (!result.ok || point != 0x10000) return 38;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Text_literalCodePointBefore_int(3, &point);
+                if (!result.ok || point != 0x10000) return 39;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Text_literalCodePointCount_int(0, &point);
+                if (!result.ok || point != 3) return 40;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Text_literalCodePointOffset_int(1, &point);
+                if (!result.ok || point != 3) return 41;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Text_literalCodePointCount_int(5, &point);
+                if (result.ok || point != 0 || result.message == NULL
+                    || strstr(result.message, "java/lang/IndexOutOfBoundsException") == NULL) return 42;
                 javan_result_free(&result);
                 result = javan_utf16_try_com_acme_Text_copy_string(input, &output);
                 if (!result.ok || output.length != 7 || memcmp(data, output.data, sizeof(data))) return 16;

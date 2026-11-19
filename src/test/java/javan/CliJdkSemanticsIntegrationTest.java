@@ -15613,6 +15613,57 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void stringCodePointMethodsAcceptUnicodeLiterals() throws Exception {
+        final Path project = project("string-code-point-unicode-literals");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int at(int i) {
+                    try { return "\\0\\ud800\\udc00\\udfff\\udbff".codePointAt(i); }
+                    catch (IndexOutOfBoundsException ex) { return -1; }
+                }
+                static int before(int i) {
+                    try { return "\\0\\ud800\\udc00\\udfff\\udbff".codePointBefore(i); }
+                    catch (IndexOutOfBoundsException ex) { return -1; }
+                }
+                static int count(int begin, int end) {
+                    try { return "\\0\\ud800\\udc00\\udfff\\udbff".codePointCount(begin, end); }
+                    catch (IndexOutOfBoundsException ex) { return -1; }
+                }
+                static int offset(int index, int distance) {
+                    try { return "\\0\\ud800\\udc00\\udfff\\udbff".offsetByCodePoints(index, distance); }
+                    catch (IndexOutOfBoundsException ex) { return -1; }
+                }
+                static int index() { return new String(new char[] {'x'}).length(); }
+                public static void main(String[] args) {
+                    for (int i = -1; i <= 6; i++) {
+                        System.out.println(at(i));
+                        System.out.println(before(i));
+                        for (int j = -2; j <= 6; j++) {
+                            System.out.println(count(i, j));
+                            System.out.println(offset(i, j));
+                        }
+                    }
+                    System.out.println("\\ud800\\udc00".codePointAt(index()));
+                    System.out.println("\\ud800\\udc00".codePointBefore(index()));
+                    System.out.println("\\ud800\\udc00".codePointCount(0, index()));
+                    System.out.println("\\ud800\\udc00".offsetByCodePoints(index(), 1));
+                    System.out.println(count(Integer.MIN_VALUE, Integer.MAX_VALUE));
+                    System.out.println(offset(Integer.MAX_VALUE, Integer.MIN_VALUE));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-code-point-unicode-literals").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void stringCodePointOffsetRemainsValidDuringConcurrentCollection() throws Exception {
         final Path project = project("string-codepoint-offset-concurrent");
         writeJava(project, "com.acme.Main", """
