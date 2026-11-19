@@ -579,13 +579,16 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.intExpression(IrExpression.intCall(symbol, List.of(receiver, index))));
             return;
         }
-        if ("java/lang/String".equals(methodRef.owner()) && "codePointCount".equals(methodRef.name())
+        if ("java/lang/String".equals(methodRef.owner())
+            && ("codePointCount".equals(methodRef.name()) || "offsetByCodePoints".equals(methodRef.name()))
             && "(II)I".equals(methodRef.descriptor())) {
-            final IrExpression end = popInt(classFile, method, stack);
-            final IrExpression begin = popInt(classFile, method, stack);
+            final IrExpression second = popInt(classFile, method, stack);
+            final IrExpression first = popInt(classFile, method, stack);
             final IrExpression receiver = popObject(classFile, method, stack);
             rejectUnsupportedStringSemantic(classFile, method, instruction, receiver);
-            stack.add(StackValue.intExpression(IrExpression.intCall("javan_string_code_point_count", List.of(receiver, begin, end))));
+            final String symbol = "codePointCount".equals(methodRef.name())
+                ? "javan_string_code_point_count" : "javan_string_offset_by_code_points";
+            stack.add(StackValue.intExpression(IrExpression.intCall(symbol, List.of(receiver, first, second))));
             return;
         }
         if ("java/lang/String".equals(methodRef.owner()) && "indexOf".equals(methodRef.name()) && "(I)I".equals(methodRef.descriptor())) {

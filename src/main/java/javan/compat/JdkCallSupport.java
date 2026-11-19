@@ -549,6 +549,7 @@ public final class JdkCallSupport {
         runtime("String.codePointAt", "java/lang/String", "codePointAt", "(I)I"),
         runtime("String.codePointBefore", "java/lang/String", "codePointBefore", "(I)I"),
         runtime("String.codePointCount", "java/lang/String", "codePointCount", "(II)I"),
+        runtime("String.offsetByCodePoints", "java/lang/String", "offsetByCodePoints", "(II)I"),
         runtime("String.indexOf", "java/lang/String", "indexOf", "(I)I"),
         runtime("String.indexOf", "java/lang/String", "indexOf", "(II)I"),
         runtime("String.indexOf", "java/lang/String", "indexOf", "(Ljava/lang/String;)I"),
@@ -1992,7 +1993,8 @@ public final class JdkCallSupport {
                     && "(I)I".equals(methodRef.descriptor()))) {
             return List.of("java/lang/StringIndexOutOfBoundsException", "java/lang/NullPointerException");
         }
-        if ("java/lang/String".equals(methodRef.owner()) && "codePointCount".equals(methodRef.name())
+        if ("java/lang/String".equals(methodRef.owner())
+            && ("codePointCount".equals(methodRef.name()) || "offsetByCodePoints".equals(methodRef.name()))
             && "(II)I".equals(methodRef.descriptor())) {
             return List.of("java/lang/IndexOutOfBoundsException", "java/lang/NullPointerException");
         }

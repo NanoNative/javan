@@ -10443,6 +10443,62 @@ final class RuntimeSourceMemorySections {
             return count;
         }
 
+        int javan_string_offset_by_code_points(const char* value, int index, int distance) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            int length = javan_string_length(value);
+            if (index < 0 || index > length) {
+                javan_pending_throw("java/lang/IndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            if (distance == 0) {
+                return index;
+            }
+            int position = 0;
+            int limit = length;
+            int steps = distance;
+            if (distance < 0) {
+                int preceding = javan_string_code_point_count(value, 0, index);
+                if (distance < -preceding) {
+                    javan_pending_throw("java/lang/IndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                    return 0;
+                }
+                steps = preceding + distance;
+                limit = index;
+            }
+            const unsigned char* cursor = (const unsigned char*) value;
+            int pending_low_surrogate = -1;
+            if (distance >= 0) {
+                while (position < index) {
+                    (void) javan_utf16_next_char(&cursor, &pending_low_surrogate);
+                    position++;
+                }
+            }
+            while (steps > 0) {
+                if (position >= limit) {
+                    javan_pending_throw("java/lang/IndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                    return 0;
+                }
+                int first = javan_utf16_next_char(&cursor, &pending_low_surrogate);
+                position++;
+                if (first >= 0xd800 && first <= 0xdbff && position < limit) {
+                    const unsigned char* saved_cursor = cursor;
+                    int saved_pending = pending_low_surrogate;
+                    int second = javan_utf16_next_char(&cursor, &pending_low_surrogate);
+                    if (second >= 0xdc00 && second <= 0xdfff) {
+                        position++;
+                    } else {
+                        cursor = saved_cursor;
+                        pending_low_surrogate = saved_pending;
+                    }
+                }
+                steps--;
+            }
+            return position;
+        }
+
         int javan_string_index_of_char(const char* value, int ch) {
             return javan_string_index_of_char_from(value, ch, 0);
         }

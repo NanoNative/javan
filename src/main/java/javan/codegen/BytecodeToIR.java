@@ -509,6 +509,9 @@ public final class BytecodeToIR {
         result.put("javan_string_code_point_count", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/lang/String", "codePointCount", "(II)I"
         )));
+        result.put("javan_string_offset_by_code_points", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/lang/String", "offsetByCodePoints", "(II)I"
+        )));
         result.put("javan_path_of", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/nio/file/Path", "of", "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;"
         )));

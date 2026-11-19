@@ -402,6 +402,7 @@ final class RuntimeHeaderFile {
         int javan_string_code_point_at(const char* value, int index);
         int javan_string_code_point_before(const char* value, int index);
         int javan_string_code_point_count(const char* value, int begin, int end);
+        int javan_string_offset_by_code_points(const char* value, int index, int distance);
         int javan_string_index_of_char(const char* value, int ch);
         int javan_string_index_of_char_from(const char* value, int ch, int from_index);
         int javan_string_index_of_string(const char* value, const char* needle);
