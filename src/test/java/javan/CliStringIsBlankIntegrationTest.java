@@ -153,15 +153,12 @@ final class CliStringIsBlankIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void nullReceiverFailsAtNativeBoundary() {
+    void nullReceiverReportsUncaughtNullPointerException() {
         final ProcessResult result = runNative(NULL_RECEIVER);
 
-        assertThat(new NativeFailure(
-            result.exitCode() != 0,
-            result.stdout(),
-            result.stderr().contains("[JAVAN-RUNTIME-PANIC]"),
-            result.stderr().contains("detail: null string")
-        )).isEqualTo(new NativeFailure(true, "", true, true));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEmpty();
+        assertThat(result.stderr()).contains("NullPointerException");
     }
 
     private BlankResult runBlank(final String value) {
@@ -202,6 +199,4 @@ final class CliStringIsBlankIntegrationTest extends CliIntegrationSupport {
     ) {
     }
 
-    private record NativeFailure(boolean failed, String stdout, boolean panic, boolean nullString) {
-    }
 }
