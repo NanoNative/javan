@@ -72,6 +72,8 @@ final class IntrinsicUsageReportsTest {
             new IntrinsicCallCount("Math.round", 0),
             new IntrinsicCallCount("Math.floorDiv", 1),
             new IntrinsicCallCount("Math.floorMod", 0),
+            new IntrinsicCallCount("Math.ceilDiv", 0),
+            new IntrinsicCallCount("Math.ceilMod", 0),
             new IntrinsicCallCount("Math.floor", 0),
             new IntrinsicCallCount("Math.ceil", 0),
             new IntrinsicCallCount("Math.atan2", 0),

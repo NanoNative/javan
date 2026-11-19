@@ -30,13 +30,15 @@ final class BytecodeToIRMathSupport {
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final SourceLineIndex sourceLines
     ) {
-        if (("floorDiv".equals(methodRef.name())
+        if ((("floorDiv".equals(methodRef.name()) || "ceilDiv".equals(methodRef.name()))
                 && ("(II)I".equals(methodRef.descriptor()) || "(JI)J".equals(methodRef.descriptor())
                     || "(JJ)J".equals(methodRef.descriptor())))
-            || ("floorMod".equals(methodRef.name())
+            || (("floorMod".equals(methodRef.name()) || "ceilMod".equals(methodRef.name()))
                 && ("(II)I".equals(methodRef.descriptor()) || "(JI)I".equals(methodRef.descriptor())
                     || "(JJ)J".equals(methodRef.descriptor())))) {
-            final boolean floorMod = "floorMod".equals(methodRef.name());
+            final boolean modulus = "floorMod".equals(methodRef.name()) || "ceilMod".equals(methodRef.name());
+            final String rounding = "ceilDiv".equals(methodRef.name()) || "ceilMod".equals(methodRef.name())
+                ? "ceil" : "floor";
             final boolean leftLong = !"(II)I".equals(methodRef.descriptor());
             final boolean rightLong = "(JJ)J".equals(methodRef.descriptor());
             final IrExpression right = rightLong ? popLong(classFile, method, stack) : popInt(classFile, method, stack);
@@ -51,7 +53,7 @@ final class BytecodeToIRMathSupport {
             instructions.add(rightLong ? IrInstruction.assignLong(rightName, right) : IrInstruction.assignInt(rightName, right));
             final IrExpression checkedLeft = leftLong ? IrExpression.longLocal(leftName) : IrExpression.intLocal(leftName);
             final IrExpression checkedRight = rightLong ? IrExpression.longLocal(rightName) : IrExpression.intLocal(rightName);
-            final String successLabel = "label_math_floor_div_success_" + instruction.offset() + "_" + rightIndex;
+            final String successLabel = "label_math_" + rounding + "_div_success_" + instruction.offset() + "_" + rightIndex;
             instructions.add(IrInstruction.branchIf(
                 successLabel,
                 IrExpression.intComparison(
@@ -72,14 +74,13 @@ final class BytecodeToIRMathSupport {
             );
             instructions.add(IrInstruction.label(successLabel));
             stack.addAll(successStack);
-            if (leftLong && (!floorMod || rightLong)) {
+            if (leftLong && (!modulus || rightLong)) {
                 stack.add(StackValue.longExpression(IrExpression.longCall(
-                    floorMod ? "javan_math_floor_mod_long" : "javan_math_floor_div_long", List.of(checkedLeft, checkedRight)
+                    "javan_math_" + rounding + (modulus ? "_mod_long" : "_div_long"), List.of(checkedLeft, checkedRight)
                 )));
             } else {
-                final String function = floorMod
-                    ? (leftLong ? "javan_math_floor_mod_long_int" : "javan_math_floor_mod_int")
-                    : "javan_math_floor_div_int";
+                final String function = "javan_math_" + rounding + (modulus
+                    ? (leftLong ? "_mod_long_int" : "_mod_int") : "_div_int");
                 stack.add(StackValue.intExpression(IrExpression.intCall(function, List.of(checkedLeft, checkedRight))));
             }
             return true;

@@ -13229,6 +13229,126 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mathCeilingDivisionAndModulusMatchSignsAndBoundaries() throws Exception {
+        final Path project = project("math-ceiling-div-mod");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    int[] ints = { Integer.MIN_VALUE, -4, -1, 0, 1, 4, Integer.MAX_VALUE };
+                    int[] divisors = { Integer.MIN_VALUE, -3, -1, 1, 3, Integer.MAX_VALUE };
+                    long[] longs = { Long.MIN_VALUE, -4L, -1L, 0L, 1L, 4L, Long.MAX_VALUE };
+                    for (int value : ints) {
+                        for (int divisor : divisors) {
+                            System.out.println(Math.ceilDiv(value, divisor));
+                            System.out.println(Math.ceilMod(value, divisor));
+                        }
+                    }
+                    for (long value : longs) {
+                        for (int divisor : divisors) {
+                            System.out.println(Math.ceilDiv(value, divisor));
+                            System.out.println(Math.ceilMod(value, divisor));
+                            System.out.println(Math.ceilDiv(value, (long) divisor));
+                            System.out.println(Math.ceilMod(value, (long) divisor));
+                        }
+                    }
+                    long[] wideDivisors = { Long.MIN_VALUE, -3L, -1L, 1L, 3L, Long.MAX_VALUE };
+                    for (long value : longs) {
+                        for (long divisor : wideDivisors) {
+                            System.out.println(Math.ceilDiv(value, divisor));
+                            System.out.println(Math.ceilMod(value, divisor));
+                        }
+                    }
+                    System.out.println(Math.ceilDiv(Long.MAX_VALUE, Long.MIN_VALUE));
+                    System.out.println(Math.ceilMod(Long.MAX_VALUE, Long.MIN_VALUE));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/math-ceiling-div-mod").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void mathCeilingDivisionAndModulusThrowForZeroDivisors() throws Exception {
+        final Path project = project("math-ceiling-div-mod-zero");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    try { System.out.println(Math.ceilDiv(5, 0)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(Math.ceilDiv(5L, 0)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(Math.ceilDiv(5L, 0L)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(Math.ceilMod(5, 0)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(Math.ceilMod(5L, 0)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(Math.ceilMod(5L, 0L)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/math-ceiling-div-mod-zero").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void mathCeilingDivisionAndModulusEvaluateOperandsOnceInOrder() throws Exception {
+        final Path project = project("math-ceiling-div-mod-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int trace;
+                static int left() { trace = trace * 10 + 1; return 4; }
+                static int right() { trace = trace * 10 + 2; return 3; }
+                public static void main(String[] args) {
+                    System.out.println(Math.ceilDiv(left(), right()));
+                    System.out.println(trace);
+                    trace = 0;
+                    System.out.println(Math.ceilMod(left(), right()));
+                    System.out.println(trace);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/math-ceiling-div-mod-order").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("2\n12\n-2\n12\n");
+    }
+
+    @Test
+    void mathCeilingDivisionUncaughtZeroFailsAtRuntime() throws Exception {
+        final Path project = project("math-ceiling-div-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) { System.out.println(Math.ceilDiv(5, 0)); }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/math-ceiling-div-uncaught").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("java/lang/ArithmeticException", "/ by zero");
+    }
+
+    @Test
     void mathFloorDivBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("math-floor-div");
         writeJava(project, "com.acme.Main", """
