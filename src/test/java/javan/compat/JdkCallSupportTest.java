@@ -4463,6 +4463,13 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void stringEqualsTransportsNullReceiverFailure() {
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
+            "java/lang/String", "equals", "(Ljava/lang/Object;)Z"
+        ))).containsExactly("java/lang/NullPointerException");
+    }
+
+    @Test
     void stringPrefixAndSuffixTransportNullFailures() {
         for (final String descriptor : List.of("(Ljava/lang/String;)Z", "(Ljava/lang/String;I)Z")) {
             assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(

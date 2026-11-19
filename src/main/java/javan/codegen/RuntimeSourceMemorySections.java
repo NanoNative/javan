@@ -11658,6 +11658,28 @@ final class RuntimeSourceMemorySections {
             return javan_probably_string_key(value);
         }
 
+        int javan_string_equals_java(const char* left, void* right) {
+            if (left == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            if (left == right) {
+                return 1;
+            }
+            if (right == NULL) {
+                return 0;
+            }
+            javan_allocation_metadata allocation;
+            if (javan_find_allocation(right, &allocation) != 0) {
+                return allocation.kind == JAVAN_HEAP_KIND_RUNTIME && allocation.runtime_kind == JAVAN_RUNTIME_KIND_STRING
+                    ? javan_string_equals(left, (const char*) right) : 0;
+            }
+            if (javan_runtime_class_registry_contains(right) != 0 || javan_registered_type_id(right) != 0) {
+                return 0;
+            }
+            return javan_string_equals(left, (const char*) right);
+        }
+
         int javan_object_equals(void* left, void* right) {
             if (left == right) {
                 return 1;

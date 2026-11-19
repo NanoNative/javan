@@ -16123,6 +16123,160 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void stringEqualsRejectsNonStringsAndAcceptsAllStringContents() throws Exception {
+        final Path project = project("string-equals-object-kinds");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static final class Box { int value = 123; }
+                public static void main(String[] args) {
+                    String value = "\\0\\ud800\\udc00\\udfff";
+                    Object same = new String(new char[] {0, (char) 0xd800, (char) 0xdc00, (char) 0xdfff});
+                    System.out.println(value.equals(same));
+                    System.out.println(value.equals(null));
+                    System.out.println(value.equals(new Box()));
+                    System.out.println(value.equals(Integer.valueOf(123)));
+                    System.out.println(value.equals(new StringBuilder("text")));
+                    System.out.println(value.equals(Object.class));
+                    System.out.println(value.equals(new Object[0]));
+                    System.out.println("".equals(new int[0]));
+                    System.out.println("".equals(new byte[0]));
+                    System.out.println("".equals(new StringBuilder()));
+                    System.out.println("\\u0001control".equals(new String(new char[] {1, 'c', 'o', 'n', 't', 'r', 'o', 'l'})));
+                    System.out.println(new String(new char[] {1, 'c', 'o', 'n', 't', 'r', 'o', 'l'}).equals("\\u0001control"));
+                    System.out.println("x".repeat(5000).equals("x".repeat(5000)));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-equals-object-kinds").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringEqualsAcceptsLongAndControlCharacterLiterals() throws Exception {
+        final Path project = project("string-equals-literal-boundaries");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    String control = new String(new char[] {1, 'x'});
+                    System.out.println(control.equals("\\u0001x"));
+                    String longValue = "x".repeat(5000);
+                    System.out.println(longValue.equals("%s"));
+                }
+            }
+            """.formatted("x".repeat(5000)));
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-equals-literal-boundaries").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringEqualsEvaluatesArgumentBeforeUncaughtNullFailure() throws Exception {
+        final Path project = project("string-equals-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static Object other() { System.out.println("other"); return new StringBuilder(); }
+                public static void main(String[] args) {
+                    System.out.println("before");
+                    String value = args.length == 0 ? null : "text";
+                    System.out.println(value.equals(other()));
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-equals-uncaught").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("before\nother\n");
+        assertThat(result.stderr()).contains("NullPointerException");
+    }
+
+    @Test
+    void stringEqualsSurvivesConcurrentCollection() throws Exception {
+        final Path project = project("string-equals-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static String value() { return new String(new char[] {0, (char) 0xd800, (char) 0xdc00, (char) 0xdfff}); }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            if (!value().equals(value())) errors.incrementAndGet();
+                            if ("".equals(new int[0])) errors.incrementAndGet();
+                            if (value().equals(new StringBuilder())) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-equals-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
+    void stringEqualsMatchesJavaForNullAndOtherObjectTypes() throws Exception {
+        final Path project = project("string-equals-objects");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static final class Box { int value = 123; }
+                static int compare(String value, Object other) {
+                    boolean result;
+                    try { result = value.equals(other); }
+                    catch (NullPointerException ex) { return -9; }
+                    return result ? 1 : 0;
+                }
+                public static void main(String[] args) {
+                    String value = "\\0\\ud800\\udc00\\udfff";
+                    Object same = new String(new char[] {0, (char) 0xd800, (char) 0xdc00, (char) 0xdfff});
+                    System.out.println(compare(value, same));
+                    System.out.println(compare(value, "different"));
+                    System.out.println(compare(value, null));
+                    System.out.println(compare(value, new Box()));
+                    System.out.println(compare(value, Integer.valueOf(123)));
+                    System.out.println(compare(value, new StringBuilder("text")));
+                    System.out.println(compare(null, null));
+                    System.out.println(compare(null, "x"));
+                    System.out.println("\\0\\ud800\\udc00".equals(new String(new char[] {0, (char) 0xd800, (char) 0xdc00})));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-equals-objects").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void stringPrefixAndSuffixMatchJavaForUtf16AndNulls() throws Exception {
         final Path project = project("string-prefix-suffix-null");
         writeJava(project, "com.acme.Main", """

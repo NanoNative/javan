@@ -433,6 +433,7 @@ final class RuntimeHeaderFile {
         int javan_string_last_index_of_string(const char* value, const char* needle);
         int javan_string_last_index_of_string_from(const char* value, const char* needle, int from_index);
         int javan_string_equals(const char* left, const char* right);
+        int javan_string_equals_java(const char* left, void* right);
         int javan_string_contains(const char* left, const char* right);
         int javan_string_starts_with_java(const char* left, const char* prefix, int from_index);
         int javan_string_ends_with_java(const char* left, const char* suffix);

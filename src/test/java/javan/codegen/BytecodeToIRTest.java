@@ -17604,7 +17604,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersStringEqualsToRuntimeCall() {
+    void propagatesStringEqualsFailure() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -17617,12 +17617,7 @@ final class BytecodeToIRTest {
             plain(3, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnInt(IrExpression.intCall(
-                "javan_string_equals",
-                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
-            ))
-        );
+        assertThat(function.instructions()).contains(IrInstruction.propagatePending());
     }
 
     @Test

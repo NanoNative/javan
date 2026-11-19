@@ -642,7 +642,7 @@ final class BytecodeToIRInvokeSupport {
             && "(Ljava/lang/Object;)Z".equals(methodRef.descriptor())) {
             final IrExpression argument = popObject(classFile, method, stack);
             final IrExpression receiver = popObject(classFile, method, stack);
-            stack.add(StackValue.intExpression(IrExpression.intCall("javan_string_equals", List.of(receiver, argument))));
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_string_equals_java", List.of(receiver, argument))));
             return;
         }
         if ("java/lang/String".equals(methodRef.owner())
