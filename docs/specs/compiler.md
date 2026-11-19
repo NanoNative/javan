@@ -97,6 +97,8 @@ receiver exception within supported handler shapes.
 null and range errors within supported handler shapes.
 `Charset.defaultCharset()` returns Javan's UTF-8 default, and parameterless `String.getBytes()`
 encodes with that same charset. Other configurable default encodings are not supported.
+`String(byte[])` and `String(byte[], int, int)` decode UTF-8, replace malformed input and
+transport null and invalid-range exceptions within supported handler shapes.
 `String.repeat` preserves UTF-16 code units and transports null-receiver, negative-count,
 and representational-overflow errors within supported handler shapes.
 `String.length` counts UTF-16 code units and transports a null-receiver exception within

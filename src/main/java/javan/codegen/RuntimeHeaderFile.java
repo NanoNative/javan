@@ -406,6 +406,8 @@ final class RuntimeHeaderFile {
         void* javan_string_from(const char* value);
         void* javan_string_from_chars(void* array, int offset, int count);
         void javan_string_from_chars_into(void** result, void* array, int offset, int count);
+        void* javan_string_from_utf8_java(void* array, int offset, int count, int ranged);
+        void javan_string_from_utf8_java_into(void** result, void* array, int offset, int count, int ranged);
         int javan_string_length(const char* value);
         int javan_string_length_java(const char* value);
         void javan_string_get_chars(const char* value, int begin, int end, void* destination, int destination_offset);

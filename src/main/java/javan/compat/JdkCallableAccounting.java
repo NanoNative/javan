@@ -48,9 +48,7 @@ final class JdkCallableAccounting {
             if ("<init>".equals(methodName)) {
                 return "(Ljava/lang/StringBuffer;)V".equals(descriptor)
                     || "([III)V".equals(descriptor)
-                    || "([B)V".equals(descriptor)
                     || "([BI)V".equals(descriptor)
-                    || "([BII)V".equals(descriptor)
                     || "([BIII)V".equals(descriptor)
                     || "([BIILjava/lang/String;)V".equals(descriptor)
                     || "([BIILjava/nio/charset/Charset;)V".equals(descriptor)

@@ -1957,6 +1957,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     System.out.println("alphabet".replace(new Sequence(), new StringBuilder("X")));
                     System.out.println("\\0\\ud800\\udc00\\udfff".getBytes().length);
                     System.out.println("\\0\\ud800".getBytes(java.nio.charset.Charset.defaultCharset()).length);
+                    System.out.println(new String(new byte[] {65, 0, (byte) 0xf0, (byte) 0x9f, (byte) 0x98, (byte) 0x80, (byte) 0xed, (byte) 0xa0, (byte) 0x80}).length());
                     System.out.println("\\0\\ud800\\udc00".replace((char) 0xd800, (char) 1).charAt(1));
                     System.out.println(value.replace('z', 'q') == value);
                     System.out.println(nullReplace(null));
@@ -3795,6 +3796,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static String replaceChar(String value, int oldValue, int newValue) { return value.replace((char) oldValue, (char) newValue); }
                 public static String replaceSequence(String value, String target, String replacement) { return value.replace(target, replacement); }
                 public static byte[] defaultBytes(String value) { return value.getBytes(); }
+                public static String fromDefaultBytes(byte[] value) { return new String(value); }
                 public static String join(String value, String other) { return value.concat(other); }
                 public static String fail(String value) { throw new IllegalArgumentException(value); }
                 public static String literal() { return "a\\0b"; }
@@ -3821,7 +3823,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "--export", "com.acme.Text.boundedString", "--export", "com.acme.Text.slice", "--export", "com.acme.Text.tail",
             "--export", "com.acme.Text.sequence", "--export", "com.acme.Text.prefix", "--export", "com.acme.Text.suffix",
             "--export", "com.acme.Text.same", "--export", "com.acme.Text.contains", "--export", "com.acme.Text.containsCustom",
-            "--export", "com.acme.Text.replaceChar", "--export", "com.acme.Text.replaceSequence", "--export", "com.acme.Text.defaultBytes", "--export", "com.acme.Text.join");
+            "--export", "com.acme.Text.replaceChar", "--export", "com.acme.Text.replaceSequence", "--export", "com.acme.Text.defaultBytes", "--export", "com.acme.Text.fromDefaultBytes", "--export", "com.acme.Text.join");
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         final Path library = project.resolve(".javan/dist/liblibrary-utf16.a");
         final Path caller = writeC(project, "call_utf16.c", """
@@ -3936,6 +3938,12 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 javan_result_free(&result);
                 JavanByteArray encoded = { 0 };
                 int8_t expected_bytes[] = { 'A', 0, (int8_t) 0xf0, (int8_t) 0x9f, (int8_t) 0x98, (int8_t) 0x80, '?', 'Z', '?' };
+                int8_t bytes_input[] = { 'A', 0, (int8_t) 0xf0, (int8_t) 0x9f, (int8_t) 0x98, (int8_t) 0x80, (int8_t) 0xed, (int8_t) 0xa0, (int8_t) 0x80 };
+                JavanByteArray byte_view = { bytes_input, 9 };
+                uint16_t decoded[] = { 'A', 0, 0xd83d, 0xde00, 0xfffd };
+                result = javan_utf16_try_com_acme_Text_fromDefaultBytes_bytes(byte_view, &output);
+                if (!result.ok || output.length != 5 || memcmp(decoded, output.data, sizeof(decoded))) return 77;
+                javan_result_free(&result); javan_free(output.data);
                 result = javan_utf16_try_com_acme_Text_defaultBytes_string(input, &encoded);
                 if (!result.ok || encoded.length != 9 || memcmp(expected_bytes, encoded.data, sizeof(expected_bytes))) return 76;
                 javan_result_free(&result); javan_free(encoded.data);

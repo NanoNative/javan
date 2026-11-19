@@ -13724,6 +13724,136 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void stringConstructorsDecodeUtf8AndTransportInvalidArguments() throws Exception {
+        final Path project = project("string-utf8-constructors");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static void show(byte[] bytes) {
+                    String value = new String(bytes);
+                    System.out.println(value.length());
+                    for (int i = 0; i < value.length(); i++) System.out.println((int) value.charAt(i));
+                }
+                static String copy(byte[] bytes) {
+                    try { return new String(bytes); }
+                    catch (NullPointerException ex) { return "null"; }
+                }
+                static String slice(byte[] bytes, int offset, int length) {
+                    try { return new String(bytes, offset, length); }
+                    catch (NullPointerException ex) { return "null"; }
+                    catch (IndexOutOfBoundsException ex) { return "range"; }
+                }
+                public static void main(String[] args) {
+                    byte[][] cases = { {}, {65, 0, (byte) 0xc3, (byte) 0xa9},
+                        {(byte) 0xf0, (byte) 0x9f, (byte) 0x98, (byte) 0x80},
+                        {(byte) 0xc0, (byte) 0x80}, {(byte) 0xed, (byte) 0xa0, (byte) 0x80},
+                        {(byte) 0xe0, (byte) 0x80, 65}, {(byte) 0xe1, (byte) 0x80, 65},
+                        {(byte) 0xf0, (byte) 0x9f}, {(byte) 0xf0, (byte) 0x9f, (byte) 0x98, 65},
+                        {(byte) 0xf4, (byte) 0x90, (byte) 0x80, (byte) 0x80} };
+                    for (byte[] value : cases) show(value);
+                    byte[] input = {65, (byte) 0xc3, (byte) 0xa9, 66};
+                    String middle = slice(input, 1, 2);
+                    System.out.println(middle.length()); System.out.println((int) middle.charAt(0));
+                    System.out.println(slice(input, -1, 1));
+                    System.out.println(slice(input, 5, 0));
+                    System.out.println(slice(input, 1, Integer.MAX_VALUE));
+                    System.out.println(slice(null, -1, -1));
+                    System.out.println(copy(null));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-utf8-constructors").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringUtf8ConstructorMatchesInterpretedJavaAcrossBytePairs() throws Exception {
+        final Path project = project("string-utf8-byte-pairs");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    byte[] bytes = new byte[4];
+                    long hash = 1;
+                    for (int first = 0; first < 256; first++) {
+                        for (int second = 0; second < 256; second++) {
+                            bytes[0] = (byte) first; bytes[1] = (byte) second;
+                            for (int variant = 0; variant < 4; variant++) {
+                                bytes[2] = (byte) (variant == 2 ? 65 : 0x80);
+                                bytes[3] = (byte) 0x80;
+                                int length = variant == 0 ? 2 : variant == 3 ? 4 : 3;
+                                String value = new String(bytes, 0, length);
+                                hash = hash * 31 + value.length();
+                                for (int i = 0; i < value.length(); i++) hash = hash * 31 + value.charAt(i);
+                            }
+                        }
+                    }
+                    System.out.println(hash);
+                }
+            }
+            """);
+        final Path classes = project.resolve("jvm-classes");
+        Files.createDirectories(classes);
+        final ProcessResult javac = process(project, List.of(CliTestHarness.currentJavacCommand(), "-d", classes.toString(),
+            project.resolve("src/main/java/com/acme/Main.java").toString()));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult reference = process(project,
+            List.of(CliTestHarness.currentJavaCommand(), "-Xint", "-cp", classes.toString(), "com.acme.Main"),
+            Duration.ofSeconds(60));
+        assertThat(reference.exitCode()).as(reference.stderr()).isZero();
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-utf8-byte-pairs").toString()), Duration.ofSeconds(60));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(reference.stdout());
+    }
+
+    @Test
+    void stringUtf8ConstructorSurvivesConcurrentCollection() throws Exception {
+        final Path project = project("string-utf8-constructor-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            byte[] bytes = {65, 0, (byte) 0xf0, (byte) 0x9f, (byte) 0x98, (byte) 0x80,
+                                (byte) 0xed, (byte) 0xa0, (byte) 0x80, 66};
+                            String value = new String(bytes, 1, 8);
+                            String all = new String(bytes);
+                            new String(new char[] {'x', 'y'});
+                            if (value.length() != 4 || value.charAt(0) != 0 || value.charAt(1) != (char) 0xd83d
+                                || value.charAt(2) != (char) 0xde00 || value.charAt(3) != (char) 0xfffd
+                                || all.length() != 6 || all.charAt(5) != 'B') errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-utf8-constructor-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
     void embeddedNullLiteralInPathFailsLikeJava() throws Exception {
         final Path project = project("string-null-path");
         writeJava(project, "com.acme.Main", """

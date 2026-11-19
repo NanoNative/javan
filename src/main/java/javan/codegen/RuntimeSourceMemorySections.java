@@ -10264,6 +10264,101 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        static unsigned int javan_utf8_decode_replacing(const unsigned char* bytes, int length, int* index) {
+            int start = *index;
+            unsigned int first = bytes[start];
+            int width;
+            unsigned int code_point;
+            if (first < 0x80U) {
+                *index = start + 1;
+                return first;
+            }
+            if (first >= 0xC2U && first <= 0xDFU) {
+                width = 2;
+                code_point = first & 0x1FU;
+            } else if (first >= 0xE0U && first <= 0xEFU) {
+                width = 3;
+                code_point = first & 0x0FU;
+            } else if (first >= 0xF0U && first <= 0xF4U) {
+                width = 4;
+                code_point = first & 0x07U;
+            } else {
+                *index = start + 1;
+                return 0xFFFDU;
+            }
+            for (int part = 1; part < width; part++) {
+                if (part >= length - start) {
+                    *index = start + part;
+                    return 0xFFFDU;
+                }
+                unsigned int next = bytes[start + part];
+                if ((next & 0xC0U) != 0x80U
+                    || (part == 1 && first == 0xE0U && next < 0xA0U)
+                    || (part == 1 && first == 0xF0U && next < 0x90U)
+                    || (part == 1 && first == 0xF4U && next > 0x8FU)) {
+                    *index = start + part;
+                    return 0xFFFDU;
+                }
+                code_point = (code_point << 6) | (next & 0x3FU);
+            }
+            *index = start + width;
+            if (code_point >= 0xD800U && code_point <= 0xDFFFU) return 0xFFFDU;
+            return code_point;
+        }
+
+        void* javan_string_from_utf8_java(void* array, int offset, int count, int ranged) {
+            if (array == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
+            }
+            javan_byte_array* bytes = (javan_byte_array*) javan_array_checked(array);
+            if (!ranged) {
+                offset = 0;
+                count = bytes->length;
+            }
+            if (offset < 0 || count < 0 || offset > bytes->length || count > bytes->length - offset) {
+                javan_pending_throw("java/lang/StringIndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
+            }
+            void* root = array;
+            void** roots[] = { &root };
+            javan_root_frame_push(roots, 1);
+            unsigned long byte_length = 0;
+            for (int index = 0; index < count;) {
+                unsigned int value = javan_utf8_decode_replacing((const unsigned char*) bytes->values + offset, count, &index);
+                unsigned long size = value > 0xFFFFU ? 6UL : (unsigned long) javan_modified_utf8_char_length((int) value);
+                if (byte_length > ULONG_MAX - size - 1UL) {
+                    javan_root_frame_pop(roots);
+                    javan_pending_throw("java/lang/OutOfMemoryError", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                    return NULL;
+                }
+                byte_length += size;
+            }
+            char* result = javan_string_alloc(byte_length + 1UL);
+            char* out = result;
+            bytes = (javan_byte_array*) root;
+            for (int index = 0; index < count;) {
+                unsigned int value = javan_utf8_decode_replacing((const unsigned char*) bytes->values + offset, count, &index);
+                if (value > 0xFFFFU) {
+                    unsigned int adjusted = value - 0x10000U;
+                    out = javan_modified_utf8_write_char(out, (int) (0xD800U + (adjusted >> 10)));
+                    out = javan_modified_utf8_write_char(out, (int) (0xDC00U + (adjusted & 0x3FFU)));
+                } else {
+                    out = javan_modified_utf8_write_char(out, (int) value);
+                }
+            }
+            *out = '\\0';
+            javan_root_frame_pop(roots);
+            return result;
+        }
+
+        void javan_string_from_utf8_java_into(void** result, void* array, int offset, int count, int ranged) {
+            if (result == NULL) javan_panic("invalid String result");
+            javan_runtime_lock_enter();
+            *result = javan_string_from_utf8_java(array, offset, count, ranged);
+            javan_runtime_lock_leave();
+        }
+
         void javan_string_from_chars_into(void** result, void* array, int offset, int count) {
             if (result == NULL) {
                 javan_panic("invalid String result");

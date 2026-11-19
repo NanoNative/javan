@@ -396,6 +396,13 @@ final class BytecodeToIRLangSupport {
             ));
             return true;
         }
+        if ("([B)V".equals(methodRef.descriptor()) || "([BII)V".equals(methodRef.descriptor())) {
+            final boolean ranged = "([BII)V".equals(methodRef.descriptor());
+            instructions.add(IrInstruction.assignObject(receiver.value(), IrExpression.objectCall("javan_string_from_utf8_java",
+                List.of(arguments.getFirst(), ranged ? arguments.get(1) : IrExpression.intLiteral(0),
+                    ranged ? arguments.get(2) : IrExpression.intLiteral(0), IrExpression.intLiteral(ranged ? 1 : 0)))));
+            return true;
+        }
         if ("([C)V".equals(methodRef.descriptor())) {
             final IrExpression array = arguments.getFirst();
             instructions.add(IrInstruction.assignObject(

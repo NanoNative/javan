@@ -5381,6 +5381,7 @@ public final class CCodegen {
                 "javan_path_get_name",
                 "javan_path_relativize",
                 "javan_string_from_chars",
+                "javan_string_from_utf8_java",
                 "javan_character_code_point_to_string",
                 "javan_string_substring_java",
                 "javan_string_substring_range_java",

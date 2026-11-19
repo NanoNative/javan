@@ -114,9 +114,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksStringByteConstructorAsExplicitRejected() {
+    void marksStringByteConstructorAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/String", "<init>", "([B)V")))
-            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test
