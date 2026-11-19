@@ -95,8 +95,9 @@ Within supported handler shapes, `String.charAt`, `codePointAt`, `codePointBefor
 receiver exception within supported handler shapes.
 `String.getChars` copies UTF-16 code units into the requested destination range and transports
 null and range errors within supported handler shapes.
-`Charset.defaultCharset()` returns Javan's UTF-8 default, and parameterless `String.getBytes()`
-encodes with that same charset. Other configurable default encodings are not supported.
+`Charset.defaultCharset()` returns Javan's UTF-8 default, and `Charset.name`, `displayName` and
+`toString` expose its canonical name. Parameterless `String.getBytes()` encodes with that same
+charset. Other configurable default encodings are not supported.
 `String` byte-array constructors using the default or explicit UTF-8 charset decode UTF-8,
 replace malformed input and transport null and invalid-range exceptions within supported handler
 shapes. Other explicit charsets remain unsupported.

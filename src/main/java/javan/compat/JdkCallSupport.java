@@ -579,6 +579,9 @@ public final class JdkCallSupport {
         runtime("String.concat", "java/lang/String", "concat", "(Ljava/lang/String;)Ljava/lang/String;"),
         runtime("String.getBytes", "java/lang/String", "getBytes", "(Ljava/nio/charset/Charset;)[B", "()[B"),
         runtime("Charset.defaultCharset", "java/nio/charset/Charset", "defaultCharset", "()Ljava/nio/charset/Charset;"),
+        runtime("Charset.name", "java/nio/charset/Charset", "name", "()Ljava/lang/String;"),
+        runtime("Charset.displayName", "java/nio/charset/Charset", "displayName", "()Ljava/lang/String;"),
+        runtime("Charset.toString", "java/nio/charset/Charset", "toString", "()Ljava/lang/String;"),
         runtime(
             "String.toLowerCase",
             "java/lang/String",
@@ -2000,6 +2003,11 @@ public final class JdkCallSupport {
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
         if ("java/lang/String".equals(methodRef.owner()) && "concat".equals(methodRef.name())
             && "(Ljava/lang/String;)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            return List.of("java/lang/NullPointerException");
+        }
+        if ("java/nio/charset/Charset".equals(methodRef.owner())
+            && ("name".equals(methodRef.name()) || "displayName".equals(methodRef.name()) || "toString".equals(methodRef.name()))
+            && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
             return List.of("java/lang/NullPointerException");
         }
         if ("java/lang/String".equals(methodRef.owner()) && "<init>".equals(methodRef.name())

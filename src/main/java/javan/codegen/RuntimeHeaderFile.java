@@ -853,6 +853,7 @@ final class RuntimeHeaderFile {
         void* javan_locale_english(void);
         void* javan_locale_root(void);
         void* javan_standard_charset_utf8(void);
+        void* javan_charset_name_java(void* charset);
         void* javan_caller_runs_policy_new(void);
         void* javan_atomic_boolean_new(void);
         void javan_atomic_boolean_init(void* value, int initial_value);

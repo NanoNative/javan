@@ -969,6 +969,12 @@ final class BytecodeToIRInvokeSupport {
             pushObjectCall(instructions, stack, localDeclarations, "javan_string_strip_trailing", List.of(popObject(classFile, method, stack)));
             return;
         }
+        if ("java/nio/charset/Charset".equals(methodRef.owner())
+            && ("name".equals(methodRef.name()) || "displayName".equals(methodRef.name()) || "toString".equals(methodRef.name()))
+            && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_charset_name_java", List.of(popObject(classFile, method, stack)));
+            return;
+        }
         if ("java/lang/String".equals(methodRef.owner())
             && "getBytes".equals(methodRef.name())
             && ("(Ljava/nio/charset/Charset;)[B".equals(methodRef.descriptor())

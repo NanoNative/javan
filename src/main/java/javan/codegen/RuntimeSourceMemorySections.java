@@ -5856,6 +5856,15 @@ final class RuntimeSourceMemorySections {
             return javan_locale_singleton(&javan_locale_root_value, JAVAN_LOCALE_ROOT);
         }
 
+        void* javan_charset_name_java(void* charset) {
+            if (charset == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
+            }
+            (void) javan_charset_utf8_checked(charset);
+            return (void*) "UTF-8";
+        }
+
         void* javan_standard_charset_utf8(void) {
             javan_runtime_lock_enter();
             if (javan_charset_utf8_value != NULL) {

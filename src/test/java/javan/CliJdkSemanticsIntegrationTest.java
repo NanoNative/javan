@@ -13664,6 +13664,47 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void utf8CharsetExposesItsCanonicalNameAndNullFailures() throws Exception {
+        final Path project = project("utf8-charset-name");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.nio.charset.Charset;
+            import java.nio.charset.StandardCharsets;
+            public final class Main {
+                static String name(Charset value) {
+                    try { return value.name(); }
+                    catch (NullPointerException ex) { return "null"; }
+                }
+                static String display(Charset value) {
+                    try { return value.displayName(); }
+                    catch (NullPointerException ex) { return "null"; }
+                }
+                static String text(Charset value) {
+                    try { return value.toString(); }
+                    catch (NullPointerException ex) { return "null"; }
+                }
+                public static void main(String[] args) {
+                    System.out.println(name(Charset.defaultCharset()));
+                    System.out.println(name(StandardCharsets.UTF_8));
+                    System.out.println(display(StandardCharsets.UTF_8));
+                    System.out.println(text(StandardCharsets.UTF_8));
+                    System.out.println(name(null));
+                    System.out.println(display(null));
+                    System.out.println(text(null));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/utf8-charset-name").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void stringGetBytesWorksWithoutExplicitCharsetCalls() throws Exception {
         final Path project = project("default-string-bytes-only");
         writeJava(project, "com.acme.Main", """
@@ -13703,7 +13744,8 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                             byte[] again = value.getBytes();
                             new String(new char[] {'x', 'y'});
                             if (bytes.length != 7 || again.length != 7 || bytes[0] != 'a' || bytes[1] != 0
-                                || bytes[2] != (byte) 0xf0 || bytes[6] != '?' || again[6] != '?') errors.incrementAndGet();
+                                || bytes[2] != (byte) 0xf0 || bytes[6] != '?' || again[6] != '?'
+                                || !Charset.defaultCharset().name().equals("UTF-8")) errors.incrementAndGet();
                         }
                     }
                 }
