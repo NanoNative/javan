@@ -1141,6 +1141,20 @@ final class RuntimeSourceCoreSection {
             return left >= right ? left : right;
         }
 
+        int javan_math_valid_clamp_float(float min, float max) {
+            return !isnan(min) && !isnan(max) && min <= max
+                && !(min == 0.0f && max == 0.0f && !signbit(min) && signbit(max));
+        }
+
+        int javan_math_valid_clamp_double(double min, double max) {
+            return !isnan(min) && !isnan(max) && min <= max
+                && !(min == 0.0 && max == 0.0 && !signbit(min) && signbit(max));
+        }
+
+        int javan_math_clamp_long_int(long long value, int min, int max) {
+            return (int) javan_math_min_long(max, javan_math_max_long(value, min));
+        }
+
         int javan_math_floor_div_int(int left, int right) {
             if (left == INT_MIN && right == -1) {
                 return INT_MIN;

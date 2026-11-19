@@ -577,6 +577,39 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsMathClamp() throws Exception {
+        final Path project = tempDir.resolve("selfhost-math-clamp");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    System.out.println(Math.clamp(Long.MAX_VALUE, -2, 3));
+                    System.out.println(StrictMath.clamp(Long.MIN_VALUE, -2L, 3L));
+                    System.out.println(1.0 / Math.clamp(-0.0, 0.0, 1.0));
+                    System.out.println(Float.floatToRawIntBits(StrictMath.clamp(0.0f, -1.0f, -0.0f)));
+                    try { System.out.println(Math.clamp(1L, 2, 1)); }
+                    catch (IllegalArgumentException expected) { System.out.println("invalid"); }
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-math-clamp"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-math-clamp").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo("3\n-2\nInfinity\n-2147483648\ninvalid\n");
+    }
+
+    @Test
     void nativeBuiltJavanBuildsStrictMathDivision() throws Exception {
         final Path project = tempDir.resolve("selfhost-strict-math-division");
         final Path classes = project.resolve("classes");

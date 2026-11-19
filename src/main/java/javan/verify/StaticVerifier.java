@@ -2101,6 +2101,9 @@ public final class StaticVerifier {
         if (supportedStringLocaleCaseHandler(code, handler)) {
             return true;
         }
+        if (supportedMathClampHandler(code, handler)) {
+            return true;
+        }
         if (supportedMathArithmeticHandler(code, handler)) {
             return true;
         }
@@ -3868,6 +3871,36 @@ public final class StaticVerifier {
         return "java/util/Locale".equals(target.owner())
             && ("ROOT".equals(target.name()) || "ENGLISH".equals(target.name()))
             && "Ljava/util/Locale;".equals(target.descriptor());
+    }
+
+    private static boolean supportedMathClampHandler(final CodeAttribute code, final CodeException handler) {
+        if (handler.catchType().isEmpty()
+            || !JdkCallSupport.isPlatformThrowableAssignable("java/lang/IllegalArgumentException", handler.catchType().orElseThrow())) {
+            return false;
+        }
+        int calls = 0;
+        for (final Instruction instruction : code.instructions()) {
+            if (instruction.offset() < handler.startPc() || instruction.offset() >= handler.endPc()) {
+                continue;
+            }
+            if (instruction.opcode() == 184 && instruction.methodRef().isPresent()) {
+                final MethodRef target = instruction.methodRef().orElseThrow();
+                if (("java/lang/Math".equals(target.owner()) || "java/lang/StrictMath".equals(target.owner()))
+                    && "clamp".equals(target.name()) && JdkCallSupport.isSupported(target)) {
+                    calls++;
+                    continue;
+                }
+            }
+            if (!boundedNonThrowingOpcode(instruction.opcode())
+                && !supportedInterruptedWaitProtectedInstruction(instruction)
+                && !(instruction.opcode() == 182 && instruction.methodRef().isPresent()
+                    && "java/io/PrintStream".equals(instruction.methodRef().orElseThrow().owner())
+                    && "println".equals(instruction.methodRef().orElseThrow().name())
+                    && "(F)V".equals(instruction.methodRef().orElseThrow().descriptor()))) {
+                return false;
+            }
+        }
+        return calls == 1;
     }
 
     private static boolean supportedMathArithmeticHandler(final CodeAttribute code, final CodeException handler) {

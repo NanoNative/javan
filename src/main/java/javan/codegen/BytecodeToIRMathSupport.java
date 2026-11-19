@@ -30,6 +30,130 @@ final class BytecodeToIRMathSupport {
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final SourceLineIndex sourceLines
     ) {
+        if ("clamp".equals(methodRef.name())
+            && ("(JII)I".equals(methodRef.descriptor()) || "(JJJ)J".equals(methodRef.descriptor())
+                || "(FFF)F".equals(methodRef.descriptor()) || "(DDD)D".equals(methodRef.descriptor()))) {
+            final String descriptor = methodRef.descriptor();
+            final boolean intBounds = "(JII)I".equals(descriptor);
+            final IrType valueType;
+            if ("(FFF)F".equals(descriptor)) {
+                valueType = IrType.FLOAT;
+            } else if ("(DDD)D".equals(descriptor)) {
+                valueType = IrType.DOUBLE;
+            } else {
+                valueType = IrType.LONG;
+            }
+            final IrType boundsType;
+            if (intBounds) {
+                boundsType = IrType.INT;
+            } else {
+                boundsType = valueType;
+            }
+            final IrExpression max;
+            final IrExpression min;
+            if (boundsType == IrType.INT) {
+                max = popInt(classFile, method, stack);
+                min = popInt(classFile, method, stack);
+            } else if (boundsType == IrType.LONG) {
+                max = popLong(classFile, method, stack);
+                min = popLong(classFile, method, stack);
+            } else if (boundsType == IrType.FLOAT) {
+                max = popFloat(classFile, method, stack);
+                min = popFloat(classFile, method, stack);
+            } else {
+                max = popDouble(classFile, method, stack);
+                min = popDouble(classFile, method, stack);
+            }
+            final IrExpression value;
+            if (valueType == IrType.LONG) {
+                value = popLong(classFile, method, stack);
+            } else if (valueType == IrType.FLOAT) {
+                value = popFloat(classFile, method, stack);
+            } else {
+                value = popDouble(classFile, method, stack);
+            }
+            final int index = localDeclarations.size();
+            final String valueName = "clampValue" + index;
+            final String minName = "clampMin" + index;
+            final String maxName = "clampMax" + index;
+            localDeclarations.put(Integer.MIN_VALUE + index, new IrLocal(valueType, valueName));
+            localDeclarations.put(Integer.MIN_VALUE + index + 1, new IrLocal(boundsType, minName));
+            localDeclarations.put(Integer.MIN_VALUE + index + 2, new IrLocal(boundsType, maxName));
+            final boolean literalBounds = min.kind() == max.kind()
+                && (min.kind() == IrExpression.Kind.INT_LITERAL || min.kind() == IrExpression.Kind.LONG_LITERAL
+                    || min.kind() == IrExpression.Kind.FLOAT_LITERAL || min.kind() == IrExpression.Kind.DOUBLE_LITERAL);
+            final IrExpression savedValue;
+            if (literalBounds && (value.kind() == IrExpression.Kind.LOCAL
+                || value.kind() == IrExpression.Kind.INT_LITERAL || value.kind() == IrExpression.Kind.LONG_LITERAL
+                || value.kind() == IrExpression.Kind.FLOAT_LITERAL || value.kind() == IrExpression.Kind.DOUBLE_LITERAL)) {
+                savedValue = value;
+            } else if (valueType == IrType.LONG) {
+                instructions.add(IrInstruction.assignLong(valueName, value));
+                savedValue = IrExpression.longLocal(valueName);
+            } else if (valueType == IrType.FLOAT) {
+                instructions.add(IrInstruction.assignFloat(valueName, value));
+                savedValue = IrExpression.floatLocal(valueName);
+            } else {
+                instructions.add(IrInstruction.assignDouble(valueName, value));
+                savedValue = IrExpression.doubleLocal(valueName);
+            }
+            final IrExpression savedMin;
+            final IrExpression savedMax;
+            if (literalBounds) {
+                savedMin = min;
+                savedMax = max;
+            } else if (boundsType == IrType.INT) {
+                instructions.add(IrInstruction.assignInt(minName, min));
+                instructions.add(IrInstruction.assignInt(maxName, max));
+                savedMin = IrExpression.intLocal(minName);
+                savedMax = IrExpression.intLocal(maxName);
+            } else if (boundsType == IrType.LONG) {
+                instructions.add(IrInstruction.assignLong(minName, min));
+                instructions.add(IrInstruction.assignLong(maxName, max));
+                savedMin = IrExpression.longLocal(minName);
+                savedMax = IrExpression.longLocal(maxName);
+            } else if (boundsType == IrType.FLOAT) {
+                instructions.add(IrInstruction.assignFloat(minName, min));
+                instructions.add(IrInstruction.assignFloat(maxName, max));
+                savedMin = IrExpression.floatLocal(minName);
+                savedMax = IrExpression.floatLocal(maxName);
+            } else {
+                instructions.add(IrInstruction.assignDouble(minName, min));
+                instructions.add(IrInstruction.assignDouble(maxName, max));
+                savedMin = IrExpression.doubleLocal(minName);
+                savedMax = IrExpression.doubleLocal(maxName);
+            }
+            final IrExpression valid;
+            if (boundsType == IrType.FLOAT) {
+                valid = IrExpression.intCall("javan_math_valid_clamp_float", List.of(savedMin, savedMax));
+            } else if (boundsType == IrType.DOUBLE) {
+                valid = IrExpression.intCall("javan_math_valid_clamp_double", List.of(savedMin, savedMax));
+            } else {
+                valid = IrExpression.intComparison("<=", savedMin, savedMax);
+            }
+            final String successLabel = "label_math_clamp_success_" + instruction.offset() + "_" + index;
+            instructions.add(IrInstruction.branchIf(successLabel, valid));
+            final List<StackValue> successStack = List.copyOf(stack);
+            routePendingPlatformException(classFile, method, instruction, instructions, stack,
+                pendingExceptionHandlerStacks, sourceLines, "java/lang/IllegalArgumentException",
+                IrExpression.stringLiteral("invalid clamp bounds"));
+            instructions.add(IrInstruction.label(successLabel));
+            stack.addAll(successStack);
+            if (intBounds) {
+                stack.add(StackValue.intExpression(IrExpression.intCall("javan_math_clamp_long_int",
+                    List.of(savedValue, savedMin, savedMax))));
+            } else if (valueType == IrType.LONG) {
+                stack.add(StackValue.longExpression(IrExpression.longCall("javan_math_min_long", List.of(savedMax,
+                    IrExpression.longCall("javan_math_max_long", List.of(savedValue, savedMin))))));
+            } else if (valueType == IrType.FLOAT) {
+                stack.add(StackValue.floatExpression(IrExpression.floatCall("javan_math_min_float", List.of(savedMax,
+                    IrExpression.floatCall("javan_math_max_float", List.of(savedValue, savedMin))))));
+            } else {
+                stack.add(StackValue.doubleExpression(IrExpression.doubleCall("javan_math_min_double", List.of(savedMax,
+                    IrExpression.doubleCall("javan_math_max_double", List.of(savedValue, savedMin))))));
+            }
+            return true;
+        }
         if ((("floorDiv".equals(methodRef.name()) || "ceilDiv".equals(methodRef.name()))
                 && ("(II)I".equals(methodRef.descriptor()) || "(JI)J".equals(methodRef.descriptor())
                     || "(JJ)J".equals(methodRef.descriptor())))

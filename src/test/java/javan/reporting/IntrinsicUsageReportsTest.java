@@ -70,6 +70,8 @@ final class IntrinsicUsageReportsTest {
             new IntrinsicCallCount("Objects.toString", 0),
             new IntrinsicCallCount("Math.abs", 1),
             new IntrinsicCallCount("Math.round", 0),
+            new IntrinsicCallCount("Math.clamp", 0),
+            new IntrinsicCallCount("StrictMath.clamp", 0),
             new IntrinsicCallCount("Math.floorDiv", 1),
             new IntrinsicCallCount("Math.floorMod", 0),
             new IntrinsicCallCount("Math.ceilDiv", 0),

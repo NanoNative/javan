@@ -13229,6 +13229,170 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mathClampVariantsRespectBoundsAndSpecialValues() throws Exception {
+        final Path project = project("math-clamp-values");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    long[] values = { Long.MIN_VALUE, -5L, 0L, 5L, Long.MAX_VALUE };
+                    for (long value : values) {
+                        System.out.println(Math.clamp(value, -2, 3));
+                        System.out.println(StrictMath.clamp(value, -2, 3));
+                        System.out.println(Math.clamp(value, -2L, 3L));
+                        System.out.println(StrictMath.clamp(value, -2L, 3L));
+                    }
+                    double[] doubles = { Double.NEGATIVE_INFINITY, -5.0, -0.0, 0.0, 5.0, Double.POSITIVE_INFINITY, Double.NaN };
+                    for (double value : doubles) {
+                        double a = Math.clamp(value, -0.0, 2.0);
+                        double b = StrictMath.clamp(value, -0.0, 2.0);
+                        System.out.println(a != a);
+                        System.out.println(b != b);
+                        System.out.println(1.0 / a);
+                        System.out.println(1.0 / b);
+                    }
+                    float[] floats = { Float.NEGATIVE_INFINITY, -5.0f, -0.0f, 0.0f, 5.0f, Float.POSITIVE_INFINITY, Float.NaN };
+                    for (float value : floats) {
+                        System.out.println(Float.floatToRawIntBits(Math.clamp(value, -0.0f, 3.0f)));
+                        System.out.println(Float.floatToRawIntBits(StrictMath.clamp(value, -0.0f, 3.0f)));
+                    }
+                    System.out.println(1.0 / Math.clamp(-0.0, 0.0, 1.0));
+                    System.out.println(1.0 / StrictMath.clamp(0.0, -1.0, -0.0));
+                    System.out.println(Float.floatToRawIntBits(Math.clamp(-0.0f, 0.0f, 1.0f)));
+                    System.out.println(Float.floatToRawIntBits(StrictMath.clamp(0.0f, -1.0f, -0.0f)));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/math-clamp-values").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void mathClampHandlesAllFiniteAndInfiniteBoundaryCombinations() throws Exception {
+        final Path project = project("math-clamp-boundary-matrix");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    long[] numbers = { Long.MIN_VALUE, -2L, -1L, 0L, 1L, 2L, Long.MAX_VALUE };
+                    int[] bounds = { Integer.MIN_VALUE, -1, 0, 1, Integer.MAX_VALUE };
+                    for (long value : numbers) for (int min : bounds) for (int max : bounds) {
+                        if (min > max) continue;
+                        System.out.println(Math.clamp(value, min, max));
+                        System.out.println(StrictMath.clamp(value, min, max));
+                        System.out.println(Math.clamp(value, (long) min, (long) max));
+                        System.out.println(StrictMath.clamp(value, (long) min, (long) max));
+                    }
+                    double[] values = { Double.NEGATIVE_INFINITY, -2.0, -1.0, -0.0, 0.0, 1.0, 2.0, Double.POSITIVE_INFINITY, Double.NaN };
+                    double[] edges = { Double.NEGATIVE_INFINITY, -1.0, -0.0, 0.0, 1.0, Double.POSITIVE_INFINITY };
+                    for (double value : values) for (double min : edges) for (double max : edges) {
+                        if (min > max || (min == 0.0 && max == 0.0 && 1.0 / min > 1.0 / max)) continue;
+                        System.out.println(Math.clamp(value, min, max));
+                        System.out.println(StrictMath.clamp(value, min, max));
+                    }
+                    float[] floatValues = { Float.NEGATIVE_INFINITY, -2.0f, -1.0f, -0.0f, 0.0f, 1.0f, 2.0f, Float.POSITIVE_INFINITY, Float.NaN };
+                    float[] floatEdges = { Float.NEGATIVE_INFINITY, -1.0f, -0.0f, 0.0f, 1.0f, Float.POSITIVE_INFINITY };
+                    for (float value : floatValues) for (float min : floatEdges) for (float max : floatEdges) {
+                        if (min > max || (min == 0.0f && max == 0.0f && 1.0f / min > 1.0f / max)) continue;
+                        System.out.println(Float.floatToRawIntBits(Math.clamp(value, min, max)));
+                        System.out.println(Float.floatToRawIntBits(StrictMath.clamp(value, min, max)));
+                    }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/math-clamp-boundary-matrix").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void mathClampUncaughtInvalidBoundsTerminate() throws Exception {
+        final Path project = project("math-clamp-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    System.out.println(Math.clamp(1L, 2, 1));
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/math-clamp-uncaught").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("java/lang/IllegalArgumentException");
+    }
+
+    @Test
+    void mathClampRejectsInvalidBounds() throws Exception {
+        final Path project = project("math-clamp-invalid");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    try { System.out.println(Math.clamp(1L, 2, 1)); } catch (IllegalArgumentException e) { System.out.println("int"); }
+                    try { System.out.println(StrictMath.clamp(1L, 2, 1)); } catch (IllegalArgumentException e) { System.out.println("strict-int"); }
+                    try { System.out.println(Math.clamp(1L, 2L, 1L)); } catch (IllegalArgumentException e) { System.out.println("long"); }
+                    try { System.out.println(StrictMath.clamp(1L, 2L, 1L)); } catch (IllegalArgumentException e) { System.out.println("strict-long"); }
+                    try { System.out.println(Math.clamp(1.0, Double.NaN, 2.0)); } catch (IllegalArgumentException e) { System.out.println("nan-min-double"); }
+                    try { System.out.println(StrictMath.clamp(1.0, 0.0, Double.NaN)); } catch (IllegalArgumentException e) { System.out.println("nan-max-double"); }
+                    try { System.out.println(Math.clamp(1.0, 0.0, -0.0)); } catch (IllegalArgumentException e) { System.out.println("zero-double"); }
+                    try { System.out.println(StrictMath.clamp(1.0, 2.0, 1.0)); } catch (IllegalArgumentException e) { System.out.println("order-double"); }
+                    try { System.out.println(Math.clamp(1.0f, Float.NaN, 2.0f)); } catch (IllegalArgumentException e) { System.out.println("nan-min-float"); }
+                    try { System.out.println(StrictMath.clamp(1.0f, 0.0f, Float.NaN)); } catch (IllegalArgumentException e) { System.out.println("nan-max-float"); }
+                    try { System.out.println(Math.clamp(1.0f, 0.0f, -0.0f)); } catch (IllegalArgumentException e) { System.out.println("zero-float"); }
+                    try { System.out.println(StrictMath.clamp(1.0f, 2.0f, 1.0f)); } catch (IllegalArgumentException e) { System.out.println("order-float"); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/math-clamp-invalid").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void mathClampEvaluatesArgumentsOnceInOrder() throws Exception {
+        final Path project = project("math-clamp-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int trace;
+                static long value() { trace = trace * 10 + 1; return 4; }
+                static int min() { trace = trace * 10 + 2; return 5; }
+                static int max() { trace = trace * 10 + 3; return 3; }
+                public static void main(String[] args) {
+                    try { System.out.println(Math.clamp(value(), min(), max())); }
+                    catch (IllegalArgumentException expected) { System.out.println(trace); }
+                    trace = 0;
+                    try { System.out.println(Math.clamp(value(), 5, 3)); }
+                    catch (IllegalArgumentException expected) { System.out.println(trace); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/math-clamp-order").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("123\n1\n");
+    }
+
+    @Test
     void strictMathDivisionVariantsMatchSignsAndBoundaries() throws Exception {
         final Path project = project("strict-math-division");
         writeJava(project, "com.acme.Main", """

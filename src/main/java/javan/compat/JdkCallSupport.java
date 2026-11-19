@@ -96,6 +96,8 @@ public final class JdkCallSupport {
         intrinsic("Objects.toString", "java/util/Objects", "toString", "(Ljava/lang/Object;)Ljava/lang/String;", "(Ljava/lang/Object;Ljava/lang/String;)Ljava/lang/String;"),
         intrinsic("Math.abs", "java/lang/Math", "abs", "(I)I", "(J)J", "(F)F", "(D)D"),
         intrinsic("Math.round", "java/lang/Math", "round", "(F)I", "(D)J"),
+        intrinsic("Math.clamp", "java/lang/Math", "clamp", "(JII)I", "(JJJ)J", "(FFF)F", "(DDD)D"),
+        intrinsic("StrictMath.clamp", "java/lang/StrictMath", "clamp", "(JII)I", "(JJJ)J", "(FFF)F", "(DDD)D"),
         intrinsic("Math.floorDiv", "java/lang/Math", "floorDiv", "(II)I", "(JI)J", "(JJ)J"),
         intrinsic("Math.floorMod", "java/lang/Math", "floorMod", "(II)I", "(JI)I", "(JJ)J"),
         intrinsic("Math.ceilDiv", "java/lang/Math", "ceilDiv", "(II)I", "(JI)J", "(JJ)J"),
@@ -2099,6 +2101,10 @@ public final class JdkCallSupport {
             && "toLowerCase".equals(methodRef.name())
             && "(Ljava/util/Locale;)Ljava/lang/String;".equals(methodRef.descriptor())) {
             return List.of("java/lang/NullPointerException");
+        }
+        if (("java/lang/Math".equals(methodRef.owner()) || "java/lang/StrictMath".equals(methodRef.owner()))
+            && "clamp".equals(methodRef.name()) && supportedCall(methodRef).isPresent()) {
+            return List.of("java/lang/IllegalArgumentException");
         }
         if (("java/lang/Math".equals(methodRef.owner()) || "java/lang/StrictMath".equals(methodRef.owner()))
             && ("addExact".equals(methodRef.name())

@@ -2746,7 +2746,7 @@ final class BytecodeToIRInvokeSupport {
     ) {
         if ("java/lang/Math".equals(methodRef.owner())
             || "java/lang/StrictMath".equals(methodRef.owner())
-                && ("floorDiv".equals(methodRef.name()) || "floorMod".equals(methodRef.name())
+                && ("clamp".equals(methodRef.name()) || "floorDiv".equals(methodRef.name()) || "floorMod".equals(methodRef.name())
                     || "ceilDiv".equals(methodRef.name()) || "ceilMod".equals(methodRef.name())
                     || "divideExact".equals(methodRef.name()) || "floorDivExact".equals(methodRef.name())
                     || "ceilDivExact".equals(methodRef.name()))) {
