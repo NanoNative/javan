@@ -10223,6 +10223,54 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void customRandomGeneratorBoundedIntDispatchesInClosedWorld() throws Exception {
+        final Path project = project("custom-random-generator-next-int");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            import java.util.random.RandomGenerator;
+            public final class Main {
+                static class Custom implements RandomGenerator {
+                    int calls;
+                    public long nextLong() { return 0; }
+                    public int nextInt(int bound) { calls = calls + 1; return bound + 42; }
+                }
+                static final class Child extends Custom { }
+                static final class Throwing extends Custom {
+                    public int nextInt(int bound) { throw new IllegalStateException(); }
+                }
+                static int invoke(RandomGenerator generator, int bound) {
+                    try { return generator.nextInt(bound); }
+                    catch (NullPointerException ex) { return -10; }
+                    catch (IllegalArgumentException ex) { return -20; }
+                    catch (IllegalStateException ex) { return -30; }
+                }
+                static int order;
+                static RandomGenerator generator() { order = order * 10 + 1; return new Custom(); }
+                static int bound() { order = order * 10 + 2; return 5; }
+                public static void main(String[] args) {
+                    Custom custom = new Custom(); Child child = new Child();
+                    System.out.println(invoke(custom, 0)); System.out.println(invoke(custom, -2));
+                    System.out.println(custom.calls); System.out.println(invoke(child, 3));
+                    System.out.println(child.calls); System.out.println(invoke(new Throwing(), 5));
+                    System.out.println(invoke(null, 0));
+                    RandomGenerator secure = new SecureRandom();
+                    System.out.println(invoke(secure, 1)); System.out.println(invoke(secure, 0));
+                    System.out.println(generator().nextInt(bound())); System.out.println(order);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/custom-random-generator-next-int").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void unsupportedRandomGeneratorIsNotSilentlyReplaced() throws Exception {
         final Path project = project("unsupported-random-generator");
         writeJava(project, "com.acme.Main", """
@@ -10231,11 +10279,11 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
             public final class Main {
                 static final class Custom implements RandomGenerator {
                     public long nextLong() { return 0; }
-                    public int nextInt(int bound) { return 42; }
+                    public double nextDouble(double bound) { return 42.0; }
                 }
                 public static void main(String[] args) {
                     RandomGenerator generator = new Custom();
-                    System.out.println(generator.nextInt(100));
+                    System.out.println(generator.nextDouble(100.0));
                 }
             }
             """);
@@ -10265,6 +10313,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                     long value;
                     public long nextLong() { long result = value; value = value + 1; return result; }
                     public void nextBytes(byte[] bytes) { bytes[0] = 42; }
+                    public int nextInt(int bound) { return bound + 42; }
                 }
                 static final class Worker implements Runnable {
                     public void run() {
@@ -10278,7 +10327,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                             custom.nextBytes(bytes);
                             new String(new char[] {'x', 'y'});
                             if (bytes.length != 64 || bytes[0] != 42 || value < 0 || value >= 5 || other < 0 || other >= 5
-                                || custom.nextLong() != i) errors.incrementAndGet();
+                                || custom.nextLong() != i || custom.nextInt(5) != 47) errors.incrementAndGet();
                         }
                     }
                 }
