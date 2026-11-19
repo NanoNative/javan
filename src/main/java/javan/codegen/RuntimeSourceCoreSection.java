@@ -1391,6 +1391,32 @@ final class RuntimeSourceCoreSection {
             return result;
         }
 
+        int javan_integer_compare_unsigned(int left, int right) {
+            uint32_t lhs = (uint32_t) left;
+            uint32_t rhs = (uint32_t) right;
+            return (lhs > rhs) - (lhs < rhs);
+        }
+
+        long long javan_integer_to_unsigned_long(int value) {
+            return (long long) (uint32_t) value;
+        }
+
+        int javan_integer_divide_unsigned(int left, int right) {
+            return javan_int_from_bits((uint32_t) left / (uint32_t) right);
+        }
+
+        int javan_integer_remainder_unsigned(int left, int right) {
+            return javan_int_from_bits((uint32_t) left % (uint32_t) right);
+        }
+
+        long long javan_long_divide_unsigned(long long left, long long right) {
+            return javan_long_from_bits((uint64_t) left / (uint64_t) right);
+        }
+
+        long long javan_long_remainder_unsigned(long long left, long long right) {
+            return javan_long_from_bits((uint64_t) left % (uint64_t) right);
+        }
+
         int javan_int_neg(int value) {
             return javan_int_from_bits(0U - (uint32_t) value);
         }

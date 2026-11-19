@@ -2806,6 +2806,58 @@ final class BytecodeToIRInvokeSupport {
         )) {
             return true;
         }
+        if ((("java/lang/Integer".equals(methodRef.owner()) && "(II)I".equals(methodRef.descriptor()))
+                || ("java/lang/Long".equals(methodRef.owner()) && "(JJ)J".equals(methodRef.descriptor())))
+            && ("divideUnsigned".equals(methodRef.name()) || "remainderUnsigned".equals(methodRef.name()))) {
+            final boolean wide = "java/lang/Long".equals(methodRef.owner());
+            final IrExpression right = wide ? popLong(classFile, method, stack) : popInt(classFile, method, stack);
+            final IrExpression left = wide ? popLong(classFile, method, stack) : popInt(classFile, method, stack);
+            final int index = localDeclarations.size();
+            final String leftName = "unsignedLeft" + index;
+            final String rightName = "unsignedRight" + index;
+            final IrType type = wide ? IrType.LONG : IrType.INT;
+            localDeclarations.put(Integer.MIN_VALUE + index, new IrLocal(type, leftName));
+            localDeclarations.put(Integer.MIN_VALUE + index + 1, new IrLocal(type, rightName));
+            final boolean literalDivisor = right.kind() == IrExpression.Kind.INT_LITERAL
+                || right.kind() == IrExpression.Kind.LONG_LITERAL;
+            final IrExpression savedLeft;
+            if (literalDivisor && (left.kind() == IrExpression.Kind.LOCAL || left.kind() == IrExpression.Kind.INT_LITERAL
+                || left.kind() == IrExpression.Kind.LONG_LITERAL)) {
+                savedLeft = left;
+            } else if (wide) {
+                instructions.add(IrInstruction.assignLong(leftName, left));
+                savedLeft = IrExpression.longLocal(leftName);
+            } else {
+                instructions.add(IrInstruction.assignInt(leftName, left));
+                savedLeft = IrExpression.intLocal(leftName);
+            }
+            final IrExpression savedRight;
+            if (literalDivisor) {
+                savedRight = right;
+            } else if (wide) {
+                instructions.add(IrInstruction.assignLong(rightName, right));
+                savedRight = IrExpression.longLocal(rightName);
+            } else {
+                instructions.add(IrInstruction.assignInt(rightName, right));
+                savedRight = IrExpression.intLocal(rightName);
+            }
+            final String successLabel = "label_unsigned_division_success_" + instruction.offset() + "_" + index;
+            instructions.add(IrInstruction.branchIf(successLabel, IrExpression.intComparison("!=", savedRight,
+                wide ? IrExpression.longLiteral(0) : IrExpression.intLiteral(0))));
+            final List<StackValue> successStack = List.copyOf(stack);
+            routePendingPlatformException(classFile, method, instruction, instructions, stack,
+                pendingExceptionHandlerStacks, sourceLines, "java/lang/ArithmeticException", IrExpression.stringLiteral("/ by zero"));
+            instructions.add(IrInstruction.label(successLabel));
+            stack.addAll(successStack);
+            final String symbol = (wide ? "javan_long_" : "javan_integer_")
+                + ("divideUnsigned".equals(methodRef.name()) ? "divide_unsigned" : "remainder_unsigned");
+            if (wide) {
+                stack.add(StackValue.longExpression(IrExpression.longCall(symbol, List.of(savedLeft, savedRight))));
+            } else {
+                stack.add(StackValue.intExpression(IrExpression.intCall(symbol, List.of(savedLeft, savedRight))));
+            }
+            return true;
+        }
         if ("java/lang/Integer".equals(methodRef.owner())) {
             return lowerIntegerIntrinsic(classFile, method, methodRef, stack);
         }
@@ -2998,6 +3050,17 @@ final class BytecodeToIRInvokeSupport {
         final MethodRef methodRef,
         final List<StackValue> stack
     ) {
+        if ("compareUnsigned".equals(methodRef.name()) && "(II)I".equals(methodRef.descriptor())) {
+            final IrExpression right = popInt(classFile, method, stack);
+            final IrExpression left = popInt(classFile, method, stack);
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_integer_compare_unsigned", List.of(left, right))));
+            return true;
+        }
+        if ("toUnsignedLong".equals(methodRef.name()) && "(I)J".equals(methodRef.descriptor())) {
+            stack.add(StackValue.longExpression(IrExpression.longCall("javan_integer_to_unsigned_long",
+                List.of(popInt(classFile, method, stack)))));
+            return true;
+        }
         if ("toString".equals(methodRef.name()) && "(I)Ljava/lang/String;".equals(methodRef.descriptor())) {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_string_value_of_int", List.of(popInt(classFile, method, stack)))));
             return true;

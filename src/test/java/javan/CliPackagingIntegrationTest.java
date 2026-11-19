@@ -577,6 +577,41 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsUnsignedIntegerArithmetic() throws Exception {
+        final Path project = tempDir.resolve("selfhost-unsigned-integer");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    System.out.println(Integer.toUnsignedLong(-1));
+                    System.out.println(Integer.compareUnsigned(-1, 1));
+                    System.out.println(Integer.divideUnsigned(-1, 3));
+                    System.out.println(Integer.remainderUnsigned(-1, 2));
+                    System.out.println(Long.divideUnsigned(-1L, 3L));
+                    System.out.println(Long.remainderUnsigned(-1L, 2L));
+                    try { System.out.println(Long.divideUnsigned(1L, 0L)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-unsigned-integer"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-unsigned-integer").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo("4294967295\n1\n1431655765\n1\n6148914691236517205\n1\n/ by zero\n");
+    }
+
+    @Test
     void nativeBuiltJavanBuildsMathClamp() throws Exception {
         final Path project = tempDir.resolve("selfhost-math-clamp");
         final Path classes = project.resolve("classes");

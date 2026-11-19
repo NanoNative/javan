@@ -13229,6 +13229,104 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void unsignedIntegerArithmeticMatchesJavaAtBoundaries() throws Exception {
+        final Path project = project("unsigned-integer-arithmetic");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    int[] ints = { Integer.MIN_VALUE, -4, -1, 0, 1, 4, Integer.MAX_VALUE };
+                    int[] divisors = { Integer.MIN_VALUE, -3, -1, 1, 3, Integer.MAX_VALUE };
+                    long[] longs = { Long.MIN_VALUE, -4L, -1L, 0L, 1L, 4L, Long.MAX_VALUE };
+                    long[] longDivisors = { Long.MIN_VALUE, -3L, -1L, 1L, 3L, Long.MAX_VALUE };
+                    for (int value : ints) {
+                        System.out.println(Integer.toUnsignedLong(value));
+                        for (int other : ints) System.out.println(Integer.compareUnsigned(value, other));
+                        for (int divisor : divisors) {
+                            System.out.println(Integer.divideUnsigned(value, divisor));
+                            System.out.println(Integer.remainderUnsigned(value, divisor));
+                        }
+                    }
+                    for (long value : longs) for (long divisor : longDivisors) {
+                        System.out.println(Long.divideUnsigned(value, divisor));
+                        System.out.println(Long.remainderUnsigned(value, divisor));
+                    }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/unsigned-integer-arithmetic").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void unsignedIntegerDivisionByZeroThrowsAndEvaluatesArgumentsInOrder() throws Exception {
+        final Path project = project("unsigned-integer-division-zero");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int trace;
+                static int intValue() { trace = trace * 10 + 1; return -1; }
+                static int intZero() { trace = trace * 10 + 2; return 0; }
+                static long longValue() { trace = trace * 10 + 1; return -1L; }
+                static long longZero() { trace = trace * 10 + 2; return 0L; }
+                public static void main(String[] args) {
+                    try { System.out.println(Integer.divideUnsigned(intValue(), intZero())); }
+                    catch (ArithmeticException expected) { System.out.println(trace); }
+                    trace = 0;
+                    try { System.out.println(Integer.remainderUnsigned(intValue(), intZero())); }
+                    catch (ArithmeticException expected) { System.out.println(trace); }
+                    trace = 0;
+                    try { System.out.println(Long.divideUnsigned(longValue(), longZero())); }
+                    catch (ArithmeticException expected) { System.out.println(trace); }
+                    trace = 0;
+                    try { System.out.println(Long.remainderUnsigned(longValue(), longZero())); }
+                    catch (ArithmeticException expected) { System.out.println(trace); }
+                    trace = 0;
+                    System.out.println(Integer.compareUnsigned(intValue(), intZero()));
+                    System.out.println(trace);
+                    trace = 0;
+                    try { System.out.println(Integer.divideUnsigned(intValue(), 0)); }
+                    catch (ArithmeticException expected) { System.out.println(trace); }
+                    trace = 0;
+                    try { System.out.println(Long.remainderUnsigned(longValue(), 0L)); }
+                    catch (ArithmeticException expected) { System.out.println(trace); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/unsigned-integer-division-zero").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("12\n12\n12\n12\n1\n12\n1\n1\n");
+    }
+
+    @Test
+    void unsignedIntegerUncaughtDivisionByZeroTerminates() throws Exception {
+        final Path project = project("unsigned-integer-uncaught-zero");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    System.out.println(Long.divideUnsigned(-1L, 0L));
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/unsigned-integer-uncaught-zero").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("java/lang/ArithmeticException", "/ by zero");
+    }
+
+    @Test
     void mathClampVariantsRespectBoundsAndSpecialValues() throws Exception {
         final Path project = project("math-clamp-values");
         writeJava(project, "com.acme.Main", """

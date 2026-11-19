@@ -362,6 +362,10 @@ public final class JdkCallSupport {
         ),
         intrinsic("Arrays.equals", "java/util/Arrays", "equals", "([B[B)Z"),
         intrinsic("Arrays.fill", "java/util/Arrays", "fill", "([BB)V", "([BIIB)V"),
+        intrinsic("Integer.compareUnsigned", "java/lang/Integer", "compareUnsigned", "(II)I"),
+        intrinsic("Integer.toUnsignedLong", "java/lang/Integer", "toUnsignedLong", "(I)J"),
+        intrinsic("Integer.divideUnsigned", "java/lang/Integer", "divideUnsigned", "(II)I"),
+        intrinsic("Integer.remainderUnsigned", "java/lang/Integer", "remainderUnsigned", "(II)I"),
         intrinsic("Integer.parseInt", "java/lang/Integer", "parseInt", "(Ljava/lang/String;)I"),
         intrinsic("Integer.toString", "java/lang/Integer", "toString", "(I)Ljava/lang/String;"),
         runtime("Integer.toString.instance", "java/lang/Integer", "toString", "()Ljava/lang/String;"),
@@ -381,6 +385,8 @@ public final class JdkCallSupport {
             "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Object;"
         ),
         intrinsic("Long.compare", "java/lang/Long", "compare", "(JJ)I"),
+        intrinsic("Long.divideUnsigned", "java/lang/Long", "divideUnsigned", "(JJ)J"),
+        intrinsic("Long.remainderUnsigned", "java/lang/Long", "remainderUnsigned", "(JJ)J"),
         intrinsic("Long.compareUnsigned", "java/lang/Long", "compareUnsigned", "(JJ)I"),
         intrinsic("Long.parseLong", "java/lang/Long", "parseLong", "(Ljava/lang/String;)J"),
         intrinsic("Long.toString", "java/lang/Long", "toString", "(J)Ljava/lang/String;"),
@@ -2101,6 +2107,11 @@ public final class JdkCallSupport {
             && "toLowerCase".equals(methodRef.name())
             && "(Ljava/util/Locale;)Ljava/lang/String;".equals(methodRef.descriptor())) {
             return List.of("java/lang/NullPointerException");
+        }
+        if (("java/lang/Integer".equals(methodRef.owner()) || "java/lang/Long".equals(methodRef.owner()))
+            && ("divideUnsigned".equals(methodRef.name()) || "remainderUnsigned".equals(methodRef.name()))
+            && supportedCall(methodRef).isPresent()) {
+            return List.of("java/lang/ArithmeticException");
         }
         if (("java/lang/Math".equals(methodRef.owner()) || "java/lang/StrictMath".equals(methodRef.owner()))
             && "clamp".equals(methodRef.name()) && supportedCall(methodRef).isPresent()) {
