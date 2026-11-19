@@ -971,8 +971,10 @@ final class BytecodeToIRInvokeSupport {
         }
         if ("java/lang/String".equals(methodRef.owner())
             && "getBytes".equals(methodRef.name())
-            && "(Ljava/nio/charset/Charset;)[B".equals(methodRef.descriptor())) {
-            final IrExpression charset = popObject(classFile, method, stack);
+            && ("(Ljava/nio/charset/Charset;)[B".equals(methodRef.descriptor())
+                || "()[B".equals(methodRef.descriptor()))) {
+            final IrExpression charset = "()[B".equals(methodRef.descriptor())
+                ? IrExpression.objectCall("javan_standard_charset_utf8", List.of()) : popObject(classFile, method, stack);
             final IrExpression receiver = popObject(classFile, method, stack);
             lowerStringGetBytesCharset(
                 classFile,
@@ -2534,6 +2536,12 @@ final class BytecodeToIRInvokeSupport {
         final MethodRef rawMethodRef = instruction.methodRef().orElseThrow();
         final MethodRef methodRef = JdkCallSupport.normalizeInheritedSupportedJdkCall(classes, rawMethodRef)
             .orElse(rawMethodRef);
+        if ("java/nio/charset/Charset".equals(methodRef.owner())
+            && "defaultCharset".equals(methodRef.name())
+            && "()Ljava/nio/charset/Charset;".equals(methodRef.descriptor())) {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_standard_charset_utf8", List.of());
+            return;
+        }
         if (lowerResourceAsStream(classFile, method, instruction, methodRef, instructions, stack,
             localDeclarations, pendingExceptionHandlerStacks, sourceLines)) {
             return;

@@ -2202,9 +2202,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksCharsetDefaultCharsetAsExplicitRejected() {
+    void marksCharsetDefaultCharsetAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/nio/charset/Charset", "defaultCharset", "()Ljava/nio/charset/Charset;")))
-            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test

@@ -577,7 +577,8 @@ public final class JdkCallSupport {
         runtime("String.intern", "java/lang/String", "intern", "()Ljava/lang/String;"),
         runtime("String.toString", "java/lang/String", "toString", "()Ljava/lang/String;"),
         runtime("String.concat", "java/lang/String", "concat", "(Ljava/lang/String;)Ljava/lang/String;"),
-        runtime("String.getBytes", "java/lang/String", "getBytes", "(Ljava/nio/charset/Charset;)[B"),
+        runtime("String.getBytes", "java/lang/String", "getBytes", "(Ljava/nio/charset/Charset;)[B", "()[B"),
+        runtime("Charset.defaultCharset", "java/nio/charset/Charset", "defaultCharset", "()Ljava/nio/charset/Charset;"),
         runtime(
             "String.toLowerCase",
             "java/lang/String",
@@ -2279,7 +2280,7 @@ public final class JdkCallSupport {
         }
         if ("java/lang/String".equals(methodRef.owner())
             && "getBytes".equals(methodRef.name())
-            && "(Ljava/nio/charset/Charset;)[B".equals(methodRef.descriptor())) {
+            && ("(Ljava/nio/charset/Charset;)[B".equals(methodRef.descriptor()) || "()[B".equals(methodRef.descriptor()))) {
             return List.of("java/lang/NullPointerException");
         }
         if ("java/lang/String".equals(methodRef.owner())

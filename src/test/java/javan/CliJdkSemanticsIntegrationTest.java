@@ -13629,6 +13629,101 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void defaultCharsetAndStringGetBytesUseUtf8() throws Exception {
+        final Path project = project("default-charset-string-bytes");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.nio.charset.Charset;
+            public final class Main {
+                static byte[] encode(String value) {
+                    try { return value.getBytes(); }
+                    catch (NullPointerException ex) { return new byte[] {-1}; }
+                }
+                static void print(byte[] bytes) {
+                    System.out.println(bytes.length);
+                    for (byte value : bytes) System.out.println((int) value);
+                }
+                public static void main(String[] args) {
+                    String value = new String(new char[] {'a', 0, (char) 0x00e9, (char) 0xd800,
+                        (char) 0xdc00, (char) 0xdfff, (char) 0xd800, 'z'});
+                    print(encode(value));
+                    print(value.getBytes(Charset.defaultCharset()));
+                    print(encode(""));
+                    print(encode(null));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/default-charset-string-bytes").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringGetBytesWorksWithoutExplicitCharsetCalls() throws Exception {
+        final Path project = project("default-string-bytes-only");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    byte[] bytes = new String(new char[] {0, (char) 0xd800, (char) 0xdc00, (char) 0xdfff}).getBytes();
+                    System.out.println(bytes.length);
+                    for (byte value : bytes) System.out.println((int) value);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/default-string-bytes-only").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void defaultCharsetSurvivesConcurrentCollection() throws Exception {
+        final Path project = project("default-charset-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.nio.charset.Charset;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            String value = new String(new char[] {'a', 0, (char) 0xd800, (char) 0xdc00, (char) 0xdfff});
+                            byte[] bytes = value.getBytes(Charset.defaultCharset());
+                            byte[] again = value.getBytes();
+                            new String(new char[] {'x', 'y'});
+                            if (bytes.length != 7 || again.length != 7 || bytes[0] != 'a' || bytes[1] != 0
+                                || bytes[2] != (byte) 0xf0 || bytes[6] != '?' || again[6] != '?') errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/default-charset-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
     void embeddedNullLiteralInPathFailsLikeJava() throws Exception {
         final Path project = project("string-null-path");
         writeJava(project, "com.acme.Main", """
