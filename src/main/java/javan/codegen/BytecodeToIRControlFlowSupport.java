@@ -1196,7 +1196,8 @@ final class BytecodeToIRControlFlowSupport {
         if (doneIndex <= targetIndex) {
             return false;
         }
-        if (!isValueConsumer(bytecode.get(doneIndex).opcode())) {
+        final int consumerOpcode = bytecode.get(doneIndex).opcode();
+        if (!isValueConsumer(consumerOpcode) && (consumerOpcode < 182 || consumerOpcode > 186)) {
             return false;
         }
         if (hasEarlierControlFlowEntry(bytecode, index, bytecode.get(index + 1).offset(), doneOffset)) {

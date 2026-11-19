@@ -81,6 +81,48 @@ final class ControlFlowCliTest extends CliIntegrationSupport {
             .contains("\"name\": \"control-flow\"", "\"status\": \"pass\"");
     }
 
+    @Test
+    void guardedConditionalArgumentsEvaluateTheSelectedBranch() throws Exception {
+        final Path project = project("guarded-conditional-arguments");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int calls;
+                static boolean check(boolean result) { calls++; return result; }
+                static String fallback() { calls++; return "fallback"; }
+                static void show(boolean left, boolean right) {
+                    StringBuilder builder = new StringBuilder();
+                    builder.append(left && check(right) ? "selected" : fallback());
+                    System.out.println(builder.toString());
+                    System.out.println(calls);
+                    calls = 0;
+                }
+                static void showOr(boolean left, boolean right) {
+                    System.out.println(left || check(right) ? "selected" : fallback());
+                    System.out.println(calls);
+                    calls = 0;
+                }
+                static void consume(String value) { System.out.println(value); }
+                public static void main(String[] args) {
+                    show(false, false);
+                    show(true, false);
+                    show(true, true);
+                    showOr(false, false);
+                    showOr(false, true);
+                    showOr(true, false);
+                    consume(args.length > 0 && check(true) ? "selected" : fallback());
+                    System.out.println(calls);
+                }
+            }
+            """);
+        final CliRun build = runSlow(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            java.util.List.of(project.resolve(".javan/bin/guarded-conditional-arguments").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("fallback\n1\nfallback\n2\nselected\n1\nfallback\n2\nselected\n1\nselected\n0\nfallback\n1\n");
+    }
+
     private static byte[] legacySubroutineClassfile() throws Exception {
         final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (DataOutputStream out = new DataOutputStream(bytes)) {

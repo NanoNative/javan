@@ -153,9 +153,11 @@ final class BytecodeToIRDynamicSupport {
         } else if (returnType == IrType.DOUBLE) {
             stack.add(StackValue.doubleExpression(localExpression));
         } else if (returnType == IrType.OBJECT) {
-            stack.add(throwable.isPresent()
-                ? new StackValue(StackKind.OBJECT, throwable, Optional.of(localExpression), Optional.empty())
-                : StackValue.objectExpression(localExpression));
+            if (throwable.isPresent()) {
+                stack.add(new StackValue(StackKind.OBJECT, throwable, Optional.of(localExpression), Optional.empty()));
+            } else {
+                stack.add(StackValue.objectExpression(localExpression));
+            }
         } else {
             throw new IllegalStateException("Unsupported call result type.");
         }
