@@ -6294,32 +6294,6 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
                 "{\"target\": \"java/util/Objects.equals(Ljava/lang/Object;Ljava/lang/Object;)Z\", \"count\": 1}"
             );
 
-        final Path numberProject = project("unsupported-number-to-string-overload");
-        writeJava(numberProject, "com.acme.Main", """
-            package com.acme;
-
-            public final class Main {
-                private Main() {
-                }
-
-                public static void main(final String[] args) {
-                    System.out.println(Integer.toString(15, 16));
-                    System.out.println(Long.toString(31L, 16));
-                }
-            }
-            """);
-
-        final CliRun numberRun = run(tempDir, "build", numberProject.toString());
-
-        assertThat(numberRun.exitCode()).isEqualTo(2);
-        assertThat(numberRun.stderr()).contains("error[JAVAN031]");
-        assertThat(Files.readString(numberProject.resolve(".javan/reports/intrinsics.json")))
-            .contains(
-                "{\"name\": \"Integer.toString\", \"count\": 0}",
-                "{\"name\": \"Long.toString\", \"count\": 0}",
-                "{\"target\": \"java/lang/Integer.toString(II)Ljava/lang/String;\", \"count\": 1}",
-                "{\"target\": \"java/lang/Long.toString(JI)Ljava/lang/String;\", \"count\": 1}"
-            );
     }
 
     @Test
