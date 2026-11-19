@@ -1133,15 +1133,21 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if ("java/util/random/RandomGenerator".equals(methodRef.owner()) && "nextInt".equals(methodRef.name())
-            && "(I)I".equals(methodRef.descriptor())) {
+            && ("(I)I".equals(methodRef.descriptor()) || "()I".equals(methodRef.descriptor()))) {
             final List<EntryPoint> targets = interfaceTargets(classes, methodRef, instantiatedTypes);
             if (!targets.isEmpty()) {
-                final IrExpression bound = popInt(classFile, method, stack);
+                final boolean bounded = "(I)I".equals(methodRef.descriptor());
+                final IrExpression bound = bounded ? popInt(classFile, method, stack) : null;
                 final IrExpression receiver = popObject(classFile, method, stack);
                 final String receiverLocal = newObjectLocal(localDeclarations);
-                final String boundLocal = newIntLocal(localDeclarations);
                 instructions.add(IrInstruction.assignObject(receiverLocal, receiver));
-                instructions.add(IrInstruction.assignInt(boundLocal, bound));
+                final List<IrExpression> arguments = new ArrayList<>();
+                arguments.add(IrExpression.objectLocal(receiverLocal));
+                if (bounded) {
+                    final String boundLocal = newIntLocal(localDeclarations);
+                    instructions.add(IrInstruction.assignInt(boundLocal, bound));
+                    arguments.add(IrExpression.intLocal(boundLocal));
+                }
                 final String resultLocal = newIntLocal(localDeclarations);
                 final String builtinLabel = "label_random_next_int_builtin_" + instruction.offset() + "_" + resultLocal;
                 final String doneLabel = "label_random_next_int_done_" + instruction.offset() + "_" + resultLocal;
@@ -1149,12 +1155,11 @@ final class BytecodeToIRInvokeSupport {
                 dispatches.putIfAbsent(symbol, dispatch(classes, symbol, MethodDescriptor.parse(methodRef.descriptor()), targets));
                 instructions.add(IrInstruction.branchIf(builtinLabel, IrExpression.intCall("javan_secure_random_use_builtin",
                     List.of(IrExpression.objectLocal(receiverLocal)))));
-                instructions.add(IrInstruction.assignInt(resultLocal, IrExpression.intCall(symbol,
-                    List.of(IrExpression.objectLocal(receiverLocal), IrExpression.intLocal(boundLocal)))));
+                instructions.add(IrInstruction.assignInt(resultLocal, IrExpression.intCall(symbol, arguments)));
                 instructions.add(IrInstruction.jump(doneLabel));
                 instructions.add(IrInstruction.label(builtinLabel));
-                instructions.add(IrInstruction.assignInt(resultLocal, IrExpression.intCall("javan_secure_random_next_int_bound_java",
-                    List.of(IrExpression.objectLocal(receiverLocal), IrExpression.intLocal(boundLocal)))));
+                instructions.add(IrInstruction.assignInt(resultLocal, IrExpression.intCall(
+                    bounded ? "javan_secure_random_next_int_bound_java" : "javan_secure_random_next_int_java", arguments)));
                 instructions.add(IrInstruction.label(doneLabel));
                 stack.add(StackValue.intExpression(IrExpression.intLocal(resultLocal)));
                 return;

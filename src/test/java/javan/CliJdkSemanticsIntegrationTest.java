@@ -10223,6 +10223,80 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void customRandomGeneratorIntDispatchesInClosedWorld() throws Exception {
+        final Path project = project("custom-random-generator-int");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            import java.util.random.RandomGenerator;
+            public final class Main {
+                static class Custom implements RandomGenerator {
+                    int calls;
+                    public long nextLong() { return 0; }
+                    public int nextInt() { int result = 42 + calls; calls = calls + 1; return result; }
+                }
+                static final class Child extends Custom { }
+                static final class Throwing extends Custom {
+                    public int nextInt() { throw new IllegalStateException(); }
+                }
+                static int invoke(RandomGenerator generator) {
+                    try { return generator.nextInt(); }
+                    catch (NullPointerException ex) { return -10; }
+                    catch (IllegalStateException ex) { return -20; }
+                }
+                public static void main(String[] args) {
+                    Custom custom = new Custom(); Child child = new Child();
+                    System.out.println(invoke(custom)); System.out.println(invoke(custom));
+                    System.out.println(custom.calls); System.out.println(invoke(child));
+                    System.out.println(child.calls); System.out.println(invoke(new Throwing()));
+                    System.out.println(invoke(null));
+                    RandomGenerator secure = new SecureRandom();
+                    int value = invoke(secure); System.out.println(value | ~value);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/custom-random-generator-int").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void unimplementedRandomGeneratorIntDefaultIsNotReplaced() throws Exception {
+        final Path project = project("unsupported-random-generator-int-default");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.random.RandomGenerator;
+            public final class Main {
+                static final class DefaultGenerator implements RandomGenerator {
+                    public long nextLong() { return 42L; }
+                }
+                static final class OverrideGenerator implements RandomGenerator {
+                    public long nextLong() { return 42L; }
+                    public int nextInt() { return 7; }
+                }
+                static int invoke(RandomGenerator generator) { return generator.nextInt(); }
+                public static void main(String[] args) {
+                    System.out.println(invoke(new OverrideGenerator()));
+                    System.out.println(invoke(new DefaultGenerator()));
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        for (int attempt = 0; attempt < 2; attempt++) {
+            final ProcessResult result = process(project,
+                List.of(project.resolve(".javan/bin/unsupported-random-generator-int-default").toString()));
+            assertThat(result.exitCode()).isNotZero();
+            assertThat(result.stderr()).contains("unsupported dispatch target");
+        }
+    }
+
+    @Test
     void customRandomGeneratorBoundedIntDispatchesInClosedWorld() throws Exception {
         final Path project = project("custom-random-generator-next-int");
         writeJava(project, "com.acme.Main", """
@@ -10314,6 +10388,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                     public long nextLong() { long result = value; value = value + 1; return result; }
                     public void nextBytes(byte[] bytes) { bytes[0] = 42; }
                     public int nextInt(int bound) { return bound + 42; }
+                    public int nextInt() { return 41; }
                 }
                 static final class Worker implements Runnable {
                     public void run() {
@@ -10327,7 +10402,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                             custom.nextBytes(bytes);
                             new String(new char[] {'x', 'y'});
                             if (bytes.length != 64 || bytes[0] != 42 || value < 0 || value >= 5 || other < 0 || other >= 5
-                                || custom.nextLong() != i || custom.nextInt(5) != 47) errors.incrementAndGet();
+                                || custom.nextLong() != i || custom.nextInt(5) != 47 || custom.nextInt() != 41) errors.incrementAndGet();
                         }
                     }
                 }

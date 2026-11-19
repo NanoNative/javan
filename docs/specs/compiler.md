@@ -72,7 +72,7 @@ are `nextBoolean` and the zero-argument, single-bound and origin-bound `nextInt`
 The supported `Random` and `RandomGenerator` `nextBytes`, `nextBoolean`, `nextInt`, `nextLong`,
 `nextFloat` and `nextDouble` overloads also work when the runtime receiver is a `SecureRandom`,
 including values passed through fields or method arguments. `RandomGenerator.nextLong()`,
-`nextBytes(byte[])` and `nextInt(int)` also dispatch statically reachable application overrides,
+`nextBytes(byte[])`, `nextInt()` and `nextInt(int)` also dispatch statically reachable application overrides,
 including inherited ones. Other receivers for the remaining overloads fail explicitly and are not
 treated as secure generators. Entropy-source failures retain the native runtime panic boundary.
 Provider selection, explicit seeding, other calls resolved through random supertypes and other

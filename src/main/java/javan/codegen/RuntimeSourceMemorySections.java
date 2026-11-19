@@ -9080,6 +9080,14 @@ final class RuntimeSourceMemorySections {
             javan_secure_random_next_bytes(value, array);
         }
 
+        int javan_secure_random_next_int_java(void* value) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            return javan_secure_random_next_int(value);
+        }
+
         int javan_secure_random_next_int_bound_java(void* value, int bound) {
             if (value == NULL) {
                 javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);

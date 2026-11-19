@@ -4242,6 +4242,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     public long nextLong() { return 42L; }
                     public void nextBytes(byte[] bytes) { if (bytes != null && bytes.length > 0) bytes[0] = 42; }
                     public int nextInt(int bound) { return bound + 42; }
+                    public int nextInt() { return 41; }
                 }
                 public static Object custom() { return new Custom(); }
                 public static int fill(Object value) {
@@ -4251,6 +4252,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 }
                 public static int next(Object value) { return ((Random) value).nextInt(7); }
                 public static int nextGenerator(Object value) { return ((java.util.random.RandomGenerator) value).nextInt(7); }
+                public static int nextGeneratorInt(Object value) { return ((java.util.random.RandomGenerator) value).nextInt(); }
                 public static long nextGeneratorLong(Object value) { return ((java.util.random.RandomGenerator) value).nextLong(); }
                 public static int fillGenerator(Object value) { byte[] bytes = new byte[1]; ((java.util.random.RandomGenerator) value).nextBytes(bytes); return bytes[0]; }
             }
@@ -4259,7 +4261,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "--export", "com.acme.Api.good():object", "--export", "com.acme.Api.wrong():object",
             "--export", "com.acme.Api.fill(object):int", "--export", "com.acme.Api.next(object):int", "--export", "com.acme.Api.nextGenerator(object):int",
             "--export", "com.acme.Api.custom():object", "--export", "com.acme.Api.nextGeneratorLong(object):long",
-            "--export", "com.acme.Api.fillGenerator(object):int");
+            "--export", "com.acme.Api.fillGenerator(object):int", "--export", "com.acme.Api.nextGeneratorInt(object):int");
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final Path caller = writeC(project, "call_random.c", """
             #include <string.h>
@@ -4283,6 +4285,9 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 result = javan_try_com_acme_Api_nextGeneratorLong_object(good, &generated);
                 if (!result.ok) return 9;
                 javan_result_free(&result);
+                result = javan_try_com_acme_Api_nextGeneratorInt_object(good, &size);
+                if (!result.ok) return 14;
+                javan_result_free(&result);
                 result = javan_try_com_acme_Api_custom_void(&custom);
                 if (!result.ok || custom == 0) return 10;
                 javan_result_free(&result);
@@ -4295,6 +4300,9 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 result = javan_try_com_acme_Api_nextGenerator_object(custom, &size);
                 if (!result.ok || size != 49) return 13;
                 javan_result_free(&result);
+                result = javan_try_com_acme_Api_nextGeneratorInt_object(custom, &size);
+                if (!result.ok || size != 41) return 15;
+                javan_result_free(&result);
                 result = javan_try_com_acme_Api_wrong_void(&wrong);
                 if (!result.ok || wrong == 0) return 3;
                 javan_result_free(&result);
@@ -4306,6 +4314,9 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 javan_result_free(&result);
                 result = javan_try_com_acme_Api_nextGenerator_object(wrong, &size);
                 if (result.ok || result.message == 0 || strstr(result.message, "unsupported dispatch target") == 0) return 8;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_nextGeneratorInt_object(wrong, &size);
+                if (result.ok || result.message == 0 || strstr(result.message, "unsupported dispatch target") == 0) return 16;
                 javan_result_free(&result);
                 javan_object_handle_release(good);
                 javan_object_handle_release(wrong);
