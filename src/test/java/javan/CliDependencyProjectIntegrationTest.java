@@ -1511,7 +1511,7 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void reachableNonAsciiStringConstantFailsUntilUtf16StringModelExists() throws Exception {
+    void reachableNonAsciiStringLengthBuildsAndRuns() throws Exception {
         final Path project = project("non-ascii-string");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -1526,13 +1526,12 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
             }
             """);
 
-        final CliRun run = run(tempDir, "check", project.toString());
+        final CliRun run = run(tempDir, "build", project.toString());
 
-        assertThat(run.exitCode()).isEqualTo(2);
-        assertThat(run.stderr()).contains(
-            "error[JAVAN046]",
-            "non-ASCII string constants require the UTF-16 string model"
-        );
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/non-ascii-string").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("4\n");
     }
 
     @Test
@@ -1604,7 +1603,7 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static int unused() {
-                    return "caf\\u00e9".length();
+                    return "caf\\u00e9".charAt(0);
                 }
             }
             """);
