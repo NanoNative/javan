@@ -903,6 +903,11 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     System.out.println(value.strip().length());
                     System.out.println((int) value.strip().charAt(0));
                     System.out.println(value.trim().length());
+                    String spaces = " ".repeat(100000);
+                    String unicode = String.valueOf((char) 0x2003).repeat(100000);
+                    System.out.println(("x" + spaces).trim().equals("x"));
+                    System.out.println(("x" + unicode).stripTrailing().equals("x"));
+                    System.out.println((unicode + "x").stripLeading().equals("x"));
                 }
             }
             """);

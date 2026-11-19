@@ -13542,13 +13542,19 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                         new String(new char[]{0x2028, 'A', 0x3000}),
                         new String(new char[]{0x0085, 'A', 0x0085}),
                         "",
-                        new String(new char[]{0x2003, (char) 0xd83d, (char) 0xde00, 0x2003})
+                        new String(new char[]{0x2003, (char) 0xd83d, (char) 0xde00, 0x2003}),
+                        new String(new char[]{0x2003, (char) 0xd800, 0x2003}),
+                        new String(new char[]{0x2003, (char) 0xdc00, 0x2003})
                     };
                     for (String value : values) {
                         String stripped = value.strip();
                         System.out.println(stripped.length());
                         for (int i = 0; i < stripped.length(); i++) System.out.println((int) stripped.charAt(i));
-                        System.out.println(value.trim().length());
+                        String[] variants = {value.trim(), value.stripLeading(), value.stripTrailing()};
+                        for (String variant : variants) {
+                            System.out.println(variant.length());
+                            for (int i = 0; i < variant.length(); i++) System.out.println((int) variant.charAt(i));
+                        }
                     }
                 }
             }
@@ -13572,6 +13578,9 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                         boolean whitespace = Character.isWhitespace((char) i);
                         String value = new String(new char[]{(char) i, 'x', (char) i});
                         if (value.strip().length() != (whitespace ? 1 : 3)) System.out.println("bad-strip:" + i);
+                        if (value.stripLeading().length() != (whitespace ? 2 : 3)) System.out.println("bad-leading:" + i);
+                        if (value.stripTrailing().length() != (whitespace ? 2 : 3)) System.out.println("bad-trailing:" + i);
+                        if (value.trim().length() != (i <= 0x20 ? 1 : 3)) System.out.println("bad-trim:" + i);
                         if (whitespace) System.out.println(i);
                     }
                 }
@@ -13616,6 +13625,32 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
             Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
         assertThat(result.exitCode()).as(result.stderr()).isZero();
         assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
+    void longUnicodeWhitespaceStripsWithinBoundedTime() throws Exception {
+        final Path project = project("string-strip-long-whitespace");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    String spaces = " ".repeat(100000);
+                    String unicode = String.valueOf((char) 0x2003).repeat(100000);
+                    System.out.println(("x" + spaces).stripTrailing().equals("x"));
+                    System.out.println(("x" + spaces).trim().equals("x"));
+                    System.out.println((spaces + "x").trim().equals("x"));
+                    System.out.println(("x" + unicode).stripTrailing().equals("x"));
+                    System.out.println((unicode + "x").stripLeading().equals("x"));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-strip-long-whitespace").toString()),
+            Duration.ofSeconds(5));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
     }
 
     @Test

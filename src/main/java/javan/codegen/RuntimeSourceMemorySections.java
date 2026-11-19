@@ -10631,23 +10631,7 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
-        void* javan_string_trim(const char* value) {
-            if (value == NULL) {
-                javan_panic("null string");
-            }
-            int length = javan_string_length(value);
-            int begin = 0;
-            while (begin < length && javan_utf16_char_at_utf8(value, begin) <= 32) {
-                begin++;
-            }
-            int end = length;
-            while (end > begin && javan_utf16_char_at_utf8(value, end - 1) <= 32) {
-                end--;
-            }
-            return javan_string_substring_range(value, begin, end);
-        }
-
-        void* javan_string_strip(const char* value) {
+        static void* javan_string_strip_edges(const char* value, int leading, int trailing, int unicode_whitespace) {
             if (value == NULL) {
                 javan_panic("null string");
             }
@@ -10661,38 +10645,39 @@ final class RuntimeSourceMemorySections {
                 if (length > INT_MAX - width) {
                     javan_panic("string length overflow");
                 }
-                if (!javan_character_is_whitespace((int) code_point)) {
+                int whitespace = unicode_whitespace
+                    ? javan_character_is_whitespace((int) code_point) : code_point <= 0x20U;
+                if (!whitespace) {
                     if (begin < 0) {
                         begin = length;
+                        if (leading && !trailing) {
+                            return javan_string_substring_range(value, begin, javan_string_length(value));
+                        }
                     }
                     end = length + width;
                 }
                 length += width;
             }
-            return javan_string_substring_range(value, begin < 0 ? 0 : begin, end);
+            if (begin < 0) {
+                return javan_string_substring_range(value, 0, 0);
+            }
+            return javan_string_substring_range(value, leading ? begin : 0, trailing ? end : length);
+        }
+
+        void* javan_string_trim(const char* value) {
+            return javan_string_strip_edges(value, 1, 1, 0);
+        }
+
+        void* javan_string_strip(const char* value) {
+            return javan_string_strip_edges(value, 1, 1, 1);
         }
 
         void* javan_string_strip_leading(const char* value) {
-            if (value == NULL) {
-                javan_panic("null string");
-            }
-            int length = javan_string_length(value);
-            int begin = 0;
-            while (begin < length && javan_character_is_whitespace(javan_utf16_char_at_utf8(value, begin))) {
-                begin++;
-            }
-            return javan_string_substring_range(value, begin, length);
+            return javan_string_strip_edges(value, 1, 0, 1);
         }
 
         void* javan_string_strip_trailing(const char* value) {
-            if (value == NULL) {
-                javan_panic("null string");
-            }
-            int end = javan_string_length(value);
-            while (end > 0 && javan_character_is_whitespace(javan_utf16_char_at_utf8(value, end - 1))) {
-                end--;
-            }
-            return javan_string_substring_range(value, 0, end);
+            return javan_string_strip_edges(value, 0, 1, 1);
         }
 
         void* javan_string_to_lower_case(const char* value) {
