@@ -944,6 +944,10 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 }
                 public static void main(String[] args) {
                     print("A", -1); print("A", 1); print(null, 0); print("A", 0);
+                    System.out.println((int) "\\0\\ud800\\udc00\\udfff".charAt(0));
+                    System.out.println((int) "\\0\\ud800\\udc00\\udfff".charAt(1));
+                    System.out.println((int) "\\0\\ud800\\udc00\\udfff".charAt(2));
+                    System.out.println((int) "\\0\\ud800\\udc00\\udfff".charAt(3));
                 }
             }
             """);
@@ -3602,6 +3606,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static int strictHash(String value) { return value.hashCode(); }
                 public static int strictEmpty(String value) { return value.isEmpty() ? 1 : 0; }
                 public static int strictBlank(String value) { return value.isBlank() ? 1 : 0; }
+                public static int literalCharAt(int index) { return "\\0\\ud800\\udc00\\udfff".charAt(index); }
                 public static String fail(String value) { throw new IllegalArgumentException(value); }
                 public static String literal() { return "a\\0b"; }
                 public static String fromCodePoint(int value) { return Character.toString(value); }
@@ -3618,7 +3623,8 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "--export", "com.acme.Text.echo", "--export", "com.acme.Text.length", "--export", "com.acme.Text.fail",
             "--export", "com.acme.Text.literal", "--export", "com.acme.Text.fromCodePoint", "--export", "com.acme.Text.copy",
             "--export", "com.acme.Text.repeat", "--export", "com.acme.Text.strictLength", "--export", "com.acme.Text.getChars",
-            "--export", "com.acme.Text.strictHash", "--export", "com.acme.Text.strictEmpty", "--export", "com.acme.Text.strictBlank");
+            "--export", "com.acme.Text.strictHash", "--export", "com.acme.Text.strictEmpty", "--export", "com.acme.Text.strictBlank",
+            "--export", "com.acme.Text.literalCharAt");
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         final Path library = project.resolve(".javan/dist/liblibrary-utf16.a");
         final Path caller = writeC(project, "call_utf16.c", """
@@ -3634,6 +3640,18 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 if (!result.ok || output.length != 7 || memcmp(data, output.data, sizeof(data))) return 1;
                 javan_result_free(&result);
                 javan_free(output.data);
+                const int literal_units[] = {0, 0xd800, 0xdc00, 0xdfff};
+                for (int i = 0; i < 4; i++) {
+                    int character = -1;
+                    result = javan_try_com_acme_Text_literalCharAt_int(i, &character);
+                    if (!result.ok || character != literal_units[i]) return 36;
+                    javan_result_free(&result);
+                }
+                int invalid_character = -1;
+                result = javan_try_com_acme_Text_literalCharAt_int(4, &invalid_character);
+                if (result.ok || invalid_character != 0 || result.message == NULL
+                    || strstr(result.message, "java/lang/StringIndexOutOfBoundsException") == NULL) return 37;
+                javan_result_free(&result);
                 result = javan_utf16_try_com_acme_Text_copy_string(input, &output);
                 if (!result.ok || output.length != 7 || memcmp(data, output.data, sizeof(data))) return 16;
                 javan_result_free(&result);

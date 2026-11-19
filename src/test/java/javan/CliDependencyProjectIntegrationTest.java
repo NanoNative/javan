@@ -1602,8 +1602,8 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
                     System.out.println("ok");
                 }
 
-                public static int unused() {
-                    return "caf\\u00e9".charAt(0);
+                public static String unused() {
+                    return "caf\\u00e9".substring(0);
                 }
             }
             """);

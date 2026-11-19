@@ -6493,7 +6493,7 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void staticVerifierRejectsReachableNonAsciiStringCharAtCall() {
+    void staticVerifierAcceptsReachableNonAsciiStringCharAtCall() {
         final List<Diagnostic> diagnostics = verifyStringSemanticMethod(
             new MethodRef("java/lang/String", "charAt", "(I)C"),
             true,
@@ -6504,10 +6504,7 @@ final class CoreBehaviorTest {
             instruction(4, 177, "return")
         );
 
-        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
-            assertThat(diagnostic.code()).isEqualTo("JAVAN046");
-            assertThat(diagnostic.subject()).isEqualTo("java/lang/String.charAt(I)C");
-        });
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test

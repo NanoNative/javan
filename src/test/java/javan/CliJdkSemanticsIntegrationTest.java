@@ -15516,6 +15516,35 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void stringCharAtAcceptsUnicodeLiterals() throws Exception {
+        final Path project = project("string-char-at-unicode-literal");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int index() { return new String(new char[] {'x'}).length(); }
+                public static void main(String[] args) {
+                    System.out.println((int) "\\0x".charAt(0));
+                    System.out.println((int) "\\ud800\\udc00\\udfff\\udbff".charAt(0));
+                    System.out.println((int) "\\ud800\\udc00\\udfff\\udbff".charAt(index()));
+                    System.out.println((int) "\\ud800\\udc00\\udfff\\udbff".charAt(2));
+                    System.out.println((int) "\\ud800\\udc00\\udfff\\udbff".charAt(3));
+                    int invalid = args.length + 1;
+                    try { System.out.println((int) "é".charAt(invalid)); }
+                    catch (StringIndexOutOfBoundsException ex) { System.out.println("bounds"); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-char-at-unicode-literal").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void stringCharAtThrowsCatchableExceptionsForInvalidInput() throws Exception {
         final Path project = project("string-char-at-exceptions");
         writeJava(project, "com.acme.Main", """
