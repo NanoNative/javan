@@ -4400,9 +4400,9 @@ final class JdkCallSupportTest {
     @Test
     void nonTransportingCallHasNoPlatformThrowableTypes() {
         assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
-            "java/lang/String",
-            "hashCode",
-            "()I"
+            "java/lang/Math",
+            "abs",
+            "(I)I"
         ))).isEmpty();
     }
 
