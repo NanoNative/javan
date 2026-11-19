@@ -787,7 +787,7 @@ final class BytecodeToIRInvokeSupport {
         if ("java/lang/Object".equals(methodRef.owner())
             && "getClass".equals(methodRef.name())
             && "()Ljava/lang/Class;".equals(methodRef.descriptor())) {
-            final IrExpression receiver = popObject(classFile, method, instruction, stack);
+            final IrExpression receiver = stackValueExpression(popObjectValue(classFile, method, instruction, stack));
             final IrExpression savedReceiver;
             if (receiver.kind() == IrExpression.Kind.LOCAL || receiver.kind() == IrExpression.Kind.OBJECT_NULL) {
                 savedReceiver = receiver;
