@@ -4452,6 +4452,17 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void stringCodePointSearchTransportsNullReceiverFailure() {
+        for (final String name : List.of("indexOf", "lastIndexOf")) {
+            for (final String descriptor : List.of("(I)I", "(II)I")) {
+                assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
+                    "java/lang/String", name, descriptor
+                ))).containsExactly("java/lang/NullPointerException");
+            }
+        }
+    }
+
+    @Test
     void unknownJdkThrowableIsNotAdmittedWithoutAnExactHierarchyEdge() {
         assertThat(JdkCallSupport.isPlatformThrowable("java/nio/file/NoSuchFileException")).isFalse();
     }

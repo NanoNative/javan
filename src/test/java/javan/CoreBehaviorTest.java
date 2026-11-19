@@ -6545,7 +6545,7 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void staticVerifierRejectsReachableNonAsciiStringIndexOfCharCall() {
+    void staticVerifierAcceptsReachableNonAsciiStringIndexOfCharCall() {
         final List<Diagnostic> diagnostics = verifyStringSemanticMethod(
             new MethodRef("java/lang/String", "indexOf", "(I)I"),
             true,
@@ -6556,14 +6556,11 @@ final class CoreBehaviorTest {
             instruction(4, 177, "return")
         );
 
-        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
-            assertThat(diagnostic.code()).isEqualTo("JAVAN046");
-            assertThat(diagnostic.subject()).isEqualTo("java/lang/String.indexOf(I)I");
-        });
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test
-    void staticVerifierRejectsReachableNonAsciiStringIndexOfCharFromIndexCall() {
+    void staticVerifierAcceptsReachableNonAsciiStringIndexOfCharFromIndexCall() {
         final List<Diagnostic> diagnostics = verifyStringSemanticMethod(
             new MethodRef("java/lang/String", "indexOf", "(II)I"),
             true,
@@ -6575,10 +6572,7 @@ final class CoreBehaviorTest {
             instruction(5, 177, "return")
         );
 
-        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
-            assertThat(diagnostic.code()).isEqualTo("JAVAN046");
-            assertThat(diagnostic.subject()).isEqualTo("java/lang/String.indexOf(II)I");
-        });
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test
@@ -6619,7 +6613,7 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void staticVerifierRejectsReachableNonAsciiStringLastIndexOfCall() {
+    void staticVerifierAcceptsReachableNonAsciiStringLastIndexOfCall() {
         final List<Diagnostic> diagnostics = verifyStringSemanticMethod(
             new MethodRef("java/lang/String", "lastIndexOf", "(I)I"),
             true,
@@ -6630,10 +6624,7 @@ final class CoreBehaviorTest {
             instruction(4, 177, "return")
         );
 
-        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
-            assertThat(diagnostic.code()).isEqualTo("JAVAN046");
-            assertThat(diagnostic.subject()).isEqualTo("java/lang/String.lastIndexOf(I)I");
-        });
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test

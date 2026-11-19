@@ -15943,6 +15943,362 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void conditionalReferencesPreserveValuesFromTransportingCalls() throws Exception {
+        final Path project = project("conditional-transported-references");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static final class Box {
+                    final int value;
+                    Box(int value) { this.value = value; }
+                }
+                static Box fromStack(boolean fail) {
+                    if (fail) throw new IllegalArgumentException();
+                    return new Box(10);
+                }
+                static Box literal(int value) { return new Box(value); }
+                static int select(boolean flag, boolean backwards) {
+                    Box selected = flag ? fromStack(false) : literal(backwards ? 20 : 30);
+                    return selected.value;
+                }
+                public static void main(String[] args) {
+                    System.out.println(select(true, true));
+                    System.out.println(select(false, true));
+                    System.out.println(select(false, false));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/conditional-transported-references").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void nestedConditionalStopsAfterTransportedException() throws Exception {
+        final Path project = project("nested-conditional-exception-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static final class Box {
+                    final int value;
+                    Box(int value) { this.value = value; }
+                }
+                static Box first() { throw new IllegalArgumentException(); }
+                static int later() { System.out.println("later"); return 1; }
+                static Box combine(Box value, int ignored) { return value; }
+                static Box literal(int value) { return new Box(value); }
+                static int select(boolean flag, boolean nested) {
+                    Box selected = flag ? combine(first(), later()) : literal(nested ? 20 : 30);
+                    return selected.value;
+                }
+                public static void main(String[] args) {
+                    System.out.println("before");
+                    try { System.out.println(select(true, false)); }
+                    catch (IllegalArgumentException ex) { System.out.println("caught"); }
+                    System.out.println("done");
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/nested-conditional-exception-order").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void nestedConditionalInnerArmStopsAfterTransportedException() throws Exception {
+        final Path project = project("nested-conditional-inner-exception-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static final class Box {
+                    final int value;
+                    Box(int value) { this.value = value; }
+                }
+                static int first() { throw new IllegalArgumentException(); }
+                static int later() { System.out.println("later"); return 1; }
+                static int combine(int value, int ignored) { return value; }
+                static Box box(int value) { return new Box(value); }
+                static int select(boolean outer, boolean inner) {
+                    Box selected = outer ? box(10) : box(inner ? combine(first(), later()) : 30);
+                    return selected.value;
+                }
+                public static void main(String[] args) {
+                    System.out.println(select(true, true));
+                    System.out.println(select(false, false));
+                    try { System.out.println(select(false, true)); }
+                    catch (IllegalArgumentException ex) { System.out.println("caught"); }
+                    System.out.println("done");
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/nested-conditional-inner-exception-order").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void nestedReferenceSelectionSurvivesConcurrentCollection() throws Exception {
+        final Path project = project("nested-reference-selection-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static final class Box {
+                    final int value;
+                    Box(int value) { this.value = value; }
+                }
+                static Box first(boolean fail) {
+                    if (fail) throw new IllegalArgumentException();
+                    return new Box(10);
+                }
+                static Box literal(int value) { return new Box(value); }
+                static int select(boolean outer, boolean inner) {
+                    Box selected = outer ? first(false) : literal(inner ? 20 : 30);
+                    return selected.value;
+                }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            if (select(true, true) != 10) errors.incrementAndGet();
+                            if (select(false, true) != 20) errors.incrementAndGet();
+                            if (select(false, false) != 30) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/nested-reference-selection-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
+    void nestedConditionalLocalHandlerFailsExplicitlyUntilSupported() throws Exception {
+        final Path project = project("nested-conditional-local-handler");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int fail() { throw new IllegalArgumentException(); }
+                static int later() { System.out.println("later"); return 2; }
+                static int combine(int value, int ignored) { return value; }
+                static int identity(int value) { return value; }
+                static int select(boolean outer, boolean inner) {
+                    try { return outer ? combine(fail(), later()) : identity(inner ? 20 : 30); }
+                    catch (IllegalArgumentException ex) { System.out.println("caught"); return -1; }
+                }
+                public static void main(String[] args) {
+                    System.out.println(select(false, true));
+                    System.out.println(select(true, false));
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).isNotZero();
+        assertThat(build.stderr()).contains("error[JAVAN014]", "exception handlers are not supported");
+    }
+
+    @Test
+    void stringCodePointSearchAcceptsUnicodeLiteralsAndNullFailures() throws Exception {
+        final Path project = project("string-codepoint-search-literal-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int first(String text, int point) {
+                    try { return text.indexOf(point); } catch (NullPointerException ex) { return -9; }
+                }
+                static int firstFrom(String text, int point, int from) {
+                    try { return text.indexOf(point, from); } catch (NullPointerException ex) { return -9; }
+                }
+                static int last(String text, int point) {
+                    try { return text.lastIndexOf(point); } catch (NullPointerException ex) { return -9; }
+                }
+                static int lastFrom(String text, int point, int from) {
+                    try { return text.lastIndexOf(point, from); } catch (NullPointerException ex) { return -9; }
+                }
+                static int next() { return new String(new char[] {'x'}).length(); }
+                public static void main(String[] args) {
+                    int[] points = {-1, 0, 0x10000, 0xd800, 0xdc00, 0xdfff, 0x10ffff, 0x110000};
+                    int[] positions = {Integer.MIN_VALUE, -1, 0, 1, 2, 3, 4, 5, Integer.MAX_VALUE};
+                    for (int point : points) {
+                        System.out.println("\\0\\ud800\\udc00\\udfff\\ud800".indexOf(point));
+                        System.out.println("\\0\\ud800\\udc00\\udfff\\ud800".lastIndexOf(point));
+                        for (int from : positions) {
+                            System.out.println("\\0\\ud800\\udc00\\udfff\\ud800".indexOf(point, from));
+                            System.out.println("\\0\\ud800\\udc00\\udfff\\ud800".lastIndexOf(point, from));
+                        }
+                    }
+                    System.out.println("\\0\\ud800\\udc00".indexOf(next()));
+                    System.out.println(first(null, -1)); System.out.println(firstFrom(null, -1, 1));
+                    System.out.println(last(null, -1)); System.out.println(lastFrom(null, -1, -1));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-codepoint-search-literal-null").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringCodePointSearchUncaughtNullEvaluatesArgumentsBeforeFailure() throws Exception {
+        final Path project = project("string-codepoint-search-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int point() { System.out.println("point"); return 0x10000; }
+                static int from() { System.out.println("from"); return 0; }
+                static int later() { System.out.println("later"); return 1; }
+                public static void main(String[] args) {
+                    System.out.println("before");
+                    String value = args.length == 0 ? null : "text";
+                    System.out.println(value.lastIndexOf(point(), from()) + later());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-codepoint-search-uncaught").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("before\npoint\nfrom\n");
+        assertThat(result.stderr()).contains("NullPointerException");
+    }
+
+    @Test
+    void stringCodePointSearchSurvivesConcurrentCollection() throws Exception {
+        final Path project = project("string-codepoint-search-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static int from() { return new String(new char[] {'x'}).length(); }
+                static int nullSearch(String value) {
+                    try { return value.indexOf(-1); } catch (NullPointerException ex) { return -9; }
+                }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            if ("\\0\\ud800\\udc00\\udfff".indexOf(0x10000, from()) != 1) errors.incrementAndGet();
+                            if ("\\0\\ud800\\udc00\\udfff".lastIndexOf(0x10000, from()) != 1) errors.incrementAndGet();
+                            if (nullSearch(null) != -9) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-codepoint-search-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
+    void nestedConditionalPreservesWideValuesAndExceptionOrder() throws Exception {
+        final Path project = project("nested-conditional-wide-exception-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static long first(boolean fail) {
+                    if (fail) throw new IllegalArgumentException();
+                    return 10L;
+                }
+                static long later() { System.out.println("later"); return 1L; }
+                static long combine(long value, long extra) { return value + extra; }
+                static long identity(long value) { return value; }
+                static long select(boolean outer, boolean inner, boolean fail) {
+                    return outer ? combine(first(fail), later()) : identity(inner ? 20L : 30L);
+                }
+                public static void main(String[] args) {
+                    System.out.println(select(true, false, false));
+                    System.out.println(select(false, true, false));
+                    System.out.println(select(false, false, false));
+                    try { System.out.println(select(true, false, true)); }
+                    catch (IllegalArgumentException ex) { System.out.println("caught"); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/nested-conditional-wide-exception-order").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void nestedConditionalPreservesArgumentEvaluationOrder() throws Exception {
+        final Path project = project("nested-conditional-argument-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static final class Box {
+                    final int value;
+                    Box(int value) { this.value = value; }
+                }
+                static Box first() { System.out.println("first"); return new Box(10); }
+                static int later() { System.out.println("later"); return 1; }
+                static Box combine(Box value, int ignored) { return value; }
+                static Box literal(int value) { return new Box(value); }
+                static int select(boolean flag, boolean nested) {
+                    Box selected = flag ? combine(first(), later()) : literal(nested ? 20 : 30);
+                    return selected.value;
+                }
+                public static void main(String[] args) {
+                    System.out.println(select(true, false));
+                    System.out.println(select(false, true));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/nested-conditional-argument-order").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void stringCodePointSearchMatchesJavaAcrossSurrogateCombinations() throws Exception {
         final Path project = project("string-codepoint-search-combinations");
         writeJava(project, "com.acme.Main", """

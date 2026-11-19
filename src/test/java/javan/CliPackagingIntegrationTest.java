@@ -705,6 +705,56 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsNestedReferenceSelection() throws Exception {
+        final Path project = tempDir.resolve("selfhost-nested-reference-selection");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static final class Box {
+                    final int value;
+                    Box(int value) { this.value = value; }
+                }
+                static Box first(boolean fail) {
+                    if (fail) throw new IllegalArgumentException();
+                    return new Box(10);
+                }
+                static int later() { System.out.println("later"); return 1; }
+                static Box combine(Box box, int ignored) { return box; }
+                static Box literal(int value) { return new Box(value); }
+                static int select(boolean outer, boolean inner, boolean fail) {
+                    Box box = outer ? combine(first(fail), later()) : literal(inner ? 20 : 30);
+                    return box.value;
+                }
+                public static void main(String[] args) {
+                    System.out.println(select(true, true, false));
+                    System.out.println(select(false, true, false));
+                    System.out.println(select(false, false, false));
+                    try { System.out.println(select(true, false, true)); }
+                    catch (IllegalArgumentException ex) { System.out.println("caught"); }
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-nested-reference-selection"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-nested-reference-selection").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout());
+    }
+
+    @Test
     void nativeBuiltJavanBuildsGuardedConditionalArguments() throws Exception {
         final Path project = tempDir.resolve("selfhost-guarded-arguments");
         final Path classes = project.resolve("classes");
@@ -1328,6 +1378,61 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void staticLibraryNestedReferenceSelectionTransportsFailures() throws Exception {
+        final Path project = project("library-nested-reference-selection");
+        writeJava(project, "com.acme.Text", """
+            package com.acme;
+            public final class Text {
+                static final class Box {
+                    final int value;
+                    Box(int value) { this.value = value; }
+                }
+                static Box first(int fail) {
+                    if (fail != 0) throw new IllegalArgumentException();
+                    return new Box(10);
+                }
+                static Box box(int value) { return new Box(value); }
+                public static int select(int outer, int inner, int fail) {
+                    Box selected = outer != 0 ? first(fail) : box(inner != 0 ? 20 : 30);
+                    return selected.value;
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString(), "--kind", "staticlib", "--export", "com.acme.Text.select");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path library = project.resolve(".javan/dist/liblibrary-nested-reference-selection.a");
+        final Path caller = writeC(project, "call_selection.c", """
+            #include <string.h>
+            #include ".javan/dist/bindings/c/library-nested-reference-selection.h"
+            int main(void) {
+                for (int i = 0; i < 100; i++) {
+                    int value = -1;
+                    JavanResult result = javan_try_com_acme_Text_select_int_int_int(1, 0, 0, &value);
+                    if (!result.ok || value != 10) return 1;
+                    javan_result_free(&result);
+                    result = javan_try_com_acme_Text_select_int_int_int(0, 1, 0, &value);
+                    if (!result.ok || value != 20) return 2;
+                    javan_result_free(&result);
+                    result = javan_try_com_acme_Text_select_int_int_int(0, 0, 0, &value);
+                    if (!result.ok || value != 30) return 3;
+                    javan_result_free(&result);
+                    result = javan_try_com_acme_Text_select_int_int_int(1, 0, 1, &value);
+                    if (result.ok || value != 0 || result.message == NULL
+                        || strstr(result.message, "java/lang/IllegalArgumentException") == NULL) return 4;
+                    javan_result_free(&result);
+                }
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-selection");
+        final ProcessResult compile = process(project, List.of("cc", caller.toString(), library.toString(), "-o", binary.toString()));
+        assertThat(compile.exitCode()).as(compile.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(binary.toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+    }
+
+    @Test
     void staticLibraryCharacterArrayOffsetTransportsFailures() throws Exception {
         final Path project = project("library-character-offset");
         writeJava(project, "com.acme.Text", """
@@ -1796,6 +1901,9 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         writeJava(project, "com.acme.Main", """
             package com.acme;
             public final class Main {
+                static int nullSearch(String value) {
+                    try { return value.lastIndexOf(-1, -1); } catch (NullPointerException ex) { return -9; }
+                }
                 public static void main(String[] args) {
                     String value = new String(new char[]{'a', (char) 0xd83d, (char) 0xde00, 'b', (char) 0xd83d, (char) 0xde00});
                     int[] targets = {-1, 0xd83d, 0xde00, 0x1f600, 0x110000};
@@ -1806,6 +1914,11 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                         System.out.println(value.lastIndexOf(target, 2));
                     }
                     System.out.println("a".repeat(100000).lastIndexOf('z'));
+                    System.out.println("\\0\\ud800\\udc00\\udfff".indexOf(0x10000));
+                    System.out.println("\\0\\ud800\\udc00\\udfff".indexOf(0x10000, 1));
+                    System.out.println("\\0\\ud800\\udc00\\udfff".lastIndexOf(0x10000));
+                    System.out.println("\\0\\ud800\\udc00\\udfff".lastIndexOf(0x10000, 1));
+                    System.out.println(nullSearch(null));
                 }
             }
             """);
@@ -3615,6 +3728,8 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static int literalCodePointBefore(int index) { return "\\0\\ud800\\udc00\\udfff".codePointBefore(index); }
                 public static int literalCodePointCount(int begin) { return "\\0\\ud800\\udc00\\udfff".codePointCount(begin, 4); }
                 public static int literalCodePointOffset(int index) { return "\\0\\ud800\\udc00\\udfff".offsetByCodePoints(index, 1); }
+                public static int search(String value, int point) { return value.indexOf(point); }
+                public static int lastSearch(String value, int point, int from) { return value.lastIndexOf(point, from); }
                 public static String fail(String value) { throw new IllegalArgumentException(value); }
                 public static String literal() { return "a\\0b"; }
                 public static String fromCodePoint(int value) { return Character.toString(value); }
@@ -3634,7 +3749,8 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "--export", "com.acme.Text.strictHash", "--export", "com.acme.Text.strictEmpty", "--export", "com.acme.Text.strictBlank",
             "--export", "com.acme.Text.literalCharAt", "--export", "com.acme.Text.literalCodePointAt",
             "--export", "com.acme.Text.literalCodePointBefore", "--export", "com.acme.Text.literalCodePointCount",
-            "--export", "com.acme.Text.literalCodePointOffset");
+            "--export", "com.acme.Text.literalCodePointOffset", "--export", "com.acme.Text.search",
+            "--export", "com.acme.Text.lastSearch");
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         final Path library = project.resolve(".javan/dist/liblibrary-utf16.a");
         final Path caller = writeC(project, "call_utf16.c", """
@@ -3661,6 +3777,13 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 result = javan_try_com_acme_Text_literalCharAt_int(4, &invalid_character);
                 if (result.ok || invalid_character != 0 || result.message == NULL
                     || strstr(result.message, "java/lang/StringIndexOutOfBoundsException") == NULL) return 37;
+                javan_result_free(&result);
+                int search = -1;
+                result = javan_utf16_try_com_acme_Text_search_string_int(input, 0, &search);
+                if (!result.ok || search != 1) return 43;
+                javan_result_free(&result);
+                result = javan_utf16_try_com_acme_Text_lastSearch_string_int_int(input, 0x1f600, 6, &search);
+                if (!result.ok || search != 2) return 44;
                 javan_result_free(&result);
                 int point = -1;
                 result = javan_try_com_acme_Text_literalCodePointAt_int(1, &point);
@@ -3727,6 +3850,10 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 if (!result.ok || blank != 0) return 33;
                 javan_result_free(&result);
                 input.data = NULL; input.length = 0;
+                result = javan_utf16_try_com_acme_Text_search_string_int(input, -1, &search);
+                if (result.ok || search != 0 || result.message == NULL
+                    || strstr(result.message, "java/lang/NullPointerException") == NULL) return 45;
+                javan_result_free(&result);
                 result = javan_utf16_try_com_acme_Text_getChars_string_int_int_int(input, 0, 0, 0, &output);
                 if (result.ok || output.data != NULL || output.length != 0 || result.message == NULL
                     || strstr(result.message, "java/lang/NullPointerException") == NULL) return 25;

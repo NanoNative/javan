@@ -1649,12 +1649,6 @@ public final class StaticVerifier {
     }
 
     private static boolean stringIndexDescriptor(final String descriptor) {
-        if ("(I)I".equals(descriptor)) {
-            return true;
-        }
-        if ("(II)I".equals(descriptor)) {
-            return true;
-        }
         if ("(Ljava/lang/String;)I".equals(descriptor)) {
             return true;
         }

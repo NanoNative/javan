@@ -568,6 +568,7 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, DynamicLambda> objectLocalLambdas,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
+        final Map<String, List<String>> transportedThrowableTypes,
         final Map<String, Integer> functionOrNullTargetIds,
         final Map<String, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final FunctionValueFlow.Result functionValueFlow,
@@ -594,6 +595,7 @@ final class BytecodeToIRControlFlowSupport {
             objectLocalLambdas,
             localDeclarations,
             dispatches,
+            transportedThrowableTypes,
             functionOrNullTargetIds,
             materializedLambdaMethods,
             functionValueFlow,
@@ -607,7 +609,7 @@ final class BytecodeToIRControlFlowSupport {
         if (lowerNestedBranchValueSelection(
             classes, classFile, method, bytecode, index, instructions, stack, locals,
             objectLocalKinds, objectLocalThrowableTypes, objectLocalLambdas, localDeclarations,
-            dispatches, functionOrNullTargetIds, materializedLambdaMethods, functionValueFlow,
+            dispatches, transportedThrowableTypes, functionOrNullTargetIds, materializedLambdaMethods, functionValueFlow,
             pendingExceptionHandlerStacks, sourceLines, skippedOffsets, replacementLabelOffsets, -1, false
         )) {
             return true;
@@ -653,6 +655,7 @@ final class BytecodeToIRControlFlowSupport {
             objectLocalLambdas,
             workingDeclarations,
             dispatches,
+            transportedThrowableTypes,
             functionOrNullTargetIds,
             materializedLambdaMethods,
             functionValueFlow,
@@ -673,6 +676,7 @@ final class BytecodeToIRControlFlowSupport {
             objectLocalLambdas,
             workingDeclarations,
             dispatches,
+            transportedThrowableTypes,
             functionOrNullTargetIds,
             materializedLambdaMethods,
             functionValueFlow,
@@ -733,6 +737,7 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, DynamicLambda> objectLocalLambdas,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
+        final Map<String, List<String>> transportedThrowableTypes,
         final Map<String, Integer> functionOrNullTargetIds,
         final Map<String, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final FunctionValueFlow.Result functionValueFlow,
@@ -761,6 +766,7 @@ final class BytecodeToIRControlFlowSupport {
                 break;
             }
         }
+        final boolean directExit = doneOffset >= 0;
         if (doneOffset < 0 && !conditionalBeforeTarget) {
             return false;
         }
@@ -803,7 +809,8 @@ final class BytecodeToIRControlFlowSupport {
                     nested = true;
                 }
             } else if (opcode == 167) {
-                if (branchTarget(candidate) != doneOffset) {
+                final int target = branchTarget(candidate);
+                if (target != doneOffset && (!directExit || target <= candidate.offset() || target >= selectionEndOffset)) {
                     return false;
                 }
             } else if (opcode >= 54 && opcode <= 78) {
@@ -922,6 +929,7 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, List<StackValue>> branchEntries = new HashMap<>();
         branchEntries.put(targetOffset, prefix);
         final List<Integer> replacementOffsets = new ArrayList<>();
+        final List<Integer> nestedSkippedOffsets = new ArrayList<>();
         final String doneLabel = "nested_branch_value_done_" + first.offset();
         workingInstructions.add(IrInstruction.branchIf(label(targetOffset), firstCondition));
         final int lastDuplicate = BytecodeToIR.lastMaterializingDuplicateOffset(bytecode);
@@ -932,6 +940,9 @@ final class BytecodeToIRControlFlowSupport {
         String selectedLocal = "";
         for (int cursor = index + 1; cursor < selectionEndIndex; cursor++) {
             final Instruction current = bytecode.get(cursor);
+            if (nestedSkippedOffsets.contains(current.offset())) {
+                continue;
+            }
             if (branchEntries.containsKey(current.offset())) {
                 if (active) {
                     if (workingStack.size() != prefix.size()) {
@@ -959,6 +970,24 @@ final class BytecodeToIRControlFlowSupport {
                 return false;
             }
             if (isConditionalBranch(current.opcode())) {
+                final int nestedTargetIndex = instructionIndex(bytecode, branchTarget(current));
+                final int nestedJumpIndex = nestedTargetIndex > cursor + 1
+                    ? unconditionalJumpBefore(bytecode, cursor + 1, nestedTargetIndex) : -1;
+                if (nestedJumpIndex >= 0) {
+                    final int nestedDoneOffset = branchTarget(bytecode.get(nestedJumpIndex));
+                    if (nestedDoneOffset > branchTarget(current) && nestedDoneOffset < selectionEndOffset) {
+                        final List<Integer> innerSkippedOffsets = new ArrayList<>();
+                        if (lowerBranchValueSelection(
+                            classes, classFile, method, bytecode, cursor, workingInstructions, workingStack,
+                            workingLocals, workingKinds, workingThrowables, workingLambdas, workingDeclarations,
+                            dispatches, transportedThrowableTypes, functionOrNullTargetIds, materializedLambdaMethods, functionValueFlow,
+                            workingHandlers, sourceLines, innerSkippedOffsets, replacementOffsets
+                        )) {
+                            nestedSkippedOffsets.addAll(innerSkippedOffsets);
+                            continue;
+                        }
+                    }
+                }
                 final IrExpression condition = branchCondition(classFile, method, current, workingStack);
                 final int target = branchTarget(current);
                 if (target <= current.offset() || target >= selectionEndOffset || instructionIndex(bytecode, target) < 0
@@ -1028,10 +1057,17 @@ final class BytecodeToIRControlFlowSupport {
                     throw unsupportedBranchValueMerge(classFile, method, current);
                 }
             }
+            final int instructionStart = workingInstructions.size();
             lowerInstruction(classes, classFile, method, current, workingInstructions, workingStack,
                 workingHandlers, workingLocals, workingKinds, workingThrowables, workingLambdas,
                 workingDeclarations, dispatches, functionOrNullTargetIds, materializedLambdaMethods,
                 functionValueFlow, sourceLines, lastDuplicate);
+            if (current.methodRef().isPresent() && !current.methodRef().orElseThrow().descriptor().endsWith(")V")) {
+                snapshotTopOperand(workingInstructions, workingStack, workingLocals, workingDeclarations,
+                    dispatches, transportedThrowableTypes);
+            }
+            appendPendingExceptionTransport(classes, method, current, workingInstructions, instructionStart,
+                dispatches, transportedThrowableTypes, workingHandlers);
         }
         if (active) {
             if (!hasSelectedValue(prefix, workingStack)) {
@@ -1167,6 +1203,7 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, DynamicLambda> objectLocalLambdas,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
+        final Map<String, List<String>> transportedThrowableTypes,
         final Map<String, Integer> functionOrNullTargetIds,
         final Map<String, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final FunctionValueFlow.Result functionValueFlow,
@@ -1235,6 +1272,7 @@ final class BytecodeToIRControlFlowSupport {
                 }
                 mergedInstructions.add(IrInstruction.branchIf(targetLabel, condition));
             } else {
+                final int instructionStart = mergedInstructions.size();
                 lowerInstruction(
                     classes,
                     classFile,
@@ -1255,6 +1293,12 @@ final class BytecodeToIRControlFlowSupport {
                     sourceLines,
                     lastMaterializingDuplicateOffset
                 );
+                if (current.methodRef().isPresent() && !current.methodRef().orElseThrow().descriptor().endsWith(")V")) {
+                    snapshotTopOperand(mergedInstructions, workingStack, workingLocals, workingDeclarations,
+                        dispatches, transportedThrowableTypes);
+                }
+                appendPendingExceptionTransport(classes, method, current, mergedInstructions, instructionStart,
+                    dispatches, transportedThrowableTypes, workingPendingExceptionHandlerStacks);
             }
         }
         if (conditionalCount < 2) {
@@ -1278,6 +1322,7 @@ final class BytecodeToIRControlFlowSupport {
             objectLocalLambdas,
             workingDeclarations,
             dispatches,
+            transportedThrowableTypes,
             functionOrNullTargetIds,
             materializedLambdaMethods,
             functionValueFlow,
@@ -1436,6 +1481,7 @@ final class BytecodeToIRControlFlowSupport {
             objectLocalLambdas,
             localDeclarations,
             dispatches,
+            Map.of(),
             functionOrNullTargetIds,
             materializedLambdaMethods,
             functionValueFlow,
@@ -1457,6 +1503,7 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, DynamicLambda> objectLocalLambdas,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
+        final Map<String, List<String>> transportedThrowableTypes,
         final Map<String, Integer> functionOrNullTargetIds,
         final Map<String, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final FunctionValueFlow.Result functionValueFlow,
@@ -1475,6 +1522,7 @@ final class BytecodeToIRControlFlowSupport {
             if (isControlTransfer(blockInstruction.opcode())) {
                 throw unsupportedBranchValueMerge(classFile, method, blockInstruction);
             }
+            final int instructionStart = blockInstructions.size();
             lowerInstruction(
                 classes,
                 classFile,
@@ -1495,6 +1543,13 @@ final class BytecodeToIRControlFlowSupport {
                 sourceLines,
                 lastMaterializingDuplicateOffset
             );
+            if (blockInstruction.methodRef().isPresent()
+                && !blockInstruction.methodRef().orElseThrow().descriptor().endsWith(")V")) {
+                snapshotTopOperand(blockInstructions, blockStack, blockLocals, localDeclarations,
+                    dispatches, transportedThrowableTypes);
+            }
+            appendPendingExceptionTransport(classes, method, blockInstruction, blockInstructions, instructionStart,
+                dispatches, transportedThrowableTypes, pendingExceptionHandlerStacks);
         }
         return new BlockResult(List.copyOf(blockInstructions), List.copyOf(blockStack));
     }
@@ -1523,6 +1578,7 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, DynamicLambda> objectLocalLambdas,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
+        final Map<String, List<String>> transportedThrowableTypes,
         final Map<String, Integer> functionOrNullTargetIds,
         final Map<String, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final FunctionValueFlow.Result functionValueFlow,
@@ -1677,7 +1733,7 @@ final class BytecodeToIRControlFlowSupport {
                 final BlockResult preparation = lowerLinearBlock(
                     classes, classFile, method, bytecode, targetIndex, conditionalIndex, prefix, locals,
                     objectLocalKinds, objectLocalThrowableTypes, objectLocalLambdas, workingDeclarations,
-                    dispatches, functionOrNullTargetIds, materializedLambdaMethods, functionValueFlow,
+                    dispatches, transportedThrowableTypes, functionOrNullTargetIds, materializedLambdaMethods, functionValueFlow,
                     workingPendingExceptionHandlerStacks, sourceLines
                 );
                 final List<IrInstruction> blockInstructions = new ArrayList<>(preparation.instructions());
@@ -1686,7 +1742,7 @@ final class BytecodeToIRControlFlowSupport {
                 if (!lowerNestedBranchValueSelection(
                     classes, classFile, method, bytecode, conditionalIndex, blockInstructions, blockStack,
                     locals, objectLocalKinds, objectLocalThrowableTypes, objectLocalLambdas, workingDeclarations,
-                    dispatches, functionOrNullTargetIds, materializedLambdaMethods, functionValueFlow,
+                    dispatches, transportedThrowableTypes, functionOrNullTargetIds, materializedLambdaMethods, functionValueFlow,
                     workingPendingExceptionHandlerStacks, sourceLines, nestedSkippedOffsets,
                     nestedReplacementOffsets, blockEndIndex, true
                 )) {
@@ -1697,7 +1753,7 @@ final class BytecodeToIRControlFlowSupport {
                 block = lowerLinearBlock(
                     classes, classFile, method, bytecode, targetIndex, blockEndIndex, prefix, locals,
                     objectLocalKinds, objectLocalThrowableTypes, objectLocalLambdas, workingDeclarations,
-                    dispatches, functionOrNullTargetIds, materializedLambdaMethods, functionValueFlow,
+                    dispatches, transportedThrowableTypes, functionOrNullTargetIds, materializedLambdaMethods, functionValueFlow,
                     workingPendingExceptionHandlerStacks, sourceLines
                 );
             }

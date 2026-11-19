@@ -87,6 +87,8 @@ supported when each value-producing branch assigns it at its exit. Partially ini
 are rejected during lowering. Some nested expressions that combine an earlier operand with a
 conditional also remain unsupported and fail during lowering. Within supported control-flow
 shapes, an earlier static-field read is preserved across later calls, writes and class initialization.
+Nested conditionals inside a local exception handler remain limited to the verifier's supported
+handler shapes and otherwise fail with `JAVAN014`.
 Within supported handler shapes, `String.charAt`, `codePointAt`, `codePointBefore`,
 `codePointCount`, and `offsetByCodePoints` transport null-receiver and invalid-index exceptions.
 `String.toCharArray` returns an independent array of UTF-16 code units and transports a null
@@ -107,6 +109,8 @@ supported handler shapes.
 to the diagnostics policy.
 `String.codePointAt`, `codePointBefore`, `codePointCount`, and `offsetByCodePoints` also accept
 Unicode literals.
+The integer overloads of `String.indexOf` and `lastIndexOf` accept Unicode literals and transport
+null-receiver exceptions within supported handler shapes.
 Both `Character.toChars` overloads produce UTF-16 code units and transport invalid-code-point
 and destination errors within supported handler shapes. A direct `Character.toChars(...).length`
 can be used in a typed handler when control flow cannot bypass the array creation.

@@ -10854,6 +10854,14 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        int javan_string_search_code_point_java(const char* value, int ch, int from_index, int backwards) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            return javan_string_search_code_point(value, ch, from_index, backwards);
+        }
+
         int javan_string_index_of_char_from(const char* value, int ch, int from_index) {
             return javan_string_search_code_point(value, ch, from_index, 0);
         }

@@ -542,6 +542,9 @@ public final class BytecodeToIR {
         result.put("javan_string_is_blank_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/lang/String", "isBlank", "()Z"
         )));
+        result.put("javan_string_search_code_point_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/lang/String", "indexOf", "(I)I"
+        )));
         result.put("javan_string_to_char_array", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/lang/String", "toCharArray", "()[C"
         )));
@@ -1135,6 +1138,7 @@ public final class BytecodeToIR {
                 objectLocalLambdas,
                 localDeclarations,
                 dispatches,
+                transportedThrowableTypes,
                 functionOrNullTargetIds,
                 materializedLambdaMethods,
                 functionValueFlow,
@@ -1170,6 +1174,7 @@ public final class BytecodeToIR {
                 objectLocalLambdas,
                 localDeclarations,
                 dispatches,
+                transportedThrowableTypes,
                 functionOrNullTargetIds,
                 materializedLambdaMethods,
                 functionValueFlow,
@@ -1341,7 +1346,7 @@ public final class BytecodeToIR {
             : StackValue.caughtThrowable(IrExpression.objectLocal(localName));
     }
 
-    private static void appendPendingExceptionTransport(
+    static void appendPendingExceptionTransport(
         final Map<String, ClassFile> classes,
         final MethodInfo method,
         final Instruction bytecodeInstruction,
@@ -3535,6 +3540,29 @@ public final class BytecodeToIR {
             }
         }
         return false;
+    }
+
+    static void snapshotTopOperand(
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrExpression> locals,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<String, IrDispatch> dispatches,
+        final Map<String, List<String>> transportedThrowableTypes
+    ) {
+        if (stack.isEmpty()) {
+            return;
+        }
+        final int index = stack.size() - 1;
+        final StackValue value = stack.get(index);
+        if (!isMaterializableDuplicateStackKind(value.kind()) || !hasMaterializableDuplicateExpression(value)) {
+            return;
+        }
+        final Set<String> possibleTypes = new LinkedHashSet<>();
+        collectTransportedThrowableTypes(stackValueExpression(value), dispatches, transportedThrowableTypes, possibleTypes);
+        if (!possibleTypes.isEmpty()) {
+            stack.set(index, materializeDuplicateValueIfNeeded(value, instructions, locals, localDeclarations));
+        }
     }
 
     private static void snapshotOperandStack(
