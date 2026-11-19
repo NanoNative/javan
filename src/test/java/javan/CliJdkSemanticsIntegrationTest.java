@@ -9969,6 +9969,99 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void randomTypedSecureRandomUsesOsEntropyAndTransportsNullFailures() throws Exception {
+        final Path project = project("secure-random-through-random");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            import java.util.Random;
+            public final class Main {
+                static final Random RANDOM = new SecureRandom();
+                static int order;
+                static Random receiver() { order = order * 10 + 1; return RANDOM; }
+                static byte[] bytes() { order = order * 10 + 2; return new byte[32]; }
+                static void fill(Random random, byte[] value) {
+                    try { random.nextBytes(value); System.out.println("filled"); }
+                    catch (NullPointerException ex) { System.out.println("null"); }
+                }
+                public static void main(String[] args) {
+                    fill(RANDOM, new byte[0]);
+                    fill(receiver(), bytes());
+                    System.out.println(order);
+                    order = 0;
+                    receiver().nextBytes(bytes());
+                    System.out.println(order);
+                    fill(null, new byte[1]);
+                    fill(RANDOM, null);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/secure-random-through-random").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("filled\nfilled\n12\n12\nnull\nnull\n");
+    }
+
+    @Test
+    void randomTypedSecureRandomWorksDuringConcurrentCollection() throws Exception {
+        final Path project = project("secure-random-through-random-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            import java.util.Random;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final Random RANDOM = new SecureRandom();
+                static final AtomicInteger errors = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            byte[] bytes = new byte[64];
+                            RANDOM.nextBytes(bytes);
+                            new String(new char[] {'x', 'y'});
+                            if (bytes.length != 64) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/secure-random-through-random-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
+    void ordinaryRandomIsNotSilentlyReplacedBySecureRandom() throws Exception {
+        final Path project = project("ordinary-random-still-unsupported");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Random;
+            public final class Main {
+                public static void main(String[] args) {
+                    Random random = new Random(42);
+                    random.nextBytes(new byte[4]);
+                }
+            }
+            """);
+        final CliRun check = run(tempDir, "check", project.toString());
+        assertThat(check.exitCode()).isNotZero();
+        assertThat(check.stderr()).contains("java/util/Random.<init>(J)V");
+    }
+
+    @Test
     void secureRandomSubclassIsRejectedBeforeNativeExecution() throws Exception {
         final Path project = project("secure-random-subclass");
         writeJava(project, "com.acme.Main", """

@@ -120,6 +120,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void randomNextBytesRemainsUnaccountedForOtherImplementations() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Random", "nextBytes", "([B)V")))
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+    }
+
+    @Test
     void marksStringCharsetConstructorAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/String", "<init>", "([BLjava/nio/charset/Charset;)V")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

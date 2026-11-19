@@ -1961,6 +1961,10 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     System.out.println(new String(new byte[] {0, (byte) 0xc3, (byte) 0xa9}, java.nio.charset.StandardCharsets.UTF_8).length());
                     System.out.println(java.nio.charset.Charset.defaultCharset().name());
                     System.out.println(java.nio.charset.StandardCharsets.UTF_8.displayName());
+                    java.util.Random random = new java.security.SecureRandom();
+                    byte[] randomBytes = new byte[0];
+                    random.nextBytes(randomBytes);
+                    System.out.println(randomBytes.length);
                     System.out.println("\\0\\ud800\\udc00".replace((char) 0xd800, (char) 1).charAt(1));
                     System.out.println(value.replace('z', 'q') == value);
                     System.out.println(nullReplace(null));
@@ -4208,6 +4212,59 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         final Path binary = project.resolve("call-bytes");
         assertThat(process(project, List.of("cc", caller.toString(), library.toString(), "-o", binary.toString())).exitCode()).isZero();
         assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo("3 2\n");
+    }
+
+    @Test
+    void staticLibraryRandomTypedSecureRandomRejectsOtherHandles() throws Exception {
+        final Path project = project("library-random-handle");
+        writeJava(project, "com.acme.Api", """
+            package com.acme;
+            import java.security.SecureRandom;
+            import java.util.Random;
+            public final class Api {
+                public static Object good() { return new SecureRandom(); }
+                public static Object wrong() { return new String("not random"); }
+                public static int fill(Object value) {
+                    byte[] bytes = new byte[8];
+                    ((Random) value).nextBytes(bytes);
+                    return bytes.length;
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString(), "--kind", "staticlib",
+            "--export", "com.acme.Api.good():object", "--export", "com.acme.Api.wrong():object",
+            "--export", "com.acme.Api.fill(object):int");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path caller = writeC(project, "call_random.c", """
+            #include <string.h>
+            #include ".javan/dist/bindings/c/library-random-handle.h"
+            int main(void) {
+                JavanObjectHandle *good = 0, *wrong = 0;
+                int size = -1;
+                JavanResult result = javan_try_com_acme_Api_good_void(&good);
+                if (!result.ok || good == 0) return 1;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_fill_object(good, &size);
+                if (!result.ok || size != 8) return 2;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_wrong_void(&wrong);
+                if (!result.ok || wrong == 0) return 3;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_fill_object(wrong, &size);
+                if (result.ok || result.message == 0 || strstr(result.message, "unsupported Random receiver") == 0) return 4;
+                javan_result_free(&result);
+                javan_object_handle_release(good);
+                javan_object_handle_release(wrong);
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-random");
+        final Path library = project.resolve(".javan/dist/liblibrary-random-handle.a");
+        final ProcessResult compile = process(project, List.of("cc", caller.toString(), library.toString(), "-o", binary.toString()));
+        assertThat(compile.exitCode()).as(compile.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(binary.toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
     }
 
     @Test

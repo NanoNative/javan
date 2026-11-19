@@ -9072,6 +9072,16 @@ final class RuntimeSourceMemorySections {
             javan_os_random_bytes((unsigned char*) bytes->values, bytes->length);
         }
 
+        void javan_secure_random_next_bytes_as_random(void* value, void* array) {
+            javan_allocation_metadata allocation;
+            if (javan_find_allocation(value, &allocation) == 0
+                || allocation.kind != JAVAN_HEAP_KIND_RUNTIME
+                || allocation.runtime_kind != JAVAN_RUNTIME_KIND_SECURE_RANDOM) {
+                javan_panic("unsupported Random receiver; only SecureRandom is supported");
+            }
+            javan_secure_random_next_bytes(value, array);
+        }
+
         void javan_secure_random_seed_into(void** result, int length) {
             if (result == NULL) {
                 javan_panic("invalid SecureRandom seed result");

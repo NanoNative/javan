@@ -1270,11 +1270,22 @@ final class BytecodeToIRInvokeSupport {
                 pendingExceptionHandlerStacks, sourceLines, true);
             return;
         }
-        if ("java/security/SecureRandom".equals(methodRef.owner())
-            && "nextBytes".equals(methodRef.name())
-            && "([B)V".equals(methodRef.descriptor())) {
-            final IrExpression bytes = popObject(classFile, method, stack);
-            final IrExpression receiver = popObject(classFile, method, stack);
+        if (("java/security/SecureRandom".equals(methodRef.owner())
+                && "nextBytes".equals(methodRef.name()) && "([B)V".equals(methodRef.descriptor()))
+            || JdkCallSupport.isSecureRandomSupertypeNextBytes(methodRef)) {
+            final IrExpression bytesInput = popObject(classFile, method, stack);
+            final IrExpression receiverInput = popObject(classFile, method, stack);
+            final boolean randomSupertype = JdkCallSupport.isSecureRandomSupertypeNextBytes(methodRef);
+            IrExpression receiver = receiverInput;
+            IrExpression bytes = bytesInput;
+            if (randomSupertype) {
+                final String receiverLocal = newObjectLocal(localDeclarations);
+                final String bytesLocal = newObjectLocal(localDeclarations);
+                instructions.add(IrInstruction.assignObject(receiverLocal, receiverInput));
+                instructions.add(IrInstruction.assignObject(bytesLocal, bytesInput));
+                receiver = IrExpression.objectLocal(receiverLocal);
+                bytes = IrExpression.objectLocal(bytesLocal);
+            }
             final String receiverLabel = "label_secure_random_receiver_" + instruction.offset();
             instructions.add(IrInstruction.branchIf(
                 receiverLabel,
@@ -1310,7 +1321,7 @@ final class BytecodeToIRInvokeSupport {
             );
             instructions.add(IrInstruction.label(bytesLabel));
             instructions.add(IrInstruction.callStaticVoid(
-                "javan_secure_random_next_bytes",
+                randomSupertype ? "javan_secure_random_next_bytes_as_random" : "javan_secure_random_next_bytes",
                 List.of(receiver, bytes)
             ));
             return;

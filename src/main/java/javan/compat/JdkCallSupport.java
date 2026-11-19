@@ -1113,7 +1113,7 @@ public final class JdkCallSupport {
      * @return true when the verifier and lowering both support the call
      */
     public static boolean isSupported(final MethodRef methodRef) {
-        if (isContextLimitedOptionalOrElseThrowCall(methodRef)) {
+        if (isContextLimitedOptionalOrElseThrowCall(methodRef) || isSecureRandomSupertypeNextBytes(methodRef)) {
             return true;
         }
         if (isDirectlySupported(methodRef)) {
@@ -1138,6 +1138,17 @@ public final class JdkCallSupport {
         return "java/util/Optional".equals(methodRef.owner())
             && "orElseThrow".equals(methodRef.name())
             && "(Ljava/util/function/Supplier;)Ljava/lang/Object;".equals(methodRef.descriptor());
+    }
+
+    /**
+     * Identifies the Random-typed call supported only for native SecureRandom receivers.
+     *
+     * @param methodRef exact JDK method reference
+     * @return true when runtime receiver validation is required
+     */
+    public static boolean isSecureRandomSupertypeNextBytes(final MethodRef methodRef) {
+        return "java/util/Random".equals(methodRef.owner()) && "nextBytes".equals(methodRef.name())
+            && "([B)V".equals(methodRef.descriptor());
     }
 
     private static boolean isDirectlySupported(final MethodRef methodRef) {
@@ -1801,7 +1812,8 @@ public final class JdkCallSupport {
         if ("java/lang/Math".equals(owner)) {
             return List.of("math");
         }
-        if ("java/security/SecureRandom".equals(owner) || "java/util/UUID".equals(owner)) {
+        if ("java/security/SecureRandom".equals(owner) || "java/util/UUID".equals(owner)
+            || isSecureRandomSupertypeNextBytes(methodRef)) {
             return List.of("random");
         }
         if ("java/util/Base64".equals(owner)
@@ -2238,9 +2250,9 @@ public final class JdkCallSupport {
                 "java/lang/IllegalArgumentException"
             );
         }
-        if ("java/security/SecureRandom".equals(methodRef.owner())
-            && "nextBytes".equals(methodRef.name())
-            && "([B)V".equals(methodRef.descriptor())) {
+        if (("java/security/SecureRandom".equals(methodRef.owner())
+                && "nextBytes".equals(methodRef.name()) && "([B)V".equals(methodRef.descriptor()))
+            || isSecureRandomSupertypeNextBytes(methodRef)) {
             return List.of("java/lang/NullPointerException");
         }
         if ("java/security/SecureRandom".equals(methodRef.owner())

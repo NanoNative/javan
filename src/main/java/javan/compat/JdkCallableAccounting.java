@@ -13,7 +13,8 @@ final class JdkCallableAccounting {
     }
 
     static Status status(final MethodRef methodRef) {
-        if (JdkCallSupport.isContextLimitedOptionalOrElseThrowCall(methodRef)) {
+        if (JdkCallSupport.isContextLimitedOptionalOrElseThrowCall(methodRef)
+            || JdkCallSupport.isSecureRandomSupertypeNextBytes(methodRef)) {
             return Status.UNKNOWN;
         }
         if (JdkCallSupport.isSupported(methodRef)) {
