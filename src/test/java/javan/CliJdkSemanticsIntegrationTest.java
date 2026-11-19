@@ -1799,6 +1799,48 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void systemIdentityHashIgnoresOverridesAndSurvivesCollection() throws Exception {
+        final Path project = project("identity-hash-code");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int calls;
+                static int overrides;
+                static final class Custom {
+                    public int hashCode() { overrides = overrides + 1; return 7; }
+                }
+                static Object select(Object value) { calls = calls + 1; return value; }
+                static boolean stable(Object value) {
+                    int first = System.identityHashCode(select(value));
+                    new String(new char[] { 'x' });
+                    return first == System.identityHashCode(value);
+                }
+                public static void main(String[] args) {
+                    Object plain = new Object();
+                    Object custom = new Custom();
+                    Object array = new int[] { 1, 2 };
+                    Object text = "hello";
+                    System.out.println(System.identityHashCode(null));
+                    System.out.println(stable(plain)); System.out.println(stable(custom));
+                    System.out.println(stable(array)); System.out.println(stable(text));
+                    System.out.println(stable(Object.class));
+                    System.out.println(stable(System.out));
+                    System.out.println(System.identityHashCode(System.out) == System.identityHashCode(System.out));
+                    System.out.println(calls); System.out.println(overrides);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/identity-hash-code").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void plainObjectsRetainIdentityAndClassThroughCollection() throws Exception {
         final Path project = project("plain-object-identity");
         writeJava(project, "com.acme.Main", """

@@ -4137,6 +4137,11 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_system_get_property_or_default", List.of(key, fallback))));
             return true;
         }
+        if ("identityHashCode".equals(methodRef.name()) && "(Ljava/lang/Object;)I".equals(methodRef.descriptor())) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_record_reference_identity_hash_code",
+                List.of(popObject(classFile, method, stack)))));
+            return true;
+        }
         if ("arraycopy".equals(methodRef.name()) && "(Ljava/lang/Object;ILjava/lang/Object;II)V".equals(methodRef.descriptor())) {
             final IrExpression length = popInt(classFile, method, stack);
             final IrExpression targetPosition = popInt(classFile, method, stack);

@@ -130,6 +130,7 @@ public final class JdkCallSupport {
         intrinsic("System.lineSeparator", "java/lang/System", "lineSeparator", "()Ljava/lang/String;"),
         intrinsic("System.getenv", "java/lang/System", "getenv", "(Ljava/lang/String;)Ljava/lang/String;"),
         intrinsic("System.getProperty", "java/lang/System", "getProperty", "(Ljava/lang/String;)Ljava/lang/String;", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;"),
+        intrinsic("System.identityHashCode", "java/lang/System", "identityHashCode", "(Ljava/lang/Object;)I"),
         intrinsic("System.arraycopy", "java/lang/System", "arraycopy", "(Ljava/lang/Object;ILjava/lang/Object;II)V"),
         intrinsic("System.exit", "java/lang/System", "exit", "(I)V"),
         runtime("SecureRandom.<init>", "java/security/SecureRandom", "<init>", "()V"),

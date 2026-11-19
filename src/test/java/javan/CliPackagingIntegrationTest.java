@@ -4342,17 +4342,18 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static Object create() { return new Object(); }
                 public static int same(Object left, Object right) { return left == right ? 1 : 0; }
                 public static int plain(Object value) { return value.getClass() == Object.class ? 1 : 0; }
+                public static int hash(Object value) { return System.identityHashCode(value); }
             }
             """);
         final CliRun build = run(tempDir, "build", project.toString(), "--kind", "staticlib",
             "--export", "com.acme.Api.create():object", "--export", "com.acme.Api.same(object,object):int",
-            "--export", "com.acme.Api.plain(object):int");
+            "--export", "com.acme.Api.plain(object):int", "--export", "com.acme.Api.hash(object):int");
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final Path caller = writeC(project, "call_plain.c", """
             #include ".javan/dist/bindings/c/library-plain-object.h"
             int main(void) {
                 JavanObjectHandle *first = 0, *second = 0;
-                int value = 0;
+                int value = 0, hash = 0;
                 JavanResult result = javan_try_com_acme_Api_create_void(&first);
                 if (!result.ok || first == 0) return 1;
                 javan_result_free(&result);
@@ -4367,6 +4368,15 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 javan_result_free(&result);
                 result = javan_try_com_acme_Api_plain_object(first, &value);
                 if (!result.ok || value != 1) return 5;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_hash_object(first, &hash);
+                if (!result.ok) return 6;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_hash_object(first, &value);
+                if (!result.ok || value != hash) return 7;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_hash_object(0, &value);
+                if (!result.ok || value != 0) return 8;
                 javan_result_free(&result);
                 javan_object_handle_release(first);
                 javan_object_handle_release(second);

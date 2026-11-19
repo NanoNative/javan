@@ -6749,23 +6749,6 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void rejectsUnsupportedSystemIdentityHashCode() {
-        assertThatThrownBy(() -> lowerMain(method(
-            0x0008,
-            "main",
-            "(Ljava/lang/Object;)I",
-            1,
-            1,
-            plain(0, 42, "aload_0"),
-            invokeStatic(1, new MethodRef("java/lang/System", "identityHashCode", "(Ljava/lang/Object;)I")),
-            plain(2, 172, "ireturn")
-        )))
-            .isInstanceOf(DiagnosticException.class)
-            .hasMessageContaining("error[JAVAN040]: bytecode is not implemented by native code generation")
-            .hasMessageContaining("invokestatic java/lang/System.identityHashCode(Ljava/lang/Object;)I");
-    }
-
-    @Test
     void lowersObjectsRequireNonNullElseToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
