@@ -103,6 +103,13 @@ public final class JdkCallSupport {
         intrinsic("Math.divideExact", "java/lang/Math", "divideExact", "(II)I", "(JJ)J"),
         intrinsic("Math.floorDivExact", "java/lang/Math", "floorDivExact", "(II)I", "(JJ)J"),
         intrinsic("Math.ceilDivExact", "java/lang/Math", "ceilDivExact", "(II)I", "(JJ)J"),
+        intrinsic("StrictMath.floorDiv", "java/lang/StrictMath", "floorDiv", "(II)I", "(JI)J", "(JJ)J"),
+        intrinsic("StrictMath.floorMod", "java/lang/StrictMath", "floorMod", "(II)I", "(JI)I", "(JJ)J"),
+        intrinsic("StrictMath.ceilDiv", "java/lang/StrictMath", "ceilDiv", "(II)I", "(JI)J", "(JJ)J"),
+        intrinsic("StrictMath.ceilMod", "java/lang/StrictMath", "ceilMod", "(II)I", "(JI)I", "(JJ)J"),
+        intrinsic("StrictMath.divideExact", "java/lang/StrictMath", "divideExact", "(II)I", "(JJ)J"),
+        intrinsic("StrictMath.floorDivExact", "java/lang/StrictMath", "floorDivExact", "(II)I", "(JJ)J"),
+        intrinsic("StrictMath.ceilDivExact", "java/lang/StrictMath", "ceilDivExact", "(II)I", "(JJ)J"),
         intrinsic("Math.floor", "java/lang/Math", "floor", "(D)D"),
         intrinsic("Math.ceil", "java/lang/Math", "ceil", "(D)D"),
         intrinsic("Math.atan2", "java/lang/Math", "atan2", "(DD)D"),
@@ -2093,7 +2100,7 @@ public final class JdkCallSupport {
             && "(Ljava/util/Locale;)Ljava/lang/String;".equals(methodRef.descriptor())) {
             return List.of("java/lang/NullPointerException");
         }
-        if ("java/lang/Math".equals(methodRef.owner())
+        if (("java/lang/Math".equals(methodRef.owner()) || "java/lang/StrictMath".equals(methodRef.owner()))
             && ("addExact".equals(methodRef.name())
                 || "subtractExact".equals(methodRef.name())
                 || "multiplyExact".equals(methodRef.name())

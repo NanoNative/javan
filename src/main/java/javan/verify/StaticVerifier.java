@@ -3902,7 +3902,7 @@ public final class StaticVerifier {
             return false;
         }
         final MethodRef target = instruction.methodRef().orElseThrow();
-        if (!"java/lang/Math".equals(target.owner())) {
+        if (!"java/lang/Math".equals(target.owner()) && !"java/lang/StrictMath".equals(target.owner())) {
             return false;
         }
         if ("addExact".equals(target.name())

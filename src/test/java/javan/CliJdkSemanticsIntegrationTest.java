@@ -13229,6 +13229,172 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void strictMathDivisionVariantsMatchSignsAndBoundaries() throws Exception {
+        final Path project = project("strict-math-division");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    int[] ints = { Integer.MIN_VALUE, -4, -1, 0, 1, 4, Integer.MAX_VALUE };
+                    int[] divisors = { Integer.MIN_VALUE, -3, -1, 1, 3, Integer.MAX_VALUE };
+                    long[] longs = { Long.MIN_VALUE, -4L, -1L, 0L, 1L, 4L, Long.MAX_VALUE };
+                    long[] wideDivisors = { Long.MIN_VALUE, -3L, -1L, 1L, 3L, Long.MAX_VALUE };
+                    for (int value : ints) {
+                        for (int divisor : divisors) {
+                            System.out.println(StrictMath.floorDiv(value, divisor));
+                            System.out.println(StrictMath.floorMod(value, divisor));
+                            System.out.println(StrictMath.ceilDiv(value, divisor));
+                            System.out.println(StrictMath.ceilMod(value, divisor));
+                            if (value != Integer.MIN_VALUE || divisor != -1) {
+                                System.out.println(StrictMath.divideExact(value, divisor));
+                                System.out.println(StrictMath.floorDivExact(value, divisor));
+                                System.out.println(StrictMath.ceilDivExact(value, divisor));
+                            }
+                        }
+                    }
+                    for (long value : longs) {
+                        for (long divisor : wideDivisors) {
+                            System.out.println(StrictMath.floorDiv(value, divisor));
+                            System.out.println(StrictMath.floorMod(value, divisor));
+                            System.out.println(StrictMath.ceilDiv(value, divisor));
+                            System.out.println(StrictMath.ceilMod(value, divisor));
+                            if (value != Long.MIN_VALUE || divisor != -1L) {
+                                System.out.println(StrictMath.divideExact(value, divisor));
+                                System.out.println(StrictMath.floorDivExact(value, divisor));
+                                System.out.println(StrictMath.ceilDivExact(value, divisor));
+                            }
+                        }
+                        for (int divisor : divisors) {
+                            System.out.println(StrictMath.floorDiv(value, divisor));
+                            System.out.println(StrictMath.floorMod(value, divisor));
+                            System.out.println(StrictMath.ceilDiv(value, divisor));
+                            System.out.println(StrictMath.ceilMod(value, divisor));
+                        }
+                    }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/strict-math-division").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void strictMathDivisionEvaluatesOperandsOnceInOrder() throws Exception {
+        final Path project = project("strict-math-division-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int trace;
+                static int left() { trace = trace * 10 + 1; return -4; }
+                static int right() { trace = trace * 10 + 2; return 3; }
+                public static void main(String[] args) {
+                    System.out.println(StrictMath.floorDivExact(left(), right()));
+                    System.out.println(trace);
+                    trace = 0;
+                    System.out.println(StrictMath.ceilMod(left(), right()));
+                    System.out.println(trace);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/strict-math-division-order").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("-2\n12\n-1\n12\n");
+    }
+
+    @Test
+    void unsupportedStrictMathArithmeticRemainsRejected() throws Exception {
+        final Path project = project("unsupported-strict-math-arithmetic");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    try { System.out.println(StrictMath.addExact(1, 2)); }
+                    catch (ArithmeticException expected) { System.out.println("overflow"); }
+                }
+            }
+            """);
+        final CliRun check = run(tempDir, "check", project.toString());
+        assertThat(check.exitCode()).isEqualTo(2);
+        assertThat(check.stderr()).contains("error[JAVAN031]", "java/lang/StrictMath.addExact");
+    }
+
+    @Test
+    void strictMathDivisionVariantsThrowForZeroAndOverflow() throws Exception {
+        final Path project = project("strict-math-division-invalid");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    try { System.out.println(StrictMath.floorDiv(5, 0)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(StrictMath.floorDiv(5L, 0)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(StrictMath.floorDiv(5L, 0L)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(StrictMath.floorMod(5, 0)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(StrictMath.floorMod(5L, 0)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(StrictMath.floorMod(5L, 0L)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(StrictMath.ceilDiv(5, 0)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(StrictMath.ceilDiv(5L, 0)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(StrictMath.ceilDiv(5L, 0L)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(StrictMath.ceilMod(5, 0)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(StrictMath.ceilMod(5L, 0)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(StrictMath.ceilMod(5L, 0L)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(StrictMath.divideExact(5, 0)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(StrictMath.divideExact(5L, 0L)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(StrictMath.divideExact(Integer.MIN_VALUE, -1)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(StrictMath.divideExact(Long.MIN_VALUE, -1L)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(StrictMath.floorDivExact(5, 0)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(StrictMath.floorDivExact(5L, 0L)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(StrictMath.floorDivExact(Integer.MIN_VALUE, -1)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(StrictMath.floorDivExact(Long.MIN_VALUE, -1L)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(StrictMath.ceilDivExact(5, 0)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(StrictMath.ceilDivExact(5L, 0L)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(StrictMath.ceilDivExact(Integer.MIN_VALUE, -1)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(StrictMath.ceilDivExact(Long.MIN_VALUE, -1L)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/strict-math-division-invalid").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void mathExactDivisionVariantsMatchSignsAndBoundaries() throws Exception {
         final Path project = project("math-exact-division");
         writeJava(project, "com.acme.Main", """

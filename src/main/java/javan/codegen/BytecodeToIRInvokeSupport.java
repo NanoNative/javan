@@ -2744,7 +2744,12 @@ final class BytecodeToIRInvokeSupport {
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final SourceLineIndex sourceLines
     ) {
-        if ("java/lang/Math".equals(methodRef.owner())) {
+        if ("java/lang/Math".equals(methodRef.owner())
+            || "java/lang/StrictMath".equals(methodRef.owner())
+                && ("floorDiv".equals(methodRef.name()) || "floorMod".equals(methodRef.name())
+                    || "ceilDiv".equals(methodRef.name()) || "ceilMod".equals(methodRef.name())
+                    || "divideExact".equals(methodRef.name()) || "floorDivExact".equals(methodRef.name())
+                    || "ceilDivExact".equals(methodRef.name()))) {
             return lowerMathIntrinsic(
                 classFile,
                 method,
