@@ -13815,6 +13815,169 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void stringGetCharsMatchesJavaAndTransportsExceptions() throws Exception {
+        final Path project = project("string-get-chars");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int order;
+                static String source() { order = order * 10 + 1; return "x"; }
+                static int begin() { order = order * 10 + 2; return 0; }
+                static int end() { order = order * 10 + 3; return 1; }
+                static char[] target() { order = order * 10 + 4; return new char[1]; }
+                static int destination() { order = order * 10 + 5; return 0; }
+                static int copy(String value, int begin, int end, char[] target, int destination) {
+                    try { value.getChars(begin, end, target, destination); return 0; }
+                    catch (StringIndexOutOfBoundsException ex) { return -1; }
+                    catch (NullPointerException ex) { return -2; }
+                }
+                public static void main(String[] args) {
+                    String value = "a\\0\\ud800\\udc00\\udfff\\udbffz";
+                    long hash = 1;
+                    for (int begin = -1; begin <= value.length() + 1; begin++)
+                        for (int end = -1; end <= value.length() + 1; end++)
+                            for (int destination = -1; destination <= 8; destination++) {
+                                char[] target = {'A','B','C','D','E','F','G'};
+                                hash = hash * 31 + copy(value, begin, end, target, destination);
+                                for (int i = 0; i < target.length; i++) hash = hash * 31 + target[i];
+                            }
+                    System.out.println(hash);
+                    System.out.println(copy(null, -1, -1, null, -1));
+                    System.out.println(copy(value, -1, 0, null, 0));
+                    System.out.println(copy(value, 0, 0, null, 0));
+                    System.out.println(copy(value, 0, 1, new char[1], Integer.MAX_VALUE));
+                    System.out.println(copy(value, Integer.MIN_VALUE, Integer.MAX_VALUE, new char[1], 0));
+                    char[] direct = {'A','B','C','D','E','F'};
+                    "\\0\\ud800\\udc00\\udfff".getChars(0, 4, direct, 1);
+                    for (int i = 0; i < direct.length; i++) System.out.println((int) direct[i]);
+                    char[] original = {'a','b','c','d'};
+                    String copied = new String(original);
+                    copied.getChars(0, 3, original, 1);
+                    System.out.println(new String(original));
+                    System.out.println(copied);
+                    source().getChars(begin(), end(), target(), destination());
+                    System.out.println(order);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-get-chars").toString()),
+            Duration.ofSeconds(60));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringGetCharsMatchesJavaAcrossSurrogateBoundaries() throws Exception {
+        final Path project = project("string-get-chars-surrogates");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    char[] candidates = {0, 'a', '\\ud800', '\\udbff', '\\udc00', '\\udfff'};
+                    char[] source = new char[4];
+                    long hash = 1;
+                    for (int a = 0; a < candidates.length; a++)
+                        for (int b = 0; b < candidates.length; b++)
+                            for (int c = 0; c < candidates.length; c++)
+                                for (int d = 0; d < candidates.length; d++) {
+                                    source[0] = candidates[a]; source[1] = candidates[b];
+                                    source[2] = candidates[c]; source[3] = candidates[d];
+                                    String value = new String(source);
+                                    for (int begin = 0; begin <= 4; begin++)
+                                        for (int end = begin; end <= 4; end++)
+                                            for (int destination = 0; destination <= 6 - (end - begin); destination++) {
+                                                char[] target = {'A','B','C','D','E','F'};
+                                                value.getChars(begin, end, target, destination);
+                                                for (int i = 0; i < target.length; i++) hash = hash * 31 + target[i];
+                                            }
+                                }
+                    System.out.println(hash);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-get-chars-surrogates").toString()),
+            Duration.ofSeconds(60));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringGetCharsSurvivesConcurrentCollection() throws Exception {
+        final Path project = project("string-get-chars-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static int destination() { char[] temporary = new char[1]; return temporary[0] + 1; }
+                static final class Worker implements Runnable {
+                    char[] latest;
+                    char[] target() { latest = new char[]{'a', 'b', 'c', 'd'}; return latest; }
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            int point = i % 2 == 0 ? 0x1f600 : 0xd800;
+                            String value = Character.toString(point);
+                            char[] target = {'a', 'b', 'c', 'd'};
+                            int count = value.length();
+                            value.getChars(0, count, target, destination());
+                            if (Character.codePointAt(target, 1) != point) errors.incrementAndGet();
+                            if (target[0] != 'a' || target[3] != 'd') errors.incrementAndGet();
+                            Character.toString(point).getChars(0, count, target(), destination());
+                            if (Character.codePointAt(latest, 1) != point) errors.incrementAndGet();
+                            if (latest[0] != 'a' || latest[3] != 'd') errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-get-chars-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
+    void stringGetCharsUncaughtFailureStopsBeforeLaterEffects() throws Exception {
+        final Path project = project("string-get-chars-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int begin() { System.out.println("begin"); return 0; }
+                static int end() { System.out.println("end"); return 1; }
+                static char[] target() { System.out.println("target"); return new char[1]; }
+                static int destination() { System.out.println("destination"); return 0; }
+                static int later() { System.out.println("later"); return 1; }
+                public static void main(String[] args) {
+                    System.out.println("before");
+                    String value = args.length == 0 ? null : "x";
+                    value.getChars(begin(), end(), target(), destination());
+                    System.out.println(later());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-get-chars-uncaught").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("before\nbegin\nend\ntarget\ndestination\n");
+        assertThat(result.stderr()).contains("NullPointerException");
+    }
+
+    @Test
     void stringLengthAcceptsUnicodeLiterals() throws Exception {
         final Path project = project("string-length-unicode-literal");
         writeJava(project, "com.acme.Main", """

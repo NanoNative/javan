@@ -180,9 +180,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksStringGetCharsAsExplicitRejected() {
+    void marksStringGetCharsAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/String", "getChars", "(II[CI)V")))
-            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test

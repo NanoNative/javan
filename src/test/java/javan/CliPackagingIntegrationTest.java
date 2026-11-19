@@ -1042,6 +1042,51 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsStringGetChars() throws Exception {
+        final Path project = tempDir.resolve("selfhost-string-get-chars");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int copy(String value, int begin, int end, char[] target, int destination) {
+                    try { value.getChars(begin, end, target, destination); return 0; }
+                    catch (StringIndexOutOfBoundsException ex) { return -1; }
+                    catch (NullPointerException ex) { return -2; }
+                }
+                public static void main(String[] args) {
+                    String value = "a\\0\\ud800\\udc00\\udfff\\udbffz";
+                    for (int begin = -1; begin <= value.length() + 1; begin++)
+                        for (int end = -1; end <= value.length() + 1; end++) {
+                            char[] target = {'A','B','C','D','E','F','G'};
+                            System.out.println(copy(value, begin, end, target, 1));
+                            for (int i = 0; i < target.length; i++) System.out.println((int) target[i]);
+                        }
+                    System.out.println(copy(null, -1, -1, null, -1));
+                    System.out.println(copy(value, -1, 0, null, 0));
+                    System.out.println(copy(value, 0, 0, null, 0));
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-string-get-chars"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-string-get-chars").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout());
+    }
+
+    @Test
     void nativeBuiltJavanBuildsUnicodeStringLength() throws Exception {
         final Path project = tempDir.resolve("selfhost-string-length-unicode");
         final Path classes = project.resolve("classes");
@@ -3445,12 +3490,17 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static String fromCodePoint(int value) { return Character.toString(value); }
                 public static String copy(String value) { return new String(value.toCharArray()); }
                 public static String repeat(String value, int count) { return value.repeat(count); }
+                public static String getChars(String value, int begin, int end, int offset) {
+                    char[] chars = {'a','b','c','d','e','f','g','h','i'};
+                    value.getChars(begin, end, chars, offset);
+                    return new String(chars);
+                }
             }
             """);
         final CliRun run = run(tempDir, "build", project.toString(), "--kind", "staticlib",
             "--export", "com.acme.Text.echo", "--export", "com.acme.Text.length", "--export", "com.acme.Text.fail",
             "--export", "com.acme.Text.literal", "--export", "com.acme.Text.fromCodePoint", "--export", "com.acme.Text.copy",
-            "--export", "com.acme.Text.repeat", "--export", "com.acme.Text.strictLength");
+            "--export", "com.acme.Text.repeat", "--export", "com.acme.Text.strictLength", "--export", "com.acme.Text.getChars");
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         final Path library = project.resolve(".javan/dist/liblibrary-utf16.a");
         final Path caller = writeC(project, "call_utf16.c", """
@@ -3470,6 +3520,15 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 if (!result.ok || output.length != 7 || memcmp(data, output.data, sizeof(data))) return 16;
                 javan_result_free(&result);
                 javan_free(output.data);
+                uint16_t expected_chars[] = { 'a', 'b', 0, 0xD83D, 0xDE00, 0xD800, 'Z', 'h', 'i' };
+                result = javan_utf16_try_com_acme_Text_getChars_string_int_int_int(input, 1, 6, 2, &output);
+                if (!result.ok || output.length != 9 || memcmp(expected_chars, output.data, sizeof(expected_chars))) return 23;
+                javan_result_free(&result);
+                javan_free(output.data);
+                result = javan_utf16_try_com_acme_Text_getChars_string_int_int_int(input, -1, 0, 0, &output);
+                if (result.ok || output.data != NULL || output.length != 0 || result.message == NULL
+                    || strstr(result.message, "java/lang/StringIndexOutOfBoundsException") == NULL) return 24;
+                javan_result_free(&result);
                 result = javan_utf16_try_com_acme_Text_repeat_string_int(input, 2, &output);
                 if (!result.ok || output.length != 14 || memcmp(data, output.data, sizeof(data))
                     || memcmp(data, output.data + 7, sizeof(data))) return 18;
@@ -3491,6 +3550,10 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 if (!result.ok || length != 7) return 20;
                 javan_result_free(&result);
                 input.data = NULL; input.length = 0;
+                result = javan_utf16_try_com_acme_Text_getChars_string_int_int_int(input, 0, 0, 0, &output);
+                if (result.ok || output.data != NULL || output.length != 0 || result.message == NULL
+                    || strstr(result.message, "java/lang/NullPointerException") == NULL) return 25;
+                javan_result_free(&result);
                 result = javan_utf16_try_com_acme_Text_strictLength_string(input, &length);
                 if (result.ok || length != 0 || result.message == NULL
                     || strstr(result.message, "java/lang/NullPointerException") == NULL) return 21;
@@ -3525,6 +3588,10 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 for (int i = 0; i < 100; i++) {
                     result = javan_utf16_try_com_acme_Text_echo_string(input, &output);
                     if (!result.ok || output.length != 7 || memcmp(data, output.data, sizeof(data))) return 9;
+                    javan_result_free(&result);
+                    javan_free(output.data);
+                    result = javan_utf16_try_com_acme_Text_getChars_string_int_int_int(input, 1, 6, 2, &output);
+                    if (!result.ok || output.length != 9 || memcmp(expected_chars, output.data, sizeof(expected_chars))) return 26;
                     javan_result_free(&result);
                     javan_free(output.data);
                 }

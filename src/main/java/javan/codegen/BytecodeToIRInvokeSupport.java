@@ -541,6 +541,16 @@ final class BytecodeToIRInvokeSupport {
         if (lowerScheduledThreadPoolExecutorCall(classFile, method, instruction, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
+        if ("java/lang/String".equals(methodRef.owner()) && "getChars".equals(methodRef.name()) && "(II[CI)V".equals(methodRef.descriptor())) {
+            final IrExpression destinationOffset = popInt(classFile, method, stack);
+            final IrExpression destination = popObject(classFile, method, stack);
+            final IrExpression end = popInt(classFile, method, stack);
+            final IrExpression begin = popInt(classFile, method, stack);
+            final IrExpression receiver = popObject(classFile, method, stack);
+            instructions.add(IrInstruction.callStaticVoid("javan_string_get_chars",
+                List.of(receiver, begin, end, destination, destinationOffset)));
+            return;
+        }
         if ("java/lang/String".equals(methodRef.owner()) && "toCharArray".equals(methodRef.name()) && "()[C".equals(methodRef.descriptor())) {
             final IrExpression receiver = popObject(classFile, method, stack);
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_string_to_char_array", List.of(receiver))));

@@ -4416,6 +4416,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void stringGetCharsTransportsBoundsAndNullFailures() {
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
+            "java/lang/String",
+            "getChars",
+            "(II[CI)V"
+        ))).containsExactly("java/lang/StringIndexOutOfBoundsException", "java/lang/NullPointerException");
+    }
+
+    @Test
     void unknownJdkThrowableIsNotAdmittedWithoutAnExactHierarchyEdge() {
         assertThat(JdkCallSupport.isPlatformThrowable("java/nio/file/NoSuchFileException")).isFalse();
     }

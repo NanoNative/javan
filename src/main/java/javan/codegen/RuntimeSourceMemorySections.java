@@ -10593,6 +10593,35 @@ final class RuntimeSourceMemorySections {
             return javan_string_length(value);
         }
 
+        void javan_string_get_chars(const char* value, int begin, int end, void* destination, int destination_offset) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return;
+            }
+            int length = javan_utf16_length_from_utf8(value);
+            if (begin < 0 || end < begin || end > length) {
+                javan_pending_throw("java/lang/StringIndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return;
+            }
+            if (destination == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return;
+            }
+            javan_char_array* chars = (javan_char_array*) destination;
+            int count = end - begin;
+            if (destination_offset < 0 || destination_offset > chars->length || count > chars->length - destination_offset) {
+                javan_pending_throw("java/lang/StringIndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return;
+            }
+            if (count == 0) return;
+            const unsigned char* cursor = (const unsigned char*) value;
+            int pending = -1;
+            for (int i = 0; i < end; i++) {
+                int character = javan_utf16_next_char(&cursor, &pending);
+                if (i >= begin) chars->values[destination_offset + (i - begin)] = (unsigned short) character;
+            }
+        }
+
         int javan_string_hash_code(const char* value) {
             if (value == NULL) {
                 javan_panic("null string");
