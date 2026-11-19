@@ -851,6 +851,46 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsDerivedStrings() throws Exception {
+        final Path project = tempDir.resolve("selfhost-derived-strings");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Locale;
+            public final class Main {
+                public static void main(String[] args) {
+                    String value = new String(new char[]{' ', 'A', 'b', 'c', ' '});
+                    System.out.println(value.substring(1, 4));
+                    System.out.println(value.trim());
+                    System.out.println(value.stripLeading());
+                    System.out.println(value.stripTrailing());
+                    System.out.println(value.replace('A', 'X'));
+                    System.out.println(value.repeat(2));
+                    System.out.println(value.toLowerCase(Locale.ROOT));
+                    System.out.println(value.toUpperCase());
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-derived-strings"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-derived-strings").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout());
+    }
+
+    @Test
     void nativeBuiltJavanBuildsFloatingDecimalOutput() throws Exception {
         final Path project = tempDir.resolve("selfhost-floating-decimal-output");
         final Path classes = project.resolve("classes");

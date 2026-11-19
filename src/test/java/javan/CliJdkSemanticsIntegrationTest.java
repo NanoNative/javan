@@ -13482,6 +13482,49 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void derivedStringsStayValidDuringConcurrentCollection() throws Exception {
+        final Path project = project("string-derived-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Locale;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() {
+                        String value = new String(new char[]{' ', 'A', 'b', 'c', ' '});
+                        for (int i = 0; i < 100; i++) {
+                            if (!value.substring(1, 4).equals("Abc")) errors.incrementAndGet();
+                            if (!value.substring(1).equals("Abc ")) errors.incrementAndGet();
+                            if (!value.trim().equals("Abc")) errors.incrementAndGet();
+                            if (!value.strip().equals("Abc")) errors.incrementAndGet();
+                            if (!value.stripLeading().equals("Abc ")) errors.incrementAndGet();
+                            if (!value.stripTrailing().equals(" Abc")) errors.incrementAndGet();
+                            if (!value.replace('A', 'X').equals(" Xbc ")) errors.incrementAndGet();
+                            if (!value.repeat(2).equals(" Abc  Abc ")) errors.incrementAndGet();
+                            if (!value.toLowerCase().equals(" abc ")) errors.incrementAndGet();
+                            if (!value.toLowerCase(Locale.ROOT).equals(" abc ")) errors.incrementAndGet();
+                            if (!value.toUpperCase().equals(" ABC ")) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-derived-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
     void integerRadixStringsMatchJavaAcrossValidAndInvalidRadices() throws Exception {
         final Path project = project("integer-radix-strings");
         writeJava(project, "com.acme.Main", """

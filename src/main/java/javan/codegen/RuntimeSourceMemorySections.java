@@ -10899,6 +10899,73 @@ final class RuntimeSourceMemorySections {
             return javan_string_copy_utf16_range(value, begin, end);
         }
         """;
+    private static final String SOURCE_STRING_ROOTING = """
+        static void javan_string_unary_into(void** result, const char* value, void* (*operation)(const char*)) {
+            if (result == NULL) {
+                javan_panic("invalid String result");
+            }
+            javan_runtime_lock_enter();
+            *result = operation(value);
+            javan_runtime_lock_leave();
+        }
+
+        static void javan_string_int_into(void** result, const char* value, int number,
+                                          void* (*operation)(const char*, int)) {
+            if (result == NULL) {
+                javan_panic("invalid String result");
+            }
+            javan_runtime_lock_enter();
+            *result = operation(value, number);
+            javan_runtime_lock_leave();
+        }
+
+        static void javan_string_two_ints_into(void** result, const char* value, int first, int second,
+                                               void* (*operation)(const char*, int, int)) {
+            if (result == NULL) {
+                javan_panic("invalid String result");
+            }
+            javan_runtime_lock_enter();
+            *result = operation(value, first, second);
+            javan_runtime_lock_leave();
+        }
+
+        void javan_string_substring_into(void** result, const char* value, int begin) {
+            javan_string_int_into(result, value, begin, javan_string_substring);
+        }
+        void javan_string_substring_range_into(void** result, const char* value, int begin, int end) {
+            javan_string_two_ints_into(result, value, begin, end, javan_string_substring_range);
+        }
+        void javan_string_trim_into(void** result, const char* value) {
+            javan_string_unary_into(result, value, javan_string_trim);
+        }
+        void javan_string_strip_leading_into(void** result, const char* value) {
+            javan_string_unary_into(result, value, javan_string_strip_leading);
+        }
+        void javan_string_strip_trailing_into(void** result, const char* value) {
+            javan_string_unary_into(result, value, javan_string_strip_trailing);
+        }
+        void javan_string_replace_char_into(void** result, const char* value, int old_ch, int new_ch) {
+            javan_string_two_ints_into(result, value, old_ch, new_ch, javan_string_replace_char);
+        }
+        void javan_string_repeat_into(void** result, const char* value, int count) {
+            javan_string_int_into(result, value, count, javan_string_repeat);
+        }
+        void javan_string_to_lower_case_into(void** result, const char* value) {
+            javan_string_unary_into(result, value, javan_string_to_lower_case);
+        }
+        void javan_string_to_upper_case_into(void** result, const char* value) {
+            javan_string_unary_into(result, value, javan_string_to_upper_case);
+        }
+        void javan_string_to_lower_case_locale_into(void** result, const char* value, void* locale) {
+            if (result == NULL) {
+                javan_panic("invalid String result");
+            }
+            javan_runtime_lock_enter();
+            *result = javan_string_to_lower_case_locale(value, locale);
+            javan_runtime_lock_leave();
+        }
+
+        """;
     private static final String SOURCE_COLLECTIONS_HEAD = """
         static int javan_probably_string_key(void* value) {
             if (value == NULL) {
@@ -15646,6 +15713,7 @@ final class RuntimeSourceMemorySections {
         String result = SOURCE_ARRAYS;
         result = result + SOURCE_BASE64;
         result = result + SOURCE_ARRAYS_TAIL;
+        result = result + SOURCE_STRING_ROOTING;
         return result;
     }
 

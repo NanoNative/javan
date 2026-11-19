@@ -425,6 +425,16 @@ final class RuntimeHeaderFile {
         int javan_character_is_whitespace(int value);
         void* javan_string_substring(const char* value, int begin);
         void* javan_string_substring_range(const char* value, int begin, int end);
+        void javan_string_substring_into(void** result, const char* value, int begin);
+        void javan_string_substring_range_into(void** result, const char* value, int begin, int end);
+        void javan_string_trim_into(void** result, const char* value);
+        void javan_string_strip_leading_into(void** result, const char* value);
+        void javan_string_strip_trailing_into(void** result, const char* value);
+        void javan_string_replace_char_into(void** result, const char* value, int old_ch, int new_ch);
+        void javan_string_repeat_into(void** result, const char* value, int count);
+        void javan_string_to_lower_case_into(void** result, const char* value);
+        void javan_string_to_lower_case_locale_into(void** result, const char* value, void* locale);
+        void javan_string_to_upper_case_into(void** result, const char* value);
         void* javan_arraylist_new(void);
         typedef void* (*javan_service_provider_resolver)(int service_type_id, int provider_index);
         typedef int (*javan_service_provider_counter)(int service_type_id);
