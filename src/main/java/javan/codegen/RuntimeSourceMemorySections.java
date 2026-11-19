@@ -8907,6 +8907,28 @@ final class RuntimeSourceMemorySections {
             return javan_character_array_code_point_before_valid(chars, index, start);
         }
 
+        int javan_character_array_code_point_count(void* value, int offset, int count) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            javan_char_array* chars = (javan_char_array*) value;
+            if (offset < 0 || count < 0 || offset > chars->length || count > chars->length - offset) {
+                javan_pending_throw("java/lang/IndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            int end = offset + count;
+            int result = count;
+            for (int i = offset; i < end; i++) {
+                if (javan_character_is_high_surrogate(chars->values[i]) && i + 1 < end
+                    && javan_character_is_low_surrogate(chars->values[i + 1])) {
+                    result--;
+                    i++;
+                }
+            }
+            return result;
+        }
+
         int javan_character_write_chars(int value, void* destination, int index) {
             if (!javan_character_is_valid_code_point(value)) {
                 javan_pending_throw("java/lang/IllegalArgumentException", NULL, NULL, NULL, NULL, -1, -1, NULL);

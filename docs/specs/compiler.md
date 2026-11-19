@@ -98,6 +98,8 @@ within supported handler shapes.
 The `char[]` overloads of `Character.codePointAt` and `Character.codePointBefore` read surrogate
 pairs within their optional bounds and transport null-array and invalid-index errors within
 supported handler shapes.
+`Character.codePointCount(char[], int, int)` counts within the requested array slice and
+transports null-array and invalid-range errors within supported handler shapes.
 `Path.of`, `Paths.get`, and `Path.resolve` report supported null inputs and embedded
 U+0000 through typed exceptions. Some inline varargs inside `catch` ranges still fail
 verification and can be moved outside the protected range.

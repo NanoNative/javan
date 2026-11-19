@@ -13815,6 +13815,99 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void characterArrayCodePointCountMatchesJava() throws Exception {
+        final Path project = project("character-array-codepoint-count");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int order;
+                static int first() { order = order * 10 + 1; return 7; }
+                static char[] array() { order = order * 10 + 2; return new char[]{'a'}; }
+                static int offset() { order = order * 10 + 3; return 0; }
+                static int length() { order = order * 10 + 4; return 1; }
+                static int count(char[] value, int offset, int length) {
+                    try { return Character.codePointCount(value, offset, length); }
+                    catch (NullPointerException ex) { return -1; }
+                    catch (IndexOutOfBoundsException ex) { return -2; }
+                }
+                public static void main(String[] args) {
+                    char[] value = {'a', '\\ud800', '\\udc00', '\\udfff', '\\udbff', 'z', 0};
+                    for (int offset = -1; offset <= value.length + 1; offset++)
+                        for (int length = -1; length <= value.length + 1; length++) {
+                            System.out.println(count(value, offset, length));
+                            System.out.println(count(null, offset, length));
+                        }
+                    System.out.println(count(value, Integer.MAX_VALUE, Integer.MAX_VALUE));
+                    System.out.println(count(value, Integer.MIN_VALUE, Integer.MAX_VALUE));
+                    System.out.println(count(value, 0, Integer.MAX_VALUE));
+                    System.out.println(first() + Character.codePointCount(array(), offset(), length()));
+                    System.out.println(order);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/character-array-codepoint-count").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void characterArrayCodePointCountAcrossSurrogateBoundaries() throws Exception {
+        final Path project = project("character-array-codepoint-count-surrogates");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    char[] candidates = {0, 1, 0xd7ff, 0xd800, 0xdbff, 0xdc00, 0xdfff, 0xe000, 0xffff};
+                    char[] value = new char[4];
+                    long hash = 1;
+                    for (int a = 0; a < candidates.length; a++)
+                        for (int b = 0; b < candidates.length; b++)
+                            for (int c = 0; c < candidates.length; c++)
+                                for (int d = 0; d < candidates.length; d++) {
+                                    value[0] = candidates[a]; value[1] = candidates[b];
+                                    value[2] = candidates[c]; value[3] = candidates[d];
+                                    for (int offset = 0; offset <= value.length; offset++)
+                                        for (int length = 0; length <= value.length - offset; length++)
+                                            hash = hash * 31 + Character.codePointCount(value, offset, length);
+                                }
+                    System.out.println(hash);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/character-array-codepoint-count-surrogates").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void characterArrayCodePointCountUncaughtFailureStopsBeforeUse() throws Exception {
+        final Path project = project("character-array-codepoint-count-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    System.out.println("before");
+                    int value = args.length == 0 ? Character.codePointCount(new char[0], 0, 1) : 1;
+                    System.out.println(value);
+                    System.out.println("after");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/character-array-codepoint-count-uncaught").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("before\n");
+        assertThat(result.stderr()).contains("IndexOutOfBoundsException");
+    }
+
+    @Test
     void characterArrayCodePointAccessWithLimitsMatchesJava() throws Exception {
         final Path project = project("character-array-codepoint-limits");
         writeJava(project, "com.acme.Main", """
@@ -14011,6 +14104,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                             if (Character.codePointBefore(pair(), index(2)) != 0x1f600) errors.incrementAndGet();
                             if (Character.codePointAt(pair(), index(0), index(2)) != 0x1f600) errors.incrementAndGet();
                             if (Character.codePointBefore(pair(), index(2), index(0)) != 0x1f600) errors.incrementAndGet();
+                            if (Character.codePointCount(pair(), index(0), index(2)) != 1) errors.incrementAndGet();
                         }
                     }
                 }
