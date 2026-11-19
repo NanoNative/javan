@@ -2003,7 +2003,8 @@ public final class JdkCallSupport {
             && "()I".equals(methodRef.descriptor())) {
             return List.of("java/lang/NullPointerException");
         }
-        if ("java/lang/String".equals(methodRef.owner()) && "isEmpty".equals(methodRef.name())
+        if ("java/lang/String".equals(methodRef.owner())
+            && ("isEmpty".equals(methodRef.name()) || "isBlank".equals(methodRef.name()))
             && "()Z".equals(methodRef.descriptor())) {
             return List.of("java/lang/NullPointerException");
         }

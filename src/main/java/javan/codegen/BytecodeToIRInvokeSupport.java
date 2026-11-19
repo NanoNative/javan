@@ -571,7 +571,7 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if ("java/lang/String".equals(methodRef.owner()) && "isBlank".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())) {
-            stack.add(StackValue.intExpression(IrExpression.intCall("javan_string_is_blank", List.of(popObject(classFile, method, stack)))));
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_string_is_blank_java", List.of(popObject(classFile, method, stack)))));
             return;
         }
         if ("java/lang/String".equals(methodRef.owner()) && "charAt".equals(methodRef.name()) && "(I)C".equals(methodRef.descriptor())) {

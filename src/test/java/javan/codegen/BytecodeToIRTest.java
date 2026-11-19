@@ -17374,7 +17374,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersStringIsBlankToRuntimeCall() {
+    void propagatesStringIsBlankFailure() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -17386,12 +17386,7 @@ final class BytecodeToIRTest {
             plain(2, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnInt(IrExpression.intCall(
-                "javan_string_is_blank",
-                List.of(IrExpression.objectLocal("arg0"))
-            ))
-        );
+        assertThat(function.instructions()).contains(IrInstruction.propagatePending());
     }
 
     @Test

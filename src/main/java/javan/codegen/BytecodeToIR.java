@@ -539,6 +539,9 @@ public final class BytecodeToIR {
         result.put("javan_string_is_empty", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/lang/String", "isEmpty", "()Z"
         )));
+        result.put("javan_string_is_blank_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/lang/String", "isBlank", "()Z"
+        )));
         result.put("javan_string_to_char_array", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/lang/String", "toCharArray", "()[C"
         )));
@@ -1219,7 +1222,8 @@ public final class BytecodeToIR {
                             || "repeat".equals(reference.name()) && "(I)Ljava/lang/String;".equals(reference.descriptor())
                             || ("length".equals(reference.name()) || "hashCode".equals(reference.name()))
                                 && "()I".equals(reference.descriptor())
-                            || "isEmpty".equals(reference.name()) && "()Z".equals(reference.descriptor())
+                            || ("isEmpty".equals(reference.name()) || "isBlank".equals(reference.name()))
+                                && "()Z".equals(reference.descriptor())
                             || "getChars".equals(reference.name()) && "(II[CI)V".equals(reference.descriptor()))
                     || "java/lang/Character".equals(reference.owner())
                         && ("toChars".equals(reference.name())

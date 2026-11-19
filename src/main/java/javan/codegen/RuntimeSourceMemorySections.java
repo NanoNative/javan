@@ -10273,6 +10273,8 @@ final class RuntimeSourceMemorySections {
             javan_runtime_lock_leave();
         }
 
+        """;
+    private static final String SOURCE_ARRAYS_TAIL_STRINGS = """
         static unsigned int javan_utf8_next_code_point(const unsigned char** cursor, int modified_utf8) {
             const unsigned char* current = *cursor;
             unsigned char first = *current;
@@ -10669,6 +10671,14 @@ final class RuntimeSourceMemorySections {
                 }
             }
             return 1;
+        }
+
+        int javan_string_is_blank_java(const char* value) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            return javan_string_is_blank(value);
         }
 
         int javan_string_char_at(const char* value, int index) {
@@ -16177,6 +16187,7 @@ final class RuntimeSourceMemorySections {
         String result = SOURCE_ARRAYS;
         result = result + SOURCE_BASE64;
         result = result + SOURCE_ARRAYS_TAIL;
+        result = result + SOURCE_ARRAYS_TAIL_STRINGS;
         result = result + SOURCE_STRING_ROOTING;
         return result;
     }
