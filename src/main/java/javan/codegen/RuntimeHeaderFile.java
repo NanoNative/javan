@@ -216,6 +216,16 @@ final class RuntimeHeaderFile {
             int length;
         } JavanByteArray;
         typedef struct {
+            const uint16_t* data;
+            int length;
+        } JavanUtf16View;
+        typedef struct {
+            uint16_t* data;
+            int length;
+        } JavanUtf16String;
+        void* javan_string_from_utf16(JavanUtf16View value);
+        JavanUtf16String javan_string_export_utf16(const char* value);
+        typedef struct {
             signed char* data;
             int length;
         } JavanNativeImportedByteArray;

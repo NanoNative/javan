@@ -671,8 +671,12 @@ public final class CCodegen {
         }
         emitLibraryInitializer(program, nativeWrapperSymbols, c);
         for (final ExportedMethod export : exports) {
-            emitExportWrapper(program, export, nativeWrapperSymbols, c);
-            emitResultWrapper(export, c);
+            emitExportWrapper(program, export, nativeWrapperSymbols, false, c);
+            emitResultWrapper(export, false, c);
+            if (export.hasString()) {
+                emitExportWrapper(program, export, nativeWrapperSymbols, true, c);
+                emitResultWrapper(export, true, c);
+            }
         }
         return Files2.writeString(generatedDirectory.resolve("library.c"), c.toString());
     }
@@ -2502,15 +2506,16 @@ public final class CCodegen {
         final IrProgram program,
         final ExportedMethod export,
         final NativeWrapperSymbols nativeWrapperSymbols,
+        final boolean utf16,
         final StringBuilder c
     ) {
-        emitExportSignature(export, c);
+        emitExportSignature(export, utf16, c);
         c.append(" {").append(System.lineSeparator());
         c.append("    jmp_buf javan_export_panic_target;").append(System.lineSeparator());
         c.append("    javan_panic_set_target(&javan_export_panic_target);").append(System.lineSeparator());
         c.append("    if (setjmp(javan_export_panic_target) != 0) {").append(System.lineSeparator());
         c.append("        javan_panic_clear_target(&javan_export_panic_target);").append(System.lineSeparator());
-        emitExportWrapperDefaultReturn(export.returnType(), c);
+        emitExportWrapperDefaultReturn(export.returnType(), utf16, c);
         c.append("    }").append(System.lineSeparator());
         c.append("    javan_library_init();").append(System.lineSeparator());
         if (program.classInitializationDependencies().containsKey(export.entryPoint().className())) {
@@ -2537,8 +2542,13 @@ public final class CCodegen {
             final AbiType type = export.parameterTypes().get(index);
             c.append("    javan_runtime_lock_enter();").append(System.lineSeparator());
             if (type == AbiType.STRING) {
-                c.append("    arg").append(index).append("_string = javan_string_from(arg")
-                    .append(index)
+                c.append("    arg").append(index);
+                if (utf16) {
+                    c.append("_string = javan_string_from_utf16(arg");
+                } else {
+                    c.append("_string = javan_string_from(arg");
+                }
+                c.append(index)
                     .append(");")
                     .append(System.lineSeparator());
             } else if (type == AbiType.BYTE_ARRAY) {
@@ -2567,8 +2577,12 @@ public final class CCodegen {
         }
         emitExportPendingPanic(objectArguments, objectReturn, c);
         if (returnType == AbiType.STRING) {
-            c.append("    char* javan_export_result = javan_string_export((const char*) javan_export_object_result);")
-                .append(System.lineSeparator());
+            if (utf16) {
+                c.append("    JavanUtf16String javan_export_result = javan_string_export_utf16((const char*) javan_export_object_result);");
+            } else {
+                c.append("    char* javan_export_result = javan_string_export((const char*) javan_export_object_result);");
+            }
+            c.append(System.lineSeparator());
         } else if (returnType == AbiType.BYTE_ARRAY) {
             c.append("    JavanByteArray javan_export_result = javan_byte_array_export(javan_export_object_result);")
                 .append(System.lineSeparator());
@@ -2597,9 +2611,12 @@ public final class CCodegen {
         c.append("    }").append(System.lineSeparator());
     }
 
-    private static void emitExportWrapperDefaultReturn(final AbiType type, final StringBuilder c) {
+    private static void emitExportWrapperDefaultReturn(final AbiType type, final boolean utf16, final StringBuilder c) {
         if (type == AbiType.VOID) {
             c.append("        return;").append(System.lineSeparator());
+        } else if (type == AbiType.STRING && utf16) {
+            c.append("        JavanUtf16String result = { NULL, 0 };").append(System.lineSeparator());
+            c.append("        return result;").append(System.lineSeparator());
         } else if (type == AbiType.STRING) {
             c.append("        return NULL;").append(System.lineSeparator());
         } else if (type == AbiType.BYTE_ARRAY) {
@@ -2620,20 +2637,40 @@ public final class CCodegen {
         }
     }
 
-    private static void emitResultWrapper(final ExportedMethod export, final StringBuilder c) {
-        emitResultWrapperSignature(export, c);
+    private static void emitResultWrapper(final ExportedMethod export, final boolean utf16, final StringBuilder c) {
+        emitResultWrapperSignature(export, utf16, c);
         c.append(" {").append(System.lineSeparator());
         if (export.returnType() != AbiType.VOID) {
             c.append("    if (out == NULL) {").append(System.lineSeparator());
             c.append("        return javan_result_error_message(\"JAVAN-ABI-NULL-OUT\", \"invalid native ABI call\", \"result output pointer is null\");").append(System.lineSeparator());
             c.append("    }").append(System.lineSeparator());
-            emitResultWrapperDefaultOut(export.returnType(), c);
+            emitResultWrapperDefaultOut(export.returnType(), utf16, c);
         }
-        final String call = export.symbol() + "(" + rawExportArguments(export) + ")";
+        if (utf16) {
+            for (int index = 0; index < export.parameterTypes().size(); index++) {
+                if (export.parameterTypes().get(index) == AbiType.STRING) {
+                    c.append("    if (arg").append(index).append(".length < 0 || (arg").append(index)
+                        .append(".data == NULL && arg").append(index).append(".length != 0)) {\n")
+                        .append("        return javan_result_error_message(\"JAVAN-ABI-INVALID-UTF16\", \"invalid native ABI call\", \"invalid UTF-16 input\");\n")
+                        .append("    }\n");
+                }
+            }
+        }
+        String callSymbol = export.symbol();
+        if (utf16) {
+            callSymbol = "javan_utf16_internal_" + export.symbol();
+        }
+        final String call = callSymbol + "(" + rawExportArguments(export) + ")";
         if (export.returnType() == AbiType.VOID) {
             c.append("    ").append(call).append(";").append(System.lineSeparator());
         } else {
-            c.append("    ").append(export.returnType().cReturnName()).append(" javan_try_value = ").append(call).append(";").append(System.lineSeparator());
+            c.append("    ");
+            if (utf16 && export.returnType() == AbiType.STRING) {
+                c.append("JavanUtf16String");
+            } else {
+                c.append(export.returnType().cReturnName());
+            }
+            c.append(" javan_try_value = ").append(call).append(";").append(System.lineSeparator());
         }
         c.append("    if (javan_last_error() != NULL) {").append(System.lineSeparator());
         c.append("        return javan_result_error_from_last_error();").append(System.lineSeparator());
@@ -2645,22 +2682,38 @@ public final class CCodegen {
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
     }
 
-    private static void emitResultWrapperSignature(final ExportedMethod export, final StringBuilder c) {
-        c.append("JavanResult ").append(export.trySymbol()).append('(');
+    private static void emitResultWrapperSignature(final ExportedMethod export, final boolean utf16, final StringBuilder c) {
+        c.append("JavanResult ");
+        if (utf16) {
+            c.append(export.utf16TrySymbol());
+        } else {
+            c.append(export.trySymbol());
+        }
+        c.append('(');
         boolean emitted = false;
         for (int index = 0; index < export.parameterTypes().size(); index++) {
             if (emitted) {
                 c.append(", ");
             }
             final AbiType type = export.parameterTypes().get(index);
-            c.append(type.cName()).append(" arg").append(index);
+            if (utf16 && type == AbiType.STRING) {
+                c.append("JavanUtf16View");
+            } else {
+                c.append(type.cName());
+            }
+            c.append(" arg").append(index);
             emitted = true;
         }
         if (export.returnType() != AbiType.VOID) {
             if (emitted) {
                 c.append(", ");
             }
-            c.append(export.returnType().cReturnName()).append("* out");
+            if (utf16 && export.returnType() == AbiType.STRING) {
+                c.append("JavanUtf16String");
+            } else {
+                c.append(export.returnType().cReturnName());
+            }
+            c.append("* out");
             emitted = true;
         }
         if (!emitted) {
@@ -2669,8 +2722,11 @@ public final class CCodegen {
         c.append(')');
     }
 
-    private static void emitResultWrapperDefaultOut(final AbiType type, final StringBuilder c) {
-        if (type == AbiType.STRING) {
+    private static void emitResultWrapperDefaultOut(final AbiType type, final boolean utf16, final StringBuilder c) {
+        if (type == AbiType.STRING && utf16) {
+            c.append("    out->data = NULL;").append(System.lineSeparator());
+            c.append("    out->length = 0;").append(System.lineSeparator());
+        } else if (type == AbiType.STRING) {
             c.append("    *out = NULL;").append(System.lineSeparator());
         } else if (type == AbiType.BYTE_ARRAY) {
             c.append("    out->data = NULL;").append(System.lineSeparator());
@@ -2764,8 +2820,20 @@ public final class CCodegen {
         c.append(indent).append("javan_root_frame_pop(javan_export_roots);").append(System.lineSeparator());
     }
 
-    private static void emitExportSignature(final ExportedMethod export, final StringBuilder c) {
-        c.append(export.returnType().cReturnName()).append(' ').append(export.symbol()).append('(');
+    private static void emitExportSignature(final ExportedMethod export, final boolean utf16, final StringBuilder c) {
+        if (utf16) {
+            c.append("static ");
+        }
+        if (utf16 && export.returnType() == AbiType.STRING) {
+            c.append("JavanUtf16String");
+        } else {
+            c.append(export.returnType().cReturnName());
+        }
+        c.append(' ');
+        if (utf16) {
+            c.append("javan_utf16_internal_");
+        }
+        c.append(export.symbol()).append('(');
         if (export.parameterTypes().isEmpty()) {
             c.append("void");
         } else {
@@ -2774,7 +2842,12 @@ public final class CCodegen {
                     c.append(", ");
                 }
                 final AbiType type = export.parameterTypes().get(index);
-                c.append(type.cName()).append(" arg").append(index);
+                if (utf16 && type == AbiType.STRING) {
+                    c.append("JavanUtf16View");
+                } else {
+                    c.append(type.cName());
+                }
+                c.append(" arg").append(index);
             }
         }
         c.append(')');

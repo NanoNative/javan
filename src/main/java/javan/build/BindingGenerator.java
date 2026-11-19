@@ -112,6 +112,7 @@ public final class BindingGenerator {
         header.append("#define JAVAN_ABI_VERSION ").append(ABI_VERSION).append(System.lineSeparator());
         header.append("#define JAVAN_ABI_V1_DIRECT_EXPORTS 1").append(System.lineSeparator());
         header.append("#define JAVAN_ABI_STRING_UTF8 1").append(System.lineSeparator());
+        header.append("#define JAVAN_ABI_STRING_UTF16 1").append(System.lineSeparator());
         header.append("#define JAVAN_ABI_BYTE_ARRAY_POINTER_LENGTH 1").append(System.lineSeparator());
         header.append("#define JAVAN_ABI_RUNTIME_DIAGNOSTICS 1").append(System.lineSeparator());
         header.append("#define JAVAN_ABI_STRUCTURED_ERROR 1").append(System.lineSeparator());
@@ -124,6 +125,8 @@ public final class BindingGenerator {
         header.append("    int8_t* data;").append(System.lineSeparator());
         header.append("    int length;").append(System.lineSeparator());
         header.append("} JavanByteArray;").append(System.lineSeparator()).append(System.lineSeparator());
+        header.append("typedef struct { const uint16_t* data; int length; } JavanUtf16View;").append(System.lineSeparator());
+        header.append("typedef struct { uint16_t* data; int length; } JavanUtf16String;").append(System.lineSeparator()).append(System.lineSeparator());
         header.append("typedef struct javan_object_handle JavanObjectHandle;").append(System.lineSeparator());
         header.append("/* Opaque GC-rooted object handles; retain each copied handle and release every owned reference. */").append(System.lineSeparator());
         header.append("void javan_object_handle_retain(JavanObjectHandle* handle);").append(System.lineSeparator());
@@ -146,6 +149,10 @@ public final class BindingGenerator {
                 .append(". Diagnostic strings inside JavanResult are owned; release with javan_result_free. */")
                 .append(System.lineSeparator());
             header.append(trySignature(export)).append(";").append(System.lineSeparator()).append(System.lineSeparator());
+            if (export.hasString()) {
+                header.append("/* UTF-16 code units, with caller-owned input and javan-owned output. */").append(System.lineSeparator());
+                header.append(utf16TrySignature(export)).append(";").append(System.lineSeparator()).append(System.lineSeparator());
+            }
         }
         header.append("#ifdef __cplusplus").append(System.lineSeparator());
         header.append("}").append(System.lineSeparator());
@@ -168,6 +175,9 @@ public final class BindingGenerator {
         test.append("_Static_assert(sizeof(((JavanResult*)0)->bytecode_offset) == sizeof(int), \"JavanResult.bytecode_offset must be int\");").append(System.lineSeparator());
         test.append("_Static_assert(JAVAN_ABI_V1_DIRECT_EXPORTS == 1, \"ABI v1 direct exports must remain available\");").append(System.lineSeparator());
         test.append("_Static_assert(JAVAN_ABI_STRING_UTF8 == 1, \"String ABI must be UTF-8 char pointer\");").append(System.lineSeparator());
+        test.append("_Static_assert(JAVAN_ABI_STRING_UTF16 == 1, \"UTF-16 string ABI must be available\");").append(System.lineSeparator());
+        test.append("_Static_assert(offsetof(JavanUtf16View, data) == 0, \"UTF-16 input data must be first\");").append(System.lineSeparator());
+        test.append("_Static_assert(offsetof(JavanUtf16String, data) == 0, \"UTF-16 output data must be first\");").append(System.lineSeparator());
         test.append("_Static_assert(JAVAN_ABI_BYTE_ARRAY_POINTER_LENGTH == 1, \"byte[] ABI must be pointer plus length\");").append(System.lineSeparator()).append(System.lineSeparator());
         test.append("_Static_assert(JAVAN_ABI_RUNTIME_DIAGNOSTICS == 1, \"runtime diagnostics ABI must be available\");").append(System.lineSeparator()).append(System.lineSeparator());
         test.append("_Static_assert(JAVAN_ABI_STRUCTURED_ERROR == 1, \"structured error ABI must be available\");").append(System.lineSeparator()).append(System.lineSeparator());
@@ -797,6 +807,18 @@ public final class BindingGenerator {
 
     private static String trySignature(final ExportedMethod export) {
         return "JavanResult " + export.trySymbol() + "(" + tryParameters(export) + ")";
+    }
+
+    private static String utf16TrySignature(final ExportedMethod export) {
+        final List<String> parameters = new ArrayList<>();
+        for (int index = 0; index < export.parameterTypes().size(); index++) {
+            final AbiType type = export.parameterTypes().get(index);
+            parameters.add((type == AbiType.STRING ? "JavanUtf16View" : cName(type)) + " arg" + index);
+        }
+        if (export.returnType() != AbiType.VOID) {
+            parameters.add((export.returnType() == AbiType.STRING ? "JavanUtf16String" : cReturnName(export.returnType())) + "* out");
+        }
+        return "JavanResult " + export.utf16TrySymbol() + "(" + (parameters.isEmpty() ? "void" : joinComma(parameters)) + ")";
     }
 
     private static String tryFunctionPointer(final ExportedMethod export) {

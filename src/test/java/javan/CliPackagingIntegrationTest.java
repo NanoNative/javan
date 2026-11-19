@@ -662,6 +662,49 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsUtf16LibraryExports() throws Exception {
+        final Path project = tempDir.resolve("selfhost-utf16-library");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Text", """
+            package com.acme;
+            public final class Text {
+                public static String echo(String value) { return value; }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Text.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--kind", "staticlib",
+                "--export", "com.acme.Text.echo"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path caller = writeC(project, "call_utf16_selfhost.c", """
+            #include <stdint.h>
+            #include <string.h>
+            #include ".javan/dist/bindings/c/classes.h"
+            int main(void) {
+                uint16_t data[] = { 'x', 0, 0xD800, 0xDC00, 0xDC00 };
+                JavanUtf16View input = { data, 5 };
+                JavanUtf16String output = { 0 };
+                JavanResult result = javan_utf16_try_com_acme_Text_echo_string(input, &output);
+                int failed = !result.ok || output.length != 5 || memcmp(data, output.data, sizeof(data));
+                javan_result_free(&result);
+                javan_free(output.data);
+                return failed;
+            }
+            """);
+        final Path binary = project.resolve("utf16-selfhost");
+        final ProcessResult compile = process(project, List.of("cc", caller.toString(),
+            project.resolve(".javan/dist/libclasses.a").toString(), "-o", binary.toString()));
+        assertThat(compile.exitCode()).as(compile.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(binary.toString()), Duration.ofSeconds(30),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+    }
+
+    @Test
     void nativeBuiltJavanBuildsFloatingDecimalOutput() throws Exception {
         final Path project = tempDir.resolve("selfhost-floating-decimal-output");
         final Path classes = project.resolve("classes");
@@ -2378,6 +2421,81 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             project.resolve(".javan/dist/liblibrary-floating-environment.a").toString(), "-o", binary.toString(), "-lm"));
         assertThat(compile.exitCode()).as(compile.stderr()).isZero();
         final ProcessResult result = process(project, List.of(binary.toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+    }
+
+    @Test
+    void staticLibraryUtf16StringsPreserveEveryCodeUnitAlongsideUtf8Abi() throws Exception {
+        final Path project = project("library-utf16");
+        writeJava(project, "com.acme.Text", """
+            package com.acme;
+            public final class Text {
+                public static String echo(String value) { return value; }
+                public static int length(String value) { return value == null ? -1 : value.length(); }
+                public static String fail(String value) { throw new IllegalArgumentException(value); }
+            }
+            """);
+        final CliRun run = run(tempDir, "build", project.toString(), "--kind", "staticlib",
+            "--export", "com.acme.Text.echo", "--export", "com.acme.Text.length", "--export", "com.acme.Text.fail");
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Path library = project.resolve(".javan/dist/liblibrary-utf16.a");
+        final Path caller = writeC(project, "call_utf16.c", """
+            #include <stdint.h>
+            #include <string.h>
+            #include ".javan/dist/bindings/c/library-utf16.h"
+            int main(void) {
+                uint16_t data[] = { 'A', 0, 0xD83D, 0xDE00, 0xD800, 'Z', 0xDC00 };
+                JavanUtf16View input = { data, 7 };
+                JavanUtf16String output = { 0 };
+                JavanResult result = javan_utf16_try_com_acme_Text_echo_string(input, &output);
+                if (!result.ok || output.length != 7 || memcmp(data, output.data, sizeof(data))) return 1;
+                javan_result_free(&result);
+                javan_free(output.data);
+                int length = 0;
+                result = javan_utf16_try_com_acme_Text_length_string(input, &length);
+                if (!result.ok || length != 7) return 2;
+                javan_result_free(&result);
+                input.data = NULL; input.length = 0;
+                result = javan_utf16_try_com_acme_Text_echo_string(input, &output);
+                if (!result.ok || output.data != NULL || output.length != 0) return 3;
+                javan_result_free(&result);
+                input.data = data;
+                result = javan_utf16_try_com_acme_Text_echo_string(input, &output);
+                if (!result.ok || output.data == NULL || output.length != 0) return 4;
+                javan_result_free(&result);
+                javan_free(output.data);
+                input.data = NULL; input.length = 1;
+                result = javan_utf16_try_com_acme_Text_echo_string(input, &output);
+                if (result.ok || output.data != NULL || output.length != 0) return 5;
+                javan_result_free(&result);
+                input.data = data; input.length = -1;
+                result = javan_utf16_try_com_acme_Text_echo_string(input, &output);
+                if (result.ok || output.data != NULL || output.length != 0) return 6;
+                javan_result_free(&result);
+                result = javan_utf16_try_com_acme_Text_echo_string(input, NULL);
+                if (result.ok) return 7;
+                javan_result_free(&result);
+                input.length = 7;
+                result = javan_utf16_try_com_acme_Text_fail_string(input, &output);
+                if (result.ok || output.data != NULL || output.length != 0) return 8;
+                javan_result_free(&result);
+                for (int i = 0; i < 100; i++) {
+                    result = javan_utf16_try_com_acme_Text_echo_string(input, &output);
+                    if (!result.ok || output.length != 7 || memcmp(data, output.data, sizeof(data))) return 9;
+                    javan_result_free(&result);
+                    javan_free(output.data);
+                }
+                char* legacy = javan_export_com_acme_Text_echo_string("legacy");
+                if (!legacy || strcmp(legacy, "legacy")) return 10;
+                javan_free(legacy);
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-utf16");
+        final ProcessResult compile = process(project, List.of("cc", caller.toString(), library.toString(), "-o", binary.toString()));
+        assertThat(compile.exitCode()).as(compile.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(binary.toString()), Duration.ofSeconds(30),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
         assertThat(result.exitCode()).as(result.stderr()).isZero();
     }
 

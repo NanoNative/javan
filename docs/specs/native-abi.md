@@ -22,7 +22,9 @@ from configured primitive imports.
 Status: implemented C ABI v2 baseline for primitive, `String`, `byte[]`, `void`, and
 opaque GC-rooted object-handle exports. ABI v1 direct export symbols remain available
 for compatibility, and ABI v2 adds C `javan_try_*` result wrappers with owned diagnostic
-fields.
+fields. An additive C UTF-16 interface preserves all Java `String` code units without
+changing the v2 symbols. Generated Rust, Go and Python bindings currently use the existing
+UTF-8 interface.
 
 ## Scope
 
@@ -88,6 +90,7 @@ Generated C headers define:
 #define JAVAN_ABI_VERSION 2
 #define JAVAN_ABI_V1_DIRECT_EXPORTS 1
 #define JAVAN_ABI_STRING_UTF8 1
+#define JAVAN_ABI_STRING_UTF16 1
 #define JAVAN_ABI_BYTE_ARRAY_POINTER_LENGTH 1
 #define JAVAN_ABI_RUNTIME_DIAGNOSTICS 1
 #define JAVAN_ABI_STRUCTURED_ERROR 1
@@ -126,6 +129,31 @@ Returns:
 - returned memory remains valid until released by the caller
 - generated export wrappers root returned Java `String` values until the C ABI copy is
   complete
+
+### Length-based UTF-16 C Interface
+
+Exports with at least one `String` parameter or a `String` return also have a
+`javan_utf16_try_*` wrapper. Its non-string parameters and results use the same types as
+the corresponding `javan_try_*` wrapper. String parameters and results use:
+
+```c
+typedef struct { const uint16_t* data; int length; } JavanUtf16View;
+typedef struct { uint16_t* data; int length; } JavanUtf16String;
+```
+
+Lengths count UTF-16 code units, including zero and unpaired surrogates. Input memory is
+borrowed for the duration of the call and copied into a Java `String`. `{ NULL, 0 }`
+represents Java null. A non-null pointer with zero length represents an empty string.
+Negative lengths and a null pointer with positive length return a failed `JavanResult`.
+For a non-null pointer and positive length, the caller must provide that many readable
+`uint16_t` elements.
+
+A successful string return uses the same distinction for null and empty values. The
+caller releases non-null `JavanUtf16String.data` with `javan_free`. On failure the output
+is reset to `{ NULL, 0 }`. Diagnostic fields in the returned `JavanResult` are released
+with `javan_result_free`, just as for the existing result wrappers. An output pointer is
+required for non-void results. The existing UTF-8 symbols and their ownership rules remain
+unchanged.
 
 ## byte[] Ownership
 

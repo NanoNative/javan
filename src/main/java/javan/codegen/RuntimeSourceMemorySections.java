@@ -10172,6 +10172,46 @@ final class RuntimeSourceMemorySections {
             return (int) (0xD800U + (adjusted >> 10));
         }
 
+        void* javan_string_from_utf16(JavanUtf16View value) {
+            if (value.data == NULL) {
+                return NULL;
+            }
+            int length = 0;
+            for (int i = 0; i < value.length; i++) {
+                int size = javan_modified_utf8_char_length(value.data[i]);
+                if (length > INT_MAX - size) {
+                    javan_panic("string length overflow");
+                }
+                length += size;
+            }
+            char* result = javan_string_alloc((unsigned long) length + 1UL);
+            char* cursor = result;
+            for (int i = 0; i < value.length; i++) {
+                cursor = javan_modified_utf8_write_char(cursor, value.data[i]);
+            }
+            *cursor = '\\0';
+            return result;
+        }
+
+        JavanUtf16String javan_string_export_utf16(const char* value) {
+            JavanUtf16String result = { NULL, 0 };
+            if (value == NULL) {
+                return result;
+            }
+            result.length = javan_utf16_length_from_utf8(value);
+            void* source_root = (void*) value;
+            void** roots[] = { &source_root };
+            javan_root_frame_push(roots, 1);
+            result.data = (uint16_t*) javan_export_alloc((unsigned long) result.length * sizeof(uint16_t));
+            const unsigned char* cursor = (const unsigned char*) source_root;
+            int pending = -1;
+            for (int i = 0; i < result.length; i++) {
+                result.data[i] = (uint16_t) javan_utf16_next_char(&cursor, &pending);
+            }
+            javan_root_frame_pop(roots);
+            return result;
+        }
+
         static int javan_utf16_char_at_utf8(const char* value, int index) {
             if (value == NULL || index < 0) {
                 javan_panic("string index out of bounds");

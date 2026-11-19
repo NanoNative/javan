@@ -42,6 +42,24 @@ public record ExportedMethod(
     }
 
     /**
+     * Returns the additive UTF-16 result-wrapper symbol.
+     *
+     * @return UTF-16 wrapper symbol
+     */
+    public String utf16TrySymbol() {
+        return "javan_utf16_" + trySymbol().substring("javan_".length());
+    }
+
+    /**
+     * Reports whether the export accepts or returns a String.
+     *
+     * @return true when a UTF-16 wrapper is applicable
+     */
+    public boolean hasString() {
+        return returnType == AbiType.STRING || parameterTypes.contains(AbiType.STRING);
+    }
+
+    /**
      * Returns the display name used in diagnostics.
      *
      * @return display name
