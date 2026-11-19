@@ -65,6 +65,9 @@ Closed-world support includes:
   supported provider factories, iteration, `findFirst` and `reload`. `loadInstalled` uses the
   platform view. Dynamic loader discovery and provider streams are not implied.
 
+Direct `new Object()` creates a distinct managed instance with `java.lang.Object` class metadata.
+Its methods remain subject to their supported callable entries.
+
 The default `SecureRandom` constructor supports calls resolved as `SecureRandom.nextBytes` and
 `generateSeed`. The static `getSeed` entry is also supported. The supported random value methods
 are `nextBoolean` and the zero-argument, single-bound and origin-bound `nextInt`, `nextLong`,

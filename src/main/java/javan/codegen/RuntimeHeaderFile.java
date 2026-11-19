@@ -293,6 +293,7 @@ final class RuntimeHeaderFile {
             int _javan_runtime_kind;
             int _javan_runtime_reserved;
         };
+        void javan_plain_object_new_into(void** result);
         void* javan_alloc(unsigned long size);
         void javan_free(void* value);
         JavanResult javan_result_ok(void);

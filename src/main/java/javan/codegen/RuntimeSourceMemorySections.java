@@ -87,6 +87,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_RUNTIME_KIND_HTTP_CONTEXT 44
         #define JAVAN_RUNTIME_KIND_HTTP_HEADERS 45
         #define JAVAN_RUNTIME_KIND_HTTP_EXCHANGE_INPUT_STREAM 46
+        #define JAVAN_RUNTIME_KIND_PLAIN_OBJECT 47
         #define JAVAN_SERVICE_LOADER_MAGIC 0x4a534c44
         #define JAVAN_SERVICE_ITERATOR_MAGIC 0x4a534954
         #define JAVAN_LIST_VIEW_UNMODIFIABLE 1
@@ -2413,7 +2414,8 @@ final class RuntimeSourceMemorySections {
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_UUID
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_METHOD
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_SERVICE_LOADER
-                    && node->runtime_kind != JAVAN_RUNTIME_KIND_SERVICE_ITERATOR) {
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_SERVICE_ITERATOR
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_PLAIN_OBJECT) {
                     javan_panic("invalid runtime allocation kind");
                 }
                 javan_validate_runtime_container_references(node);
@@ -2703,6 +2705,10 @@ final class RuntimeSourceMemorySections {
                 javan_panic("missing runtime allocation kind");
             }
             return javan_alloc_with_root_and_kind(size, root_slot, runtime_kind);
+        }
+
+        void javan_plain_object_new_into(void** result) {
+            (void) javan_alloc_runtime_rooted(sizeof(unsigned char), result, JAVAN_RUNTIME_KIND_PLAIN_OBJECT);
         }
 
         static char* javan_string_alloc(unsigned long size) {
@@ -4593,6 +4599,9 @@ final class RuntimeSourceMemorySections {
             }
             javan_allocation_metadata snapshot;
             int found = javan_find_allocation(value, &snapshot);
+            if (found != 0 && snapshot.runtime_kind == JAVAN_RUNTIME_KIND_PLAIN_OBJECT) {
+                return javan_runtime_class_literal("java.lang.Object", JAVAN_CLASS_EXACT_OBJECT, 0, 0, 0);
+            }
             if (found != 0 && snapshot.kind == JAVAN_HEAP_KIND_ARRAY) {
                 if (snapshot.array_class_name == NULL || snapshot.array_class_name[0] == '\\0') {
                     javan_panic("unsupported array class metadata");

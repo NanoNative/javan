@@ -1689,6 +1689,14 @@ final class BytecodeToIRDynamicSupport {
             stack.add(StackValue.applicationThrowable(owner, local));
             return;
         }
+        if ("java/lang/Object".equals(owner)) {
+            final String localName = "object" + localDeclarations.size();
+            localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
+            final IrExpression local = IrExpression.objectLocal(localName);
+            instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall("javan_plain_object_new", List.of())));
+            stack.add(StackValue.objectExpression(local));
+            return;
+        }
         if ("java/lang/String".equals(owner)) {
             final String localName = "object" + localDeclarations.size();
             localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));

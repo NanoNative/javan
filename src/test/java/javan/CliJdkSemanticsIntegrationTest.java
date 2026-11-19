@@ -1799,6 +1799,81 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void plainObjectsRetainIdentityAndClassThroughCollection() throws Exception {
+        final Path project = project("plain-object-identity");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.HashMap;
+            public final class Main {
+                static Object stored;
+                public static void main(String[] args) {
+                    Object first = new Object();
+                    Object second = new Object();
+                    stored = first;
+                    HashMap<Object, Integer> map = new HashMap<>();
+                    map.put(first, 7); map.put(second, 11);
+                    Object[] values = new Object[] { first, second };
+                    for (int i = 0; i < 100; i++) new String(new char[] { 'x' });
+                    System.out.println(first == stored);
+                    System.out.println(first == values[0]);
+                    System.out.println(first == second);
+                    System.out.println(first.equals(first));
+                    System.out.println(first.equals(second));
+                    System.out.println(first.equals(null));
+                    System.out.println(first.getClass().getName());
+                    System.out.println(Object.class.isInstance(second));
+                    System.out.println(Object.class.cast(first) == first);
+                    System.out.println(map.get(first)); System.out.println(map.get(second));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/plain-object-identity").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void plainObjectAllocationWorksDuringConcurrentCollection() throws Exception {
+        final Path project = project("plain-object-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            Object value = new Object();
+                            Object[] root = new Object[] { value };
+                            new String(new char[] { 'x' });
+                            if (value != root[0] || value.getClass() != Object.class || !value.equals(root[0])) {
+                                errors.incrementAndGet();
+                            }
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/plain-object-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
     void generatedObjectGetClassNameBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("generated-object-get-class-name");
         writeJava(project, "com.acme.Widget", """
