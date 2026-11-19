@@ -619,6 +619,49 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanParsesDynamicNullCharacters() throws Exception {
+        final Path project = tempDir.resolve("selfhost-double-parse-null");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    String[] inputs = {
+                        new String(new char[] { 0, '1', 0 }),
+                        new String(new char[] { 0, '-', '0', 'x', '1', 'p', '2', 0 }),
+                        new String(new char[] { '1', 0, '2' }),
+                        new String(new char[] { 0 })
+                    };
+                    for (String input : inputs) {
+                        try {
+                            System.out.println(Double.parseDouble(input));
+                        } catch (NumberFormatException exception) {
+                            System.out.println(exception.getMessage());
+                        }
+                    }
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-double-parse-null"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-double-parse-null").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout());
+    }
+
+    @Test
     void nativeBuiltJavanBuildsFloatingDecimalOutput() throws Exception {
         final Path project = tempDir.resolve("selfhost-floating-decimal-output");
         final Path classes = project.resolve("classes");

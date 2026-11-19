@@ -306,6 +306,28 @@ final class CliDoubleParseDoubleIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void dynamicallyConstructedNullCharactersFollowJavaTrimAndParseRules() throws Exception {
+        assertMatchesJvm("double-parse-dynamic-nul", """
+            String[] inputs = {
+                new String(new char[] { 0, '1' }),
+                new String(new char[] { '1', 0 }),
+                new String(new char[] { 0, ' ', '-', '0', 'x', '1', '.', '0', 'p', '2', 0, ' ' }),
+                new String(new char[] { 0 }),
+                new String(new char[] { '1', 0, '2' }),
+                new String(new char[] { 0, 'N', 'a', 'N', 0 }),
+                new String(new char[] { 0, 'I', 'n', 'f', 'i', 'n', 'i', 't', 'y', 0 })
+            };
+            for (final String input : inputs) {
+                try {
+                    System.out.println(Double.parseDouble(input));
+                } catch (final NumberFormatException exception) {
+                    System.out.println(exception.getMessage());
+                }
+            }
+            """);
+    }
+
+    @Test
     void embeddedNulLiteralIsRejectedBeforeNativeParsing() throws Exception {
         final Path project = project("double-parse-nul-literal");
         writeJava(project, "com.acme.Main", source("""

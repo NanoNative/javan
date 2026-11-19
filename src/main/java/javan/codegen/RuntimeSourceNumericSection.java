@@ -595,11 +595,23 @@ final class RuntimeSourceNumericSection {
             }
             const unsigned char* start = (const unsigned char*) value;
             const unsigned char* end = start + strlen(value);
-            while (start < end && *start <= 0x20U) {
-                start++;
+            while (start < end) {
+                if (*start <= 0x20U) {
+                    start++;
+                } else if (end - start >= 2 && start[0] == 0xC0U && start[1] == 0x80U) {
+                    start += 2;
+                } else {
+                    break;
+                }
             }
-            while (end > start && end[-1] <= 0x20U) {
-                end--;
+            while (end > start) {
+                if (end[-1] <= 0x20U) {
+                    end--;
+                } else if (end - start >= 2 && end[-2] == 0xC0U && end[-1] == 0x80U) {
+                    end -= 2;
+                } else {
+                    break;
+                }
             }
             if (start == end) {
                 return JAVAN_DOUBLE_PARSE_EMPTY;
