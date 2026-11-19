@@ -158,6 +158,12 @@ final class RuntimeHeaderFile {
         long long javan_i2l(int value);
         float javan_i2f(int value);
         double javan_i2d(int value);
+        int javan_integer_bit_count(int value);
+        int javan_integer_leading_zeros(int value);
+        int javan_integer_trailing_zeros(int value);
+        int javan_long_bit_count(long long value);
+        int javan_long_leading_zeros(long long value);
+        int javan_long_trailing_zeros(long long value);
         int javan_integer_compare_unsigned(int left, int right);
         long long javan_integer_to_unsigned_long(int value);
         int javan_integer_divide_unsigned(int left, int right);

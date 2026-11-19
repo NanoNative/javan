@@ -3050,6 +3050,19 @@ final class BytecodeToIRInvokeSupport {
         final MethodRef methodRef,
         final List<StackValue> stack
     ) {
+        if (("bitCount".equals(methodRef.name()) || "numberOfLeadingZeros".equals(methodRef.name())
+            || "numberOfTrailingZeros".equals(methodRef.name())) && "(I)I".equals(methodRef.descriptor())) {
+            final String symbol;
+            if ("bitCount".equals(methodRef.name())) {
+                symbol = "javan_integer_bit_count";
+            } else if ("numberOfLeadingZeros".equals(methodRef.name())) {
+                symbol = "javan_integer_leading_zeros";
+            } else {
+                symbol = "javan_integer_trailing_zeros";
+            }
+            stack.add(StackValue.intExpression(IrExpression.intCall(symbol, List.of(popInt(classFile, method, stack)))));
+            return true;
+        }
         if ("compareUnsigned".equals(methodRef.name()) && "(II)I".equals(methodRef.descriptor())) {
             final IrExpression right = popInt(classFile, method, stack);
             final IrExpression left = popInt(classFile, method, stack);
@@ -3178,6 +3191,19 @@ final class BytecodeToIRInvokeSupport {
         final MethodRef methodRef,
         final List<StackValue> stack
     ) {
+        if (("bitCount".equals(methodRef.name()) || "numberOfLeadingZeros".equals(methodRef.name())
+            || "numberOfTrailingZeros".equals(methodRef.name())) && "(J)I".equals(methodRef.descriptor())) {
+            final String symbol;
+            if ("bitCount".equals(methodRef.name())) {
+                symbol = "javan_long_bit_count";
+            } else if ("numberOfLeadingZeros".equals(methodRef.name())) {
+                symbol = "javan_long_leading_zeros";
+            } else {
+                symbol = "javan_long_trailing_zeros";
+            }
+            stack.add(StackValue.intExpression(IrExpression.intCall(symbol, List.of(popLong(classFile, method, stack)))));
+            return true;
+        }
         if ("compare".equals(methodRef.name()) && "(JJ)I".equals(methodRef.descriptor())) {
             final IrExpression right = popLong(classFile, method, stack);
             final IrExpression left = popLong(classFile, method, stack);

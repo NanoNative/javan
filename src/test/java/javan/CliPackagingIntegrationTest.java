@@ -577,6 +577,39 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsIntegerBitCounts() throws Exception {
+        final Path project = tempDir.resolve("selfhost-integer-bit-counts");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    System.out.println(Integer.bitCount(-1));
+                    System.out.println(Integer.numberOfLeadingZeros(0));
+                    System.out.println(Integer.numberOfTrailingZeros(Integer.MIN_VALUE));
+                    System.out.println(Long.bitCount(-1L));
+                    System.out.println(Long.numberOfLeadingZeros(0L));
+                    System.out.println(Long.numberOfTrailingZeros(Long.MIN_VALUE));
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-integer-bit-counts"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-integer-bit-counts").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo("32\n32\n31\n64\n64\n63\n");
+    }
+
+    @Test
     void nativeBuiltJavanBuildsUnsignedIntegerArithmetic() throws Exception {
         final Path project = tempDir.resolve("selfhost-unsigned-integer");
         final Path classes = project.resolve("classes");

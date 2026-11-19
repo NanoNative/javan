@@ -1391,6 +1391,96 @@ final class RuntimeSourceCoreSection {
             return result;
         }
 
+        int javan_integer_bit_count(int value) {
+            uint32_t bits = (uint32_t) value;
+            bits -= (bits >> 1) & UINT32_C(0x55555555);
+            bits = (bits & UINT32_C(0x33333333)) + ((bits >> 2) & UINT32_C(0x33333333));
+            bits = (bits + (bits >> 4)) & UINT32_C(0x0f0f0f0f);
+            bits += bits >> 8;
+            bits += bits >> 16;
+            return (int) (bits & UINT32_C(0x3f));
+        }
+
+        int javan_integer_leading_zeros(int value) {
+            uint32_t bits = (uint32_t) value;
+            if (bits == 0U) {
+                return 32;
+            }
+            int count = 0;
+            if (bits <= UINT32_C(0x0000ffff)) {
+                count += 16;
+                bits <<= 16;
+            }
+            if (bits <= UINT32_C(0x00ffffff)) {
+                count += 8;
+                bits <<= 8;
+            }
+            if (bits <= UINT32_C(0x0fffffff)) {
+                count += 4;
+                bits <<= 4;
+            }
+            if (bits <= UINT32_C(0x3fffffff)) {
+                count += 2;
+                bits <<= 2;
+            }
+            if (bits <= UINT32_C(0x7fffffff)) {
+                count++;
+            }
+            return count;
+        }
+
+        int javan_integer_trailing_zeros(int value) {
+            uint32_t bits = (uint32_t) value;
+            if (bits == 0U) {
+                return 32;
+            }
+            int count = 0;
+            if ((bits & UINT32_C(0x0000ffff)) == 0U) {
+                count += 16;
+                bits >>= 16;
+            }
+            if ((bits & UINT32_C(0x000000ff)) == 0U) {
+                count += 8;
+                bits >>= 8;
+            }
+            if ((bits & UINT32_C(0x0000000f)) == 0U) {
+                count += 4;
+                bits >>= 4;
+            }
+            if ((bits & UINT32_C(0x00000003)) == 0U) {
+                count += 2;
+                bits >>= 2;
+            }
+            if ((bits & UINT32_C(0x00000001)) == 0U) {
+                count++;
+            }
+            return count;
+        }
+
+        int javan_long_bit_count(long long value) {
+            uint64_t bits = (uint64_t) value;
+            return javan_integer_bit_count(javan_int_from_bits((uint32_t) bits))
+                + javan_integer_bit_count(javan_int_from_bits((uint32_t) (bits >> 32)));
+        }
+
+        int javan_long_leading_zeros(long long value) {
+            uint64_t bits = (uint64_t) value;
+            uint32_t high = (uint32_t) (bits >> 32);
+            if (high == 0U) {
+                return 32 + javan_integer_leading_zeros(javan_int_from_bits((uint32_t) bits));
+            }
+            return javan_integer_leading_zeros(javan_int_from_bits(high));
+        }
+
+        int javan_long_trailing_zeros(long long value) {
+            uint64_t bits = (uint64_t) value;
+            uint32_t low = (uint32_t) bits;
+            if (low == 0U) {
+                return 32 + javan_integer_trailing_zeros(javan_int_from_bits((uint32_t) (bits >> 32)));
+            }
+            return javan_integer_trailing_zeros(javan_int_from_bits(low));
+        }
+
         int javan_integer_compare_unsigned(int left, int right) {
             uint32_t lhs = (uint32_t) left;
             uint32_t rhs = (uint32_t) right;

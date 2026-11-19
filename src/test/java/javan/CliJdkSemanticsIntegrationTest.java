@@ -13229,6 +13229,96 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void integerBitCountsMatchJavaAtBoundariesAndAcrossBitPatterns() throws Exception {
+        final Path project = project("integer-bit-counts");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    int[] ints = { 0, 1, -1, Integer.MIN_VALUE, Integer.MAX_VALUE, 0x55555555, 0x40000000, 0x8000 };
+                    long[] longs = { 0L, 1L, -1L, Long.MIN_VALUE, Long.MAX_VALUE, 0x5555555555555555L, 0x4000000000000000L, 0x80000000L };
+                    for (int value : ints) {
+                        System.out.println(Integer.bitCount(value));
+                        System.out.println(Integer.numberOfLeadingZeros(value));
+                        System.out.println(Integer.numberOfTrailingZeros(value));
+                    }
+                    for (long value : longs) {
+                        System.out.println(Long.bitCount(value));
+                        System.out.println(Long.numberOfLeadingZeros(value));
+                        System.out.println(Long.numberOfTrailingZeros(value));
+                    }
+                    for (int bit = 0; bit < 32; bit++) {
+                        int value = 1 << bit;
+                        System.out.println(Integer.bitCount(value));
+                        System.out.println(Integer.numberOfLeadingZeros(value));
+                        System.out.println(Integer.numberOfTrailingZeros(value));
+                        System.out.println(Integer.bitCount(~value));
+                        System.out.println(Integer.numberOfLeadingZeros(~value));
+                        System.out.println(Integer.numberOfTrailingZeros(~value));
+                    }
+                    for (int bit = 0; bit < 64; bit++) {
+                        long value = 1L << bit;
+                        System.out.println(Long.bitCount(value));
+                        System.out.println(Long.numberOfLeadingZeros(value));
+                        System.out.println(Long.numberOfTrailingZeros(value));
+                        System.out.println(Long.bitCount(~value));
+                        System.out.println(Long.numberOfLeadingZeros(~value));
+                        System.out.println(Long.numberOfTrailingZeros(~value));
+                    }
+                    int x = 0x12345678;
+                    long y = 0x123456789abcdefL;
+                    for (int i = 0; i < 64; i++) {
+                        x = x * 1664525 + 1013904223;
+                        y = y * 6364136223846793005L + 1442695040888963407L;
+                        System.out.println(Integer.bitCount(x));
+                        System.out.println(Integer.numberOfLeadingZeros(x));
+                        System.out.println(Integer.numberOfTrailingZeros(x));
+                        System.out.println(Long.bitCount(y));
+                        System.out.println(Long.numberOfLeadingZeros(y));
+                        System.out.println(Long.numberOfTrailingZeros(y));
+                    }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/integer-bit-counts").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void integerBitCountsEvaluateArgumentsOnce() throws Exception {
+        final Path project = project("integer-bit-count-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int trace;
+                static int nextInt() { trace++; return 0; }
+                static long nextLong() { trace++; return Long.MIN_VALUE; }
+                public static void main(String[] args) {
+                    System.out.println(Integer.bitCount(nextInt()));
+                    System.out.println(Integer.numberOfLeadingZeros(nextInt()));
+                    System.out.println(Integer.numberOfTrailingZeros(nextInt()));
+                    System.out.println(Long.bitCount(nextLong()));
+                    System.out.println(Long.numberOfLeadingZeros(nextLong()));
+                    System.out.println(Long.numberOfTrailingZeros(nextLong()));
+                    System.out.println(trace);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/integer-bit-count-order").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("0\n32\n32\n1\n0\n63\n6\n");
+    }
+
+    @Test
     void unsignedIntegerArithmeticMatchesJavaAtBoundaries() throws Exception {
         final Path project = project("unsigned-integer-arithmetic");
         writeJava(project, "com.acme.Main", """
