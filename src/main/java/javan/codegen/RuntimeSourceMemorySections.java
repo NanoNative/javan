@@ -8829,6 +8829,37 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        int javan_character_write_chars(int value, void* destination, int index) {
+            if (!javan_character_is_valid_code_point(value)) {
+                javan_pending_throw("java/lang/IllegalArgumentException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            if (destination == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            javan_char_array* chars = (javan_char_array*) destination;
+            if (value <= 0xffff) {
+                if (index < 0 || index >= chars->length) {
+                    javan_pending_throw("java/lang/ArrayIndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                    return 0;
+                }
+                chars->values[index] = (unsigned short) value;
+                return 1;
+            }
+            if (index == INT_MAX || index + 1 < 0 || index + 1 >= chars->length) {
+                javan_pending_throw("java/lang/ArrayIndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            chars->values[index + 1] = (unsigned short) javan_character_low_surrogate(value);
+            if (index < 0 || index >= chars->length) {
+                javan_pending_throw("java/lang/ArrayIndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            chars->values[index] = (unsigned short) javan_character_high_surrogate(value);
+            return 2;
+        }
+
         static javan_array_header* javan_array_checked(void* array) {
             if (array == NULL) {
                 javan_panic("null array");

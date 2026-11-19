@@ -90,8 +90,8 @@ shapes, an earlier static-field read is preserved across later calls, writes and
 Within supported handler shapes, `String.charAt`, `codePointAt`, `codePointBefore`,
 `codePointCount`, and `offsetByCodePoints` transport null-receiver and invalid-index exceptions.
 Provably invalid literal `charAt` indices remain subject to the diagnostics policy.
-`Character.toChars(int)` returns UTF-16 code units and transports invalid-code-point errors
-within supported handler shapes. The overload that writes into an existing array is not covered.
+Both `Character.toChars` overloads produce UTF-16 code units and transport invalid-code-point
+and destination errors within supported handler shapes.
 `Path.of`, `Paths.get`, and `Path.resolve` report supported null inputs and embedded
 U+0000 through typed exceptions. Some inline varargs inside `catch` ranges still fail
 verification and can be moved outside the protected range.

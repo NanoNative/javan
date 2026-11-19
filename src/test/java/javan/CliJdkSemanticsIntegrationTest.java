@@ -13654,6 +13654,121 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void characterToCharsIntoArrayMatchesJavaAcrossUnicode() throws Exception {
+        final Path project = project("character-to-chars-array-unicode");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    long result = 1;
+                    for (int value = 0; value <= 0x10ffff; value += 31) {
+                        char[] chars = {'a', 'b', 'c', 'd'};
+                        int written = Character.toChars(value, chars, 1);
+                        result = result * 31 + written;
+                        for (char ch : chars) result = result * 31 + ch;
+                    }
+                    System.out.println(result);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/character-to-chars-array-unicode").toString()),
+            Duration.ofSeconds(60));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void characterToCharsIntoArrayRemainsValidDuringConcurrentCollection() throws Exception {
+        final Path project = project("character-to-chars-array-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static int writeNegative(char[] chars) {
+                    try { Character.toChars(0x1f600, chars, -1); return -1; }
+                    catch (IndexOutOfBoundsException ex) { return chars[0]; }
+                }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        char[] chars = new char[2];
+                        for (int i = 0; i < 100; i++) {
+                            if (writeNegative(chars) != 0xde00) errors.incrementAndGet();
+                            if (Character.toChars(0x1f600, chars, 0) != 2) errors.incrementAndGet();
+                            if (new String(chars).codePointAt(0) != 0x1f600) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/character-to-chars-array-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
+    void characterToCharsIntoArrayMatchesJavaAndTransportsExceptions() throws Exception {
+        final Path project = project("character-to-chars-array");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int order = 0;
+                static int first() { order = order * 10 + 1; return 5; }
+                static int point() { order = order * 10 + 2; return 0x1f600; }
+                static char[] destination() { order = order * 10 + 3; return new char[2]; }
+                static int position() { order = order * 10 + 4; return 0; }
+                static void write(int value, int index) {
+                    char[] chars = {'x', 'y', 'z'};
+                    try { System.out.println(Character.toChars(value, chars, index)); }
+                    catch (IllegalArgumentException ex) { System.out.println("invalid"); }
+                    catch (IndexOutOfBoundsException ex) { System.out.println("index"); }
+                    for (char ch : chars) System.out.println((int) ch);
+                }
+                static void writeSmall(int value, int index, int size) {
+                    char[] chars = new char[size];
+                    try { System.out.println(Character.toChars(value, chars, index)); }
+                    catch (IndexOutOfBoundsException ex) { System.out.println("index"); }
+                    for (char ch : chars) System.out.println((int) ch);
+                }
+                static void writeNull(int value, int index) {
+                    try { System.out.println(Character.toChars(value, null, index)); }
+                    catch (IllegalArgumentException ex) { System.out.println("invalid"); }
+                    catch (NullPointerException ex) { System.out.println("null"); }
+                }
+                public static void main(String[] args) {
+                    int[] values = {Integer.MIN_VALUE, -1, 0, 'a', 0xd800, 0xffff, 0x10000, 0x1f600, 0x10ffff, 0x110000, Integer.MAX_VALUE};
+                    int[] indexes = {Integer.MIN_VALUE, -2, -1, 0, 1, 2, 3, 4, Integer.MAX_VALUE};
+                    for (int value : values) for (int index : indexes) write(value, index);
+                    for (int size = 0; size <= 2; size++) for (int index = -1; index <= 2; index++) {
+                        writeSmall(65, index, size); writeSmall(0x1f600, index, size);
+                    }
+                    writeNull(-1, -1); writeNull(65, -1); writeNull(0x1f600, 0);
+                    System.out.println(first() + Character.toChars(point(), destination(), position()));
+                    System.out.println(order);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/character-to-chars-array").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void characterToCharsMatchesJavaAcrossUnicode() throws Exception {
         final Path project = project("character-to-chars-unicode");
         writeJava(project, "com.acme.Main", """

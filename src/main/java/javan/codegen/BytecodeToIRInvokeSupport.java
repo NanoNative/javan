@@ -3604,6 +3604,15 @@ final class BytecodeToIRInvokeSupport {
             )));
             return true;
         }
+        if ("toChars".equals(methodRef.name()) && "(I[CI)I".equals(methodRef.descriptor())) {
+            final IrExpression index = popInt(classFile, method, stack);
+            final IrExpression destination = popObject(classFile, method, stack);
+            final IrExpression value = popInt(classFile, method, stack);
+            stack.add(StackValue.intExpression(IrExpression.intCall(
+                "javan_character_write_chars", List.of(value, destination, index)
+            )));
+            return true;
+        }
         if ("toString".equals(methodRef.name()) && "(C)Ljava/lang/String;".equals(methodRef.descriptor())) {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_string_value_of_char", List.of(popInt(classFile, method, stack)))));
             return true;
