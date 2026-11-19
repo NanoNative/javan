@@ -91,6 +91,8 @@ Within supported handler shapes, `String.charAt`, `codePointAt`, `codePointBefor
 `codePointCount`, and `offsetByCodePoints` transport null-receiver and invalid-index exceptions.
 `String.toCharArray` returns an independent array of UTF-16 code units and transports a null
 receiver exception within supported handler shapes.
+`String.repeat` preserves UTF-16 code units and transports null-receiver, negative-count,
+and representational-overflow errors within supported handler shapes.
 Provably invalid literal `charAt` indices remain subject to the diagnostics policy.
 Both `Character.toChars` overloads produce UTF-16 code units and transport invalid-code-point
 and destination errors within supported handler shapes. A direct `Character.toChars(...).length`

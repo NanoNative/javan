@@ -17947,7 +17947,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersStringRepeatToRuntimeCall() {
+    void propagatesStringRepeatFailure() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -17961,7 +17961,7 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).contains(
             IrInstruction.assignObject(
                 "object0",
                 IrExpression.objectCall(
@@ -17969,7 +17969,7 @@ final class BytecodeToIRTest {
                     List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"))
                 )
             ),
-            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+            IrInstruction.propagatePending()
         );
     }
 

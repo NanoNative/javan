@@ -868,7 +868,6 @@ final class BytecodeToIRInvokeSupport {
             && "(I)Ljava/lang/String;".equals(methodRef.descriptor())) {
             final IrExpression count = popInt(classFile, method, stack);
             final IrExpression receiver = popObject(classFile, method, stack);
-            rejectUnsupportedStringSemantic(classFile, method, instruction, receiver);
             pushObjectCall(instructions, stack, localDeclarations, "javan_string_repeat", List.of(receiver, count));
             return;
         }

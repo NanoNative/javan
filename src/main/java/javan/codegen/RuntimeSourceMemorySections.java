@@ -10995,10 +10995,12 @@ final class RuntimeSourceMemorySections {
 
         void* javan_string_repeat(const char* value, int count) {
             if (value == NULL) {
-                javan_panic("null string");
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
             }
             if (count < 0) {
-                javan_panic("negative string repeat count");
+                javan_pending_throw("java/lang/IllegalArgumentException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
             }
             int length = javan_string_length(value);
             unsigned long byte_length = strlen(value);
@@ -11009,10 +11011,12 @@ final class RuntimeSourceMemorySections {
                 return javan_string_copy(value);
             }
             if (length > INT_MAX / count) {
-                javan_panic("string length overflow");
+                javan_pending_throw("java/lang/OutOfMemoryError", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
             }
             if (byte_length > (ULONG_MAX - 1UL) / (unsigned long) count) {
-                javan_panic("string length overflow");
+                javan_pending_throw("java/lang/OutOfMemoryError", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
             }
             unsigned long repeated_length = byte_length * (unsigned long) count;
             void* source_root = (void*) value;

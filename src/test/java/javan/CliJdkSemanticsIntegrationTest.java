@@ -12065,7 +12065,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/string-repeat-negative").toString()));
         assertThat(nativeRun.exitCode()).isNotZero();
-        assertThat(nativeRun.stderr()).contains("negative string repeat count");
+        assertThat(nativeRun.stderr()).contains("IllegalArgumentException");
     }
 
     @Test
@@ -13812,6 +13812,148 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/character-to-chars-handler-length").toString()));
         assertThat(result.exitCode()).as(result.stderr()).isZero();
         assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringRepeatPreservesUtf16AndTransportsExceptions() throws Exception {
+        final Path project = project("string-repeat-unicode");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int order;
+                static int first() { order = order * 10 + 1; return 7; }
+                static String value() { order = order * 10 + 2; return "\\ud800\\0x"; }
+                static int count() { order = order * 10 + 3; return 2; }
+                static String repeat(String value, int count) {
+                    try { return value.repeat(count); }
+                    catch (NullPointerException ex) { System.out.println("null"); return null; }
+                    catch (IllegalArgumentException ex) { System.out.println("negative"); return null; }
+                    catch (OutOfMemoryError ex) { System.out.println("overflow"); return null; }
+                }
+                static void print(String value) {
+                    if (value == null) return;
+                    char[] chars = value.toCharArray();
+                    System.out.println(chars.length);
+                    for (int i = 0; i < chars.length; i++) System.out.println((int) chars[i]);
+                }
+                static void printOrder() {
+                    System.out.println(first() + value().repeat(count()).length());
+                    System.out.println(order);
+                }
+                public static void main(String[] args) {
+                    print("\\0\\ud800\\udc00\\udfff\\udbff".repeat(2));
+                    print("\\udc00\\ud800".repeat(3));
+                    print(repeat("\\0\\ud800z", 0));
+                    print(repeat("\\0\\ud800z", 1));
+                    print(repeat("\\0\\ud800z", 2));
+                    print(repeat("", 3));
+                    print(repeat("a", -1));
+                    print(repeat(null, -1));
+                    print(repeat("ab", Integer.MAX_VALUE));
+                    printOrder();
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-repeat-unicode").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringRepeatMatchesJavaAcrossUnicode() throws Exception {
+        final Path project = project("string-repeat-unicode-sweep");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    long hash = 1;
+                    for (int value = 0; value <= 0x10ffff; value += 31) {
+                        char[] chars = Character.toString(value).repeat(3).toCharArray();
+                        hash = hash * 31 + chars.length;
+                        for (int i = 0; i < chars.length; i++) hash = hash * 31 + chars[i];
+                    }
+                    for (int value = 0; value <= 0xffff; value++) {
+                        char[] chars = Character.toString((char) value).repeat(2).toCharArray();
+                        hash = hash * 31 + chars.length;
+                        hash = hash * 31 + chars[0];
+                        hash = hash * 31 + chars[1];
+                    }
+                    System.out.println(hash);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-repeat-unicode-sweep").toString()),
+            Duration.ofSeconds(60));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringRepeatSurvivesConcurrentCollection() throws Exception {
+        final Path project = project("string-repeat-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            int point = i % 2 == 0 ? 0x1f600 : 0xd800;
+                            String value = Character.toString(point);
+                            String repeated = value.repeat(2);
+                            char[] chars = repeated.toCharArray();
+                            int width = point > 0xffff ? 2 : 1;
+                            if (chars.length != width * 2) errors.incrementAndGet();
+                            if (Character.codePointAt(chars, 0) != point || Character.codePointAt(chars, width) != point)
+                                errors.incrementAndGet();
+                            if (value.repeat(0).toCharArray().length != 0) errors.incrementAndGet();
+                            if (Character.codePointAt(value.repeat(1).toCharArray(), 0) != point) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-repeat-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
+    void stringRepeatUncaughtFailureStopsBeforeUse() throws Exception {
+        final Path project = project("string-repeat-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    System.out.println("before");
+                    String text = args.length == 0 ? "x".repeat(-1) : "y";
+                    System.out.println(text);
+                    System.out.println("after");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-repeat-uncaught").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("before\n");
+        assertThat(result.stderr()).contains("IllegalArgumentException");
     }
 
     @Test
