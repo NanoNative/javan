@@ -1998,7 +1998,8 @@ public final class JdkCallSupport {
             && "(II[CI)V".equals(methodRef.descriptor())) {
             return List.of("java/lang/StringIndexOutOfBoundsException", "java/lang/NullPointerException");
         }
-        if ("java/lang/String".equals(methodRef.owner()) && "length".equals(methodRef.name())
+        if ("java/lang/String".equals(methodRef.owner())
+            && ("length".equals(methodRef.name()) || "hashCode".equals(methodRef.name()))
             && "()I".equals(methodRef.descriptor())) {
             return List.of("java/lang/NullPointerException");
         }

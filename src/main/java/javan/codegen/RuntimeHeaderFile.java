@@ -410,6 +410,7 @@ final class RuntimeHeaderFile {
         int javan_string_length_java(const char* value);
         void javan_string_get_chars(const char* value, int begin, int end, void* destination, int destination_offset);
         int javan_string_hash_code(const char* value);
+        int javan_string_hash_code_java(const char* value);
         int javan_string_is_empty(const char* value);
         int javan_string_is_blank(const char* value);
         int javan_string_char_at(const char* value, int index);

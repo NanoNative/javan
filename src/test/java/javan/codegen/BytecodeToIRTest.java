@@ -17342,7 +17342,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersStringHashCodeToRuntimeCall() {
+    void propagatesStringHashCodeFailure() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -17354,12 +17354,7 @@ final class BytecodeToIRTest {
             plain(2, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnInt(IrExpression.intCall(
-                "javan_string_hash_code",
-                List.of(IrExpression.objectLocal("arg0"))
-            ))
-        );
+        assertThat(function.instructions()).contains(IrInstruction.propagatePending());
     }
 
     @Test

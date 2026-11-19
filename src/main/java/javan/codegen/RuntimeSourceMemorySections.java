@@ -10641,6 +10641,14 @@ final class RuntimeSourceMemorySections {
             return (int) hash;
         }
 
+        int javan_string_hash_code_java(const char* value) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            return javan_string_hash_code(value);
+        }
+
         int javan_string_is_empty(const char* value) {
             return javan_string_length(value) == 0;
         }

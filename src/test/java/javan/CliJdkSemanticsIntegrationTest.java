@@ -395,6 +395,121 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void stringHashCodeUnicodeAndNullMatchJava() throws Exception {
+        final Path project = project("string-hash-unicode-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int hash(String value) {
+                    try { return value.hashCode(); }
+                    catch (NullPointerException ex) { System.out.println("null"); return -1; }
+                }
+                public static void main(String[] args) {
+                    System.out.println("\\0\\ud800\\udc00\\udfff\\udbff".hashCode());
+                    System.out.println("aé𐀀".hashCode());
+                    System.out.println(hash(null));
+                    System.out.println(hash("\\0\\ud800\\udc00"));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-hash-unicode-null").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringHashCodeMatchesJavaAcrossUnicode() throws Exception {
+        final Path project = project("string-hash-unicode-sweep");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    long hash = 1;
+                    for (int value = 0; value <= 0x10ffff; value += 31)
+                        hash = hash * 31 + Character.toString(value).hashCode();
+                    for (int value = 0; value <= 0xffff; value++)
+                        hash = hash * 31 + Character.toString((char) value).hashCode();
+                    char[] units = {0, 'x', '\\ud800', '\\udbff', '\\udc00', '\\udfff'};
+                    for (char a : units) for (char b : units) for (char c : units)
+                        hash = hash * 31 + new String(new char[] {a, b, c}).hashCode();
+                    System.out.println(hash);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-hash-unicode-sweep").toString()),
+            Duration.ofSeconds(60));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringHashCodeUncaughtNullStopsBeforeUse() throws Exception {
+        final Path project = project("string-hash-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int later() { System.out.println("later"); return 1; }
+                public static void main(String[] args) {
+                    System.out.println("before");
+                    String value = args.length == 0 ? null : "x";
+                    System.out.println(value.hashCode() + later());
+                    System.out.println("after");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-hash-uncaught").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("before\n");
+        assertThat(result.stderr()).contains("NullPointerException");
+    }
+
+    @Test
+    void stringHashCodeSurvivesConcurrentCollection() throws Exception {
+        final Path project = project("string-hash-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static int hash(String value) {
+                    try { return value.hashCode(); }
+                    catch (NullPointerException ex) { return -1; }
+                }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            int point = i % 2 == 0 ? 0x1f600 : 0xd800;
+                            int expected = point > 0xffff ? 0xd83d * 31 + 0xde00 : 0xd800;
+                            if (Character.toString(point).hashCode() != expected) errors.incrementAndGet();
+                            if (hash(null) != -1) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-hash-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
     void stringHashCodeFromUtf16CharArrayBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("string-hash-code-utf16-char-array");
         writeJava(project, "com.acme.Main", """
