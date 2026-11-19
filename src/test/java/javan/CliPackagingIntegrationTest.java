@@ -587,6 +587,12 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             public final class Main {
                 private static final SecureRandom RANDOM = new SecureRandom();
                 private static SecureRandom EMPTY;
+                static final class Derived extends SecureRandom {
+                    static { System.out.println("unexpected-random-init"); }
+                }
+                static final class ThreadChild extends Thread {
+                    static { System.out.println("unexpected-thread-init"); }
+                }
                 public static void main(final String[] args) {
                     final SecureRandom random = RANDOM;
                     final int value = random.nextInt(17);
@@ -598,11 +604,17 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     final double doubleFraction = random.nextDouble();
                     final float narrow = random.nextFloat(Float.MIN_VALUE);
                     final double wideFraction = random.nextDouble(-Double.MAX_VALUE, Double.MAX_VALUE);
+                    final byte[] seed = random.generateSeed(16);
+                    final byte[] staticSeed = SecureRandom.getSeed(17);
+                    final byte[] inheritedSeed = Derived.getSeed(0);
+                    final boolean threadPresent = ThreadChild.currentThread() != null;
                     System.out.println(value >= 0 && value < 17 && wide < Integer.MAX_VALUE
                         && longValue >= 0 && longValue < 17 && longWide < Long.MAX_VALUE
                         && (bit || !bit) && fraction >= 0.0f && fraction < 1.0f
                         && doubleFraction >= 0.0 && doubleFraction < 1.0 && narrow == 0.0f
-                        && wideFraction >= -Double.MAX_VALUE && wideFraction < Double.MAX_VALUE);
+                        && wideFraction >= -Double.MAX_VALUE && wideFraction < Double.MAX_VALUE
+                        && seed.length == 16 && staticSeed.length == 17 && seed != staticSeed
+                        && inheritedSeed.length == 0 && threadPresent);
                     try { random.nextInt(0); }
                     catch (IllegalArgumentException expected) { System.out.println("invalid"); }
                     try { RANDOM.nextInt(1, 1); }
@@ -613,6 +625,12 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     catch (NullPointerException expected) { System.out.println("null-scalar"); }
                     try { random.nextDouble(Double.NaN); }
                     catch (IllegalArgumentException expected) { System.out.println("floating-invalid"); }
+                    try { random.generateSeed(-1); }
+                    catch (IllegalArgumentException expected) { System.out.println("seed-invalid"); }
+                    try { SecureRandom.getSeed(-1); }
+                    catch (IllegalArgumentException expected) { System.out.println("static-seed-invalid"); }
+                    try { EMPTY.generateSeed(-1); }
+                    catch (NullPointerException expected) { System.out.println("null-seed"); }
                 }
             }
             """);
@@ -631,9 +649,10 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         );
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final Path executable = project.resolve(".javan/bin/selfhost-secure-random-integers");
-        final ProcessResult nativeRun = process(tempDir, List.of(executable.toString()));
+        final ProcessResult nativeRun = process(tempDir, List.of(executable.toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
         assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
-        assertThat(nativeRun.stdout()).isEqualTo("true\ninvalid\nrange-invalid\nlong-range-invalid\nnull-scalar\nfloating-invalid\n");
+        assertThat(nativeRun.stdout()).isEqualTo("true\ninvalid\nrange-invalid\nlong-range-invalid\nnull-scalar\nfloating-invalid\nseed-invalid\nstatic-seed-invalid\nnull-seed\n");
     }
 
     @Test

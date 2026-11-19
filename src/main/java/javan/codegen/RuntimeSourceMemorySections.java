@@ -8870,6 +8870,16 @@ final class RuntimeSourceMemorySections {
             javan_os_random_bytes((unsigned char*) bytes->values, bytes->length);
         }
 
+        void javan_secure_random_seed_into(void** result, int length) {
+            if (result == NULL) {
+                javan_panic("invalid SecureRandom seed result");
+            }
+            const unsigned long size = javan_array_allocation_size(sizeof(javan_byte_array), length, sizeof(signed char));
+            javan_byte_array* bytes = (javan_byte_array*) javan_alloc_rooted(size, result);
+            javan_array_init((javan_array_header*) bytes, length, sizeof(signed char), JAVAN_ARRAY_KIND_BYTE, "[B");
+            javan_os_random_bytes((unsigned char*) bytes->values, length);
+        }
+
         static int javan_secure_random_signed_int(uint32_t bits) {
             if (bits <= INT32_MAX) {
                 return (int) bits;

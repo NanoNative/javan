@@ -9712,6 +9712,178 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void inheritedPlatformStaticMethodUsesDeclaringClassInitialization() throws Exception {
+        final Path project = project("thread-inherited-static-call");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static final class Child extends Thread {
+                    static { System.out.println("unexpected"); }
+                }
+                public static void main(String[] args) {
+                    System.out.println(Child.currentThread() != null);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/thread-inherited-static-call").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("true\n");
+    }
+
+    @Test
+    void inheritedStaticSeedUsesDeclaringClassInitialization() throws Exception {
+        final Path project = project("secure-random-inherited-static-seed");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                static final class Derived extends SecureRandom {
+                    static { System.out.println("unexpected"); }
+                }
+                static final class Hiding extends SecureRandom {
+                    static { System.out.println("initialized"); }
+                    public static byte[] getSeed(int count) { return new byte[] { 42 }; }
+                }
+                public static void main(String[] args) {
+                    System.out.println(Derived.getSeed(0).length);
+                    System.out.println(Hiding.getSeed(0)[0]);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/secure-random-inherited-static-seed").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("0\ninitialized\n42\n");
+    }
+
+    @Test
+    void secureRandomSeedMethodsReturnIndependentArrays() throws Exception {
+        final Path project = project("secure-random-seed-arrays");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                public static void main(String[] args) {
+                    SecureRandom random = new SecureRandom();
+                    byte[] empty = random.generateSeed(0);
+                    byte[] first = random.generateSeed(24);
+                    byte[] second = SecureRandom.getSeed(24);
+                    byte[] another = random.generateSeed(24);
+                    System.out.println(empty.length == 0 && first.length == 24 && second.length == 24
+                        && another.length == 24 && first != second && first != another);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/secure-random-seed-arrays").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("true\n");
+    }
+
+    @Test
+    void secureRandomSeedArraysSurviveConcurrentCollection() throws Exception {
+        final Path project = project("secure-random-seed-concurrent-gc");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                static final SecureRandom RANDOM = new SecureRandom();
+                static final class Worker implements Runnable {
+                    boolean valid = true;
+                    int checksum;
+                    public void run() {
+                        for (int index = 0; index < 128; index++) {
+                            byte[] value = RANDOM.generateSeed(4096);
+                            if (value.length != 4096) valid = false;
+                            checksum += value[0] + value[4095];
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Worker first = new Worker();
+                    Worker second = new Worker();
+                    Worker third = new Worker();
+                    Worker fourth = new Worker();
+                    Thread a = new Thread(first);
+                    Thread b = new Thread(second);
+                    Thread c = new Thread(third);
+                    Thread d = new Thread(fourth);
+                    a.start(); b.start(); c.start(); d.start();
+                    a.join(); b.join(); c.join(); d.join();
+                    System.out.println(first.valid && second.valid && third.valid && fourth.valid);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/secure-random-seed-concurrent-gc").toString()),
+            Duration.ofSeconds(120), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("true\n");
+    }
+
+    @Test
+    void secureRandomSeedMethodsRejectNegativeLengthsAndPreserveNullOrder() throws Exception {
+        final Path project = project("secure-random-seed-invalid");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                static int trace;
+                static int invalid() { trace++; return -1; }
+                public static void main(String[] args) {
+                    SecureRandom random = new SecureRandom();
+                    try { random.generateSeed(-1); }
+                    catch (IllegalArgumentException expected) { System.out.println("instance"); }
+                    try { SecureRandom.getSeed(-1); }
+                    catch (IllegalArgumentException expected) { System.out.println("static"); }
+                    SecureRandom missing = null;
+                    try { missing.generateSeed(invalid()); }
+                    catch (NullPointerException expected) { System.out.println(trace); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/secure-random-seed-invalid").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("instance\nstatic\n1\n");
+    }
+
+    @Test
+    void secureRandomSeedMethodsPropagateUncaughtInvalidLength() throws Exception {
+        final Path project = project("secure-random-seed-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            public final class Main {
+                public static void main(String[] args) { SecureRandom.getSeed(-1); }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/secure-random-seed-uncaught").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("java/lang/IllegalArgumentException");
+    }
+
+    @Test
     void secureRandomFloatingBoundsStayInsideFiniteIntervals() throws Exception {
         final Path project = project("secure-random-floating-bounds");
         writeJava(project, "com.acme.Main", """

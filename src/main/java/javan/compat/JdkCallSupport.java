@@ -119,6 +119,8 @@ public final class JdkCallSupport {
         intrinsic("System.exit", "java/lang/System", "exit", "(I)V"),
         runtime("SecureRandom.<init>", "java/security/SecureRandom", "<init>", "()V"),
         runtime("SecureRandom.nextBytes", "java/security/SecureRandom", "nextBytes", "([B)V"),
+        runtime("SecureRandom.generateSeed", "java/security/SecureRandom", "generateSeed", "(I)[B"),
+        runtime("SecureRandom.getSeed", "java/security/SecureRandom", "getSeed", "(I)[B"),
         runtime("SecureRandom.nextInt", "java/security/SecureRandom", "nextInt", "()I", "(I)I", "(II)I"),
         runtime("SecureRandom.nextLong", "java/security/SecureRandom", "nextLong", "()J", "(J)J", "(JJ)J"),
         runtime("SecureRandom.nextBoolean", "java/security/SecureRandom", "nextBoolean", "()Z"),
@@ -2026,6 +2028,15 @@ public final class JdkCallSupport {
             && "nextBytes".equals(methodRef.name())
             && "([B)V".equals(methodRef.descriptor())) {
             return List.of("java/lang/NullPointerException");
+        }
+        if ("java/security/SecureRandom".equals(methodRef.owner())
+            && "(I)[B".equals(methodRef.descriptor())) {
+            if ("generateSeed".equals(methodRef.name())) {
+                return List.of("java/lang/NullPointerException", "java/lang/IllegalArgumentException");
+            }
+            if ("getSeed".equals(methodRef.name())) {
+                return List.of("java/lang/IllegalArgumentException");
+            }
         }
         if ("java/security/SecureRandom".equals(methodRef.owner())
             && "nextInt".equals(methodRef.name())) {

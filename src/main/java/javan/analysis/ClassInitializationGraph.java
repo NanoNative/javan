@@ -5,6 +5,7 @@ import javan.classfile.FieldRef;
 import javan.classfile.Instruction;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
+import javan.compat.JdkCallSupport;
 import javan.util.Strings2;
 
 import java.util.ArrayList;
@@ -257,7 +258,11 @@ public final class ClassInitializationGraph {
         if (instruction.opcode() == 184 && instruction.methodRef().isPresent()) {
             final MethodRef method = instruction.methodRef().orElseThrow();
             final Optional<String> resolved = staticMethodOwner(classes, method);
-            return resolved.isPresent() ? resolved : Optional.of(method.owner());
+            if (resolved.isPresent()) {
+                return resolved;
+            }
+            final Optional<MethodRef> inherited = JdkCallSupport.normalizeInheritedSupportedJdkCall(classes, method);
+            return inherited.isPresent() ? Optional.of(inherited.orElseThrow().owner()) : Optional.of(method.owner());
         }
         if (instruction.opcode() == 187) {
             return instruction.className();

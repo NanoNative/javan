@@ -1194,6 +1194,12 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if ("java/security/SecureRandom".equals(methodRef.owner())
+            && "generateSeed".equals(methodRef.name()) && "(I)[B".equals(methodRef.descriptor())) {
+            lowerSecureRandomSeedCall(classFile, method, instruction, instructions, stack, localDeclarations,
+                pendingExceptionHandlerStacks, sourceLines, true);
+            return;
+        }
+        if ("java/security/SecureRandom".equals(methodRef.owner())
             && "nextBytes".equals(methodRef.name())
             && "([B)V".equals(methodRef.descriptor())) {
             final IrExpression bytes = popObject(classFile, method, stack);
@@ -2462,7 +2468,9 @@ final class BytecodeToIRInvokeSupport {
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final SourceLineIndex sourceLines
     ) {
-        final MethodRef methodRef = instruction.methodRef().orElseThrow();
+        final MethodRef rawMethodRef = instruction.methodRef().orElseThrow();
+        final MethodRef methodRef = JdkCallSupport.normalizeInheritedSupportedJdkCall(classes, rawMethodRef)
+            .orElse(rawMethodRef);
         if (lowerResourceAsStream(classFile, method, instruction, methodRef, instructions, stack,
             localDeclarations, pendingExceptionHandlerStacks, sourceLines)) {
             return;
@@ -2532,6 +2540,12 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if (lowerJdkFileStaticCall(classFile, method, methodRef, instructions, stack, localDeclarations)) {
+            return;
+        }
+        if ("java/security/SecureRandom".equals(methodRef.owner())
+            && "getSeed".equals(methodRef.name()) && "(I)[B".equals(methodRef.descriptor())) {
+            lowerSecureRandomSeedCall(classFile, method, instruction, instructions, stack, localDeclarations,
+                pendingExceptionHandlerStacks, sourceLines, false);
             return;
         }
         if ("java/util/UUID".equals(methodRef.owner())
@@ -3609,6 +3623,52 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         return false;
+    }
+
+    private static void lowerSecureRandomSeedCall(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines,
+        final boolean instanceCall
+    ) {
+        final IrExpression length = popInt(classFile, method, stack);
+        final IrExpression receiver = instanceCall ? popObject(classFile, method, stack) : IrExpression.objectNull();
+        final String receiverLocal = instanceCall ? newObjectLocal(localDeclarations) : "";
+        if (instanceCall) {
+            instructions.add(IrInstruction.assignObject(receiverLocal, receiver));
+        }
+        final int lengthIndex = localDeclarations.size();
+        final String lengthLocal = "int" + lengthIndex;
+        localDeclarations.put(Integer.MIN_VALUE + lengthIndex, new IrLocal(IrType.INT, lengthLocal));
+        instructions.add(IrInstruction.assignInt(lengthLocal, length));
+        final List<StackValue> successStack = List.copyOf(stack);
+        if (instanceCall) {
+            final String receiverPresent = "label_secure_random_seed_receiver_" + instruction.offset();
+            instructions.add(IrInstruction.branchIf(receiverPresent,
+                IrExpression.objectComparison("!=", IrExpression.objectLocal(receiverLocal), IrExpression.objectNull())));
+            routePendingPlatformException(classFile, method, instruction, instructions, stack,
+                pendingExceptionHandlerStacks, sourceLines, "java/lang/NullPointerException",
+                IrExpression.stringLiteral("SecureRandom"));
+            instructions.add(IrInstruction.label(receiverPresent));
+            stack.addAll(successStack);
+        }
+        final String lengthValid = "label_secure_random_seed_length_" + instruction.offset();
+        instructions.add(IrInstruction.branchIf(lengthValid,
+            IrExpression.intComparison(">=", IrExpression.intLocal(lengthLocal), IrExpression.intLiteral(0))));
+        routePendingPlatformException(classFile, method, instruction, instructions, stack,
+            pendingExceptionHandlerStacks, sourceLines, "java/lang/IllegalArgumentException",
+            IrExpression.stringLiteral("seed length must not be negative"));
+        instructions.add(IrInstruction.label(lengthValid));
+        stack.addAll(successStack);
+        final String resultLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.callStaticVoid("javan_secure_random_seed_into",
+            List.of(IrExpression.objectLocalAddress(resultLocal), IrExpression.intLocal(lengthLocal))));
+        stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
     }
 
     static void pushIntCall(
