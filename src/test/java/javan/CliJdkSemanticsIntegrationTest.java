@@ -16123,6 +16123,127 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void stringConcatPreservesUtf16AndTransportsNullFailures() throws Exception {
+        final Path project = project("string-concat-utf16");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static String concat(String left, String right) {
+                    try { return left.concat(right); }
+                    catch (NullPointerException ex) { return "null"; }
+                }
+                static int hash(String value) {
+                    int result = value.length();
+                    for (int i = 0; i < value.length(); i++) result = result * 31 + value.charAt(i);
+                    return result;
+                }
+                public static void main(String[] args) {
+                    String[] values = {"", "a", "\\0", "\\ud800", "\\udc00", "\\ud800\\udc00", "\\udfff", null,
+                        new String(new char[] {0, (char) 0xd800, (char) 0xdc00, (char) 0xdfff})};
+                    for (String left : values) for (String right : values) System.out.println(hash(concat(left, right)));
+                    System.out.println(hash("\\0\\ud800".concat("\\udc00\\udfff")));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-concat-utf16").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringConcatReturnsReceiverForEmptyArgument() throws Exception {
+        final Path project = project("string-concat-empty-identity");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    String value = new String(new char[] {0, (char) 0xd800, 'x'});
+                    String empty = new String(new char[] {});
+                    System.out.println(value.concat(empty) == value);
+                    System.out.println(value.concat("") == value);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-concat-empty-identity").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringConcatEvaluatesArgumentBeforeUncaughtNullFailure() throws Exception {
+        final Path project = project("string-concat-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static String right() { System.out.println("right"); return new String(new char[] {'x'}); }
+                public static void main(String[] args) {
+                    System.out.println("before");
+                    String value = args.length == 0 ? null : "text";
+                    System.out.println(value.concat(right()));
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-concat-uncaught").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("before\nright\n");
+        assertThat(result.stderr()).contains("NullPointerException");
+    }
+
+    @Test
+    void stringConcatSurvivesConcurrentCollection() throws Exception {
+        final Path project = project("string-concat-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static String left() { return new String(new char[] {0, (char) 0xd800}); }
+                static String right() { return new String(new char[] {(char) 0xdc00, (char) 0xdfff}); }
+                static String concat(String left, String right) {
+                    try { return left.concat(right); }
+                    catch (NullPointerException ex) { return "null"; }
+                }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            String value = concat(left(), right());
+                            new String(new char[] {'x', 'y'});
+                            if (value.length() != 4 || value.charAt(0) != 0 || value.charAt(1) != (char) 0xd800
+                                || value.charAt(2) != (char) 0xdc00 || value.charAt(3) != (char) 0xdfff)
+                                errors.incrementAndGet();
+                            if (!concat(left(), null).equals("null")) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-concat-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
     void stringReplaceCharPreservesUtf16AndTransportsNullFailure() throws Exception {
         final Path project = project("string-replace-char-utf16");
         writeJava(project, "com.acme.Main", """

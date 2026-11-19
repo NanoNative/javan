@@ -21826,7 +21826,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersStringConcatToNullCheckedStringConcatExpression() {
+    void propagatesStringConcatFailure() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -21840,15 +21840,7 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(IrExpression.objectLocal("arg0"))),
-            IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(IrExpression.objectLocal("arg1"))),
-            IrInstruction.assignObject(
-                "object0",
-                IrExpression.stringConcat("\u0001\u0001", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
-            ),
-            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
-        );
+        assertThat(function.instructions()).contains(IrInstruction.propagatePending());
     }
 
     @Test

@@ -4463,6 +4463,13 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void stringConcatTransportsNullFailures() {
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
+            "java/lang/String", "concat", "(Ljava/lang/String;)Ljava/lang/String;"
+        ))).containsExactly("java/lang/NullPointerException");
+    }
+
+    @Test
     void stringReplaceCharTransportsNullReceiverFailure() {
         assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
             "java/lang/String", "replace", "(CC)Ljava/lang/String;"

@@ -1910,6 +1910,9 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 static String nullReplace(String value) {
                     try { return value.replace('a', 'b'); } catch (NullPointerException ex) { return "null"; }
                 }
+                static String nullConcat(String value) {
+                    try { return value.concat("x"); } catch (NullPointerException ex) { return "null"; }
+                }
                 static int nullSearch(String value) {
                     try { return value.lastIndexOf(-1, -1); } catch (NullPointerException ex) { return -9; }
                 }
@@ -1953,6 +1956,8 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     System.out.println("alphabet".contains(new Sequence()));
                     System.out.println("\\0\\ud800\\udc00".replace((char) 0xd800, (char) 1).charAt(1));
                     System.out.println(nullReplace(null));
+                    System.out.println("\\0\\ud800".concat("\\udc00").length());
+                    System.out.println(nullConcat(null));
                     System.out.println(nullSubstring(null));
                 }
             }
@@ -3784,6 +3789,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 }
                 public static int containsCustom(String value) { return value.contains(new Needle()) ? 1 : 0; }
                 public static String replaceChar(String value, int oldValue, int newValue) { return value.replace((char) oldValue, (char) newValue); }
+                public static String join(String value, String other) { return value.concat(other); }
                 public static String fail(String value) { throw new IllegalArgumentException(value); }
                 public static String literal() { return "a\\0b"; }
                 public static String fromCodePoint(int value) { return Character.toString(value); }
@@ -3809,7 +3815,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "--export", "com.acme.Text.boundedString", "--export", "com.acme.Text.slice", "--export", "com.acme.Text.tail",
             "--export", "com.acme.Text.sequence", "--export", "com.acme.Text.prefix", "--export", "com.acme.Text.suffix",
             "--export", "com.acme.Text.same", "--export", "com.acme.Text.contains", "--export", "com.acme.Text.containsCustom",
-            "--export", "com.acme.Text.replaceChar");
+            "--export", "com.acme.Text.replaceChar", "--export", "com.acme.Text.join");
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         final Path library = project.resolve(".javan/dist/liblibrary-utf16.a");
         final Path caller = writeC(project, "call_utf16.c", """
@@ -3926,6 +3932,16 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 result = javan_utf16_try_com_acme_Text_replaceChar_string_int_int(input, 0xd83d, 0, &output);
                 if (!result.ok || output.length != 7 || memcmp(replaced, output.data, sizeof(replaced))) return 71;
                 javan_result_free(&result); javan_free(output.data);
+                needle.data = data + 2; needle.length = 2;
+                uint16_t joined[] = { 'A', 0, 0xd83d, 0xde00, 0xd800, 'Z', 0xdc00, 0xd83d, 0xde00 };
+                result = javan_utf16_try_com_acme_Text_join_string_string(input, needle, &output);
+                if (!result.ok || output.length != 9 || memcmp(joined, output.data, sizeof(joined))) return 73;
+                javan_result_free(&result); javan_free(output.data);
+                needle.data = NULL; needle.length = 0;
+                result = javan_utf16_try_com_acme_Text_join_string_string(input, needle, &output);
+                if (result.ok || output.data != NULL || output.length != 0 || result.message == NULL
+                    || strstr(result.message, "NullPointerException") == NULL) return 74;
+                javan_result_free(&result);
                 int point = -1;
                 result = javan_try_com_acme_Text_literalCodePointAt_int(1, &point);
                 if (!result.ok || point != 0x10000) return 38;
@@ -4006,6 +4022,10 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 result = javan_utf16_try_com_acme_Text_replaceChar_string_int_int(input, 0, 1, &output);
                 if (result.ok || output.data != NULL || output.length != 0 || result.message == NULL
                     || strstr(result.message, "NullPointerException") == NULL) return 72;
+                javan_result_free(&result);
+                result = javan_utf16_try_com_acme_Text_join_string_string(input, input, &output);
+                if (result.ok || output.data != NULL || output.length != 0 || result.message == NULL
+                    || strstr(result.message, "NullPointerException") == NULL) return 75;
                 javan_result_free(&result);
                 needle.data = data; needle.length = 1;
                 result = javan_utf16_try_com_acme_Text_substringLast_string_string_int(input, needle, -1, &search);

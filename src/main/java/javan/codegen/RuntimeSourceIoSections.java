@@ -1477,6 +1477,28 @@ final class RuntimeSourceIoSections {
             return result;
         }
 
+        void* javan_string_concat_java(const char* left, const char* right) {
+            if (left == NULL || right == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
+            }
+            if (*right == 0) {
+                return (void*) left;
+            }
+            const char recipe[] = { 1, 1, 0 };
+            const char* values[] = { left, right };
+            return javan_string_concat(recipe, 2, values);
+        }
+
+        void javan_string_concat_java_into(void** result, const char* left, const char* right) {
+            if (result == NULL) {
+                javan_panic("invalid String result");
+            }
+            javan_runtime_lock_enter();
+            *result = javan_string_concat_java(left, right);
+            javan_runtime_lock_leave();
+        }
+
         void javan_string_concat_into(void** result, const char* recipe, int argc, const char** values) {
             if (result == NULL) {
                 javan_panic("invalid String result");
