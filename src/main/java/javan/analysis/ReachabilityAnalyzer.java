@@ -1284,8 +1284,9 @@ public final class ReachabilityAnalyzer {
             addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
             return;
         }
-        if ("java/util/random/RandomGenerator".equals(target.owner()) && "nextLong".equals(target.name())
-            && "()J".equals(target.descriptor())) {
+        if ("java/util/random/RandomGenerator".equals(target.owner())
+            && (("nextLong".equals(target.name()) && "()J".equals(target.descriptor()))
+                || ("nextBytes".equals(target.name()) && "([B)V".equals(target.descriptor())))) {
             final List<EntryPoint> targetMethods = dispatchTargets.interfaceTargets(target);
             enqueueAll(work, workSet, targetMethods);
             addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);

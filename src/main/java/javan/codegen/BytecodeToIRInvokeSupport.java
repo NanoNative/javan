@@ -1132,6 +1132,32 @@ final class BytecodeToIRInvokeSupport {
         if (lowerJdkFileInstanceCall(classFile, method, instruction, methodRef, stack)) {
             return;
         }
+        if ("java/util/random/RandomGenerator".equals(methodRef.owner()) && "nextBytes".equals(methodRef.name())
+            && "([B)V".equals(methodRef.descriptor())) {
+            final List<EntryPoint> targets = interfaceTargets(classes, methodRef, instantiatedTypes);
+            if (!targets.isEmpty()) {
+                final IrExpression bytes = popObject(classFile, method, stack);
+                final IrExpression receiver = popObject(classFile, method, stack);
+                final String receiverLocal = newObjectLocal(localDeclarations);
+                final String bytesLocal = newObjectLocal(localDeclarations);
+                instructions.add(IrInstruction.assignObject(receiverLocal, receiver));
+                instructions.add(IrInstruction.assignObject(bytesLocal, bytes));
+                final String builtinLabel = "label_random_next_bytes_builtin_" + instruction.offset() + "_" + receiverLocal;
+                final String doneLabel = "label_random_next_bytes_done_" + instruction.offset() + "_" + receiverLocal;
+                final String symbol = dispatchSymbol(methodRef);
+                dispatches.putIfAbsent(symbol, dispatch(classes, symbol, MethodDescriptor.parse(methodRef.descriptor()), targets));
+                instructions.add(IrInstruction.branchIf(builtinLabel, IrExpression.intCall("javan_secure_random_use_builtin",
+                    List.of(IrExpression.objectLocal(receiverLocal)))));
+                instructions.add(IrInstruction.callStaticVoid(symbol,
+                    List.of(IrExpression.objectLocal(receiverLocal), IrExpression.objectLocal(bytesLocal))));
+                instructions.add(IrInstruction.jump(doneLabel));
+                instructions.add(IrInstruction.label(builtinLabel));
+                instructions.add(IrInstruction.callStaticVoid("javan_secure_random_next_bytes_java",
+                    List.of(IrExpression.objectLocal(receiverLocal), IrExpression.objectLocal(bytesLocal))));
+                instructions.add(IrInstruction.label(doneLabel));
+                return;
+            }
+        }
         if ("java/util/random/RandomGenerator".equals(methodRef.owner()) && "nextLong".equals(methodRef.name())
             && "()J".equals(methodRef.descriptor())) {
             final List<EntryPoint> targets = interfaceTargets(classes, methodRef, instantiatedTypes);

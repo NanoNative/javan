@@ -10167,6 +10167,62 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void customRandomGeneratorNextBytesDispatchesInClosedWorld() throws Exception {
+        final Path project = project("custom-random-generator-next-bytes");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            import java.util.random.RandomGenerator;
+            public final class Main {
+                static class Custom implements RandomGenerator {
+                    int calls;
+                    public long nextLong() { return 0; }
+                    public void nextBytes(byte[] bytes) {
+                        if (bytes == null) { calls = calls + 10; return; }
+                        calls = calls + 1; bytes[0] = 42;
+                    }
+                }
+                static final class Child extends Custom { }
+                static final class Throwing extends Custom {
+                    public void nextBytes(byte[] bytes) { throw new IllegalStateException(); }
+                }
+                static int order;
+                static RandomGenerator generator() { order = order * 10 + 1; return new Custom(); }
+                static byte[] argument() { order = order * 10 + 2; return new byte[1]; }
+                static void unguarded(RandomGenerator generator, byte[] bytes) { generator.nextBytes(bytes); }
+                static int catchCaller(RandomGenerator generator, byte[] bytes) {
+                    try { unguarded(generator, bytes); return 0; }
+                    catch (IllegalStateException ex) { return -30; }
+                }
+                static int fill(RandomGenerator generator, byte[] bytes) {
+                    try { generator.nextBytes(bytes); return 1; }
+                    catch (NullPointerException ex) { return -10; }
+                    catch (IllegalStateException ex) { return -20; }
+                }
+                public static void main(String[] args) {
+                    Custom custom = new Custom(); Child child = new Child(); byte[] bytes = new byte[1];
+                    System.out.println(fill(custom, bytes)); System.out.println((int) bytes[0]);
+                    System.out.println(fill(custom, null)); System.out.println(custom.calls);
+                    System.out.println(fill(child, bytes)); System.out.println(child.calls);
+                    System.out.println(fill(new Throwing(), bytes)); System.out.println(fill(null, bytes));
+                    System.out.println(catchCaller(new Throwing(), bytes));
+                    generator().nextBytes(argument()); System.out.println(order);
+                    RandomGenerator secure = new SecureRandom();
+                    System.out.println(fill(secure, new byte[0])); System.out.println(fill(secure, null));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/custom-random-generator-next-bytes").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void unsupportedRandomGeneratorIsNotSilentlyReplaced() throws Exception {
         final Path project = project("unsupported-random-generator");
         writeJava(project, "com.acme.Main", """
@@ -10208,6 +10264,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                 static final class Custom implements java.util.random.RandomGenerator {
                     long value;
                     public long nextLong() { long result = value; value = value + 1; return result; }
+                    public void nextBytes(byte[] bytes) { bytes[0] = 42; }
                 }
                 static final class Worker implements Runnable {
                     public void run() {
@@ -10218,8 +10275,9 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                             int value = RANDOM.nextInt(5);
                             GENERATOR.nextBytes(bytes);
                             int other = GENERATOR.nextInt(5);
+                            custom.nextBytes(bytes);
                             new String(new char[] {'x', 'y'});
-                            if (bytes.length != 64 || value < 0 || value >= 5 || other < 0 || other >= 5
+                            if (bytes.length != 64 || bytes[0] != 42 || value < 0 || value >= 5 || other < 0 || other >= 5
                                 || custom.nextLong() != i) errors.incrementAndGet();
                         }
                     }

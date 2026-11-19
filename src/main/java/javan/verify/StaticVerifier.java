@@ -3476,8 +3476,9 @@ public final class StaticVerifier {
         if (!visiting.add(target)) {
             return Set.of();
         }
-        if ("java/util/random/RandomGenerator".equals(target.owner()) && "nextLong".equals(target.name())
-            && "()J".equals(target.descriptor())) {
+        if ("java/util/random/RandomGenerator".equals(target.owner())
+            && (("nextLong".equals(target.name()) && "()J".equals(target.descriptor()))
+                || ("nextBytes".equals(target.name()) && "([B)V".equals(target.descriptor())))) {
             final Set<String> result = new HashSet<>();
             for (final ClassFile candidate : classes.values()) {
                 if (candidate.isInterface() || !isAssignableTo(classes, candidate.name(), target.owner())) {
@@ -3486,9 +3487,9 @@ public final class StaticVerifier {
                 ClassFile current = candidate;
                 final Set<String> visitedClasses = new HashSet<>();
                 while (current != null && visitedClasses.add(current.name())) {
-                    if (current.method("nextLong", "()J").isPresent()) {
+                    if (current.method(target.name(), target.descriptor()).isPresent()) {
                         result.addAll(escapingPlatformExceptionTypes(classes,
-                            new MethodRef(current.name(), "nextLong", "()J"), visiting));
+                            new MethodRef(current.name(), target.name(), target.descriptor()), visiting));
                         break;
                     }
                     final String parent = current.superName();

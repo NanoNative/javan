@@ -1909,6 +1909,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 }
                 static final class CustomGenerator implements java.util.random.RandomGenerator {
                     public long nextLong() { return 42L; }
+                    public void nextBytes(byte[] bytes) { if (bytes != null && bytes.length > 0) bytes[0] = 42; }
                 }
                 static String nullReplace(String value) {
                     try { return value.replace('a', 'b'); } catch (NullPointerException ex) { return "null"; }
@@ -1974,6 +1975,8 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     System.out.println(generator.nextInt(1));
                     java.util.random.RandomGenerator custom = new CustomGenerator();
                     System.out.println(custom.nextLong());
+                    byte[] customBytes = new byte[1]; custom.nextBytes(customBytes);
+                    System.out.println((int) customBytes[0]);
                     System.out.println("\\0\\ud800\\udc00".replace((char) 0xd800, (char) 1).charAt(1));
                     System.out.println(value.replace('z', 'q') == value);
                     System.out.println(nullReplace(null));
@@ -4233,7 +4236,10 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             public final class Api {
                 public static Object good() { return new SecureRandom(); }
                 public static Object wrong() { return new String("not random"); }
-                static final class Custom implements java.util.random.RandomGenerator { public long nextLong() { return 42L; } }
+                static final class Custom implements java.util.random.RandomGenerator {
+                    public long nextLong() { return 42L; }
+                    public void nextBytes(byte[] bytes) { if (bytes != null && bytes.length > 0) bytes[0] = 42; }
+                }
                 public static Object custom() { return new Custom(); }
                 public static int fill(Object value) {
                     byte[] bytes = new byte[8];
@@ -4243,12 +4249,14 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static int next(Object value) { return ((Random) value).nextInt(7); }
                 public static int nextGenerator(Object value) { return ((java.util.random.RandomGenerator) value).nextInt(7); }
                 public static long nextGeneratorLong(Object value) { return ((java.util.random.RandomGenerator) value).nextLong(); }
+                public static int fillGenerator(Object value) { byte[] bytes = new byte[1]; ((java.util.random.RandomGenerator) value).nextBytes(bytes); return bytes[0]; }
             }
             """);
         final CliRun build = run(tempDir, "build", project.toString(), "--kind", "staticlib",
             "--export", "com.acme.Api.good():object", "--export", "com.acme.Api.wrong():object",
             "--export", "com.acme.Api.fill(object):int", "--export", "com.acme.Api.next(object):int", "--export", "com.acme.Api.nextGenerator(object):int",
-            "--export", "com.acme.Api.custom():object", "--export", "com.acme.Api.nextGeneratorLong(object):long");
+            "--export", "com.acme.Api.custom():object", "--export", "com.acme.Api.nextGeneratorLong(object):long",
+            "--export", "com.acme.Api.fillGenerator(object):int");
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final Path caller = writeC(project, "call_random.c", """
             #include <string.h>
@@ -4277,6 +4285,9 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 javan_result_free(&result);
                 result = javan_try_com_acme_Api_nextGeneratorLong_object(custom, &generated);
                 if (!result.ok || generated != 42) return 11;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_fillGenerator_object(custom, &size);
+                if (!result.ok || size != 42) return 12;
                 javan_result_free(&result);
                 result = javan_try_com_acme_Api_wrong_void(&wrong);
                 if (!result.ok || wrong == 0) return 3;
