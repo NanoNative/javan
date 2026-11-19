@@ -2290,19 +2290,18 @@ public final class BytecodeToIR {
                 );
                 break;
             case 185:
-                BytecodeToIRThreadSupport.lowerInterfaceCall(
-                    classes,
-                    classFile,
-                    method,
-                    instruction,
-                    instructions,
-                    stack,
-                    localDeclarations,
-                    dispatches,
-                    materializedLambdaMethods,
-                    functionValueFlow,
-                    instantiatedTypes
-                );
+                if (instruction.methodRef().filter(JdkCallSupport::isSecureRandomSupertypeCall).isPresent()) {
+                    BytecodeToIRInvokeSupport.lowerVirtualCall(
+                        classes, classFile, method, instruction, instructions, stack, localDeclarations,
+                        pendingExceptionHandlerStacks, dispatches, materializedLambdaMethods, functionValueFlow,
+                        instantiatedTypes, sourceLines
+                    );
+                } else {
+                    BytecodeToIRThreadSupport.lowerInterfaceCall(
+                        classes, classFile, method, instruction, instructions, stack, localDeclarations,
+                        dispatches, materializedLambdaMethods, functionValueFlow, instantiatedTypes
+                    );
+                }
                 break;
             case 186:
                 BytecodeToIRDynamicSupport.lowerDynamicCall(

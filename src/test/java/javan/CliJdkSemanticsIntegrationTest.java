@@ -10066,6 +10066,79 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void randomGeneratorTypedSecureRandomUsesEntropyAndChecksBounds() throws Exception {
+        final Path project = project("secure-random-through-generator");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            import java.util.random.RandomGenerator;
+            public final class Main {
+                static final RandomGenerator GENERATOR = new SecureRandom();
+                static int bound(RandomGenerator generator, int bound) {
+                    try { return generator.nextInt(bound); }
+                    catch (NullPointerException ex) { return -10; }
+                    catch (IllegalArgumentException ex) { return -20; }
+                }
+                static void fill(RandomGenerator generator, byte[] bytes) {
+                    try { generator.nextBytes(bytes); System.out.println("filled"); }
+                    catch (NullPointerException ex) { System.out.println("null"); }
+                }
+                public static void main(String[] args) {
+                    boolean valid = true;
+                    for (int i = 0; i < 100; i++) {
+                        int a = GENERATOR.nextInt(7); long b = GENERATOR.nextLong(-4, 9);
+                        float c = GENERATOR.nextFloat(3); double d = GENERATOR.nextDouble(-2, 6);
+                        GENERATOR.nextInt(); GENERATOR.nextLong(); GENERATOR.nextBoolean();
+                        GENERATOR.nextFloat(); GENERATOR.nextDouble();
+                        if (a < 0 || a >= 7 || b < -4 || b >= 9 || c < 0 || c >= 3 || d < -2 || d >= 6) valid = false;
+                    }
+                    System.out.println(valid);
+                    fill(GENERATOR, new byte[8]);
+                    fill(GENERATOR, null);
+                    fill(null, new byte[1]);
+                    System.out.println(bound(GENERATOR, 0));
+                    System.out.println(bound(null, 0));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/secure-random-through-generator").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("true\nfilled\nnull\nnull\n-20\n-10\n");
+    }
+
+    @Test
+    void unsupportedRandomGeneratorIsNotSilentlyReplaced() throws Exception {
+        final Path project = project("unsupported-random-generator");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.random.RandomGenerator;
+            public final class Main {
+                static final class Custom implements RandomGenerator {
+                    public long nextLong() { return 0; }
+                    public int nextInt(int bound) { return 42; }
+                }
+                public static void main(String[] args) {
+                    RandomGenerator generator = new Custom();
+                    System.out.println(generator.nextInt(100));
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        for (int attempt = 0; attempt < 2; attempt++) {
+            final ProcessResult result = process(project,
+                List.of(project.resolve(".javan/bin/unsupported-random-generator").toString()));
+            assertThat(result.exitCode()).isNotZero();
+            assertThat(result.stderr()).contains("unsupported Random receiver or RandomGenerator receiver");
+        }
+    }
+
+    @Test
     void randomTypedSecureRandomWorksDuringConcurrentCollection() throws Exception {
         final Path project = project("secure-random-through-random-concurrent");
         writeJava(project, "com.acme.Main", """
@@ -10075,6 +10148,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
             import java.util.concurrent.atomic.AtomicInteger;
             public final class Main {
                 static final Random RANDOM = new SecureRandom();
+                static final java.util.random.RandomGenerator GENERATOR = new SecureRandom();
                 static final AtomicInteger errors = new AtomicInteger();
                 static final class Worker implements Runnable {
                     public void run() {
@@ -10082,8 +10156,10 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                             byte[] bytes = new byte[64];
                             RANDOM.nextBytes(bytes);
                             int value = RANDOM.nextInt(5);
+                            GENERATOR.nextBytes(bytes);
+                            int other = GENERATOR.nextInt(5);
                             new String(new char[] {'x', 'y'});
-                            if (bytes.length != 64 || value < 0 || value >= 5) errors.incrementAndGet();
+                            if (bytes.length != 64 || value < 0 || value >= 5 || other < 0 || other >= 5) errors.incrementAndGet();
                         }
                     }
                 }

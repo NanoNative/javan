@@ -69,10 +69,10 @@ The default `SecureRandom` constructor supports calls resolved as `SecureRandom.
 `generateSeed`. The static `getSeed` entry is also supported. The supported random value methods
 are `nextBoolean` and the zero-argument, single-bound and origin-bound `nextInt`, `nextLong`,
 `nextFloat` and `nextDouble` overloads. These methods use operating-system entropy during execution.
-The supported `Random.nextBytes`, `nextBoolean`, `nextInt`, `nextLong`, `nextFloat` and
-`nextDouble` overloads also work when the runtime receiver is a `SecureRandom`, including values
-passed through fields or method arguments. Other `Random` receivers fail explicitly and are not
-treated as secure generators. Entropy-source failures retain the native runtime panic boundary.
+The supported `Random` and `RandomGenerator` `nextBytes`, `nextBoolean`, `nextInt`, `nextLong`,
+`nextFloat` and `nextDouble` overloads also work when the runtime receiver is a `SecureRandom`,
+including values passed through fields or method arguments. Other receivers fail explicitly and
+are not treated as secure generators. Entropy-source failures retain the native runtime panic boundary.
 Provider selection, explicit seeding, other calls resolved through random supertypes and other
 random APIs remain subject to their own supported callable entries. Reachable constructors of
 application-defined `SecureRandom` subclasses are rejected until subclass state and overridden

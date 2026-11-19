@@ -1141,13 +1141,13 @@ public final class JdkCallSupport {
     }
 
     /**
-     * Identifies Random-typed calls supported only for native SecureRandom receivers.
+     * Identifies random-supertype calls supported only for native SecureRandom receivers.
      *
      * @param methodRef exact JDK method reference
      * @return true when runtime receiver validation is required
      */
     public static boolean isSecureRandomSupertypeCall(final MethodRef methodRef) {
-        if (!"java/util/Random".equals(methodRef.owner())
+        if (!("java/util/Random".equals(methodRef.owner()) || "java/util/random/RandomGenerator".equals(methodRef.owner()))
             || !("nextBytes".equals(methodRef.name()) || "nextInt".equals(methodRef.name())
                 || "nextLong".equals(methodRef.name()) || "nextBoolean".equals(methodRef.name())
                 || "nextFloat".equals(methodRef.name()) || "nextDouble".equals(methodRef.name()))) {

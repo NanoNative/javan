@@ -9077,7 +9077,7 @@ final class RuntimeSourceMemorySections {
             if (javan_find_allocation(value, &allocation) == 0
                 || allocation.kind != JAVAN_HEAP_KIND_RUNTIME
                 || allocation.runtime_kind != JAVAN_RUNTIME_KIND_SECURE_RANDOM) {
-                javan_panic("unsupported Random receiver; only SecureRandom is supported");
+                javan_panic("unsupported Random receiver or RandomGenerator receiver; only SecureRandom is supported");
             }
         }
 

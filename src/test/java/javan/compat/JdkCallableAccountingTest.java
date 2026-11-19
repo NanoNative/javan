@@ -125,6 +125,8 @@ final class JdkCallableAccountingTest {
             .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Random", "nextInt", "(I)I")))
             .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/random/RandomGenerator", "nextInt", "(I)I")))
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
