@@ -87,9 +87,9 @@ supported when each value-producing branch assigns it at its exit. Partially ini
 are rejected during lowering. Some nested expressions that combine an earlier operand with a
 conditional also remain unsupported and fail during lowering. Within supported control-flow
 shapes, an earlier static-field read is preserved across later calls, writes and class initialization.
-Within supported handler shapes, `String.charAt`, `codePointAt`, and `codePointBefore`
-transport null-receiver and invalid-index exceptions. Provably invalid literal `charAt` indices
-remain subject to the diagnostics policy.
+Within supported handler shapes, `String.charAt`, `codePointAt`, `codePointBefore`, and
+`codePointCount` transport null-receiver and invalid-index exceptions. Provably invalid literal
+`charAt` indices remain subject to the diagnostics policy.
 `Path.of`, `Paths.get`, and `Path.resolve` report supported null inputs and embedded
 U+0000 through typed exceptions. Some inline varargs inside `catch` ranges still fail
 verification and can be moved outside the protected range.

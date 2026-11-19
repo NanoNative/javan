@@ -10416,6 +10416,33 @@ final class RuntimeSourceMemorySections {
             return last;
         }
 
+        int javan_string_code_point_count(const char* value, int begin, int end) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            int length = javan_string_length(value);
+            if (begin < 0 || end < begin || end > length) {
+                javan_pending_throw("java/lang/IndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            const unsigned char* cursor = (const unsigned char*) value;
+            int pending_low_surrogate = -1;
+            int previous = -1;
+            int count = 0;
+            for (int index = 0; index < end; index++) {
+                int current = javan_utf16_next_char(&cursor, &pending_low_surrogate);
+                if (index < begin) {
+                    continue;
+                }
+                if (!(previous >= 0xd800 && previous <= 0xdbff && current >= 0xdc00 && current <= 0xdfff)) {
+                    count++;
+                }
+                previous = current;
+            }
+            return count;
+        }
+
         int javan_string_index_of_char(const char* value, int ch) {
             return javan_string_index_of_char_from(value, ch, 0);
         }

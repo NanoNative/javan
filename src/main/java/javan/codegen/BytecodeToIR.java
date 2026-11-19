@@ -506,6 +506,9 @@ public final class BytecodeToIR {
         result.put("javan_string_code_point_before", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/lang/String", "codePointBefore", "(I)I"
         )));
+        result.put("javan_string_code_point_count", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/lang/String", "codePointCount", "(II)I"
+        )));
         result.put("javan_path_of", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/nio/file/Path", "of", "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;"
         )));
@@ -1162,9 +1165,9 @@ public final class BytecodeToIR {
             if (instruction.methodRef().isPresent()) {
                 final MethodRef reference = instruction.methodRef().orElseThrow();
                 if ("java/lang/String".equals(reference.owner())
-                    && ("charAt".equals(reference.name()) && "(I)C".equals(reference.descriptor())
-                        || ("codePointAt".equals(reference.name()) || "codePointBefore".equals(reference.name()))
-                            && "(I)I".equals(reference.descriptor()))) {
+                    && ("(I)C".equals(reference.descriptor()) || "(I)I".equals(reference.descriptor())
+                        || "(II)I".equals(reference.descriptor()))
+                    && !JdkCallSupport.transportedPlatformThrowableTypes(reference).isEmpty()) {
                     snapshotOperandStack(instructions, stack, locals, localDeclarations, true);
                 }
             }

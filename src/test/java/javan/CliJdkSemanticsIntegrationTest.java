@@ -13764,6 +13764,82 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void stringCodePointCountMatchesJavaAcrossSurrogateCombinations() throws Exception {
+        final Path project = project("string-codepoint-count-combinations");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    char[] alphabet = {0, 'a', (char) 0xd800, (char) 0xdbff, (char) 0xdc00, (char) 0xdfff, (char) 0xffff};
+                    long result = 1;
+                    for (int combination = 0; combination < 2401; combination++) {
+                        char[] chars = new char[4];
+                        int digits = combination;
+                        for (int index = 0; index < chars.length; index++) {
+                            chars[index] = alphabet[digits % alphabet.length];
+                            digits /= alphabet.length;
+                        }
+                        String value = new String(chars);
+                        for (int begin = 0; begin <= value.length(); begin++) {
+                            for (int end = begin; end <= value.length(); end++) {
+                                result = result * 31 + value.codePointCount(begin, end);
+                            }
+                        }
+                    }
+                    System.out.println(result);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-codepoint-count-combinations").toString()),
+            Duration.ofSeconds(60));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringCodePointCountMatchesJavaAndTransportsExceptions() throws Exception {
+        final Path project = project("string-codepoint-count");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int order = 0;
+                static int first() { order = order * 10 + 1; return 5; }
+                static String text() { order = order * 10 + 2; return "ab"; }
+                static int position(int value, int digit) { order = order * 10 + digit; return value; }
+                static String literal() { return "\\ud83d\\ude00"; }
+                static void count(String value, int begin, int end) {
+                    try { System.out.println(value.codePointCount(begin, end)); }
+                    catch (IndexOutOfBoundsException ex) { System.out.println("index"); }
+                    catch (NullPointerException ex) { System.out.println("null"); }
+                }
+                public static void main(String[] args) {
+                    String[] values = {"", "abc", literal(), new String(new char[]{0, 'a', 0}),
+                        new String(new char[]{'a', (char) 0xd83d, (char) 0xde00, 'b'}),
+                        new String(new char[]{(char) 0xd800, (char) 0xdc00, (char) 0xdbff, (char) 0xdfff}),
+                        new String(new char[]{(char) 0xd83d, 'x', (char) 0xde00})};
+                    for (String value : values) for (int begin = -1; begin <= value.length() + 1; begin++) {
+                        for (int end = -1; end <= value.length() + 1; end++) count(value, begin, end);
+                    }
+                    count(null, 0, 0); count(null, -1, -1);
+                    count("a", Integer.MIN_VALUE, Integer.MAX_VALUE);
+                    count("a", 0, Integer.MAX_VALUE);
+                    System.out.println(first() + text().codePointCount(position(0, 3), position(1, 4)));
+                    System.out.println(order);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-codepoint-count").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void stringCodePointAccessMatchesJavaAcrossSurrogateCombinations() throws Exception {
         final Path project = project("string-codepoint-access-combinations");
         writeJava(project, "com.acme.Main", """

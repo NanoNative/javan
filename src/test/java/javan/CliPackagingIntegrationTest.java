@@ -965,6 +965,43 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsStringCodePointCount() throws Exception {
+        final Path project = tempDir.resolve("selfhost-string-codepoint-count");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static void count(String value, int begin, int end) {
+                    try { System.out.println(value.codePointCount(begin, end)); }
+                    catch (IndexOutOfBoundsException ex) { System.out.println("index"); }
+                    catch (NullPointerException ex) { System.out.println("null"); }
+                }
+                public static void main(String[] args) {
+                    String value = new String(new char[]{'a', (char) 0xd83d, (char) 0xde00, (char) 0xd800});
+                    for (int begin = -1; begin <= 5; begin++) for (int end = -1; end <= 5; end++) count(value, begin, end);
+                    count(null, 0, 0);
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-string-codepoint-count"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-string-codepoint-count").toString()), Duration.ofSeconds(30));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout());
+    }
+
+    @Test
     void nativeBuiltJavanBuildsStringCodePointAccess() throws Exception {
         final Path project = tempDir.resolve("selfhost-string-codepoint-access");
         final Path classes = project.resolve("classes");
