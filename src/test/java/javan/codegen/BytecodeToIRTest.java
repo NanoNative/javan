@@ -17423,11 +17423,13 @@ final class BytecodeToIRTest {
             plain(3, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnInt(IrExpression.intCall(
-                "javan_string_char_at",
+        assertThat(function.instructions()).containsSubsequence(
+            IrInstruction.assignInt("stackDup0", IrExpression.intCall(
+                "javan_string_char_at_java",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"))
-            ))
+            )),
+            IrInstruction.propagatePending(),
+            IrInstruction.returnInt(IrExpression.intLocal("stackDup0"))
         );
     }
 

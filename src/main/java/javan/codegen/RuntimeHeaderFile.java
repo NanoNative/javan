@@ -398,6 +398,7 @@ final class RuntimeHeaderFile {
         int javan_string_is_empty(const char* value);
         int javan_string_is_blank(const char* value);
         int javan_string_char_at(const char* value, int index);
+        int javan_string_char_at_java(const char* value, int index);
         int javan_string_index_of_char(const char* value, int ch);
         int javan_string_index_of_char_from(const char* value, int ch, int from_index);
         int javan_string_index_of_string(const char* value, const char* needle);

@@ -1983,6 +1983,10 @@ public final class JdkCallSupport {
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
+        if ("java/lang/String".equals(methodRef.owner()) && "charAt".equals(methodRef.name())
+            && "(I)C".equals(methodRef.descriptor())) {
+            return List.of("java/lang/StringIndexOutOfBoundsException", "java/lang/NullPointerException");
+        }
         if (("java/nio/file/Path".equals(methodRef.owner()) && "of".equals(methodRef.name())
                 || "java/nio/file/Paths".equals(methodRef.owner()) && "get".equals(methodRef.name()))
             && "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;".equals(methodRef.descriptor())) {

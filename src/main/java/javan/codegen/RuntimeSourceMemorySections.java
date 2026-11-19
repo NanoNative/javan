@@ -10223,7 +10223,7 @@ final class RuntimeSourceMemorySections {
 
         static int javan_utf16_char_at_utf8(const char* value, int index) {
             if (value == NULL || index < 0) {
-                javan_panic("string index out of bounds");
+                return -1;
             }
             const unsigned char* current = (const unsigned char*) value;
             int current_index = 0;
@@ -10244,8 +10244,7 @@ final class RuntimeSourceMemorySections {
                 }
                 current_index++;
             }
-            javan_panic("string index out of bounds");
-            return 0;
+            return -1;
         }
 
         static void javan_utf16_cursor_cache_invalidate(const char* value) {
@@ -10369,7 +10368,24 @@ final class RuntimeSourceMemorySections {
         }
 
         int javan_string_char_at(const char* value, int index) {
-            return javan_utf16_char_at_utf8(value, index);
+            int result = javan_utf16_char_at_utf8(value, index);
+            if (result < 0) {
+                javan_panic("string index out of bounds");
+            }
+            return result;
+        }
+
+        int javan_string_char_at_java(const char* value, int index) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            int result = javan_utf16_char_at_utf8(value, index);
+            if (result < 0) {
+                javan_pending_throw("java/lang/StringIndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            return result;
         }
 
         int javan_string_index_of_char(const char* value, int ch) {

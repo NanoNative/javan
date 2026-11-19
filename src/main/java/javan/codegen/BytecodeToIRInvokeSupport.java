@@ -565,7 +565,7 @@ final class BytecodeToIRInvokeSupport {
             final IrExpression index = popInt(classFile, method, stack);
             final IrExpression receiver = popObject(classFile, method, stack);
             rejectUnsupportedStringSemantic(classFile, method, instruction, receiver);
-            stack.add(StackValue.intExpression(IrExpression.intCall("javan_string_char_at", List.of(receiver, index))));
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_string_char_at_java", List.of(receiver, index))));
             return;
         }
         if ("java/lang/String".equals(methodRef.owner()) && "indexOf".equals(methodRef.name()) && "(I)I".equals(methodRef.descriptor())) {

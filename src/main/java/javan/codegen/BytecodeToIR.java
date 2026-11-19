@@ -497,6 +497,9 @@ public final class BytecodeToIR {
                 "()Ljava/lang/Object;"
             ))
         );
+        result.put("javan_string_char_at_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/lang/String", "charAt", "(I)C"
+        )));
         result.put("javan_path_of", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/nio/file/Path", "of", "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;"
         )));
@@ -1056,7 +1059,7 @@ public final class BytecodeToIR {
                     || instruction.opcode() == 170 || instruction.opcode() == 171 ? 1 : 0;
             if (branchOperands > 0 && stack.size() > branchOperands
                 && containsNontrivialDeferredValue(stack, stack.size() - branchOperands)) {
-                snapshotOperandStack(instructions, stack, locals, localDeclarations);
+                snapshotOperandStack(instructions, stack, locals, localDeclarations, false);
             }
             if (BytecodeToIRControlFlowSupport.lowerBranchValueSelection(
                 classes,
@@ -1150,6 +1153,13 @@ public final class BytecodeToIR {
                 sourceLines,
                 lastMaterializingDuplicateOffset
             );
+            if (instruction.methodRef().isPresent()) {
+                final MethodRef reference = instruction.methodRef().orElseThrow();
+                if ("java/lang/String".equals(reference.owner()) && "charAt".equals(reference.name())
+                    && "(I)C".equals(reference.descriptor())) {
+                    snapshotOperandStack(instructions, stack, locals, localDeclarations, true);
+                }
+            }
             appendPendingExceptionTransport(
                 classes,
                 method,
@@ -1634,7 +1644,7 @@ public final class BytecodeToIR {
             }
             final int prefixEnd = opcode == 186 || consumed > stack.size() ? stack.size() : stack.size() - consumed;
             if (containsDeferredStaticField(stack, prefixEnd)) {
-                snapshotOperandStack(instructions, stack, locals, localDeclarations);
+                snapshotOperandStack(instructions, stack, locals, localDeclarations, false);
             }
         }
         BytecodeToIRInvokeSupport.guardTypedReceiver(
@@ -1969,7 +1979,7 @@ public final class BytecodeToIR {
                 unaryDoubleNeg(classFile, method, stack);
                 break;
             case 132:
-                snapshotOperandStack(instructions, stack, locals, localDeclarations);
+                snapshotOperandStack(instructions, stack, locals, localDeclarations, false);
                 incrementInt(classFile, method, instructions, locals, localDeclarations, instruction);
                 break;
             case 133:
@@ -2061,14 +2071,14 @@ public final class BytecodeToIR {
                 break;
             case 178:
                 if (containsNontrivialDeferredValue(stack, stack.size())) {
-                    snapshotOperandStack(instructions, stack, locals, localDeclarations);
+                    snapshotOperandStack(instructions, stack, locals, localDeclarations, false);
                 }
                 initializeClass(classes, classFile.name(), method, instruction, instructions, classInitialization, pendingExceptionHandlerStacks);
                 BytecodeToIRInvokeSupport.pushField(classes, classFile, method, instruction, stack);
                 break;
             case 179:
                 if (initializesClass(classes, classFile.name(), instruction, classInitialization)) {
-                    snapshotOperandStack(instructions, stack, locals, localDeclarations);
+                    snapshotOperandStack(instructions, stack, locals, localDeclarations, false);
                     initializeClass(classes, classFile.name(), method, instruction, instructions, classInitialization, pendingExceptionHandlerStacks);
                 }
                 BytecodeToIRInvokeSupport.assignStaticField(classes, classFile, method, instruction, instructions, stack);
@@ -2114,7 +2124,7 @@ public final class BytecodeToIR {
                 break;
             case 184:
                 if (initializesClass(classes, classFile.name(), instruction, classInitialization)) {
-                    snapshotOperandStack(instructions, stack, locals, localDeclarations);
+                    snapshotOperandStack(instructions, stack, locals, localDeclarations, false);
                     initializeClass(classes, classFile.name(), method, instruction, instructions, classInitialization, pendingExceptionHandlerStacks);
                 }
                 BytecodeToIRInvokeSupport.lowerStaticCall(
@@ -2231,7 +2241,7 @@ public final class BytecodeToIR {
                 break;
         }
         if (instruction.offset() < lastMaterializingDuplicateOffset) {
-            snapshotOperandStack(instructions, stack, locals, localDeclarations);
+            snapshotOperandStack(instructions, stack, locals, localDeclarations, false);
         }
     }
 
@@ -3453,7 +3463,8 @@ public final class BytecodeToIR {
         final List<IrInstruction> instructions,
         final List<StackValue> stack,
         final Map<Integer, IrExpression> locals,
-        final Map<Integer, IrLocal> localDeclarations
+        final Map<Integer, IrLocal> localDeclarations,
+        final boolean preserveReadOnlyValues
     ) {
         final List<StackValue> originalStack = new ArrayList<>(stack);
         for (int index = 0; index < stack.size(); index++) {
@@ -3464,6 +3475,11 @@ public final class BytecodeToIR {
                 continue;
             }
             if (!isMaterializableDuplicateStackKind(value.kind()) || !hasMaterializableDuplicateExpression(value)) {
+                continue;
+            }
+            if (preserveReadOnlyValues && index + 1 < originalStack.size()
+                && value.dynamicLambda().isEmpty()
+                && isRepeatableDuplicateExpression(stackValueExpression(value), Map.of())) {
                 continue;
             }
             stack.set(

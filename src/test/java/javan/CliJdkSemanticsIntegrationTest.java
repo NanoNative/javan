@@ -13696,6 +13696,74 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void stringCharAtThrowsCatchableExceptionsForInvalidInput() throws Exception {
+        final Path project = project("string-char-at-exceptions");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int order = 0;
+                static int before() { order = order * 10 + 1; return 5; }
+                static int nextIndex() { order = order * 10 + 2; return 0; }
+                static int fromMethod(String value, int index) { return value.charAt(index); }
+                static void print(String value, int index) {
+                    try {
+                        System.out.println((int) value.charAt(index));
+                    } catch (StringIndexOutOfBoundsException ex) {
+                        System.out.println("index");
+                    } catch (NullPointerException ex) {
+                        System.out.println("null");
+                    }
+                }
+                static void printSuper() {
+                    try { System.out.println((int) "A".charAt(1)); }
+                    catch (IndexOutOfBoundsException ex) { System.out.println("super"); }
+                }
+                public static void main(String[] args) {
+                    print("A", -1);
+                    print("A", 1);
+                    print("", 0);
+                    print(null, 0);
+                    print(new String(new char[]{(char) 0xd83d, (char) 0xde00}), 0);
+                    print(new String(new char[]{(char) 0xd83d, (char) 0xde00}), 1);
+                    print(new String(new char[]{(char) 0xd83d, (char) 0xde00}), 2);
+                    print("A", 0);
+                    System.out.println(before() + "A".charAt(nextIndex()));
+                    System.out.println(order);
+                    System.out.println(fromMethod("A", 0));
+                    printSuper();
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-char-at-exceptions").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringCharAtUncaughtExceptionStopsTheProgram() throws Exception {
+        final Path project = project("string-char-at-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    System.out.println("before");
+                    System.out.println((int) "A".charAt(args.length + 1));
+                    System.out.println("after");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-char-at-uncaught").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("before\n");
+        assertThat(result.stderr()).contains("StringIndexOutOfBoundsException");
+    }
+
+    @Test
     void characterCodePointAndSurrogatePrimitivesMatchJava() throws Exception {
         final Path project = project("character-codepoint-primitives");
         writeJava(project, "com.acme.Main", """
