@@ -66,8 +66,9 @@ ASCII string lengths and direct local copies within one straight-line bytecode s
 | Literal `String.substring` start/end outside a supported ASCII literal | `JAVAN073` | `JAVAN173` |
 
 Reachable errors stop before native code generation. Unreachable findings remain visible in
-the shared reports without failing the command. Non-ASCII literals retain the existing
-`JAVAN046` UTF-16-profile diagnostic, not a second bounds finding for an unrepresentable string.
+the shared reports without failing the command. Methods containing non-ASCII literals and
+string operations still subject to the UTF-16-profile restriction report `JAVAN046` instead
+of a speculative bounds finding. `String.length` accepts these literals.
 
 Reassigned locals, parameters, fields, returned values, calls with arguments, array writes,
 dynamic lengths/indexes, branch merges, exception paths and other dynamic shapes remain unknown

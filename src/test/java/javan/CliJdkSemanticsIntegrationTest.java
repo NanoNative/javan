@@ -13815,6 +13815,145 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void stringLengthAcceptsUnicodeLiterals() throws Exception {
+        final Path project = project("string-length-unicode-literal");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    System.out.println("\\0\\ud800\\udc00\\udfff\\udbff".length());
+                    System.out.println("aé𐀀".length());
+                    System.out.println("\\0\\ud800\\udc00".repeat(2).length());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-length-unicode-literal").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringLengthPreservesUtf16AndTransportsNull() throws Exception {
+        final Path project = project("string-length-unicode");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int order;
+                static int first() { order = order * 10 + 1; return 7; }
+                static String value() { order = order * 10 + 2; return "\\0\\ud800\\udc00\\udfff\\udbff"; }
+                static int length(String text) {
+                    try { return text.length(); }
+                    catch (NullPointerException ex) { System.out.println("null"); return -1; }
+                }
+                public static void main(String[] args) {
+                    System.out.println("".length());
+                    System.out.println("abc".length());
+                    System.out.println("\\0\\ud800\\udc00\\udfff\\udbff".length());
+                    System.out.println("aé𐀀".length());
+                    System.out.println(length(null));
+                    System.out.println(length("\\0\\ud800\\udc00"));
+                    System.out.println(first() + value().length());
+                    System.out.println(order);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-length-unicode").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringLengthMatchesJavaAcrossUnicode() throws Exception {
+        final Path project = project("string-length-unicode-sweep");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    long hash = 1;
+                    for (int value = 0; value <= 0x10ffff; value += 31)
+                        hash = hash * 31 + Character.toString(value).length();
+                    for (int value = 0; value <= 0xffff; value++)
+                        hash = hash * 31 + Character.toString((char) value).length();
+                    System.out.println(hash);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-length-unicode-sweep").toString()),
+            Duration.ofSeconds(60));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringLengthSurvivesConcurrentCollection() throws Exception {
+        final Path project = project("string-length-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static int length(String value) {
+                    try { return value.length(); }
+                    catch (NullPointerException ex) { return -1; }
+                }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            int point = i % 2 == 0 ? 0x1f600 : 0xd800;
+                            if (Character.toString(point).length() != (point > 0xffff ? 2 : 1)) errors.incrementAndGet();
+                            if (length(null) != -1) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-length-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
+    void stringLengthUncaughtNullStopsBeforeUse() throws Exception {
+        final Path project = project("string-length-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int later() { System.out.println("later"); return 1; }
+                public static void main(String[] args) {
+                    System.out.println("before");
+                    String value = args.length == 0 ? null : "x";
+                    System.out.println(value.length() + later());
+                    System.out.println("after");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-length-uncaught").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("before\n");
+        assertThat(result.stderr()).contains("NullPointerException");
+    }
+
+    @Test
     void stringRepeatPreservesUtf16AndTransportsExceptions() throws Exception {
         final Path project = project("string-repeat-unicode");
         writeJava(project, "com.acme.Main", """

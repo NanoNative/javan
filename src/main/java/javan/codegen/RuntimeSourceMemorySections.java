@@ -10585,6 +10585,14 @@ final class RuntimeSourceMemorySections {
             return javan_utf16_length_from_utf8(value);
         }
 
+        int javan_string_length_java(const char* value) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            return javan_string_length(value);
+        }
+
         int javan_string_hash_code(const char* value) {
             if (value == NULL) {
                 javan_panic("null string");

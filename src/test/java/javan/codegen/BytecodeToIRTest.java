@@ -17326,7 +17326,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersStringLengthToRuntimeCall() {
+    void propagatesStringLengthFailure() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -17338,12 +17338,7 @@ final class BytecodeToIRTest {
             plain(2, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnInt(IrExpression.intCall(
-                "javan_string_length",
-                List.of(IrExpression.objectLocal("arg0"))
-            ))
-        );
+        assertThat(function.instructions()).contains(IrInstruction.propagatePending());
     }
 
     @Test
@@ -18923,25 +18918,6 @@ final class BytecodeToIRTest {
                 assertThat(exception.diagnostic().code()).isEqualTo("JAVAN043");
                 assertThat(exception.diagnostic().subject()).isEqualTo("com/acme/Mode.MISSING");
             });
-    }
-
-    @Test
-    void rejectsNonAsciiStringLengthUntilUtf16StringModelExists() {
-        final MethodInfo main = method(
-            0x0008,
-            "main",
-            "()I",
-            1,
-            0,
-            stringConstant(0, "cafe\u00e9"),
-            invokeVirtual(1, new MethodRef("java/lang/String", "length", "()I")),
-            plain(2, 172, "ireturn")
-        );
-
-        assertThatThrownBy(() -> lowerMain(main))
-            .isInstanceOf(DiagnosticException.class)
-            .hasMessageContaining("JAVAN046")
-            .hasMessageContaining("non-ASCII string constants require the UTF-16 string model");
     }
 
     @Test

@@ -548,8 +548,7 @@ final class BytecodeToIRInvokeSupport {
         }
         if ("java/lang/String".equals(methodRef.owner()) && "length".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
             final IrExpression receiver = popObject(classFile, method, stack);
-            rejectUnsupportedStringSemantic(classFile, method, instruction, receiver);
-            stack.add(StackValue.intExpression(IrExpression.intCall("javan_string_length", List.of(receiver))));
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_string_length_java", List.of(receiver))));
             return;
         }
         if ("java/lang/String".equals(methodRef.owner()) && "hashCode".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {

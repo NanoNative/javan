@@ -6479,7 +6479,7 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void staticVerifierRejectsReachableNonAsciiStringLengthCall() {
+    void staticVerifierAcceptsReachableNonAsciiStringLengthCall() {
         final List<Diagnostic> diagnostics = verifyStringSemanticMethod(
             new MethodRef("java/lang/String", "length", "()I"),
             true,
@@ -6489,10 +6489,7 @@ final class CoreBehaviorTest {
             instruction(3, 177, "return")
         );
 
-        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
-            assertThat(diagnostic.code()).isEqualTo("JAVAN046");
-            assertThat(diagnostic.subject()).isEqualTo("java/lang/String.length()I");
-        });
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test

@@ -527,6 +527,9 @@ public final class BytecodeToIR {
         result.put("javan_string_char_at_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/lang/String", "charAt", "(I)C"
         )));
+        result.put("javan_string_length_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/lang/String", "length", "()I"
+        )));
         result.put("javan_string_to_char_array", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/lang/String", "toCharArray", "()[C"
         )));
@@ -1204,7 +1207,8 @@ public final class BytecodeToIR {
                         && ("(I)C".equals(reference.descriptor()) || "(I)I".equals(reference.descriptor())
                             || "(II)I".equals(reference.descriptor())
                             || "toCharArray".equals(reference.name()) && "()[C".equals(reference.descriptor())
-                            || "repeat".equals(reference.name()) && "(I)Ljava/lang/String;".equals(reference.descriptor()))
+                            || "repeat".equals(reference.name()) && "(I)Ljava/lang/String;".equals(reference.descriptor())
+                            || "length".equals(reference.name()) && "()I".equals(reference.descriptor()))
                     || "java/lang/Character".equals(reference.owner())
                         && ("toChars".equals(reference.name())
                                 && ("(I)[C".equals(reference.descriptor()) || "(I[CI)I".equals(reference.descriptor()))

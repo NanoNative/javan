@@ -1632,9 +1632,6 @@ public final class StaticVerifier {
         if (!"java/lang/String".equals(target.owner())) {
             return false;
         }
-        if ("length".equals(target.name()) && "()I".equals(target.descriptor())) {
-            return true;
-        }
         if ("charAt".equals(target.name()) && "(I)C".equals(target.descriptor())) {
             return true;
         }
