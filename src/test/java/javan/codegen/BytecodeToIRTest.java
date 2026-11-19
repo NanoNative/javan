@@ -19342,11 +19342,13 @@ final class BytecodeToIRTest {
             plain(3, 176, "areturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.objectCall(
-                "javan_path_resolve",
+        assertThat(function.instructions()).contains(
+            IrInstruction.assignObject("object0", IrExpression.objectCall(
+                "javan_path_resolve_java",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
-            ))
+            )),
+            IrInstruction.propagatePending(),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 
@@ -27595,11 +27597,13 @@ final class BytecodeToIRTest {
             plain(3, 176, "areturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.objectCall(
-                "javan_path_resolve",
+        assertThat(function.instructions()).contains(
+            IrInstruction.assignObject("object0", IrExpression.objectCall(
+                "javan_path_resolve_java",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
-            ))
+            )),
+            IrInstruction.propagatePending(),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 

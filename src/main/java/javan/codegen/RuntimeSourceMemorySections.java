@@ -10071,6 +10071,15 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        void javan_string_from_chars_into(void** result, void* array, int offset, int count) {
+            if (result == NULL) {
+                javan_panic("invalid String result");
+            }
+            javan_runtime_lock_enter();
+            *result = javan_string_from_chars(array, offset, count);
+            javan_runtime_lock_leave();
+        }
+
         static unsigned int javan_utf8_next_code_point(const unsigned char** cursor, int modified_utf8) {
             const unsigned char* current = *cursor;
             unsigned char first = *current;

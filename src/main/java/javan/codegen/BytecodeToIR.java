@@ -500,6 +500,9 @@ public final class BytecodeToIR {
         result.put("javan_path_of", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/nio/file/Path", "of", "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;"
         )));
+        result.put("javan_path_resolve_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/nio/file/Path", "resolve", "(Ljava/lang/String;)Ljava/nio/file/Path;"
+        )));
         addTransportedFilesCall(result, "javan_files_create_directories", "createDirectories",
             "(Ljava/nio/file/Path;[Ljava/nio/file/attribute/FileAttribute;)Ljava/nio/file/Path;");
         addTransportedFilesCall(result, "javan_files_copy", "copy",

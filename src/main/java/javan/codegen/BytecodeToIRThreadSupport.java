@@ -1264,7 +1264,9 @@ final class BytecodeToIRThreadSupport {
         final MethodInfo method,
         final Instruction instruction,
         final MethodRef methodRef,
-        final List<StackValue> stack
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations
     ) {
         if (!"java/nio/file/Path".equals(methodRef.owner())) {
             return false;
@@ -1346,7 +1348,7 @@ final class BytecodeToIRThreadSupport {
             || "(Ljava/nio/file/Path;)Ljava/nio/file/Path;".equals(methodRef.descriptor()))) {
             final IrExpression child = popObjectForJdkCall(classFile, method, instruction, stack);
             final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
-            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_path_resolve", List.of(receiver, child))));
+            pushObjectCall(instructions, stack, localDeclarations, "javan_path_resolve_java", List.of(receiver, child));
             return true;
         }
         return false;
@@ -1446,7 +1448,7 @@ final class BytecodeToIRThreadSupport {
         if (lowerVirtualThreadExecutorInterfaceCall(classFile, method, instruction, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
-        if (lowerJdkPathInstanceCall(classFile, method, instruction, methodRef, stack)) {
+        if (lowerJdkPathInstanceCall(classFile, method, instruction, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
         if (lowerJdkFileInstanceCall(classFile, method, instruction, methodRef, stack)) {

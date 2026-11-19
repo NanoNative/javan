@@ -1052,7 +1052,7 @@ final class BytecodeToIRInvokeSupport {
         if (lowerJdkNetworkInstanceCall(classFile, method, instruction, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
-        if (lowerJdkPathInstanceCall(classFile, method, instruction, methodRef, stack)) {
+        if (lowerJdkPathInstanceCall(classFile, method, instruction, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
         if (lowerJdkTimeInstanceCall(classFile, method, instruction, methodRef, stack)) {

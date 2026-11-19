@@ -1972,6 +1972,14 @@ public final class JdkCallSupport {
             && "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;".equals(methodRef.descriptor())) {
             return List.of("java/nio/file/InvalidPathException", "java/lang/NullPointerException");
         }
+        if ("java/nio/file/Path".equals(methodRef.owner()) && "resolve".equals(methodRef.name())) {
+            if ("(Ljava/lang/String;)Ljava/nio/file/Path;".equals(methodRef.descriptor())) {
+                return List.of("java/nio/file/InvalidPathException", "java/lang/NullPointerException");
+            }
+            if ("(Ljava/nio/file/Path;)Ljava/nio/file/Path;".equals(methodRef.descriptor())) {
+                return List.of("java/lang/NullPointerException");
+            }
+        }
         if (filesIoCall(methodRef)) {
             return List.of("java/io/IOException");
         }

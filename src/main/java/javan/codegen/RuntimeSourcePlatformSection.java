@@ -996,6 +996,22 @@ final class RuntimeSourcePlatformSection {
             return length;
         }
 
+        static int javan_path_validate(void* path_value) {
+            if (strchr((const char*) path_value, 0xC0) == NULL
+                || strstr((const char*) path_value, "\\300\\200") == NULL) {
+                return 1;
+            }
+            void* result_root = path_value;
+            void* message = NULL;
+            void** roots[] = { &result_root, &message };
+            javan_root_frame_push(roots, 2);
+            const char* values[] = { (const char*) result_root };
+            javan_string_concat_into(&message, "Nul character not allowed: \\001", 1, values);
+            javan_pending_throw("java/nio/file/InvalidPathException", message, NULL, NULL, NULL, -1, -1, NULL);
+            javan_root_frame_pop(roots);
+            return 0;
+        }
+
         void* javan_path_of(void* first_value, void* more_value) {
             if (first_value == NULL || more_value == NULL) {
                 javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
@@ -1034,15 +1050,7 @@ final class RuntimeSourcePlatformSection {
                 }
                 strcat(result, part);
             }
-            if (strstr(result, "\\300\\200") != NULL) {
-                void* result_root = result;
-                void* message = NULL;
-                void** roots[] = { &result_root, &message };
-                javan_root_frame_push(roots, 2);
-                const char* values[] = { (const char*) result_root };
-                message = javan_string_concat("Nul character not allowed: \\001", 1, values);
-                javan_pending_throw("java/nio/file/InvalidPathException", message, NULL, NULL, NULL, -1, -1, NULL);
-                javan_root_frame_pop(roots);
+            if (!javan_path_validate(result)) {
                 javan_root_frame_pop(javan_path_of_roots);
                 return NULL;
             }
@@ -1050,9 +1058,9 @@ final class RuntimeSourcePlatformSection {
             return result;
         }
 
-        void* javan_path_resolve(void* path_value, void* child_value) {
-            const char* path = javan_path_checked(path_value);
-            const char* child = javan_path_checked(child_value);
+        static void* javan_path_resolve_validated(void* path_value, void* child_value) {
+            const char* path = (const char*) path_value;
+            const char* child = (const char*) child_value;
             if (javan_path_is_absolute_text(child)) {
                 return javan_string_copy(child);
             }
@@ -1068,8 +1076,8 @@ final class RuntimeSourcePlatformSection {
                     (void**) &child_root
                 };
                 javan_root_frame_push(javan_path_root_relative_roots, 2);
-                path = javan_path_checked(path_root);
-                child = javan_path_checked(child_root);
+                path = (const char*) path_root;
+                child = (const char*) child_root;
                 char* result = javan_string_alloc(child_length + 3);
                 memcpy(result, path, 2);
                 memcpy(result + 2, child, child_length + 1);
@@ -1090,8 +1098,8 @@ final class RuntimeSourcePlatformSection {
                 (void**) &child_root
             };
             javan_root_frame_push(javan_path_resolve_roots, 2);
-            path = javan_path_checked(path_root);
-            child = javan_path_checked(child_root);
+            path = (const char*) path_root;
+            child = (const char*) child_root;
             char* result = javan_string_alloc(path_length + (unsigned long) slash + child_length + 1);
             memcpy(result, path, path_length);
             unsigned long offset = path_length;
@@ -1102,6 +1110,42 @@ final class RuntimeSourcePlatformSection {
             memcpy(result + offset, child, child_length + 1);
             javan_root_frame_pop(javan_path_resolve_roots);
             return result;
+        }
+
+        void* javan_path_resolve(void* path_value, void* child_value) {
+            (void) javan_path_checked(path_value);
+            (void) javan_path_checked(child_value);
+            return javan_path_resolve_validated(path_value, child_value);
+        }
+
+        void* javan_path_resolve_java(void* path_value, void* child_value) {
+            if (path_value == NULL || child_value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
+            }
+            (void) javan_path_checked(path_value);
+            if (!javan_path_validate(child_value)) {
+                return NULL;
+            }
+            return javan_path_resolve_validated(path_value, child_value);
+        }
+
+        void javan_path_of_into(void** result, void* first, void* more) {
+            if (result == NULL) {
+                javan_panic("invalid path result");
+            }
+            javan_runtime_lock_enter();
+            *result = javan_path_of(first, more);
+            javan_runtime_lock_leave();
+        }
+
+        void javan_path_resolve_java_into(void** result, void* path, void* child) {
+            if (result == NULL) {
+                javan_panic("invalid path result");
+            }
+            javan_runtime_lock_enter();
+            *result = javan_path_resolve_java(path, child);
+            javan_runtime_lock_leave();
         }
 
         int javan_path_is_absolute(void* path_value) {

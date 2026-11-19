@@ -392,6 +392,7 @@ final class RuntimeHeaderFile {
         void* javan_string_array_from_args(int argc, char** argv);
         void* javan_string_from(const char* value);
         void* javan_string_from_chars(void* array, int offset, int count);
+        void javan_string_from_chars_into(void** result, void* array, int offset, int count);
         int javan_string_length(const char* value);
         int javan_string_hash_code(const char* value);
         int javan_string_is_empty(const char* value);
@@ -564,6 +565,9 @@ final class RuntimeHeaderFile {
         void* javan_materialized_lambda_capture(void* value, int capture_index);
         void* javan_path_of(void* first, void* more);
         void* javan_path_resolve(void* path, void* child);
+        void* javan_path_resolve_java(void* path, void* child);
+        void javan_path_of_into(void** result, void* first, void* more);
+        void javan_path_resolve_java_into(void** result, void* path, void* child);
         void* javan_path_to_absolute(void* path);
         void* javan_path_normalize(void* path);
         void* javan_path_get_parent(void* path);
