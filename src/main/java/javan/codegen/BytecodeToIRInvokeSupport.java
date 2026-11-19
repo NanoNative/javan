@@ -3050,6 +3050,31 @@ final class BytecodeToIRInvokeSupport {
         final MethodRef methodRef,
         final List<StackValue> stack
     ) {
+        if (("toHexString".equals(methodRef.name()) || "toOctalString".equals(methodRef.name())
+            || "toBinaryString".equals(methodRef.name()) || "toUnsignedString".equals(methodRef.name())
+            || "toString".equals(methodRef.name()))
+            && (("(II)Ljava/lang/String;".equals(methodRef.descriptor())
+                    && ("toString".equals(methodRef.name()) || "toUnsignedString".equals(methodRef.name())))
+                || ("(I)Ljava/lang/String;".equals(methodRef.descriptor())
+                    && !"toString".equals(methodRef.name())))) {
+            final IrExpression radix;
+            if ("(II)Ljava/lang/String;".equals(methodRef.descriptor())) {
+                radix = popInt(classFile, method, stack);
+            } else if ("toHexString".equals(methodRef.name())) {
+                radix = IrExpression.intLiteral(16);
+            } else if ("toOctalString".equals(methodRef.name())) {
+                radix = IrExpression.intLiteral(8);
+            } else if ("toBinaryString".equals(methodRef.name())) {
+                radix = IrExpression.intLiteral(2);
+            } else {
+                radix = IrExpression.intLiteral(10);
+            }
+            final IrExpression value = popInt(classFile, method, stack);
+            final int unsignedMode = "toString".equals(methodRef.name()) ? 0 : 1;
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_integer_to_radix",
+                List.of(value, radix, IrExpression.intLiteral(unsignedMode)))));
+            return true;
+        }
         if (("rotateLeft".equals(methodRef.name()) || "rotateRight".equals(methodRef.name()))
             && "(II)I".equals(methodRef.descriptor())) {
             final IrExpression distance = popInt(classFile, method, stack);
@@ -3224,6 +3249,31 @@ final class BytecodeToIRInvokeSupport {
         final MethodRef methodRef,
         final List<StackValue> stack
     ) {
+        if (("toHexString".equals(methodRef.name()) || "toOctalString".equals(methodRef.name())
+            || "toBinaryString".equals(methodRef.name()) || "toUnsignedString".equals(methodRef.name())
+            || "toString".equals(methodRef.name()))
+            && (("(JI)Ljava/lang/String;".equals(methodRef.descriptor())
+                    && ("toString".equals(methodRef.name()) || "toUnsignedString".equals(methodRef.name())))
+                || ("(J)Ljava/lang/String;".equals(methodRef.descriptor())
+                    && !"toString".equals(methodRef.name())))) {
+            final IrExpression radix;
+            if ("(JI)Ljava/lang/String;".equals(methodRef.descriptor())) {
+                radix = popInt(classFile, method, stack);
+            } else if ("toHexString".equals(methodRef.name())) {
+                radix = IrExpression.intLiteral(16);
+            } else if ("toOctalString".equals(methodRef.name())) {
+                radix = IrExpression.intLiteral(8);
+            } else if ("toBinaryString".equals(methodRef.name())) {
+                radix = IrExpression.intLiteral(2);
+            } else {
+                radix = IrExpression.intLiteral(10);
+            }
+            final IrExpression value = popLong(classFile, method, stack);
+            final int unsignedMode = "toString".equals(methodRef.name()) ? 0 : 1;
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_long_to_radix",
+                List.of(value, radix, IrExpression.intLiteral(unsignedMode)))));
+            return true;
+        }
         if (("rotateLeft".equals(methodRef.name()) || "rotateRight".equals(methodRef.name()))
             && "(JI)J".equals(methodRef.descriptor())) {
             final IrExpression distance = popInt(classFile, method, stack);

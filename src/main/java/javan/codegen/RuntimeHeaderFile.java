@@ -939,6 +939,10 @@ final class RuntimeHeaderFile {
         void javan_thread_unpark(void* value);
         void javan_wait_for_non_current_threads(void);
         void javan_runtime_profile_consume_args(int* argc, char*** argv);
+        void* javan_integer_to_radix(int value, int radix, int unsigned_mode);
+        void javan_integer_to_radix_into(void** result, int value, int radix, int unsigned_mode);
+        void* javan_long_to_radix(long long value, int radix, int unsigned_mode);
+        void javan_long_to_radix_into(void** result, long long value, int radix, int unsigned_mode);
         void* javan_string_value_of_int(int value);
         void javan_string_value_of_int_into(void** result, int value);
         void* javan_string_value_of_long(long long value);

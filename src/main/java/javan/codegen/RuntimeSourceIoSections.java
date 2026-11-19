@@ -1284,6 +1284,56 @@ final class RuntimeSourceIoSections {
             return optional->value;
         }
 
+        static void* javan_unsigned_radix_string(uint64_t magnitude, int radix, int negative) {
+            if (radix < 2 || radix > 36) {
+                radix = 10;
+            }
+            const char* digits = "0123456789abcdefghijklmnopqrstuvwxyz";
+            char buffer[67];
+            char* cursor = buffer + sizeof(buffer) - 1;
+            *cursor = '\\0';
+            do {
+                *--cursor = digits[magnitude % (uint64_t) radix];
+                magnitude /= (uint64_t) radix;
+            } while (magnitude != 0);
+            if (negative) {
+                *--cursor = '-';
+            }
+            return javan_string_copy(cursor);
+        }
+
+        void* javan_integer_to_radix(int value, int radix, int unsigned_mode) {
+            uint32_t bits = (uint32_t) value;
+            int negative = !unsigned_mode && value < 0;
+            uint32_t magnitude = negative ? UINT32_C(0) - bits : bits;
+            return javan_unsigned_radix_string((uint64_t) magnitude, radix, negative);
+        }
+
+        void javan_integer_to_radix_into(void** result, int value, int radix, int unsigned_mode) {
+            if (result == NULL) {
+                javan_panic("invalid String result");
+            }
+            javan_runtime_lock_enter();
+            *result = javan_integer_to_radix(value, radix, unsigned_mode);
+            javan_runtime_lock_leave();
+        }
+
+        void* javan_long_to_radix(long long value, int radix, int unsigned_mode) {
+            uint64_t bits = (uint64_t) value;
+            int negative = !unsigned_mode && value < 0;
+            uint64_t magnitude = negative ? UINT64_C(0) - bits : bits;
+            return javan_unsigned_radix_string(magnitude, radix, negative);
+        }
+
+        void javan_long_to_radix_into(void** result, long long value, int radix, int unsigned_mode) {
+            if (result == NULL) {
+                javan_panic("invalid String result");
+            }
+            javan_runtime_lock_enter();
+            *result = javan_long_to_radix(value, radix, unsigned_mode);
+            javan_runtime_lock_leave();
+        }
+
         void* javan_string_value_of_int(int value) {
             char buffer[32];
             snprintf(buffer, sizeof(buffer), "%d", value);

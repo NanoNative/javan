@@ -13229,6 +13229,119 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void integerRadixStringsMatchJavaAcrossValidAndInvalidRadices() throws Exception {
+        final Path project = project("integer-radix-strings");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    int[] ints = { Integer.MIN_VALUE, -123456789, -1, 0, 1, 123456789, Integer.MAX_VALUE };
+                    long[] longs = { Long.MIN_VALUE, -1234567890123456789L, -1L, 0L, 1L, 1234567890123456789L, Long.MAX_VALUE };
+                    for (int value : ints) {
+                        System.out.println(Integer.toHexString(value));
+                        System.out.println(Integer.toOctalString(value));
+                        System.out.println(Integer.toBinaryString(value));
+                        System.out.println(Integer.toUnsignedString(value));
+                        for (int radix = -1; radix <= 38; radix++) {
+                            System.out.println(Integer.toString(value, radix));
+                            System.out.println(Integer.toUnsignedString(value, radix));
+                        }
+                    }
+                    for (long value : longs) {
+                        System.out.println(Long.toHexString(value));
+                        System.out.println(Long.toOctalString(value));
+                        System.out.println(Long.toBinaryString(value));
+                        System.out.println(Long.toUnsignedString(value));
+                        for (int radix = -1; radix <= 38; radix++) {
+                            System.out.println(Long.toString(value, radix));
+                            System.out.println(Long.toUnsignedString(value, radix));
+                        }
+                    }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/integer-radix-strings").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void integerRadixStringsRemainRootedAcrossConcurrentCollection() throws Exception {
+        final Path project = project("integer-radix-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 300; i++) {
+                            String first = Integer.toUnsignedString(-1, 16);
+                            String second = Long.toUnsignedString(-1L, 36);
+                            String third = Long.toString(Long.MIN_VALUE, 16);
+                            String fourth = Integer.toBinaryString(Integer.MIN_VALUE);
+                            if (!first.equals("ffffffff")) errors.incrementAndGet();
+                            if (!second.equals("3w5e11264sgsf")) errors.incrementAndGet();
+                            if (!third.equals("-8000000000000000")) errors.incrementAndGet();
+                            if (!fourth.equals("10000000000000000000000000000000")) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker());
+                    Thread second = new Thread(new Worker());
+                    Thread third = new Thread(new Worker());
+                    Thread fourth = new Thread(new Worker());
+                    first.start(); second.start(); third.start(); fourth.start();
+                    first.join(); second.join(); third.join(); fourth.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/integer-radix-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
+    void integerRadixStringsEvaluateArgumentsOnceInOrder() throws Exception {
+        final Path project = project("integer-radix-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int trace;
+                static int value() { trace = trace * 10 + 1; return -1; }
+                static long longValue() { trace = trace * 10 + 1; return -1L; }
+                static int radix() { trace = trace * 10 + 2; return 16; }
+                public static void main(String[] args) {
+                    System.out.println(Integer.toUnsignedString(value(), radix()));
+                    System.out.println(trace);
+                    trace = 0;
+                    System.out.println(Long.toString(longValue(), radix()));
+                    System.out.println(trace);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/integer-radix-order").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("ffffffff\n12\n-1\n12\n");
+    }
+
+    @Test
     void floatingDecimalStringsRemainCorrectAcrossThreads() throws Exception {
         final Path project = project("floating-decimal-concurrent");
         writeJava(project, "com.acme.Main", """

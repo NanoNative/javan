@@ -5282,7 +5282,9 @@ public final class CCodegen {
 
     private static boolean isStringResultIntoCall(final String symbol) {
         return switch (symbol) {
-            case "javan_string_value_of_int",
+            case "javan_integer_to_radix",
+                "javan_long_to_radix",
+                "javan_string_value_of_int",
                 "javan_string_value_of_long",
                 "javan_string_value_of_float",
                 "javan_string_value_of_double",
