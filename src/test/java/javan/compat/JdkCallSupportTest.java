@@ -4401,9 +4401,18 @@ final class JdkCallSupportTest {
     void nonTransportingCallHasNoPlatformThrowableTypes() {
         assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
             "java/lang/String",
-            "length",
+            "hashCode",
             "()I"
         ))).isEmpty();
+    }
+
+    @Test
+    void stringLengthTransportsNullReceiverFailure() {
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
+            "java/lang/String",
+            "length",
+            "()I"
+        ))).containsExactly("java/lang/NullPointerException");
     }
 
     @Test
