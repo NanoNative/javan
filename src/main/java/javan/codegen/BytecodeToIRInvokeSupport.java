@@ -1132,6 +1132,33 @@ final class BytecodeToIRInvokeSupport {
         if (lowerJdkFileInstanceCall(classFile, method, instruction, methodRef, stack)) {
             return;
         }
+        if ("java/util/random/RandomGenerator".equals(methodRef.owner()) && "nextLong".equals(methodRef.name())
+            && "()J".equals(methodRef.descriptor())) {
+            final List<EntryPoint> targets = interfaceTargets(classes, methodRef, instantiatedTypes);
+            if (!targets.isEmpty()) {
+                final IrExpression receiver = popObject(classFile, method, stack);
+                final String receiverLocal = newObjectLocal(localDeclarations);
+                instructions.add(IrInstruction.assignObject(receiverLocal, receiver));
+                final int index = localDeclarations.size();
+                final String resultLocal = "long" + index;
+                localDeclarations.put(Integer.MIN_VALUE + index, new IrLocal(IrType.LONG, resultLocal));
+                final String builtinLabel = "label_random_next_long_builtin_" + instruction.offset() + "_" + resultLocal;
+                final String doneLabel = "label_random_next_long_done_" + instruction.offset() + "_" + resultLocal;
+                final String symbol = dispatchSymbol(methodRef);
+                dispatches.putIfAbsent(symbol, dispatch(classes, symbol, MethodDescriptor.parse(methodRef.descriptor()), targets));
+                instructions.add(IrInstruction.branchIf(builtinLabel, IrExpression.intCall("javan_secure_random_use_builtin",
+                    List.of(IrExpression.objectLocal(receiverLocal)))));
+                instructions.add(IrInstruction.assignLong(resultLocal, IrExpression.longCall(symbol,
+                    List.of(IrExpression.objectLocal(receiverLocal)))));
+                instructions.add(IrInstruction.jump(doneLabel));
+                instructions.add(IrInstruction.label(builtinLabel));
+                instructions.add(IrInstruction.assignLong(resultLocal, IrExpression.longCall("javan_secure_random_next_long_java",
+                    List.of(IrExpression.objectLocal(receiverLocal)))));
+                instructions.add(IrInstruction.label(doneLabel));
+                stack.add(StackValue.longExpression(IrExpression.longLocal(resultLocal)));
+                return;
+            }
+        }
         if (("java/security/SecureRandom".equals(methodRef.owner()) || JdkCallSupport.isSecureRandomSupertypeCall(methodRef))
             && ("nextInt".equals(methodRef.name()) || "nextLong".equals(methodRef.name()))
             && JdkCallSupport.isSupported(methodRef)) {

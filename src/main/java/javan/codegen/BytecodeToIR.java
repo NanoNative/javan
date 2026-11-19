@@ -582,6 +582,9 @@ public final class BytecodeToIR {
         result.put("javan_string_replace_sequence_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/lang/String", "replace", "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;"
         )));
+        result.put("javan_secure_random_next_long_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/util/random/RandomGenerator", "nextLong", "()J"
+        )));
         result.put("javan_charset_name_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/nio/charset/Charset", "name", "()Ljava/lang/String;"
         )));

@@ -1907,6 +1907,9 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     public CharSequence subSequence(int begin, int end) { return this; }
                     public String toString() { return "pha"; }
                 }
+                static final class CustomGenerator implements java.util.random.RandomGenerator {
+                    public long nextLong() { return 42L; }
+                }
                 static String nullReplace(String value) {
                     try { return value.replace('a', 'b'); } catch (NullPointerException ex) { return "null"; }
                 }
@@ -1969,6 +1972,8 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     java.util.random.RandomGenerator generator = new java.security.SecureRandom();
                     generator.nextBytes(randomBytes);
                     System.out.println(generator.nextInt(1));
+                    java.util.random.RandomGenerator custom = new CustomGenerator();
+                    System.out.println(custom.nextLong());
                     System.out.println("\\0\\ud800\\udc00".replace((char) 0xd800, (char) 1).charAt(1));
                     System.out.println(value.replace('z', 'q') == value);
                     System.out.println(nullReplace(null));
@@ -4228,6 +4233,8 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             public final class Api {
                 public static Object good() { return new SecureRandom(); }
                 public static Object wrong() { return new String("not random"); }
+                static final class Custom implements java.util.random.RandomGenerator { public long nextLong() { return 42L; } }
+                public static Object custom() { return new Custom(); }
                 public static int fill(Object value) {
                     byte[] bytes = new byte[8];
                     ((Random) value).nextBytes(bytes);
@@ -4235,18 +4242,21 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 }
                 public static int next(Object value) { return ((Random) value).nextInt(7); }
                 public static int nextGenerator(Object value) { return ((java.util.random.RandomGenerator) value).nextInt(7); }
+                public static long nextGeneratorLong(Object value) { return ((java.util.random.RandomGenerator) value).nextLong(); }
             }
             """);
         final CliRun build = run(tempDir, "build", project.toString(), "--kind", "staticlib",
             "--export", "com.acme.Api.good():object", "--export", "com.acme.Api.wrong():object",
-            "--export", "com.acme.Api.fill(object):int", "--export", "com.acme.Api.next(object):int", "--export", "com.acme.Api.nextGenerator(object):int");
+            "--export", "com.acme.Api.fill(object):int", "--export", "com.acme.Api.next(object):int", "--export", "com.acme.Api.nextGenerator(object):int",
+            "--export", "com.acme.Api.custom():object", "--export", "com.acme.Api.nextGeneratorLong(object):long");
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final Path caller = writeC(project, "call_random.c", """
             #include <string.h>
             #include ".javan/dist/bindings/c/library-random-handle.h"
             int main(void) {
-                JavanObjectHandle *good = 0, *wrong = 0;
+                JavanObjectHandle *good = 0, *wrong = 0, *custom = 0;
                 int size = -1;
+                long long generated = 0;
                 JavanResult result = javan_try_com_acme_Api_good_void(&good);
                 if (!result.ok || good == 0) return 1;
                 javan_result_free(&result);
@@ -4258,6 +4268,15 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 javan_result_free(&result);
                 result = javan_try_com_acme_Api_nextGenerator_object(good, &size);
                 if (!result.ok || size < 0 || size >= 7) return 7;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_nextGeneratorLong_object(good, &generated);
+                if (!result.ok) return 9;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_custom_void(&custom);
+                if (!result.ok || custom == 0) return 10;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_nextGeneratorLong_object(custom, &generated);
+                if (!result.ok || generated != 42) return 11;
                 javan_result_free(&result);
                 result = javan_try_com_acme_Api_wrong_void(&wrong);
                 if (!result.ok || wrong == 0) return 3;
@@ -4273,6 +4292,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 javan_result_free(&result);
                 javan_object_handle_release(good);
                 javan_object_handle_release(wrong);
+                javan_object_handle_release(custom);
                 return 0;
             }
             """);

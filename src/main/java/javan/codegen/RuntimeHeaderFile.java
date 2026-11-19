@@ -886,6 +886,8 @@ final class RuntimeHeaderFile {
         int javan_secure_random_next_int_bound(void* value, int bound);
         int javan_secure_random_next_int_range(void* value, int origin, int bound);
         long long javan_secure_random_next_long(void* value);
+        int javan_secure_random_use_builtin(void* value);
+        long long javan_secure_random_next_long_java(void* value);
         long long javan_secure_random_next_long_bound(void* value, long long bound);
         long long javan_secure_random_next_long_range(void* value, long long origin, long long bound);
         int javan_secure_random_next_boolean(void* value);

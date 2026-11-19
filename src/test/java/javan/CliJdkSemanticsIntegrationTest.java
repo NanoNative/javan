@@ -10112,6 +10112,61 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void customRandomGeneratorNextLongDispatchesInClosedWorld() throws Exception {
+        final Path project = project("custom-random-generator-next-long");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            import java.util.random.RandomGenerator;
+            public final class Main {
+                static class Custom implements RandomGenerator {
+                    long value;
+                    Custom(long value) { this.value = value; }
+                    public long nextLong() { long result = value; value = value + 1; return result; }
+                }
+                static final class Child extends Custom { Child(long value) { super(value); } }
+                static final class Throwing extends Custom {
+                    Throwing() { super(0); }
+                    public long nextLong() { throw new IllegalStateException(); }
+                }
+                static int order;
+                static long earlier() { order = order * 10 + 1; return 3; }
+                static RandomGenerator generator() { order = order * 10 + 2; return new Custom(7); }
+                static long unguarded(RandomGenerator generator) { return generator.nextLong(); }
+                static long catchCaller(RandomGenerator generator) {
+                    try { return unguarded(generator); }
+                    catch (IllegalStateException ex) { return -30; }
+                }
+                static long invoke(RandomGenerator generator) {
+                    try { return generator.nextLong(); }
+                    catch (NullPointerException ex) { return -10; }
+                    catch (IllegalStateException ex) { return -20; }
+                }
+                public static void main(String[] args) {
+                    RandomGenerator first = new Custom(40);
+                    RandomGenerator second = new Child(70);
+                    System.out.println(invoke(first)); System.out.println(invoke(first));
+                    System.out.println(invoke(second)); System.out.println(invoke(second));
+                    System.out.println(invoke(null)); System.out.println(invoke(new Throwing()));
+                    System.out.println(catchCaller(new Throwing()));
+                    RandomGenerator secure = new SecureRandom();
+                    invoke(secure); System.out.println("secure");
+                    System.out.println(earlier() + generator().nextLong());
+                    System.out.println(order);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/custom-random-generator-next-long").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void unsupportedRandomGeneratorIsNotSilentlyReplaced() throws Exception {
         final Path project = project("unsupported-random-generator");
         writeJava(project, "com.acme.Main", """
@@ -10150,8 +10205,13 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                 static final Random RANDOM = new SecureRandom();
                 static final java.util.random.RandomGenerator GENERATOR = new SecureRandom();
                 static final AtomicInteger errors = new AtomicInteger();
+                static final class Custom implements java.util.random.RandomGenerator {
+                    long value;
+                    public long nextLong() { long result = value; value = value + 1; return result; }
+                }
                 static final class Worker implements Runnable {
                     public void run() {
+                        java.util.random.RandomGenerator custom = new Custom();
                         for (int i = 0; i < 100; i++) {
                             byte[] bytes = new byte[64];
                             RANDOM.nextBytes(bytes);
@@ -10159,7 +10219,8 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                             GENERATOR.nextBytes(bytes);
                             int other = GENERATOR.nextInt(5);
                             new String(new char[] {'x', 'y'});
-                            if (bytes.length != 64 || value < 0 || value >= 5 || other < 0 || other >= 5) errors.incrementAndGet();
+                            if (bytes.length != 64 || value < 0 || value >= 5 || other < 0 || other >= 5
+                                || custom.nextLong() != i) errors.incrementAndGet();
                         }
                     }
                 }

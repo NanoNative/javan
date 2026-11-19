@@ -9072,6 +9072,22 @@ final class RuntimeSourceMemorySections {
             javan_os_random_bytes((unsigned char*) bytes->values, bytes->length);
         }
 
+        int javan_secure_random_use_builtin(void* value) {
+            if (value == NULL) return 1;
+            javan_allocation_metadata allocation;
+            return javan_find_allocation(value, &allocation) != 0
+                && allocation.kind == JAVAN_HEAP_KIND_RUNTIME
+                && allocation.runtime_kind == JAVAN_RUNTIME_KIND_SECURE_RANDOM;
+        }
+
+        long long javan_secure_random_next_long_java(void* value) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            return javan_secure_random_next_long(value);
+        }
+
         void javan_secure_random_require_random(void* value) {
             javan_allocation_metadata allocation;
             if (javan_find_allocation(value, &allocation) == 0
