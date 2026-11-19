@@ -106,6 +106,7 @@ final class IntrinsicUsageReportsTest {
             new IntrinsicCallCount("System.arraycopy", 1),
             new IntrinsicCallCount("System.exit", 0),
             new IntrinsicCallCount("Character.isWhitespace", 0),
+            new IntrinsicCallCount("Character.isSpaceChar", 0),
             new IntrinsicCallCount("Arrays.copyOf", 1),
             new IntrinsicCallCount("Arrays.copyOfRange", 0),
             new IntrinsicCallCount("Arrays.equals", 0),

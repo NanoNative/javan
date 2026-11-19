@@ -424,6 +424,7 @@ final class RuntimeHeaderFile {
         int javan_char_sequence_length(void* value);
         int javan_char_sequence_char_at(void* value, int index);
         int javan_character_is_whitespace(int value);
+        int javan_character_is_space_char(int value);
         void* javan_string_substring(const char* value, int begin);
         void* javan_string_substring_range(const char* value, int begin, int end);
         void javan_string_substring_into(void** result, const char* value, int begin);

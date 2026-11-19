@@ -511,6 +511,13 @@ final class RuntimeSourcePlatformSection {
             return 0;
         }
 
+        int javan_character_is_space_char(int value) {
+            return value == 0x20 || value == 0xa0 || value == 0x1680
+                || (value >= 0x2000 && value <= 0x200a)
+                || value == 0x2028 || value == 0x2029 || value == 0x202f
+                || value == 0x205f || value == 0x3000;
+        }
+
         int javan_character_is_whitespace(int value) {
             return value == 0x20
                 || (value >= 0x09 && value <= 0x0d)

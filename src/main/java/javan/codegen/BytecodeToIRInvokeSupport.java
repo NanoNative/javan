@@ -3583,7 +3583,16 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_character_value_of", List.of(popInt(classFile, method, stack)))));
             return true;
         }
-        if ("isWhitespace".equals(methodRef.name()) && "(C)Z".equals(methodRef.descriptor())) {
+        if ("isSpaceChar".equals(methodRef.name())
+            && ("(C)Z".equals(methodRef.descriptor()) || "(I)Z".equals(methodRef.descriptor()))) {
+            stack.add(StackValue.intExpression(IrExpression.intCall(
+                "javan_character_is_space_char",
+                List.of(popInt(classFile, method, stack))
+            )));
+            return true;
+        }
+        if ("isWhitespace".equals(methodRef.name())
+            && ("(C)Z".equals(methodRef.descriptor()) || "(I)Z".equals(methodRef.descriptor()))) {
             stack.add(StackValue.intExpression(IrExpression.intCall(
                 "javan_character_is_whitespace",
                 List.of(popInt(classFile, method, stack))

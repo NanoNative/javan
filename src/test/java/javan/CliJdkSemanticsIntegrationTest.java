@@ -13619,6 +13619,57 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void characterWhitespaceIntMatchesJavaAcrossUnicode() throws Exception {
+        final Path project = project("character-whitespace-int");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    System.out.println(Character.isWhitespace(-1));
+                    System.out.println(Character.isWhitespace(0x110000));
+                    for (int value = 0; value <= 0x10ffff; value++) {
+                        if (Character.isWhitespace(value)) System.out.println(value);
+                    }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/character-whitespace-int").toString()),
+            Duration.ofSeconds(60));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void characterSpaceCharOverloadsMatchJavaAcrossUnicode() throws Exception {
+        final Path project = project("character-space-char");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    System.out.println(Character.isSpaceChar(-1));
+                    System.out.println(Character.isSpaceChar(0x110000));
+                    for (int value = 0; value <= 0x10ffff; value++) {
+                        if (Character.isSpaceChar(value)) System.out.println(value);
+                        if (value <= 0xffff && Character.isSpaceChar((char) value) != Character.isSpaceChar(value)) {
+                            System.out.println("different-char:" + value);
+                        }
+                    }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/character-space-char").toString()),
+            Duration.ofSeconds(60));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void integerRadixStringsMatchJavaAcrossValidAndInvalidRadices() throws Exception {
         final Path project = project("integer-radix-strings");
         writeJava(project, "com.acme.Main", """
