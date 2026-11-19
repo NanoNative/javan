@@ -106,7 +106,7 @@ final class Strings2Test {
     }
 
     @Test
-    void runtimeAsciiStringConstantRejectsEmbeddedNul() {
-        assertThat(Strings2.isRuntimeAsciiStringConstant("a\0b")).isFalse();
+    void runtimeAsciiStringConstantAcceptsEmbeddedNul() {
+        assertThat(Strings2.isRuntimeAsciiStringConstant("a\0b")).isTrue();
     }
 }

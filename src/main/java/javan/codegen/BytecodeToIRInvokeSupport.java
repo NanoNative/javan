@@ -4584,14 +4584,14 @@ final class BytecodeToIRInvokeSupport {
             && "get".equals(methodRef.name())
             && "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;".equals(methodRef.descriptor())) {
             final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_path_of", arguments)));
+            pushObjectCall(instructions, stack, localDeclarations, "javan_path_of", arguments);
             return true;
         }
         if ("java/nio/file/Path".equals(methodRef.owner())
             && "of".equals(methodRef.name())
             && "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;".equals(methodRef.descriptor())) {
             final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_path_of", arguments)));
+            pushObjectCall(instructions, stack, localDeclarations, "javan_path_of", arguments);
             return true;
         }
         if (!"java/nio/file/Files".equals(methodRef.owner())) {

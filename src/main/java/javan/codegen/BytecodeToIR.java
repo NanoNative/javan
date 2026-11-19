@@ -497,6 +497,9 @@ public final class BytecodeToIR {
                 "()Ljava/lang/Object;"
             ))
         );
+        result.put("javan_path_of", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/nio/file/Path", "of", "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;"
+        )));
         addTransportedFilesCall(result, "javan_files_create_directories", "createDirectories",
             "(Ljava/nio/file/Path;[Ljava/nio/file/attribute/FileAttribute;)Ljava/nio/file/Path;");
         addTransportedFilesCall(result, "javan_files_copy", "copy",
@@ -4056,22 +4059,6 @@ public final class BytecodeToIR {
             instructionSubject(instruction),
             "The current native runtime stores strings as UTF-8 C strings for the supported ASCII subset. Accepting this constant would make Java String length, indexing, substring, and ABI ownership semantics unsafe.",
             "Use ASCII string constants for now, or keep this code on the JVM until Javan's full UTF-16 String object model is implemented."
-        ));
-    }
-
-    static DiagnosticException unsupportedEmbeddedNulStringConstant(
-        final ClassFile classFile,
-        final MethodInfo method,
-        final Instruction instruction
-    ) {
-        return new DiagnosticException(Diagnostic.error(
-            "JAVAN046",
-            "embedded NUL string constants require the length-aware string model",
-            classFile.name(),
-            method.name() + method.descriptor(),
-            instructionSubject(instruction),
-            "The current native runtime stores strings as NUL-terminated UTF-8. Accepting this constant would silently truncate Java content and change parsing, equality, length, indexing, and ABI behavior.",
-            "Remove the embedded U+0000 value or keep this code on the JVM until Javan's length-aware String object model is implemented."
         ));
     }
 

@@ -328,20 +328,13 @@ final class CliDoubleParseDoubleIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void embeddedNulLiteralIsRejectedBeforeNativeParsing() throws Exception {
-        final Path project = project("double-parse-nul-literal");
-        writeJava(project, "com.acme.Main", source("""
+    void embeddedNulLiteralsFollowJavaParseRules() throws Exception {
+        assertMatchesJvm("double-parse-nul-literal", """
             System.out.println(Double.parseDouble("\\u00001"));
-            """, ""));
-
-        final CliRun build = run(tempDir, "build", project.toString());
-
-        assertThat(build.exitCode() + "\n" + build.stderr())
-            .startsWith("2\n")
-            .contains(
-                "error[JAVAN046]",
-                "embedded NUL string constants require the length-aware string model"
-            );
+            System.out.println(Double.parseDouble("1\\u0000"));
+            try { Double.parseDouble("1\\u00002"); }
+            catch (NumberFormatException exception) { System.out.println(exception.getMessage()); }
+            """);
     }
 
     private void assertMatchesJvm(final String projectName, final String body) throws Exception {

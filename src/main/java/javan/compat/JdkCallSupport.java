@@ -45,6 +45,7 @@ public final class JdkCallSupport {
         java/lang/NegativeArraySizeException=java/lang/RuntimeException
         java/lang/NullPointerException=java/lang/RuntimeException
         java/lang/NumberFormatException=java/lang/IllegalArgumentException
+        java/nio/file/InvalidPathException=java/lang/IllegalArgumentException
         java/lang/SecurityException=java/lang/RuntimeException
         java/lang/StringIndexOutOfBoundsException=java/lang/IndexOutOfBoundsException
         java/lang/UnsupportedOperationException=java/lang/RuntimeException
@@ -1966,6 +1967,11 @@ public final class JdkCallSupport {
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
+        if (("java/nio/file/Path".equals(methodRef.owner()) && "of".equals(methodRef.name())
+                || "java/nio/file/Paths".equals(methodRef.owner()) && "get".equals(methodRef.name()))
+            && "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;".equals(methodRef.descriptor())) {
+            return List.of("java/nio/file/InvalidPathException", "java/lang/NullPointerException");
+        }
         if (filesIoCall(methodRef)) {
             return List.of("java/io/IOException");
         }

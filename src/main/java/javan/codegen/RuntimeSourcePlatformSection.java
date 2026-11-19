@@ -825,6 +825,13 @@ final class RuntimeSourcePlatformSection {
             if (value == NULL) {
                 javan_panic("null path");
             }
+            const char* zero = strchr((const char*) value, 0xC0);
+            while (zero != NULL) {
+                if ((unsigned char) zero[1] == 0x80U) {
+                    javan_panic("path contains U+0000");
+                }
+                zero = strchr(zero + 1, 0xC0);
+            }
             return (const char*) value;
         }
 
@@ -975,7 +982,7 @@ final class RuntimeSourcePlatformSection {
             unsigned long length = strlen(first);
             char last = length == 0 ? '\\0' : first[length - 1];
             for (int index = 0; index < more->length; index++) {
-                const char* part = javan_path_checked(more->values[index]);
+                const char* part = (const char*) more->values[index];
                 unsigned long part_length = strlen(part);
                 if (length > 0 && !javan_path_is_separator(last)
                     && part_length > 0 && !javan_path_is_separator(part[0])) {
@@ -990,10 +997,20 @@ final class RuntimeSourcePlatformSection {
         }
 
         void* javan_path_of(void* first_value, void* more_value) {
-            const char* first = javan_path_checked(first_value);
+            if (first_value == NULL || more_value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
+            }
+            const char* first = (const char*) first_value;
             javan_array_header* header = javan_array_checked(more_value);
             javan_array_kind_checked(header, JAVAN_ARRAY_KIND_OBJECT);
             javan_object_array* more = (javan_object_array*) header;
+            for (int index = 0; index < more->length; index++) {
+                if (more->values[index] == NULL) {
+                    javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                    return NULL;
+                }
+            }
             unsigned long length = javan_path_joined_length(first, more);
             void* first_root = first_value;
             void* more_root = more_value;
@@ -1002,13 +1019,13 @@ final class RuntimeSourcePlatformSection {
                 (void**) &more_root
             };
             javan_root_frame_push(javan_path_of_roots, 2);
-            first = javan_path_checked(first_root);
+            first = (const char*) first_root;
             more = (javan_object_array*) javan_array_checked(more_root);
             char* result = javan_string_alloc(length + 1);
             result[0] = '\\0';
             strcat(result, first);
             for (int index = 0; index < more->length; index++) {
-                const char* part = javan_path_checked(more->values[index]);
+                const char* part = (const char*) more->values[index];
                 unsigned long current = strlen(result);
                 if (current > 0 && !javan_path_is_separator(result[current - 1])
                     && part[0] != '\\0' && !javan_path_is_separator(part[0])) {
@@ -1016,6 +1033,18 @@ final class RuntimeSourcePlatformSection {
                     result[current + 1] = '\\0';
                 }
                 strcat(result, part);
+            }
+            if (strstr(result, "\\300\\200") != NULL) {
+                void* result_root = result;
+                void* message = NULL;
+                void** roots[] = { &result_root, &message };
+                javan_root_frame_push(roots, 2);
+                const char* values[] = { (const char*) result_root };
+                message = javan_string_concat("Nul character not allowed: \\001", 1, values);
+                javan_pending_throw("java/nio/file/InvalidPathException", message, NULL, NULL, NULL, -1, -1, NULL);
+                javan_root_frame_pop(roots);
+                javan_root_frame_pop(javan_path_of_roots);
+                return NULL;
             }
             javan_root_frame_pop(javan_path_of_roots);
             return result;

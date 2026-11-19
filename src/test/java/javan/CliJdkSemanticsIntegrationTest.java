@@ -13229,6 +13229,134 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void javaStringsPreserveEmbeddedNullCharacters() throws Exception {
+        final Path project = project("string-embedded-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    String literal = "a\\0b";
+                    String constructed = new String(new char[] { 'a', 0, 'b' });
+                    System.out.println(literal.length());
+                    System.out.println((int) literal.charAt(1));
+                    System.out.println(literal.equals(constructed));
+                    System.out.println(literal.substring(2));
+                    System.out.println(literal.hashCode());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/string-embedded-null").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void embeddedNullLiteralsSurviveConcatenationAndUtf8Output() throws Exception {
+        final Path project = project("string-null-literal-concat");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.nio.charset.StandardCharsets;
+            public final class Main {
+                static String stored = "a\\0b";
+                public static void main(String[] args) {
+                    String value = "x\\0" + args.length + stored + "\\0z";
+                    System.out.println(value);
+                    System.out.println(value.length());
+                    System.out.println(value.indexOf(0));
+                    System.out.println(value.lastIndexOf(0));
+                    byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
+                    for (byte b : bytes) System.out.println((int) b);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-null-literal-concat").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void embeddedNullLiteralInPathFailsLikeJava() throws Exception {
+        final Path project = project("string-null-path");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.nio.file.Path;
+            import java.nio.file.InvalidPathException;
+            public final class Main {
+                public static void main(String[] args) {
+                    String[] more = new String[0];
+                    try { Path.of("a\\0b", more); System.out.println("accepted"); }
+                    catch (InvalidPathException expected) { System.out.println(expected.getMessage()); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-null-path").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void pathFactoriesHandleNullPartsAndEmbeddedNullCharacters() throws Exception {
+        final Path project = project("path-factory-null-parts");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.nio.file.Path;
+            import java.nio.file.Paths;
+            import java.nio.file.InvalidPathException;
+            public final class Main {
+                public static void main(String[] args) {
+                    String[] empty = new String[0];
+                    String[] embedded = { new String(new char[]{'b', 0, 'c'}) };
+                    String[] missing = { null };
+                    String[] absent = null;
+                    System.out.println(Path.of("a", empty));
+                    try { Paths.get("a", embedded); }
+                    catch (InvalidPathException e) { System.out.println(e.getMessage()); }
+                    try { Path.of(null, empty); }
+                    catch (NullPointerException e) { System.out.println("null-first"); }
+                    try { Path.of("a", missing); }
+                    catch (NullPointerException e) { System.out.println("null-part"); }
+                    try { Path.of("a", absent); }
+                    catch (NullPointerException e) { System.out.println("null-array"); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/path-factory-null-parts").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void resolvedPathWithEmbeddedNullDoesNotReachTheFilesystem() throws Exception {
+        final Path project = project("path-resolve-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.nio.file.Path;
+            public final class Main {
+                public static void main(String[] args) {
+                    System.out.println(Path.of("safe").resolve("a\\0b"));
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/path-resolve-null").toString()));
+        assertThat(result.exitCode()).isNotZero();
+    }
+
+    @Test
     void integerRadixStringsMatchJavaAcrossValidAndInvalidRadices() throws Exception {
         final Path project = project("integer-radix-strings");
         writeJava(project, "com.acme.Main", """

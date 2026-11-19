@@ -1460,13 +1460,6 @@ final class BytecodeToIRDynamicSupport {
         }
         if (instruction.stringValue().isPresent()) {
             final String value = instruction.stringValue().orElseThrow();
-            if (value.indexOf('\0') >= 0) {
-                throw BytecodeToIR.unsupportedEmbeddedNulStringConstant(
-                    classFile,
-                    method,
-                    instruction
-                );
-            }
             stack.add(StackValue.objectExpression(IrExpression.stringLiteral(value)));
             return;
         }

@@ -3639,7 +3639,7 @@ public final class CCodegen {
                     "javan_string_concat_into((void**) &"
                         + temporary
                         + ", "
-                        + emitCStringLiteral(expression.value())
+                        + emitJavaCStringLiteral(expression.value())
                         + ", "
                         + expression.arguments().size()
                         + ", (const char*[]){"
@@ -3734,10 +3734,10 @@ public final class CCodegen {
                 case OBJECT_NULL:
                     return "((void*) 0)";
                 case STRING_LITERAL:
-                    return "(void*) " + emitCStringLiteral(expression.value());
+                    return "(void*) " + emitJavaCStringLiteral(expression.value());
                 case STRING_CONCAT:
                     return "javan_string_concat("
-                        + emitCStringLiteral(expression.value())
+                        + emitJavaCStringLiteral(expression.value())
                         + ", "
                         + expression.arguments().size()
                         + ", (const char*[]){"
@@ -5211,11 +5211,18 @@ public final class CCodegen {
     }
 
     private static String escapeCString(final String value) {
+        return escapeCString(value, false);
+    }
+
+    private static String escapeCString(final String value, final boolean javaString) {
         final StringBuilder result = new StringBuilder();
         final int valueLength = value.length();
         for (int index = 0; index < valueLength; index++) {
             final char current = value.charAt(index);
-            if (current <= 0x7F) {
+            if (current == 0 && javaString) {
+                appendEscapedCByte(result, 0xC0);
+                appendEscapedCByte(result, 0x80);
+            } else if (current <= 0x7F) {
                 appendEscapedCByte(result, current);
             } else if (current <= 0x7FF) {
                 appendEscapedCByte(result, 0xC0 | (current >> 6));
@@ -5239,8 +5246,16 @@ public final class CCodegen {
     }
 
     private static String emitCStringLiteral(final String value) {
+        return emitCStringLiteral(value, false);
+    }
+
+    private static String emitJavaCStringLiteral(final String value) {
+        return emitCStringLiteral(value, true);
+    }
+
+    private static String emitCStringLiteral(final String value, final boolean javaString) {
         final int maxChunkLength = 120;
-        final String escaped = escapeCString(value);
+        final String escaped = escapeCString(value, javaString);
         final int escapedLength = escaped.length();
         final StringBuilder result = new StringBuilder(escapedLength + 16);
         StringBuilder chunk = new StringBuilder(Math.min(escapedLength, maxChunkLength));

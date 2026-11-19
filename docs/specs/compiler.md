@@ -87,6 +87,11 @@ supported when each value-producing branch assigns it at its exit. Partially ini
 are rejected during lowering. Some nested expressions that combine an earlier operand with a
 conditional also remain unsupported and fail during lowering. Within supported control-flow
 shapes, an earlier static-field read is preserved across later calls, writes and class initialization.
+`Path.of` and `Paths.get` report supported null inputs and embedded U+0000 through typed
+exceptions. A `Path.resolve` input containing U+0000 fails explicitly; typed exception
+handling for that path remains open. Some inline varargs inside `catch` ranges still fail
+verification and can be moved outside the protected range.
+
 Broader exceptions/finally, UTF-16 operations, collections, networking and threading require
 their own public-boundary proofs of supported Java contracts. Unrestricted runtime class
 definition, arbitrary loaders, proxies, instrumentation, JNI and unrestricted accessibility

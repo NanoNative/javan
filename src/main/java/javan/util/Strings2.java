@@ -254,14 +254,14 @@ public final class Strings2 {
      * Returns true when the value can be represented by the current native string subset.
      *
      * @param value input value
-     * @return true when every character is non-NUL ASCII
+     * @return true when every character is ASCII
      */
     public static boolean isRuntimeAsciiStringConstant(final String value) {
         Objects.requireNonNull(value, "value");
         final int length = value.length();
         for (int index = 0; index < length; index++) {
             final char current = value.charAt(index);
-            if (current == '\0' || current > 0x7F) {
+            if (current > 0x7F) {
                 return false;
             }
         }
