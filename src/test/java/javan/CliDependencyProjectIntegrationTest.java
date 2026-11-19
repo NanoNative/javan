@@ -1603,7 +1603,7 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static String unused() {
-                    return "caf\\u00e9".substring(0);
+                    return "caf\\u00e9".toLowerCase(java.util.Locale.ROOT);
                 }
             }
             """);
