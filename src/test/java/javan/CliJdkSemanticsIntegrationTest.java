@@ -13815,6 +13815,135 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void characterCodePointToStringMatchesJavaAcrossUnicode() throws Exception {
+        final Path project = project("character-codepoint-string-unicode");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    long result = 1;
+                    for (int value = 0; value <= 0x10ffff; value += 31) {
+                        String text = Character.toString(value);
+                        result = result * 31 + text.length();
+                        for (int i = 0; i < text.length(); i++) result = result * 31 + text.charAt(i);
+                    }
+                    for (int value = 0; value <= 0xffff; value++) {
+                        String text = Character.toString((char) value);
+                        result = result * 31 + text.length();
+                        result = result * 31 + text.charAt(0);
+                    }
+                    System.out.println(result);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/character-codepoint-string-unicode").toString()),
+            Duration.ofSeconds(60));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void characterCodePointToStringRemainsValidDuringConcurrentCollection() throws Exception {
+        final Path project = project("character-codepoint-string-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static boolean rejectsInvalid() {
+                    try { Character.toString(-1); return false; }
+                    catch (IllegalArgumentException ex) { return true; }
+                }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            int value = i % 2 == 0 ? 0x1f600 : 0;
+                            String text = i % 2 == 0 ? Character.toString(0x1f600) : Character.toString(0);
+                            if (text.length() != (value > 0xffff ? 2 : 1)) errors.incrementAndGet();
+                            if (text.codePointAt(0) != value) errors.incrementAndGet();
+                            if (!rejectsInvalid()) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/character-codepoint-string-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
+    void characterCodePointToStringUncaughtFailureStopsBeforeUse() throws Exception {
+        final Path project = project("character-codepoint-string-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    System.out.println("before");
+                    String value = args.length == 0 ? Character.toString(-1) : Character.toString(65);
+                    System.out.println(value.length());
+                    System.out.println("after");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/character-codepoint-string-uncaught").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("before\n");
+        assertThat(result.stderr()).contains("IllegalArgumentException");
+    }
+
+    @Test
+    void characterCodePointToStringMatchesJavaAndTransportsExceptions() throws Exception {
+        final Path project = project("character-codepoint-string");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int order = 0;
+                static int first() { order = order * 10 + 1; return 5; }
+                static int point() { order = order * 10 + 2; return 0x1f600; }
+                static String convert(int value) {
+                    try { return Character.toString(value); }
+                    catch (IllegalArgumentException ex) { System.out.println("invalid"); return null; }
+                }
+                static void print(int value) {
+                    String result = convert(value);
+                    if (result == null) return;
+                    System.out.println(result.length());
+                    for (int i = 0; i < result.length(); i++) System.out.println((int) result.charAt(i));
+                }
+                public static void main(String[] args) {
+                    int[] values = {Integer.MIN_VALUE, -1, 0, 'a', 0xd7ff, 0xd800, 0xdfff, 0xe000,
+                        0xffff, 0x10000, 0x1f600, 0x10ffff, 0x110000, Integer.MAX_VALUE};
+                    for (int value : values) print(value);
+                    System.out.println(first() + Character.toString(point()).length());
+                    System.out.println(order);
+                    System.out.println((int) Character.toString((char) 0xd800).charAt(0));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/character-codepoint-string").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void characterToCharsMatchesJavaAcrossUnicode() throws Exception {
         final Path project = project("character-to-chars-unicode");
         writeJava(project, "com.acme.Main", """

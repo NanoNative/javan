@@ -224,6 +224,8 @@ final class RuntimeHeaderFile {
             int length;
         } JavanUtf16String;
         void* javan_string_from_utf16(JavanUtf16View value);
+        void* javan_character_code_point_to_string(int value);
+        void javan_character_code_point_to_string_into(void** result, int value);
         JavanUtf16String javan_string_export_utf16(const char* value);
         typedef struct {
             signed char* data;

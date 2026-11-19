@@ -506,7 +506,7 @@ public final class JdkCallSupport {
         runtime("Short.toString.instance", "java/lang/Short", "toString", "()Ljava/lang/String;"),
         runtime("Short.valueOf", "java/lang/Short", "valueOf", "(S)Ljava/lang/Short;"),
         runtime("Short.shortValue", "java/lang/Short", "shortValue", "()S"),
-        intrinsic("Character.toString", "java/lang/Character", "toString", "(C)Ljava/lang/String;"),
+        intrinsic("Character.toString", "java/lang/Character", "toString", "(C)Ljava/lang/String;", "(I)Ljava/lang/String;"),
         runtime("Character.toString.instance", "java/lang/Character", "toString", "()Ljava/lang/String;"),
         runtime("Character.valueOf", "java/lang/Character", "valueOf", "(C)Ljava/lang/Character;"),
         runtime("Character.charValue", "java/lang/Character", "charValue", "()C"),
@@ -2007,6 +2007,10 @@ public final class JdkCallSupport {
             && "(I[CI)I".equals(methodRef.descriptor())) {
             return List.of("java/lang/IllegalArgumentException", "java/lang/ArrayIndexOutOfBoundsException",
                 "java/lang/NullPointerException");
+        }
+        if ("java/lang/Character".equals(methodRef.owner()) && "toString".equals(methodRef.name())
+            && "(I)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            return List.of("java/lang/IllegalArgumentException");
         }
         if (("java/nio/file/Path".equals(methodRef.owner()) && "of".equals(methodRef.name())
                 || "java/nio/file/Paths".equals(methodRef.owner()) && "get".equals(methodRef.name()))

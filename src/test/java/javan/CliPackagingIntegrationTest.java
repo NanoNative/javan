@@ -1042,6 +1042,48 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsCharacterCodePointToString() throws Exception {
+        final Path project = tempDir.resolve("selfhost-character-codepoint-string");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static String convert(int value) {
+                    try { return Character.toString(value); }
+                    catch (IllegalArgumentException ex) { System.out.println("invalid"); return null; }
+                }
+                public static void main(String[] args) {
+                    int[] values = {-1, 0, 0xd800, 0xffff, 0x10000, 0x1f600, 0x10ffff, 0x110000};
+                    for (int value : values) {
+                        String text = convert(value);
+                        if (text != null) {
+                            System.out.println(text.length());
+                            for (int i = 0; i < text.length(); i++) System.out.println((int) text.charAt(i));
+                        }
+                    }
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-character-codepoint-string"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-character-codepoint-string").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout());
+    }
+
+    @Test
     void nativeBuiltJavanBuildsCharacterToChars() throws Exception {
         final Path project = tempDir.resolve("selfhost-character-to-chars");
         final Path classes = project.resolve("classes");
@@ -3019,11 +3061,12 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static int length(String value) { return value == null ? -1 : value.length(); }
                 public static String fail(String value) { throw new IllegalArgumentException(value); }
                 public static String literal() { return "a\\0b"; }
+                public static String fromCodePoint(int value) { return Character.toString(value); }
             }
             """);
         final CliRun run = run(tempDir, "build", project.toString(), "--kind", "staticlib",
             "--export", "com.acme.Text.echo", "--export", "com.acme.Text.length", "--export", "com.acme.Text.fail",
-            "--export", "com.acme.Text.literal");
+            "--export", "com.acme.Text.literal", "--export", "com.acme.Text.fromCodePoint");
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         final Path library = project.resolve(".javan/dist/liblibrary-utf16.a");
         final Path caller = writeC(project, "call_utf16.c", """
@@ -3077,6 +3120,21 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 if (!result.ok || output.length != 3 || memcmp(expected, output.data, sizeof(expected))) return 11;
                 javan_result_free(&result);
                 javan_free(output.data);
+                int code_points[] = { 0, 0xD800, 0x1F600 };
+                uint16_t code_units[][2] = { { 0, 0 }, { 0xD800, 0 }, { 0xD83D, 0xDE00 } };
+                int code_lengths[] = { 1, 1, 2 };
+                for (int i = 0; i < 3; i++) {
+                    result = javan_utf16_try_com_acme_Text_fromCodePoint_int(code_points[i], &output);
+                    if (!result.ok || output.length != code_lengths[i]
+                        || memcmp(code_units[i], output.data, (size_t) output.length * sizeof(uint16_t))) return 13;
+                    javan_result_free(&result);
+                    javan_free(output.data);
+                }
+                result = javan_utf16_try_com_acme_Text_fromCodePoint_int(-1, &output);
+                if (result.ok || output.data != NULL || output.length != 0) return 14;
+                javan_result_free(&result);
+                char* code_point_nul = javan_export_com_acme_Text_fromCodePoint_int(0);
+                if (code_point_nul != NULL || javan_last_error() == NULL) return 15;
                 char* rejected = javan_export_com_acme_Text_literal_void();
                 if (rejected != NULL || javan_last_error() == NULL) return 12;
                 char* legacy = javan_export_com_acme_Text_echo_string("legacy");

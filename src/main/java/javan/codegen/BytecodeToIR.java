@@ -497,6 +497,9 @@ public final class BytecodeToIR {
                 "()Ljava/lang/Object;"
             ))
         );
+        result.put("javan_character_code_point_to_string", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/lang/Character", "toString", "(I)Ljava/lang/String;"
+        )));
         result.put("javan_character_to_chars", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/lang/Character", "toChars", "(I)[C"
         )));
@@ -1176,8 +1179,11 @@ public final class BytecodeToIR {
                 if (("java/lang/String".equals(reference.owner())
                         && ("(I)C".equals(reference.descriptor()) || "(I)I".equals(reference.descriptor())
                             || "(II)I".equals(reference.descriptor()))
-                    || "java/lang/Character".equals(reference.owner()) && "toChars".equals(reference.name())
-                        && ("(I)[C".equals(reference.descriptor()) || "(I[CI)I".equals(reference.descriptor())))
+                    || "java/lang/Character".equals(reference.owner())
+                        && ("toChars".equals(reference.name())
+                                && ("(I)[C".equals(reference.descriptor()) || "(I[CI)I".equals(reference.descriptor()))
+                            || "toString".equals(reference.name())
+                                && "(I)Ljava/lang/String;".equals(reference.descriptor())))
                     && !JdkCallSupport.transportedPlatformThrowableTypes(reference).isEmpty()) {
                     snapshotOperandStack(instructions, stack, locals, localDeclarations, true);
                 }

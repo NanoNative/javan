@@ -3613,6 +3613,12 @@ final class BytecodeToIRInvokeSupport {
             )));
             return true;
         }
+        if ("toString".equals(methodRef.name()) && "(I)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_character_code_point_to_string", List.of(popInt(classFile, method, stack))
+            )));
+            return true;
+        }
         if ("toString".equals(methodRef.name()) && "(C)Ljava/lang/String;".equals(methodRef.descriptor())) {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_string_value_of_char", List.of(popInt(classFile, method, stack)))));
             return true;

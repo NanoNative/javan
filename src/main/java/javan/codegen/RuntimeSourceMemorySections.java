@@ -10262,6 +10262,36 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        void javan_character_code_point_to_string_into(void** result, int value) {
+            if (result == NULL) {
+                javan_panic("invalid character string result");
+            }
+            javan_runtime_lock_enter();
+            *result = NULL;
+            if (!javan_character_is_valid_code_point(value)) {
+                javan_pending_throw("java/lang/IllegalArgumentException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                javan_runtime_lock_leave();
+                return;
+            }
+            uint16_t chars[2];
+            int length = javan_character_char_count(value);
+            if (length == 1) {
+                chars[0] = (uint16_t) value;
+            } else {
+                chars[0] = (uint16_t) javan_character_high_surrogate(value);
+                chars[1] = (uint16_t) javan_character_low_surrogate(value);
+            }
+            JavanUtf16View view = { chars, length };
+            *result = javan_string_from_utf16(view);
+            javan_runtime_lock_leave();
+        }
+
+        void* javan_character_code_point_to_string(int value) {
+            void* result = NULL;
+            javan_character_code_point_to_string_into(&result, value);
+            return result;
+        }
+
         JavanUtf16String javan_string_export_utf16(const char* value) {
             JavanUtf16String result = { NULL, 0 };
             if (value == NULL) {

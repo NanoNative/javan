@@ -93,6 +93,8 @@ Provably invalid literal `charAt` indices remain subject to the diagnostics poli
 Both `Character.toChars` overloads produce UTF-16 code units and transport invalid-code-point
 and destination errors within supported handler shapes. A direct `Character.toChars(...).length`
 can be used in a typed handler when control flow cannot bypass the array creation.
+`Character.toString(int)` preserves UTF-16 code units and transports invalid-code-point errors
+within supported handler shapes.
 `Path.of`, `Paths.get`, and `Path.resolve` report supported null inputs and embedded
 U+0000 through typed exceptions. Some inline varargs inside `catch` ranges still fail
 verification and can be moved outside the protected range.
