@@ -17298,7 +17298,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersStringSubstringRangeToRuntimeHelperWithTemporaryLocal() {
+    void propagatesStringSubstringRangeFailure() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -17313,16 +17313,7 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(javan.ir.IrType.OBJECT, "object0"));
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.assignObject(
-                "object0",
-                IrExpression.objectCall(
-                    "javan_string_substring_range",
-                    List.of(IrExpression.objectLocal("arg0"), IrExpression.intLiteral(1), IrExpression.intLiteral(2))
-                )
-            ),
-            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
-        );
+        assertThat(function.instructions()).contains(IrInstruction.propagatePending());
     }
 
     @Test
@@ -18167,7 +18158,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersStringSubstringFromBeginToRuntimeHelperWithTemporaryLocal() {
+    void propagatesStringSubstringFromBeginFailure() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -18181,16 +18172,7 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.assignObject(
-                "object0",
-                IrExpression.objectCall(
-                    "javan_string_substring",
-                    List.of(IrExpression.objectLocal("arg0"), IrExpression.intLiteral(1))
-                )
-            ),
-            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
-        );
+        assertThat(function.instructions()).contains(IrInstruction.propagatePending());
     }
 
     @Test

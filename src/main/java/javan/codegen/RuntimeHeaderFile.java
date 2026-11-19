@@ -466,6 +466,10 @@ final class RuntimeHeaderFile {
         int javan_character_compare(int left, int right);
         int javan_character_is_surrogate_pair(int high, int low);
         int javan_character_to_code_point(int high, int low);
+        void* javan_string_substring_java(const char* value, int begin);
+        void* javan_string_substring_range_java(const char* value, int begin, int end);
+        void javan_string_substring_java_into(void** result, const char* value, int begin);
+        void javan_string_substring_range_java_into(void** result, const char* value, int begin, int end);
         void* javan_string_substring(const char* value, int begin);
         void* javan_string_substring_range(const char* value, int begin, int end);
         void javan_string_substring_into(void** result, const char* value, int begin);

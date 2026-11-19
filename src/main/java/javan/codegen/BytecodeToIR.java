@@ -554,6 +554,12 @@ public final class BytecodeToIR {
         result.put("javan_string_index_of_string_range", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/lang/String", "indexOf", "(Ljava/lang/String;II)I"
         )));
+        result.put("javan_string_substring_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/lang/String", "substring", "(I)Ljava/lang/String;"
+        )));
+        result.put("javan_string_substring_range_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/lang/String", "substring", "(II)Ljava/lang/String;"
+        )));
         result.put("javan_string_to_char_array", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/lang/String", "toCharArray", "()[C"
         )));

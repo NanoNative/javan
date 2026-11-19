@@ -1632,10 +1632,6 @@ public final class StaticVerifier {
         if (!"java/lang/String".equals(target.owner())) {
             return false;
         }
-        if ("substring".equals(target.name())
-            && ("(I)Ljava/lang/String;".equals(target.descriptor()) || "(II)Ljava/lang/String;".equals(target.descriptor()))) {
-            return true;
-        }
         if ("toLowerCase".equals(target.name())) {
             return "(Ljava/util/Locale;)Ljava/lang/String;".equals(target.descriptor());
         }

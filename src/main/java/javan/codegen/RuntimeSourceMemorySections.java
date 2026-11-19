@@ -11464,6 +11464,32 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        void* javan_string_substring_java(const char* value, int begin) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
+            }
+            int length = javan_string_length(value);
+            if (begin < 0 || begin > length) {
+                javan_pending_throw("java/lang/StringIndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
+            }
+            return javan_string_copy_utf16_range(value, begin, length);
+        }
+
+        void* javan_string_substring_range_java(const char* value, int begin, int end) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
+            }
+            int length = javan_string_length(value);
+            if (begin < 0 || end < begin || end > length) {
+                javan_pending_throw("java/lang/StringIndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
+            }
+            return javan_string_copy_utf16_range(value, begin, end);
+        }
+
         void* javan_string_substring(const char* value, int begin) {
             int length = javan_string_length(value);
             return javan_string_substring_range(value, begin, length);
@@ -11507,6 +11533,12 @@ final class RuntimeSourceMemorySections {
             javan_runtime_lock_leave();
         }
 
+        void javan_string_substring_java_into(void** result, const char* value, int begin) {
+            javan_string_int_into(result, value, begin, javan_string_substring_java);
+        }
+        void javan_string_substring_range_java_into(void** result, const char* value, int begin, int end) {
+            javan_string_two_ints_into(result, value, begin, end, javan_string_substring_range_java);
+        }
         void javan_string_substring_into(void** result, const char* value, int begin) {
             javan_string_int_into(result, value, begin, javan_string_substring);
         }

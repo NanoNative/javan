@@ -955,8 +955,7 @@ final class BytecodeToIRInvokeSupport {
             && "(I)Ljava/lang/String;".equals(methodRef.descriptor())) {
             final IrExpression begin = popInt(classFile, method, stack);
             final IrExpression receiver = popObject(classFile, method, stack);
-            rejectUnsupportedStringSemantic(classFile, method, instruction, receiver);
-            pushObjectCall(instructions, stack, localDeclarations, "javan_string_substring", List.of(receiver, begin));
+            pushObjectCall(instructions, stack, localDeclarations, "javan_string_substring_java", List.of(receiver, begin));
             return;
         }
         if ("java/lang/String".equals(methodRef.owner())
@@ -965,8 +964,7 @@ final class BytecodeToIRInvokeSupport {
             final IrExpression end = popInt(classFile, method, stack);
             final IrExpression begin = popInt(classFile, method, stack);
             final IrExpression receiver = popObject(classFile, method, stack);
-            rejectUnsupportedStringSemantic(classFile, method, instruction, receiver);
-            pushObjectCall(instructions, stack, localDeclarations, "javan_string_substring_range", List.of(receiver, begin, end));
+            pushObjectCall(instructions, stack, localDeclarations, "javan_string_substring_range_java", List.of(receiver, begin, end));
             return;
         }
         if ("java/lang/String".equals(methodRef.owner())

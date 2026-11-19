@@ -6508,7 +6508,7 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void staticVerifierRejectsReachableNonAsciiStringSubstringStartCall() {
+    void staticVerifierAcceptsReachableNonAsciiStringSubstringStartCall() {
         final List<Diagnostic> diagnostics = verifyStringSemanticMethod(
             new MethodRef("java/lang/String", "substring", "(I)Ljava/lang/String;"),
             true,
@@ -6519,14 +6519,11 @@ final class CoreBehaviorTest {
             instruction(4, 177, "return")
         );
 
-        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
-            assertThat(diagnostic.code()).isEqualTo("JAVAN046");
-            assertThat(diagnostic.subject()).isEqualTo("java/lang/String.substring(I)Ljava/lang/String;");
-        });
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test
-    void staticVerifierRejectsReachableNonAsciiStringSubstringRangeCall() {
+    void staticVerifierAcceptsReachableNonAsciiStringSubstringRangeCall() {
         final List<Diagnostic> diagnostics = verifyStringSemanticMethod(
             new MethodRef("java/lang/String", "substring", "(II)Ljava/lang/String;"),
             true,
@@ -6538,10 +6535,7 @@ final class CoreBehaviorTest {
             instruction(5, 177, "return")
         );
 
-        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
-            assertThat(diagnostic.code()).isEqualTo("JAVAN046");
-            assertThat(diagnostic.subject()).isEqualTo("java/lang/String.substring(II)Ljava/lang/String;");
-        });
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test

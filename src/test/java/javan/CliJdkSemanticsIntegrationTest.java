@@ -16123,6 +16123,134 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void substringExtractionPreservesUtf16AndTransportsFailures() throws Exception {
+        final Path project = project("substring-extraction-utf16");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static String tail(String value, int begin) {
+                    try { return value.substring(begin); }
+                    catch (StringIndexOutOfBoundsException ex) { return "range"; }
+                    catch (NullPointerException ex) { return "null"; }
+                }
+                static String range(String value, int begin, int end) {
+                    try { return value.substring(begin, end); }
+                    catch (StringIndexOutOfBoundsException ex) { return "range"; }
+                    catch (NullPointerException ex) { return "null"; }
+                }
+                static int hash(String value) {
+                    int result = value.length();
+                    for (int i = 0; i < value.length(); i++) result = result * 31 + value.charAt(i);
+                    return result;
+                }
+                public static void main(String[] args) {
+                    String value = "a\\0\\ud800\\udc00\\udfff\\ud800a";
+                    int[] indices = {Integer.MIN_VALUE, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, Integer.MAX_VALUE};
+                    for (int begin : indices) {
+                        System.out.println(hash(tail(value, begin)));
+                        for (int end : indices) System.out.println(hash(range(value, begin, end)));
+                    }
+                    System.out.println(hash(tail(null, 0)));
+                    System.out.println(hash(range(null, -1, 100)));
+                    System.out.println(hash("\\0\\ud800\\udc00\\udfff".substring(1, 3)));
+                    System.out.println(hash("\\0\\ud800\\udc00\\udfff".substring(2)));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/substring-extraction-utf16").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void substringExtractionHandlesStaticallyInvalidRanges() throws Exception {
+        final Path project = project("substring-extraction-static-range");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    try { System.out.println("done".substring(9)); }
+                    catch (StringIndexOutOfBoundsException ex) { System.out.println("caught"); }
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/substring-extraction-static-range").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("caught\n");
+    }
+
+    @Test
+    void substringExtractionEvaluatesArgumentsBeforeUncaughtFailure() throws Exception {
+        final Path project = project("substring-extraction-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int begin() { System.out.println("begin"); return -1; }
+                static int end() { System.out.println("end"); return 9; }
+                public static void main(String[] args) {
+                    System.out.println("before");
+                    String value = args.length == 0 ? null : "text";
+                    System.out.println(value.substring(begin(), end()));
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/substring-extraction-uncaught").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("before\nbegin\nend\n");
+        assertThat(result.stderr()).contains("NullPointerException");
+    }
+
+    @Test
+    void substringExtractionSurvivesConcurrentCollection() throws Exception {
+        final Path project = project("substring-extraction-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static String source() { return new String(new char[] {0, (char) 0xd800, (char) 0xdc00, (char) 0xdfff}); }
+                static String invalid(String value) {
+                    try { return value.substring(0, 9); }
+                    catch (StringIndexOutOfBoundsException ex) { return "range"; }
+                }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            String value = source().substring(1, 3);
+                            new String(new char[] {'x', 'y'});
+                            if (value.length() != 2 || value.charAt(0) != (char) 0xd800
+                                || value.charAt(1) != (char) 0xdc00) errors.incrementAndGet();
+                            if (!invalid(source()).equals("range")) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/substring-extraction-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
     void boundedStringSearchMatchesJavaForRangesAndFailures() throws Exception {
         final Path project = project("bounded-string-search");
         writeJava(project, "com.acme.Main", """
