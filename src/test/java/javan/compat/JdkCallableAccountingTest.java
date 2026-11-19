@@ -168,15 +168,15 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksStringCodePointAtAsExplicitRejected() {
+    void marksStringCodePointAtAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/String", "codePointAt", "(I)I")))
-            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test
-    void marksStringCodePointCountAsExplicitRejected() {
+    void marksStringCodePointCountAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/String", "codePointCount", "(II)I")))
-            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test
