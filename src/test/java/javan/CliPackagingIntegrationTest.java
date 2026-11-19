@@ -577,6 +577,48 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsIntegerBitOperations() throws Exception {
+        final Path project = tempDir.resolve("selfhost-integer-bit-operations");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    System.out.println(Integer.highestOneBit(-1));
+                    System.out.println(Integer.lowestOneBit(Integer.MIN_VALUE));
+                    System.out.println(Integer.reverse(1));
+                    System.out.println(Integer.reverseBytes(0x12345678));
+                    System.out.println(Integer.signum(-1));
+                    System.out.println(Integer.rotateLeft(1, -1));
+                    System.out.println(Integer.rotateRight(1, -1));
+                    System.out.println(Long.highestOneBit(-1L));
+                    System.out.println(Long.lowestOneBit(Long.MIN_VALUE));
+                    System.out.println(Long.reverse(1L));
+                    System.out.println(Long.reverseBytes(0x0102030405060708L));
+                    System.out.println(Long.signum(-1L));
+                    System.out.println(Long.rotateLeft(1L, -1));
+                    System.out.println(Long.rotateRight(1L, -1));
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-integer-bit-operations"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-integer-bit-operations").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo("-2147483648\n-2147483648\n-2147483648\n2018915346\n-1\n-2147483648\n2\n"
+            + "-9223372036854775808\n-9223372036854775808\n-9223372036854775808\n578437695752307201\n-1\n-9223372036854775808\n2\n");
+    }
+
+    @Test
     void nativeBuiltJavanBuildsIntegerBitCounts() throws Exception {
         final Path project = tempDir.resolve("selfhost-integer-bit-counts");
         final Path classes = project.resolve("classes");

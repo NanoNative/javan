@@ -13229,6 +13229,106 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void integerBitOperationsMatchJavaAtBoundaries() throws Exception {
+        final Path project = project("integer-bit-operations");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    int[] ints = { 0, 1, -1, Integer.MIN_VALUE, Integer.MAX_VALUE, 0x12345678, 0x55555555, 0x8000 };
+                    long[] longs = { 0L, 1L, -1L, Long.MIN_VALUE, Long.MAX_VALUE, 0x123456789abcdefL, 0x5555555555555555L, 0x80000000L };
+                    int[] distances = { -65, -64, -33, -32, -31, -1, 0, 1, 31, 32, 33, 63, 64, 65 };
+                    for (int value : ints) {
+                        System.out.println(Integer.highestOneBit(value));
+                        System.out.println(Integer.lowestOneBit(value));
+                        System.out.println(Integer.reverse(value));
+                        System.out.println(Integer.reverseBytes(value));
+                        System.out.println(Integer.signum(value));
+                        for (int distance : distances) {
+                            System.out.println(Integer.rotateLeft(value, distance));
+                            System.out.println(Integer.rotateRight(value, distance));
+                        }
+                    }
+                    for (long value : longs) {
+                        System.out.println(Long.highestOneBit(value));
+                        System.out.println(Long.lowestOneBit(value));
+                        System.out.println(Long.reverse(value));
+                        System.out.println(Long.reverseBytes(value));
+                        System.out.println(Long.signum(value));
+                        for (int distance : distances) {
+                            System.out.println(Long.rotateLeft(value, distance));
+                            System.out.println(Long.rotateRight(value, distance));
+                        }
+                    }
+                    for (int bit = 0; bit < 32; bit++) {
+                        int value = 1 << bit;
+                        System.out.println(Integer.highestOneBit(value));
+                        System.out.println(Integer.lowestOneBit(value));
+                        System.out.println(Integer.reverse(value));
+                        System.out.println(Integer.reverseBytes(value));
+                        System.out.println(Integer.rotateLeft(value, bit));
+                        System.out.println(Integer.rotateRight(value, bit));
+                    }
+                    for (int bit = 0; bit < 64; bit++) {
+                        long value = 1L << bit;
+                        System.out.println(Long.highestOneBit(value));
+                        System.out.println(Long.lowestOneBit(value));
+                        System.out.println(Long.reverse(value));
+                        System.out.println(Long.reverseBytes(value));
+                        System.out.println(Long.rotateLeft(value, bit));
+                        System.out.println(Long.rotateRight(value, bit));
+                    }
+                    int x = 0x12345678;
+                    long y = 0x123456789abcdefL;
+                    for (int i = 0; i < 64; i++) {
+                        x = x * 1664525 + 1013904223;
+                        y = y * 6364136223846793005L + 1442695040888963407L;
+                        System.out.println(Integer.reverse(x));
+                        System.out.println(Integer.rotateLeft(x, i - 33));
+                        System.out.println(Long.reverse(y));
+                        System.out.println(Long.rotateRight(y, i - 65));
+                    }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/integer-bit-operations").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void integerRotationsEvaluateArgumentsOnceInOrder() throws Exception {
+        final Path project = project("integer-rotation-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int trace;
+                static int value() { trace = trace * 10 + 1; return 1; }
+                static long longValue() { trace = trace * 10 + 1; return 1L; }
+                static int distance() { trace = trace * 10 + 2; return -1; }
+                public static void main(String[] args) {
+                    System.out.println(Integer.rotateLeft(value(), distance()));
+                    System.out.println(trace);
+                    trace = 0;
+                    System.out.println(Long.rotateRight(longValue(), distance()));
+                    System.out.println(trace);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/integer-rotation-order").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("-2147483648\n12\n2\n12\n");
+    }
+
+    @Test
     void integerBitCountsMatchJavaAtBoundariesAndAcrossBitPatterns() throws Exception {
         final Path project = project("integer-bit-counts");
         writeJava(project, "com.acme.Main", """

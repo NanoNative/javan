@@ -3050,6 +3050,39 @@ final class BytecodeToIRInvokeSupport {
         final MethodRef methodRef,
         final List<StackValue> stack
     ) {
+        if (("rotateLeft".equals(methodRef.name()) || "rotateRight".equals(methodRef.name()))
+            && "(II)I".equals(methodRef.descriptor())) {
+            final IrExpression distance = popInt(classFile, method, stack);
+            final IrExpression value = popInt(classFile, method, stack);
+            final String symbol;
+            if ("rotateLeft".equals(methodRef.name())) {
+                symbol = "javan_integer_rotate_left";
+            } else {
+                symbol = "javan_integer_rotate_right";
+            }
+            stack.add(StackValue.intExpression(IrExpression.intCall(symbol, List.of(value, distance))));
+            return true;
+        }
+        if (("highestOneBit".equals(methodRef.name()) || "lowestOneBit".equals(methodRef.name())
+            || "reverse".equals(methodRef.name()) || "reverseBytes".equals(methodRef.name())
+            || "signum".equals(methodRef.name()))
+            && "(I)I".equals(methodRef.descriptor())) {
+            final String symbol;
+            if ("highestOneBit".equals(methodRef.name())) {
+                symbol = "javan_integer_highest_one_bit";
+            } else if ("lowestOneBit".equals(methodRef.name())) {
+                symbol = "javan_integer_lowest_one_bit";
+            } else if ("reverse".equals(methodRef.name())) {
+                symbol = "javan_integer_reverse";
+            } else if ("reverseBytes".equals(methodRef.name())) {
+                symbol = "javan_integer_reverse_bytes";
+            } else {
+                symbol = "javan_integer_signum";
+            }
+            final IrExpression value = popInt(classFile, method, stack);
+            stack.add(StackValue.intExpression(IrExpression.intCall(symbol, List.of(value))));
+            return true;
+        }
         if (("bitCount".equals(methodRef.name()) || "numberOfLeadingZeros".equals(methodRef.name())
             || "numberOfTrailingZeros".equals(methodRef.name())) && "(I)I".equals(methodRef.descriptor())) {
             final String symbol;
@@ -3191,6 +3224,44 @@ final class BytecodeToIRInvokeSupport {
         final MethodRef methodRef,
         final List<StackValue> stack
     ) {
+        if (("rotateLeft".equals(methodRef.name()) || "rotateRight".equals(methodRef.name()))
+            && "(JI)J".equals(methodRef.descriptor())) {
+            final IrExpression distance = popInt(classFile, method, stack);
+            final IrExpression value = popLong(classFile, method, stack);
+            final String symbol;
+            if ("rotateLeft".equals(methodRef.name())) {
+                symbol = "javan_long_rotate_left";
+            } else {
+                symbol = "javan_long_rotate_right";
+            }
+            stack.add(StackValue.longExpression(IrExpression.longCall(symbol, List.of(value, distance))));
+            return true;
+        }
+        if (("highestOneBit".equals(methodRef.name()) || "lowestOneBit".equals(methodRef.name())
+            || "reverse".equals(methodRef.name()) || "reverseBytes".equals(methodRef.name())
+            || "signum".equals(methodRef.name()))
+            && (("signum".equals(methodRef.name()) && "(J)I".equals(methodRef.descriptor()))
+                || (!"signum".equals(methodRef.name()) && "(J)J".equals(methodRef.descriptor())))) {
+            final String symbol;
+            if ("highestOneBit".equals(methodRef.name())) {
+                symbol = "javan_long_highest_one_bit";
+            } else if ("lowestOneBit".equals(methodRef.name())) {
+                symbol = "javan_long_lowest_one_bit";
+            } else if ("reverse".equals(methodRef.name())) {
+                symbol = "javan_long_reverse";
+            } else if ("reverseBytes".equals(methodRef.name())) {
+                symbol = "javan_long_reverse_bytes";
+            } else {
+                symbol = "javan_long_signum";
+            }
+            final IrExpression value = popLong(classFile, method, stack);
+            if ("signum".equals(methodRef.name())) {
+                stack.add(StackValue.intExpression(IrExpression.intCall(symbol, List.of(value))));
+            } else {
+                stack.add(StackValue.longExpression(IrExpression.longCall(symbol, List.of(value))));
+            }
+            return true;
+        }
         if (("bitCount".equals(methodRef.name()) || "numberOfLeadingZeros".equals(methodRef.name())
             || "numberOfTrailingZeros".equals(methodRef.name())) && "(J)I".equals(methodRef.descriptor())) {
             final String symbol;

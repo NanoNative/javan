@@ -1391,6 +1391,98 @@ final class RuntimeSourceCoreSection {
             return result;
         }
 
+        int javan_integer_highest_one_bit(int value) {
+            uint32_t bits = (uint32_t) value;
+            bits |= bits >> 1;
+            bits |= bits >> 2;
+            bits |= bits >> 4;
+            bits |= bits >> 8;
+            bits |= bits >> 16;
+            return javan_int_from_bits(bits - (bits >> 1));
+        }
+
+        int javan_integer_lowest_one_bit(int value) {
+            uint32_t bits = (uint32_t) value;
+            return javan_int_from_bits(bits & (UINT32_C(0) - bits));
+        }
+
+        int javan_integer_reverse(int value) {
+            uint32_t bits = (uint32_t) value;
+            bits = ((bits >> 1) & UINT32_C(0x55555555)) | ((bits & UINT32_C(0x55555555)) << 1);
+            bits = ((bits >> 2) & UINT32_C(0x33333333)) | ((bits & UINT32_C(0x33333333)) << 2);
+            bits = ((bits >> 4) & UINT32_C(0x0f0f0f0f)) | ((bits & UINT32_C(0x0f0f0f0f)) << 4);
+            bits = ((bits >> 8) & UINT32_C(0x00ff00ff)) | ((bits & UINT32_C(0x00ff00ff)) << 8);
+            return javan_int_from_bits((bits >> 16) | (bits << 16));
+        }
+
+        int javan_integer_reverse_bytes(int value) {
+            uint32_t bits = (uint32_t) value;
+            return javan_int_from_bits((bits >> 24) | ((bits >> 8) & UINT32_C(0x0000ff00))
+                | ((bits & UINT32_C(0x0000ff00)) << 8) | (bits << 24));
+        }
+
+        int javan_integer_signum(int value) {
+            return (value > 0) - (value < 0);
+        }
+
+        int javan_integer_rotate_left(int value, int distance) {
+            uint32_t bits = (uint32_t) value;
+            uint32_t shift = (uint32_t) distance & UINT32_C(31);
+            return javan_int_from_bits((bits << shift) | (bits >> ((UINT32_C(0) - shift) & UINT32_C(31))));
+        }
+
+        int javan_integer_rotate_right(int value, int distance) {
+            uint32_t bits = (uint32_t) value;
+            uint32_t shift = (uint32_t) distance & UINT32_C(31);
+            return javan_int_from_bits((bits >> shift) | (bits << ((UINT32_C(0) - shift) & UINT32_C(31))));
+        }
+
+        long long javan_long_highest_one_bit(long long value) {
+            uint64_t bits = (uint64_t) value;
+            bits |= bits >> 1;
+            bits |= bits >> 2;
+            bits |= bits >> 4;
+            bits |= bits >> 8;
+            bits |= bits >> 16;
+            bits |= bits >> 32;
+            return javan_long_from_bits(bits - (bits >> 1));
+        }
+
+        long long javan_long_lowest_one_bit(long long value) {
+            uint64_t bits = (uint64_t) value;
+            return javan_long_from_bits(bits & (UINT64_C(0) - bits));
+        }
+
+        long long javan_long_reverse(long long value) {
+            uint64_t bits = (uint64_t) value;
+            uint64_t high = (uint32_t) javan_integer_reverse(javan_int_from_bits((uint32_t) bits));
+            uint64_t low = (uint32_t) javan_integer_reverse(javan_int_from_bits((uint32_t) (bits >> 32)));
+            return javan_long_from_bits((high << 32) | low);
+        }
+
+        long long javan_long_reverse_bytes(long long value) {
+            uint64_t bits = (uint64_t) value;
+            uint64_t high = (uint32_t) javan_integer_reverse_bytes(javan_int_from_bits((uint32_t) bits));
+            uint64_t low = (uint32_t) javan_integer_reverse_bytes(javan_int_from_bits((uint32_t) (bits >> 32)));
+            return javan_long_from_bits((high << 32) | low);
+        }
+
+        int javan_long_signum(long long value) {
+            return (value > 0) - (value < 0);
+        }
+
+        long long javan_long_rotate_left(long long value, int distance) {
+            uint64_t bits = (uint64_t) value;
+            uint32_t shift = (uint32_t) distance & UINT32_C(63);
+            return javan_long_from_bits((bits << shift) | (bits >> ((UINT32_C(0) - shift) & UINT32_C(63))));
+        }
+
+        long long javan_long_rotate_right(long long value, int distance) {
+            uint64_t bits = (uint64_t) value;
+            uint32_t shift = (uint32_t) distance & UINT32_C(63);
+            return javan_long_from_bits((bits >> shift) | (bits << ((UINT32_C(0) - shift) & UINT32_C(63))));
+        }
+
         int javan_integer_bit_count(int value) {
             uint32_t bits = (uint32_t) value;
             bits -= (bits >> 1) & UINT32_C(0x55555555);
