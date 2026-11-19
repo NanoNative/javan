@@ -1841,6 +1841,67 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void objectGetClassNullThrowsCatchableNullPointerException() throws Exception {
+        final Path project = project("get-class-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int calls;
+                static Object selected;
+                static Object receiver() { calls = calls + 1; return selected; }
+                static Class<?> classify() {
+                    try { return receiver().getClass(); }
+                    catch (NullPointerException ex) { return null; }
+                }
+                public static void main(String[] args) {
+                    selected = new Object();
+                    System.out.println(classify() == Object.class);
+                    selected = null;
+                    System.out.println(classify() == null);
+                    System.out.println(classify() == null);
+                    System.out.println(calls);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/get-class-null").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void objectGetClassNullPropagatesToCaller() throws Exception {
+        final Path project = project("get-class-null-caller");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static Class<?> load(Object value) { return value.getClass(); }
+                static Class<?> classify(Object value) {
+                    try { return load(value); }
+                    catch (NullPointerException ex) { return null; }
+                }
+                public static void main(String[] args) {
+                    System.out.println(classify(new Object()) == Object.class);
+                    System.out.println(classify(null) == null);
+                    System.out.println(classify(null) == null);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/get-class-null-caller").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void plainObjectsRetainIdentityAndClassThroughCollection() throws Exception {
         final Path project = project("plain-object-identity");
         writeJava(project, "com.acme.Main", """

@@ -4350,6 +4350,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "--export", "com.acme.Api.plain(object):int", "--export", "com.acme.Api.hash(object):int");
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final Path caller = writeC(project, "call_plain.c", """
+            #include <string.h>
             #include ".javan/dist/bindings/c/library-plain-object.h"
             int main(void) {
                 JavanObjectHandle *first = 0, *second = 0;
@@ -4377,6 +4378,9 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 javan_result_free(&result);
                 result = javan_try_com_acme_Api_hash_object(0, &value);
                 if (!result.ok || value != 0) return 8;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_plain_object(0, &value);
+                if (result.ok || result.message == 0 || strstr(result.message, "NullPointerException") == 0) return 9;
                 javan_result_free(&result);
                 javan_object_handle_release(first);
                 javan_object_handle_release(second);

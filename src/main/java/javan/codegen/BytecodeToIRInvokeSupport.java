@@ -787,10 +787,24 @@ final class BytecodeToIRInvokeSupport {
         if ("java/lang/Object".equals(methodRef.owner())
             && "getClass".equals(methodRef.name())
             && "()Ljava/lang/Class;".equals(methodRef.descriptor())) {
-            final IrExpression receiver = popObjectValue(classFile, method, instruction, stack)
-                .expression()
-                .orElseThrow();
-            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_object_get_class", List.of(receiver))));
+            final IrExpression receiver = popObject(classFile, method, instruction, stack);
+            final IrExpression savedReceiver;
+            if (receiver.kind() == IrExpression.Kind.LOCAL || receiver.kind() == IrExpression.Kind.OBJECT_NULL) {
+                savedReceiver = receiver;
+            } else {
+                final String receiverLocal = newObjectLocal(localDeclarations);
+                instructions.add(IrInstruction.assignObject(receiverLocal, receiver));
+                savedReceiver = IrExpression.objectLocal(receiverLocal);
+            }
+            final List<StackValue> successStack = List.copyOf(stack);
+            final String receiverPresent = "label_get_class_receiver_" + instruction.offset();
+            instructions.add(IrInstruction.branchIf(receiverPresent,
+                IrExpression.objectComparison("!=", savedReceiver, IrExpression.objectNull())));
+            routePendingPlatformException(classFile, method, instruction, instructions, stack,
+                pendingExceptionHandlerStacks, sourceLines, "java/lang/NullPointerException", IrExpression.objectNull());
+            instructions.add(IrInstruction.label(receiverPresent));
+            stack.addAll(successStack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_object_get_class", List.of(savedReceiver))));
             return;
         }
         if ("java/lang/Class".equals(methodRef.owner())
