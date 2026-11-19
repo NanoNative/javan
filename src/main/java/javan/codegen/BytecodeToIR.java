@@ -500,6 +500,12 @@ public final class BytecodeToIR {
         result.put("javan_string_char_at_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/lang/String", "charAt", "(I)C"
         )));
+        result.put("javan_string_code_point_at", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/lang/String", "codePointAt", "(I)I"
+        )));
+        result.put("javan_string_code_point_before", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/lang/String", "codePointBefore", "(I)I"
+        )));
         result.put("javan_path_of", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/nio/file/Path", "of", "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;"
         )));
@@ -1155,8 +1161,10 @@ public final class BytecodeToIR {
             );
             if (instruction.methodRef().isPresent()) {
                 final MethodRef reference = instruction.methodRef().orElseThrow();
-                if ("java/lang/String".equals(reference.owner()) && "charAt".equals(reference.name())
-                    && "(I)C".equals(reference.descriptor())) {
+                if ("java/lang/String".equals(reference.owner())
+                    && ("charAt".equals(reference.name()) && "(I)C".equals(reference.descriptor())
+                        || ("codePointAt".equals(reference.name()) || "codePointBefore".equals(reference.name()))
+                            && "(I)I".equals(reference.descriptor()))) {
                     snapshotOperandStack(instructions, stack, locals, localDeclarations, true);
                 }
             }

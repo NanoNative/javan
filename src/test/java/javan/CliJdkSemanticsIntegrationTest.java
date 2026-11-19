@@ -13764,6 +13764,91 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void stringCodePointAccessMatchesJavaAcrossSurrogateCombinations() throws Exception {
+        final Path project = project("string-codepoint-access-combinations");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    char[] alphabet = {0, 'a', (char) 0xd800, (char) 0xdbff, (char) 0xdc00, (char) 0xdfff, (char) 0xffff};
+                    long result = 1;
+                    for (int combination = 0; combination < 2401; combination++) {
+                        char[] chars = new char[4];
+                        int digits = combination;
+                        for (int index = 0; index < chars.length; index++) {
+                            chars[index] = alphabet[digits % alphabet.length];
+                            digits /= alphabet.length;
+                        }
+                        String value = new String(chars);
+                        for (int index = 0; index < value.length(); index++) {
+                            result = result * 31 + value.codePointAt(index);
+                            result = result * 31 + value.codePointBefore(index + 1);
+                        }
+                    }
+                    System.out.println(result);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-codepoint-access-combinations").toString()),
+            Duration.ofSeconds(60));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringCodePointAccessMatchesJavaAndTransportsExceptions() throws Exception {
+        final Path project = project("string-codepoint-access");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int order = 0;
+                static String literal() { return "\\ud83d\\ude00"; }
+                static int first() { order = order * 10 + 1; return 5; }
+                static String text() { order = order * 10 + 2; return "a"; }
+                static int position(int value) { order = order * 10 + 3; return value; }
+                static void at(String value, int index) {
+                    try { System.out.println(value.codePointAt(index)); }
+                    catch (IndexOutOfBoundsException ex) { System.out.println("index"); }
+                    catch (NullPointerException ex) { System.out.println("null"); }
+                }
+                static void before(String value, int index) {
+                    try { System.out.println(value.codePointBefore(index)); }
+                    catch (IndexOutOfBoundsException ex) { System.out.println("index"); }
+                    catch (NullPointerException ex) { System.out.println("null"); }
+                }
+                public static void main(String[] args) {
+                    String[] values = {"", "abc", literal(), new String(new char[]{0, 'a', 0}),
+                        new String(new char[]{'a', (char) 0xd83d, (char) 0xde00, 'b'}),
+                        new String(new char[]{(char) 0xd800, (char) 0xdc00, (char) 0xdbff, (char) 0xdfff}),
+                        new String(new char[]{(char) 0xd83d, 'x', (char) 0xde00})};
+                    for (String value : values) for (int index = -1; index <= value.length() + 1; index++) {
+                        at(value, index); before(value, index);
+                    }
+                    at(null, 0); before(null, 0);
+                    System.out.println(literal().indexOf(0x1f600));
+                    System.out.println(literal().lastIndexOf(0x1f600));
+                    at("a", Integer.MIN_VALUE); at("a", Integer.MAX_VALUE);
+                    before("a", Integer.MIN_VALUE); before("a", Integer.MAX_VALUE);
+                    System.out.println(first() + text().codePointAt(position(0)));
+                    System.out.println(order);
+                    order = 0;
+                    System.out.println(first() + text().codePointBefore(position(1)));
+                    System.out.println(order);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-codepoint-access").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void stringCodePointSearchMatchesJavaAcrossSurrogateCombinations() throws Exception {
         final Path project = project("string-codepoint-search-combinations");
         writeJava(project, "com.acme.Main", """

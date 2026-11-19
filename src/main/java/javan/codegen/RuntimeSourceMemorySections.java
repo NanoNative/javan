@@ -10388,6 +10388,34 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        int javan_string_code_point_at(const char* value, int index) {
+            int first = javan_string_char_at_java(value, index);
+            if (javan_pending_has()) {
+                return 0;
+            }
+            if (first >= 0xd800 && first <= 0xdbff) {
+                int second = javan_utf16_char_at_utf8(value, index + 1);
+                if (second >= 0xdc00 && second <= 0xdfff) {
+                    return javan_character_to_code_point(first, second);
+                }
+            }
+            return first;
+        }
+
+        int javan_string_code_point_before(const char* value, int index) {
+            int last = javan_string_char_at_java(value, index <= 0 ? -1 : index - 1);
+            if (javan_pending_has()) {
+                return 0;
+            }
+            if (last >= 0xdc00 && last <= 0xdfff && index >= 2) {
+                int previous = javan_utf16_char_at_utf8(value, index - 2);
+                if (previous >= 0xd800 && previous <= 0xdbff) {
+                    return javan_character_to_code_point(previous, last);
+                }
+            }
+            return last;
+        }
+
         int javan_string_index_of_char(const char* value, int ch) {
             return javan_string_index_of_char_from(value, ch, 0);
         }
