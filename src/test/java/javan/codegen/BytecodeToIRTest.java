@@ -17821,7 +17821,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersStringReplaceCharToRuntimeCall() {
+    void propagatesStringReplaceCharFailure() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -17836,16 +17836,7 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.assignObject(
-                "object0",
-                IrExpression.objectCall(
-                    "javan_string_replace_char",
-                    List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"), IrExpression.intLocal("arg2"))
-                )
-            ),
-            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
-        );
+        assertThat(function.instructions()).contains(IrInstruction.propagatePending());
     }
 
     @Test

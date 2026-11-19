@@ -16123,6 +16123,105 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void stringReplaceCharPreservesUtf16AndTransportsNullFailure() throws Exception {
+        final Path project = project("string-replace-char-utf16");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static String replace(String value, char oldValue, char newValue) {
+                    try { return value.replace(oldValue, newValue); }
+                    catch (NullPointerException ex) { return "null"; }
+                }
+                static int hash(String value) {
+                    int result = value.length();
+                    for (int i = 0; i < value.length(); i++) result = result * 31 + value.charAt(i);
+                    return result;
+                }
+                public static void main(String[] args) {
+                    String value = "a\\0\\ud800\\udc00\\udfff\\ud800a";
+                    char[] characters = {0, 'a', 'z', (char) 1, (char) 0xd800, (char) 0xdc00, (char) 0xdfff, (char) 0xffff};
+                    for (char oldValue : characters) for (char newValue : characters)
+                        System.out.println(hash(replace(value, oldValue, newValue)));
+                    System.out.println(hash(replace(null, 'a', 'b')));
+                    System.out.println(hash("\\0\\ud800\\udc00\\udfff".replace((char) 0xd800, (char) 0)));
+                    System.out.println(hash("\\0\\ud800\\udc00\\udfff".replace((char) 0xdc00, (char) 0xffff)));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-replace-char-utf16").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringReplaceCharEvaluatesArgumentsBeforeUncaughtNullFailure() throws Exception {
+        final Path project = project("string-replace-char-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static char oldValue() { System.out.println("old"); return 'a'; }
+                static char newValue() { System.out.println("new"); return 'b'; }
+                public static void main(String[] args) {
+                    System.out.println("before");
+                    String value = args.length == 0 ? null : "text";
+                    System.out.println(value.replace(oldValue(), newValue()));
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-replace-char-uncaught").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("before\nold\nnew\n");
+        assertThat(result.stderr()).contains("NullPointerException");
+    }
+
+    @Test
+    void stringReplaceCharSurvivesConcurrentCollection() throws Exception {
+        final Path project = project("string-replace-char-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static String source() { return new String(new char[] {0, (char) 0xd800, (char) 0xdc00, (char) 0xdfff}); }
+                static String replace(String value) {
+                    try { return value.replace((char) 0xd800, (char) 1); }
+                    catch (NullPointerException ex) { return "null"; }
+                }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            String value = replace(source());
+                            new String(new char[] {'x', 'y'});
+                            if (value.length() != 4 || value.charAt(1) != 1 || value.charAt(2) != (char) 0xdc00)
+                                errors.incrementAndGet();
+                            if (!replace(null).equals("null")) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-replace-char-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
     void stringContainsSupportsStringBuilderArguments() throws Exception {
         final Path project = project("string-contains-builder");
         writeJava(project, "com.acme.Main", """

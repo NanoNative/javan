@@ -578,6 +578,9 @@ public final class BytecodeToIR {
         result.put("javan_string_contains_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/lang/String", "contains", "(Ljava/lang/CharSequence;)Z"
         )));
+        result.put("javan_string_replace_char_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/lang/String", "replace", "(CC)Ljava/lang/String;"
+        )));
         result.put("javan_string_to_char_array", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/lang/String", "toCharArray", "()[C"
         )));

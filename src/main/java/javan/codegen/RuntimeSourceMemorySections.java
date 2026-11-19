@@ -11180,6 +11180,14 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        void* javan_string_replace_char_java(const char* value, int old_ch, int new_ch) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
+            }
+            return javan_string_replace_char(value, old_ch, new_ch);
+        }
+
         void* javan_string_replace_char(const char* value, int old_ch, int new_ch) {
             if (value == NULL) {
                 javan_panic("null string");
@@ -11614,6 +11622,9 @@ final class RuntimeSourceMemorySections {
         }
         void javan_string_strip_trailing_into(void** result, const char* value) {
             javan_string_unary_into(result, value, javan_string_strip_trailing);
+        }
+        void javan_string_replace_char_java_into(void** result, const char* value, int old_ch, int new_ch) {
+            javan_string_two_ints_into(result, value, old_ch, new_ch, javan_string_replace_char_java);
         }
         void javan_string_replace_char_into(void** result, const char* value, int old_ch, int new_ch) {
             javan_string_two_ints_into(result, value, old_ch, new_ch, javan_string_replace_char);

@@ -1996,6 +1996,10 @@ public final class JdkCallSupport {
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
+        if ("java/lang/String".equals(methodRef.owner()) && "replace".equals(methodRef.name())
+            && "(CC)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            return List.of("java/lang/NullPointerException");
+        }
         if ("java/lang/String".equals(methodRef.owner()) && "contains".equals(methodRef.name())
             && "(Ljava/lang/CharSequence;)Z".equals(methodRef.descriptor())) {
             return List.of("java/lang/NullPointerException");

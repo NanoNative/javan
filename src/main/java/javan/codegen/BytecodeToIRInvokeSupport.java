@@ -715,7 +715,7 @@ final class BytecodeToIRInvokeSupport {
             final IrExpression newCh = popInt(classFile, method, stack);
             final IrExpression oldCh = popInt(classFile, method, stack);
             final IrExpression receiver = popObject(classFile, method, stack);
-            pushObjectCall(instructions, stack, localDeclarations, "javan_string_replace_char", List.of(receiver, oldCh, newCh));
+            pushObjectCall(instructions, stack, localDeclarations, "javan_string_replace_char_java", List.of(receiver, oldCh, newCh));
             return;
         }
         if ("java/lang/String".equals(methodRef.owner())
