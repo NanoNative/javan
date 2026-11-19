@@ -3922,6 +3922,11 @@ public final class StaticVerifier {
         if ("toIntExact".equals(target.name()) && "(J)I".equals(target.descriptor())) {
             return true;
         }
+        if (("divideExact".equals(target.name()) || "floorDivExact".equals(target.name())
+            || "ceilDivExact".equals(target.name()))
+            && ("(II)I".equals(target.descriptor()) || "(JJ)J".equals(target.descriptor()))) {
+            return true;
+        }
         if ((("floorDiv".equals(target.name()) || "ceilDiv".equals(target.name()))
                 && ("(II)I".equals(target.descriptor()) || "(JI)J".equals(target.descriptor())
                     || "(JJ)J".equals(target.descriptor())))

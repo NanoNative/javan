@@ -13229,6 +13229,157 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mathExactDivisionVariantsMatchSignsAndBoundaries() throws Exception {
+        final Path project = project("math-exact-division");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    int[] ints = { Integer.MIN_VALUE, -4, -1, 0, 1, 4, Integer.MAX_VALUE };
+                    int[] divisors = { Integer.MIN_VALUE, -3, -1, 1, 3, Integer.MAX_VALUE };
+                    long[] longs = { Long.MIN_VALUE, -4L, -1L, 0L, 1L, 4L, Long.MAX_VALUE };
+                    long[] wideDivisors = { Long.MIN_VALUE, -3L, -1L, 1L, 3L, Long.MAX_VALUE };
+                    for (int value : ints) {
+                        for (int divisor : divisors) {
+                            if (value == Integer.MIN_VALUE && divisor == -1) continue;
+                            System.out.println(Math.divideExact(value, divisor));
+                            System.out.println(Math.floorDivExact(value, divisor));
+                            System.out.println(Math.ceilDivExact(value, divisor));
+                        }
+                    }
+                    for (long value : longs) {
+                        for (long divisor : wideDivisors) {
+                            if (value == Long.MIN_VALUE && divisor == -1L) continue;
+                            System.out.println(Math.divideExact(value, divisor));
+                            System.out.println(Math.floorDivExact(value, divisor));
+                            System.out.println(Math.ceilDivExact(value, divisor));
+                        }
+                    }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/math-exact-division").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void mathExactDivisionVariantsThrowForZeroAndOverflow() throws Exception {
+        final Path project = project("math-exact-division-invalid");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    try { System.out.println(Math.divideExact(1, 0)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(Math.floorDivExact(1, 0)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(Math.ceilDivExact(1, 0)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(Math.divideExact(1L, 0L)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(Math.floorDivExact(1L, 0L)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(Math.ceilDivExact(1L, 0L)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(Math.divideExact(Integer.MIN_VALUE, -1)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(Math.floorDivExact(Integer.MIN_VALUE, -1)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(Math.ceilDivExact(Integer.MIN_VALUE, -1)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(Math.divideExact(Long.MIN_VALUE, -1L)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(Math.floorDivExact(Long.MIN_VALUE, -1L)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                    try { System.out.println(Math.ceilDivExact(Long.MIN_VALUE, -1L)); }
+                    catch (ArithmeticException expected) { System.out.println(expected.getMessage()); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/math-exact-division-invalid").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void mathExactDivisionEvaluatesOperandsOnceInOrder() throws Exception {
+        final Path project = project("math-exact-division-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int trace;
+                static int left() { trace = trace * 10 + 1; return -4; }
+                static int right() { trace = trace * 10 + 2; return 3; }
+                public static void main(String[] args) {
+                    System.out.println(Math.divideExact(left(), right()));
+                    System.out.println(trace);
+                    trace = 0;
+                    System.out.println(Math.floorDivExact(left(), right()));
+                    System.out.println(trace);
+                    trace = 0;
+                    System.out.println(Math.ceilDivExact(left(), right()));
+                    System.out.println(trace);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/math-exact-division-order").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected).isEqualTo("-1\n12\n-2\n12\n-1\n12\n");
+    }
+
+    @Test
+    void mathExactDivisionEvaluatesOperandsBeforeUncaughtOverflow() throws Exception {
+        final Path project = project("math-exact-division-uncaught-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int left() { System.out.println("left"); return Integer.MIN_VALUE; }
+                static int right() { System.out.println("right"); return -1; }
+                public static void main(String[] args) { Math.ceilDivExact(left(), right()); }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/math-exact-division-uncaught-order").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stdout()).isEqualTo("left\nright\n");
+        assertThat(nativeRun.stderr()).contains("java/lang/ArithmeticException", "integer overflow");
+    }
+
+    @Test
+    void mathExactDivisionUncaughtOverflowFailsAtRuntime() throws Exception {
+        final Path project = project("math-exact-division-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    System.out.println(Math.ceilDivExact(Integer.MIN_VALUE, -1));
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(project,
+            List.of(project.resolve(".javan/bin/math-exact-division-uncaught").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("java/lang/ArithmeticException", "integer overflow");
+    }
+
+    @Test
     void mathCeilingDivisionAndModulusMatchSignsAndBoundaries() throws Exception {
         final Path project = project("math-ceiling-div-mod");
         writeJava(project, "com.acme.Main", """

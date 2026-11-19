@@ -33,12 +33,18 @@ final class BytecodeToIRMathSupport {
         if ((("floorDiv".equals(methodRef.name()) || "ceilDiv".equals(methodRef.name()))
                 && ("(II)I".equals(methodRef.descriptor()) || "(JI)J".equals(methodRef.descriptor())
                     || "(JJ)J".equals(methodRef.descriptor())))
+            || (("divideExact".equals(methodRef.name()) || "floorDivExact".equals(methodRef.name())
+                || "ceilDivExact".equals(methodRef.name()))
+                && ("(II)I".equals(methodRef.descriptor()) || "(JJ)J".equals(methodRef.descriptor())))
             || (("floorMod".equals(methodRef.name()) || "ceilMod".equals(methodRef.name()))
                 && ("(II)I".equals(methodRef.descriptor()) || "(JI)I".equals(methodRef.descriptor())
                     || "(JJ)J".equals(methodRef.descriptor())))) {
             final boolean modulus = "floorMod".equals(methodRef.name()) || "ceilMod".equals(methodRef.name());
+            final boolean exact = "divideExact".equals(methodRef.name()) || "floorDivExact".equals(methodRef.name())
+                || "ceilDivExact".equals(methodRef.name());
+            final boolean truncate = "divideExact".equals(methodRef.name());
             final String rounding = "ceilDiv".equals(methodRef.name()) || "ceilMod".equals(methodRef.name())
-                ? "ceil" : "floor";
+                || "ceilDivExact".equals(methodRef.name()) ? "ceil" : "floor";
             final boolean leftLong = !"(II)I".equals(methodRef.descriptor());
             final boolean rightLong = "(JJ)J".equals(methodRef.descriptor());
             final IrExpression right = rightLong ? popLong(classFile, method, stack) : popInt(classFile, method, stack);
@@ -74,7 +80,26 @@ final class BytecodeToIRMathSupport {
             );
             instructions.add(IrInstruction.label(successLabel));
             stack.addAll(successStack);
-            if (leftLong && (!modulus || rightLong)) {
+            if (exact) {
+                final String noOverflow = "label_math_exact_div_no_overflow_" + instruction.offset() + "_" + rightIndex;
+                instructions.add(IrInstruction.branchIf(noOverflow, IrExpression.intComparison("!=", checkedLeft,
+                    leftLong ? IrExpression.longLiteral(Long.MIN_VALUE) : IrExpression.intLiteral(Integer.MIN_VALUE))));
+                instructions.add(IrInstruction.branchIf(noOverflow, IrExpression.intComparison("!=", checkedRight,
+                    rightLong ? IrExpression.longLiteral(-1) : IrExpression.intLiteral(-1))));
+                routePendingPlatformException(
+                    classFile, method, instruction, instructions, stack, pendingExceptionHandlerStacks, sourceLines,
+                    "java/lang/ArithmeticException", IrExpression.stringLiteral(leftLong ? "long overflow" : "integer overflow")
+                );
+                instructions.add(IrInstruction.label(noOverflow));
+                stack.addAll(successStack);
+            }
+            if (truncate) {
+                if (leftLong) {
+                    stack.add(StackValue.longExpression(IrExpression.longBinary("/", checkedLeft, checkedRight)));
+                } else {
+                    stack.add(StackValue.intExpression(IrExpression.intBinary("/", checkedLeft, checkedRight)));
+                }
+            } else if (leftLong && (!modulus || rightLong)) {
                 stack.add(StackValue.longExpression(IrExpression.longCall(
                     "javan_math_" + rounding + (modulus ? "_mod_long" : "_div_long"), List.of(checkedLeft, checkedRight)
                 )));
