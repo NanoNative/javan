@@ -99,6 +99,8 @@ and representational-overflow errors within supported handler shapes.
 supported handler shapes.
 `String.hashCode` hashes UTF-16 code units and transports a null-receiver exception within
 supported handler shapes.
+`String.isEmpty` tests for zero UTF-16 code units and transports a null-receiver exception within
+supported handler shapes.
 Provably invalid literal `charAt` indices remain subject to the diagnostics policy.
 Both `Character.toChars` overloads produce UTF-16 code units and transport invalid-code-point
 and destination errors within supported handler shapes. A direct `Character.toChars(...).length`

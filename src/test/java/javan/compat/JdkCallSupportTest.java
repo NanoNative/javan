@@ -4434,6 +4434,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void stringIsEmptyTransportsNullReceiverFailure() {
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
+            "java/lang/String",
+            "isEmpty",
+            "()Z"
+        ))).containsExactly("java/lang/NullPointerException");
+    }
+
+    @Test
     void unknownJdkThrowableIsNotAdmittedWithoutAnExactHierarchyEdge() {
         assertThat(JdkCallSupport.isPlatformThrowable("java/nio/file/NoSuchFileException")).isFalse();
     }

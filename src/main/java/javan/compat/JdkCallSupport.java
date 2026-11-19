@@ -2003,6 +2003,10 @@ public final class JdkCallSupport {
             && "()I".equals(methodRef.descriptor())) {
             return List.of("java/lang/NullPointerException");
         }
+        if ("java/lang/String".equals(methodRef.owner()) && "isEmpty".equals(methodRef.name())
+            && "()Z".equals(methodRef.descriptor())) {
+            return List.of("java/lang/NullPointerException");
+        }
         if ("java/lang/String".equals(methodRef.owner()) && "repeat".equals(methodRef.name())
             && "(I)Ljava/lang/String;".equals(methodRef.descriptor())) {
             return List.of("java/lang/IllegalArgumentException", "java/lang/NullPointerException", "java/lang/OutOfMemoryError");

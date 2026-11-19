@@ -371,6 +371,120 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void stringIsEmptyUnicodeAndNullMatchJava() throws Exception {
+        final Path project = project("string-is-empty-unicode-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static boolean empty(String value) {
+                    try { return value.isEmpty(); }
+                    catch (NullPointerException ex) { System.out.println("null"); return false; }
+                }
+                public static void main(String[] args) {
+                    System.out.println("".isEmpty());
+                    System.out.println("\\0".isEmpty());
+                    System.out.println("\\ud800".isEmpty());
+                    System.out.println("aé𐀀".isEmpty());
+                    System.out.println(empty(null));
+                    System.out.println(empty(new String(new char[] {'\\udfff', '\\0'})));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-is-empty-unicode-null").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringIsEmptyMatchesJavaAcrossUnicode() throws Exception {
+        final Path project = project("string-is-empty-unicode-sweep");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    int nonempty = 0;
+                    for (int value = 0; value <= 0x10ffff; value += 31)
+                        if (!Character.toString(value).isEmpty()) nonempty++;
+                    for (int value = 0; value <= 0xffff; value++)
+                        if (!Character.toString((char) value).isEmpty()) nonempty++;
+                    System.out.println(nonempty);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-is-empty-unicode-sweep").toString()),
+            Duration.ofSeconds(60));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringIsEmptyUncaughtNullStopsBeforeUse() throws Exception {
+        final Path project = project("string-is-empty-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static boolean later() { System.out.println("later"); return true; }
+                public static void main(String[] args) {
+                    System.out.println("before");
+                    String value = args.length == 0 ? null : "x";
+                    System.out.println(value.isEmpty() || later());
+                    System.out.println("after");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-is-empty-uncaught").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("before\n");
+        assertThat(result.stderr()).contains("NullPointerException");
+    }
+
+    @Test
+    void stringIsEmptySurvivesConcurrentCollection() throws Exception {
+        final Path project = project("string-is-empty-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static boolean empty(String value) {
+                    try { return value.isEmpty(); }
+                    catch (NullPointerException ex) { return false; }
+                }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            int point = i % 2 == 0 ? 0 : 0xd800;
+                            if (Character.toString(point).isEmpty()) errors.incrementAndGet();
+                            if (empty(null)) errors.incrementAndGet();
+                            if (!"".isEmpty()) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-is-empty-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
     void stringHashCodeBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("string-hash-code");
         writeJava(project, "com.acme.Main", """
