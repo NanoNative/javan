@@ -653,32 +653,22 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_string_contains", List.of(receiver, argument))));
             return;
         }
-        if ("java/lang/String".equals(methodRef.owner())
-            && "startsWith".equals(methodRef.name())
+        if ("java/lang/String".equals(methodRef.owner()) && "startsWith".equals(methodRef.name())
+            && ("(Ljava/lang/String;)Z".equals(methodRef.descriptor())
+                || "(Ljava/lang/String;I)Z".equals(methodRef.descriptor()))) {
+            final IrExpression fromIndex = "(Ljava/lang/String;I)Z".equals(methodRef.descriptor())
+                ? popInt(classFile, method, stack) : IrExpression.intLiteral(0);
+            final IrExpression argument = popObject(classFile, method, stack);
+            final IrExpression receiver = popObject(classFile, method, stack);
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_string_starts_with_java",
+                List.of(receiver, argument, fromIndex))));
+            return;
+        }
+        if ("java/lang/String".equals(methodRef.owner()) && "endsWith".equals(methodRef.name())
             && "(Ljava/lang/String;)Z".equals(methodRef.descriptor())) {
             final IrExpression argument = popObject(classFile, method, stack);
             final IrExpression receiver = popObject(classFile, method, stack);
-            stack.add(StackValue.intExpression(IrExpression.intCall("javan_string_starts_with", List.of(receiver, argument))));
-            return;
-        }
-        if ("java/lang/String".equals(methodRef.owner())
-            && "startsWith".equals(methodRef.name())
-            && "(Ljava/lang/String;I)Z".equals(methodRef.descriptor())) {
-            final IrExpression fromIndex = popInt(classFile, method, stack);
-            final IrExpression argument = popObject(classFile, method, stack);
-            final IrExpression receiver = popObject(classFile, method, stack);
-            stack.add(StackValue.intExpression(IrExpression.intCall(
-                "javan_string_starts_with_from",
-                List.of(receiver, argument, fromIndex)
-            )));
-            return;
-        }
-        if ("java/lang/String".equals(methodRef.owner())
-            && "endsWith".equals(methodRef.name())
-            && "(Ljava/lang/String;)Z".equals(methodRef.descriptor())) {
-            final IrExpression argument = popObject(classFile, method, stack);
-            final IrExpression receiver = popObject(classFile, method, stack);
-            stack.add(StackValue.intExpression(IrExpression.intCall("javan_string_ends_with", List.of(receiver, argument))));
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_string_ends_with_java", List.of(receiver, argument))));
             return;
         }
         if ("java/lang/String".equals(methodRef.owner())

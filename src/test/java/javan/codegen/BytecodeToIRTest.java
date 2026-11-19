@@ -17686,7 +17686,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersStringStartsWithToRuntimeCall() {
+    void propagatesStringStartsWithFailure() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -17699,16 +17699,11 @@ final class BytecodeToIRTest {
             plain(3, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnInt(IrExpression.intCall(
-                "javan_string_starts_with",
-                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
-            ))
-        );
+        assertThat(function.instructions()).contains(IrInstruction.propagatePending());
     }
 
     @Test
-    void lowersStringStartsWithOffsetToRuntimeCall() {
+    void propagatesStringStartsWithOffsetFailure() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -17722,16 +17717,7 @@ final class BytecodeToIRTest {
             plain(4, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnInt(IrExpression.intCall(
-                "javan_string_starts_with_from",
-                List.of(
-                    IrExpression.objectLocal("arg0"),
-                    IrExpression.objectLocal("arg1"),
-                    IrExpression.intLocal("arg2")
-                )
-            ))
-        );
+        assertThat(function.instructions()).contains(IrInstruction.propagatePending());
     }
 
     @Test
@@ -17809,7 +17795,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersStringEndsWithToRuntimeCall() {
+    void propagatesStringEndsWithFailure() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -17822,12 +17808,7 @@ final class BytecodeToIRTest {
             plain(3, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnInt(IrExpression.intCall(
-                "javan_string_ends_with",
-                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
-            ))
-        );
+        assertThat(function.instructions()).contains(IrInstruction.propagatePending());
     }
 
     @Test

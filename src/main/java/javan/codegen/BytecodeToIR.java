@@ -560,6 +560,12 @@ public final class BytecodeToIR {
         result.put("javan_string_substring_range_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/lang/String", "substring", "(II)Ljava/lang/String;"
         )));
+        result.put("javan_string_starts_with_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/lang/String", "startsWith", "(Ljava/lang/String;)Z"
+        )));
+        result.put("javan_string_ends_with_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/lang/String", "endsWith", "(Ljava/lang/String;)Z"
+        )));
         result.put("javan_string_to_char_array", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/lang/String", "toCharArray", "()[C"
         )));
@@ -1240,6 +1246,9 @@ public final class BytecodeToIR {
                             || "(II)I".equals(reference.descriptor())
                             || ("indexOf".equals(reference.name()) && ("(III)I".equals(reference.descriptor())
                                 || "(Ljava/lang/String;II)I".equals(reference.descriptor())))
+                            || (("startsWith".equals(reference.name()) || "endsWith".equals(reference.name()))
+                                && ("(Ljava/lang/String;)Z".equals(reference.descriptor())
+                                    || "(Ljava/lang/String;I)Z".equals(reference.descriptor())))
                             || (("indexOf".equals(reference.name()) || "lastIndexOf".equals(reference.name()))
                                 && ("(Ljava/lang/String;)I".equals(reference.descriptor())
                                     || "(Ljava/lang/String;I)I".equals(reference.descriptor())))

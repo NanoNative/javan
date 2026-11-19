@@ -4463,6 +4463,18 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void stringPrefixAndSuffixTransportNullFailures() {
+        for (final String descriptor : List.of("(Ljava/lang/String;)Z", "(Ljava/lang/String;I)Z")) {
+            assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
+                "java/lang/String", "startsWith", descriptor
+            ))).containsExactly("java/lang/NullPointerException");
+        }
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
+            "java/lang/String", "endsWith", "(Ljava/lang/String;)Z"
+        ))).containsExactly("java/lang/NullPointerException");
+    }
+
+    @Test
     void stringSubSequenceTransportsRangeAndNullFailures() {
         assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
             "java/lang/String", "subSequence", "(II)Ljava/lang/CharSequence;"

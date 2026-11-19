@@ -16123,6 +16123,118 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void stringPrefixAndSuffixMatchJavaForUtf16AndNulls() throws Exception {
+        final Path project = project("string-prefix-suffix-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int prefix(String value, String prefix) {
+                    boolean result;
+                    try { result = value.startsWith(prefix); }
+                    catch (NullPointerException ex) { return -9; }
+                    return result ? 1 : 0;
+                }
+                static int prefixFrom(String value, String prefix, int from) {
+                    boolean result;
+                    try { result = value.startsWith(prefix, from); }
+                    catch (NullPointerException ex) { return -9; }
+                    return result ? 1 : 0;
+                }
+                static int suffix(String value, String suffix) {
+                    boolean result;
+                    try { result = value.endsWith(suffix); }
+                    catch (NullPointerException ex) { return -9; }
+                    return result ? 1 : 0;
+                }
+                public static void main(String[] args) {
+                    String value = "\\0\\ud800\\udc00\\udfff\\ud800";
+                    String[] terms = {"", "\\0", "\\ud800", "\\udc00", "\\ud800\\udc00", "\\udfff", "x", null};
+                    int[] positions = {Integer.MIN_VALUE, -1, 0, 1, 2, 3, 4, 5, 6, Integer.MAX_VALUE};
+                    for (String term : terms) {
+                        System.out.println(prefix(value, term));
+                        System.out.println(suffix(value, term));
+                        for (int from : positions) System.out.println(prefixFrom(value, term, from));
+                    }
+                    System.out.println(prefix(null, "x"));
+                    System.out.println(prefixFrom(null, null, -1));
+                    System.out.println(suffix(null, "x"));
+                    System.out.println("\\0\\ud800\\udc00".startsWith("\\ud800", 1));
+                    System.out.println("\\0\\ud800\\udc00".endsWith("\\udc00"));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-prefix-suffix-null").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringPrefixEvaluatesArgumentsBeforeUncaughtFailure() throws Exception {
+        final Path project = project("string-prefix-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static String prefix() { System.out.println("prefix"); return "x"; }
+                static int offset() { System.out.println("offset"); return -1; }
+                public static void main(String[] args) {
+                    System.out.println("before");
+                    String value = args.length == 0 ? null : "text";
+                    System.out.println(value.startsWith(prefix(), offset()));
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-prefix-uncaught").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("before\nprefix\noffset\n");
+        assertThat(result.stderr()).contains("NullPointerException");
+    }
+
+    @Test
+    void stringPrefixAndSuffixSurviveConcurrentCollection() throws Exception {
+        final Path project = project("string-prefix-suffix-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static String term() { return new String(new char[] {(char) 0xd800, (char) 0xdc00}); }
+                static boolean nullPrefix(String value) {
+                    try { return value.startsWith(null, -1); }
+                    catch (NullPointerException ex) { return true; }
+                }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            if (!"\\0\\ud800\\udc00".startsWith(term(), 1)) errors.incrementAndGet();
+                            if (!"\\0\\ud800\\udc00".endsWith(term())) errors.incrementAndGet();
+                            if (nullPrefix("x")) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-prefix-suffix-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
     void stringSubSequenceAcceptsUnicodeAndTransportsFailures() throws Exception {
         final Path project = project("string-subsequence-utf16");
         writeJava(project, "com.acme.Main", """

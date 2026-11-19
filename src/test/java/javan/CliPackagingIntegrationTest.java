@@ -1930,6 +1930,9 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     System.out.println("\\0\\ud800\\udc00\\udfff".substring(1, 3).length());
                     System.out.println("\\0\\ud800\\udc00\\udfff".substring(2).charAt(0));
                     System.out.println("caf\\u00e9".subSequence(1, 4));
+                    System.out.println("\\0\\ud800\\udc00".startsWith("\\ud800", 1));
+                    System.out.println("\\0\\ud800\\udc00".endsWith("\\udc00"));
+                    System.out.println("x".startsWith(null, -1));
                     System.out.println(nullSubstring(null));
                 }
             }
@@ -3749,6 +3752,8 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static String slice(String value, int begin, int end) { return value.substring(begin, end); }
                 public static String tail(String value, int begin) { return value.substring(begin); }
                 public static String sequence(String value, int begin, int end) { return (String) value.subSequence(begin, end); }
+                public static int prefix(String value, String prefix, int from) { return value.startsWith(prefix, from) ? 1 : 0; }
+                public static int suffix(String value, String suffix) { return value.endsWith(suffix) ? 1 : 0; }
                 public static String fail(String value) { throw new IllegalArgumentException(value); }
                 public static String literal() { return "a\\0b"; }
                 public static String fromCodePoint(int value) { return Character.toString(value); }
@@ -3772,7 +3777,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "--export", "com.acme.Text.lastSearch", "--export", "com.acme.Text.substringFirst",
             "--export", "com.acme.Text.substringLast", "--export", "com.acme.Text.boundedPoint",
             "--export", "com.acme.Text.boundedString", "--export", "com.acme.Text.slice", "--export", "com.acme.Text.tail",
-            "--export", "com.acme.Text.sequence");
+            "--export", "com.acme.Text.sequence", "--export", "com.acme.Text.prefix", "--export", "com.acme.Text.suffix");
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         final Path library = project.resolve(".javan/dist/liblibrary-utf16.a");
         final Path caller = writeC(project, "call_utf16.c", """
@@ -3850,6 +3855,22 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 result = javan_utf16_try_com_acme_Text_sequence_string_int_int(input, 4, 2, &output);
                 if (result.ok || output.data != NULL || output.length != 0 || result.message == NULL
                     || strstr(result.message, "StringIndexOutOfBoundsException") == NULL) return 59;
+                javan_result_free(&result);
+                needle.data = data + 2; needle.length = 2;
+                result = javan_utf16_try_com_acme_Text_prefix_string_string_int(input, needle, 2, &search);
+                if (!result.ok || search != 1) return 60;
+                javan_result_free(&result);
+                needle.data = data + 6; needle.length = 1;
+                result = javan_utf16_try_com_acme_Text_suffix_string_string(input, needle, &search);
+                if (!result.ok || search != 1) return 61;
+                javan_result_free(&result);
+                needle.data = NULL; needle.length = 0;
+                result = javan_utf16_try_com_acme_Text_prefix_string_string_int(input, needle, -1, &search);
+                if (!result.ok || search != 0) return 62;
+                javan_result_free(&result);
+                result = javan_utf16_try_com_acme_Text_suffix_string_string(input, needle, &search);
+                if (result.ok || search != 0 || result.message == NULL
+                    || strstr(result.message, "NullPointerException") == NULL) return 63;
                 javan_result_free(&result);
                 int point = -1;
                 result = javan_try_com_acme_Text_literalCodePointAt_int(1, &point);
