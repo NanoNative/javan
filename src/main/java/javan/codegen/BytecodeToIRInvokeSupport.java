@@ -3598,6 +3598,17 @@ final class BytecodeToIRInvokeSupport {
         final MethodRef methodRef,
         final List<StackValue> stack
     ) {
+        if ("offsetByCodePoints".equals(methodRef.name()) && "([CIIII)I".equals(methodRef.descriptor())) {
+            final IrExpression distance = popInt(classFile, method, stack);
+            final IrExpression index = popInt(classFile, method, stack);
+            final IrExpression count = popInt(classFile, method, stack);
+            final IrExpression start = popInt(classFile, method, stack);
+            final IrExpression value = popObject(classFile, method, stack);
+            stack.add(StackValue.intExpression(IrExpression.intCall(
+                "javan_character_array_offset_by_code_points", List.of(value, start, count, index, distance)
+            )));
+            return true;
+        }
         if ("codePointCount".equals(methodRef.name()) && "([CII)I".equals(methodRef.descriptor())) {
             final IrExpression count = popInt(classFile, method, stack);
             final IrExpression offset = popInt(classFile, method, stack);

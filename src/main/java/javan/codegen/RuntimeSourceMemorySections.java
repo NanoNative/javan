@@ -8929,6 +8929,39 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        int javan_character_array_offset_by_code_points(void* value, int start, int count, int index, int distance) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            javan_char_array* chars = (javan_char_array*) value;
+            if (start < 0 || count < 0 || start > chars->length || count > chars->length - start
+                || index < start || index > start + count) {
+                javan_pending_throw("java/lang/IndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            int end = start + count;
+            int position = index;
+            int remaining = distance;
+            while (remaining > 0 && position < end) {
+                int first = chars->values[position++];
+                if (javan_character_is_high_surrogate(first) && position < end
+                    && javan_character_is_low_surrogate(chars->values[position])) position++;
+                remaining--;
+            }
+            while (remaining < 0 && position > start) {
+                int last = chars->values[--position];
+                if (javan_character_is_low_surrogate(last) && position > start
+                    && javan_character_is_high_surrogate(chars->values[position - 1])) position--;
+                remaining++;
+            }
+            if (remaining != 0) {
+                javan_pending_throw("java/lang/IndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            return position;
+        }
+
         int javan_character_write_chars(int value, void* destination, int index) {
             if (!javan_character_is_valid_code_point(value)) {
                 javan_pending_throw("java/lang/IllegalArgumentException", NULL, NULL, NULL, NULL, -1, -1, NULL);

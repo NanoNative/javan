@@ -1042,6 +1042,88 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void staticLibraryCharacterArrayOffsetTransportsFailures() throws Exception {
+        final Path project = project("library-character-offset");
+        writeJava(project, "com.acme.Text", """
+            package com.acme;
+            public final class Text {
+                public static int offset(int start, int count, int index, int distance) {
+                    char[] chars = {'a', '\\ud800', '\\udc00', 'z'};
+                    return Character.offsetByCodePoints(chars, start, count, index, distance);
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString(), "--kind", "staticlib", "--export", "com.acme.Text.offset");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path library = project.resolve(".javan/dist/liblibrary-character-offset.a");
+        final Path caller = writeC(project, "call_offset.c", """
+            #include ".javan/dist/bindings/c/library-character-offset.h"
+            int main(void) {
+                int value = 99;
+                JavanResult result = javan_try_com_acme_Text_offset_int_int_int_int(0, 4, 1, 1, &value);
+                if (!result.ok || value != 3) return 1;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Text_offset_int_int_int_int(0, 4, 4, 1, &value);
+                if (result.ok || value != 0) return 2;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Text_offset_int_int_int_int(0, 4, 3, -1, &value);
+                if (!result.ok || value != 1) return 3;
+                javan_result_free(&result);
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-offset");
+        final ProcessResult compile = process(project, List.of("cc", caller.toString(), library.toString(), "-o", binary.toString()));
+        assertThat(compile.exitCode()).as(compile.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(binary.toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+    }
+
+    @Test
+    void nativeBuiltJavanBuildsCharacterArrayOffsetByCodePoints() throws Exception {
+        final Path project = tempDir.resolve("selfhost-character-array-codepoint-offset");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int offset(char[] value, int start, int count, int index, int shift) {
+                    try { return Character.offsetByCodePoints(value, start, count, index, shift); }
+                    catch (NullPointerException ex) { return -1; }
+                    catch (IndexOutOfBoundsException ex) { return -2; }
+                }
+                public static void main(String[] args) {
+                    char[] value = {'a', '\\ud800', '\\udc00', '\\udfff', 0};
+                    for (int start = -1; start <= value.length + 1; start++)
+                        for (int count = -1; count <= value.length + 1; count++)
+                            for (int index = -1; index <= value.length + 1; index++)
+                                for (int shift = -2; shift <= 2; shift++) {
+                                    System.out.println(offset(value, start, count, index, shift));
+                                    System.out.println(offset(null, start, count, index, shift));
+                                }
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-character-array-codepoint-offset"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-character-array-codepoint-offset").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout());
+    }
+
+    @Test
     void staticLibraryCharacterArrayCodePointCountTransportsFailures() throws Exception {
         final Path project = project("library-character-count");
         writeJava(project, "com.acme.Text", """

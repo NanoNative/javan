@@ -510,6 +510,7 @@ public final class JdkCallSupport {
         intrinsic("Character.codePointAt", "java/lang/Character", "codePointAt", "([CI)I", "([CII)I"),
         intrinsic("Character.codePointBefore", "java/lang/Character", "codePointBefore", "([CI)I", "([CII)I"),
         intrinsic("Character.codePointCount", "java/lang/Character", "codePointCount", "([CII)I"),
+        intrinsic("Character.offsetByCodePoints", "java/lang/Character", "offsetByCodePoints", "([CIIII)I"),
         runtime("Character.toString.instance", "java/lang/Character", "toString", "()Ljava/lang/String;"),
         runtime("Character.valueOf", "java/lang/Character", "valueOf", "(C)Ljava/lang/Character;"),
         runtime("Character.charValue", "java/lang/Character", "charValue", "()C"),
@@ -1991,6 +1992,10 @@ public final class JdkCallSupport {
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
+        if ("java/lang/Character".equals(methodRef.owner()) && "offsetByCodePoints".equals(methodRef.name())
+            && "([CIIII)I".equals(methodRef.descriptor())) {
+            return List.of("java/lang/IndexOutOfBoundsException", "java/lang/NullPointerException");
+        }
         if ("java/lang/Character".equals(methodRef.owner())
             && ("codePointAt".equals(methodRef.name()) || "codePointBefore".equals(methodRef.name()))
             && "([CI)I".equals(methodRef.descriptor())) {

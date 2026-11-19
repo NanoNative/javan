@@ -13815,6 +13815,113 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void characterArrayOffsetByCodePointsMatchesJava() throws Exception {
+        final Path project = project("character-array-codepoint-offset");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int order;
+                static int first() { order = order * 10 + 1; return 7; }
+                static char[] array() { order = order * 10 + 2; return new char[]{'a'}; }
+                static int start() { order = order * 10 + 3; return 0; }
+                static int count() { order = order * 10 + 4; return 1; }
+                static int index() { order = order * 10 + 5; return 0; }
+                static int shift() { order = order * 10 + 6; return 1; }
+                static int offset(char[] value, int start, int count, int index, int shift) {
+                    try { return Character.offsetByCodePoints(value, start, count, index, shift); }
+                    catch (NullPointerException ex) { return -1; }
+                    catch (IndexOutOfBoundsException ex) { return -2; }
+                }
+                public static void main(String[] args) {
+                    char[] value = {'a', '\\ud800', '\\udc00', '\\udfff', '\\udbff', 'z', 0};
+                    long hash = 1;
+                    for (int start = -1; start <= value.length + 1; start++)
+                        for (int count = -1; count <= value.length + 1; count++)
+                            for (int index = -1; index <= value.length + 1; index++)
+                                for (int shift = -3; shift <= 3; shift++) {
+                                    hash = hash * 31 + offset(value, start, count, index, shift);
+                                    hash = hash * 31 + offset(null, start, count, index, shift);
+                                }
+                    System.out.println(hash);
+                    System.out.println(offset(value, 0, 7, 0, Integer.MIN_VALUE));
+                    System.out.println(offset(value, 0, 7, 7, Integer.MAX_VALUE));
+                    System.out.println(offset(value, Integer.MIN_VALUE, Integer.MAX_VALUE, 0, 0));
+                    System.out.println(offset(null, Integer.MIN_VALUE, Integer.MAX_VALUE, 0, 0));
+                    System.out.println(first() + Character.offsetByCodePoints(array(), start(), count(), index(), shift()));
+                    System.out.println(order);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/character-array-codepoint-offset").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void characterArrayOffsetByCodePointsAcrossSurrogateBoundaries() throws Exception {
+        final Path project = project("character-array-codepoint-offset-surrogates");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int offset(char[] value, int start, int count, int index, int shift) {
+                    try { return Character.offsetByCodePoints(value, start, count, index, shift); }
+                    catch (IndexOutOfBoundsException ex) { return -1; }
+                }
+                public static void main(String[] args) {
+                    char[] candidates = {'a', '\\ud800', '\\udbff', '\\udc00', '\\udfff'};
+                    char[] value = new char[4];
+                    long hash = 1;
+                    for (int a = 0; a < candidates.length; a++)
+                        for (int b = 0; b < candidates.length; b++)
+                            for (int c = 0; c < candidates.length; c++)
+                                for (int d = 0; d < candidates.length; d++) {
+                                    value[0] = candidates[a]; value[1] = candidates[b];
+                                    value[2] = candidates[c]; value[3] = candidates[d];
+                                    for (int start = 0; start <= value.length; start++)
+                                        for (int count = 0; count <= value.length - start; count++)
+                                            for (int index = start; index <= start + count; index++)
+                                                for (int shift = -2; shift <= 2; shift++)
+                                                    hash = hash * 31 + offset(value, start, count, index, shift);
+                                }
+                    System.out.println(hash);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/character-array-codepoint-offset-surrogates").toString()), Duration.ofSeconds(60));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void characterArrayOffsetByCodePointsUncaughtFailureStopsBeforeUse() throws Exception {
+        final Path project = project("character-array-codepoint-offset-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    System.out.println("before");
+                    int value = args.length == 0 ? Character.offsetByCodePoints(new char[0], 0, 0, 0, 1) : 1;
+                    System.out.println(value);
+                    System.out.println("after");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/character-array-codepoint-offset-uncaught").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("before\n");
+        assertThat(result.stderr()).contains("IndexOutOfBoundsException");
+    }
+
+    @Test
     void characterArrayCodePointCountMatchesJava() throws Exception {
         final Path project = project("character-array-codepoint-count");
         writeJava(project, "com.acme.Main", """
@@ -14105,6 +14212,8 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                             if (Character.codePointAt(pair(), index(0), index(2)) != 0x1f600) errors.incrementAndGet();
                             if (Character.codePointBefore(pair(), index(2), index(0)) != 0x1f600) errors.incrementAndGet();
                             if (Character.codePointCount(pair(), index(0), index(2)) != 1) errors.incrementAndGet();
+                            if (Character.offsetByCodePoints(pair(), index(0), index(2), index(0), index(1)) != 2) errors.incrementAndGet();
+                            if (Character.offsetByCodePoints(pair(), index(0), index(2), index(2), -index(1)) != 0) errors.incrementAndGet();
                         }
                     }
                 }

@@ -100,6 +100,8 @@ pairs within their optional bounds and transport null-array and invalid-index er
 supported handler shapes.
 `Character.codePointCount(char[], int, int)` counts within the requested array slice and
 transports null-array and invalid-range errors within supported handler shapes.
+`Character.offsetByCodePoints(char[], int, int, int, int)` moves within its array slice and
+transports null-array and invalid-range errors within supported handler shapes.
 `Path.of`, `Paths.get`, and `Path.resolve` report supported null inputs and embedded
 U+0000 through typed exceptions. Some inline varargs inside `catch` ranges still fail
 verification and can be moved outside the protected range.

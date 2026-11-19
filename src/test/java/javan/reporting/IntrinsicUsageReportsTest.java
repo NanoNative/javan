@@ -50,6 +50,7 @@ final class IntrinsicUsageReportsTest {
                 instruction("java/lang/Character", "codePointAt", "([CII)I"),
                 instruction("java/lang/Character", "codePointBefore", "([CII)I"),
                 instruction("java/lang/Character", "codePointCount", "([CII)I"),
+                instruction("java/lang/Character", "offsetByCodePoints", "([CIIII)I"),
                 instruction("java/io/PrintStream", "println", "(I)V"),
                 instruction("java/lang/Thread", "currentThread", "()Ljava/lang/Thread;"),
                 instruction("java/util/List", "of", "()Ljava/util/List;"),
@@ -187,6 +188,7 @@ final class IntrinsicUsageReportsTest {
             new IntrinsicCallCount("Character.codePointAt", 2),
             new IntrinsicCallCount("Character.codePointBefore", 2),
             new IntrinsicCallCount("Character.codePointCount", 1),
+            new IntrinsicCallCount("Character.offsetByCodePoints", 1),
             new IntrinsicCallCount("String.valueOf", 1),
             new IntrinsicCallCount("String.copyValueOf", 0)
         );
@@ -199,7 +201,7 @@ final class IntrinsicUsageReportsTest {
         assertThat(report.runtimeCallSiteCount()).isEqualTo(4);
         assertThat(report.supportedDirectJdkCalls()).isEmpty();
         assertThat(report.supportedDirectJdkCallSiteCount()).isZero();
-        assertThat(report.supportedJdkCallSiteCount()).isEqualTo(22);
+        assertThat(report.supportedJdkCallSiteCount()).isEqualTo(23);
         assertThat(report.unsupportedJdkCallCandidateCount()).isZero();
         assertThat(report.unsupportedJdkCallCandidates()).isEmpty();
         assertThat(Files.readString(tempDir.resolve("reports/intrinsics.json")))
@@ -220,20 +222,21 @@ final class IntrinsicUsageReportsTest {
                 "{\"name\": \"Character.codePointAt\", \"count\": 2}",
                 "{\"name\": \"Character.codePointBefore\", \"count\": 2}",
                 "{\"name\": \"Character.codePointCount\", \"count\": 1}",
+                "{\"name\": \"Character.offsetByCodePoints\", \"count\": 1}",
                 "{\"name\": \"String.valueOf\", \"count\": 1}",
-                "\"intrinsicCallSiteCount\": 18",
+                "\"intrinsicCallSiteCount\": 19",
                 "{\"name\": \"List.getFirst\", \"count\": 1}",
                 "{\"name\": \"List.of\", \"count\": 1}",
                 "{\"name\": \"PrintStream.println\", \"count\": 1}",
                 "{\"name\": \"Thread.currentThread\", \"count\": 1}",
                 "\"runtimeCallSiteCount\": 4",
                 "\"supportedDirectJdkCallSiteCount\": 0",
-                "\"supportedJdkCallSiteCount\": 22",
+                "\"supportedJdkCallSiteCount\": 23",
                 "\"unsupportedJdkCallCandidateCount\": 0"
             );
         assertThat(Files.readString(tempDir.resolve("reports/intrinsics.md")))
             .contains(
-                "Supported reachable JDK call sites: `22`",
+                "Supported reachable JDK call sites: `23`",
                 "| `Math.floorDiv` | 1 |",
                 "Runtime-registry reachable call sites: `4`",
                 "Supported-direct reachable call sites: `0`",
@@ -246,6 +249,7 @@ final class IntrinsicUsageReportsTest {
                 "| `Character.codePointAt` | 2 |",
                 "| `Character.codePointBefore` | 2 |",
                 "| `Character.codePointCount` | 1 |",
+                "| `Character.offsetByCodePoints` | 1 |",
                 "| `String.valueOf` | 1 |",
                 "| `List.getFirst` | 1 |",
                 "| `List.of` | 1 |",

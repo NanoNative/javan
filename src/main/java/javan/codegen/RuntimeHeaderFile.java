@@ -373,6 +373,7 @@ final class RuntimeHeaderFile {
         int javan_character_array_code_point_at_limit(void* value, int index, int limit);
         int javan_character_array_code_point_before_start(void* value, int index, int start);
         int javan_character_array_code_point_count(void* value, int offset, int count);
+        int javan_character_array_offset_by_code_points(void* value, int start, int count, int index, int distance);
         int javan_char_array_get(void* array, int index);
         void javan_char_array_set(void* array, int index, int value);
         int javan_array_length(void* array);
