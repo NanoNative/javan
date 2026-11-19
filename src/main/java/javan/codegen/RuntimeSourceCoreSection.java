@@ -820,12 +820,52 @@ final class RuntimeSourceCoreSection {
             return 0;
         }
 
-        static void javan_format_real(char* buffer, unsigned long size, double value, int is_float) {
-            int saved_errno = errno;
-            fenv_t saved_environment;
-            if (feholdexcept(&saved_environment) != 0 || fesetround(FE_TONEAREST) != 0) {
+        /* Linux keeps the floating-environment functions in libm, which static ABI callers
+         * must not need to link. Save and restore the target's complete control/status state. */
+        #if defined(__linux__) && defined(__aarch64__)
+        typedef struct { uint64_t control; uint64_t status; } JavanFloatEnvironment;
+        static void javan_float_environment_begin(JavanFloatEnvironment* environment) {
+            __asm__ __volatile__("mrs %0, fpcr" : "=r" (environment->control));
+            __asm__ __volatile__("mrs %0, fpsr" : "=r" (environment->status));
+            uint64_t control = environment->control & ~((UINT64_C(3) << 22) | (UINT64_C(0x9f) << 8));
+            __asm__ __volatile__("msr fpcr, %0\\n\\tmsr fpsr, xzr\\n\\tisb" : : "r" (control) : "memory");
+        }
+        static void javan_float_environment_end(const JavanFloatEnvironment* environment) {
+            __asm__ __volatile__("msr fpcr, %0\\n\\tmsr fpsr, %1\\n\\tisb" : :
+                "r" (environment->control), "r" (environment->status) : "memory");
+        }
+        #elif defined(__linux__) && defined(__x86_64__)
+        typedef struct { unsigned char x87[28]; uint32_t mxcsr; } JavanFloatEnvironment;
+        static void javan_float_environment_begin(JavanFloatEnvironment* environment) {
+            __asm__ __volatile__("fnstenv %0" : "=m" (environment->x87) : : "memory");
+            __asm__ __volatile__("stmxcsr %0" : "=m" (environment->mxcsr));
+            uint16_t control;
+            memcpy(&control, environment->x87, sizeof(control));
+            control = (uint16_t) ((control | 0x003fU) & ~0x0c00U);
+            uint32_t mxcsr = (environment->mxcsr | 0x1f80U) & ~0x603fU;
+            __asm__ __volatile__("fnclex\\n\\tfldcw %0\\n\\tldmxcsr %1" : : "m" (control), "m" (mxcsr) : "memory");
+        }
+        static void javan_float_environment_end(const JavanFloatEnvironment* environment) {
+            __asm__ __volatile__("fldenv %0\\n\\tldmxcsr %1" : : "m" (environment->x87), "m" (environment->mxcsr) : "memory");
+        }
+        #else
+        typedef fenv_t JavanFloatEnvironment;
+        static void javan_float_environment_begin(JavanFloatEnvironment* environment) {
+            if (feholdexcept(environment) != 0 || fesetround(FE_TONEAREST) != 0) {
                 javan_panic("floating-point environment could not be saved");
             }
+        }
+        static void javan_float_environment_end(const JavanFloatEnvironment* environment) {
+            if (fesetenv(environment) != 0) {
+                javan_panic("floating-point environment could not be restored");
+            }
+        }
+        #endif
+
+        static void javan_format_real(char* buffer, unsigned long size, double value, int is_float) {
+            int saved_errno = errno;
+            JavanFloatEnvironment saved_environment;
+            javan_float_environment_begin(&saved_environment);
             char result[64];
             if (isnan(value)) {
                 strcpy(result, "NaN");
@@ -937,9 +977,7 @@ final class RuntimeSourceCoreSection {
                 }
                 *output = '\\0';
             }
-            if (fesetenv(&saved_environment) != 0) {
-                javan_panic("floating-point environment could not be restored");
-            }
+            javan_float_environment_end(&saved_environment);
             if (size != 0) {
                 size_t length = strlen(result);
                 if (length >= size) {

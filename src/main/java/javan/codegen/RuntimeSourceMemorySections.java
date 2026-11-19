@@ -8997,7 +8997,16 @@ final class RuntimeSourceMemorySections {
             const float span = bound - origin;
             float result = isfinite(span) ? origin + unit * span : (1.0f - unit) * origin + unit * bound;
             if (result >= bound) {
-                result = nextafterf(bound, -INFINITY);
+                uint32_t bits;
+                memcpy(&bits, &bound, sizeof(bits));
+                if ((bits & UINT32_C(0x7fffffff)) == 0U) {
+                    bits = UINT32_C(0x80000001);
+                } else if ((bits & UINT32_C(0x80000000)) != 0U) {
+                    bits++;
+                } else {
+                    bits--;
+                }
+                memcpy(&result, &bits, sizeof(result));
             }
             return result;
         }
@@ -9007,7 +9016,16 @@ final class RuntimeSourceMemorySections {
             const double span = bound - origin;
             double result = isfinite(span) ? origin + unit * span : (1.0 - unit) * origin + unit * bound;
             if (result >= bound) {
-                result = nextafter(bound, -INFINITY);
+                uint64_t bits;
+                memcpy(&bits, &bound, sizeof(bits));
+                if ((bits & UINT64_C(0x7fffffffffffffff)) == 0U) {
+                    bits = UINT64_C(0x8000000000000001);
+                } else if ((bits & UINT64_C(0x8000000000000000)) != 0U) {
+                    bits++;
+                } else {
+                    bits--;
+                }
+                memcpy(&result, &bits, sizeof(result));
             }
             return result;
         }

@@ -2343,6 +2343,45 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void staticLibraryFloatingFormattingPreservesCallerEnvironment() throws Exception {
+        final Path project = project("library-floating-environment");
+        writeJava(project, "com.acme.Text", """
+            package com.acme;
+            public final class Text {
+                public static String render(double value) { return Double.toString(value); }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString(), "--kind", "staticlib",
+            "--export", "com.acme.Text.render");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path caller = writeC(project, "call_environment.c", """
+            #include <errno.h>
+            #include <fenv.h>
+            #include <string.h>
+            #include ".javan/dist/bindings/c/library-floating-environment.h"
+            int main(void) {
+                int modes[] = { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
+                for (unsigned i = 0; i < sizeof(modes) / sizeof(modes[0]); i++) {
+                    if (fesetround(modes[i]) || feclearexcept(FE_ALL_EXCEPT) || feraiseexcept(FE_INVALID)) return 1;
+                    int flags = fetestexcept(FE_ALL_EXCEPT);
+                    errno = EDOM;
+                    char* text = javan_export_com_acme_Text_render_double(0x1.5555555555555p-2);
+                    if (!text || strcmp(text, "0.3333333333333333") || fegetround() != modes[i]
+                        || fetestexcept(FE_ALL_EXCEPT) != flags || errno != EDOM) return 2;
+                    javan_free(text);
+                }
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("environment");
+        final ProcessResult compile = process(project, List.of("cc", caller.toString(),
+            project.resolve(".javan/dist/liblibrary-floating-environment.a").toString(), "-o", binary.toString(), "-lm"));
+        assertThat(compile.exitCode()).as(compile.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(binary.toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+    }
+
+    @Test
     void staticLibraryByteArrayInputAndOutputUsesPointerLengthAbi() throws Exception {
         final Path project = project("library-bytes");
         writeJava(project, "com.acme.Bytes", """
