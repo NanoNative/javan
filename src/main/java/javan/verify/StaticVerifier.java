@@ -3476,8 +3476,10 @@ public final class StaticVerifier {
         if (!visiting.add(target)) {
             return Set.of();
         }
-        if ("java/lang/String".equals(target.owner()) && "contains".equals(target.name())
-            && "(Ljava/lang/CharSequence;)Z".equals(target.descriptor())) {
+        if ("java/lang/String".equals(target.owner())
+            && (("contains".equals(target.name()) && "(Ljava/lang/CharSequence;)Z".equals(target.descriptor()))
+                || ("replace".equals(target.name())
+                    && "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;".equals(target.descriptor())))) {
             final Set<String> result = new HashSet<>();
             for (final ClassFile candidate : classes.values()) {
                 if (candidate.isInterface() || !isAssignableTo(classes, candidate.name(), "java/lang/CharSequence")) {

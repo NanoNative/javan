@@ -443,6 +443,11 @@ final class RuntimeHeaderFile {
         int javan_string_starts_with_from(const char* left, const char* prefix, int from_index);
         int javan_string_ends_with(const char* left, const char* suffix);
         void* javan_string_replace_char(const char* value, int old_ch, int new_ch);
+        int javan_string_replace_null_receiver(const char* value);
+        void* javan_char_sequence_to_string_java(void* sequence);
+        void javan_char_sequence_to_string_java_into(void** result, void* sequence);
+        void* javan_string_replace_sequence_java(const char* value, const char* target, const char* replacement);
+        void javan_string_replace_sequence_java_into(void** result, const char* value, const char* target, const char* replacement);
         void* javan_string_replace_char_java(const char* value, int old_ch, int new_ch);
         void javan_string_replace_char_java_into(void** result, const char* value, int old_ch, int new_ch);
         void* javan_string_repeat(const char* value, int count);

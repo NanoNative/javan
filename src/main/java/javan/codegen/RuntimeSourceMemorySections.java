@@ -11180,6 +11180,164 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        int javan_string_replace_null_receiver(const char* value) {
+            if (value != NULL) return 0;
+            javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+            return 1;
+        }
+
+        void* javan_char_sequence_to_string_java(void* sequence) {
+            if (sequence == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
+            }
+            javan_allocation_metadata allocation;
+            if (javan_find_allocation(sequence, &allocation) == 0) {
+                if (javan_runtime_class_registry_contains(sequence) != 0 || javan_registered_type_id(sequence) != 0) {
+                    javan_panic("unsupported CharSequence implementation in String.replace");
+                }
+                return sequence;
+            }
+            if (allocation.kind == JAVAN_HEAP_KIND_RUNTIME && allocation.runtime_kind == JAVAN_RUNTIME_KIND_STRING) {
+                return sequence;
+            }
+            if (allocation.kind == JAVAN_HEAP_KIND_RUNTIME && allocation.runtime_kind == JAVAN_RUNTIME_KIND_STRING_BUILDER) {
+                void* root = sequence;
+                void** roots[] = { &root };
+                javan_root_frame_push(roots, 1);
+                void* result = javan_stringbuilder_to_string(root);
+                javan_root_frame_pop(roots);
+                return result;
+            }
+            javan_panic("unsupported CharSequence implementation in String.replace");
+            return NULL;
+        }
+
+        void javan_char_sequence_to_string_java_into(void** result, void* sequence) {
+            if (result == NULL) javan_panic("invalid CharSequence result");
+            javan_runtime_lock_enter();
+            *result = javan_char_sequence_to_string_java(sequence);
+            javan_runtime_lock_leave();
+        }
+
+        void* javan_string_replace_sequence_java(const char* value, const char* target, const char* replacement) {
+            if (value == NULL || target == NULL || replacement == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
+            }
+            void* value_root = (void*) value;
+            void* target_root = (void*) target;
+            void* replacement_root = (void*) replacement;
+            void** roots[] = { &value_root, &target_root, &replacement_root };
+            javan_root_frame_push(roots, 3);
+            int empty_target = *target == '\\0';
+            int replacement_length = javan_string_length(replacement);
+            unsigned long replacement_bytes = 0;
+            const unsigned char* replacement_cursor = (const unsigned char*) replacement;
+            int replacement_pending = -1;
+            while (*replacement_cursor != 0U || replacement_pending >= 0) {
+                int size = javan_modified_utf8_char_length(javan_utf16_next_char(&replacement_cursor, &replacement_pending));
+                if (replacement_bytes > ULONG_MAX - (unsigned long) size - 1UL) {
+                    javan_root_frame_pop(roots);
+                    javan_pending_throw("java/lang/OutOfMemoryError", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                    return NULL;
+                }
+                replacement_bytes += (unsigned long) size;
+            }
+            if (empty_target) {
+                long long source_length = (long long) javan_string_length(value);
+                if (source_length + (source_length + 1LL) * (long long) replacement_length > INT_MAX) {
+                    javan_root_frame_pop(roots);
+                    javan_pending_throw("java/lang/OutOfMemoryError", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                    return NULL;
+                }
+            }
+            unsigned long byte_length = 0;
+            int result_length = 0;
+            int matches_found = 0;
+            char* result = NULL;
+            for (int pass = 0; pass < 2; pass++) {
+                const unsigned char* cursor = (const unsigned char*) value_root;
+                int pending = -1;
+                char* out = result;
+                int insert = empty_target;
+                while (insert || *cursor != 0U || pending >= 0) {
+                    int matched = 0;
+                    if (!insert && !empty_target) {
+                        const unsigned char* candidate = cursor;
+                        const unsigned char* sought = (const unsigned char*) target_root;
+                        int candidate_pending = pending;
+                        int sought_pending = -1;
+                        matched = 1;
+                        while (*sought != 0U || sought_pending >= 0) {
+                            if ((*candidate == 0U && candidate_pending < 0)
+                                || javan_utf16_next_char(&candidate, &candidate_pending)
+                                    != javan_utf16_next_char(&sought, &sought_pending)) {
+                                matched = 0;
+                                break;
+                            }
+                        }
+                        if (matched) {
+                            cursor = candidate;
+                            pending = candidate_pending;
+                            matches_found = 1;
+                        }
+                    }
+                    if (insert || matched) {
+                        if (pass == 0) {
+                            if (result_length > INT_MAX - replacement_length
+                                || byte_length > ULONG_MAX - replacement_bytes - 1UL) {
+                                javan_root_frame_pop(roots);
+                                javan_pending_throw("java/lang/OutOfMemoryError", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                                return NULL;
+                            }
+                            result_length += replacement_length;
+                            byte_length += replacement_bytes;
+                        } else {
+                            const unsigned char* part = (const unsigned char*) replacement_root;
+                            int part_pending = -1;
+                            while (*part != 0U || part_pending >= 0) {
+                                out = javan_modified_utf8_write_char(out, javan_utf16_next_char(&part, &part_pending));
+                            }
+                        }
+                        insert = 0;
+                    } else {
+                        int character = javan_utf16_next_char(&cursor, &pending);
+                        if (pass == 0) {
+                            int size = javan_modified_utf8_char_length(character);
+                            if (result_length == INT_MAX || byte_length > ULONG_MAX - (unsigned long) size - 1UL) {
+                                javan_root_frame_pop(roots);
+                                javan_pending_throw("java/lang/OutOfMemoryError", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                                return NULL;
+                            }
+                            result_length++;
+                            byte_length += (unsigned long) size;
+                        } else out = javan_modified_utf8_write_char(out, character);
+                        if (empty_target) insert = 1;
+                    }
+                }
+                if (pass == 0) {
+                    if (!empty_target && !matches_found) {
+                        void* unchanged = value_root;
+                        javan_root_frame_pop(roots);
+                        return unchanged;
+                    }
+                    result = javan_string_alloc(byte_length + 1UL);
+                } else {
+                    *out = '\\0';
+                }
+            }
+            javan_root_frame_pop(roots);
+            return result;
+        }
+
+        void javan_string_replace_sequence_java_into(void** result, const char* value, const char* target, const char* replacement) {
+            if (result == NULL) javan_panic("invalid string replacement result");
+            javan_runtime_lock_enter();
+            *result = javan_string_replace_sequence_java(value, target, replacement);
+            javan_runtime_lock_leave();
+        }
+
         void* javan_string_replace_char_java(const char* value, int old_ch, int new_ch) {
             if (value == NULL) {
                 javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);

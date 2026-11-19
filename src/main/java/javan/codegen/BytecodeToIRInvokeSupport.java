@@ -711,6 +711,56 @@ final class BytecodeToIRInvokeSupport {
         }
         if ("java/lang/String".equals(methodRef.owner())
             && "replace".equals(methodRef.name())
+            && "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression replacement = popObject(classFile, method, stack);
+            final IrExpression target = popObject(classFile, method, stack);
+            final IrExpression receiver = popObject(classFile, method, stack);
+            final String receiverLocal = newObjectLocal(localDeclarations);
+            final String targetLocal = newObjectLocal(localDeclarations);
+            final String replacementLocal = newObjectLocal(localDeclarations);
+            instructions.add(IrInstruction.assignObject(receiverLocal, receiver));
+            instructions.add(IrInstruction.assignObject(targetLocal, target));
+            instructions.add(IrInstruction.assignObject(replacementLocal, replacement));
+            final String resultLocal = newObjectLocal(localDeclarations);
+            final String doneLabel = "label_replace_done_" + instruction.offset() + "_" + resultLocal;
+            instructions.add(IrInstruction.branchIf(doneLabel, IrExpression.intCall("javan_string_replace_null_receiver",
+                List.of(IrExpression.objectLocal(receiverLocal)))));
+            final MethodRef toString = new MethodRef("java/lang/CharSequence", "toString", "()Ljava/lang/String;");
+            final List<EntryPoint> targets = interfaceTargets(classes, toString, instantiatedTypes);
+            final String dispatchSymbol = dispatchSymbol(toString);
+            if (!targets.isEmpty()) {
+                dispatches.putIfAbsent(dispatchSymbol, dispatch(classes, dispatchSymbol, MethodDescriptor.parse(toString.descriptor()), targets));
+            }
+            final List<IrExpression> converted = new ArrayList<>();
+            for (final String argumentLocal : List.of(targetLocal, replacementLocal)) {
+                final String convertedLocal = newObjectLocal(localDeclarations);
+                if (!targets.isEmpty()) {
+                    final String builtinLabel = "label_replace_builtin_" + instruction.offset() + "_" + convertedLocal;
+                    final String nextLabel = "label_replace_next_" + instruction.offset() + "_" + convertedLocal;
+                    instructions.add(IrInstruction.branchIf(builtinLabel, IrExpression.intCall("javan_string_contains_use_builtin",
+                        List.of(IrExpression.objectLocal(receiverLocal), IrExpression.objectLocal(argumentLocal)))));
+                    instructions.add(IrInstruction.assignObject(convertedLocal,
+                        IrExpression.objectCall(dispatchSymbol, List.of(IrExpression.objectLocal(argumentLocal)))));
+                    instructions.add(IrInstruction.jump(nextLabel));
+                    instructions.add(IrInstruction.label(builtinLabel));
+                    instructions.add(IrInstruction.assignObject(convertedLocal, IrExpression.objectCall("javan_char_sequence_to_string_java",
+                        List.of(IrExpression.objectLocal(argumentLocal)))));
+                    instructions.add(IrInstruction.label(nextLabel));
+                } else {
+                    instructions.add(IrInstruction.assignObject(convertedLocal, IrExpression.objectCall("javan_char_sequence_to_string_java",
+                        List.of(IrExpression.objectLocal(argumentLocal)))));
+                }
+                instructions.add(IrInstruction.branchIf(doneLabel, IrExpression.intCall("javan_pending_has", List.of())));
+                converted.add(IrExpression.objectLocal(convertedLocal));
+            }
+            instructions.add(IrInstruction.assignObject(resultLocal, IrExpression.objectCall("javan_string_replace_sequence_java",
+                List.of(IrExpression.objectLocal(receiverLocal), converted.get(0), converted.get(1)))));
+            instructions.add(IrInstruction.label(doneLabel));
+            stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
+            return;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "replace".equals(methodRef.name())
             && "(CC)Ljava/lang/String;".equals(methodRef.descriptor())) {
             final IrExpression newCh = popInt(classFile, method, stack);
             final IrExpression oldCh = popInt(classFile, method, stack);

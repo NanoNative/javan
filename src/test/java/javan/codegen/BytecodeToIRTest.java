@@ -17867,28 +17867,6 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void rejectsUnsupportedStringReplaceSequenceDescriptor() {
-        assertThatThrownBy(() -> lowerMain(method(
-            0x0008,
-            "main",
-            "(Ljava/lang/String;Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;",
-            3,
-            3,
-            plain(0, 42, "aload_0"),
-            plain(1, 43, "aload_1"),
-            plain(2, 44, "aload_2"),
-            invokeVirtual(3, new MethodRef("java/lang/String", "replace", "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;")),
-            plain(4, 176, "areturn")
-        )))
-            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
-                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
-                assertThat(exception.diagnostic().subject()).isEqualTo(
-                    "invokevirtual java/lang/String.replace(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;"
-                );
-            });
-    }
-
-    @Test
     void lowersStringInternToIdentityReturn() {
         final IrFunction function = lowerMain(method(
             0x0008,

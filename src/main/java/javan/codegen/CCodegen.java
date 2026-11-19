@@ -5392,6 +5392,8 @@ public final class CCodegen {
                 "javan_string_strip_trailing",
                 "javan_string_replace_char",
                 "javan_string_replace_char_java",
+                "javan_char_sequence_to_string_java",
+                "javan_string_replace_sequence_java",
                 "javan_string_concat_java",
                 "javan_string_repeat",
                 "javan_string_to_lower_case",

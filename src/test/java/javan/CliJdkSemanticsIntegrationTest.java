@@ -16244,6 +16244,172 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void stringReplaceSequencesPreservesUtf16AndCallsCustomConversions() throws Exception {
+        final Path project = project("string-replace-sequences");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int calls;
+                static final class Sequence implements CharSequence {
+                    final String value;
+                    Sequence(String value) { this.value = value; }
+                    public int length() { return value.length(); }
+                    public char charAt(int index) { return value.charAt(index); }
+                    public CharSequence subSequence(int begin, int end) { return value.subSequence(begin, end); }
+                    public String toString() { calls++; return value; }
+                }
+                static int hash(String value) {
+                    int result = value.length();
+                    for (int i = 0; i < value.length(); i++) result = result * 31 + value.charAt(i);
+                    return result;
+                }
+                static String replace(String text, CharSequence oldValue, CharSequence newValue) {
+                    try { return text.replace(oldValue, newValue); }
+                    catch (NullPointerException ex) { return "null"; }
+                }
+                public static void main(String[] args) {
+                    String[] values = {"", "aaa", "a\\0\\ud800\\udc00\\udfff", "\\ud800\\udc00"};
+                    String[] parts = {"", "a", "aa", "z", "\\0", "\\ud800", "\\udc00", "\\ud800\\udc00"};
+                    for (String value : values) for (String target : parts) for (String replacement : parts)
+                        System.out.println(hash(replace(value, target, replacement)));
+                    System.out.println(replace("aabb", new StringBuilder("aa"), new StringBuilder("z")));
+                    System.out.println(replace("aabb", new Sequence("aa"), new Sequence("z")));
+                    System.out.println(calls);
+                    System.out.println(replace(null, new Sequence("a"), new Sequence("b")));
+                    System.out.println(calls);
+                    System.out.println(replace("a", null, new Sequence("b")));
+                    System.out.println(calls);
+                    System.out.println(replace("a", new Sequence("a"), null));
+                    System.out.println(calls);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-replace-sequences").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringReplaceSequencesPropagatesConversionFailuresInOrder() throws Exception {
+        final Path project = project("string-replace-sequence-failures");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static class Sequence implements CharSequence {
+                    public int length() { return 1; }
+                    public char charAt(int index) { return 'x'; }
+                    public CharSequence subSequence(int begin, int end) { return this; }
+                    public String toString() { System.out.println("convert"); return "x"; }
+                }
+                static final class NullSequence extends Sequence {
+                    public String toString() { System.out.println("null-result"); return null; }
+                }
+                static final class ThrowSequence extends Sequence {
+                    public String toString() { System.out.println("throw"); throw new IllegalStateException(); }
+                }
+                static String invoke(String value, CharSequence target, CharSequence replacement) {
+                    return value.replace(target, replacement);
+                }
+                static String replace(String value, CharSequence target, CharSequence replacement) {
+                    try { return invoke(value, target, replacement); }
+                    catch (NullPointerException ex) { return "null"; }
+                    catch (IllegalStateException ex) { return "thrown"; }
+                }
+                public static void main(String[] args) {
+                    System.out.println(replace("xy", new NullSequence(), new Sequence()));
+                    System.out.println(replace("xy", new Sequence(), new NullSequence()));
+                    System.out.println(replace("xy", new ThrowSequence(), new Sequence()));
+                    System.out.println(replace("xy", new Sequence(), new ThrowSequence()));
+                    System.out.println(replace(null, new ThrowSequence(), new ThrowSequence()));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-replace-sequence-failures").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringReplaceSequencesRejectsOversizedResultsPromptly() throws Exception {
+        final Path project = project("string-replace-sequence-overflow");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static String replace(String value, CharSequence target, CharSequence replacement) {
+                    try { return value.replace(target, replacement); }
+                    catch (NullPointerException ex) { return "null"; }
+                    catch (OutOfMemoryError ex) { return "overflow"; }
+                }
+                public static void main(String[] args) {
+                    String value = "a".repeat(50000);
+                    String replacement = "b".repeat(50000);
+                    System.out.println(replace(value, "", replacement));
+                    System.out.println(replace(value, "a", replacement));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-replace-sequence-overflow").toString()), Duration.ofSeconds(5));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringReplaceSequencesSurvivesConcurrentCollection() throws Exception {
+        final Path project = project("string-replace-sequence-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static final class Seq implements CharSequence {
+                    final String value;
+                    Seq(String value) { this.value = value; }
+                    public int length() { return value.length(); }
+                    public char charAt(int i) { return value.charAt(i); }
+                    public CharSequence subSequence(int a, int b) { return value.subSequence(a,b); }
+                    public String toString() { return new String(value.toCharArray()); }
+                }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            String source = new String(new char[] {0, (char) 0xd800, (char) 0xdc00, (char) 0xdfff});
+                            String value = source.replace(new Seq("\\ud800"), new Seq("x\\0"));
+                            new String(new char[] {'x', 'y'});
+                            if (value.length() != 5 || value.charAt(0) != 0 || value.charAt(1) != 'x' || value.charAt(2) != 0 || value.charAt(3) != (char) 0xdc00 || value.charAt(4) != (char) 0xdfff) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-replace-sequence-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
     void stringReplaceCharReturnsReceiverWhenCharacterIsAbsent() throws Exception {
         final Path project = project("string-replace-char-identity");
         writeJava(project, "com.acme.Main", """

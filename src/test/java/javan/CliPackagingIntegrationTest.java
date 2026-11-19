@@ -1954,6 +1954,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     System.out.println("alphabet".contains(new StringBuilder("pha")));
                     System.out.println("alphabet".contains(new StringBuilder()));
                     System.out.println("alphabet".contains(new Sequence()));
+                    System.out.println("alphabet".replace(new Sequence(), new StringBuilder("X")));
                     System.out.println("\\0\\ud800\\udc00".replace((char) 0xd800, (char) 1).charAt(1));
                     System.out.println(value.replace('z', 'q') == value);
                     System.out.println(nullReplace(null));
@@ -3790,6 +3791,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 }
                 public static int containsCustom(String value) { return value.contains(new Needle()) ? 1 : 0; }
                 public static String replaceChar(String value, int oldValue, int newValue) { return value.replace((char) oldValue, (char) newValue); }
+                public static String replaceSequence(String value, String target, String replacement) { return value.replace(target, replacement); }
                 public static String join(String value, String other) { return value.concat(other); }
                 public static String fail(String value) { throw new IllegalArgumentException(value); }
                 public static String literal() { return "a\\0b"; }
@@ -3816,7 +3818,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "--export", "com.acme.Text.boundedString", "--export", "com.acme.Text.slice", "--export", "com.acme.Text.tail",
             "--export", "com.acme.Text.sequence", "--export", "com.acme.Text.prefix", "--export", "com.acme.Text.suffix",
             "--export", "com.acme.Text.same", "--export", "com.acme.Text.contains", "--export", "com.acme.Text.containsCustom",
-            "--export", "com.acme.Text.replaceChar", "--export", "com.acme.Text.join");
+            "--export", "com.acme.Text.replaceChar", "--export", "com.acme.Text.replaceSequence", "--export", "com.acme.Text.join");
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         final Path library = project.resolve(".javan/dist/liblibrary-utf16.a");
         final Path caller = writeC(project, "call_utf16.c", """
@@ -3932,6 +3934,11 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 uint16_t replaced[] = { 'A', 0, 0, 0xDE00, 0xD800, 'Z', 0xDC00 };
                 result = javan_utf16_try_com_acme_Text_replaceChar_string_int_int(input, 0xd83d, 0, &output);
                 if (!result.ok || output.length != 7 || memcmp(replaced, output.data, sizeof(replaced))) return 71;
+                javan_result_free(&result); javan_free(output.data);
+                needle.data = data + 2; needle.length = 1;
+                JavanUtf16View replacement = { data + 1, 1 };
+                result = javan_utf16_try_com_acme_Text_replaceSequence_string_string_string(input, needle, replacement, &output);
+                if (!result.ok || output.length != 7 || memcmp(replaced, output.data, sizeof(replaced))) return 75;
                 javan_result_free(&result); javan_free(output.data);
                 needle.data = data + 2; needle.length = 2;
                 uint16_t joined[] = { 'A', 0, 0xd83d, 0xde00, 0xd800, 'Z', 0xdc00, 0xd83d, 0xde00 };

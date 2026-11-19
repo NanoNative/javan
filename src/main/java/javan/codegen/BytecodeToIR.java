@@ -435,8 +435,9 @@ public final class BytecodeToIR {
                         final boolean directCall = calledMethod.name().equals(callee.methodName())
                             && calledMethod.descriptor().equals(callee.descriptor());
                         final boolean charSequenceConversion = "java/lang/String".equals(calledMethod.owner())
-                            && "contains".equals(calledMethod.name())
-                            && "(Ljava/lang/CharSequence;)Z".equals(calledMethod.descriptor())
+                            && (("contains".equals(calledMethod.name()) && "(Ljava/lang/CharSequence;)Z".equals(calledMethod.descriptor()))
+                                || ("replace".equals(calledMethod.name())
+                                    && "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;".equals(calledMethod.descriptor())))
                             && "toString".equals(callee.methodName())
                             && "()Ljava/lang/String;".equals(callee.descriptor());
                         if (!directCall && !charSequenceConversion) {
@@ -577,6 +578,9 @@ public final class BytecodeToIR {
         )));
         result.put("javan_string_contains_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/lang/String", "contains", "(Ljava/lang/CharSequence;)Z"
+        )));
+        result.put("javan_string_replace_sequence_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/lang/String", "replace", "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;"
         )));
         result.put("javan_string_replace_char_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/lang/String", "replace", "(CC)Ljava/lang/String;"
@@ -1265,6 +1269,8 @@ public final class BytecodeToIR {
                             || ("indexOf".equals(reference.name()) && ("(III)I".equals(reference.descriptor())
                                 || "(Ljava/lang/String;II)I".equals(reference.descriptor())))
                             || ("contains".equals(reference.name()) && "(Ljava/lang/CharSequence;)Z".equals(reference.descriptor()))
+                            || ("replace".equals(reference.name())
+                                && "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;".equals(reference.descriptor()))
                             || ("equals".equals(reference.name()) && "(Ljava/lang/Object;)Z".equals(reference.descriptor()))
                             || (("startsWith".equals(reference.name()) || "endsWith".equals(reference.name()))
                                 && ("(Ljava/lang/String;)Z".equals(reference.descriptor())

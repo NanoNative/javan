@@ -116,6 +116,10 @@ The bounded `String.indexOf` overloads also transport invalid-range exceptions.
 and invalid-range exceptions within supported handler shapes.
 `String.replace(char, char)` preserves UTF-16 code units, returns its receiver if the old character
 is absent and transports null-receiver failures within supported handler shapes.
+`String.replace(CharSequence, CharSequence)` performs literal, non-overlapping replacements over
+UTF-16 code units. Its arguments support strings, string builders and application implementations
+with a statically reachable supported `toString` override. Null and supported conversion failures
+are transported within supported handler shapes. Other implementations are rejected at runtime.
 `String.concat` preserves UTF-16 code units, returns its receiver for an empty argument and
 transports null receiver and argument failures within supported handler shapes.
 `String.startsWith` and `String.endsWith` preserve UTF-16 comparisons and transport null failures

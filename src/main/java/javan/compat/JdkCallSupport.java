@@ -571,7 +571,8 @@ public final class JdkCallSupport {
         runtime("String.contains", "java/lang/String", "contains", "(Ljava/lang/CharSequence;)Z"),
         runtime("String.startsWith", "java/lang/String", "startsWith", "(Ljava/lang/String;)Z", "(Ljava/lang/String;I)Z"),
         runtime("String.endsWith", "java/lang/String", "endsWith", "(Ljava/lang/String;)Z"),
-        runtime("String.replace", "java/lang/String", "replace", "(CC)Ljava/lang/String;"),
+        runtime("String.replace", "java/lang/String", "replace", "(CC)Ljava/lang/String;",
+            "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;"),
         runtime("String.repeat", "java/lang/String", "repeat", "(I)Ljava/lang/String;"),
         runtime("String.intern", "java/lang/String", "intern", "()Ljava/lang/String;"),
         runtime("String.toString", "java/lang/String", "toString", "()Ljava/lang/String;"),
@@ -2003,6 +2004,10 @@ public final class JdkCallSupport {
         if ("java/lang/String".equals(methodRef.owner()) && "replace".equals(methodRef.name())
             && "(CC)Ljava/lang/String;".equals(methodRef.descriptor())) {
             return List.of("java/lang/NullPointerException");
+        }
+        if ("java/lang/String".equals(methodRef.owner()) && "replace".equals(methodRef.name())
+            && "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            return List.of("java/lang/NullPointerException", "java/lang/OutOfMemoryError");
         }
         if ("java/lang/String".equals(methodRef.owner()) && "contains".equals(methodRef.name())
             && "(Ljava/lang/CharSequence;)Z".equals(methodRef.descriptor())) {
