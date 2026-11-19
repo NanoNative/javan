@@ -1132,7 +1132,7 @@ final class BytecodeToIRInvokeSupport {
         if (lowerJdkFileInstanceCall(classFile, method, instruction, methodRef, stack)) {
             return;
         }
-        if ("java/security/SecureRandom".equals(methodRef.owner())
+        if (("java/security/SecureRandom".equals(methodRef.owner()) || JdkCallSupport.isSecureRandomSupertypeCall(methodRef))
             && ("nextInt".equals(methodRef.name()) || "nextLong".equals(methodRef.name()))
             && JdkCallSupport.isSupported(methodRef)) {
             final boolean wide = "nextLong".equals(methodRef.name());
@@ -1169,6 +1169,9 @@ final class BytecodeToIRInvokeSupport {
                 IrExpression.stringLiteral("SecureRandom"));
             instructions.add(IrInstruction.label(receiverPresent));
             stack.addAll(successStack);
+            if (JdkCallSupport.isSecureRandomSupertypeCall(methodRef)) {
+                instructions.add(IrInstruction.callStaticVoid("javan_secure_random_require_random", List.of(IrExpression.objectLocal(receiverLocal))));
+            }
             if (bounded) {
                 final String boundValid = "label_secure_random_" + prefix + "_bound_" + instruction.offset();
                 final IrExpression condition = ranged
@@ -1193,7 +1196,7 @@ final class BytecodeToIRInvokeSupport {
             }
             return;
         }
-        if ("java/security/SecureRandom".equals(methodRef.owner())
+        if (("java/security/SecureRandom".equals(methodRef.owner()) || JdkCallSupport.isSecureRandomSupertypeCall(methodRef))
             && ("nextBoolean".equals(methodRef.name()) || "nextFloat".equals(methodRef.name())
                 || "nextDouble".equals(methodRef.name())) && JdkCallSupport.isSupported(methodRef)) {
             final boolean wide = "nextDouble".equals(methodRef.name());
@@ -1230,6 +1233,9 @@ final class BytecodeToIRInvokeSupport {
                 IrExpression.stringLiteral("SecureRandom"));
             instructions.add(IrInstruction.label(receiverPresent));
             stack.addAll(successStack);
+            if (JdkCallSupport.isSecureRandomSupertypeCall(methodRef)) {
+                instructions.add(IrInstruction.callStaticVoid("javan_secure_random_require_random", List.of(IrExpression.objectLocal(receiverLocal))));
+            }
             if (bounded) {
                 final String boundValid = "label_secure_random_scalar_bound_" + instruction.offset();
                 final IrExpression valid = IrExpression.intCall("javan_secure_random_" + prefix + "_range_valid",
@@ -1272,10 +1278,10 @@ final class BytecodeToIRInvokeSupport {
         }
         if (("java/security/SecureRandom".equals(methodRef.owner())
                 && "nextBytes".equals(methodRef.name()) && "([B)V".equals(methodRef.descriptor()))
-            || JdkCallSupport.isSecureRandomSupertypeNextBytes(methodRef)) {
+            || ("nextBytes".equals(methodRef.name()) && JdkCallSupport.isSecureRandomSupertypeCall(methodRef))) {
             final IrExpression bytesInput = popObject(classFile, method, stack);
             final IrExpression receiverInput = popObject(classFile, method, stack);
-            final boolean randomSupertype = JdkCallSupport.isSecureRandomSupertypeNextBytes(methodRef);
+            final boolean randomSupertype = JdkCallSupport.isSecureRandomSupertypeCall(methodRef);
             IrExpression receiver = receiverInput;
             IrExpression bytes = bytesInput;
             if (randomSupertype) {

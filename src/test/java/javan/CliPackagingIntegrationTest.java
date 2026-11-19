@@ -1965,6 +1965,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     byte[] randomBytes = new byte[0];
                     random.nextBytes(randomBytes);
                     System.out.println(randomBytes.length);
+                    System.out.println(random.nextInt(1));
                     System.out.println("\\0\\ud800\\udc00".replace((char) 0xd800, (char) 1).charAt(1));
                     System.out.println(value.replace('z', 'q') == value);
                     System.out.println(nullReplace(null));
@@ -4229,11 +4230,12 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     ((Random) value).nextBytes(bytes);
                     return bytes.length;
                 }
+                public static int next(Object value) { return ((Random) value).nextInt(7); }
             }
             """);
         final CliRun build = run(tempDir, "build", project.toString(), "--kind", "staticlib",
             "--export", "com.acme.Api.good():object", "--export", "com.acme.Api.wrong():object",
-            "--export", "com.acme.Api.fill(object):int");
+            "--export", "com.acme.Api.fill(object):int", "--export", "com.acme.Api.next(object):int");
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final Path caller = writeC(project, "call_random.c", """
             #include <string.h>
@@ -4247,11 +4249,17 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 result = javan_try_com_acme_Api_fill_object(good, &size);
                 if (!result.ok || size != 8) return 2;
                 javan_result_free(&result);
+                result = javan_try_com_acme_Api_next_object(good, &size);
+                if (!result.ok || size < 0 || size >= 7) return 5;
+                javan_result_free(&result);
                 result = javan_try_com_acme_Api_wrong_void(&wrong);
                 if (!result.ok || wrong == 0) return 3;
                 javan_result_free(&result);
                 result = javan_try_com_acme_Api_fill_object(wrong, &size);
                 if (result.ok || result.message == 0 || strstr(result.message, "unsupported Random receiver") == 0) return 4;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_next_object(wrong, &size);
+                if (result.ok || result.message == 0 || strstr(result.message, "unsupported Random receiver") == 0) return 6;
                 javan_result_free(&result);
                 javan_object_handle_release(good);
                 javan_object_handle_release(wrong);

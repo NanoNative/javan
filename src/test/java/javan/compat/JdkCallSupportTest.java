@@ -4717,6 +4717,19 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void randomTypedSecureCallsRequireRandomRuntimeAndStayContextLimited() {
+        for (final MethodRef call : List.of(
+            new MethodRef("java/util/Random", "nextBytes", "([B)V"),
+            new MethodRef("java/util/Random", "nextInt", "(I)I"),
+            new MethodRef("java/util/Random", "nextDouble", "(DD)D")
+        )) {
+            assertThat(JdkCallSupport.isSecureRandomSupertypeCall(call)).isTrue();
+            assertThat(JdkCallSupport.runtimeModules(call)).containsExactly("random");
+        }
+        assertThat(JdkCallSupport.isSecureRandomSupertypeCall(new MethodRef("java/util/Random", "nextGaussian", "()D"))).isFalse();
+    }
+
+    @Test
     void secureRandomNextBytesTransportsNullPointerException() {
         assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/security/SecureRandom",

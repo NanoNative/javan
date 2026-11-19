@@ -1113,7 +1113,7 @@ public final class JdkCallSupport {
      * @return true when the verifier and lowering both support the call
      */
     public static boolean isSupported(final MethodRef methodRef) {
-        if (isContextLimitedOptionalOrElseThrowCall(methodRef) || isSecureRandomSupertypeNextBytes(methodRef)) {
+        if (isContextLimitedOptionalOrElseThrowCall(methodRef) || isSecureRandomSupertypeCall(methodRef)) {
             return true;
         }
         if (isDirectlySupported(methodRef)) {
@@ -1141,14 +1141,19 @@ public final class JdkCallSupport {
     }
 
     /**
-     * Identifies the Random-typed call supported only for native SecureRandom receivers.
+     * Identifies Random-typed calls supported only for native SecureRandom receivers.
      *
      * @param methodRef exact JDK method reference
      * @return true when runtime receiver validation is required
      */
-    public static boolean isSecureRandomSupertypeNextBytes(final MethodRef methodRef) {
-        return "java/util/Random".equals(methodRef.owner()) && "nextBytes".equals(methodRef.name())
-            && "([B)V".equals(methodRef.descriptor());
+    public static boolean isSecureRandomSupertypeCall(final MethodRef methodRef) {
+        if (!"java/util/Random".equals(methodRef.owner())
+            || !("nextBytes".equals(methodRef.name()) || "nextInt".equals(methodRef.name())
+                || "nextLong".equals(methodRef.name()) || "nextBoolean".equals(methodRef.name())
+                || "nextFloat".equals(methodRef.name()) || "nextDouble".equals(methodRef.name()))) {
+            return false;
+        }
+        return supportedCall(new MethodRef("java/security/SecureRandom", methodRef.name(), methodRef.descriptor())).isPresent();
     }
 
     private static boolean isDirectlySupported(final MethodRef methodRef) {
@@ -1813,7 +1818,7 @@ public final class JdkCallSupport {
             return List.of("math");
         }
         if ("java/security/SecureRandom".equals(owner) || "java/util/UUID".equals(owner)
-            || isSecureRandomSupertypeNextBytes(methodRef)) {
+            || isSecureRandomSupertypeCall(methodRef)) {
             return List.of("random");
         }
         if ("java/util/Base64".equals(owner)
@@ -2250,9 +2255,11 @@ public final class JdkCallSupport {
                 "java/lang/IllegalArgumentException"
             );
         }
-        if (("java/security/SecureRandom".equals(methodRef.owner())
-                && "nextBytes".equals(methodRef.name()) && "([B)V".equals(methodRef.descriptor()))
-            || isSecureRandomSupertypeNextBytes(methodRef)) {
+        if (isSecureRandomSupertypeCall(methodRef)) {
+            return transportedPlatformThrowableTypes(new MethodRef("java/security/SecureRandom", methodRef.name(), methodRef.descriptor()));
+        }
+        if ("java/security/SecureRandom".equals(methodRef.owner())
+            && "nextBytes".equals(methodRef.name()) && "([B)V".equals(methodRef.descriptor())) {
             return List.of("java/lang/NullPointerException");
         }
         if ("java/security/SecureRandom".equals(methodRef.owner())

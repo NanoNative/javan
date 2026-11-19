@@ -10007,6 +10007,65 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void randomTypedSecureRandomGeneratesValuesAndChecksBounds() throws Exception {
+        final Path project = project("secure-random-through-random-values");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.security.SecureRandom;
+            import java.util.Random;
+            public final class Main {
+                static final Random RANDOM = new SecureRandom();
+                static int bounded(Random value, int bound) {
+                    try { return value.nextInt(bound); }
+                    catch (NullPointerException ex) { return -10; }
+                    catch (IllegalArgumentException ex) { return -20; }
+                }
+                static int invalidLong(Random value) {
+                    try { value.nextLong(2, 2); return 0; }
+                    catch (IllegalArgumentException ex) { return -1; }
+                }
+                static int invalidFloat(Random value) {
+                    try { value.nextFloat(Float.NaN); return 0; }
+                    catch (IllegalArgumentException ex) { return -1; }
+                }
+                static int invalidDouble(Random value) {
+                    try { value.nextDouble(Double.POSITIVE_INFINITY); return 0; }
+                    catch (IllegalArgumentException ex) { return -1; }
+                }
+                public static void main(String[] args) {
+                    boolean valid = true;
+                    for (int i = 0; i < 100; i++) {
+                        int a = RANDOM.nextInt(9); int b = RANDOM.nextInt(-10, 10);
+                        long c = RANDOM.nextLong(13); long d = RANDOM.nextLong(-20, 20);
+                        float e = RANDOM.nextFloat(7); float f = RANDOM.nextFloat(-3, 5);
+                        double g = RANDOM.nextDouble(11); double h = RANDOM.nextDouble(-4, 6);
+                        RANDOM.nextInt(); RANDOM.nextLong(); RANDOM.nextBoolean(); RANDOM.nextFloat(); RANDOM.nextDouble();
+                        int extreme = RANDOM.nextInt(Integer.MIN_VALUE, Integer.MAX_VALUE);
+                        long wide = RANDOM.nextLong(Long.MIN_VALUE, Long.MAX_VALUE);
+                        if (extreme == Integer.MAX_VALUE || wide == Long.MAX_VALUE) valid = false;
+                        if (a < 0 || a >= 9 || b < -10 || b >= 10 || c < 0 || c >= 13 || d < -20 || d >= 20
+                            || e < 0 || e >= 7 || f < -3 || f >= 5 || g < 0 || g >= 11 || h < -4 || h >= 6) valid = false;
+                    }
+                    System.out.println(valid);
+                    System.out.println(bounded(RANDOM, 0));
+                    System.out.println(bounded(null, 0));
+                    System.out.println(invalidLong(RANDOM));
+                    System.out.println(invalidFloat(RANDOM));
+                    System.out.println(invalidDouble(RANDOM));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/secure-random-through-random-values").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("true\n-20\n-10\n-1\n-1\n-1\n");
+    }
+
+    @Test
     void randomTypedSecureRandomWorksDuringConcurrentCollection() throws Exception {
         final Path project = project("secure-random-through-random-concurrent");
         writeJava(project, "com.acme.Main", """
@@ -10022,8 +10081,9 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                         for (int i = 0; i < 100; i++) {
                             byte[] bytes = new byte[64];
                             RANDOM.nextBytes(bytes);
+                            int value = RANDOM.nextInt(5);
                             new String(new char[] {'x', 'y'});
-                            if (bytes.length != 64) errors.incrementAndGet();
+                            if (bytes.length != 64 || value < 0 || value >= 5) errors.incrementAndGet();
                         }
                     }
                 }

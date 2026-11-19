@@ -123,6 +123,8 @@ final class JdkCallableAccountingTest {
     void randomNextBytesRemainsUnaccountedForOtherImplementations() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Random", "nextBytes", "([B)V")))
             .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Random", "nextInt", "(I)I")))
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
