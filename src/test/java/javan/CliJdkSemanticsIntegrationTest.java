@@ -17727,13 +17727,21 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                 }
             }
             """);
-        final String expected = runJvm(project, "com.acme.Main");
+        final Path classes = project.resolve("jvm-classes");
+        Files.createDirectories(classes);
+        final ProcessResult javac = process(project, List.of(CliTestHarness.currentJavacCommand(), "-d", classes.toString(),
+            project.resolve("src/main/java/com/acme/Main.java").toString()));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        // GraalVM 25.0.4 produced varying checksums in compiled mode for this loop.
+        final ProcessResult reference = process(project,
+            List.of(CliTestHarness.currentJavaCommand(), "-Xint", "-cp", classes.toString(), "com.acme.Main"));
+        assertThat(reference.exitCode()).as(reference.stderr()).isZero();
         final CliRun build = run(tempDir, "build", project.toString());
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-codepoint-search-combinations").toString()),
             Duration.ofSeconds(60));
         assertThat(result.exitCode()).as(result.stderr()).isZero();
-        assertThat(result.stdout()).isEqualTo(expected);
+        assertThat(result.stdout()).isEqualTo(reference.stdout());
     }
 
     @Test
