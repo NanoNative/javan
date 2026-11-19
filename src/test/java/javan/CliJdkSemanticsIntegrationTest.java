@@ -16123,6 +16123,105 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void stringSubSequenceAcceptsUnicodeAndTransportsFailures() throws Exception {
+        final Path project = project("string-subsequence-utf16");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static CharSequence slice(String value, int begin, int end) {
+                    try { return value.subSequence(begin, end); }
+                    catch (StringIndexOutOfBoundsException ex) { return "range"; }
+                    catch (NullPointerException ex) { return "null"; }
+                }
+                public static void main(String[] args) {
+                    System.out.println(slice("caf\\u00e9", 1, 4));
+                    System.out.println(slice("caf\\u00e9", 2, 2));
+                    System.out.println(slice("caf\\u00e9", -1, 4));
+                    System.out.println(slice("caf\\u00e9", 3, 2));
+                    System.out.println(slice(null, -1, 4));
+                    System.out.println("caf\\u00e9".subSequence(0, 4));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-subsequence-utf16").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringSubSequencePreservesIndividualUtf16CodeUnits() throws Exception {
+        final Path project = project("string-subsequence-code-units");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    String value = "\\0\\ud800\\udc00\\udfff";
+                    for (int begin = 0; begin <= 4; begin++) {
+                        for (int end = begin; end <= 4; end++) {
+                            String slice = (String) value.subSequence(begin, end);
+                            System.out.println(slice.length());
+                            for (int i = 0; i < slice.length(); i++) System.out.println((int) slice.charAt(i));
+                        }
+                    }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-subsequence-code-units").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringSubSequenceSurvivesConcurrentCollection() throws Exception {
+        final Path project = project("string-subsequence-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static String source() { return new String(new char[] {0, (char) 0xd800, (char) 0xdc00, (char) 0xdfff}); }
+                static CharSequence invalid(String value) {
+                    try { return value.subSequence(0, 9); }
+                    catch (StringIndexOutOfBoundsException ex) { return "range"; }
+                }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            String value = (String) source().subSequence(1, 3);
+                            new String(new char[] {'x', 'y'});
+                            if (value.length() != 2 || value.charAt(0) != (char) 0xd800
+                                || value.charAt(1) != (char) 0xdc00) errors.incrementAndGet();
+                            if (!((String) invalid(source())).equals("range")) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-subsequence-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
     void substringExtractionPreservesUtf16AndTransportsFailures() throws Exception {
         final Path project = project("substring-extraction-utf16");
         writeJava(project, "com.acme.Main", """

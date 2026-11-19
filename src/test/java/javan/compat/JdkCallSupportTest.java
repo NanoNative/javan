@@ -4463,6 +4463,13 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void stringSubSequenceTransportsRangeAndNullFailures() {
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
+            "java/lang/String", "subSequence", "(II)Ljava/lang/CharSequence;"
+        ))).containsExactly("java/lang/StringIndexOutOfBoundsException", "java/lang/NullPointerException");
+    }
+
+    @Test
     void substringTransportsRangeAndNullFailures() {
         for (final String descriptor : List.of("(I)Ljava/lang/String;", "(II)Ljava/lang/String;")) {
             assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(

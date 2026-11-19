@@ -973,8 +973,7 @@ final class BytecodeToIRInvokeSupport {
             final IrExpression end = popInt(classFile, method, stack);
             final IrExpression begin = popInt(classFile, method, stack);
             final IrExpression receiver = popObject(classFile, method, stack);
-            rejectUnsupportedStringSemantic(classFile, method, instruction, receiver);
-            pushObjectCall(instructions, stack, localDeclarations, "javan_string_substring_range", List.of(receiver, begin, end));
+            pushObjectCall(instructions, stack, localDeclarations, "javan_string_substring_range_java", List.of(receiver, begin, end));
             return;
         }
         if (lowerJdkWrapperInstanceCall(classFile, method, methodRef, stack)) {
