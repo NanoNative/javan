@@ -11193,16 +11193,23 @@ final class RuntimeSourceMemorySections {
                 javan_panic("null string");
             }
             int byte_length = 0;
+            int found = 0;
             const unsigned char* current = (const unsigned char*) value;
             int pending_low_surrogate = -1;
             while (*current != 0U || pending_low_surrogate >= 0) {
                 int character = javan_utf16_next_char(&current, &pending_low_surrogate);
+                if (character == (old_ch & 0xffff)) {
+                    found = 1;
+                }
                 int replacement = character == (old_ch & 0xffff) ? new_ch : character;
                 int char_length = javan_modified_utf8_char_length(replacement);
                 if (byte_length > INT_MAX - char_length) {
                     javan_panic("string length overflow");
                 }
                 byte_length += char_length;
+            }
+            if (!found) {
+                return (void*) value;
             }
             void* source_root = (void*) value;
             void** javan_string_replace_roots[] = {

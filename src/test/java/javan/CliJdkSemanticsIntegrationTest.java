@@ -16244,6 +16244,41 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void stringReplaceCharReturnsReceiverWhenCharacterIsAbsent() throws Exception {
+        final Path project = project("string-replace-char-identity");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    String value = new String(new char[] {'a', 0, (char) 0xd800, (char) 0xdc00});
+                    String empty = new String(new char[] {});
+                    System.out.println(value.replace('z', 'q') == value);
+                    System.out.println(value.replace((char) 0xdfff, (char) 1) == value);
+                    System.out.println(empty.replace('x', 'y') == empty);
+                    System.out.println(value.replace((char) 0, 'x') == value);
+                    int failures = 0;
+                    for (int i = 0; i < 100; i++) {
+                        String original = new String(new char[] {'a', 0, (char) 0xd800});
+                        String result = original.replace('z', 'q');
+                        new String(new char[] {'x', 'y'});
+                        if (result != original || result.length() != 3 || result.charAt(1) != 0
+                            || result.charAt(2) != (char) 0xd800) failures++;
+                    }
+                    System.out.println(failures);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-replace-char-identity").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void stringReplaceCharPreservesUtf16AndTransportsNullFailure() throws Exception {
         final Path project = project("string-replace-char-utf16");
         writeJava(project, "com.acme.Main", """

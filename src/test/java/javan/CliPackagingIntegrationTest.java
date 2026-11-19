@@ -1955,6 +1955,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     System.out.println("alphabet".contains(new StringBuilder()));
                     System.out.println("alphabet".contains(new Sequence()));
                     System.out.println("\\0\\ud800\\udc00".replace((char) 0xd800, (char) 1).charAt(1));
+                    System.out.println(value.replace('z', 'q') == value);
                     System.out.println(nullReplace(null));
                     System.out.println("\\0\\ud800".concat("\\udc00").length());
                     System.out.println(nullConcat(null));
