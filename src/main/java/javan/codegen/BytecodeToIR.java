@@ -527,6 +527,9 @@ public final class BytecodeToIR {
         result.put("javan_string_char_at_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/lang/String", "charAt", "(I)C"
         )));
+        result.put("javan_string_to_char_array", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/lang/String", "toCharArray", "()[C"
+        )));
         result.put("javan_string_code_point_at", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/lang/String", "codePointAt", "(I)I"
         )));
@@ -1196,7 +1199,8 @@ public final class BytecodeToIR {
                 final MethodRef reference = instruction.methodRef().orElseThrow();
                 if (("java/lang/String".equals(reference.owner())
                         && ("(I)C".equals(reference.descriptor()) || "(I)I".equals(reference.descriptor())
-                            || "(II)I".equals(reference.descriptor()))
+                            || "(II)I".equals(reference.descriptor())
+                            || "toCharArray".equals(reference.name()) && "()[C".equals(reference.descriptor()))
                     || "java/lang/Character".equals(reference.owner())
                         && ("toChars".equals(reference.name())
                                 && ("(I)[C".equals(reference.descriptor()) || "(I[CI)I".equals(reference.descriptor()))

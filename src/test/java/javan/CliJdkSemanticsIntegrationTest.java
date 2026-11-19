@@ -13815,6 +13815,160 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void stringToCharArrayPreservesUtf16AndCopiesIndependently() throws Exception {
+        final Path project = project("string-to-char-array");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int order;
+                static int first() { order = order * 10 + 1; return 7; }
+                static String text() { order = order * 10 + 2; return "abc"; }
+                static char[] convert(String value) {
+                    try { return value.toCharArray(); }
+                    catch (NullPointerException ex) { System.out.println("null"); return null; }
+                }
+                static void print(String value) {
+                    char[] chars = convert(value);
+                    if (chars == null) return;
+                    System.out.println(chars.length);
+                    for (int i = 0; i < chars.length; i++) System.out.println((int) chars[i]);
+                    System.out.println(value.equals(new String(chars)));
+                    if (chars.length != 0) {
+                        chars[0] = 'X';
+                        System.out.println((int) value.charAt(0));
+                    }
+                }
+                public static void main(String[] args) {
+                    print(null); print(""); print("abc");
+                    print("\\0\\ud800\\udc00\\udfff\\udbffz");
+                    System.out.println(first() + text().toCharArray().length);
+                    System.out.println(order);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-to-char-array").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringToCharArrayAcceptsUnicodeLiterals() throws Exception {
+        final Path project = project("string-to-char-array-literal");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    char[] chars = "\\0\\ud800\\udc00\\udfff\\udbffz".toCharArray();
+                    System.out.println(chars.length);
+                    for (int i = 0; i < chars.length; i++) System.out.println((int) chars[i]);
+                    System.out.println("".toCharArray() == "".toCharArray());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-to-char-array-literal").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringToCharArrayMatchesJavaAcrossUnicode() throws Exception {
+        final Path project = project("string-to-char-array-unicode");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    long hash = 1;
+                    for (int value = 0; value <= 0x10ffff; value += 31) {
+                        char[] chars = Character.toString(value).toCharArray();
+                        hash = hash * 31 + chars.length;
+                        for (int i = 0; i < chars.length; i++) hash = hash * 31 + chars[i];
+                    }
+                    for (int value = 0; value <= 0xffff; value++) {
+                        char[] chars = Character.toString((char) value).toCharArray();
+                        hash = hash * 31 + chars.length;
+                        hash = hash * 31 + chars[0];
+                    }
+                    System.out.println(hash);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-to-char-array-unicode").toString()),
+            Duration.ofSeconds(60));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void stringToCharArraySurvivesConcurrentCollection() throws Exception {
+        final Path project = project("string-to-char-array-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            int point = i % 2 == 0 ? 0x1f600 : 0xd800;
+                            String value = Character.toString(point);
+                            char[] first = value.toCharArray();
+                            char[] second = value.toCharArray();
+                            if (first.length != (point > 0xffff ? 2 : 1)) errors.incrementAndGet();
+                            if (Character.codePointAt(first, 0) != point) errors.incrementAndGet();
+                            first[0] = 'x';
+                            if (Character.codePointAt(second, 0) != point || value.codePointAt(0) != point) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/string-to-char-array-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
+    void stringToCharArrayUncaughtNullStopsBeforeUse() throws Exception {
+        final Path project = project("string-to-char-array-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    System.out.println("before");
+                    String value = args.length == 0 ? null : "x";
+                    char[] chars = value.toCharArray();
+                    System.out.println(chars.length);
+                    System.out.println("after");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/string-to-char-array-uncaught").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("before\n");
+        assertThat(result.stderr()).contains("NullPointerException");
+    }
+
+    @Test
     void characterArrayOffsetByCodePointsMatchesJava() throws Exception {
         final Path project = project("character-array-codepoint-offset");
         writeJava(project, "com.acme.Main", """

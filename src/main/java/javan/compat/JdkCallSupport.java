@@ -550,6 +550,7 @@ public final class JdkCallSupport {
         runtime("String.hashCode", "java/lang/String", "hashCode", "()I"),
         runtime("String.isEmpty", "java/lang/String", "isEmpty", "()Z"),
         runtime("String.isBlank", "java/lang/String", "isBlank", "()Z"),
+        runtime("String.toCharArray", "java/lang/String", "toCharArray", "()[C"),
         runtime("String.charAt", "java/lang/String", "charAt", "(I)C"),
         runtime("String.codePointAt", "java/lang/String", "codePointAt", "(I)I"),
         runtime("String.codePointBefore", "java/lang/String", "codePointBefore", "(I)I"),
@@ -1992,6 +1993,10 @@ public final class JdkCallSupport {
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
+        if ("java/lang/String".equals(methodRef.owner()) && "toCharArray".equals(methodRef.name())
+            && "()[C".equals(methodRef.descriptor())) {
+            return List.of("java/lang/NullPointerException");
+        }
         if ("java/lang/Character".equals(methodRef.owner()) && "offsetByCodePoints".equals(methodRef.name())
             && "([CIIII)I".equals(methodRef.descriptor())) {
             return List.of("java/lang/IndexOutOfBoundsException", "java/lang/NullPointerException");

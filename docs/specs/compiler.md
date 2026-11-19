@@ -89,6 +89,8 @@ conditional also remain unsupported and fail during lowering. Within supported c
 shapes, an earlier static-field read is preserved across later calls, writes and class initialization.
 Within supported handler shapes, `String.charAt`, `codePointAt`, `codePointBefore`,
 `codePointCount`, and `offsetByCodePoints` transport null-receiver and invalid-index exceptions.
+`String.toCharArray` returns an independent array of UTF-16 code units and transports a null
+receiver exception within supported handler shapes.
 Provably invalid literal `charAt` indices remain subject to the diagnostics policy.
 Both `Character.toChars` overloads produce UTF-16 code units and transport invalid-code-point
 and destination errors within supported handler shapes. A direct `Character.toChars(...).length`

@@ -541,6 +541,11 @@ final class BytecodeToIRInvokeSupport {
         if (lowerScheduledThreadPoolExecutorCall(classFile, method, instruction, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
+        if ("java/lang/String".equals(methodRef.owner()) && "toCharArray".equals(methodRef.name()) && "()[C".equals(methodRef.descriptor())) {
+            final IrExpression receiver = popObject(classFile, method, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_string_to_char_array", List.of(receiver))));
+            return;
+        }
         if ("java/lang/String".equals(methodRef.owner()) && "length".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
             final IrExpression receiver = popObject(classFile, method, stack);
             rejectUnsupportedStringSemantic(classFile, method, instruction, receiver);

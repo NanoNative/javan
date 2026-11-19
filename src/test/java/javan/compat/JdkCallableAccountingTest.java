@@ -198,9 +198,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksStringToCharArrayAsExplicitRejected() {
+    void marksStringToCharArrayAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/String", "toCharArray", "()[C")))
-            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test

@@ -1042,6 +1042,48 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsStringToCharArray() throws Exception {
+        final Path project = tempDir.resolve("selfhost-string-to-char-array");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static char[] convert(String value) {
+                    try { return value.toCharArray(); }
+                    catch (NullPointerException ex) { System.out.println("null"); return null; }
+                }
+                static void print(String value) {
+                    char[] chars = convert(value);
+                    if (chars == null) return;
+                    System.out.println(chars.length);
+                    for (int i = 0; i < chars.length; i++) System.out.println((int) chars[i]);
+                    System.out.println(value.equals(new String(chars)));
+                }
+                public static void main(String[] args) {
+                    print(null); print(""); print("abc"); print("\\0\\ud800\\udc00\\udfff\\udbffz");
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-string-to-char-array"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-string-to-char-array").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout());
+    }
+
+    @Test
     void staticLibraryCharacterArrayOffsetTransportsFailures() throws Exception {
         final Path project = project("library-character-offset");
         writeJava(project, "com.acme.Text", """
@@ -3319,11 +3361,12 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static String fail(String value) { throw new IllegalArgumentException(value); }
                 public static String literal() { return "a\\0b"; }
                 public static String fromCodePoint(int value) { return Character.toString(value); }
+                public static String copy(String value) { return new String(value.toCharArray()); }
             }
             """);
         final CliRun run = run(tempDir, "build", project.toString(), "--kind", "staticlib",
             "--export", "com.acme.Text.echo", "--export", "com.acme.Text.length", "--export", "com.acme.Text.fail",
-            "--export", "com.acme.Text.literal", "--export", "com.acme.Text.fromCodePoint");
+            "--export", "com.acme.Text.literal", "--export", "com.acme.Text.fromCodePoint", "--export", "com.acme.Text.copy");
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         final Path library = project.resolve(".javan/dist/liblibrary-utf16.a");
         final Path caller = writeC(project, "call_utf16.c", """
@@ -3338,11 +3381,19 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 if (!result.ok || output.length != 7 || memcmp(data, output.data, sizeof(data))) return 1;
                 javan_result_free(&result);
                 javan_free(output.data);
+                result = javan_utf16_try_com_acme_Text_copy_string(input, &output);
+                if (!result.ok || output.length != 7 || memcmp(data, output.data, sizeof(data))) return 16;
+                javan_result_free(&result);
+                javan_free(output.data);
                 int length = 0;
                 result = javan_utf16_try_com_acme_Text_length_string(input, &length);
                 if (!result.ok || length != 7) return 2;
                 javan_result_free(&result);
                 input.data = NULL; input.length = 0;
+                result = javan_utf16_try_com_acme_Text_copy_string(input, &output);
+                if (result.ok || output.data != NULL || output.length != 0 || result.message == NULL
+                    || strstr(result.message, "java/lang/NullPointerException") == NULL) return 17;
+                javan_result_free(&result);
                 result = javan_utf16_try_com_acme_Text_echo_string(input, &output);
                 if (!result.ok || output.data != NULL || output.length != 0) return 3;
                 javan_result_free(&result);

@@ -10374,6 +10374,38 @@ final class RuntimeSourceMemorySections {
             return (int) (0xD800U + (adjusted >> 10));
         }
 
+        void javan_string_to_char_array_into(void** result, const char* value) {
+            if (result == NULL) {
+                javan_panic("invalid character array result");
+            }
+            javan_runtime_lock_enter();
+            *result = NULL;
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                javan_runtime_lock_leave();
+                return;
+            }
+            void* source_root = (void*) value;
+            void** roots[] = { &source_root };
+            javan_root_frame_push(roots, 1);
+            int length = javan_utf16_length_from_utf8((const char*) source_root);
+            javan_char_array* chars = (javan_char_array*) javan_char_array_new(length);
+            *result = chars;
+            const unsigned char* cursor = (const unsigned char*) source_root;
+            int pending = -1;
+            for (int i = 0; i < length; i++) {
+                chars->values[i] = (unsigned short) javan_utf16_next_char(&cursor, &pending);
+            }
+            javan_root_frame_pop(roots);
+            javan_runtime_lock_leave();
+        }
+
+        void* javan_string_to_char_array(const char* value) {
+            void* result = NULL;
+            javan_string_to_char_array_into(&result, value);
+            return result;
+        }
+
         void* javan_string_from_utf16(JavanUtf16View value) {
             if (value.data == NULL) {
                 return NULL;
