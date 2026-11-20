@@ -2759,7 +2759,7 @@ final class BytecodeToIRInvokeSupport {
         if (lowerJavanFiles2CreateDirectoriesIfPossible(classFile, method, methodRef, stack)) {
             return;
         }
-        if (lowerJdkCollectionStaticCall(classFile, method, methodRef, stack)) {
+        if (lowerJdkCollectionStaticCall(classFile, method, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
         if ("java/util/ServiceLoader".equals(methodRef.owner())

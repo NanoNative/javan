@@ -39,7 +39,9 @@ final class BytecodeToIRCollectionSupport {
         final ClassFile classFile,
         final MethodInfo method,
         final MethodRef methodRef,
-        final List<StackValue> stack
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations
     ) {
         final String owner = methodRef.owner();
         final String name = methodRef.name();
@@ -141,7 +143,7 @@ final class BytecodeToIRCollectionSupport {
                 return false;
             }
             final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_copy_of", arguments)));
+            pushObjectCall(instructions, stack, localDeclarations, "javan_map_copy_of", arguments);
             return true;
         }
         if ("java/util/Collections".equals(owner)) {

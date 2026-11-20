@@ -89,7 +89,8 @@ allowed, and two-argument `remove` with a non-null key and null expected value r
 null-sensitive methods and constructors, application-defined key equality, compound callback
 operations and concurrent views still need their complete API semantics, so `ConcurrentHashMap` is
 not yet accounted as fully supported. Copy constructors of `HashMap` and `LinkedHashMap` likewise
-reject null sources, while accepting null keys and values in the source.
+reject null sources, while accepting null keys and values in the source. `Map.copyOf` rejects null
+sources and null entries and creates an immutable snapshot.
 
 The default `SecureRandom` constructor supports calls resolved as `SecureRandom.nextBytes` and
 `generateSeed`. The static `getSeed` entry is also supported. The supported random value methods

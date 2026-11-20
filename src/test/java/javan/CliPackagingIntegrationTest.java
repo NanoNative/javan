@@ -4553,6 +4553,11 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static int nullCopySource() { new ConcurrentHashMap<Integer, Integer>((Map<Integer, Integer>) null); return 0; }
                 public static int nullHashCopySource() { new java.util.HashMap<Integer, Integer>((Map<Integer, Integer>) null); return 0; }
                 public static int nullLinkedCopySource() { new java.util.LinkedHashMap<Integer, Integer>((Map<Integer, Integer>) null); return 0; }
+                public static int nullCopyOfValue() {
+                    Map<Integer, Integer> source = new java.util.HashMap<>(); source.put(999, null);
+                    Map.copyOf(source); return 0;
+                }
+                public static int nullCopyOfSource() { Map.copyOf(null); return 0; }
                 public static int replacesNull() {
                     Map<Integer, Integer> map = new java.util.HashMap<>();
                     map.put(1, null); map.putIfAbsent(1, 7); return map.get(1);
@@ -4574,7 +4579,8 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "--export", "com.acme.Api.immutableReplace():int", "--export", "com.acme.Api.nullPutAllValue():int",
             "--export", "com.acme.Api.nullPutAllSource():int", "--export", "com.acme.Api.immutablePutAll():int",
             "--export", "com.acme.Api.nullCopyValue():int", "--export", "com.acme.Api.nullCopySource():int",
-            "--export", "com.acme.Api.nullHashCopySource():int", "--export", "com.acme.Api.nullLinkedCopySource():int");
+            "--export", "com.acme.Api.nullHashCopySource():int", "--export", "com.acme.Api.nullLinkedCopySource():int",
+            "--export", "com.acme.Api.nullCopyOfValue():int", "--export", "com.acme.Api.nullCopyOfSource():int");
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final Path caller = writeC(project, "call_map.c", """
             #include <string.h>
@@ -4668,6 +4674,12 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     javan_result_free(&failure);
                     failure = javan_try_com_acme_Api_nullLinkedCopySource_void(&value);
                     if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 30;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_nullCopyOfValue_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 31;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_nullCopyOfSource_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 32;
                     javan_result_free(&failure);
                     JavanResult result = javan_try_com_acme_Api_size_void(&value);
                     if (!result.ok || value != 400) return 1;

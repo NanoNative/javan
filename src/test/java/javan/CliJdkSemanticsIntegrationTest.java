@@ -2226,6 +2226,42 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mapCopyOfRejectsNullsAndKeepsAnImmutableSnapshot() throws Exception {
+        final Path project = project("map-copy-of-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.HashMap;
+            import java.util.Map;
+            public final class Main {
+                public static void main(String[] args) {
+                    Map<String, String> source = new HashMap<>(); source.put("key", "old");
+                    Map<String, String> copy = Map.copyOf(source); source.put("key", "new");
+                    System.out.println(copy.get("key"));
+                    try { copy.put("key", "other"); } catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                    source.put("key", null);
+                    try { Map.copyOf(source); } catch (NullPointerException expected) { System.out.println("null value"); }
+                    source.clear(); source.put(null, "value");
+                    try { Map.copyOf(source); } catch (NullPointerException expected) { System.out.println("null key"); }
+                    try { Map.copyOf(null); } catch (NullPointerException expected) { System.out.println("null source"); }
+                    System.out.println(Map.copyOf(Map.of("after", "yes")).get("after"));
+                    source.clear(); source.put("dynamic", Integer.toString(42));
+                    Map<String, String> retained = Map.copyOf(source); source.clear();
+                    for (int i = 0; i < 100; i++) Integer.toString(i);
+                    System.out.println(retained.get("dynamic"));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/map-copy-of-null").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void mapCopyConstructorsHandleNullEntriesAndNullSource() throws Exception {
         final Path project = project("plain-map-constructor");
         writeJava(project, "com.acme.Main", """

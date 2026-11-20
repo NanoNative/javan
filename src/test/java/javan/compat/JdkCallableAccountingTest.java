@@ -917,6 +917,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksMapCopyOfAsUnknown() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "copyOf", "(Ljava/util/Map;)Ljava/util/Map;")))
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+    }
+
+    @Test
     void marksMapPutAllAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "putAll", "(Ljava/util/Map;)V")))
             .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);

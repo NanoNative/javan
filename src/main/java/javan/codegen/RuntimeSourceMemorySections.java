@@ -15581,6 +15581,20 @@ final class RuntimeSourceMemorySections {
 
         void* javan_map_copy_of(void* value) {
             javan_runtime_lock_enter();
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                javan_runtime_lock_leave();
+                return NULL;
+            }
+            javan_object_map* source = javan_map_checked(value);
+            int length = javan_map_logical_length(source);
+            for (int index = 0; index < length; index++) {
+                if (javan_map_key_unchecked(source, index) == NULL || javan_map_value_unchecked(source, index) == NULL) {
+                    javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                    javan_runtime_lock_leave();
+                    return NULL;
+                }
+            }
             void* result = javan_map_copy_of_unlocked(value);
             javan_runtime_lock_leave();
             return result;

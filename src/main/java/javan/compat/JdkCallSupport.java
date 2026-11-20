@@ -2080,6 +2080,17 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies the immutable map copy factory.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method creates an immutable map copy
+     */
+    public static boolean isMapCopyOf(final MethodRef methodRef) {
+        return "java/util/Map".equals(methodRef.owner()) && "copyOf".equals(methodRef.name())
+            && "(Ljava/util/Map;)Ljava/util/Map;".equals(methodRef.descriptor()) && isSupported(methodRef);
+    }
+
+    /**
      * Identifies supported constructors that copy a source map.
      *
      * @param methodRef referenced JDK constructor
@@ -2179,7 +2190,7 @@ public final class JdkCallSupport {
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
-        if (isMapCopyConstructor(methodRef)) {
+        if (isMapCopyConstructor(methodRef) || isMapCopyOf(methodRef)) {
             return List.of("java/lang/NullPointerException");
         }
         if (isCollectionObjectAddition(methodRef) || isCollectionClear(methodRef) || isMapClear(methodRef)
