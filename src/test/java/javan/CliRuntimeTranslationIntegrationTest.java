@@ -8872,7 +8872,7 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/list-of-immutable-add").toString()));
 
         assertThat(nativeRun.exitCode()).isNotZero();
-        assertThat(nativeRun.stderr()).contains("unsupported operation on immutable list");
+        assertThat(nativeRun.stderr()).contains("UnsupportedOperationException");
     }
 
     @Test
@@ -8935,7 +8935,7 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/collections-unmodifiable-set-add").toString()));
 
         assertThat(nativeRun.exitCode()).isNotZero();
-        assertThat(nativeRun.stderr()).contains("unsupported operation on immutable list");
+        assertThat(nativeRun.stderr()).contains("UnsupportedOperationException");
     }
 
     @Test
