@@ -5655,12 +5655,12 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void mapEntryNullKeyFailsAtRuntime() throws Exception {
-        assertMapEntryFailureAtRuntime("map-entry-null-key", "Map.entry((String) null, 7);", "null Map.entry component");
+        assertMapEntryFailureAtRuntime("map-entry-null-key", "Map.entry((String) null, 7);", "NullPointerException");
     }
 
     @Test
     void mapEntryNullValueFailsAtRuntime() throws Exception {
-        assertMapEntryFailureAtRuntime("map-entry-null-value", "Map.entry(\"alpha\", (Integer) null);", "null Map.entry component");
+        assertMapEntryFailureAtRuntime("map-entry-null-value", "Map.entry(\"alpha\", (Integer) null);", "NullPointerException");
     }
 
     @Test
@@ -5707,7 +5707,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertMapOfEntriesFailureAtRuntime(
             "map-of-entries-duplicate-key",
             "Map.ofEntries(Map.entry(\"same\", 1), Map.entry(\"same\", 2));",
-            "duplicate Map.of key"
+            "IllegalArgumentException"
         );
     }
 
@@ -5716,7 +5716,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertMapOfEntriesFailureAtRuntime(
             "map-of-entries-null-entry",
             "Map.ofEntries(Map.entry(\"x\", 1), null);",
-            "null Map.ofEntries entry"
+            "NullPointerException"
         );
     }
 
@@ -5756,27 +5756,27 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void mapOfPairDuplicateKeyFailsAtRuntime() throws Exception {
-        assertMapOfPairFailureAtRuntime("map-of-pair-duplicate-key", "Map.of(\"same\", 1, \"same\", 2);", "duplicate Map.of key");
+        assertMapOfPairFailureAtRuntime("map-of-pair-duplicate-key", "Map.of(\"same\", 1, \"same\", 2);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfPairNullFirstKeyFailsAtRuntime() throws Exception {
-        assertMapOfPairFailureAtRuntime("map-of-pair-null-first-key", "Map.of((String) null, 1, \"y\", 2);", "null Map.of entry");
+        assertMapOfPairFailureAtRuntime("map-of-pair-null-first-key", "Map.of((String) null, 1, \"y\", 2);", "NullPointerException");
     }
 
     @Test
     void mapOfPairNullFirstValueFailsAtRuntime() throws Exception {
-        assertMapOfPairFailureAtRuntime("map-of-pair-null-first-value", "Map.of(\"x\", (Integer) null, \"y\", 2);", "null Map.of entry");
+        assertMapOfPairFailureAtRuntime("map-of-pair-null-first-value", "Map.of(\"x\", (Integer) null, \"y\", 2);", "NullPointerException");
     }
 
     @Test
     void mapOfPairNullSecondKeyFailsAtRuntime() throws Exception {
-        assertMapOfPairFailureAtRuntime("map-of-pair-null-second-key", "Map.of(\"x\", 1, (String) null, 2);", "null Map.of entry");
+        assertMapOfPairFailureAtRuntime("map-of-pair-null-second-key", "Map.of(\"x\", 1, (String) null, 2);", "NullPointerException");
     }
 
     @Test
     void mapOfPairNullSecondValueFailsAtRuntime() throws Exception {
-        assertMapOfPairFailureAtRuntime("map-of-pair-null-second-value", "Map.of(\"x\", 1, \"y\", (Integer) null);", "null Map.of entry");
+        assertMapOfPairFailureAtRuntime("map-of-pair-null-second-value", "Map.of(\"x\", 1, \"y\", (Integer) null);", "NullPointerException");
     }
 
     @Test
@@ -5817,47 +5817,47 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void mapOfTripleDuplicateFirstSecondFailsAtRuntime() throws Exception {
-        assertMapOfTripleFailureAtRuntime("map-of-triple-duplicate-first-second", "Map.of(\"same\", 1, \"same\", 2, \"z\", 3);", "duplicate Map.of key");
+        assertMapOfTripleFailureAtRuntime("map-of-triple-duplicate-first-second", "Map.of(\"same\", 1, \"same\", 2, \"z\", 3);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfTripleDuplicateFirstThirdFailsAtRuntime() throws Exception {
-        assertMapOfTripleFailureAtRuntime("map-of-triple-duplicate-first-third", "Map.of(\"same\", 1, \"y\", 2, \"same\", 3);", "duplicate Map.of key");
+        assertMapOfTripleFailureAtRuntime("map-of-triple-duplicate-first-third", "Map.of(\"same\", 1, \"y\", 2, \"same\", 3);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfTripleDuplicateSecondThirdFailsAtRuntime() throws Exception {
-        assertMapOfTripleFailureAtRuntime("map-of-triple-duplicate-second-third", "Map.of(\"x\", 1, \"same\", 2, \"same\", 3);", "duplicate Map.of key");
+        assertMapOfTripleFailureAtRuntime("map-of-triple-duplicate-second-third", "Map.of(\"x\", 1, \"same\", 2, \"same\", 3);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfTripleNullFirstKeyFailsAtRuntime() throws Exception {
-        assertMapOfTripleFailureAtRuntime("map-of-triple-null-first-key", "Map.of((String) null, 1, \"y\", 2, \"z\", 3);", "null Map.of entry");
+        assertMapOfTripleFailureAtRuntime("map-of-triple-null-first-key", "Map.of((String) null, 1, \"y\", 2, \"z\", 3);", "NullPointerException");
     }
 
     @Test
     void mapOfTripleNullFirstValueFailsAtRuntime() throws Exception {
-        assertMapOfTripleFailureAtRuntime("map-of-triple-null-first-value", "Map.of(\"x\", (Integer) null, \"y\", 2, \"z\", 3);", "null Map.of entry");
+        assertMapOfTripleFailureAtRuntime("map-of-triple-null-first-value", "Map.of(\"x\", (Integer) null, \"y\", 2, \"z\", 3);", "NullPointerException");
     }
 
     @Test
     void mapOfTripleNullSecondKeyFailsAtRuntime() throws Exception {
-        assertMapOfTripleFailureAtRuntime("map-of-triple-null-second-key", "Map.of(\"x\", 1, (String) null, 2, \"z\", 3);", "null Map.of entry");
+        assertMapOfTripleFailureAtRuntime("map-of-triple-null-second-key", "Map.of(\"x\", 1, (String) null, 2, \"z\", 3);", "NullPointerException");
     }
 
     @Test
     void mapOfTripleNullSecondValueFailsAtRuntime() throws Exception {
-        assertMapOfTripleFailureAtRuntime("map-of-triple-null-second-value", "Map.of(\"x\", 1, \"y\", (Integer) null, \"z\", 3);", "null Map.of entry");
+        assertMapOfTripleFailureAtRuntime("map-of-triple-null-second-value", "Map.of(\"x\", 1, \"y\", (Integer) null, \"z\", 3);", "NullPointerException");
     }
 
     @Test
     void mapOfTripleNullThirdKeyFailsAtRuntime() throws Exception {
-        assertMapOfTripleFailureAtRuntime("map-of-triple-null-third-key", "Map.of(\"x\", 1, \"y\", 2, (String) null, 3);", "null Map.of entry");
+        assertMapOfTripleFailureAtRuntime("map-of-triple-null-third-key", "Map.of(\"x\", 1, \"y\", 2, (String) null, 3);", "NullPointerException");
     }
 
     @Test
     void mapOfTripleNullThirdValueFailsAtRuntime() throws Exception {
-        assertMapOfTripleFailureAtRuntime("map-of-triple-null-third-value", "Map.of(\"x\", 1, \"y\", 2, \"z\", (Integer) null);", "null Map.of entry");
+        assertMapOfTripleFailureAtRuntime("map-of-triple-null-third-value", "Map.of(\"x\", 1, \"y\", 2, \"z\", (Integer) null);", "NullPointerException");
     }
 
     @Test
@@ -5900,72 +5900,72 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void mapOfQuadrupleDuplicateFirstSecondFailsAtRuntime() throws Exception {
-        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-duplicate-first-second", "Map.of(\"same\", 1, \"same\", 2, \"c\", 3, \"d\", 4);", "duplicate Map.of key");
+        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-duplicate-first-second", "Map.of(\"same\", 1, \"same\", 2, \"c\", 3, \"d\", 4);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfQuadrupleDuplicateFirstThirdFailsAtRuntime() throws Exception {
-        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-duplicate-first-third", "Map.of(\"same\", 1, \"b\", 2, \"same\", 3, \"d\", 4);", "duplicate Map.of key");
+        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-duplicate-first-third", "Map.of(\"same\", 1, \"b\", 2, \"same\", 3, \"d\", 4);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfQuadrupleDuplicateFirstFourthFailsAtRuntime() throws Exception {
-        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-duplicate-first-fourth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"same\", 4);", "duplicate Map.of key");
+        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-duplicate-first-fourth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"same\", 4);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfQuadrupleDuplicateSecondThirdFailsAtRuntime() throws Exception {
-        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-duplicate-second-third", "Map.of(\"a\", 1, \"same\", 2, \"same\", 3, \"d\", 4);", "duplicate Map.of key");
+        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-duplicate-second-third", "Map.of(\"a\", 1, \"same\", 2, \"same\", 3, \"d\", 4);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfQuadrupleDuplicateSecondFourthFailsAtRuntime() throws Exception {
-        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-duplicate-second-fourth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"same\", 4);", "duplicate Map.of key");
+        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-duplicate-second-fourth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"same\", 4);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfQuadrupleDuplicateThirdFourthFailsAtRuntime() throws Exception {
-        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-duplicate-third-fourth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"same\", 4);", "duplicate Map.of key");
+        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-duplicate-third-fourth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"same\", 4);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfQuadrupleNullFirstKeyFailsAtRuntime() throws Exception {
-        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-null-first-key", "Map.of((String) null, 1, \"b\", 2, \"c\", 3, \"d\", 4);", "null Map.of entry");
+        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-null-first-key", "Map.of((String) null, 1, \"b\", 2, \"c\", 3, \"d\", 4);", "NullPointerException");
     }
 
     @Test
     void mapOfQuadrupleNullFirstValueFailsAtRuntime() throws Exception {
-        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-null-first-value", "Map.of(\"a\", (Integer) null, \"b\", 2, \"c\", 3, \"d\", 4);", "null Map.of entry");
+        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-null-first-value", "Map.of(\"a\", (Integer) null, \"b\", 2, \"c\", 3, \"d\", 4);", "NullPointerException");
     }
 
     @Test
     void mapOfQuadrupleNullSecondKeyFailsAtRuntime() throws Exception {
-        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-null-second-key", "Map.of(\"a\", 1, (String) null, 2, \"c\", 3, \"d\", 4);", "null Map.of entry");
+        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-null-second-key", "Map.of(\"a\", 1, (String) null, 2, \"c\", 3, \"d\", 4);", "NullPointerException");
     }
 
     @Test
     void mapOfQuadrupleNullSecondValueFailsAtRuntime() throws Exception {
-        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-null-second-value", "Map.of(\"a\", 1, \"b\", (Integer) null, \"c\", 3, \"d\", 4);", "null Map.of entry");
+        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-null-second-value", "Map.of(\"a\", 1, \"b\", (Integer) null, \"c\", 3, \"d\", 4);", "NullPointerException");
     }
 
     @Test
     void mapOfQuadrupleNullThirdKeyFailsAtRuntime() throws Exception {
-        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-null-third-key", "Map.of(\"a\", 1, \"b\", 2, (String) null, 3, \"d\", 4);", "null Map.of entry");
+        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-null-third-key", "Map.of(\"a\", 1, \"b\", 2, (String) null, 3, \"d\", 4);", "NullPointerException");
     }
 
     @Test
     void mapOfQuadrupleNullThirdValueFailsAtRuntime() throws Exception {
-        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-null-third-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", (Integer) null, \"d\", 4);", "null Map.of entry");
+        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-null-third-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", (Integer) null, \"d\", 4);", "NullPointerException");
     }
 
     @Test
     void mapOfQuadrupleNullFourthKeyFailsAtRuntime() throws Exception {
-        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-null-fourth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, (String) null, 4);", "null Map.of entry");
+        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-null-fourth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, (String) null, 4);", "NullPointerException");
     }
 
     @Test
     void mapOfQuadrupleNullFourthValueFailsAtRuntime() throws Exception {
-        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-null-fourth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", (Integer) null);", "null Map.of entry");
+        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-null-fourth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", (Integer) null);", "NullPointerException");
     }
 
     @Test
@@ -6010,102 +6010,102 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void mapOfQuintupleDuplicateFirstSecondFailsAtRuntime() throws Exception {
-        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-duplicate-first-second", "Map.of(\"same\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5);", "duplicate Map.of key");
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-duplicate-first-second", "Map.of(\"same\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfQuintupleDuplicateFirstThirdFailsAtRuntime() throws Exception {
-        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-duplicate-first-third", "Map.of(\"same\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5);", "duplicate Map.of key");
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-duplicate-first-third", "Map.of(\"same\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfQuintupleDuplicateFirstFourthFailsAtRuntime() throws Exception {
-        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-duplicate-first-fourth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5);", "duplicate Map.of key");
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-duplicate-first-fourth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfQuintupleDuplicateFirstFifthFailsAtRuntime() throws Exception {
-        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-duplicate-first-fifth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5);", "duplicate Map.of key");
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-duplicate-first-fifth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfQuintupleDuplicateSecondThirdFailsAtRuntime() throws Exception {
-        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-duplicate-second-third", "Map.of(\"a\", 1, \"same\", 2, \"same\", 3, \"d\", 4, \"e\", 5);", "duplicate Map.of key");
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-duplicate-second-third", "Map.of(\"a\", 1, \"same\", 2, \"same\", 3, \"d\", 4, \"e\", 5);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfQuintupleDuplicateSecondFourthFailsAtRuntime() throws Exception {
-        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-duplicate-second-fourth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"same\", 4, \"e\", 5);", "duplicate Map.of key");
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-duplicate-second-fourth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"same\", 4, \"e\", 5);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfQuintupleDuplicateSecondFifthFailsAtRuntime() throws Exception {
-        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-duplicate-second-fifth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"same\", 5);", "duplicate Map.of key");
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-duplicate-second-fifth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"same\", 5);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfQuintupleDuplicateThirdFourthFailsAtRuntime() throws Exception {
-        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-duplicate-third-fourth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"same\", 4, \"e\", 5);", "duplicate Map.of key");
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-duplicate-third-fourth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"same\", 4, \"e\", 5);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfQuintupleDuplicateThirdFifthFailsAtRuntime() throws Exception {
-        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-duplicate-third-fifth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"same\", 5);", "duplicate Map.of key");
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-duplicate-third-fifth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"same\", 5);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfQuintupleDuplicateFourthFifthFailsAtRuntime() throws Exception {
-        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-duplicate-fourth-fifth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"same\", 5);", "duplicate Map.of key");
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-duplicate-fourth-fifth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"same\", 5);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfQuintupleNullFirstKeyFailsAtRuntime() throws Exception {
-        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-null-first-key", "Map.of((String) null, 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5);", "null Map.of entry");
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-null-first-key", "Map.of((String) null, 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5);", "NullPointerException");
     }
 
     @Test
     void mapOfQuintupleNullFirstValueFailsAtRuntime() throws Exception {
-        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-null-first-value", "Map.of(\"a\", (Integer) null, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5);", "null Map.of entry");
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-null-first-value", "Map.of(\"a\", (Integer) null, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5);", "NullPointerException");
     }
 
     @Test
     void mapOfQuintupleNullSecondKeyFailsAtRuntime() throws Exception {
-        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-null-second-key", "Map.of(\"a\", 1, (String) null, 2, \"c\", 3, \"d\", 4, \"e\", 5);", "null Map.of entry");
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-null-second-key", "Map.of(\"a\", 1, (String) null, 2, \"c\", 3, \"d\", 4, \"e\", 5);", "NullPointerException");
     }
 
     @Test
     void mapOfQuintupleNullSecondValueFailsAtRuntime() throws Exception {
-        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-null-second-value", "Map.of(\"a\", 1, \"b\", (Integer) null, \"c\", 3, \"d\", 4, \"e\", 5);", "null Map.of entry");
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-null-second-value", "Map.of(\"a\", 1, \"b\", (Integer) null, \"c\", 3, \"d\", 4, \"e\", 5);", "NullPointerException");
     }
 
     @Test
     void mapOfQuintupleNullThirdKeyFailsAtRuntime() throws Exception {
-        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-null-third-key", "Map.of(\"a\", 1, \"b\", 2, (String) null, 3, \"d\", 4, \"e\", 5);", "null Map.of entry");
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-null-third-key", "Map.of(\"a\", 1, \"b\", 2, (String) null, 3, \"d\", 4, \"e\", 5);", "NullPointerException");
     }
 
     @Test
     void mapOfQuintupleNullThirdValueFailsAtRuntime() throws Exception {
-        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-null-third-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", (Integer) null, \"d\", 4, \"e\", 5);", "null Map.of entry");
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-null-third-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", (Integer) null, \"d\", 4, \"e\", 5);", "NullPointerException");
     }
 
     @Test
     void mapOfQuintupleNullFourthKeyFailsAtRuntime() throws Exception {
-        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-null-fourth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, (String) null, 4, \"e\", 5);", "null Map.of entry");
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-null-fourth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, (String) null, 4, \"e\", 5);", "NullPointerException");
     }
 
     @Test
     void mapOfQuintupleNullFourthValueFailsAtRuntime() throws Exception {
-        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-null-fourth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", (Integer) null, \"e\", 5);", "null Map.of entry");
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-null-fourth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", (Integer) null, \"e\", 5);", "NullPointerException");
     }
 
     @Test
     void mapOfQuintupleNullFifthKeyFailsAtRuntime() throws Exception {
-        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-null-fifth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, (String) null, 5);", "null Map.of entry");
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-null-fifth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, (String) null, 5);", "NullPointerException");
     }
 
     @Test
     void mapOfQuintupleNullFifthValueFailsAtRuntime() throws Exception {
-        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-null-fifth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", (Integer) null);", "null Map.of entry");
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-null-fifth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", (Integer) null);", "NullPointerException");
     }
 
     @Test
@@ -6152,137 +6152,137 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void mapOfSextupleDuplicateFirstSecondFailsAtRuntime() throws Exception {
-        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-first-second", "Map.of(\"same\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6);", "duplicate Map.of key");
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-first-second", "Map.of(\"same\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSextupleDuplicateFirstThirdFailsAtRuntime() throws Exception {
-        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-first-third", "Map.of(\"same\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6);", "duplicate Map.of key");
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-first-third", "Map.of(\"same\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSextupleDuplicateFirstFourthFailsAtRuntime() throws Exception {
-        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-first-fourth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6);", "duplicate Map.of key");
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-first-fourth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSextupleDuplicateFirstFifthFailsAtRuntime() throws Exception {
-        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-first-fifth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6);", "duplicate Map.of key");
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-first-fifth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSextupleDuplicateFirstSixthFailsAtRuntime() throws Exception {
-        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-first-sixth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6);", "duplicate Map.of key");
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-first-sixth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSextupleDuplicateSecondThirdFailsAtRuntime() throws Exception {
-        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-second-third", "Map.of(\"a\", 1, \"same\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6);", "duplicate Map.of key");
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-second-third", "Map.of(\"a\", 1, \"same\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSextupleDuplicateSecondFourthFailsAtRuntime() throws Exception {
-        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-second-fourth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6);", "duplicate Map.of key");
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-second-fourth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSextupleDuplicateSecondFifthFailsAtRuntime() throws Exception {
-        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-second-fifth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6);", "duplicate Map.of key");
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-second-fifth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSextupleDuplicateSecondSixthFailsAtRuntime() throws Exception {
-        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-second-sixth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6);", "duplicate Map.of key");
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-second-sixth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSextupleDuplicateThirdFourthFailsAtRuntime() throws Exception {
-        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-third-fourth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"same\", 4, \"e\", 5, \"f\", 6);", "duplicate Map.of key");
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-third-fourth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"same\", 4, \"e\", 5, \"f\", 6);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSextupleDuplicateThirdFifthFailsAtRuntime() throws Exception {
-        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-third-fifth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"same\", 5, \"f\", 6);", "duplicate Map.of key");
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-third-fifth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"same\", 5, \"f\", 6);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSextupleDuplicateThirdSixthFailsAtRuntime() throws Exception {
-        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-third-sixth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"same\", 6);", "duplicate Map.of key");
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-third-sixth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"same\", 6);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSextupleDuplicateFourthFifthFailsAtRuntime() throws Exception {
-        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-fourth-fifth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"same\", 5, \"f\", 6);", "duplicate Map.of key");
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-fourth-fifth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"same\", 5, \"f\", 6);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSextupleDuplicateFourthSixthFailsAtRuntime() throws Exception {
-        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-fourth-sixth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"same\", 6);", "duplicate Map.of key");
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-fourth-sixth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"same\", 6);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSextupleDuplicateFifthSixthFailsAtRuntime() throws Exception {
-        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-fifth-sixth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"same\", 6);", "duplicate Map.of key");
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-fifth-sixth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"same\", 6);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSextupleNullFirstKeyFailsAtRuntime() throws Exception {
-        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-first-key", "Map.of((String) null, 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6);", "null Map.of entry");
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-first-key", "Map.of((String) null, 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6);", "NullPointerException");
     }
 
     @Test
     void mapOfSextupleNullFirstValueFailsAtRuntime() throws Exception {
-        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-first-value", "Map.of(\"a\", (Integer) null, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6);", "null Map.of entry");
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-first-value", "Map.of(\"a\", (Integer) null, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6);", "NullPointerException");
     }
 
     @Test
     void mapOfSextupleNullSecondKeyFailsAtRuntime() throws Exception {
-        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-second-key", "Map.of(\"a\", 1, (String) null, 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6);", "null Map.of entry");
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-second-key", "Map.of(\"a\", 1, (String) null, 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6);", "NullPointerException");
     }
 
     @Test
     void mapOfSextupleNullSecondValueFailsAtRuntime() throws Exception {
-        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-second-value", "Map.of(\"a\", 1, \"b\", (Integer) null, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6);", "null Map.of entry");
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-second-value", "Map.of(\"a\", 1, \"b\", (Integer) null, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6);", "NullPointerException");
     }
 
     @Test
     void mapOfSextupleNullThirdKeyFailsAtRuntime() throws Exception {
-        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-third-key", "Map.of(\"a\", 1, \"b\", 2, (String) null, 3, \"d\", 4, \"e\", 5, \"f\", 6);", "null Map.of entry");
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-third-key", "Map.of(\"a\", 1, \"b\", 2, (String) null, 3, \"d\", 4, \"e\", 5, \"f\", 6);", "NullPointerException");
     }
 
     @Test
     void mapOfSextupleNullThirdValueFailsAtRuntime() throws Exception {
-        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-third-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", (Integer) null, \"d\", 4, \"e\", 5, \"f\", 6);", "null Map.of entry");
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-third-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", (Integer) null, \"d\", 4, \"e\", 5, \"f\", 6);", "NullPointerException");
     }
 
     @Test
     void mapOfSextupleNullFourthKeyFailsAtRuntime() throws Exception {
-        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-fourth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, (String) null, 4, \"e\", 5, \"f\", 6);", "null Map.of entry");
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-fourth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, (String) null, 4, \"e\", 5, \"f\", 6);", "NullPointerException");
     }
 
     @Test
     void mapOfSextupleNullFourthValueFailsAtRuntime() throws Exception {
-        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-fourth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", (Integer) null, \"e\", 5, \"f\", 6);", "null Map.of entry");
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-fourth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", (Integer) null, \"e\", 5, \"f\", 6);", "NullPointerException");
     }
 
     @Test
     void mapOfSextupleNullFifthKeyFailsAtRuntime() throws Exception {
-        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-fifth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, (String) null, 5, \"f\", 6);", "null Map.of entry");
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-fifth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, (String) null, 5, \"f\", 6);", "NullPointerException");
     }
 
     @Test
     void mapOfSextupleNullFifthValueFailsAtRuntime() throws Exception {
-        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-fifth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", (Integer) null, \"f\", 6);", "null Map.of entry");
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-fifth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", (Integer) null, \"f\", 6);", "NullPointerException");
     }
 
     @Test
     void mapOfSextupleNullSixthKeyFailsAtRuntime() throws Exception {
-        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-sixth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, (String) null, 6);", "null Map.of entry");
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-sixth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, (String) null, 6);", "NullPointerException");
     }
 
     @Test
     void mapOfSextupleNullSixthValueFailsAtRuntime() throws Exception {
-        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-sixth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", (Integer) null);", "null Map.of entry");
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-sixth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", (Integer) null);", "NullPointerException");
     }
 
     @Test
@@ -6331,177 +6331,177 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void mapOfSeptupleDuplicateFirstSecondFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-first-second", "Map.of(\"same\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7);", "duplicate Map.of key");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-first-second", "Map.of(\"same\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSeptupleDuplicateFirstThirdFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-first-third", "Map.of(\"same\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7);", "duplicate Map.of key");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-first-third", "Map.of(\"same\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSeptupleDuplicateFirstFourthFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-first-fourth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7);", "duplicate Map.of key");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-first-fourth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSeptupleDuplicateFirstFifthFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-first-fifth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7);", "duplicate Map.of key");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-first-fifth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSeptupleDuplicateFirstSixthFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-first-sixth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7);", "duplicate Map.of key");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-first-sixth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSeptupleDuplicateFirstSeventhFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-first-seventh", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7);", "duplicate Map.of key");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-first-seventh", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSeptupleDuplicateSecondThirdFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-second-third", "Map.of(\"a\", 1, \"same\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7);", "duplicate Map.of key");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-second-third", "Map.of(\"a\", 1, \"same\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSeptupleDuplicateSecondFourthFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-second-fourth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7);", "duplicate Map.of key");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-second-fourth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSeptupleDuplicateSecondFifthFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-second-fifth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7);", "duplicate Map.of key");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-second-fifth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSeptupleDuplicateSecondSixthFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-second-sixth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7);", "duplicate Map.of key");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-second-sixth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSeptupleDuplicateSecondSeventhFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-second-seventh", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7);", "duplicate Map.of key");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-second-seventh", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSeptupleDuplicateThirdFourthFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-third-fourth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7);", "duplicate Map.of key");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-third-fourth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSeptupleDuplicateThirdFifthFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-third-fifth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7);", "duplicate Map.of key");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-third-fifth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSeptupleDuplicateThirdSixthFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-third-sixth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7);", "duplicate Map.of key");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-third-sixth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSeptupleDuplicateThirdSeventhFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-third-seventh", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7);", "duplicate Map.of key");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-third-seventh", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSeptupleDuplicateFourthFifthFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-fourth-fifth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"same\", 5, \"f\", 6, \"g\", 7);", "duplicate Map.of key");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-fourth-fifth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"same\", 5, \"f\", 6, \"g\", 7);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSeptupleDuplicateFourthSixthFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-fourth-sixth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"same\", 6, \"g\", 7);", "duplicate Map.of key");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-fourth-sixth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"same\", 6, \"g\", 7);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSeptupleDuplicateFourthSeventhFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-fourth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"same\", 7);", "duplicate Map.of key");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-fourth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"same\", 7);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSeptupleDuplicateFifthSixthFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-fifth-sixth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"same\", 6, \"g\", 7);", "duplicate Map.of key");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-fifth-sixth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"same\", 6, \"g\", 7);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSeptupleDuplicateFifthSeventhFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-fifth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"same\", 7);", "duplicate Map.of key");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-fifth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"same\", 7);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSeptupleDuplicateSixthSeventhFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-sixth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"same\", 7);", "duplicate Map.of key");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-duplicate-sixth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"same\", 7);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfSeptupleNullFirstKeyFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-null-first-key", "Map.of((String) null, 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7);", "null Map.of entry");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-null-first-key", "Map.of((String) null, 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7);", "NullPointerException");
     }
 
     @Test
     void mapOfSeptupleNullFirstValueFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-null-first-value", "Map.of(\"a\", (Integer) null, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7);", "null Map.of entry");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-null-first-value", "Map.of(\"a\", (Integer) null, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7);", "NullPointerException");
     }
 
     @Test
     void mapOfSeptupleNullSecondKeyFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-null-second-key", "Map.of(\"a\", 1, (String) null, 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7);", "null Map.of entry");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-null-second-key", "Map.of(\"a\", 1, (String) null, 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7);", "NullPointerException");
     }
 
     @Test
     void mapOfSeptupleNullSecondValueFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-null-second-value", "Map.of(\"a\", 1, \"b\", (Integer) null, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7);", "null Map.of entry");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-null-second-value", "Map.of(\"a\", 1, \"b\", (Integer) null, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7);", "NullPointerException");
     }
 
     @Test
     void mapOfSeptupleNullThirdKeyFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-null-third-key", "Map.of(\"a\", 1, \"b\", 2, (String) null, 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7);", "null Map.of entry");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-null-third-key", "Map.of(\"a\", 1, \"b\", 2, (String) null, 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7);", "NullPointerException");
     }
 
     @Test
     void mapOfSeptupleNullThirdValueFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-null-third-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", (Integer) null, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7);", "null Map.of entry");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-null-third-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", (Integer) null, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7);", "NullPointerException");
     }
 
     @Test
     void mapOfSeptupleNullFourthKeyFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-null-fourth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, (String) null, 4, \"e\", 5, \"f\", 6, \"g\", 7);", "null Map.of entry");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-null-fourth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, (String) null, 4, \"e\", 5, \"f\", 6, \"g\", 7);", "NullPointerException");
     }
 
     @Test
     void mapOfSeptupleNullFourthValueFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-null-fourth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", (Integer) null, \"e\", 5, \"f\", 6, \"g\", 7);", "null Map.of entry");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-null-fourth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", (Integer) null, \"e\", 5, \"f\", 6, \"g\", 7);", "NullPointerException");
     }
 
     @Test
     void mapOfSeptupleNullFifthKeyFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-null-fifth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, (String) null, 5, \"f\", 6, \"g\", 7);", "null Map.of entry");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-null-fifth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, (String) null, 5, \"f\", 6, \"g\", 7);", "NullPointerException");
     }
 
     @Test
     void mapOfSeptupleNullFifthValueFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-null-fifth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", (Integer) null, \"f\", 6, \"g\", 7);", "null Map.of entry");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-null-fifth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", (Integer) null, \"f\", 6, \"g\", 7);", "NullPointerException");
     }
 
     @Test
     void mapOfSeptupleNullSixthKeyFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-null-sixth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, (String) null, 6, \"g\", 7);", "null Map.of entry");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-null-sixth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, (String) null, 6, \"g\", 7);", "NullPointerException");
     }
 
     @Test
     void mapOfSeptupleNullSixthValueFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-null-sixth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", (Integer) null, \"g\", 7);", "null Map.of entry");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-null-sixth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", (Integer) null, \"g\", 7);", "NullPointerException");
     }
 
     @Test
     void mapOfSeptupleNullSeventhKeyFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-null-seventh-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, (String) null, 7);", "null Map.of entry");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-null-seventh-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, (String) null, 7);", "NullPointerException");
     }
 
     @Test
     void mapOfSeptupleNullSeventhValueFailsAtRuntime() throws Exception {
-        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-null-seventh-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", (Integer) null);", "null Map.of entry");
+        assertMapOfSeptupleFailureAtRuntime("map-of-septuple-null-seventh-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", (Integer) null);", "NullPointerException");
     }
 
     @Test
@@ -6552,222 +6552,222 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void mapOfOctupleDuplicateFirstSecondFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-first-second", "Map.of(\"same\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "duplicate Map.of key");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-first-second", "Map.of(\"same\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfOctupleDuplicateFirstThirdFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-first-third", "Map.of(\"same\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "duplicate Map.of key");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-first-third", "Map.of(\"same\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfOctupleDuplicateFirstFourthFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-first-fourth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "duplicate Map.of key");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-first-fourth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfOctupleDuplicateFirstFifthFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-first-fifth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "duplicate Map.of key");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-first-fifth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfOctupleDuplicateFirstSixthFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-first-sixth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8);", "duplicate Map.of key");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-first-sixth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfOctupleDuplicateFirstSeventhFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-first-seventh", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8);", "duplicate Map.of key");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-first-seventh", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfOctupleDuplicateFirstEighthFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-first-eighth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8);", "duplicate Map.of key");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-first-eighth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfOctupleDuplicateSecondThirdFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-second-third", "Map.of(\"a\", 1, \"same\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "duplicate Map.of key");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-second-third", "Map.of(\"a\", 1, \"same\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfOctupleDuplicateSecondFourthFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-second-fourth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "duplicate Map.of key");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-second-fourth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfOctupleDuplicateSecondFifthFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-second-fifth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "duplicate Map.of key");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-second-fifth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfOctupleDuplicateSecondSixthFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-second-sixth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8);", "duplicate Map.of key");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-second-sixth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfOctupleDuplicateSecondSeventhFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-second-seventh", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8);", "duplicate Map.of key");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-second-seventh", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfOctupleDuplicateSecondEighthFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-second-eighth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8);", "duplicate Map.of key");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-second-eighth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfOctupleDuplicateThirdFourthFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-third-fourth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "duplicate Map.of key");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-third-fourth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfOctupleDuplicateThirdFifthFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-third-fifth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "duplicate Map.of key");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-third-fifth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfOctupleDuplicateThirdSixthFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-third-sixth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8);", "duplicate Map.of key");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-third-sixth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfOctupleDuplicateThirdSeventhFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-third-seventh", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8);", "duplicate Map.of key");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-third-seventh", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfOctupleDuplicateThirdEighthFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-third-eighth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8);", "duplicate Map.of key");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-third-eighth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfOctupleDuplicateFourthFifthFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-fourth-fifth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "duplicate Map.of key");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-fourth-fifth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfOctupleDuplicateFourthSixthFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-fourth-sixth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8);", "duplicate Map.of key");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-fourth-sixth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfOctupleDuplicateFourthSeventhFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-fourth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8);", "duplicate Map.of key");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-fourth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfOctupleDuplicateFourthEighthFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-fourth-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8);", "duplicate Map.of key");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-fourth-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfOctupleDuplicateFifthSixthFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-fifth-sixth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"same\", 6, \"g\", 7, \"h\", 8);", "duplicate Map.of key");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-fifth-sixth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"same\", 6, \"g\", 7, \"h\", 8);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfOctupleDuplicateFifthSeventhFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-fifth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"same\", 7, \"h\", 8);", "duplicate Map.of key");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-fifth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"same\", 7, \"h\", 8);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfOctupleDuplicateFifthEighthFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-fifth-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"same\", 8);", "duplicate Map.of key");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-fifth-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"same\", 8);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfOctupleDuplicateSixthSeventhFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-sixth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"same\", 7, \"h\", 8);", "duplicate Map.of key");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-sixth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"same\", 7, \"h\", 8);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfOctupleDuplicateSixthEighthFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-sixth-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"same\", 8);", "duplicate Map.of key");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-sixth-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"same\", 8);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfOctupleDuplicateSeventhEighthFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-seventh-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"same\", 8);", "duplicate Map.of key");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-seventh-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"same\", 8);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfOctupleNullFirstKeyFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-first-key", "Map.of((String) null, 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "null Map.of entry");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-first-key", "Map.of((String) null, 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "NullPointerException");
     }
 
     @Test
     void mapOfOctupleNullFirstValueFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-first-value", "Map.of(\"a\", (Integer) null, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "null Map.of entry");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-first-value", "Map.of(\"a\", (Integer) null, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "NullPointerException");
     }
 
     @Test
     void mapOfOctupleNullSecondKeyFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-second-key", "Map.of(\"a\", 1, (String) null, 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "null Map.of entry");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-second-key", "Map.of(\"a\", 1, (String) null, 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "NullPointerException");
     }
 
     @Test
     void mapOfOctupleNullSecondValueFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-second-value", "Map.of(\"a\", 1, \"b\", (Integer) null, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "null Map.of entry");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-second-value", "Map.of(\"a\", 1, \"b\", (Integer) null, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "NullPointerException");
     }
 
     @Test
     void mapOfOctupleNullThirdKeyFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-third-key", "Map.of(\"a\", 1, \"b\", 2, (String) null, 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "null Map.of entry");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-third-key", "Map.of(\"a\", 1, \"b\", 2, (String) null, 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "NullPointerException");
     }
 
     @Test
     void mapOfOctupleNullThirdValueFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-third-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", (Integer) null, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "null Map.of entry");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-third-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", (Integer) null, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "NullPointerException");
     }
 
     @Test
     void mapOfOctupleNullFourthKeyFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-fourth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, (String) null, 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "null Map.of entry");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-fourth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, (String) null, 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "NullPointerException");
     }
 
     @Test
     void mapOfOctupleNullFourthValueFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-fourth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", (Integer) null, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "null Map.of entry");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-fourth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", (Integer) null, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "NullPointerException");
     }
 
     @Test
     void mapOfOctupleNullFifthKeyFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-fifth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, (String) null, 5, \"f\", 6, \"g\", 7, \"h\", 8);", "null Map.of entry");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-fifth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, (String) null, 5, \"f\", 6, \"g\", 7, \"h\", 8);", "NullPointerException");
     }
 
     @Test
     void mapOfOctupleNullFifthValueFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-fifth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", (Integer) null, \"f\", 6, \"g\", 7, \"h\", 8);", "null Map.of entry");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-fifth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", (Integer) null, \"f\", 6, \"g\", 7, \"h\", 8);", "NullPointerException");
     }
 
     @Test
     void mapOfOctupleNullSixthKeyFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-sixth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, (String) null, 6, \"g\", 7, \"h\", 8);", "null Map.of entry");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-sixth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, (String) null, 6, \"g\", 7, \"h\", 8);", "NullPointerException");
     }
 
     @Test
     void mapOfOctupleNullSixthValueFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-sixth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", (Integer) null, \"g\", 7, \"h\", 8);", "null Map.of entry");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-sixth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", (Integer) null, \"g\", 7, \"h\", 8);", "NullPointerException");
     }
 
     @Test
     void mapOfOctupleNullSeventhKeyFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-seventh-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, (String) null, 7, \"h\", 8);", "null Map.of entry");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-seventh-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, (String) null, 7, \"h\", 8);", "NullPointerException");
     }
 
     @Test
     void mapOfOctupleNullSeventhValueFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-seventh-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", (Integer) null, \"h\", 8);", "null Map.of entry");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-seventh-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", (Integer) null, \"h\", 8);", "NullPointerException");
     }
 
     @Test
     void mapOfOctupleNullEighthKeyFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-eighth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, (String) null, 8);", "null Map.of entry");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-eighth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, (String) null, 8);", "NullPointerException");
     }
 
     @Test
     void mapOfOctupleNullEighthValueFailsAtRuntime() throws Exception {
-        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-eighth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", (Integer) null);", "null Map.of entry");
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-eighth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", (Integer) null);", "NullPointerException");
     }
 
     @Test
@@ -6820,272 +6820,272 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void mapOfNonupleDuplicateFirstSecondFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-first-second", "Map.of(\"same\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-first-second", "Map.of(\"same\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateFirstThirdFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-first-third", "Map.of(\"same\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-first-third", "Map.of(\"same\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateFirstFourthFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-first-fourth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-first-fourth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateFirstFifthFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-first-fifth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-first-fifth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateFirstSixthFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-first-sixth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-first-sixth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateFirstSeventhFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-first-seventh", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-first-seventh", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateFirstEighthFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-first-eighth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-first-eighth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateFirstNinthFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-first-ninth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-first-ninth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateSecondThirdFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-second-third", "Map.of(\"a\", 1, \"same\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-second-third", "Map.of(\"a\", 1, \"same\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateSecondFourthFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-second-fourth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-second-fourth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateSecondFifthFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-second-fifth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-second-fifth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateSecondSixthFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-second-sixth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-second-sixth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateSecondSeventhFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-second-seventh", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-second-seventh", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateSecondEighthFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-second-eighth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-second-eighth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateSecondNinthFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-second-ninth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-second-ninth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateThirdFourthFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-third-fourth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-third-fourth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateThirdFifthFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-third-fifth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-third-fifth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateThirdSixthFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-third-sixth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-third-sixth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateThirdSeventhFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-third-seventh", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-third-seventh", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateThirdEighthFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-third-eighth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-third-eighth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateThirdNinthFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-third-ninth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-third-ninth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateFourthFifthFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-fourth-fifth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-fourth-fifth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateFourthSixthFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-fourth-sixth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-fourth-sixth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateFourthSeventhFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-fourth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-fourth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateFourthEighthFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-fourth-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-fourth-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateFourthNinthFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-fourth-ninth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-fourth-ninth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateFifthSixthFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-fifth-sixth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-fifth-sixth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateFifthSeventhFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-fifth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-fifth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateFifthEighthFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-fifth-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-fifth-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateFifthNinthFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-fifth-ninth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-fifth-ninth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateSixthSeventhFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-sixth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"same\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-sixth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"same\", 7, \"h\", 8, \"i\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateSixthEighthFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-sixth-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"same\", 8, \"i\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-sixth-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"same\", 8, \"i\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateSixthNinthFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-sixth-ninth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"same\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-sixth-ninth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"same\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateSeventhEighthFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-seventh-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"same\", 8, \"i\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-seventh-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"same\", 8, \"i\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateSeventhNinthFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-seventh-ninth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"same\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-seventh-ninth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"same\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleDuplicateEighthNinthFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-eighth-ninth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"same\", 9);", "duplicate Map.of key");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-eighth-ninth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"same\", 9);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfNonupleNullFirstKeyFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-first-key", "Map.of((String) null, 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "null Map.of entry");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-first-key", "Map.of((String) null, 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "NullPointerException");
     }
 
     @Test
     void mapOfNonupleNullFirstValueFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-first-value", "Map.of(\"a\", (Integer) null, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "null Map.of entry");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-first-value", "Map.of(\"a\", (Integer) null, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "NullPointerException");
     }
 
     @Test
     void mapOfNonupleNullSecondKeyFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-second-key", "Map.of(\"a\", 1, (String) null, 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "null Map.of entry");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-second-key", "Map.of(\"a\", 1, (String) null, 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "NullPointerException");
     }
 
     @Test
     void mapOfNonupleNullSecondValueFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-second-value", "Map.of(\"a\", 1, \"b\", (Integer) null, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "null Map.of entry");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-second-value", "Map.of(\"a\", 1, \"b\", (Integer) null, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "NullPointerException");
     }
 
     @Test
     void mapOfNonupleNullThirdKeyFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-third-key", "Map.of(\"a\", 1, \"b\", 2, (String) null, 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "null Map.of entry");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-third-key", "Map.of(\"a\", 1, \"b\", 2, (String) null, 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "NullPointerException");
     }
 
     @Test
     void mapOfNonupleNullThirdValueFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-third-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", (Integer) null, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "null Map.of entry");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-third-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", (Integer) null, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "NullPointerException");
     }
 
     @Test
     void mapOfNonupleNullFourthKeyFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-fourth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, (String) null, 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "null Map.of entry");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-fourth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, (String) null, 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "NullPointerException");
     }
 
     @Test
     void mapOfNonupleNullFourthValueFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-fourth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", (Integer) null, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "null Map.of entry");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-fourth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", (Integer) null, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "NullPointerException");
     }
 
     @Test
     void mapOfNonupleNullFifthKeyFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-fifth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, (String) null, 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "null Map.of entry");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-fifth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, (String) null, 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "NullPointerException");
     }
 
     @Test
     void mapOfNonupleNullFifthValueFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-fifth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", (Integer) null, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "null Map.of entry");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-fifth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", (Integer) null, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "NullPointerException");
     }
 
     @Test
     void mapOfNonupleNullSixthKeyFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-sixth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, (String) null, 6, \"g\", 7, \"h\", 8, \"i\", 9);", "null Map.of entry");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-sixth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, (String) null, 6, \"g\", 7, \"h\", 8, \"i\", 9);", "NullPointerException");
     }
 
     @Test
     void mapOfNonupleNullSixthValueFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-sixth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", (Integer) null, \"g\", 7, \"h\", 8, \"i\", 9);", "null Map.of entry");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-sixth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", (Integer) null, \"g\", 7, \"h\", 8, \"i\", 9);", "NullPointerException");
     }
 
     @Test
     void mapOfNonupleNullSeventhKeyFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-seventh-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, (String) null, 7, \"h\", 8, \"i\", 9);", "null Map.of entry");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-seventh-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, (String) null, 7, \"h\", 8, \"i\", 9);", "NullPointerException");
     }
 
     @Test
     void mapOfNonupleNullSeventhValueFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-seventh-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", (Integer) null, \"h\", 8, \"i\", 9);", "null Map.of entry");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-seventh-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", (Integer) null, \"h\", 8, \"i\", 9);", "NullPointerException");
     }
 
     @Test
     void mapOfNonupleNullEighthKeyFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-eighth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, (String) null, 8, \"i\", 9);", "null Map.of entry");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-eighth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, (String) null, 8, \"i\", 9);", "NullPointerException");
     }
 
     @Test
     void mapOfNonupleNullEighthValueFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-eighth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", (Integer) null, \"i\", 9);", "null Map.of entry");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-eighth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", (Integer) null, \"i\", 9);", "NullPointerException");
     }
 
     @Test
     void mapOfNonupleNullNinthKeyFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-ninth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, (String) null, 9);", "null Map.of entry");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-ninth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, (String) null, 9);", "NullPointerException");
     }
 
     @Test
     void mapOfNonupleNullNinthValueFailsAtRuntime() throws Exception {
-        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-ninth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", (Integer) null);", "null Map.of entry");
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-ninth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", (Integer) null);", "NullPointerException");
     }
 
     @Test
@@ -7140,327 +7140,327 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void mapOfDecupleDuplicateFirstSecondFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-first-second", "Map.of(\"same\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-first-second", "Map.of(\"same\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateFirstThirdFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-first-third", "Map.of(\"same\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-first-third", "Map.of(\"same\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateFirstFourthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-first-fourth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-first-fourth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateFirstFifthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-first-fifth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-first-fifth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateFirstSixthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-first-sixth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-first-sixth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateFirstSeventhFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-first-seventh", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-first-seventh", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateFirstEighthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-first-eighth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-first-eighth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateFirstNinthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-first-ninth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-first-ninth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateFirstTenthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-first-tenth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"same\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-first-tenth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"same\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateSecondThirdFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-second-third", "Map.of(\"a\", 1, \"same\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-second-third", "Map.of(\"a\", 1, \"same\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateSecondFourthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-second-fourth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-second-fourth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateSecondFifthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-second-fifth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-second-fifth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateSecondSixthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-second-sixth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-second-sixth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateSecondSeventhFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-second-seventh", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-second-seventh", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateSecondEighthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-second-eighth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-second-eighth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateSecondNinthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-second-ninth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-second-ninth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateSecondTenthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-second-tenth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"same\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-second-tenth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"same\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateThirdFourthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-third-fourth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-third-fourth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateThirdFifthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-third-fifth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-third-fifth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateThirdSixthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-third-sixth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-third-sixth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateThirdSeventhFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-third-seventh", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-third-seventh", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateThirdEighthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-third-eighth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-third-eighth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateThirdNinthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-third-ninth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-third-ninth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateThirdTenthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-third-tenth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"same\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-third-tenth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"same\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateFourthFifthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fourth-fifth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fourth-fifth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateFourthSixthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fourth-sixth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fourth-sixth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateFourthSeventhFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fourth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fourth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateFourthEighthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fourth-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fourth-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateFourthNinthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fourth-ninth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fourth-ninth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateFourthTenthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fourth-tenth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"same\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fourth-tenth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"same\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateFifthSixthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fifth-sixth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fifth-sixth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateFifthSeventhFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fifth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fifth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateFifthEighthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fifth-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fifth-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateFifthNinthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fifth-ninth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fifth-ninth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateFifthTenthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fifth-tenth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"same\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fifth-tenth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"same\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateSixthSeventhFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-sixth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"same\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-sixth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"same\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateSixthEighthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-sixth-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"same\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-sixth-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"same\", 8, \"i\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateSixthNinthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-sixth-ninth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"same\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-sixth-ninth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"same\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateSixthTenthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-sixth-tenth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"same\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-sixth-tenth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"same\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateSeventhEighthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-seventh-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"same\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-seventh-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"same\", 8, \"i\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateSeventhNinthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-seventh-ninth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"same\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-seventh-ninth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"same\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateSeventhTenthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-seventh-tenth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9, \"same\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-seventh-tenth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9, \"same\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateEighthNinthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-eighth-ninth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"same\", 9, \"j\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-eighth-ninth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"same\", 9, \"j\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateEighthTenthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-eighth-tenth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9, \"same\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-eighth-tenth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9, \"same\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleDuplicateNinthTenthFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-ninth-tenth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9, \"same\", 10);", "duplicate Map.of key");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-ninth-tenth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9, \"same\", 10);", "IllegalArgumentException");
     }
 
     @Test
     void mapOfDecupleNullFirstKeyFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-first-key", "Map.of((String) null, 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "null Map.of entry");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-first-key", "Map.of((String) null, 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "NullPointerException");
     }
 
     @Test
     void mapOfDecupleNullFirstValueFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-first-value", "Map.of(\"a\", (Integer) null, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "null Map.of entry");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-first-value", "Map.of(\"a\", (Integer) null, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "NullPointerException");
     }
 
     @Test
     void mapOfDecupleNullSecondKeyFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-second-key", "Map.of(\"a\", 1, (String) null, 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "null Map.of entry");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-second-key", "Map.of(\"a\", 1, (String) null, 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "NullPointerException");
     }
 
     @Test
     void mapOfDecupleNullSecondValueFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-second-value", "Map.of(\"a\", 1, \"b\", (Integer) null, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "null Map.of entry");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-second-value", "Map.of(\"a\", 1, \"b\", (Integer) null, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "NullPointerException");
     }
 
     @Test
     void mapOfDecupleNullThirdKeyFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-third-key", "Map.of(\"a\", 1, \"b\", 2, (String) null, 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "null Map.of entry");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-third-key", "Map.of(\"a\", 1, \"b\", 2, (String) null, 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "NullPointerException");
     }
 
     @Test
     void mapOfDecupleNullThirdValueFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-third-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", (Integer) null, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "null Map.of entry");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-third-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", (Integer) null, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "NullPointerException");
     }
 
     @Test
     void mapOfDecupleNullFourthKeyFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-fourth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, (String) null, 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "null Map.of entry");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-fourth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, (String) null, 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "NullPointerException");
     }
 
     @Test
     void mapOfDecupleNullFourthValueFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-fourth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", (Integer) null, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "null Map.of entry");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-fourth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", (Integer) null, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "NullPointerException");
     }
 
     @Test
     void mapOfDecupleNullFifthKeyFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-fifth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, (String) null, 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "null Map.of entry");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-fifth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, (String) null, 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "NullPointerException");
     }
 
     @Test
     void mapOfDecupleNullFifthValueFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-fifth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", (Integer) null, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "null Map.of entry");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-fifth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", (Integer) null, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "NullPointerException");
     }
 
     @Test
     void mapOfDecupleNullSixthKeyFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-sixth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, (String) null, 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "null Map.of entry");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-sixth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, (String) null, 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "NullPointerException");
     }
 
     @Test
     void mapOfDecupleNullSixthValueFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-sixth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", (Integer) null, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "null Map.of entry");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-sixth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", (Integer) null, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "NullPointerException");
     }
 
     @Test
     void mapOfDecupleNullSeventhKeyFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-seventh-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, (String) null, 7, \"h\", 8, \"i\", 9, \"j\", 10);", "null Map.of entry");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-seventh-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, (String) null, 7, \"h\", 8, \"i\", 9, \"j\", 10);", "NullPointerException");
     }
 
     @Test
     void mapOfDecupleNullSeventhValueFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-seventh-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", (Integer) null, \"h\", 8, \"i\", 9, \"j\", 10);", "null Map.of entry");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-seventh-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", (Integer) null, \"h\", 8, \"i\", 9, \"j\", 10);", "NullPointerException");
     }
 
     @Test
     void mapOfDecupleNullEighthKeyFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-eighth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, (String) null, 8, \"i\", 9, \"j\", 10);", "null Map.of entry");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-eighth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, (String) null, 8, \"i\", 9, \"j\", 10);", "NullPointerException");
     }
 
     @Test
     void mapOfDecupleNullEighthValueFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-eighth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", (Integer) null, \"i\", 9, \"j\", 10);", "null Map.of entry");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-eighth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", (Integer) null, \"i\", 9, \"j\", 10);", "NullPointerException");
     }
 
     @Test
     void mapOfDecupleNullNinthKeyFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-ninth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, (String) null, 9, \"j\", 10);", "null Map.of entry");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-ninth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, (String) null, 9, \"j\", 10);", "NullPointerException");
     }
 
     @Test
     void mapOfDecupleNullNinthValueFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-ninth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", (Integer) null, \"j\", 10);", "null Map.of entry");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-ninth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", (Integer) null, \"j\", 10);", "NullPointerException");
     }
 
     @Test
     void mapOfDecupleNullTenthKeyFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-tenth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, (String) null, 10);", "null Map.of entry");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-tenth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, (String) null, 10);", "NullPointerException");
     }
 
     @Test
     void mapOfDecupleNullTenthValueFailsAtRuntime() throws Exception {
-        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-tenth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", (Integer) null);", "null Map.of entry");
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-tenth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", (Integer) null);", "NullPointerException");
     }
 
     @Test
@@ -7586,7 +7586,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/set-of-singleton-null").toString()));
 
         assertThat(nativeRun.exitCode()).isNotZero();
-        assertThat(nativeRun.stderr()).contains("null Set.of element");
+        assertThat(nativeRun.stderr()).contains("NullPointerException");
     }
 
     @Test
@@ -7644,7 +7644,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/set-of-pair-duplicate").toString()));
 
         assertThat(nativeRun.exitCode()).isNotZero();
-        assertThat(nativeRun.stderr()).contains("duplicate Set.of element");
+        assertThat(nativeRun.stderr()).contains("IllegalArgumentException");
     }
 
     @Test
@@ -7671,7 +7671,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/set-of-pair-null").toString()));
 
         assertThat(nativeRun.exitCode()).isNotZero();
-        assertThat(nativeRun.stderr()).contains("null Set.of element");
+        assertThat(nativeRun.stderr()).contains("NullPointerException");
     }
 
     @Test
@@ -7730,7 +7730,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/set-of-triple-duplicate-first-middle").toString()));
 
         assertThat(nativeRun.exitCode()).isNotZero();
-        assertThat(nativeRun.stderr()).contains("duplicate Set.of element");
+        assertThat(nativeRun.stderr()).contains("IllegalArgumentException");
     }
 
     @Test
@@ -7757,7 +7757,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/set-of-triple-duplicate-first-right").toString()));
 
         assertThat(nativeRun.exitCode()).isNotZero();
-        assertThat(nativeRun.stderr()).contains("duplicate Set.of element");
+        assertThat(nativeRun.stderr()).contains("IllegalArgumentException");
     }
 
     @Test
@@ -7784,7 +7784,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/set-of-triple-duplicate-middle-right").toString()));
 
         assertThat(nativeRun.exitCode()).isNotZero();
-        assertThat(nativeRun.stderr()).contains("duplicate Set.of element");
+        assertThat(nativeRun.stderr()).contains("IllegalArgumentException");
     }
 
     @Test
@@ -7811,7 +7811,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/set-of-triple-null").toString()));
 
         assertThat(nativeRun.exitCode()).isNotZero();
-        assertThat(nativeRun.stderr()).contains("null Set.of element");
+        assertThat(nativeRun.stderr()).contains("NullPointerException");
     }
 
     @Test
@@ -7871,7 +7871,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/set-of-quadruple-duplicate-first-second").toString()));
 
         assertThat(nativeRun.exitCode()).isNotZero();
-        assertThat(nativeRun.stderr()).contains("duplicate Set.of element");
+        assertThat(nativeRun.stderr()).contains("IllegalArgumentException");
     }
 
     @Test
@@ -7898,7 +7898,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/set-of-quadruple-duplicate-first-third").toString()));
 
         assertThat(nativeRun.exitCode()).isNotZero();
-        assertThat(nativeRun.stderr()).contains("duplicate Set.of element");
+        assertThat(nativeRun.stderr()).contains("IllegalArgumentException");
     }
 
     @Test
@@ -7925,7 +7925,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/set-of-quadruple-duplicate-first-fourth").toString()));
 
         assertThat(nativeRun.exitCode()).isNotZero();
-        assertThat(nativeRun.stderr()).contains("duplicate Set.of element");
+        assertThat(nativeRun.stderr()).contains("IllegalArgumentException");
     }
 
     @Test
@@ -7952,7 +7952,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/set-of-quadruple-duplicate-second-third").toString()));
 
         assertThat(nativeRun.exitCode()).isNotZero();
-        assertThat(nativeRun.stderr()).contains("duplicate Set.of element");
+        assertThat(nativeRun.stderr()).contains("IllegalArgumentException");
     }
 
     @Test
@@ -7979,7 +7979,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/set-of-quadruple-duplicate-second-fourth").toString()));
 
         assertThat(nativeRun.exitCode()).isNotZero();
-        assertThat(nativeRun.stderr()).contains("duplicate Set.of element");
+        assertThat(nativeRun.stderr()).contains("IllegalArgumentException");
     }
 
     @Test
@@ -8006,7 +8006,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/set-of-quadruple-duplicate-third-fourth").toString()));
 
         assertThat(nativeRun.exitCode()).isNotZero();
-        assertThat(nativeRun.stderr()).contains("duplicate Set.of element");
+        assertThat(nativeRun.stderr()).contains("IllegalArgumentException");
     }
 
     @Test
@@ -8033,7 +8033,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/set-of-quadruple-null-first").toString()));
 
         assertThat(nativeRun.exitCode()).isNotZero();
-        assertThat(nativeRun.stderr()).contains("null Set.of element");
+        assertThat(nativeRun.stderr()).contains("NullPointerException");
     }
 
     @Test
@@ -8060,7 +8060,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/set-of-quadruple-null-second").toString()));
 
         assertThat(nativeRun.exitCode()).isNotZero();
-        assertThat(nativeRun.stderr()).contains("null Set.of element");
+        assertThat(nativeRun.stderr()).contains("NullPointerException");
     }
 
     @Test
@@ -8087,7 +8087,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/set-of-quadruple-null-third").toString()));
 
         assertThat(nativeRun.exitCode()).isNotZero();
-        assertThat(nativeRun.stderr()).contains("null Set.of element");
+        assertThat(nativeRun.stderr()).contains("NullPointerException");
     }
 
     @Test
@@ -8114,7 +8114,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/set-of-quadruple-null-fourth").toString()));
 
         assertThat(nativeRun.exitCode()).isNotZero();
-        assertThat(nativeRun.stderr()).contains("null Set.of element");
+        assertThat(nativeRun.stderr()).contains("NullPointerException");
     }
 
     @Test
@@ -8156,7 +8156,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertSetOfQuintupleFailureAtRuntime(
             "set-of-quintuple-duplicate-first-second",
             "Set.of(\"same\", \"same\", \"c\", \"d\", \"e\");",
-            "duplicate Set.of element"
+            "IllegalArgumentException"
         );
     }
 
@@ -8165,7 +8165,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertSetOfQuintupleFailureAtRuntime(
             "set-of-quintuple-duplicate-first-third",
             "Set.of(\"same\", \"b\", \"same\", \"d\", \"e\");",
-            "duplicate Set.of element"
+            "IllegalArgumentException"
         );
     }
 
@@ -8174,7 +8174,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertSetOfQuintupleFailureAtRuntime(
             "set-of-quintuple-duplicate-first-fourth",
             "Set.of(\"same\", \"b\", \"c\", \"same\", \"e\");",
-            "duplicate Set.of element"
+            "IllegalArgumentException"
         );
     }
 
@@ -8183,7 +8183,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertSetOfQuintupleFailureAtRuntime(
             "set-of-quintuple-duplicate-first-fifth",
             "Set.of(\"same\", \"b\", \"c\", \"d\", \"same\");",
-            "duplicate Set.of element"
+            "IllegalArgumentException"
         );
     }
 
@@ -8192,7 +8192,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertSetOfQuintupleFailureAtRuntime(
             "set-of-quintuple-duplicate-second-third",
             "Set.of(\"a\", \"same\", \"same\", \"d\", \"e\");",
-            "duplicate Set.of element"
+            "IllegalArgumentException"
         );
     }
 
@@ -8201,7 +8201,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertSetOfQuintupleFailureAtRuntime(
             "set-of-quintuple-duplicate-second-fourth",
             "Set.of(\"a\", \"same\", \"c\", \"same\", \"e\");",
-            "duplicate Set.of element"
+            "IllegalArgumentException"
         );
     }
 
@@ -8210,7 +8210,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertSetOfQuintupleFailureAtRuntime(
             "set-of-quintuple-duplicate-second-fifth",
             "Set.of(\"a\", \"same\", \"c\", \"d\", \"same\");",
-            "duplicate Set.of element"
+            "IllegalArgumentException"
         );
     }
 
@@ -8219,7 +8219,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertSetOfQuintupleFailureAtRuntime(
             "set-of-quintuple-duplicate-third-fourth",
             "Set.of(\"a\", \"b\", \"same\", \"same\", \"e\");",
-            "duplicate Set.of element"
+            "IllegalArgumentException"
         );
     }
 
@@ -8228,7 +8228,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertSetOfQuintupleFailureAtRuntime(
             "set-of-quintuple-duplicate-third-fifth",
             "Set.of(\"a\", \"b\", \"same\", \"d\", \"same\");",
-            "duplicate Set.of element"
+            "IllegalArgumentException"
         );
     }
 
@@ -8237,7 +8237,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertSetOfQuintupleFailureAtRuntime(
             "set-of-quintuple-duplicate-fourth-fifth",
             "Set.of(\"a\", \"b\", \"c\", \"same\", \"same\");",
-            "duplicate Set.of element"
+            "IllegalArgumentException"
         );
     }
 
@@ -8246,7 +8246,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertSetOfQuintupleFailureAtRuntime(
             "set-of-quintuple-null-first",
             "Set.of((String) null, \"b\", \"c\", \"d\", \"e\");",
-            "null Set.of element"
+            "NullPointerException"
         );
     }
 
@@ -8255,7 +8255,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertSetOfQuintupleFailureAtRuntime(
             "set-of-quintuple-null-second",
             "Set.of(\"a\", (String) null, \"c\", \"d\", \"e\");",
-            "null Set.of element"
+            "NullPointerException"
         );
     }
 
@@ -8264,7 +8264,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertSetOfQuintupleFailureAtRuntime(
             "set-of-quintuple-null-third",
             "Set.of(\"a\", \"b\", (String) null, \"d\", \"e\");",
-            "null Set.of element"
+            "NullPointerException"
         );
     }
 
@@ -8273,7 +8273,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertSetOfQuintupleFailureAtRuntime(
             "set-of-quintuple-null-fourth",
             "Set.of(\"a\", \"b\", \"c\", (String) null, \"e\");",
-            "null Set.of element"
+            "NullPointerException"
         );
     }
 
@@ -8282,7 +8282,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertSetOfQuintupleFailureAtRuntime(
             "set-of-quintuple-null-fifth",
             "Set.of(\"a\", \"b\", \"c\", \"d\", (String) null);",
-            "null Set.of element"
+            "NullPointerException"
         );
     }
 
@@ -8323,107 +8323,107 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void setOfSextupleDuplicateFirstSecondFailsAtRuntime() throws Exception {
-        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-first-second", "Set.of(\"same\", \"same\", \"c\", \"d\", \"e\", \"f\");", "duplicate Set.of element");
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-first-second", "Set.of(\"same\", \"same\", \"c\", \"d\", \"e\", \"f\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSextupleDuplicateFirstThirdFailsAtRuntime() throws Exception {
-        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-first-third", "Set.of(\"same\", \"b\", \"same\", \"d\", \"e\", \"f\");", "duplicate Set.of element");
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-first-third", "Set.of(\"same\", \"b\", \"same\", \"d\", \"e\", \"f\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSextupleDuplicateFirstFourthFailsAtRuntime() throws Exception {
-        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-first-fourth", "Set.of(\"same\", \"b\", \"c\", \"same\", \"e\", \"f\");", "duplicate Set.of element");
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-first-fourth", "Set.of(\"same\", \"b\", \"c\", \"same\", \"e\", \"f\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSextupleDuplicateFirstFifthFailsAtRuntime() throws Exception {
-        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-first-fifth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"same\", \"f\");", "duplicate Set.of element");
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-first-fifth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"same\", \"f\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSextupleDuplicateFirstSixthFailsAtRuntime() throws Exception {
-        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-first-sixth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"same\");", "duplicate Set.of element");
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-first-sixth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSextupleDuplicateSecondThirdFailsAtRuntime() throws Exception {
-        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-second-third", "Set.of(\"a\", \"same\", \"same\", \"d\", \"e\", \"f\");", "duplicate Set.of element");
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-second-third", "Set.of(\"a\", \"same\", \"same\", \"d\", \"e\", \"f\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSextupleDuplicateSecondFourthFailsAtRuntime() throws Exception {
-        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-second-fourth", "Set.of(\"a\", \"same\", \"c\", \"same\", \"e\", \"f\");", "duplicate Set.of element");
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-second-fourth", "Set.of(\"a\", \"same\", \"c\", \"same\", \"e\", \"f\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSextupleDuplicateSecondFifthFailsAtRuntime() throws Exception {
-        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-second-fifth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"same\", \"f\");", "duplicate Set.of element");
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-second-fifth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"same\", \"f\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSextupleDuplicateSecondSixthFailsAtRuntime() throws Exception {
-        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-second-sixth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"same\");", "duplicate Set.of element");
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-second-sixth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSextupleDuplicateThirdFourthFailsAtRuntime() throws Exception {
-        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-third-fourth", "Set.of(\"a\", \"b\", \"same\", \"same\", \"e\", \"f\");", "duplicate Set.of element");
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-third-fourth", "Set.of(\"a\", \"b\", \"same\", \"same\", \"e\", \"f\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSextupleDuplicateThirdFifthFailsAtRuntime() throws Exception {
-        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-third-fifth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"same\", \"f\");", "duplicate Set.of element");
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-third-fifth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"same\", \"f\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSextupleDuplicateThirdSixthFailsAtRuntime() throws Exception {
-        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-third-sixth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"same\");", "duplicate Set.of element");
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-third-sixth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSextupleDuplicateFourthFifthFailsAtRuntime() throws Exception {
-        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-fourth-fifth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"same\", \"f\");", "duplicate Set.of element");
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-fourth-fifth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"same\", \"f\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSextupleDuplicateFourthSixthFailsAtRuntime() throws Exception {
-        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-fourth-sixth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"same\");", "duplicate Set.of element");
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-fourth-sixth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSextupleDuplicateFifthSixthFailsAtRuntime() throws Exception {
-        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-fifth-sixth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"same\");", "duplicate Set.of element");
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-fifth-sixth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSextupleNullFirstFailsAtRuntime() throws Exception {
-        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-null-first", "Set.of((String) null, \"b\", \"c\", \"d\", \"e\", \"f\");", "null Set.of element");
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-null-first", "Set.of((String) null, \"b\", \"c\", \"d\", \"e\", \"f\");", "NullPointerException");
     }
 
     @Test
     void setOfSextupleNullSecondFailsAtRuntime() throws Exception {
-        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-null-second", "Set.of(\"a\", (String) null, \"c\", \"d\", \"e\", \"f\");", "null Set.of element");
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-null-second", "Set.of(\"a\", (String) null, \"c\", \"d\", \"e\", \"f\");", "NullPointerException");
     }
 
     @Test
     void setOfSextupleNullThirdFailsAtRuntime() throws Exception {
-        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-null-third", "Set.of(\"a\", \"b\", (String) null, \"d\", \"e\", \"f\");", "null Set.of element");
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-null-third", "Set.of(\"a\", \"b\", (String) null, \"d\", \"e\", \"f\");", "NullPointerException");
     }
 
     @Test
     void setOfSextupleNullFourthFailsAtRuntime() throws Exception {
-        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-null-fourth", "Set.of(\"a\", \"b\", \"c\", (String) null, \"e\", \"f\");", "null Set.of element");
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-null-fourth", "Set.of(\"a\", \"b\", \"c\", (String) null, \"e\", \"f\");", "NullPointerException");
     }
 
     @Test
     void setOfSextupleNullFifthFailsAtRuntime() throws Exception {
-        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-null-fifth", "Set.of(\"a\", \"b\", \"c\", \"d\", (String) null, \"f\");", "null Set.of element");
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-null-fifth", "Set.of(\"a\", \"b\", \"c\", \"d\", (String) null, \"f\");", "NullPointerException");
     }
 
     @Test
     void setOfSextupleNullSixthFailsAtRuntime() throws Exception {
-        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-null-sixth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", (String) null);", "null Set.of element");
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-null-sixth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", (String) null);", "NullPointerException");
     }
 
     @Test
@@ -8464,142 +8464,142 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void setOfSeptupleDuplicateFirstSecondFailsAtRuntime() throws Exception {
-        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-first-second", "Set.of(\"same\", \"same\", \"c\", \"d\", \"e\", \"f\", \"g\");", "duplicate Set.of element");
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-first-second", "Set.of(\"same\", \"same\", \"c\", \"d\", \"e\", \"f\", \"g\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSeptupleDuplicateFirstThirdFailsAtRuntime() throws Exception {
-        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-first-third", "Set.of(\"same\", \"b\", \"same\", \"d\", \"e\", \"f\", \"g\");", "duplicate Set.of element");
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-first-third", "Set.of(\"same\", \"b\", \"same\", \"d\", \"e\", \"f\", \"g\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSeptupleDuplicateFirstFourthFailsAtRuntime() throws Exception {
-        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-first-fourth", "Set.of(\"same\", \"b\", \"c\", \"same\", \"e\", \"f\", \"g\");", "duplicate Set.of element");
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-first-fourth", "Set.of(\"same\", \"b\", \"c\", \"same\", \"e\", \"f\", \"g\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSeptupleDuplicateFirstFifthFailsAtRuntime() throws Exception {
-        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-first-fifth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"same\", \"f\", \"g\");", "duplicate Set.of element");
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-first-fifth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"same\", \"f\", \"g\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSeptupleDuplicateFirstSixthFailsAtRuntime() throws Exception {
-        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-first-sixth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"same\", \"g\");", "duplicate Set.of element");
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-first-sixth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"same\", \"g\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSeptupleDuplicateFirstSeventhFailsAtRuntime() throws Exception {
-        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-first-seventh", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"f\", \"same\");", "duplicate Set.of element");
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-first-seventh", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"f\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSeptupleDuplicateSecondThirdFailsAtRuntime() throws Exception {
-        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-second-third", "Set.of(\"a\", \"same\", \"same\", \"d\", \"e\", \"f\", \"g\");", "duplicate Set.of element");
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-second-third", "Set.of(\"a\", \"same\", \"same\", \"d\", \"e\", \"f\", \"g\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSeptupleDuplicateSecondFourthFailsAtRuntime() throws Exception {
-        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-second-fourth", "Set.of(\"a\", \"same\", \"c\", \"same\", \"e\", \"f\", \"g\");", "duplicate Set.of element");
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-second-fourth", "Set.of(\"a\", \"same\", \"c\", \"same\", \"e\", \"f\", \"g\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSeptupleDuplicateSecondFifthFailsAtRuntime() throws Exception {
-        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-second-fifth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"same\", \"f\", \"g\");", "duplicate Set.of element");
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-second-fifth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"same\", \"f\", \"g\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSeptupleDuplicateSecondSixthFailsAtRuntime() throws Exception {
-        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-second-sixth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"same\", \"g\");", "duplicate Set.of element");
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-second-sixth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"same\", \"g\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSeptupleDuplicateSecondSeventhFailsAtRuntime() throws Exception {
-        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-second-seventh", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"f\", \"same\");", "duplicate Set.of element");
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-second-seventh", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"f\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSeptupleDuplicateThirdFourthFailsAtRuntime() throws Exception {
-        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-third-fourth", "Set.of(\"a\", \"b\", \"same\", \"same\", \"e\", \"f\", \"g\");", "duplicate Set.of element");
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-third-fourth", "Set.of(\"a\", \"b\", \"same\", \"same\", \"e\", \"f\", \"g\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSeptupleDuplicateThirdFifthFailsAtRuntime() throws Exception {
-        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-third-fifth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"same\", \"f\", \"g\");", "duplicate Set.of element");
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-third-fifth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"same\", \"f\", \"g\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSeptupleDuplicateThirdSixthFailsAtRuntime() throws Exception {
-        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-third-sixth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"same\", \"g\");", "duplicate Set.of element");
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-third-sixth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"same\", \"g\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSeptupleDuplicateThirdSeventhFailsAtRuntime() throws Exception {
-        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-third-seventh", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"f\", \"same\");", "duplicate Set.of element");
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-third-seventh", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"f\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSeptupleDuplicateFourthFifthFailsAtRuntime() throws Exception {
-        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-fourth-fifth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"same\", \"f\", \"g\");", "duplicate Set.of element");
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-fourth-fifth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"same\", \"f\", \"g\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSeptupleDuplicateFourthSixthFailsAtRuntime() throws Exception {
-        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-fourth-sixth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"same\", \"g\");", "duplicate Set.of element");
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-fourth-sixth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"same\", \"g\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSeptupleDuplicateFourthSeventhFailsAtRuntime() throws Exception {
-        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-fourth-seventh", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"f\", \"same\");", "duplicate Set.of element");
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-fourth-seventh", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"f\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSeptupleDuplicateFifthSixthFailsAtRuntime() throws Exception {
-        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-fifth-sixth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"same\", \"g\");", "duplicate Set.of element");
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-fifth-sixth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"same\", \"g\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSeptupleDuplicateFifthSeventhFailsAtRuntime() throws Exception {
-        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-fifth-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"f\", \"same\");", "duplicate Set.of element");
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-fifth-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"f\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSeptupleDuplicateSixthSeventhFailsAtRuntime() throws Exception {
-        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-sixth-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"same\", \"same\");", "duplicate Set.of element");
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-sixth-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"same\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfSeptupleNullFirstFailsAtRuntime() throws Exception {
-        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-null-first", "Set.of((String) null, \"b\", \"c\", \"d\", \"e\", \"f\", \"g\");", "null Set.of element");
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-null-first", "Set.of((String) null, \"b\", \"c\", \"d\", \"e\", \"f\", \"g\");", "NullPointerException");
     }
 
     @Test
     void setOfSeptupleNullSecondFailsAtRuntime() throws Exception {
-        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-null-second", "Set.of(\"a\", (String) null, \"c\", \"d\", \"e\", \"f\", \"g\");", "null Set.of element");
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-null-second", "Set.of(\"a\", (String) null, \"c\", \"d\", \"e\", \"f\", \"g\");", "NullPointerException");
     }
 
     @Test
     void setOfSeptupleNullThirdFailsAtRuntime() throws Exception {
-        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-null-third", "Set.of(\"a\", \"b\", (String) null, \"d\", \"e\", \"f\", \"g\");", "null Set.of element");
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-null-third", "Set.of(\"a\", \"b\", (String) null, \"d\", \"e\", \"f\", \"g\");", "NullPointerException");
     }
 
     @Test
     void setOfSeptupleNullFourthFailsAtRuntime() throws Exception {
-        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-null-fourth", "Set.of(\"a\", \"b\", \"c\", (String) null, \"e\", \"f\", \"g\");", "null Set.of element");
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-null-fourth", "Set.of(\"a\", \"b\", \"c\", (String) null, \"e\", \"f\", \"g\");", "NullPointerException");
     }
 
     @Test
     void setOfSeptupleNullFifthFailsAtRuntime() throws Exception {
-        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-null-fifth", "Set.of(\"a\", \"b\", \"c\", \"d\", (String) null, \"f\", \"g\");", "null Set.of element");
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-null-fifth", "Set.of(\"a\", \"b\", \"c\", \"d\", (String) null, \"f\", \"g\");", "NullPointerException");
     }
 
     @Test
     void setOfSeptupleNullSixthFailsAtRuntime() throws Exception {
-        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-null-sixth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", (String) null, \"g\");", "null Set.of element");
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-null-sixth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", (String) null, \"g\");", "NullPointerException");
     }
 
     @Test
     void setOfSeptupleNullSeventhFailsAtRuntime() throws Exception {
-        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-null-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", (String) null);", "null Set.of element");
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-null-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", (String) null);", "NullPointerException");
     }
 
     @Test
@@ -8641,182 +8641,182 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void setOfOctupleDuplicateFirstSecondFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-first-second", "Set.of(\"same\", \"same\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\");", "duplicate Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-first-second", "Set.of(\"same\", \"same\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfOctupleDuplicateFirstThirdFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-first-third", "Set.of(\"same\", \"b\", \"same\", \"d\", \"e\", \"f\", \"g\", \"h\");", "duplicate Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-first-third", "Set.of(\"same\", \"b\", \"same\", \"d\", \"e\", \"f\", \"g\", \"h\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfOctupleDuplicateFirstFourthFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-first-fourth", "Set.of(\"same\", \"b\", \"c\", \"same\", \"e\", \"f\", \"g\", \"h\");", "duplicate Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-first-fourth", "Set.of(\"same\", \"b\", \"c\", \"same\", \"e\", \"f\", \"g\", \"h\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfOctupleDuplicateFirstFifthFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-first-fifth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"same\", \"f\", \"g\", \"h\");", "duplicate Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-first-fifth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"same\", \"f\", \"g\", \"h\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfOctupleDuplicateFirstSixthFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-first-sixth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"same\", \"g\", \"h\");", "duplicate Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-first-sixth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"same\", \"g\", \"h\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfOctupleDuplicateFirstSeventhFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-first-seventh", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"f\", \"same\", \"h\");", "duplicate Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-first-seventh", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"f\", \"same\", \"h\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfOctupleDuplicateFirstEighthFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-first-eighth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"same\");", "duplicate Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-first-eighth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfOctupleDuplicateSecondThirdFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-second-third", "Set.of(\"a\", \"same\", \"same\", \"d\", \"e\", \"f\", \"g\", \"h\");", "duplicate Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-second-third", "Set.of(\"a\", \"same\", \"same\", \"d\", \"e\", \"f\", \"g\", \"h\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfOctupleDuplicateSecondFourthFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-second-fourth", "Set.of(\"a\", \"same\", \"c\", \"same\", \"e\", \"f\", \"g\", \"h\");", "duplicate Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-second-fourth", "Set.of(\"a\", \"same\", \"c\", \"same\", \"e\", \"f\", \"g\", \"h\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfOctupleDuplicateSecondFifthFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-second-fifth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"same\", \"f\", \"g\", \"h\");", "duplicate Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-second-fifth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"same\", \"f\", \"g\", \"h\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfOctupleDuplicateSecondSixthFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-second-sixth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"same\", \"g\", \"h\");", "duplicate Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-second-sixth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"same\", \"g\", \"h\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfOctupleDuplicateSecondSeventhFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-second-seventh", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"f\", \"same\", \"h\");", "duplicate Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-second-seventh", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"f\", \"same\", \"h\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfOctupleDuplicateSecondEighthFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-second-eighth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"f\", \"g\", \"same\");", "duplicate Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-second-eighth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"f\", \"g\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfOctupleDuplicateThirdFourthFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-third-fourth", "Set.of(\"a\", \"b\", \"same\", \"same\", \"e\", \"f\", \"g\", \"h\");", "duplicate Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-third-fourth", "Set.of(\"a\", \"b\", \"same\", \"same\", \"e\", \"f\", \"g\", \"h\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfOctupleDuplicateThirdFifthFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-third-fifth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"same\", \"f\", \"g\", \"h\");", "duplicate Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-third-fifth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"same\", \"f\", \"g\", \"h\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfOctupleDuplicateThirdSixthFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-third-sixth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"same\", \"g\", \"h\");", "duplicate Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-third-sixth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"same\", \"g\", \"h\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfOctupleDuplicateThirdSeventhFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-third-seventh", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"f\", \"same\", \"h\");", "duplicate Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-third-seventh", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"f\", \"same\", \"h\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfOctupleDuplicateThirdEighthFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-third-eighth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"f\", \"g\", \"same\");", "duplicate Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-third-eighth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"f\", \"g\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfOctupleDuplicateFourthFifthFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-fourth-fifth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"same\", \"f\", \"g\", \"h\");", "duplicate Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-fourth-fifth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"same\", \"f\", \"g\", \"h\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfOctupleDuplicateFourthSixthFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-fourth-sixth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"same\", \"g\", \"h\");", "duplicate Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-fourth-sixth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"same\", \"g\", \"h\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfOctupleDuplicateFourthSeventhFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-fourth-seventh", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"f\", \"same\", \"h\");", "duplicate Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-fourth-seventh", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"f\", \"same\", \"h\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfOctupleDuplicateFourthEighthFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-fourth-eighth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"f\", \"g\", \"same\");", "duplicate Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-fourth-eighth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"f\", \"g\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfOctupleDuplicateFifthSixthFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-fifth-sixth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"same\", \"g\", \"h\");", "duplicate Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-fifth-sixth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"same\", \"g\", \"h\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfOctupleDuplicateFifthSeventhFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-fifth-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"f\", \"same\", \"h\");", "duplicate Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-fifth-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"f\", \"same\", \"h\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfOctupleDuplicateFifthEighthFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-fifth-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"f\", \"g\", \"same\");", "duplicate Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-fifth-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"f\", \"g\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfOctupleDuplicateSixthSeventhFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-sixth-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"same\", \"same\", \"h\");", "duplicate Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-sixth-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"same\", \"same\", \"h\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfOctupleDuplicateSixthEighthFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-sixth-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"same\", \"g\", \"same\");", "duplicate Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-sixth-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"same\", \"g\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfOctupleDuplicateSeventhEighthFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-seventh-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"same\", \"same\");", "duplicate Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-seventh-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"same\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfOctupleNullFirstFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-null-first", "Set.of((String) null, \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\");", "null Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-null-first", "Set.of((String) null, \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\");", "NullPointerException");
     }
 
     @Test
     void setOfOctupleNullSecondFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-null-second", "Set.of(\"a\", (String) null, \"c\", \"d\", \"e\", \"f\", \"g\", \"h\");", "null Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-null-second", "Set.of(\"a\", (String) null, \"c\", \"d\", \"e\", \"f\", \"g\", \"h\");", "NullPointerException");
     }
 
     @Test
     void setOfOctupleNullThirdFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-null-third", "Set.of(\"a\", \"b\", (String) null, \"d\", \"e\", \"f\", \"g\", \"h\");", "null Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-null-third", "Set.of(\"a\", \"b\", (String) null, \"d\", \"e\", \"f\", \"g\", \"h\");", "NullPointerException");
     }
 
     @Test
     void setOfOctupleNullFourthFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-null-fourth", "Set.of(\"a\", \"b\", \"c\", (String) null, \"e\", \"f\", \"g\", \"h\");", "null Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-null-fourth", "Set.of(\"a\", \"b\", \"c\", (String) null, \"e\", \"f\", \"g\", \"h\");", "NullPointerException");
     }
 
     @Test
     void setOfOctupleNullFifthFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-null-fifth", "Set.of(\"a\", \"b\", \"c\", \"d\", (String) null, \"f\", \"g\", \"h\");", "null Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-null-fifth", "Set.of(\"a\", \"b\", \"c\", \"d\", (String) null, \"f\", \"g\", \"h\");", "NullPointerException");
     }
 
     @Test
     void setOfOctupleNullSixthFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-null-sixth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", (String) null, \"g\", \"h\");", "null Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-null-sixth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", (String) null, \"g\", \"h\");", "NullPointerException");
     }
 
     @Test
     void setOfOctupleNullSeventhFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-null-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", (String) null, \"h\");", "null Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-null-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", (String) null, \"h\");", "NullPointerException");
     }
 
     @Test
     void setOfOctupleNullEighthFailsAtRuntime() throws Exception {
-        assertSetOfOctupleFailureAtRuntime("set-of-octuple-null-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", (String) null);", "null Set.of element");
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-null-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", (String) null);", "NullPointerException");
     }
 
     @Test
@@ -8859,227 +8859,227 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void setOfNonupleDuplicateFirstSecondFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-first-second", "Set.of(\"same\", \"same\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-first-second", "Set.of(\"same\", \"same\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateFirstThirdFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-first-third", "Set.of(\"same\", \"b\", \"same\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-first-third", "Set.of(\"same\", \"b\", \"same\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateFirstFourthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-first-fourth", "Set.of(\"same\", \"b\", \"c\", \"same\", \"e\", \"f\", \"g\", \"h\", \"i\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-first-fourth", "Set.of(\"same\", \"b\", \"c\", \"same\", \"e\", \"f\", \"g\", \"h\", \"i\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateFirstFifthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-first-fifth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"same\", \"f\", \"g\", \"h\", \"i\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-first-fifth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"same\", \"f\", \"g\", \"h\", \"i\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateFirstSixthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-first-sixth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"same\", \"g\", \"h\", \"i\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-first-sixth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"same\", \"g\", \"h\", \"i\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateFirstSeventhFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-first-seventh", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"f\", \"same\", \"h\", \"i\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-first-seventh", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"f\", \"same\", \"h\", \"i\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateFirstEighthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-first-eighth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"same\", \"i\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-first-eighth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"same\", \"i\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateFirstNinthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-first-ninth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"same\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-first-ninth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateSecondThirdFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-second-third", "Set.of(\"a\", \"same\", \"same\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-second-third", "Set.of(\"a\", \"same\", \"same\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateSecondFourthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-second-fourth", "Set.of(\"a\", \"same\", \"c\", \"same\", \"e\", \"f\", \"g\", \"h\", \"i\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-second-fourth", "Set.of(\"a\", \"same\", \"c\", \"same\", \"e\", \"f\", \"g\", \"h\", \"i\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateSecondFifthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-second-fifth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"same\", \"f\", \"g\", \"h\", \"i\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-second-fifth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"same\", \"f\", \"g\", \"h\", \"i\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateSecondSixthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-second-sixth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"same\", \"g\", \"h\", \"i\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-second-sixth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"same\", \"g\", \"h\", \"i\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateSecondSeventhFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-second-seventh", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"f\", \"same\", \"h\", \"i\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-second-seventh", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"f\", \"same\", \"h\", \"i\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateSecondEighthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-second-eighth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"f\", \"g\", \"same\", \"i\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-second-eighth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"f\", \"g\", \"same\", \"i\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateSecondNinthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-second-ninth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"same\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-second-ninth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateThirdFourthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-third-fourth", "Set.of(\"a\", \"b\", \"same\", \"same\", \"e\", \"f\", \"g\", \"h\", \"i\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-third-fourth", "Set.of(\"a\", \"b\", \"same\", \"same\", \"e\", \"f\", \"g\", \"h\", \"i\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateThirdFifthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-third-fifth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"same\", \"f\", \"g\", \"h\", \"i\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-third-fifth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"same\", \"f\", \"g\", \"h\", \"i\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateThirdSixthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-third-sixth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"same\", \"g\", \"h\", \"i\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-third-sixth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"same\", \"g\", \"h\", \"i\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateThirdSeventhFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-third-seventh", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"f\", \"same\", \"h\", \"i\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-third-seventh", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"f\", \"same\", \"h\", \"i\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateThirdEighthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-third-eighth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"f\", \"g\", \"same\", \"i\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-third-eighth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"f\", \"g\", \"same\", \"i\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateThirdNinthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-third-ninth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"f\", \"g\", \"h\", \"same\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-third-ninth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"f\", \"g\", \"h\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateFourthFifthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-fourth-fifth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"same\", \"f\", \"g\", \"h\", \"i\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-fourth-fifth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"same\", \"f\", \"g\", \"h\", \"i\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateFourthSixthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-fourth-sixth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"same\", \"g\", \"h\", \"i\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-fourth-sixth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"same\", \"g\", \"h\", \"i\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateFourthSeventhFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-fourth-seventh", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"f\", \"same\", \"h\", \"i\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-fourth-seventh", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"f\", \"same\", \"h\", \"i\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateFourthEighthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-fourth-eighth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"f\", \"g\", \"same\", \"i\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-fourth-eighth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"f\", \"g\", \"same\", \"i\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateFourthNinthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-fourth-ninth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"f\", \"g\", \"h\", \"same\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-fourth-ninth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"f\", \"g\", \"h\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateFifthSixthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-fifth-sixth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"same\", \"g\", \"h\", \"i\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-fifth-sixth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"same\", \"g\", \"h\", \"i\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateFifthSeventhFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-fifth-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"f\", \"same\", \"h\", \"i\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-fifth-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"f\", \"same\", \"h\", \"i\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateFifthEighthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-fifth-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"f\", \"g\", \"same\", \"i\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-fifth-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"f\", \"g\", \"same\", \"i\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateFifthNinthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-fifth-ninth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"f\", \"g\", \"h\", \"same\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-fifth-ninth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"f\", \"g\", \"h\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateSixthSeventhFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-sixth-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"same\", \"same\", \"h\", \"i\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-sixth-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"same\", \"same\", \"h\", \"i\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateSixthEighthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-sixth-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"same\", \"g\", \"same\", \"i\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-sixth-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"same\", \"g\", \"same\", \"i\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateSixthNinthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-sixth-ninth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"same\", \"g\", \"h\", \"same\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-sixth-ninth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"same\", \"g\", \"h\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateSeventhEighthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-seventh-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"same\", \"same\", \"i\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-seventh-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"same\", \"same\", \"i\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateSeventhNinthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-seventh-ninth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"same\", \"h\", \"same\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-seventh-ninth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"same\", \"h\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleDuplicateEighthNinthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-eighth-ninth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"same\", \"same\");", "duplicate Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-eighth-ninth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"same\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfNonupleNullFirstFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-null-first", "Set.of((String) null, \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\");", "null Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-null-first", "Set.of((String) null, \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\");", "NullPointerException");
     }
 
     @Test
     void setOfNonupleNullSecondFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-null-second", "Set.of(\"a\", (String) null, \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\");", "null Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-null-second", "Set.of(\"a\", (String) null, \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\");", "NullPointerException");
     }
 
     @Test
     void setOfNonupleNullThirdFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-null-third", "Set.of(\"a\", \"b\", (String) null, \"d\", \"e\", \"f\", \"g\", \"h\", \"i\");", "null Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-null-third", "Set.of(\"a\", \"b\", (String) null, \"d\", \"e\", \"f\", \"g\", \"h\", \"i\");", "NullPointerException");
     }
 
     @Test
     void setOfNonupleNullFourthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-null-fourth", "Set.of(\"a\", \"b\", \"c\", (String) null, \"e\", \"f\", \"g\", \"h\", \"i\");", "null Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-null-fourth", "Set.of(\"a\", \"b\", \"c\", (String) null, \"e\", \"f\", \"g\", \"h\", \"i\");", "NullPointerException");
     }
 
     @Test
     void setOfNonupleNullFifthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-null-fifth", "Set.of(\"a\", \"b\", \"c\", \"d\", (String) null, \"f\", \"g\", \"h\", \"i\");", "null Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-null-fifth", "Set.of(\"a\", \"b\", \"c\", \"d\", (String) null, \"f\", \"g\", \"h\", \"i\");", "NullPointerException");
     }
 
     @Test
     void setOfNonupleNullSixthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-null-sixth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", (String) null, \"g\", \"h\", \"i\");", "null Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-null-sixth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", (String) null, \"g\", \"h\", \"i\");", "NullPointerException");
     }
 
     @Test
     void setOfNonupleNullSeventhFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-null-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", (String) null, \"h\", \"i\");", "null Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-null-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", (String) null, \"h\", \"i\");", "NullPointerException");
     }
 
     @Test
     void setOfNonupleNullEighthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-null-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", (String) null, \"i\");", "null Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-null-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", (String) null, \"i\");", "NullPointerException");
     }
 
     @Test
     void setOfNonupleNullNinthFailsAtRuntime() throws Exception {
-        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-null-ninth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", (String) null);", "null Set.of element");
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-null-ninth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", (String) null);", "NullPointerException");
     }
 
     @Test
@@ -9123,277 +9123,277 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void setOfDecupleDuplicateFirstSecondFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-first-second", "Set.of(\"same\", \"same\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-first-second", "Set.of(\"same\", \"same\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateFirstThirdFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-first-third", "Set.of(\"same\", \"b\", \"same\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-first-third", "Set.of(\"same\", \"b\", \"same\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateFirstFourthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-first-fourth", "Set.of(\"same\", \"b\", \"c\", \"same\", \"e\", \"f\", \"g\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-first-fourth", "Set.of(\"same\", \"b\", \"c\", \"same\", \"e\", \"f\", \"g\", \"h\", \"i\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateFirstFifthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-first-fifth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"same\", \"f\", \"g\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-first-fifth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"same\", \"f\", \"g\", \"h\", \"i\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateFirstSixthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-first-sixth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"same\", \"g\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-first-sixth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"same\", \"g\", \"h\", \"i\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateFirstSeventhFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-first-seventh", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"f\", \"same\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-first-seventh", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"f\", \"same\", \"h\", \"i\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateFirstEighthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-first-eighth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"same\", \"i\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-first-eighth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"same\", \"i\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateFirstNinthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-first-ninth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"same\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-first-ninth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"same\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateFirstTenthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-first-tenth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", \"same\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-first-tenth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateSecondThirdFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-second-third", "Set.of(\"a\", \"same\", \"same\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-second-third", "Set.of(\"a\", \"same\", \"same\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateSecondFourthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-second-fourth", "Set.of(\"a\", \"same\", \"c\", \"same\", \"e\", \"f\", \"g\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-second-fourth", "Set.of(\"a\", \"same\", \"c\", \"same\", \"e\", \"f\", \"g\", \"h\", \"i\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateSecondFifthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-second-fifth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"same\", \"f\", \"g\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-second-fifth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"same\", \"f\", \"g\", \"h\", \"i\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateSecondSixthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-second-sixth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"same\", \"g\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-second-sixth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"same\", \"g\", \"h\", \"i\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateSecondSeventhFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-second-seventh", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"f\", \"same\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-second-seventh", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"f\", \"same\", \"h\", \"i\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateSecondEighthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-second-eighth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"f\", \"g\", \"same\", \"i\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-second-eighth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"f\", \"g\", \"same\", \"i\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateSecondNinthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-second-ninth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"same\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-second-ninth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"same\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateSecondTenthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-second-tenth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", \"same\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-second-tenth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateThirdFourthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-third-fourth", "Set.of(\"a\", \"b\", \"same\", \"same\", \"e\", \"f\", \"g\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-third-fourth", "Set.of(\"a\", \"b\", \"same\", \"same\", \"e\", \"f\", \"g\", \"h\", \"i\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateThirdFifthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-third-fifth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"same\", \"f\", \"g\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-third-fifth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"same\", \"f\", \"g\", \"h\", \"i\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateThirdSixthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-third-sixth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"same\", \"g\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-third-sixth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"same\", \"g\", \"h\", \"i\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateThirdSeventhFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-third-seventh", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"f\", \"same\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-third-seventh", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"f\", \"same\", \"h\", \"i\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateThirdEighthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-third-eighth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"f\", \"g\", \"same\", \"i\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-third-eighth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"f\", \"g\", \"same\", \"i\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateThirdNinthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-third-ninth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"f\", \"g\", \"h\", \"same\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-third-ninth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"f\", \"g\", \"h\", \"same\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateThirdTenthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-third-tenth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", \"same\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-third-tenth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateFourthFifthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fourth-fifth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"same\", \"f\", \"g\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fourth-fifth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"same\", \"f\", \"g\", \"h\", \"i\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateFourthSixthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fourth-sixth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"same\", \"g\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fourth-sixth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"same\", \"g\", \"h\", \"i\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateFourthSeventhFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fourth-seventh", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"f\", \"same\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fourth-seventh", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"f\", \"same\", \"h\", \"i\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateFourthEighthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fourth-eighth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"f\", \"g\", \"same\", \"i\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fourth-eighth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"f\", \"g\", \"same\", \"i\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateFourthNinthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fourth-ninth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"f\", \"g\", \"h\", \"same\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fourth-ninth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"f\", \"g\", \"h\", \"same\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateFourthTenthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fourth-tenth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"f\", \"g\", \"h\", \"i\", \"same\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fourth-tenth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"f\", \"g\", \"h\", \"i\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateFifthSixthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fifth-sixth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"same\", \"g\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fifth-sixth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"same\", \"g\", \"h\", \"i\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateFifthSeventhFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fifth-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"f\", \"same\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fifth-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"f\", \"same\", \"h\", \"i\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateFifthEighthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fifth-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"f\", \"g\", \"same\", \"i\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fifth-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"f\", \"g\", \"same\", \"i\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateFifthNinthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fifth-ninth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"f\", \"g\", \"h\", \"same\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fifth-ninth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"f\", \"g\", \"h\", \"same\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateFifthTenthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fifth-tenth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"f\", \"g\", \"h\", \"i\", \"same\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fifth-tenth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"f\", \"g\", \"h\", \"i\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateSixthSeventhFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-sixth-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"same\", \"same\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-sixth-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"same\", \"same\", \"h\", \"i\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateSixthEighthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-sixth-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"same\", \"g\", \"same\", \"i\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-sixth-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"same\", \"g\", \"same\", \"i\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateSixthNinthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-sixth-ninth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"same\", \"g\", \"h\", \"same\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-sixth-ninth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"same\", \"g\", \"h\", \"same\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateSixthTenthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-sixth-tenth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"same\", \"g\", \"h\", \"i\", \"same\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-sixth-tenth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"same\", \"g\", \"h\", \"i\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateSeventhEighthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-seventh-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"same\", \"same\", \"i\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-seventh-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"same\", \"same\", \"i\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateSeventhNinthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-seventh-ninth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"same\", \"h\", \"same\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-seventh-ninth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"same\", \"h\", \"same\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateSeventhTenthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-seventh-tenth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"same\", \"h\", \"i\", \"same\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-seventh-tenth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"same\", \"h\", \"i\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateEighthNinthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-eighth-ninth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"same\", \"same\", \"j\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-eighth-ninth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"same\", \"same\", \"j\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateEighthTenthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-eighth-tenth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"same\", \"i\", \"same\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-eighth-tenth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"same\", \"i\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleDuplicateNinthTenthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-ninth-tenth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"same\", \"same\");", "duplicate Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-ninth-tenth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"same\", \"same\");", "IllegalArgumentException");
     }
 
     @Test
     void setOfDecupleNullFirstFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-null-first", "Set.of((String) null, \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", \"j\");", "null Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-null-first", "Set.of((String) null, \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", \"j\");", "NullPointerException");
     }
 
     @Test
     void setOfDecupleNullSecondFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-null-second", "Set.of(\"a\", (String) null, \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", \"j\");", "null Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-null-second", "Set.of(\"a\", (String) null, \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", \"j\");", "NullPointerException");
     }
 
     @Test
     void setOfDecupleNullThirdFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-null-third", "Set.of(\"a\", \"b\", (String) null, \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", \"j\");", "null Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-null-third", "Set.of(\"a\", \"b\", (String) null, \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", \"j\");", "NullPointerException");
     }
 
     @Test
     void setOfDecupleNullFourthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-null-fourth", "Set.of(\"a\", \"b\", \"c\", (String) null, \"e\", \"f\", \"g\", \"h\", \"i\", \"j\");", "null Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-null-fourth", "Set.of(\"a\", \"b\", \"c\", (String) null, \"e\", \"f\", \"g\", \"h\", \"i\", \"j\");", "NullPointerException");
     }
 
     @Test
     void setOfDecupleNullFifthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-null-fifth", "Set.of(\"a\", \"b\", \"c\", \"d\", (String) null, \"f\", \"g\", \"h\", \"i\", \"j\");", "null Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-null-fifth", "Set.of(\"a\", \"b\", \"c\", \"d\", (String) null, \"f\", \"g\", \"h\", \"i\", \"j\");", "NullPointerException");
     }
 
     @Test
     void setOfDecupleNullSixthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-null-sixth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", (String) null, \"g\", \"h\", \"i\", \"j\");", "null Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-null-sixth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", (String) null, \"g\", \"h\", \"i\", \"j\");", "NullPointerException");
     }
 
     @Test
     void setOfDecupleNullSeventhFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-null-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", (String) null, \"h\", \"i\", \"j\");", "null Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-null-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", (String) null, \"h\", \"i\", \"j\");", "NullPointerException");
     }
 
     @Test
     void setOfDecupleNullEighthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-null-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", (String) null, \"i\", \"j\");", "null Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-null-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", (String) null, \"i\", \"j\");", "NullPointerException");
     }
 
     @Test
     void setOfDecupleNullNinthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-null-ninth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", (String) null, \"j\");", "null Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-null-ninth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", (String) null, \"j\");", "NullPointerException");
     }
 
     @Test
     void setOfDecupleNullTenthFailsAtRuntime() throws Exception {
-        assertSetOfDecupleFailureAtRuntime("set-of-decuple-null-tenth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", (String) null);", "null Set.of element");
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-null-tenth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", (String) null);", "NullPointerException");
     }
 
     @Test
@@ -9436,7 +9436,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                 final String[] values = {"a", "b", "same", "d", "same", "f", "g", "h", "i", "j", "k"};
                 Set.of(values);
                 """,
-            "duplicate Set.of element"
+            "IllegalArgumentException"
         );
     }
 
@@ -9448,7 +9448,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                 final String[] values = {"a", "b", "c", "d", null, "f", "g", "h", "i", "j", "k"};
                 Set.of(values);
                 """,
-            "null Set.of element"
+            "NullPointerException"
         );
     }
 
