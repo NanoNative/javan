@@ -3751,7 +3751,8 @@ public final class CCodegen {
             }
             // Only nonblocking calls may hold the lock through publication into a root.
             return switch (expression.value()) {
-                case "javan_atomic_reference_get",
+                case "javan_runtime_class_literal",
+                    "javan_atomic_reference_get",
                     "javan_integer_value_of",
                     "javan_long_value_of",
                     "javan_float_value_of",
@@ -3764,6 +3765,8 @@ public final class CCodegen {
                     "javan_hashmap_new_with_expected_mappings",
                     "javan_linkedhashmap_new_with_expected_mappings",
                     "javan_map_entry_new",
+                    "javan_map_entry_get_key",
+                    "javan_map_entry_get_value",
                     "javan_map_empty",
                     "javan_map_singleton",
                     "javan_map_pair",
