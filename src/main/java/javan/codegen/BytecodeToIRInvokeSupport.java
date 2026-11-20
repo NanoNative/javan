@@ -190,7 +190,8 @@ final class BytecodeToIRInvokeSupport {
         }
         final MethodRef target = instruction.methodRef().orElseThrow();
         final boolean guardedObjectArguments = JdkCallSupport.isCollectionObjectSearch(target)
-            || JdkCallSupport.isCollectionObjectAddition(target) || JdkCallSupport.isMapObjectGetOrPut(target)
+            || JdkCallSupport.isCollectionObjectAddition(target) || JdkCallSupport.isListEndpointAdd(target)
+            || JdkCallSupport.isMapObjectGetOrPut(target)
             || JdkCallSupport.isMapMembershipOrDefaultQuery(target) || JdkCallSupport.isMapPutIfAbsent(target)
             || JdkCallSupport.isMapRemove(target) || JdkCallSupport.isMapReplace(target) || JdkCallSupport.isMapPutAll(target);
         final boolean guardedCollectionOrMapReceiver = guardedObjectArguments || JdkCallSupport.isCollectionSizeQuery(target)

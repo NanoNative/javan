@@ -471,15 +471,23 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksArrayListAddFirstAsSupported() {
+    void marksArrayListAddFirstAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "addFirst", "(Ljava/lang/Object;)V")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksArrayListAddLastAsSupported() {
+    void marksArrayListAddLastAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "addLast", "(Ljava/lang/Object;)V")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+    }
+
+    @Test
+    void marksListEndpointAdditionsAsUnknown() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/List", "addFirst", "(Ljava/lang/Object;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/List", "addLast", "(Ljava/lang/Object;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test

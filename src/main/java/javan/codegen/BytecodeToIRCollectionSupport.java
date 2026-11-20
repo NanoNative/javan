@@ -965,11 +965,11 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("addFirst(Ljava/lang/Object;)V".equals(signature)) {
-                instructions.add(IrInstruction.callStaticVoid("javan_arraylist_add_first", List.of(receiver, arguments.getFirst())));
+                instructions.add(IrInstruction.callStaticVoid("javan_arraylist_add_first_java", List.of(receiver, arguments.getFirst())));
                 return true;
             }
             if ("addLast(Ljava/lang/Object;)V".equals(signature)) {
-                instructions.add(IrInstruction.callStaticVoid("javan_arraylist_add_last", List.of(receiver, arguments.getFirst())));
+                instructions.add(IrInstruction.callStaticVoid("javan_arraylist_add_last_java", List.of(receiver, arguments.getFirst())));
                 return true;
             }
             if ("removeFirst()Ljava/lang/Object;".equals(signature)) {
@@ -1165,7 +1165,7 @@ final class BytecodeToIRCollectionSupport {
         }
         if ("java/util/List".equals(methodRef.owner())) {
             if ("addFirst(Ljava/lang/Object;)V".equals(signature)) {
-                instructions.add(IrInstruction.callStaticVoid("javan_arraylist_add_first", List.of(receiver, arguments.getFirst())));
+                instructions.add(IrInstruction.callStaticVoid("javan_arraylist_add_first_java", List.of(receiver, arguments.getFirst())));
                 return true;
             }
             if ("set(ILjava/lang/Object;)Ljava/lang/Object;".equals(signature)) {

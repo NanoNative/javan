@@ -2487,6 +2487,63 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void listAddEndpointsTransportFailuresAndPreserveOrder() throws Exception {
+        final Path project = project("list-add-endpoint-errors");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.Collections;
+            import java.util.List;
+            public final class Main {
+                public static void main(String[] args) {
+                    ArrayList<String> concrete = new ArrayList<>();
+                    List<String> values = concrete;
+                    List<String> missing = args.length == 0 ? null : values;
+                    ArrayList<String> missingConcrete = args.length == 0 ? null : concrete;
+                    try { missing.addFirst("x"); } catch (NullPointerException expected) { System.out.println("first null"); }
+                    try { missingConcrete.addLast("x"); } catch (NullPointerException expected) { System.out.println("last null"); }
+                    try { List.of().addFirst("x"); } catch (UnsupportedOperationException expected) { System.out.println("first immutable"); }
+                    try { Collections.emptyList().addLast("x"); } catch (UnsupportedOperationException expected) { System.out.println("last immutable"); }
+                    try { Collections.unmodifiableList(values).addFirst("x"); } catch (UnsupportedOperationException expected) { System.out.println("view"); }
+                    values.addFirst("middle"); values.addFirst("first"); values.addLast(null); concrete.addLast("last");
+                    System.out.println(values.get(0)); System.out.println(values.get(1));
+                    System.out.println(values.get(2) == null); System.out.println(values.get(3));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-add-endpoint-errors").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listAddEndpointEvaluatesArgumentBeforeNullFailure() throws Exception {
+        final Path project = project("list-add-endpoint-null-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.List;
+            public final class Main {
+                static List<String> missing() { System.out.println("receiver"); return null; }
+                static String value() { System.out.println("value"); return "x"; }
+                public static void main(String[] args) {
+                    missing().addFirst(value());
+                    System.out.println("after");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-add-endpoint-null-order").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("receiver\nvalue\n");
+        assertThat(result.stderr()).contains("NullPointerException");
+    }
+
+    @Test
     void listRemoveEndpointsTransportFailuresAndReturnRemovedValues() throws Exception {
         final Path project = project("list-remove-endpoint-errors");
         writeJava(project, "com.acme.Main", """
@@ -2820,6 +2877,10 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                             concrete.add(Integer.toString(i + 3));
                             if (!list.removeFirst().equals(Integer.toString(i + 1))) errors.incrementAndGet();
                             if (!concrete.removeLast().equals(Integer.toString(i + 3))) errors.incrementAndGet();
+                            list.addFirst(Integer.toString(i + 4));
+                            list.addLast(Integer.toString(i + 5));
+                            if (!list.getFirst().equals(Integer.toString(i + 4))) errors.incrementAndGet();
+                            if (!list.getLast().equals(Integer.toString(i + 5))) errors.incrementAndGet();
                             List<String> empty = List.of();
                             if (!rejectsFirst(empty) || !rejectsLast(empty)) errors.incrementAndGet();
                             if (!rejectsImmutableRemoval(empty) || !rejectsEmptyRemoval(java.util.Collections.emptyList())) errors.incrementAndGet();

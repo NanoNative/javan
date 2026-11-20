@@ -118,6 +118,8 @@ while publishing it to the collector.
 Indexed `remove` transports the same failures and publishes the removed value safely.
 Supported endpoint removals transport null, empty and immutable-list failures and publish removed
 values safely.
+Supported endpoint insertions transport null and immutable-list failures and retain inserted values
+through concurrent collection.
 Application-defined collection implementations are not yet supported.
 
 The default `SecureRandom` constructor supports calls resolved as `SecureRandom.nextBytes` and

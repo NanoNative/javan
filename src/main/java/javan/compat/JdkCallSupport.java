@@ -754,6 +754,7 @@ public final class JdkCallSupport {
         runtime("List.removeLast", "java/util/List", "removeLast", "()Ljava/lang/Object;"),
         runtime("List.set", "java/util/List", "set", "(ILjava/lang/Object;)Ljava/lang/Object;"),
         runtime("List.addFirst", "java/util/List", "addFirst", "(Ljava/lang/Object;)V"),
+        runtime("List.addLast", "java/util/List", "addLast", "(Ljava/lang/Object;)V"),
         runtime("List.iterator", "java/util/List", "iterator", "()Ljava/util/Iterator;"),
         runtime("Collection.iterator", "java/util/Collection", "iterator", "()Ljava/util/Iterator;"),
         runtime("HashSet.<init>", "java/util/HashSet", "<init>", "()V", "(I)V", "(IF)V", "(Ljava/util/Collection;)V"),
@@ -1273,7 +1274,7 @@ public final class JdkCallSupport {
         if ("set".equals(name)) {
             return "(ILjava/lang/Object;)Ljava/lang/Object;".equals(descriptor);
         }
-        if ("addFirst".equals(name)) {
+        if ("addFirst".equals(name) || "addLast".equals(name)) {
             return "(Ljava/lang/Object;)V".equals(descriptor);
         }
         if ("toArray".equals(name)) {
@@ -2116,6 +2117,18 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies first and last element insertion on supported list receivers.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method inserts at a list endpoint
+     */
+    public static boolean isListEndpointAdd(final MethodRef methodRef) {
+        return ("java/util/List".equals(methodRef.owner()) || "java/util/ArrayList".equals(methodRef.owner()))
+            && ("addFirst".equals(methodRef.name()) || "addLast".equals(methodRef.name()))
+            && "(Ljava/lang/Object;)V".equals(methodRef.descriptor()) && isSupported(methodRef);
+    }
+
+    /**
      * Identifies indexed access on supported list receivers.
      *
      * @param methodRef referenced JDK method
@@ -2356,7 +2369,8 @@ public final class JdkCallSupport {
             || isSetCopyOf(methodRef) || isListCopyOf(methodRef) || isListFactory(methodRef)) {
             return List.of("java/lang/NullPointerException");
         }
-        if (isCollectionObjectAddition(methodRef) || isCollectionClear(methodRef) || isMapClear(methodRef)
+        if (isCollectionObjectAddition(methodRef) || isListEndpointAdd(methodRef)
+            || isCollectionClear(methodRef) || isMapClear(methodRef)
             || (isMapObjectGetOrPut(methodRef) && "put".equals(methodRef.name())) || isMapPutIfAbsent(methodRef)
             || isMapRemove(methodRef) || isMapReplace(methodRef) || isMapPutAll(methodRef)) {
             return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException");

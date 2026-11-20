@@ -13268,27 +13268,32 @@ final class RuntimeSourceMemorySections {
             return javan_arraylist_add_all(value, collection);
         }
 
-        void javan_arraylist_add_first(void* value, void* element) {
-            javan_object_list* list = javan_list_checked(value);
-            javan_list_mutable_checked(list);
-            void* element_root = element;
-            void** javan_list_add_first_roots[] = {
-                (void**) &list,
-                (void**) &element_root
-            };
-            javan_root_frame_push(javan_list_add_first_roots, 2);
-            javan_list_ensure_capacity(list, list->length + 1);
-            if (list->length > 0) {
-                memmove(list->values + 1, list->values, (unsigned long) list->length * sizeof(void*));
+        static void javan_arraylist_add_endpoint_java(void* value, void* element, int last) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return;
             }
-            list->values[0] = element_root;
-            list->length++;
-            javan_root_frame_pop(javan_list_add_first_roots);
-            list->mod_count++;
+            javan_runtime_lock_enter();
+            javan_object_list* list = javan_list_checked(value);
+            if (list->immutable != 0) {
+                javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                javan_runtime_lock_leave();
+                return;
+            }
+            if (last) {
+                javan_arraylist_add_prechecked(list, element);
+            } else {
+                javan_arraylist_add_at(list, 0, element);
+            }
+            javan_runtime_lock_leave();
         }
 
-        void javan_arraylist_add_last(void* value, void* element) {
-            javan_arraylist_add(value, element);
+        void javan_arraylist_add_first_java(void* value, void* element) {
+            javan_arraylist_add_endpoint_java(value, element, 0);
+        }
+
+        void javan_arraylist_add_last_java(void* value, void* element) {
+            javan_arraylist_add_endpoint_java(value, element, 1);
         }
 
         void* javan_arraylist_set(void* value, int index, void* element) {

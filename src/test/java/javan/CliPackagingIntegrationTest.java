@@ -1250,6 +1250,8 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     try { missing.removeLast(); } catch (NullPointerException expected) { System.out.println("remove last null"); }
                     try { List.of().removeFirst(); } catch (UnsupportedOperationException expected) { System.out.println("remove first immutable"); }
                     try { java.util.Collections.emptyList().removeLast(); } catch (java.util.NoSuchElementException expected) { System.out.println("remove last legacy empty"); }
+                    try { missing.addFirst("x"); } catch (NullPointerException expected) { System.out.println("add first null"); }
+                    try { List.of().addLast("x"); } catch (UnsupportedOperationException expected) { System.out.println("add last immutable"); }
                     concrete.add("first"); concrete.add("last");
                     System.out.println(values.get(0)); System.out.println(concrete.get(1));
                     System.out.println(abstractValues.set(0, "changed"));
@@ -1257,6 +1259,8 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     System.out.println(abstractValues.remove(0));
                     System.out.println(values.get(0));
                     System.out.println(values.removeFirst());
+                    values.addFirst("new first"); values.addLast("new last");
+                    System.out.println(values.getFirst()); System.out.println(values.getLast());
                 }
             }
             """);
@@ -4738,6 +4742,10 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static int listRemoveLastNull(int selector) { java.util.List<String> values = selector == 0 ? null : new java.util.ArrayList<>(); values.removeLast(); return 0; }
                 public static int listRemoveFirstImmutable() { java.util.List.of().removeFirst(); return 0; }
                 public static int listRemoveLastLegacyEmpty() { java.util.Collections.emptyList().removeLast(); return 0; }
+                public static int listAddFirstNull(int selector) { java.util.List<String> values = selector == 0 ? null : new java.util.ArrayList<>(); values.addFirst("x"); return 0; }
+                public static int listAddLastNull(int selector) { java.util.ArrayList<String> values = selector == 0 ? null : new java.util.ArrayList<>(); values.addLast("x"); return 0; }
+                public static int listAddFirstImmutable() { java.util.List.of().addFirst("x"); return 0; }
+                public static int listAddLastImmutable() { java.util.Collections.emptyList().addLast("x"); return 0; }
                 public static int replacesNull() {
                     Map<Integer, Integer> map = new java.util.HashMap<>();
                     map.put(1, null); map.putIfAbsent(1, 7); return map.get(1);
@@ -4781,7 +4789,9 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "--export", "com.acme.Api.listSetImmutable():int", "--export", "com.acme.Api.listRemoveBadIndex():int",
             "--export", "com.acme.Api.listRemoveNull(int):int", "--export", "com.acme.Api.listRemoveImmutable():int",
             "--export", "com.acme.Api.listRemoveFirstEmpty():int", "--export", "com.acme.Api.listRemoveLastNull(int):int",
-            "--export", "com.acme.Api.listRemoveFirstImmutable():int", "--export", "com.acme.Api.listRemoveLastLegacyEmpty():int");
+            "--export", "com.acme.Api.listRemoveFirstImmutable():int", "--export", "com.acme.Api.listRemoveLastLegacyEmpty():int",
+            "--export", "com.acme.Api.listAddFirstNull(int):int", "--export", "com.acme.Api.listAddLastNull(int):int",
+            "--export", "com.acme.Api.listAddFirstImmutable():int", "--export", "com.acme.Api.listAddLastImmutable():int");
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final Path caller = writeC(project, "call_map.c", """
             #include <string.h>
@@ -5007,6 +5017,18 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     javan_result_free(&failure);
                     failure = javan_try_com_acme_Api_listRemoveLastLegacyEmpty_void(&value);
                     if (failure.ok || failure.message == 0 || strstr(failure.message, "NoSuchElementException") == 0) return 74;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_listAddFirstNull_int(0, &value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 75;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_listAddLastNull_int(0, &value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 76;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_listAddFirstImmutable_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "UnsupportedOperationException") == 0) return 77;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_listAddLastImmutable_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "UnsupportedOperationException") == 0) return 78;
                     javan_result_free(&failure);
                     JavanResult result = javan_try_com_acme_Api_size_void(&value);
                     if (!result.ok || value != 400) return 1;

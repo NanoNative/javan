@@ -25594,10 +25594,24 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
+            IrInstruction.branchIf(
+                "label_typed_receiver_success_2_0",
+                IrExpression.objectComparison("!=", IrExpression.objectLocal("arg0"), IrExpression.objectNull())
+            ),
+            IrInstruction.throwPending(
+                "java/lang/NullPointerException", IrExpression.stringLiteral("Cannot invoke java/util/ArrayList.addFirst on null"),
+                new IrSourceLocation("com/acme/Main", "main", "(Ljava/util/ArrayList;Ljava/lang/Object;)V", 2,
+                    Optional.of("Main.java"), Optional.empty(), Optional.empty())
+            ),
+            IrInstruction.label("label_typed_receiver_success_2_0"),
             IrInstruction.callStaticVoid(
-                "javan_arraylist_add_first",
+                "javan_arraylist_add_first_java",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
             ),
+            IrInstruction.branchIf("label_pending_continue_2",
+                IrExpression.intComparison("==", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))),
+            IrInstruction.propagatePending(),
+            IrInstruction.label("label_pending_continue_2"),
             IrInstruction.returnVoid()
         );
     }
@@ -25617,10 +25631,24 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
+            IrInstruction.branchIf(
+                "label_typed_receiver_success_2_0",
+                IrExpression.objectComparison("!=", IrExpression.objectLocal("arg0"), IrExpression.objectNull())
+            ),
+            IrInstruction.throwPending(
+                "java/lang/NullPointerException", IrExpression.stringLiteral("Cannot invoke java/util/ArrayList.addLast on null"),
+                new IrSourceLocation("com/acme/Main", "main", "(Ljava/util/ArrayList;Ljava/lang/Object;)V", 2,
+                    Optional.of("Main.java"), Optional.empty(), Optional.empty())
+            ),
+            IrInstruction.label("label_typed_receiver_success_2_0"),
             IrInstruction.callStaticVoid(
-                "javan_arraylist_add_last",
+                "javan_arraylist_add_last_java",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
             ),
+            IrInstruction.branchIf("label_pending_continue_2",
+                IrExpression.intComparison("==", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))),
+            IrInstruction.propagatePending(),
+            IrInstruction.label("label_pending_continue_2"),
             IrInstruction.returnVoid()
         );
     }
@@ -26459,10 +26487,24 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
+            IrInstruction.branchIf(
+                "label_typed_receiver_success_2_0",
+                IrExpression.objectComparison("!=", IrExpression.objectLocal("arg0"), IrExpression.objectNull())
+            ),
+            IrInstruction.throwPending(
+                "java/lang/NullPointerException", IrExpression.stringLiteral("Cannot invoke java/util/List.addFirst on null"),
+                new IrSourceLocation("com/acme/Main", "main", "(Ljava/util/List;Ljava/lang/Object;)V", 2,
+                    Optional.of("Main.java"), Optional.empty(), Optional.empty())
+            ),
+            IrInstruction.label("label_typed_receiver_success_2_0"),
             IrInstruction.callStaticVoid(
-                "javan_arraylist_add_first",
+                "javan_arraylist_add_first_java",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
             ),
+            IrInstruction.branchIf("label_pending_continue_2",
+                IrExpression.intComparison("==", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))),
+            IrInstruction.propagatePending(),
+            IrInstruction.label("label_pending_continue_2"),
             IrInstruction.returnVoid()
         );
     }
