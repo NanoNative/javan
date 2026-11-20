@@ -1205,6 +1205,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksListCopyOfAsUnknown() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/List", "copyOf", "(Ljava/util/Collection;)Ljava/util/List;")))
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+    }
+
+    @Test
     void marksSetOfSingletonAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "of", "(Ljava/lang/Object;)Ljava/util/Set;")))
             .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);

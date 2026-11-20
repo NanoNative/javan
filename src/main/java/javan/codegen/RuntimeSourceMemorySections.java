@@ -13385,15 +13385,27 @@ final class RuntimeSourceMemorySections {
         }
 
         void* javan_list_copy_of(void* collection) {
+            if (collection == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
+            }
             javan_object_list* source = javan_list_checked(collection);
+            javan_object_list* list = NULL;
             void** javan_list_copy_roots[] = {
-                (void**) &source
+                (void**) &source,
+                (void**) &list
             };
-            javan_root_frame_push(javan_list_copy_roots, 1);
+            javan_root_frame_push(javan_list_copy_roots, 2);
             int length = javan_list_logical_length(source);
-            javan_object_list* list = javan_list_new_with_capacity(length, 1);
+            list = javan_list_new_with_capacity(length, 1);
             for (int index = 0; index < length; index++) {
-                javan_list_append_raw(list, javan_list_get_unchecked(source, index));
+                void* element = javan_list_get_unchecked(source, index);
+                if (element == NULL) {
+                    javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                    javan_root_frame_pop(javan_list_copy_roots);
+                    return NULL;
+                }
+                javan_list_append_raw(list, element);
             }
             javan_root_frame_pop(javan_list_copy_roots);
             return list;

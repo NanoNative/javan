@@ -25229,11 +25229,12 @@ final class BytecodeToIRTest {
             plain(2, 176, "areturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.objectCall(
+        assertThat(function.instructions()).containsSubsequence(
+            IrInstruction.assignObject("object0", IrExpression.objectCall(
                 "javan_list_copy_of",
                 List.of(IrExpression.objectLocal("arg0"))
-            ))
+            )),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 

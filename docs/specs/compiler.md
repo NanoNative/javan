@@ -104,6 +104,10 @@ supported equality semantics. The immutable result retains its elements independ
 array. `Set.copyOf` rejects null sources and elements, collapses duplicates and creates an immutable
 snapshot. Application-defined equality remains incomplete.
 
+`List.copyOf` rejects null sources and elements and creates an immutable ordered snapshot.
+Reads using `List.get` publish the returned reference safely during concurrent garbage collection.
+Application-defined collection implementations are not yet supported.
+
 The default `SecureRandom` constructor supports calls resolved as `SecureRandom.nextBytes` and
 `generateSeed`. The static `getSeed` entry is also supported. The supported random value methods
 are `nextBoolean` and the zero-argument, single-bound and origin-bound `nextInt`, `nextLong`,

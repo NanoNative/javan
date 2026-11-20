@@ -3765,6 +3765,8 @@ public final class CCodegen {
                     "javan_hashmap_new_with_expected_mappings",
                     "javan_linkedhashmap_new_with_expected_mappings",
                     "javan_arraylist_new",
+                    "javan_list_copy_of",
+                    "javan_list_get",
                     "javan_set_empty",
                     "javan_set_copy_of",
                     "javan_set_of_singleton",

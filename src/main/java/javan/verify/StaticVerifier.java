@@ -2137,7 +2137,8 @@ public final class StaticVerifier {
                     || JdkCallSupport.isMapRemove(target) || JdkCallSupport.isMapReplace(target) || JdkCallSupport.isMapPutAll(target)
                     || JdkCallSupport.isMapCopyOf(target) || JdkCallSupport.isMapSingleEntryFactory(target)
                     || JdkCallSupport.isMapMultiEntryFactory(target) || JdkCallSupport.isMapEntryArrayFactory(target)
-                    || JdkCallSupport.isSetFactory(target) || JdkCallSupport.isSetCopyOf(target);
+                    || JdkCallSupport.isSetFactory(target) || JdkCallSupport.isSetCopyOf(target)
+                    || JdkCallSupport.isListCopyOf(target);
             }
             typedOperation |= instruction.opcode() == 192 || instruction.opcode() == 191;
             if (instruction.opcode() == 191) {

@@ -2297,6 +2297,77 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void separateListCopiesSurviveConcurrentGarbageCollection() throws Exception {
+        final Path project = project("list-copy-concurrent-gc");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.List;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger successes = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 40; i++) {
+                            ArrayList<String> source = new ArrayList<>();
+                            source.add(Integer.toString(i)); source.add("constant"); source.add("constant");
+                            List<String> copy = List.copyOf(source); source.clear();
+                            for (int j = 0; j < 2; j++) Integer.toString(j);
+                            if (copy.size() == 3 && copy.get(0).equals(Integer.toString(i))) successes.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread a = new Thread(new Worker()); Thread b = new Thread(new Worker());
+                    a.start(); b.start(); a.join(); b.join(); System.out.println(successes.get());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/list-copy-concurrent-gc").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listCopyOfRejectsNullsAndPreservesSnapshot() throws Exception {
+        final Path project = project("list-copy-of-errors");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.Collection;
+            import java.util.List;
+            public final class Main {
+                public static void main(String[] args) {
+                    Collection<String> missing = null;
+                    try { List.copyOf(missing); } catch (NullPointerException expected) { System.out.println("null source"); }
+                    ArrayList<String> source = new ArrayList<>(); source.add("a"); source.add(null);
+                    try { List.copyOf(source); } catch (NullPointerException expected) { System.out.println("null element"); }
+                    source.clear(); source.add(Integer.toString(42)); source.add("a"); source.add("a");
+                    List<String> copy = List.copyOf(source); source.clear();
+                    for (int i = 0; i < 100; i++) Integer.toString(i);
+                    System.out.println(copy.size()); System.out.println(copy.get(0)); System.out.println(copy.get(2));
+                    try { copy.add("b"); } catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                    System.out.println(List.copyOf(List.of("after")).get(0));
+                    System.out.println(List.copyOf(java.util.Set.of("set source")).get(0));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/list-copy-of-errors").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void setCopyOfRejectsNullsAndCollapsesDuplicates() throws Exception {
         final Path project = project("set-copy-of-errors");
         writeJava(project, "com.acme.Main", """

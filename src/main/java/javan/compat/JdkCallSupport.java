@@ -2080,6 +2080,17 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies the immutable list copy factory.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method copies a collection into a list
+     */
+    public static boolean isListCopyOf(final MethodRef methodRef) {
+        return "java/util/List".equals(methodRef.owner()) && "copyOf".equals(methodRef.name())
+            && "(Ljava/util/Collection;)Ljava/util/List;".equals(methodRef.descriptor()) && isSupported(methodRef);
+    }
+
+    /**
      * Identifies the immutable set copy factory.
      *
      * @param methodRef referenced JDK method
@@ -2253,7 +2264,7 @@ public final class JdkCallSupport {
             return List.of("java/lang/NullPointerException", "java/lang/IllegalArgumentException");
         }
         if (isMapCopyConstructor(methodRef) || isMapCopyOf(methodRef) || isMapSingleEntryFactory(methodRef)
-            || isSetCopyOf(methodRef)) {
+            || isSetCopyOf(methodRef) || isListCopyOf(methodRef)) {
             return List.of("java/lang/NullPointerException");
         }
         if (isCollectionObjectAddition(methodRef) || isCollectionClear(methodRef) || isMapClear(methodRef)
