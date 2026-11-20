@@ -189,7 +189,8 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         final MethodRef target = instruction.methodRef().orElseThrow();
-        if (!guardedMapGet(target)
+        final boolean guardedCollectionSearch = JdkCallSupport.isCollectionObjectSearch(target);
+        if (!guardedCollectionSearch && !guardedMapGet(target)
             && !guardedOptionalReceiver(target)
             && !(classes.containsKey(target.owner())
                 && classes.get(target.owner()).application()
@@ -199,7 +200,7 @@ final class BytecodeToIRInvokeSupport {
         final IrExpression nullMessage = IrExpression.stringLiteral(
             "Cannot invoke " + target.owner() + "." + target.name() + " on null"
         );
-        if (BytecodeToIRControlFlowSupport.exceptionHandler(
+        if (!guardedCollectionSearch && BytecodeToIRControlFlowSupport.exceptionHandler(
             classFile,
             method,
             instruction,
@@ -218,25 +219,40 @@ final class BytecodeToIRInvokeSupport {
         if (receiver.expression().isEmpty()) {
             throw unsupported(classFile, method, instruction);
         }
-        final String receiverLocal = "object" + localDeclarations.size();
-        localDeclarations.put(
-            Integer.MIN_VALUE + localDeclarations.size(),
-            new IrLocal(IrType.OBJECT, receiverLocal)
-        );
-        instructions.add(IrInstruction.assignObject(
-            receiverLocal,
-            receiver.expression().orElseThrow()
-        ));
-        final IrExpression materialized = IrExpression.objectLocal(receiverLocal);
-        stack.set(
-            receiverIndex,
-            new StackValue(
-                receiver.kind(),
-                receiver.throwable(),
-                Optional.of(materialized),
-                receiver.dynamicLambda()
-            )
-        );
+        final IrExpression receiverExpression = receiver.expression().orElseThrow();
+        final IrExpression materialized;
+        if (guardedCollectionSearch && (receiverExpression.kind() == IrExpression.Kind.LOCAL
+            || receiverExpression.kind() == IrExpression.Kind.OBJECT_NULL
+            || receiverExpression.kind() == IrExpression.Kind.STRING_LITERAL)) {
+            materialized = receiverExpression;
+        } else {
+            final String receiverLocal = "object" + localDeclarations.size();
+            localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, receiverLocal));
+            instructions.add(IrInstruction.assignObject(receiverLocal, receiverExpression));
+            materialized = IrExpression.objectLocal(receiverLocal);
+            stack.set(receiverIndex, new StackValue(receiver.kind(), receiver.throwable(),
+                Optional.of(materialized), receiver.dynamicLambda()));
+        }
+        if (guardedCollectionSearch) {
+            final StackValue argument = stack.get(receiverIndex + 1);
+            final boolean streamArgument = argument.kind() == StackKind.PRINT_STREAM
+                || argument.kind() == StackKind.ERROR_PRINT_STREAM;
+            if (argument.expression().isEmpty() && !streamArgument) {
+                throw unsupported(classFile, method, instruction);
+            }
+            final IrExpression argumentExpression = stackValueExpression(argument);
+            if (argumentExpression.kind() != IrExpression.Kind.LOCAL
+                && argumentExpression.kind() != IrExpression.Kind.OBJECT_NULL
+                && argumentExpression.kind() != IrExpression.Kind.STRING_LITERAL) {
+                final String argumentLocal = "object" + localDeclarations.size();
+                localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, argumentLocal));
+                instructions.add(IrInstruction.assignObject(argumentLocal, argumentExpression));
+                stack.set(receiverIndex + 1, streamArgument
+                    ? StackValue.objectExpression(IrExpression.objectLocal(argumentLocal))
+                    : new StackValue(argument.kind(), argument.throwable(),
+                        Optional.of(IrExpression.objectLocal(argumentLocal)), argument.dynamicLambda()));
+            }
+        }
         final List<StackValue> successStack = List.copyOf(stack);
         final String successLabel = "label_typed_receiver_success_"
             + instruction.offset() + "_" + localDeclarations.size();

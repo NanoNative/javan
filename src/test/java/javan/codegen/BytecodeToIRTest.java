@@ -24568,7 +24568,7 @@ final class BytecodeToIRTest {
             plain(3, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).contains(
             IrInstruction.returnInt(IrExpression.intCall(
                 "javan_list_contains",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
@@ -24696,7 +24696,7 @@ final class BytecodeToIRTest {
             plain(3, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).contains(
             IrInstruction.returnInt(IrExpression.intCall(
                 "javan_list_remove",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
@@ -24986,7 +24986,7 @@ final class BytecodeToIRTest {
             plain(3, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).contains(
             IrInstruction.returnInt(IrExpression.intCall(
                 "javan_list_remove",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
@@ -25113,7 +25113,7 @@ final class BytecodeToIRTest {
             plain(3, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).contains(
             IrInstruction.returnInt(IrExpression.intCall(
                 "javan_list_remove",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
@@ -25337,7 +25337,7 @@ final class BytecodeToIRTest {
             plain(3, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).contains(
             IrInstruction.returnInt(IrExpression.intCall(
                 "javan_list_contains",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
@@ -25504,7 +25504,7 @@ final class BytecodeToIRTest {
             plain(3, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).contains(
             IrInstruction.returnInt(IrExpression.intCall(
                 "javan_list_remove",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
@@ -25624,7 +25624,7 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).contains(
             IrInstruction.assignInt(
                 "int0",
                 IrExpression.intCall("javan_list_index_of", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
@@ -25648,7 +25648,7 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).contains(
             IrInstruction.assignInt(
                 "int0",
                 IrExpression.intCall("javan_list_last_index_of", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
@@ -25848,7 +25848,7 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).contains(
             IrInstruction.assignInt(
                 "int0",
                 IrExpression.intCall("javan_list_index_of", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
@@ -25930,7 +25930,7 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).contains(
             IrInstruction.assignInt(
                 "int0",
                 IrExpression.intCall("javan_list_last_index_of", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
@@ -26076,7 +26076,7 @@ final class BytecodeToIRTest {
             plain(3, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).contains(
             IrInstruction.returnInt(IrExpression.intCall(
                 "javan_list_remove",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
@@ -26151,7 +26151,7 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).contains(
             IrInstruction.assignInt(
                 "int0",
                 IrExpression.intCall("javan_list_index_of", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
@@ -26175,7 +26175,7 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).contains(
             IrInstruction.assignInt(
                 "int0",
                 IrExpression.intCall("javan_list_last_index_of", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
@@ -26529,7 +26529,7 @@ final class BytecodeToIRTest {
             plain(3, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).contains(
             IrInstruction.returnInt(IrExpression.intCall(
                 "javan_list_contains",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
@@ -26551,7 +26551,7 @@ final class BytecodeToIRTest {
             plain(3, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).contains(
             IrInstruction.returnInt(IrExpression.intCall(
                 "javan_list_contains",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))

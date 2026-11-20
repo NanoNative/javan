@@ -421,9 +421,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksArrayListContainsAsSupported() {
+    void marksArrayListContainsAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "contains", "(Ljava/lang/Object;)Z")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
@@ -481,21 +481,21 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksArrayListIndexOfAsSupported() {
+    void marksArrayListIndexOfAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "indexOf", "(Ljava/lang/Object;)I")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksArrayListLastIndexOfAsSupported() {
+    void marksArrayListLastIndexOfAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "lastIndexOf", "(Ljava/lang/Object;)I")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksArrayListRemoveObjectAsSupported() {
+    void marksArrayListRemoveObjectAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "remove", "(Ljava/lang/Object;)Z")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
@@ -511,21 +511,21 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksListIndexOfAsSupported() {
+    void marksListIndexOfAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/List", "indexOf", "(Ljava/lang/Object;)I")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksListLastIndexOfAsSupported() {
+    void marksListLastIndexOfAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/List", "lastIndexOf", "(Ljava/lang/Object;)I")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksListRemoveObjectAsSupported() {
+    void marksListRemoveObjectAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/List", "remove", "(Ljava/lang/Object;)Z")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
@@ -571,9 +571,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksAbstractListIndexOfAsSupported() {
+    void marksAbstractListIndexOfAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/AbstractList", "indexOf", "(Ljava/lang/Object;)I")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
@@ -595,9 +595,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksAbstractListLastIndexOfAsSupported() {
+    void marksAbstractListLastIndexOfAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/AbstractList", "lastIndexOf", "(Ljava/lang/Object;)I")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
@@ -703,9 +703,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksCollectionRemoveAsSupported() {
+    void marksCollectionRemoveAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collection", "remove", "(Ljava/lang/Object;)Z")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
@@ -715,9 +715,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksSetRemoveAsSupported() {
+    void marksSetRemoveAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "remove", "(Ljava/lang/Object;)Z")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
@@ -727,15 +727,15 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksHashSetContainsAsSupported() {
+    void marksHashSetContainsAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashSet", "contains", "(Ljava/lang/Object;)Z")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksHashSetRemoveAsSupported() {
+    void marksHashSetRemoveAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashSet", "remove", "(Ljava/lang/Object;)Z")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
@@ -775,15 +775,15 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksLinkedHashSetContainsAsSupported() {
+    void marksLinkedHashSetContainsAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashSet", "contains", "(Ljava/lang/Object;)Z")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksLinkedHashSetRemoveAsSupported() {
+    void marksLinkedHashSetRemoveAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashSet", "remove", "(Ljava/lang/Object;)Z")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test

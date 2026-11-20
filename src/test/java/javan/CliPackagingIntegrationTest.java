@@ -4397,6 +4397,52 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void staticLibraryCollectionSearchReportsNullReceiverAndCanBeReused() throws Exception {
+        final Path project = project("library-null-search");
+        writeJava(project, "com.acme.Api", """
+            package com.acme;
+            import java.util.ArrayList;
+            public final class Api {
+                public static int hit() {
+                    ArrayList<Object> list = new ArrayList<>(); list.add("item");
+                    return list.contains("item") ? 1 : 0;
+                }
+                public static int missing() {
+                    ArrayList<Object> list = null;
+                    return list.contains("item") ? 1 : 0;
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString(), "--kind", "staticlib",
+            "--export", "com.acme.Api.hit():int", "--export", "com.acme.Api.missing():int");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path caller = writeC(project, "call_null_search.c", """
+            #include <string.h>
+            #include ".javan/dist/bindings/c/library-null-search.h"
+            int main(void) {
+                int value = 0;
+                JavanResult result = javan_try_com_acme_Api_hit_void(&value);
+                if (!result.ok || value != 1) return 1;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_missing_void(&value);
+                if (result.ok || result.message == 0 || strstr(result.message, "NullPointerException") == 0) return 2;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_hit_void(&value);
+                if (!result.ok || value != 1) return 3;
+                javan_result_free(&result);
+                return 0;
+            }
+            """);
+        final Path library = project.resolve(".javan/dist/liblibrary-null-search.a");
+        final Path binary = project.resolve("call-null-search");
+        final ProcessResult compiler = process(project, List.of("cc", caller.toString(), library.toString(), "-o", binary.toString()));
+        assertThat(compiler.exitCode()).as(compiler.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(binary.toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+    }
+
+    @Test
     void staticLibraryObjectEqualsDispatchesAndReportsFailures() throws Exception {
         final Path project = project("library-object-equals");
         writeJava(project, "com.acme.Api", """

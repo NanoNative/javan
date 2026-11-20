@@ -1902,6 +1902,114 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void listQueryNullReceiverThrowsAfterEvaluatingArgument() throws Exception {
+        final Path project = project("list-query-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            public final class Main {
+                static int order;
+                static ArrayList<Object> receiver() { order = order * 10 + 1; return null; }
+                static Object argument() { order = order * 10 + 2; return "value"; }
+                public static void main(String[] args) {
+                    try { System.out.println(receiver().contains(argument())); }
+                    catch (NullPointerException expected) { System.out.println("caught"); }
+                    System.out.println(order);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/list-query-null").toString()), Duration.ofSeconds(60));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listQueryEvaluatesThrowingArgumentBeforeNullCheck() throws Exception {
+        final Path project = project("list-query-argument-failure");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.List;
+            public final class Main {
+                static List<Object> receiver() { System.out.println("receiver"); return null; }
+                static Object argument() { System.out.println("argument"); throw new IllegalStateException(); }
+                public static void main(String[] args) { receiver().contains(argument()); }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/list-query-argument-failure").toString()), Duration.ofSeconds(60));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("receiver\nargument\n");
+        assertThat(result.stderr()).contains("IllegalStateException");
+    }
+
+    @Test
+    void collectionSearchAcceptsSystemStreamArguments() throws Exception {
+        final Path project = project("collection-search-stream");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.List;
+            public final class Main {
+                public static void main(String[] args) {
+                    ArrayList<Object> values = new ArrayList<>(); values.add(System.out);
+                    System.out.println(values.contains(System.out));
+                    List<Object> missing = null;
+                    try { missing.contains(System.err); }
+                    catch (NullPointerException expected) { System.out.println("caught"); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/collection-search-stream").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void nullCollectionSearchesPropagateToCallers() throws Exception {
+        final Path project = project("null-collection-searches");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.HashSet;
+            import java.util.List;
+            import java.util.Set;
+            public final class Main {
+                static int find(List<Object> value) { return value.indexOf("x"); }
+                public static void main(String[] args) {
+                    ArrayList<Object> array = null;
+                    List<Object> list = null;
+                    HashSet<Object> hash = null;
+                    Set<Object> set = null;
+                    try { find(list); } catch (NullPointerException expected) { System.out.println("index"); }
+                    try { array.lastIndexOf("x"); } catch (NullPointerException expected) { System.out.println("last"); }
+                    try { list.remove("x"); } catch (NullPointerException expected) { System.out.println("list-remove"); }
+                    try { hash.contains("x"); } catch (NullPointerException expected) { System.out.println("hash-contains"); }
+                    try { set.remove("x"); } catch (NullPointerException expected) { System.out.println("set-remove"); }
+                    try { find(list); } catch (NullPointerException expected) { System.out.println("repeat"); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/null-collection-searches").toString()), Duration.ofSeconds(60));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void builtinEnumConstantsKeepIdentityAndClassDistinctFromStrings() throws Exception {
         final Path project = project("builtin-enum-identity");
         writeJava(project, "com.acme.Main", """

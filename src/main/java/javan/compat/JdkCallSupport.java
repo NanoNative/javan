@@ -2013,12 +2013,36 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies supported collection searches taking an object argument.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether a null receiver can be transported by the native search
+     */
+    public static boolean isCollectionObjectSearch(final MethodRef methodRef) {
+        final String owner = methodRef.owner();
+        if (!"java/util/Collection".equals(owner) && !"java/util/List".equals(owner)
+            && !"java/util/ArrayList".equals(owner) && !"java/util/AbstractList".equals(owner)
+            && !"java/util/Set".equals(owner) && !"java/util/HashSet".equals(owner)
+            && !"java/util/LinkedHashSet".equals(owner)) {
+            return false;
+        }
+        return isSupported(methodRef)
+            && ((("contains".equals(methodRef.name()) || "remove".equals(methodRef.name()))
+                    && "(Ljava/lang/Object;)Z".equals(methodRef.descriptor()))
+                || (("indexOf".equals(methodRef.name()) || "lastIndexOf".equals(methodRef.name()))
+                    && "(Ljava/lang/Object;)I".equals(methodRef.descriptor())));
+    }
+
+    /**
      * Returns platform throwable types transported by a supported JDK call.
      *
      * @param methodRef method reference
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
+        if (isCollectionObjectSearch(methodRef)) {
+            return List.of("java/lang/NullPointerException");
+        }
         if ("java/lang/Object".equals(methodRef.owner()) && "equals".equals(methodRef.name())
             && "(Ljava/lang/Object;)Z".equals(methodRef.descriptor())) {
             return List.of("java/lang/NullPointerException");
