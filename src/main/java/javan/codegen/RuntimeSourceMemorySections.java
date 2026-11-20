@@ -14943,6 +14943,10 @@ final class RuntimeSourceMemorySections {
         }
 
         void* javan_map_of_entries(void* value) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
+            }
             javan_array_header* header = javan_array_checked(value);
             javan_array_kind_checked(header, JAVAN_ARRAY_KIND_OBJECT);
             javan_object_array* entries = (javan_object_array*) header;
@@ -14957,14 +14961,20 @@ final class RuntimeSourceMemorySections {
             for (int index = 0; index < entries->length; index++) {
                 void* entry_value = entries->values[index];
                 if (entry_value == NULL) {
-                    javan_panic("null Map.ofEntries entry");
+                    javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                    javan_root_frame_pop(javan_map_of_entries_roots);
+                    return NULL;
                 }
                 javan_map_entry_state* entry = javan_map_entry_checked(entry_value);
                 if (entry->key == NULL || entry->value == NULL) {
-                    javan_panic("null Map.of entry");
+                    javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                    javan_root_frame_pop(javan_map_of_entries_roots);
+                    return NULL;
                 }
                 if (javan_map_find(result, entry->key) >= 0) {
-                    javan_panic("duplicate Map.of key");
+                    javan_pending_throw("java/lang/IllegalArgumentException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                    javan_root_frame_pop(javan_map_of_entries_roots);
+                    return NULL;
                 }
                 result->keys[index] = entry->key;
                 result->values[index] = entry->value;

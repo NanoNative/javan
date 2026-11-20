@@ -91,8 +91,9 @@ operations and concurrent views still need their complete API semantics, so `Con
 not yet accounted as fully supported. Copy constructors of `HashMap` and `LinkedHashMap` likewise
 reject null sources, while accepting null keys and values in the source. `Map.copyOf` rejects null
 sources and null entries and creates an immutable snapshot. `Map.entry` and all fixed-arity `Map.of`
-overloads reject null arguments. The multi-entry overloads also reject duplicate keys within the
-supported key semantics. `Map.ofEntries` still needs complete exception handling.
+overloads reject null arguments. The multi-entry overloads and `Map.ofEntries` reject duplicate keys
+within the supported key semantics. `Map.ofEntries` also rejects null arrays and entries. It consumes
+native map entries and does not yet support application-defined `Map.Entry` implementations.
 
 The default `SecureRandom` constructor supports calls resolved as `SecureRandom.nextBytes` and
 `generateSeed`. The static `getSeed` entry is also supported. The supported random value methods

@@ -2106,6 +2106,17 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies the map factory that consumes an array of entries.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method creates a map from entries
+     */
+    public static boolean isMapEntryArrayFactory(final MethodRef methodRef) {
+        return "java/util/Map".equals(methodRef.owner()) && "ofEntries".equals(methodRef.name())
+            && "([Ljava/util/Map$Entry;)Ljava/util/Map;".equals(methodRef.descriptor()) && isSupported(methodRef);
+    }
+
+    /**
      * Identifies the immutable map copy factory.
      *
      * @param methodRef referenced JDK method
@@ -2216,7 +2227,7 @@ public final class JdkCallSupport {
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
-        if (isMapMultiEntryFactory(methodRef)) {
+        if (isMapMultiEntryFactory(methodRef) || isMapEntryArrayFactory(methodRef)) {
             return List.of("java/lang/NullPointerException", "java/lang/IllegalArgumentException");
         }
         if (isMapCopyConstructor(methodRef) || isMapCopyOf(methodRef) || isMapSingleEntryFactory(methodRef)) {

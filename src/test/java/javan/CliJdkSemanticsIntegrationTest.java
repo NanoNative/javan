@@ -2262,6 +2262,39 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mapOfEntriesHandlesNullArraysNullEntriesAndDuplicates() throws Exception {
+        final Path project = project("map-of-entries-errors");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Map;
+            public final class Main {
+                public static void main(String[] args) {
+                    Map.Entry<String,String>[] missing = null;
+                    try { Map.ofEntries(missing); } catch (NullPointerException expected) { System.out.println("null array"); }
+                    Map.Entry<String,String>[] values = new Map.Entry[] { Map.entry("a", "x"), null };
+                    try { Map.ofEntries(values); } catch (NullPointerException expected) { System.out.println("null entry"); }
+                    values[1] = Map.entry("a", "y");
+                    try { Map.ofEntries(values); } catch (IllegalArgumentException expected) { System.out.println("duplicate"); }
+                    values[1] = Map.entry("b", Integer.toString(42));
+                    Map<String,String> result = Map.ofEntries(values); values[1] = Map.entry("b", "changed");
+                    for (int i = 0; i < 100; i++) Integer.toString(i);
+                    System.out.println(result.get("a")); System.out.println(result.get("b"));
+                    try { result.put("c", "z"); } catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                    System.out.println(Map.ofEntries().size());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/map-of-entries-errors").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void multiEntryMapFactoriesRejectNullsAndDuplicateKeys() throws Exception {
         final Path project = project("map-multi-errors");
         writeJava(project, "com.acme.Main", """
