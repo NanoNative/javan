@@ -1435,6 +1435,9 @@ public final class BytecodeToIR {
         final Set<String> possibleTypes = new LinkedHashSet<>();
         if (bytecodeInstruction.methodRef().isPresent()) {
             final MethodRef reference = bytecodeInstruction.methodRef().orElseThrow();
+            if (JdkCallSupport.isCollectionObjectAddition(reference)) {
+                possibleTypes.addAll(JdkCallSupport.transportedPlatformThrowableTypes(reference));
+            }
             if (("java/util/Iterator".equals(reference.owner()) || "java/util/ListIterator".equals(reference.owner()))
                 && "next".equals(reference.name()) && "()Ljava/lang/Object;".equals(reference.descriptor())) {
                 possibleTypes.addAll(JdkCallSupport.transportedPlatformThrowableTypes(reference));

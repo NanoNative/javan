@@ -2062,8 +2062,10 @@ public final class JdkCallSupport {
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
-        if (isCollectionObjectSearch(methodRef) || isCollectionObjectAddition(methodRef)
-            || isCollectionSizeQuery(methodRef)) {
+        if (isCollectionObjectAddition(methodRef)) {
+            return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException");
+        }
+        if (isCollectionObjectSearch(methodRef) || isCollectionSizeQuery(methodRef)) {
             return List.of("java/lang/NullPointerException");
         }
         if ("java/lang/Object".equals(methodRef.owner()) && "equals".equals(methodRef.name())

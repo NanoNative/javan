@@ -4414,12 +4414,13 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static int missingSize() { ArrayList<Object> list = null; return list.size(); }
                 public static int missingEmpty() { ArrayList<Object> list = null; return list.isEmpty() ? 1 : 0; }
                 public static int missingAdd() { ArrayList<Object> list = null; return list.add(System.err) ? 1 : 0; }
+                public static int immutableAdd() { java.util.List<Object> list = java.util.List.of(); return list.add("item") ? 1 : 0; }
             }
             """);
         final CliRun build = run(tempDir, "build", project.toString(), "--kind", "staticlib",
             "--export", "com.acme.Api.hit():int", "--export", "com.acme.Api.missing():int",
             "--export", "com.acme.Api.missingSize():int", "--export", "com.acme.Api.missingEmpty():int",
-            "--export", "com.acme.Api.missingAdd():int");
+            "--export", "com.acme.Api.missingAdd():int", "--export", "com.acme.Api.immutableAdd():int");
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final Path caller = writeC(project, "call_null_search.c", """
             #include <string.h>
@@ -4441,8 +4442,11 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 result = javan_try_com_acme_Api_missingAdd_void(&value);
                 if (result.ok || result.message == 0 || strstr(result.message, "NullPointerException") == 0) return 5;
                 javan_result_free(&result);
+                result = javan_try_com_acme_Api_immutableAdd_void(&value);
+                if (result.ok || result.message == 0 || strstr(result.message, "UnsupportedOperationException") == 0) return 6;
+                javan_result_free(&result);
                 result = javan_try_com_acme_Api_hit_void(&value);
-                if (!result.ok || value != 1) return 6;
+                if (!result.ok || value != 1) return 7;
                 javan_result_free(&result);
                 return 0;
             }

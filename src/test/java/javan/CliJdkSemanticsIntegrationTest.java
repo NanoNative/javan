@@ -2081,24 +2081,45 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void immutableCollectionAddCatchIsRejectedRepeatably() throws Exception {
-        final Path project = project("immutable-add-unsupported");
+    void immutableCollectionAddThrowsCatchableUnsupportedOperationException() throws Exception {
+        final Path project = project("immutable-add-exception");
         writeJava(project, "com.acme.Main", """
             package com.acme;
+            import java.util.ArrayList;
+            import java.util.Collection;
+            import java.util.Collections;
             import java.util.List;
+            import java.util.Set;
             public final class Main {
-                public static void main(String[] args) {
-                    List<Object> values = List.of();
-                    try { values.add("item"); }
+                static boolean add(Collection<Object> target) { return target.add("item"); }
+                static void check(Collection<Object> target) {
+                    try { add(target); }
                     catch (UnsupportedOperationException expected) { System.out.println("caught"); }
+                }
+                static void checkNull(Collection<Object> target) {
+                    try { target.add(null); }
+                    catch (UnsupportedOperationException expected) { System.out.println("null caught"); }
+                }
+                public static void main(String[] args) {
+                    ArrayList<Object> backing = new ArrayList<>();
+                    check(List.of()); check(Collections.unmodifiableList(backing));
+                    check(Set.of("item")); check(Set.of()); check(List.of());
+                    checkNull(List.of()); checkNull(Set.of());
+                    check(Collections.unmodifiableSet(new java.util.HashSet<>()));
+                    System.out.println(backing.size());
+                    System.out.println(add(backing)); System.out.println(backing.add(null));
+                    System.out.println(backing.size());
                 }
             }
             """);
-        for (int attempt = 0; attempt < 2; attempt++) {
-            final CliRun build = run(tempDir, "build", project.toString());
-            assertThat(build.exitCode()).isEqualTo(2);
-            assertThat(build.stderr()).contains("error[JAVAN014]", "exception handlers are not supported");
-        }
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/immutable-add-exception").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
     }
 
     @Test
@@ -2760,7 +2781,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
             final Collection<String> values = Collections.unmodifiableCollection(mutable);
             ((java.util.List<String>) values).add("y");
             """,
-            "unsupported operation on immutable list"
+            "UnsupportedOperationException"
         );
     }
 
@@ -4009,7 +4030,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
             final Collection<String> values = Collections.unmodifiableCollection(mutable);
             values.add("y");
             """,
-            "unsupported operation on immutable list"
+            "UnsupportedOperationException"
         );
     }
 
@@ -4088,7 +4109,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
             final List<String> values = Collections.unmodifiableList(mutable);
             values.add("y");
             """,
-            "unsupported operation on immutable list"
+            "UnsupportedOperationException"
         );
     }
 

@@ -943,6 +943,11 @@ final class BytecodeToIRCollectionSupport {
         final IrExpression receiver
     ) {
         final String signature = methodRef.name() + methodRef.descriptor();
+        if (JdkCallSupport.isCollectionObjectAddition(methodRef)) {
+            pushIntCall(instructions, stack, localDeclarations, "javan_collection_add_java", List.of(receiver, arguments.getFirst()));
+            return true;
+        }
+
         if ("java/lang/CharSequence".equals(methodRef.owner())) {
             if ("length()I".equals(signature)) {
                 stack.add(StackValue.intExpression(IrExpression.intCall("javan_char_sequence_length", List.of(receiver))));
@@ -954,10 +959,6 @@ final class BytecodeToIRCollectionSupport {
             }
         }
         if (isJdkListClass(methodRef.owner())) {
-            if ("add(Ljava/lang/Object;)Z".equals(signature)) {
-                pushIntCall(instructions, stack, localDeclarations, "javan_arraylist_add", List.of(receiver, arguments.getFirst()));
-                return true;
-            }
             if ("add(ILjava/lang/Object;)V".equals(signature)) {
                 instructions.add(IrInstruction.callStaticVoid("javan_arraylist_add_at", List.of(receiver, arguments.get(0), arguments.get(1))));
                 return true;
@@ -1024,10 +1025,6 @@ final class BytecodeToIRCollectionSupport {
             }
         }
         if ("java/util/AbstractList".equals(methodRef.owner())) {
-            if ("add(Ljava/lang/Object;)Z".equals(signature)) {
-                pushIntCall(instructions, stack, localDeclarations, "javan_collection_add", List.of(receiver, arguments.getFirst()));
-                return true;
-            }
             if ("add(ILjava/lang/Object;)V".equals(signature)) {
                 instructions.add(IrInstruction.callStaticVoid("javan_arraylist_add_at", List.of(receiver, arguments.get(0), arguments.get(1))));
                 return true;
@@ -1078,10 +1075,6 @@ final class BytecodeToIRCollectionSupport {
             }
         }
         if (isJdkListOrCollection(methodRef.owner())) {
-            if ("add(Ljava/lang/Object;)Z".equals(signature)) {
-                stack.add(StackValue.intExpression(IrExpression.intCall("javan_collection_add", List.of(receiver, arguments.getFirst()))));
-                return true;
-            }
             if ("addAll(Ljava/util/Collection;)Z".equals(signature)) {
                 stack.add(StackValue.intExpression(IrExpression.intCall("javan_collection_add_all", List.of(receiver, arguments.getFirst()))));
                 return true;
@@ -1159,10 +1152,6 @@ final class BytecodeToIRCollectionSupport {
             return true;
         }
         if (isJdkSetOwner(methodRef.owner())) {
-            if ("add(Ljava/lang/Object;)Z".equals(signature)) {
-                stack.add(StackValue.intExpression(IrExpression.intCall("javan_set_add", List.of(receiver, arguments.getFirst()))));
-                return true;
-            }
             if ("addAll(Ljava/util/Collection;)Z".equals(signature)) {
                 stack.add(StackValue.intExpression(IrExpression.intCall("javan_hashset_add_all", List.of(receiver, arguments.getFirst()))));
                 return true;

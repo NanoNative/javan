@@ -13128,12 +13128,16 @@ final class RuntimeSourceMemorySections {
             return iterator;
         }
 
-        int javan_arraylist_add(void* value, void* element) {
-            javan_object_list* list = javan_list_checked(value);
-            javan_list_mutable_checked(list);
+        static int javan_arraylist_add_prechecked(javan_object_list* list, void* element) {
             javan_list_append_raw(list, element);
             list->mod_count++;
             return 1;
+        }
+
+        int javan_arraylist_add(void* value, void* element) {
+            javan_object_list* list = javan_list_checked(value);
+            javan_list_mutable_checked(list);
+            return javan_arraylist_add_prechecked(list, element);
         }
 
         int javan_collection_add(void* value, void* element) {
@@ -13142,6 +13146,18 @@ final class RuntimeSourceMemorySections {
                 return javan_set_add(value, element);
             }
             return javan_arraylist_add(value, element);
+        }
+
+        int javan_collection_add_java(void* value, void* element) {
+            javan_object_list* list = javan_list_checked(value);
+            if (list->immutable != 0) {
+                javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            if (javan_list_is_set(list) != 0) {
+                return javan_set_add(value, element);
+            }
+            return javan_arraylist_add_prechecked(list, element);
         }
 
         void javan_arraylist_add_at(void* value, int index, void* element) {

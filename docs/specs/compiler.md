@@ -72,9 +72,10 @@ separate lists, maps, optionals and inherited platform equality, fail explicitly
 is implemented. The supported `TimeUnit`, `StandardCopyOption` and `LinkOption` constants have
 stable enum identity distinct from equal-looking strings. Collection searches, additions and size
 queries transport a null receiver as `NullPointerException`, but searches do not yet dispatch arbitrary
-application-defined `equals` methods. Catching an unsupported addition to an immutable collection
-is not yet supported. These search and addition callables remain unknown in the support ledger.
-Other methods remain subject to their supported callable entries.
+application-defined `equals` methods. Single-element additions to supported immutable collections
+transport `UnsupportedOperationException`. Search and addition callables remain unknown in the
+support ledger while custom collection overrides and set equality remain incomplete. Other methods
+remain subject to their supported callable entries.
 
 The default `SecureRandom` constructor supports calls resolved as `SecureRandom.nextBytes` and
 `generateSeed`. The static `getSeed` entry is also supported. The supported random value methods
