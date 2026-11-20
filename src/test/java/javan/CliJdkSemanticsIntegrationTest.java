@@ -2262,6 +2262,41 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void separateArrayListsSurviveConcurrentGarbageCollection() throws Exception {
+        final Path project = project("arraylist-concurrent-gc");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger successes = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 40; i++) {
+                            ArrayList<String> list = new ArrayList<>();
+                            list.add(Integer.toString(i)); list.add("a"); list.add("b");
+                            if (list.size() == 3) successes.incrementAndGet();
+                            list.clear();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread a = new Thread(new Worker()); Thread b = new Thread(new Worker());
+                    a.start(); b.start(); a.join(); b.join(); System.out.println(successes.get());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/arraylist-concurrent-gc").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void setFactoriesHandleNullsAndDuplicateElements() throws Exception {
         final Path project = project("set-factory-errors");
         writeJava(project, "com.acme.Main", """

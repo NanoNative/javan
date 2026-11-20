@@ -95,6 +95,10 @@ overloads reject null arguments. The multi-entry overloads and `Map.ofEntries` r
 within the supported key semantics. `Map.ofEntries` also rejects null arrays and entries. It consumes
 native map entries and does not yet support application-defined `Map.Entry` implementations.
 
+Zero-argument `ArrayList` allocation, single-element append and clear coordinate their native
+storage updates with garbage collection. Other list mutation paths still require concurrency
+verification.
+
 Fixed-arity and array-based `Set.of` reject null elements and duplicate elements within the
 supported equality semantics. The immutable result retains its elements independently of an input
 array. Application-defined equality remains incomplete.

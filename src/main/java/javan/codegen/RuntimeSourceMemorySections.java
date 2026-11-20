@@ -13015,6 +13015,7 @@ final class RuntimeSourceMemorySections {
         }
 
         static void javan_list_append_raw(javan_object_list* list, void* value) {
+            javan_runtime_lock_enter();
             void* value_root = value;
             void** javan_list_append_roots[] = {
                 (void**) &list,
@@ -13025,6 +13026,7 @@ final class RuntimeSourceMemorySections {
             list->values[list->length] = value_root;
             list->length++;
             javan_root_frame_pop(javan_list_append_roots);
+            javan_runtime_lock_leave();
         }
 
         void* javan_arraylist_new(void) {
@@ -13561,13 +13563,14 @@ final class RuntimeSourceMemorySections {
         }
 
         static void javan_list_clear_prechecked(javan_object_list* list) {
+            javan_runtime_lock_enter();
             int length = javan_list_logical_length(list);
-            if (length == 0) {
-                return;
+            if (length != 0) {
+                memset(list->values, 0, (unsigned long) length * sizeof(void*));
+                list->length = 0;
+                list->mod_count++;
             }
-            memset(list->values, 0, (unsigned long) length * sizeof(void*));
-            list->length = 0;
-            list->mod_count++;
+            javan_runtime_lock_leave();
         }
 
         void javan_list_clear(void* value) {
