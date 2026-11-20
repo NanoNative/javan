@@ -3788,6 +3788,7 @@ public final class CCodegen {
                     "javan_map_put_if_absent_java",
                     "javan_map_replace",
                     "javan_map_remove",
+                    "javan_map_remove_java",
                     "javan_map_key_set",
                     "javan_map_entry_set",
                     "javan_map_values",

@@ -1467,11 +1467,15 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("remove(Ljava/lang/Object;)Ljava/lang/Object;".equals(signature)) {
-                pushObjectCall(instructions, stack, localDeclarations, "javan_map_remove", List.of(receiver, arguments.getFirst()));
+                pushObjectCall(instructions, stack, localDeclarations,
+                    JdkCallSupport.isMapRemove(methodRef) ? "javan_map_remove_java" : "javan_map_remove",
+                    List.of(receiver, arguments.getFirst()));
                 return true;
             }
             if ("remove(Ljava/lang/Object;Ljava/lang/Object;)Z".equals(signature)) {
-                pushIntCall(instructions, stack, localDeclarations, "javan_map_remove_entry", List.of(receiver, arguments.get(0), arguments.get(1)));
+                pushIntCall(instructions, stack, localDeclarations,
+                    JdkCallSupport.isMapRemove(methodRef) ? "javan_map_remove_entry_java" : "javan_map_remove_entry",
+                    List.of(receiver, arguments.get(0), arguments.get(1)));
                 return true;
             }
             if ("containsKey(Ljava/lang/Object;)Z".equals(signature)) {

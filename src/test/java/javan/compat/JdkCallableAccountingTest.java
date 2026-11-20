@@ -1085,27 +1085,27 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksMapRemoveAsSupported() {
+    void marksMapRemoveAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "remove", "(Ljava/lang/Object;)Ljava/lang/Object;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksHashMapRemoveAsSupported() {
+    void marksHashMapRemoveAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashMap", "remove", "(Ljava/lang/Object;)Ljava/lang/Object;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksLinkedHashMapRemoveAsSupported() {
+    void marksLinkedHashMapRemoveAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashMap", "remove", "(Ljava/lang/Object;)Ljava/lang/Object;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksTreeMapRemoveAsSupported() {
+    void marksTreeMapRemoveAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/TreeMap", "remove", "(Ljava/lang/Object;)Ljava/lang/Object;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
@@ -1115,27 +1115,27 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksMapRemoveKeyValueAsSupported() {
+    void marksMapRemoveKeyValueAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "remove", "(Ljava/lang/Object;Ljava/lang/Object;)Z")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksHashMapRemoveKeyValueAsSupported() {
+    void marksHashMapRemoveKeyValueAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashMap", "remove", "(Ljava/lang/Object;Ljava/lang/Object;)Z")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksLinkedHashMapRemoveKeyValueAsSupported() {
+    void marksLinkedHashMapRemoveKeyValueAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashMap", "remove", "(Ljava/lang/Object;Ljava/lang/Object;)Z")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksTreeMapRemoveKeyValueAsSupported() {
+    void marksTreeMapRemoveKeyValueAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/TreeMap", "remove", "(Ljava/lang/Object;Ljava/lang/Object;)Z")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test

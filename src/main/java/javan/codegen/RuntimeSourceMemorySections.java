@@ -15930,6 +15930,24 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        void* javan_map_remove_java(void* value, void* key) {
+            javan_runtime_lock_enter();
+            javan_object_map* map = javan_map_checked(value);
+            if (map->immutable != 0) {
+                javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                javan_runtime_lock_leave();
+                return NULL;
+            }
+            if (key == NULL && javan_map_has_concurrent_backing(map) != 0) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                javan_runtime_lock_leave();
+                return NULL;
+            }
+            void* result = javan_map_remove_unlocked(value, key);
+            javan_runtime_lock_leave();
+            return result;
+        }
+
         static int javan_map_remove_entry_unlocked(void* value, void* key, void* expected_value) {
             javan_object_map* map = javan_map_checked(value);
             javan_map_mutable_checked(map);
@@ -15956,6 +15974,26 @@ final class RuntimeSourceMemorySections {
 
         int javan_map_remove_entry(void* value, void* key, void* expected_value) {
             javan_runtime_lock_enter();
+            int result = javan_map_remove_entry_unlocked(value, key, expected_value);
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        int javan_map_remove_entry_java(void* value, void* key, void* expected_value) {
+            javan_runtime_lock_enter();
+            javan_object_map* map = javan_map_checked(value);
+            if (map->immutable != 0) {
+                javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                javan_runtime_lock_leave();
+                return 0;
+            }
+            if ((key == NULL || expected_value == NULL) && javan_map_has_concurrent_backing(map) != 0) {
+                if (key == NULL) {
+                    javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                }
+                javan_runtime_lock_leave();
+                return 0;
+            }
             int result = javan_map_remove_entry_unlocked(value, key, expected_value);
             javan_runtime_lock_leave();
             return result;

@@ -4525,6 +4525,13 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static int missingAbsentReceiver() {
                     Map<Integer, Integer> map = null; map.putIfAbsent(1, 2); return 0;
                 }
+                public static int nullRemoveKey() { values.remove(null); return 0; }
+                public static int nullRemovePairKey() { values.remove(null, null); return 0; }
+                public static int nullRemoveValue() { return values.remove(-1, null) ? 1 : 0; }
+                public static int missingRemoveReceiver() {
+                    Map<Integer, Integer> map = null; map.remove(1, 2); return 0;
+                }
+                public static int immutableRemove() { Map.of().remove(1); return 0; }
                 public static int replacesNull() {
                     Map<Integer, Integer> map = new java.util.HashMap<>();
                     map.put(1, null); map.putIfAbsent(1, 7); return map.get(1);
@@ -4537,7 +4544,10 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "--export", "com.acme.Api.nullContainsKey():int", "--export", "com.acme.Api.nullContainsValue():int",
             "--export", "com.acme.Api.nullDefaultKey():int", "--export", "com.acme.Api.absentDefault():int",
             "--export", "com.acme.Api.nullAbsentKey():int", "--export", "com.acme.Api.nullAbsentValue():int",
-            "--export", "com.acme.Api.missingAbsentReceiver():int", "--export", "com.acme.Api.replacesNull():int");
+            "--export", "com.acme.Api.missingAbsentReceiver():int", "--export", "com.acme.Api.replacesNull():int",
+            "--export", "com.acme.Api.nullRemoveKey():int", "--export", "com.acme.Api.nullRemovePairKey():int",
+            "--export", "com.acme.Api.nullRemoveValue():int", "--export", "com.acme.Api.missingRemoveReceiver():int",
+            "--export", "com.acme.Api.immutableRemove():int");
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final Path caller = writeC(project, "call_map.c", """
             #include <string.h>
@@ -4577,6 +4587,21 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     javan_result_free(&failure);
                     present = javan_try_com_acme_Api_replacesNull_void(&value);
                     if (!present.ok || value != 7) return 12;
+                    javan_result_free(&present);
+                    failure = javan_try_com_acme_Api_nullRemoveKey_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 13;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_nullRemovePairKey_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 14;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_missingRemoveReceiver_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 15;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_immutableRemove_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "UnsupportedOperationException") == 0) return 16;
+                    javan_result_free(&failure);
+                    present = javan_try_com_acme_Api_nullRemoveValue_void(&value);
+                    if (!present.ok || value != 0) return 17;
                     javan_result_free(&present);
                     JavanResult result = javan_try_com_acme_Api_size_void(&value);
                     if (!result.ok || value != 400) return 1;

@@ -2226,6 +2226,58 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mapRemovalHandlesNullsAndImmutableReceivers() throws Exception {
+        final Path project = project("map-remove-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Collections;
+            import java.util.HashMap;
+            import java.util.Map;
+            import java.util.concurrent.ConcurrentHashMap;
+            public final class Main {
+                static String argument(String value) { System.out.println("argument"); return value; }
+                public static void main(String[] args) {
+                    Map<String, String> plain = new HashMap<>(); plain.put(null, null);
+                    System.out.println(plain.remove(null, null));
+                    plain.put("null", null); System.out.println(plain.remove("null") == null);
+                    System.out.println(plain.containsKey("null")); plain.put("key", "value");
+                    System.out.println(plain.remove("key", "other")); System.out.println(plain.remove("key", "value"));
+                    Map<String, String> concurrent = new ConcurrentHashMap<>(); concurrent.put("key", "value");
+                    try { concurrent.remove(null); } catch (NullPointerException expected) { System.out.println("null key"); }
+                    try { concurrent.remove(null, null); } catch (NullPointerException expected) { System.out.println("null pair key"); }
+                    System.out.println(concurrent.remove("key", null)); System.out.println(concurrent.containsKey("key"));
+                    System.out.println(concurrent.remove("key", "value"));
+                    Map<String, String> view = Collections.unmodifiableMap(plain);
+                    try { view.remove("absent"); } catch (UnsupportedOperationException expected) { System.out.println("immutable key"); }
+                    try { view.remove("absent", null); } catch (UnsupportedOperationException expected) { System.out.println("immutable pair"); }
+                    try { Map.<String, String>of().remove("absent"); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable literal"); }
+                    Map<String, String> missing = null;
+                    try { missing.remove(argument("a")); } catch (NullPointerException expected) { System.out.println("null receiver"); }
+                    try { missing.remove(argument("a"), argument("b")); }
+                    catch (NullPointerException expected) { System.out.println("null pair receiver"); }
+                    ConcurrentHashMap<String, String> direct = new ConcurrentHashMap<>();
+                    try { direct.remove(null, null); } catch (NullPointerException expected) { System.out.println("direct null"); }
+                    Map<Object, Object> streams = new HashMap<>(); streams.put(System.out, System.err);
+                    System.out.println(streams.remove(System.out, System.err));
+                    Map<String, String> retained = new HashMap<>(); retained.put("key", Integer.toString(42));
+                    String removed = retained.remove("key");
+                    for (int i = 0; i < 100; i++) Integer.toString(i);
+                    System.out.println(removed);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/map-remove-null").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void mapPutIfAbsentHandlesNullsAndImmutableReceivers() throws Exception {
         final Path project = project("map-put-if-absent-null");
         writeJava(project, "com.acme.Main", """
