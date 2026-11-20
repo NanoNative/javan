@@ -80,9 +80,10 @@ Other methods remain subject to their supported callable entries.
 
 Native map primitives serialize access to shared map storage, including access through `Map`
 references. This protects those primitives and record map traversal during concurrent mutation.
-For `get` and `put`, `ConcurrentHashMap` rejects null keys and values even through `Map` references.
-Its other null-sensitive methods and constructors, application-defined key equality, compound
-callback operations and concurrent views still need their complete API semantics, so
+`ConcurrentHashMap` rejects null keys for `get`, `getOrDefault`, `containsKey` and `put`, and null
+values for `containsValue` and `put`, including through `Map` references. A null default value is
+allowed. Other null-sensitive methods and constructors, application-defined key equality,
+compound callback operations and concurrent views still need their complete API semantics, so
 `ConcurrentHashMap` is not yet accounted as fully supported.
 
 The default `SecureRandom` constructor supports calls resolved as `SecureRandom.nextBytes` and

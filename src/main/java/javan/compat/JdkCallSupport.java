@@ -2096,6 +2096,22 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies supported map membership and defaulted lookup operations.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method performs one of these map queries
+     */
+    public static boolean isMapMembershipOrDefaultQuery(final MethodRef methodRef) {
+        if (!isMapRuntimeOwner(methodRef.owner()) || !isSupported(methodRef)) {
+            return false;
+        }
+        return (("containsKey".equals(methodRef.name()) || "containsValue".equals(methodRef.name()))
+                && "(Ljava/lang/Object;)Z".equals(methodRef.descriptor()))
+            || ("getOrDefault".equals(methodRef.name())
+                && "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(methodRef.descriptor()));
+    }
+
+    /**
      * Returns platform throwable types transported by a supported JDK call.
      *
      * @param methodRef method reference
@@ -2106,7 +2122,8 @@ public final class JdkCallSupport {
             || (isMapObjectGetOrPut(methodRef) && "put".equals(methodRef.name()))) {
             return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException");
         }
-        if (isCollectionObjectSearch(methodRef) || isCollectionSizeQuery(methodRef) || isMapObjectGetOrPut(methodRef)) {
+        if (isCollectionObjectSearch(methodRef) || isCollectionSizeQuery(methodRef) || isMapObjectGetOrPut(methodRef)
+            || isMapMembershipOrDefaultQuery(methodRef)) {
             return List.of("java/lang/NullPointerException");
         }
         if ("java/lang/Object".equals(methodRef.owner()) && "equals".equals(methodRef.name())

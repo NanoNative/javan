@@ -883,9 +883,22 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksMapContainsValueAsSupported() {
+    void marksMapContainsValueAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "containsValue", "(Ljava/lang/Object;)Z")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+    }
+
+    @Test
+    void marksMapContainsKeyAsUnknown() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "containsKey", "(Ljava/lang/Object;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+    }
+
+    @Test
+    void marksMapGetOrDefaultAsUnknown() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "getOrDefault",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test

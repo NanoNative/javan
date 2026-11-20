@@ -2226,6 +2226,62 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void concurrentMapQueriesRejectNullThroughMapReferences() throws Exception {
+        final Path project = project("concurrent-map-null-queries");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Collections;
+            import java.util.HashMap;
+            import java.util.Map;
+            import java.util.concurrent.ConcurrentHashMap;
+            public final class Main {
+                static String argument(String value) { System.out.println("argument"); return value; }
+                static void inspect(Map<String, String> values) {
+                    boolean key = false;
+                    try { key = values.containsKey(null); }
+                    catch (NullPointerException expected) { System.out.println("null key"); }
+                    System.out.println(key);
+                    boolean value = false;
+                    try { value = values.containsValue(null); }
+                    catch (NullPointerException expected) { System.out.println("null value"); }
+                    System.out.println(value);
+                    Object lookup = "unset";
+                    try { lookup = values.getOrDefault(null, "fallback"); }
+                    catch (NullPointerException expected) { System.out.println("null lookup"); }
+                    System.out.println(lookup == null);
+                    System.out.println(values.getOrDefault("missing", null) == null);
+                }
+                public static void main(String[] args) {
+                    Map<String, String> plain = new HashMap<>(); plain.put(null, null); inspect(plain);
+                    Map<String, String> concurrent = new ConcurrentHashMap<>(); concurrent.put("a", "b"); inspect(concurrent);
+                    inspect(Collections.unmodifiableMap(concurrent));
+                    Map<String, String> missing = null;
+                    try { missing.containsKey(argument("key")); }
+                    catch (NullPointerException expected) { System.out.println("missing contains"); }
+                    try { missing.getOrDefault(argument("key"), argument("default")); }
+                    catch (NullPointerException expected) { System.out.println("missing default"); }
+                    ConcurrentHashMap<String, String> direct = new ConcurrentHashMap<>();
+                    try { direct.containsValue(null); } catch (NullPointerException expected) { System.out.println("direct null"); }
+                    direct.put("ok", "value"); System.out.println(direct.containsKey("ok"));
+                    System.out.println(direct.containsValue("value")); System.out.println(direct.getOrDefault("ok", null));
+                    Map<Object, Object> streams = new HashMap<>(); streams.put(System.out, System.err);
+                    System.out.println(streams.containsKey(System.out)); System.out.println(streams.containsValue(System.err));
+                    Map<Object, Object> objects = new ConcurrentHashMap<>(); Object defaultObject = new Object();
+                    System.out.println(objects.getOrDefault("missing", defaultObject) == defaultObject);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/concurrent-map-null-queries").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void concurrentMapGetAndPutRejectNullThroughMapReferences() throws Exception {
         final Path project = project("concurrent-map-null");
         writeJava(project, "com.acme.Main", """
@@ -2337,6 +2393,9 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                                 values.clear();
                                 Integer observed = values.get(i);
                                 if (observed != null && observed.intValue() != i) badValues.incrementAndGet();
+                                values.containsKey(i); values.containsValue(i);
+                                Integer fallback = values.getOrDefault(i, null);
+                                if (fallback != null && fallback.intValue() != i) badValues.incrementAndGet();
                             }
                             else values.put(i, i);
                         }
@@ -2412,6 +2471,38 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mapEntriesKeepComponentsAliveAndAreReclaimed() throws Exception {
+        final Path project = project("map-entry-gc");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Map;
+            public final class Main {
+                static Map.Entry<String, String> entry(int i) {
+                    return Map.entry(Integer.toString(i), Integer.toString(i + 1));
+                }
+                public static void main(String[] args) {
+                    Map.Entry<String, String> retained = entry(42);
+                    int count = 0;
+                    for (int i = 0; i < 5000; i++) {
+                        Map.Entry<String, String> transientEntry = entry(i);
+                        if (transientEntry.getKey().equals(transientEntry.getValue())) count++;
+                    }
+                    System.out.println(retained.getKey()); System.out.println(retained.getValue());
+                    System.out.println(count);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/map-entry-gc").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_HEAP_LIMIT_BYTES", "131072", "JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void recordMapOperationsSurviveConcurrentMapMutation() throws Exception {
         final Path project = project("concurrent-record-map");
         writeJava(project, "com.acme.Main", """
@@ -2423,6 +2514,9 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                 record Value(Map<String, String> entries) { }
                 static final Map<String, String> values = new ConcurrentHashMap<>();
                 static final AtomicInteger ready = new AtomicInteger();
+                static Map.Entry<String, String> entry(int i) {
+                    return Map.entry(Integer.toString(i), Integer.toString(i + 1));
+                }
                 static final class Writer implements Runnable {
                     public void run() {
                         ready.incrementAndGet();
@@ -2435,7 +2529,15 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                         Value a = new Value(values); Value b = new Value(Map.of("key", "value"));
                         ready.incrementAndGet();
                         while (ready.get() < 2) Thread.yield();
-                        for (int i = 0; i < 500; i++) { a.hashCode(); a.equals(b); }
+                        for (int i = 0; i < 500; i++) {
+                            a.hashCode(); a.equals(b);
+                            if (i < 50) {
+                                Value c = new Value(Map.of("left", "one", "right", "two"));
+                                Value d = new Value(Map.ofEntries(entry(i)));
+                                Value e = new Value(java.util.HashMap.<String, String>newHashMap(1));
+                                c.hashCode(); d.hashCode(); e.hashCode();
+                            }
+                        }
                     }
                 }
                 public static void main(String[] args) throws InterruptedException {
@@ -2449,7 +2551,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final String expected = runJvm(project, "com.acme.Main");
         final CliRun build = run(tempDir, "build", project.toString());
         assertThat(build.exitCode()).as(build.stderr()).isZero();
-        for (int attempt = 0; attempt < 3; attempt++) {
+        for (int attempt = 0; attempt < 10; attempt++) {
             final ProcessResult result = process(project,
                 List.of(project.resolve(".javan/bin/concurrent-record-map").toString()), Duration.ofSeconds(60),
                 Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));

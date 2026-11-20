@@ -1335,7 +1335,9 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("getOrDefault(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(signature)) {
-                pushObjectCall(instructions, stack, localDeclarations, "javan_map_get_or_default", List.of(receiver, arguments.get(0), arguments.get(1)));
+                pushObjectCall(instructions, stack, localDeclarations,
+                    JdkCallSupport.isMapMembershipOrDefaultQuery(methodRef) ? "javan_map_get_or_default_java" : "javan_map_get_or_default",
+                    List.of(receiver, arguments.get(0), arguments.get(1)));
                 return true;
             }
             if ("put(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(signature)
@@ -1471,11 +1473,15 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("containsKey(Ljava/lang/Object;)Z".equals(signature)) {
-                pushIntCall(instructions, stack, localDeclarations, "javan_map_contains_key", List.of(receiver, arguments.getFirst()));
+                pushIntCall(instructions, stack, localDeclarations,
+                    JdkCallSupport.isMapMembershipOrDefaultQuery(methodRef) ? "javan_map_contains_key_java" : "javan_map_contains_key",
+                    List.of(receiver, arguments.getFirst()));
                 return true;
             }
             if ("containsValue(Ljava/lang/Object;)Z".equals(signature)) {
-                pushIntCall(instructions, stack, localDeclarations, "javan_map_contains_value", List.of(receiver, arguments.getFirst()));
+                pushIntCall(instructions, stack, localDeclarations,
+                    JdkCallSupport.isMapMembershipOrDefaultQuery(methodRef) ? "javan_map_contains_value_java" : "javan_map_contains_value",
+                    List.of(receiver, arguments.getFirst()));
                 return true;
             }
             if ("size()I".equals(signature)) {

@@ -594,6 +594,7 @@ final class RuntimeHeaderFile {
         void* javan_map_get(void* map, void* key);
         void* javan_map_get_java(void* map, void* key);
         void* javan_map_get_or_default(void* map, void* key, void* fallback);
+        void* javan_map_get_or_default_java(void* map, void* key, void* fallback);
         void* javan_map_put(void* map, void* key, void* value);
         void* javan_map_put_java(void* map, void* key, void* value);
         void* javan_map_put_if_absent(void* map, void* key, void* value);
@@ -604,7 +605,9 @@ final class RuntimeHeaderFile {
         void* javan_map_remove(void* map, void* key);
         int javan_map_remove_entry(void* map, void* key, void* expected_value);
         int javan_map_contains_key(void* map, void* key);
+        int javan_map_contains_key_java(void* map, void* key);
         int javan_map_contains_value(void* map, void* value);
+        int javan_map_contains_value_java(void* map, void* value);
         int javan_map_size(void* map);
         int javan_map_is_empty(void* map);
         void* javan_map_empty(void);

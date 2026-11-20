@@ -4516,11 +4516,17 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static int nullKey() { values.put(null, 1); return 0; }
                 public static int nullValue() { values.put(1, null); return 0; }
                 public static int nullGet() { values.get(null); return 0; }
+                public static int nullContainsKey() { values.containsKey(null); return 0; }
+                public static int nullContainsValue() { values.containsValue(null); return 0; }
+                public static int nullDefaultKey() { values.getOrDefault(null, null); return 0; }
+                public static int absentDefault() { return values.getOrDefault(-1, null) == null ? 1 : 0; }
             }
             """);
         final CliRun build = run(tempDir, "build", project.toString(), "--kind", "staticlib",
             "--export", "com.acme.Api.size():int", "--export", "com.acme.Api.nullKey():int",
-            "--export", "com.acme.Api.nullValue():int", "--export", "com.acme.Api.nullGet():int");
+            "--export", "com.acme.Api.nullValue():int", "--export", "com.acme.Api.nullGet():int",
+            "--export", "com.acme.Api.nullContainsKey():int", "--export", "com.acme.Api.nullContainsValue():int",
+            "--export", "com.acme.Api.nullDefaultKey():int", "--export", "com.acme.Api.absentDefault():int");
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final Path caller = writeC(project, "call_map.c", """
             #include <string.h>
@@ -4537,6 +4543,18 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     failure = javan_try_com_acme_Api_nullGet_void(&value);
                     if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 4;
                     javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_nullContainsKey_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 5;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_nullContainsValue_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 6;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_nullDefaultKey_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 7;
+                    javan_result_free(&failure);
+                    JavanResult present = javan_try_com_acme_Api_absentDefault_void(&value);
+                    if (!present.ok || value != 1) return 8;
+                    javan_result_free(&present);
                     JavanResult result = javan_try_com_acme_Api_size_void(&value);
                     if (!result.ok || value != 400) return 1;
                     javan_result_free(&result);

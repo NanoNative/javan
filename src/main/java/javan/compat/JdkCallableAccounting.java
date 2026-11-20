@@ -20,6 +20,7 @@ final class JdkCallableAccounting {
             || JdkCallSupport.isCollectionClear(methodRef)
             || JdkCallSupport.isMapClear(methodRef)
             || JdkCallSupport.isMapObjectGetOrPut(methodRef)
+            || JdkCallSupport.isMapMembershipOrDefaultQuery(methodRef)
             || ("java/util/concurrent/ConcurrentHashMap".equals(methodRef.owner())
                 && JdkCallSupport.isSupported(methodRef))
             || ("java/lang/Object".equals(methodRef.owner()) && "equals".equals(methodRef.name())

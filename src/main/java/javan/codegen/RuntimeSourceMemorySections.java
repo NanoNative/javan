@@ -1623,6 +1623,7 @@ final class RuntimeSourceMemorySections {
                 || runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_LIST
                 || runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_ITERATOR
                 || runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_MAP
+                || runtime_kind == JAVAN_RUNTIME_KIND_MAP_ENTRY
                 || runtime_kind == JAVAN_RUNTIME_KIND_OPTIONAL
                 || runtime_kind == JAVAN_RUNTIME_KIND_STRING_BUILDER
                 || runtime_kind == JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_BUILDER
@@ -2390,6 +2391,7 @@ final class RuntimeSourceMemorySections {
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_OBJECT_LIST
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_OBJECT_ITERATOR
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_OBJECT_MAP
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_MAP_ENTRY
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_OPTIONAL
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_STRING
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_PROCESS_RESULT
@@ -8441,6 +8443,12 @@ final class RuntimeSourceMemorySections {
                 }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_MAP) {
                 javan_gc_mark_runtime_map((javan_object_map*) value);
+            } else if (runtime_kind == JAVAN_RUNTIME_KIND_MAP_ENTRY) {
+                javan_map_entry_state* entry = (javan_map_entry_state*) value;
+                if (entry->magic == JAVAN_MAP_ENTRY_MAGIC) {
+                    javan_gc_mark_value(entry->key);
+                    javan_gc_mark_value(entry->value);
+                }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_OPTIONAL) {
                 javan_optional* optional = (javan_optional*) value;
                 if (optional != NULL && optional->magic == JAVAN_OPTIONAL_MAGIC && optional->present != 0) {
@@ -14424,6 +14432,13 @@ final class RuntimeSourceMemorySections {
             }
         }
 
+        static int javan_map_has_concurrent_backing(javan_object_map* map) {
+            while (map->backing != NULL) {
+                map = map->backing;
+            }
+            return map->concurrent != 0;
+        }
+
         static int javan_map_logical_length(javan_object_map* map) {
             if (map->backing != NULL) {
                 return javan_map_logical_length(map->backing);
@@ -15543,6 +15558,9 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        """;
+
+    private static final String SOURCE_COLLECTIONS_TAIL_CONTINUED = """
         static void* javan_map_copy_of_unlocked(void* value) {
             javan_object_map* source = javan_map_checked(value);
             void** javan_map_copy_roots[] = {
@@ -15623,17 +15641,10 @@ final class RuntimeSourceMemorySections {
 
         void* javan_map_get_java(void* value, void* key) {
             javan_runtime_lock_enter();
-            javan_object_map* map = javan_map_checked(value);
-            if (key == NULL) {
-                javan_object_map* backing = map;
-                while (backing->backing != NULL) {
-                    backing = backing->backing;
-                }
-                if (backing->concurrent != 0) {
-                    javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
-                    javan_runtime_lock_leave();
-                    return NULL;
-                }
+            if (key == NULL && javan_map_has_concurrent_backing(javan_map_checked(value)) != 0) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                javan_runtime_lock_leave();
+                return NULL;
             }
             void* result = javan_map_get_unlocked(value, key);
             javan_runtime_lock_leave();
@@ -15648,6 +15659,18 @@ final class RuntimeSourceMemorySections {
 
         void* javan_map_get_or_default(void* value, void* key, void* fallback) {
             javan_runtime_lock_enter();
+            void* result = javan_map_get_or_default_unlocked(value, key, fallback);
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        void* javan_map_get_or_default_java(void* value, void* key, void* fallback) {
+            javan_runtime_lock_enter();
+            if (key == NULL && javan_map_has_concurrent_backing(javan_map_checked(value)) != 0) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                javan_runtime_lock_leave();
+                return NULL;
+            }
             void* result = javan_map_get_or_default_unlocked(value, key, fallback);
             javan_runtime_lock_leave();
             return result;
@@ -15708,16 +15731,10 @@ final class RuntimeSourceMemorySections {
                 javan_runtime_lock_leave();
                 return NULL;
             }
-            if (key == NULL || element == NULL) {
-                javan_object_map* backing = map;
-                while (backing->backing != NULL) {
-                    backing = backing->backing;
-                }
-                if (backing->concurrent != 0) {
-                    javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
-                    javan_runtime_lock_leave();
-                    return NULL;
-                }
+            if ((key == NULL || element == NULL) && javan_map_has_concurrent_backing(map) != 0) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                javan_runtime_lock_leave();
+                return NULL;
             }
             void* result = javan_map_put_unlocked(value, key, element);
             javan_runtime_lock_leave();
@@ -15933,6 +15950,18 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        int javan_map_contains_key_java(void* value, void* key) {
+            javan_runtime_lock_enter();
+            if (key == NULL && javan_map_has_concurrent_backing(javan_map_checked(value)) != 0) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                javan_runtime_lock_leave();
+                return 0;
+            }
+            int result = javan_map_contains_key_unlocked(value, key);
+            javan_runtime_lock_leave();
+            return result;
+        }
+
         static int javan_map_contains_value_unlocked(void* value, void* expected_value) {
             javan_object_map* map = javan_map_checked(value);
             int length = javan_map_logical_length(map);
@@ -15946,6 +15975,18 @@ final class RuntimeSourceMemorySections {
 
         int javan_map_contains_value(void* value, void* expected_value) {
             javan_runtime_lock_enter();
+            int result = javan_map_contains_value_unlocked(value, expected_value);
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        int javan_map_contains_value_java(void* value, void* expected_value) {
+            javan_runtime_lock_enter();
+            if (expected_value == NULL && javan_map_has_concurrent_backing(javan_map_checked(value)) != 0) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                javan_runtime_lock_leave();
+                return 0;
+            }
             int result = javan_map_contains_value_unlocked(value, expected_value);
             javan_runtime_lock_leave();
             return result;
@@ -17170,6 +17211,7 @@ final class RuntimeSourceMemorySections {
         result = result + SOURCE_RECORD_SHAPES;
         result = result + SOURCE_COLLECTIONS_HEAD_CONTINUED;
         result = result + SOURCE_COLLECTIONS_TAIL;
+        result = result + SOURCE_COLLECTIONS_TAIL_CONTINUED;
         result = result + SOURCE_COLLECTIONS_PROCESS;
         result = result + SOURCE_C_ABI_OBJECT_HANDLES;
         return result;

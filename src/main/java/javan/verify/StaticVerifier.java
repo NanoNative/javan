@@ -2113,6 +2113,8 @@ public final class StaticVerifier {
         }
         final String catchType = handler.catchType().orElseThrow();
         int hasThrowableTransport = 0;
+        boolean mapAccess = false;
+        boolean typedOperation = false;
         final List<Instruction> instructions = code.instructions();
         final boolean reflectiveInvocationRange = containsMethodInvocation(instructions, handler);
         final Optional<Instruction> protectedEntry = instructionAtOffset(code, handler.startPc());
@@ -2128,6 +2130,12 @@ public final class StaticVerifier {
             if (instruction.offset() >= handler.endPc()) {
                 continue;
             }
+            if (instruction.methodRef().isPresent()) {
+                final MethodRef target = instruction.methodRef().orElseThrow();
+                mapAccess |= JdkCallSupport.isMapObjectGetOrPut(target)
+                    || JdkCallSupport.isMapMembershipOrDefaultQuery(target);
+            }
+            typedOperation |= instruction.opcode() == 192 || instruction.opcode() == 191;
             if (instruction.opcode() == 191) {
                 hasThrowableTransport = 1;
             }
@@ -2212,6 +2220,10 @@ public final class StaticVerifier {
                 && !supportedProtectedFinallyRethrowInstruction(classes, code, instruction)) {
                 return false;
             }
+        }
+        if (mapAccess && typedOperation) {
+            // The general handler path does not prove the typed stack and handler shape for this sequence.
+            return false;
         }
         if (hasThrowableTransport == 1) {
             return true;

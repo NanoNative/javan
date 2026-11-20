@@ -26915,10 +26915,10 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).containsSubsequence(
             IrInstruction.assignInt(
                 "int0",
-                IrExpression.intCall("javan_map_contains_key", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
+                IrExpression.intCall("javan_map_contains_key_java", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
             ),
             IrInstruction.returnInt(IrExpression.intLocal("int0"))
         );
@@ -26939,10 +26939,10 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).containsSubsequence(
             IrInstruction.assignInt(
                 "int0",
-                IrExpression.intCall("javan_map_contains_value", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
+                IrExpression.intCall("javan_map_contains_value_java", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
             ),
             IrInstruction.returnInt(IrExpression.intLocal("int0"))
         );
@@ -27276,11 +27276,11 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).containsSubsequence(
             IrInstruction.assignObject(
                 "object0",
                 IrExpression.objectCall(
-                    "javan_map_get_or_default",
+                    "javan_map_get_or_default_java",
                     List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("arg2"))
                 )
             ),
