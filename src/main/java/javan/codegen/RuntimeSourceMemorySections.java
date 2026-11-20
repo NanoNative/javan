@@ -14869,672 +14869,77 @@ final class RuntimeSourceMemorySections {
             return javan_map_singleton(key, value);
         }
 
-        void* javan_map_pair(void* first_key, void* first_value, void* second_key, void* second_value) {
-            if (first_key == NULL || first_value == NULL || second_key == NULL || second_value == NULL) {
-                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
-                return NULL;
+        static void* javan_map_fixed_factory(void** entries, int count) {
+            for (int index = 0; index < count; index++) {
+                if (entries[index * 2] == NULL || entries[index * 2 + 1] == NULL) {
+                    javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                    return NULL;
+                }
+                for (int previous = 0; previous < index; previous++) {
+                    if (javan_object_equals(entries[previous * 2], entries[index * 2]) != 0) {
+                        javan_pending_throw("java/lang/IllegalArgumentException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                        return NULL;
+                    }
+                }
             }
-            if (javan_object_equals(first_key, second_key) != 0) {
-                javan_pending_throw("java/lang/IllegalArgumentException", NULL, NULL, NULL, NULL, -1, -1, NULL);
-                return NULL;
+            void** roots[20];
+            for (int index = 0; index < count * 2; index++) {
+                roots[index] = &entries[index];
             }
-            void* first_key_root = first_key;
-            void* first_value_root = first_value;
-            void* second_key_root = second_key;
-            void* second_value_root = second_value;
-            void** javan_map_pair_roots[] = {
-                (void**) &first_key_root,
-                (void**) &first_value_root,
-                (void**) &second_key_root,
-                (void**) &second_value_root
-            };
-            javan_root_frame_push(javan_map_pair_roots, 4);
-            javan_object_map* map = javan_map_new_with_capacity(2, 1);
-            map->keys[0] = first_key_root;
-            map->values[0] = first_value_root;
-            map->keys[1] = second_key_root;
-            map->values[1] = second_value_root;
-            map->length = 2;
-            javan_root_frame_pop(javan_map_pair_roots);
+            javan_root_frame_push(roots, count * 2);
+            javan_object_map* map = javan_map_new_with_capacity(count, 1);
+            for (int index = 0; index < count; index++) {
+                map->keys[index] = entries[index * 2];
+                map->values[index] = entries[index * 2 + 1];
+            }
+            map->length = count;
+            javan_root_frame_pop(roots);
             return map;
+        }
+
+        void* javan_map_pair(void* first_key, void* first_value, void* second_key, void* second_value) {
+            void* entries[] = { first_key, first_value, second_key, second_value };
+            return javan_map_fixed_factory(entries, 2);
         }
 
         void* javan_map_triple(void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value) {
-            if (first_key == NULL || first_value == NULL || second_key == NULL || second_value == NULL || third_key == NULL || third_value == NULL) {
-                javan_panic("null Map.of entry");
-            }
-            if (javan_object_equals(first_key, second_key) != 0
-                || javan_object_equals(first_key, third_key) != 0
-                || javan_object_equals(second_key, third_key) != 0) {
-                javan_panic("duplicate Map.of key");
-            }
-            void* first_key_root = first_key;
-            void* first_value_root = first_value;
-            void* second_key_root = second_key;
-            void* second_value_root = second_value;
-            void* third_key_root = third_key;
-            void* third_value_root = third_value;
-            void** javan_map_triple_roots[] = {
-                (void**) &first_key_root,
-                (void**) &first_value_root,
-                (void**) &second_key_root,
-                (void**) &second_value_root,
-                (void**) &third_key_root,
-                (void**) &third_value_root
-            };
-            javan_root_frame_push(javan_map_triple_roots, 6);
-            javan_object_map* map = javan_map_new_with_capacity(3, 1);
-            map->keys[0] = first_key_root;
-            map->values[0] = first_value_root;
-            map->keys[1] = second_key_root;
-            map->values[1] = second_value_root;
-            map->keys[2] = third_key_root;
-            map->values[2] = third_value_root;
-            map->length = 3;
-            javan_root_frame_pop(javan_map_triple_roots);
-            return map;
+            void* entries[] = { first_key, first_value, second_key, second_value, third_key, third_value };
+            return javan_map_fixed_factory(entries, 3);
         }
 
         void* javan_map_quadruple(void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value, void* fourth_key, void* fourth_value) {
-            if (first_key == NULL || first_value == NULL
-                || second_key == NULL || second_value == NULL
-                || third_key == NULL || third_value == NULL
-                || fourth_key == NULL || fourth_value == NULL) {
-                javan_panic("null Map.of entry");
-            }
-            if (javan_object_equals(first_key, second_key) != 0
-                || javan_object_equals(first_key, third_key) != 0
-                || javan_object_equals(first_key, fourth_key) != 0
-                || javan_object_equals(second_key, third_key) != 0
-                || javan_object_equals(second_key, fourth_key) != 0
-                || javan_object_equals(third_key, fourth_key) != 0) {
-                javan_panic("duplicate Map.of key");
-            }
-            void* first_key_root = first_key;
-            void* first_value_root = first_value;
-            void* second_key_root = second_key;
-            void* second_value_root = second_value;
-            void* third_key_root = third_key;
-            void* third_value_root = third_value;
-            void* fourth_key_root = fourth_key;
-            void* fourth_value_root = fourth_value;
-            void** javan_map_quadruple_roots[] = {
-                (void**) &first_key_root,
-                (void**) &first_value_root,
-                (void**) &second_key_root,
-                (void**) &second_value_root,
-                (void**) &third_key_root,
-                (void**) &third_value_root,
-                (void**) &fourth_key_root,
-                (void**) &fourth_value_root
-            };
-            javan_root_frame_push(javan_map_quadruple_roots, 8);
-            javan_object_map* map = javan_map_new_with_capacity(4, 1);
-            map->keys[0] = first_key_root;
-            map->values[0] = first_value_root;
-            map->keys[1] = second_key_root;
-            map->values[1] = second_value_root;
-            map->keys[2] = third_key_root;
-            map->values[2] = third_value_root;
-            map->keys[3] = fourth_key_root;
-            map->values[3] = fourth_value_root;
-            map->length = 4;
-            javan_root_frame_pop(javan_map_quadruple_roots);
-            return map;
+            void* entries[] = { first_key, first_value, second_key, second_value, third_key, third_value, fourth_key, fourth_value };
+            return javan_map_fixed_factory(entries, 4);
         }
 
         void* javan_map_quintuple(void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value, void* fourth_key, void* fourth_value, void* fifth_key, void* fifth_value) {
-            if (first_key == NULL || first_value == NULL
-                || second_key == NULL || second_value == NULL
-                || third_key == NULL || third_value == NULL
-                || fourth_key == NULL || fourth_value == NULL
-                || fifth_key == NULL || fifth_value == NULL) {
-                javan_panic("null Map.of entry");
-            }
-            if (javan_object_equals(first_key, second_key) != 0
-                || javan_object_equals(first_key, third_key) != 0
-                || javan_object_equals(first_key, fourth_key) != 0
-                || javan_object_equals(first_key, fifth_key) != 0
-                || javan_object_equals(second_key, third_key) != 0
-                || javan_object_equals(second_key, fourth_key) != 0
-                || javan_object_equals(second_key, fifth_key) != 0
-                || javan_object_equals(third_key, fourth_key) != 0
-                || javan_object_equals(third_key, fifth_key) != 0
-                || javan_object_equals(fourth_key, fifth_key) != 0) {
-                javan_panic("duplicate Map.of key");
-            }
-            void* first_key_root = first_key;
-            void* first_value_root = first_value;
-            void* second_key_root = second_key;
-            void* second_value_root = second_value;
-            void* third_key_root = third_key;
-            void* third_value_root = third_value;
-            void* fourth_key_root = fourth_key;
-            void* fourth_value_root = fourth_value;
-            void* fifth_key_root = fifth_key;
-            void* fifth_value_root = fifth_value;
-            void** javan_map_quintuple_roots[] = {
-                (void**) &first_key_root,
-                (void**) &first_value_root,
-                (void**) &second_key_root,
-                (void**) &second_value_root,
-                (void**) &third_key_root,
-                (void**) &third_value_root,
-                (void**) &fourth_key_root,
-                (void**) &fourth_value_root,
-                (void**) &fifth_key_root,
-                (void**) &fifth_value_root
-            };
-            javan_root_frame_push(javan_map_quintuple_roots, 10);
-            javan_object_map* map = javan_map_new_with_capacity(5, 1);
-            map->keys[0] = first_key_root;
-            map->values[0] = first_value_root;
-            map->keys[1] = second_key_root;
-            map->values[1] = second_value_root;
-            map->keys[2] = third_key_root;
-            map->values[2] = third_value_root;
-            map->keys[3] = fourth_key_root;
-            map->values[3] = fourth_value_root;
-            map->keys[4] = fifth_key_root;
-            map->values[4] = fifth_value_root;
-            map->length = 5;
-            javan_root_frame_pop(javan_map_quintuple_roots);
-            return map;
+            void* entries[] = { first_key, first_value, second_key, second_value, third_key, third_value, fourth_key, fourth_value, fifth_key, fifth_value };
+            return javan_map_fixed_factory(entries, 5);
         }
 
         void* javan_map_sextuple(void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value, void* fourth_key, void* fourth_value, void* fifth_key, void* fifth_value, void* sixth_key, void* sixth_value) {
-            if (first_key == NULL || first_value == NULL
-                || second_key == NULL || second_value == NULL
-                || third_key == NULL || third_value == NULL
-                || fourth_key == NULL || fourth_value == NULL
-                || fifth_key == NULL || fifth_value == NULL
-                || sixth_key == NULL || sixth_value == NULL) {
-                javan_panic("null Map.of entry");
-            }
-            if (javan_object_equals(first_key, second_key) != 0
-                || javan_object_equals(first_key, third_key) != 0
-                || javan_object_equals(first_key, fourth_key) != 0
-                || javan_object_equals(first_key, fifth_key) != 0
-                || javan_object_equals(first_key, sixth_key) != 0
-                || javan_object_equals(second_key, third_key) != 0
-                || javan_object_equals(second_key, fourth_key) != 0
-                || javan_object_equals(second_key, fifth_key) != 0
-                || javan_object_equals(second_key, sixth_key) != 0
-                || javan_object_equals(third_key, fourth_key) != 0
-                || javan_object_equals(third_key, fifth_key) != 0
-                || javan_object_equals(third_key, sixth_key) != 0
-                || javan_object_equals(fourth_key, fifth_key) != 0
-                || javan_object_equals(fourth_key, sixth_key) != 0
-                || javan_object_equals(fifth_key, sixth_key) != 0) {
-                javan_panic("duplicate Map.of key");
-            }
-            void* first_key_root = first_key;
-            void* first_value_root = first_value;
-            void* second_key_root = second_key;
-            void* second_value_root = second_value;
-            void* third_key_root = third_key;
-            void* third_value_root = third_value;
-            void* fourth_key_root = fourth_key;
-            void* fourth_value_root = fourth_value;
-            void* fifth_key_root = fifth_key;
-            void* fifth_value_root = fifth_value;
-            void* sixth_key_root = sixth_key;
-            void* sixth_value_root = sixth_value;
-            void** javan_map_sextuple_roots[] = {
-                (void**) &first_key_root,
-                (void**) &first_value_root,
-                (void**) &second_key_root,
-                (void**) &second_value_root,
-                (void**) &third_key_root,
-                (void**) &third_value_root,
-                (void**) &fourth_key_root,
-                (void**) &fourth_value_root,
-                (void**) &fifth_key_root,
-                (void**) &fifth_value_root,
-                (void**) &sixth_key_root,
-                (void**) &sixth_value_root
-            };
-            javan_root_frame_push(javan_map_sextuple_roots, 12);
-            javan_object_map* map = javan_map_new_with_capacity(6, 1);
-            map->keys[0] = first_key_root;
-            map->values[0] = first_value_root;
-            map->keys[1] = second_key_root;
-            map->values[1] = second_value_root;
-            map->keys[2] = third_key_root;
-            map->values[2] = third_value_root;
-            map->keys[3] = fourth_key_root;
-            map->values[3] = fourth_value_root;
-            map->keys[4] = fifth_key_root;
-            map->values[4] = fifth_value_root;
-            map->keys[5] = sixth_key_root;
-            map->values[5] = sixth_value_root;
-            map->length = 6;
-            javan_root_frame_pop(javan_map_sextuple_roots);
-            return map;
+            void* entries[] = { first_key, first_value, second_key, second_value, third_key, third_value, fourth_key, fourth_value, fifth_key, fifth_value, sixth_key, sixth_value };
+            return javan_map_fixed_factory(entries, 6);
         }
 
         void* javan_map_septuple(void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value, void* fourth_key, void* fourth_value, void* fifth_key, void* fifth_value, void* sixth_key, void* sixth_value, void* seventh_key, void* seventh_value) {
-            if (first_key == NULL || first_value == NULL
-                || second_key == NULL || second_value == NULL
-                || third_key == NULL || third_value == NULL
-                || fourth_key == NULL || fourth_value == NULL
-                || fifth_key == NULL || fifth_value == NULL
-                || sixth_key == NULL || sixth_value == NULL
-                || seventh_key == NULL || seventh_value == NULL) {
-                javan_panic("null Map.of entry");
-            }
-            if (javan_object_equals(first_key, second_key) != 0
-                || javan_object_equals(first_key, third_key) != 0
-                || javan_object_equals(first_key, fourth_key) != 0
-                || javan_object_equals(first_key, fifth_key) != 0
-                || javan_object_equals(first_key, sixth_key) != 0
-                || javan_object_equals(first_key, seventh_key) != 0
-                || javan_object_equals(second_key, third_key) != 0
-                || javan_object_equals(second_key, fourth_key) != 0
-                || javan_object_equals(second_key, fifth_key) != 0
-                || javan_object_equals(second_key, sixth_key) != 0
-                || javan_object_equals(second_key, seventh_key) != 0
-                || javan_object_equals(third_key, fourth_key) != 0
-                || javan_object_equals(third_key, fifth_key) != 0
-                || javan_object_equals(third_key, sixth_key) != 0
-                || javan_object_equals(third_key, seventh_key) != 0
-                || javan_object_equals(fourth_key, fifth_key) != 0
-                || javan_object_equals(fourth_key, sixth_key) != 0
-                || javan_object_equals(fourth_key, seventh_key) != 0
-                || javan_object_equals(fifth_key, sixth_key) != 0
-                || javan_object_equals(fifth_key, seventh_key) != 0
-                || javan_object_equals(sixth_key, seventh_key) != 0) {
-                javan_panic("duplicate Map.of key");
-            }
-            void* first_key_root = first_key;
-            void* first_value_root = first_value;
-            void* second_key_root = second_key;
-            void* second_value_root = second_value;
-            void* third_key_root = third_key;
-            void* third_value_root = third_value;
-            void* fourth_key_root = fourth_key;
-            void* fourth_value_root = fourth_value;
-            void* fifth_key_root = fifth_key;
-            void* fifth_value_root = fifth_value;
-            void* sixth_key_root = sixth_key;
-            void* sixth_value_root = sixth_value;
-            void* seventh_key_root = seventh_key;
-            void* seventh_value_root = seventh_value;
-            void** javan_map_septuple_roots[] = {
-                (void**) &first_key_root,
-                (void**) &first_value_root,
-                (void**) &second_key_root,
-                (void**) &second_value_root,
-                (void**) &third_key_root,
-                (void**) &third_value_root,
-                (void**) &fourth_key_root,
-                (void**) &fourth_value_root,
-                (void**) &fifth_key_root,
-                (void**) &fifth_value_root,
-                (void**) &sixth_key_root,
-                (void**) &sixth_value_root,
-                (void**) &seventh_key_root,
-                (void**) &seventh_value_root
-            };
-            javan_root_frame_push(javan_map_septuple_roots, 14);
-            javan_object_map* map = javan_map_new_with_capacity(7, 1);
-            map->keys[0] = first_key_root;
-            map->values[0] = first_value_root;
-            map->keys[1] = second_key_root;
-            map->values[1] = second_value_root;
-            map->keys[2] = third_key_root;
-            map->values[2] = third_value_root;
-            map->keys[3] = fourth_key_root;
-            map->values[3] = fourth_value_root;
-            map->keys[4] = fifth_key_root;
-            map->values[4] = fifth_value_root;
-            map->keys[5] = sixth_key_root;
-            map->values[5] = sixth_value_root;
-            map->keys[6] = seventh_key_root;
-            map->values[6] = seventh_value_root;
-            map->length = 7;
-            javan_root_frame_pop(javan_map_septuple_roots);
-            return map;
+            void* entries[] = { first_key, first_value, second_key, second_value, third_key, third_value, fourth_key, fourth_value, fifth_key, fifth_value, sixth_key, sixth_value, seventh_key, seventh_value };
+            return javan_map_fixed_factory(entries, 7);
         }
 
         void* javan_map_octuple(void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value, void* fourth_key, void* fourth_value, void* fifth_key, void* fifth_value, void* sixth_key, void* sixth_value, void* seventh_key, void* seventh_value, void* eighth_key, void* eighth_value) {
-            if (first_key == NULL || first_value == NULL
-                || second_key == NULL || second_value == NULL
-                || third_key == NULL || third_value == NULL
-                || fourth_key == NULL || fourth_value == NULL
-                || fifth_key == NULL || fifth_value == NULL
-                || sixth_key == NULL || sixth_value == NULL
-                || seventh_key == NULL || seventh_value == NULL
-                || eighth_key == NULL || eighth_value == NULL) {
-                javan_panic("null Map.of entry");
-            }
-            if (javan_object_equals(first_key, second_key) != 0
-                || javan_object_equals(first_key, third_key) != 0
-                || javan_object_equals(first_key, fourth_key) != 0
-                || javan_object_equals(first_key, fifth_key) != 0
-                || javan_object_equals(first_key, sixth_key) != 0
-                || javan_object_equals(first_key, seventh_key) != 0
-                || javan_object_equals(first_key, eighth_key) != 0
-                || javan_object_equals(second_key, third_key) != 0
-                || javan_object_equals(second_key, fourth_key) != 0
-                || javan_object_equals(second_key, fifth_key) != 0
-                || javan_object_equals(second_key, sixth_key) != 0
-                || javan_object_equals(second_key, seventh_key) != 0
-                || javan_object_equals(second_key, eighth_key) != 0
-                || javan_object_equals(third_key, fourth_key) != 0
-                || javan_object_equals(third_key, fifth_key) != 0
-                || javan_object_equals(third_key, sixth_key) != 0
-                || javan_object_equals(third_key, seventh_key) != 0
-                || javan_object_equals(third_key, eighth_key) != 0
-                || javan_object_equals(fourth_key, fifth_key) != 0
-                || javan_object_equals(fourth_key, sixth_key) != 0
-                || javan_object_equals(fourth_key, seventh_key) != 0
-                || javan_object_equals(fourth_key, eighth_key) != 0
-                || javan_object_equals(fifth_key, sixth_key) != 0
-                || javan_object_equals(fifth_key, seventh_key) != 0
-                || javan_object_equals(fifth_key, eighth_key) != 0
-                || javan_object_equals(sixth_key, seventh_key) != 0
-                || javan_object_equals(sixth_key, eighth_key) != 0
-                || javan_object_equals(seventh_key, eighth_key) != 0) {
-                javan_panic("duplicate Map.of key");
-            }
-            void* first_key_root = first_key;
-            void* first_value_root = first_value;
-            void* second_key_root = second_key;
-            void* second_value_root = second_value;
-            void* third_key_root = third_key;
-            void* third_value_root = third_value;
-            void* fourth_key_root = fourth_key;
-            void* fourth_value_root = fourth_value;
-            void* fifth_key_root = fifth_key;
-            void* fifth_value_root = fifth_value;
-            void* sixth_key_root = sixth_key;
-            void* sixth_value_root = sixth_value;
-            void* seventh_key_root = seventh_key;
-            void* seventh_value_root = seventh_value;
-            void* eighth_key_root = eighth_key;
-            void* eighth_value_root = eighth_value;
-            void** javan_map_octuple_roots[] = {
-                (void**) &first_key_root,
-                (void**) &first_value_root,
-                (void**) &second_key_root,
-                (void**) &second_value_root,
-                (void**) &third_key_root,
-                (void**) &third_value_root,
-                (void**) &fourth_key_root,
-                (void**) &fourth_value_root,
-                (void**) &fifth_key_root,
-                (void**) &fifth_value_root,
-                (void**) &sixth_key_root,
-                (void**) &sixth_value_root,
-                (void**) &seventh_key_root,
-                (void**) &seventh_value_root,
-                (void**) &eighth_key_root,
-                (void**) &eighth_value_root
-            };
-            javan_root_frame_push(javan_map_octuple_roots, 16);
-            javan_object_map* map = javan_map_new_with_capacity(8, 1);
-            map->keys[0] = first_key_root;
-            map->values[0] = first_value_root;
-            map->keys[1] = second_key_root;
-            map->values[1] = second_value_root;
-            map->keys[2] = third_key_root;
-            map->values[2] = third_value_root;
-            map->keys[3] = fourth_key_root;
-            map->values[3] = fourth_value_root;
-            map->keys[4] = fifth_key_root;
-            map->values[4] = fifth_value_root;
-            map->keys[5] = sixth_key_root;
-            map->values[5] = sixth_value_root;
-            map->keys[6] = seventh_key_root;
-            map->values[6] = seventh_value_root;
-            map->keys[7] = eighth_key_root;
-            map->values[7] = eighth_value_root;
-            map->length = 8;
-            javan_root_frame_pop(javan_map_octuple_roots);
-            return map;
+            void* entries[] = { first_key, first_value, second_key, second_value, third_key, third_value, fourth_key, fourth_value, fifth_key, fifth_value, sixth_key, sixth_value, seventh_key, seventh_value, eighth_key, eighth_value };
+            return javan_map_fixed_factory(entries, 8);
         }
 
         void* javan_map_nonuple(void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value, void* fourth_key, void* fourth_value, void* fifth_key, void* fifth_value, void* sixth_key, void* sixth_value, void* seventh_key, void* seventh_value, void* eighth_key, void* eighth_value, void* ninth_key, void* ninth_value) {
-            if (first_key == NULL || first_value == NULL
-                || second_key == NULL || second_value == NULL
-                || third_key == NULL || third_value == NULL
-                || fourth_key == NULL || fourth_value == NULL
-                || fifth_key == NULL || fifth_value == NULL
-                || sixth_key == NULL || sixth_value == NULL
-                || seventh_key == NULL || seventh_value == NULL
-                || eighth_key == NULL || eighth_value == NULL
-                || ninth_key == NULL || ninth_value == NULL) {
-                javan_panic("null Map.of entry");
-            }
-            if (javan_object_equals(first_key, second_key) != 0
-                || javan_object_equals(first_key, third_key) != 0
-                || javan_object_equals(first_key, fourth_key) != 0
-                || javan_object_equals(first_key, fifth_key) != 0
-                || javan_object_equals(first_key, sixth_key) != 0
-                || javan_object_equals(first_key, seventh_key) != 0
-                || javan_object_equals(first_key, eighth_key) != 0
-                || javan_object_equals(first_key, ninth_key) != 0
-                || javan_object_equals(second_key, third_key) != 0
-                || javan_object_equals(second_key, fourth_key) != 0
-                || javan_object_equals(second_key, fifth_key) != 0
-                || javan_object_equals(second_key, sixth_key) != 0
-                || javan_object_equals(second_key, seventh_key) != 0
-                || javan_object_equals(second_key, eighth_key) != 0
-                || javan_object_equals(second_key, ninth_key) != 0
-                || javan_object_equals(third_key, fourth_key) != 0
-                || javan_object_equals(third_key, fifth_key) != 0
-                || javan_object_equals(third_key, sixth_key) != 0
-                || javan_object_equals(third_key, seventh_key) != 0
-                || javan_object_equals(third_key, eighth_key) != 0
-                || javan_object_equals(third_key, ninth_key) != 0
-                || javan_object_equals(fourth_key, fifth_key) != 0
-                || javan_object_equals(fourth_key, sixth_key) != 0
-                || javan_object_equals(fourth_key, seventh_key) != 0
-                || javan_object_equals(fourth_key, eighth_key) != 0
-                || javan_object_equals(fourth_key, ninth_key) != 0
-                || javan_object_equals(fifth_key, sixth_key) != 0
-                || javan_object_equals(fifth_key, seventh_key) != 0
-                || javan_object_equals(fifth_key, eighth_key) != 0
-                || javan_object_equals(fifth_key, ninth_key) != 0
-                || javan_object_equals(sixth_key, seventh_key) != 0
-                || javan_object_equals(sixth_key, eighth_key) != 0
-                || javan_object_equals(sixth_key, ninth_key) != 0
-                || javan_object_equals(seventh_key, eighth_key) != 0
-                || javan_object_equals(seventh_key, ninth_key) != 0
-                || javan_object_equals(eighth_key, ninth_key) != 0) {
-                javan_panic("duplicate Map.of key");
-            }
-            void* first_key_root = first_key;
-            void* first_value_root = first_value;
-            void* second_key_root = second_key;
-            void* second_value_root = second_value;
-            void* third_key_root = third_key;
-            void* third_value_root = third_value;
-            void* fourth_key_root = fourth_key;
-            void* fourth_value_root = fourth_value;
-            void* fifth_key_root = fifth_key;
-            void* fifth_value_root = fifth_value;
-            void* sixth_key_root = sixth_key;
-            void* sixth_value_root = sixth_value;
-            void* seventh_key_root = seventh_key;
-            void* seventh_value_root = seventh_value;
-            void* eighth_key_root = eighth_key;
-            void* eighth_value_root = eighth_value;
-            void* ninth_key_root = ninth_key;
-            void* ninth_value_root = ninth_value;
-            void** javan_map_nonuple_roots[] = {
-                (void**) &first_key_root,
-                (void**) &first_value_root,
-                (void**) &second_key_root,
-                (void**) &second_value_root,
-                (void**) &third_key_root,
-                (void**) &third_value_root,
-                (void**) &fourth_key_root,
-                (void**) &fourth_value_root,
-                (void**) &fifth_key_root,
-                (void**) &fifth_value_root,
-                (void**) &sixth_key_root,
-                (void**) &sixth_value_root,
-                (void**) &seventh_key_root,
-                (void**) &seventh_value_root,
-                (void**) &eighth_key_root,
-                (void**) &eighth_value_root,
-                (void**) &ninth_key_root,
-                (void**) &ninth_value_root
-            };
-            javan_root_frame_push(javan_map_nonuple_roots, 18);
-            javan_object_map* map = javan_map_new_with_capacity(9, 1);
-            map->keys[0] = first_key_root;
-            map->values[0] = first_value_root;
-            map->keys[1] = second_key_root;
-            map->values[1] = second_value_root;
-            map->keys[2] = third_key_root;
-            map->values[2] = third_value_root;
-            map->keys[3] = fourth_key_root;
-            map->values[3] = fourth_value_root;
-            map->keys[4] = fifth_key_root;
-            map->values[4] = fifth_value_root;
-            map->keys[5] = sixth_key_root;
-            map->values[5] = sixth_value_root;
-            map->keys[6] = seventh_key_root;
-            map->values[6] = seventh_value_root;
-            map->keys[7] = eighth_key_root;
-            map->values[7] = eighth_value_root;
-            map->keys[8] = ninth_key_root;
-            map->values[8] = ninth_value_root;
-            map->length = 9;
-            javan_root_frame_pop(javan_map_nonuple_roots);
-            return map;
+            void* entries[] = { first_key, first_value, second_key, second_value, third_key, third_value, fourth_key, fourth_value, fifth_key, fifth_value, sixth_key, sixth_value, seventh_key, seventh_value, eighth_key, eighth_value, ninth_key, ninth_value };
+            return javan_map_fixed_factory(entries, 9);
         }
 
         void* javan_map_decuple(void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value, void* fourth_key, void* fourth_value, void* fifth_key, void* fifth_value, void* sixth_key, void* sixth_value, void* seventh_key, void* seventh_value, void* eighth_key, void* eighth_value, void* ninth_key, void* ninth_value, void* tenth_key, void* tenth_value) {
-            if (first_key == NULL || first_value == NULL
-                || second_key == NULL || second_value == NULL
-                || third_key == NULL || third_value == NULL
-                || fourth_key == NULL || fourth_value == NULL
-                || fifth_key == NULL || fifth_value == NULL
-                || sixth_key == NULL || sixth_value == NULL
-                || seventh_key == NULL || seventh_value == NULL
-                || eighth_key == NULL || eighth_value == NULL
-                || ninth_key == NULL || ninth_value == NULL
-                || tenth_key == NULL || tenth_value == NULL) {
-                javan_panic("null Map.of entry");
-            }
-            if (javan_object_equals(first_key, second_key) != 0
-                || javan_object_equals(first_key, third_key) != 0
-                || javan_object_equals(first_key, fourth_key) != 0
-                || javan_object_equals(first_key, fifth_key) != 0
-                || javan_object_equals(first_key, sixth_key) != 0
-                || javan_object_equals(first_key, seventh_key) != 0
-                || javan_object_equals(first_key, eighth_key) != 0
-                || javan_object_equals(first_key, ninth_key) != 0
-                || javan_object_equals(first_key, tenth_key) != 0
-                || javan_object_equals(second_key, third_key) != 0
-                || javan_object_equals(second_key, fourth_key) != 0
-                || javan_object_equals(second_key, fifth_key) != 0
-                || javan_object_equals(second_key, sixth_key) != 0
-                || javan_object_equals(second_key, seventh_key) != 0
-                || javan_object_equals(second_key, eighth_key) != 0
-                || javan_object_equals(second_key, ninth_key) != 0
-                || javan_object_equals(second_key, tenth_key) != 0
-                || javan_object_equals(third_key, fourth_key) != 0
-                || javan_object_equals(third_key, fifth_key) != 0
-                || javan_object_equals(third_key, sixth_key) != 0
-                || javan_object_equals(third_key, seventh_key) != 0
-                || javan_object_equals(third_key, eighth_key) != 0
-                || javan_object_equals(third_key, ninth_key) != 0
-                || javan_object_equals(third_key, tenth_key) != 0
-                || javan_object_equals(fourth_key, fifth_key) != 0
-                || javan_object_equals(fourth_key, sixth_key) != 0
-                || javan_object_equals(fourth_key, seventh_key) != 0
-                || javan_object_equals(fourth_key, eighth_key) != 0
-                || javan_object_equals(fourth_key, ninth_key) != 0
-                || javan_object_equals(fourth_key, tenth_key) != 0
-                || javan_object_equals(fifth_key, sixth_key) != 0
-                || javan_object_equals(fifth_key, seventh_key) != 0
-                || javan_object_equals(fifth_key, eighth_key) != 0
-                || javan_object_equals(fifth_key, ninth_key) != 0
-                || javan_object_equals(fifth_key, tenth_key) != 0
-                || javan_object_equals(sixth_key, seventh_key) != 0
-                || javan_object_equals(sixth_key, eighth_key) != 0
-                || javan_object_equals(sixth_key, ninth_key) != 0
-                || javan_object_equals(sixth_key, tenth_key) != 0
-                || javan_object_equals(seventh_key, eighth_key) != 0
-                || javan_object_equals(seventh_key, ninth_key) != 0
-                || javan_object_equals(seventh_key, tenth_key) != 0
-                || javan_object_equals(eighth_key, ninth_key) != 0
-                || javan_object_equals(eighth_key, tenth_key) != 0
-                || javan_object_equals(ninth_key, tenth_key) != 0) {
-                javan_panic("duplicate Map.of key");
-            }
-            void* first_key_root = first_key;
-            void* first_value_root = first_value;
-            void* second_key_root = second_key;
-            void* second_value_root = second_value;
-            void* third_key_root = third_key;
-            void* third_value_root = third_value;
-            void* fourth_key_root = fourth_key;
-            void* fourth_value_root = fourth_value;
-            void* fifth_key_root = fifth_key;
-            void* fifth_value_root = fifth_value;
-            void* sixth_key_root = sixth_key;
-            void* sixth_value_root = sixth_value;
-            void* seventh_key_root = seventh_key;
-            void* seventh_value_root = seventh_value;
-            void* eighth_key_root = eighth_key;
-            void* eighth_value_root = eighth_value;
-            void* ninth_key_root = ninth_key;
-            void* ninth_value_root = ninth_value;
-            void* tenth_key_root = tenth_key;
-            void* tenth_value_root = tenth_value;
-            void** javan_map_decuple_roots[] = {
-                (void**) &first_key_root,
-                (void**) &first_value_root,
-                (void**) &second_key_root,
-                (void**) &second_value_root,
-                (void**) &third_key_root,
-                (void**) &third_value_root,
-                (void**) &fourth_key_root,
-                (void**) &fourth_value_root,
-                (void**) &fifth_key_root,
-                (void**) &fifth_value_root,
-                (void**) &sixth_key_root,
-                (void**) &sixth_value_root,
-                (void**) &seventh_key_root,
-                (void**) &seventh_value_root,
-                (void**) &eighth_key_root,
-                (void**) &eighth_value_root,
-                (void**) &ninth_key_root,
-                (void**) &ninth_value_root,
-                (void**) &tenth_key_root,
-                (void**) &tenth_value_root
-            };
-            javan_root_frame_push(javan_map_decuple_roots, 20);
-            javan_object_map* map = javan_map_new_with_capacity(10, 1);
-            map->keys[0] = first_key_root;
-            map->values[0] = first_value_root;
-            map->keys[1] = second_key_root;
-            map->values[1] = second_value_root;
-            map->keys[2] = third_key_root;
-            map->values[2] = third_value_root;
-            map->keys[3] = fourth_key_root;
-            map->values[3] = fourth_value_root;
-            map->keys[4] = fifth_key_root;
-            map->values[4] = fifth_value_root;
-            map->keys[5] = sixth_key_root;
-            map->values[5] = sixth_value_root;
-            map->keys[6] = seventh_key_root;
-            map->values[6] = seventh_value_root;
-            map->keys[7] = eighth_key_root;
-            map->values[7] = eighth_value_root;
-            map->keys[8] = ninth_key_root;
-            map->values[8] = ninth_value_root;
-            map->keys[9] = tenth_key_root;
-            map->values[9] = tenth_value_root;
-            map->length = 10;
-            javan_root_frame_pop(javan_map_decuple_roots);
-            return map;
+            void* entries[] = { first_key, first_value, second_key, second_value, third_key, third_value, fourth_key, fourth_value, fifth_key, fifth_value, sixth_key, sixth_value, seventh_key, seventh_value, eighth_key, eighth_value, ninth_key, ninth_value, tenth_key, tenth_value };
+            return javan_map_fixed_factory(entries, 10);
         }
 
         void* javan_map_of_entries(void* value) {

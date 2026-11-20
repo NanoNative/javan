@@ -2262,6 +2262,62 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void multiEntryMapFactoriesRejectNullsAndDuplicateKeys() throws Exception {
+        final Path project = project("map-multi-errors");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Map;
+            public final class Main {
+              static String argument(String label, String value) { System.out.println(label); return value; }
+              public static void main(String[] args) {
+                System.out.println(Map.of("k0", "v0", "k1", "v1", "k2", "v2").size());
+                try { Map.<String,String>of("k0", "v0", "k1", "v1", "k2", null); } catch (NullPointerException expected) { System.out.println("null-3"); }
+                try { Map.of("k0", "v0", "k1", "v1", "k0", "v2"); } catch (IllegalArgumentException expected) { System.out.println("duplicate-3"); }
+                System.out.println(Map.of("k0", "v0", "k1", "v1", "k2", "v2", "k3", "v3").size());
+                try { Map.<String,String>of("k0", "v0", "k1", "v1", "k2", "v2", "k3", null); } catch (NullPointerException expected) { System.out.println("null-4"); }
+                try { Map.of("k0", "v0", "k1", "v1", "k2", "v2", "k0", "v3"); } catch (IllegalArgumentException expected) { System.out.println("duplicate-4"); }
+                System.out.println(Map.of("k0", "v0", "k1", "v1", "k2", "v2", "k3", "v3", "k4", "v4").size());
+                try { Map.<String,String>of("k0", "v0", "k1", "v1", "k2", "v2", "k3", "v3", "k4", null); } catch (NullPointerException expected) { System.out.println("null-5"); }
+                try { Map.of("k0", "v0", "k1", "v1", "k2", "v2", "k3", "v3", "k0", "v4"); } catch (IllegalArgumentException expected) { System.out.println("duplicate-5"); }
+                System.out.println(Map.of("k0", "v0", "k1", "v1", "k2", "v2", "k3", "v3", "k4", "v4", "k5", "v5").size());
+                try { Map.<String,String>of("k0", "v0", "k1", "v1", "k2", "v2", "k3", "v3", "k4", "v4", "k5", null); } catch (NullPointerException expected) { System.out.println("null-6"); }
+                try { Map.of("k0", "v0", "k1", "v1", "k2", "v2", "k3", "v3", "k4", "v4", "k0", "v5"); } catch (IllegalArgumentException expected) { System.out.println("duplicate-6"); }
+                System.out.println(Map.of("k0", "v0", "k1", "v1", "k2", "v2", "k3", "v3", "k4", "v4", "k5", "v5", "k6", "v6").size());
+                try { Map.<String,String>of("k0", "v0", "k1", "v1", "k2", "v2", "k3", "v3", "k4", "v4", "k5", "v5", "k6", null); } catch (NullPointerException expected) { System.out.println("null-7"); }
+                try { Map.of("k0", "v0", "k1", "v1", "k2", "v2", "k3", "v3", "k4", "v4", "k5", "v5", "k0", "v6"); } catch (IllegalArgumentException expected) { System.out.println("duplicate-7"); }
+                System.out.println(Map.of("k0", "v0", "k1", "v1", "k2", "v2", "k3", "v3", "k4", "v4", "k5", "v5", "k6", "v6", "k7", "v7").size());
+                try { Map.<String,String>of("k0", "v0", "k1", "v1", "k2", "v2", "k3", "v3", "k4", "v4", "k5", "v5", "k6", "v6", "k7", null); } catch (NullPointerException expected) { System.out.println("null-8"); }
+                try { Map.of("k0", "v0", "k1", "v1", "k2", "v2", "k3", "v3", "k4", "v4", "k5", "v5", "k6", "v6", "k0", "v7"); } catch (IllegalArgumentException expected) { System.out.println("duplicate-8"); }
+                System.out.println(Map.of("k0", "v0", "k1", "v1", "k2", "v2", "k3", "v3", "k4", "v4", "k5", "v5", "k6", "v6", "k7", "v7", "k8", "v8").size());
+                try { Map.<String,String>of("k0", "v0", "k1", "v1", "k2", "v2", "k3", "v3", "k4", "v4", "k5", "v5", "k6", "v6", "k7", "v7", "k8", null); } catch (NullPointerException expected) { System.out.println("null-9"); }
+                try { Map.of("k0", "v0", "k1", "v1", "k2", "v2", "k3", "v3", "k4", "v4", "k5", "v5", "k6", "v6", "k7", "v7", "k0", "v8"); } catch (IllegalArgumentException expected) { System.out.println("duplicate-9"); }
+                System.out.println(Map.of("k0", "v0", "k1", "v1", "k2", "v2", "k3", "v3", "k4", "v4", "k5", "v5", "k6", "v6", "k7", "v7", "k8", "v8", "k9", "v9").size());
+                try { Map.<String,String>of("k0", "v0", "k1", "v1", "k2", "v2", "k3", "v3", "k4", "v4", "k5", "v5", "k6", "v6", "k7", "v7", "k8", "v8", "k9", null); } catch (NullPointerException expected) { System.out.println("null-10"); }
+                try { Map.of("k0", "v0", "k1", "v1", "k2", "v2", "k3", "v3", "k4", "v4", "k5", "v5", "k6", "v6", "k7", "v7", "k8", "v8", "k0", "v9"); } catch (IllegalArgumentException expected) { System.out.println("duplicate-10"); }
+                try { Map.<String,String>of("a", "1", "a", "2", "c", null); } catch (IllegalArgumentException expected) { System.out.println("duplicate before null"); }
+                try { Map.<String,String>of("a", "1", "a", null, "c", "3"); } catch (NullPointerException expected) { System.out.println("null before duplicate"); }
+                try { Map.of(argument("one", null), argument("two", "v"), argument("three", "b"), argument("four", "v"), argument("five", "c"), argument("six", "v")); }
+                catch (NullPointerException expected) { System.out.println("ordered null"); }
+                try { Map.of(Integer.toString(42), "x", "b", "y", Integer.toString(42), "z"); }
+                catch (IllegalArgumentException expected) { System.out.println("dynamic duplicate"); }
+                Map<String, String> retained = Map.of("a", Integer.toString(40), "b", Integer.toString(41), "c", Integer.toString(42), "d", Integer.toString(43), "e", Integer.toString(44), "f", Integer.toString(45), "g", Integer.toString(46), "h", Integer.toString(47), "i", Integer.toString(48), "j", Integer.toString(49));
+                for (int i = 0; i < 100; i++) Integer.toString(i);
+                System.out.println(retained.get("a")); System.out.println(retained.get("j"));
+                System.out.println(Map.of(System.out, "out", System.err, "err", "", "empty").get(System.err));
+              }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/map-multi-errors").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void twoEntryMapFactoryRejectsNullAndDuplicateKeys() throws Exception {
         final Path project = project("map-pair-errors");
         writeJava(project, "com.acme.Main", """

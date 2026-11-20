@@ -12205,8 +12205,8 @@ final class BytecodeToIRTest {
             plain(7, 176, "areturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(
+        assertThat(function.instructions()).containsSubsequence(
+            IrInstruction.assignObject("object0",
                 IrExpression.objectCall(
                     "javan_map_triple",
                     List.of(
@@ -12218,7 +12218,8 @@ final class BytecodeToIRTest {
                         IrExpression.objectLocal("arg5")
                     )
                 )
-            )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 
@@ -12242,8 +12243,8 @@ final class BytecodeToIRTest {
             plain(9, 176, "areturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(
+        assertThat(function.instructions()).containsSubsequence(
+            IrInstruction.assignObject("object0",
                 IrExpression.objectCall(
                     "javan_map_quadruple",
                     List.of(
@@ -12257,7 +12258,8 @@ final class BytecodeToIRTest {
                         IrExpression.objectLocal("arg7")
                     )
                 )
-            )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 
@@ -12283,8 +12285,8 @@ final class BytecodeToIRTest {
             plain(11, 176, "areturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(
+        assertThat(function.instructions()).containsSubsequence(
+            IrInstruction.assignObject("object0",
                 IrExpression.objectCall(
                     "javan_map_quintuple",
                     List.of(
@@ -12300,7 +12302,8 @@ final class BytecodeToIRTest {
                         IrExpression.objectLocal("arg9")
                     )
                 )
-            )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 
@@ -12328,8 +12331,8 @@ final class BytecodeToIRTest {
             plain(13, 176, "areturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(
+        assertThat(function.instructions()).containsSubsequence(
+            IrInstruction.assignObject("object0",
                 IrExpression.objectCall(
                     "javan_map_sextuple",
                     List.of(
@@ -12347,7 +12350,8 @@ final class BytecodeToIRTest {
                         IrExpression.objectLocal("arg11")
                     )
                 )
-            )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 
@@ -12377,8 +12381,8 @@ final class BytecodeToIRTest {
             plain(15, 176, "areturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(
+        assertThat(function.instructions()).containsSubsequence(
+            IrInstruction.assignObject("object0",
                 IrExpression.objectCall(
                     "javan_map_septuple",
                     List.of(
@@ -12398,7 +12402,8 @@ final class BytecodeToIRTest {
                         IrExpression.objectLocal("arg13")
                     )
                 )
-            )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 
@@ -12430,8 +12435,8 @@ final class BytecodeToIRTest {
             plain(17, 176, "areturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(
+        assertThat(function.instructions()).containsSubsequence(
+            IrInstruction.assignObject("object0",
                 IrExpression.objectCall(
                     "javan_map_octuple",
                     List.of(
@@ -12453,7 +12458,8 @@ final class BytecodeToIRTest {
                         IrExpression.objectLocal("arg15")
                     )
                 )
-            )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 
@@ -12487,8 +12493,8 @@ final class BytecodeToIRTest {
             plain(19, 176, "areturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(
+        assertThat(function.instructions()).containsSubsequence(
+            IrInstruction.assignObject("object0",
                 IrExpression.objectCall(
                     "javan_map_nonuple",
                     List.of(
@@ -12512,7 +12518,8 @@ final class BytecodeToIRTest {
                         IrExpression.objectLocal("arg17")
                     )
                 )
-            )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 
@@ -12548,8 +12555,8 @@ final class BytecodeToIRTest {
             plain(21, 176, "areturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(
+        assertThat(function.instructions()).containsSubsequence(
+            IrInstruction.assignObject("object0",
                 IrExpression.objectCall(
                     "javan_map_decuple",
                     List.of(
@@ -12575,7 +12582,8 @@ final class BytecodeToIRTest {
                         IrExpression.objectLocal("arg19")
                     )
                 )
-            )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 

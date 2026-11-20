@@ -4563,6 +4563,10 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static int singletonAllowsNull() { return java.util.Collections.singletonMap(null, null).containsKey(null) ? 1 : 0; }
                 public static int nullMapPair() { Map.of(1, 1, 2, null); return 0; }
                 public static int duplicateMapPair() { Map.of(1, 1, 1, 2); return 0; }
+                public static int nullMapTriple() { Map.of(1, 1, 2, 2, 3, null); return 0; }
+                public static int duplicateMapTriple() { Map.of(1, 1, 2, 2, 1, 3); return 0; }
+                public static int nullMapDecuple() { Map.of(1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, null); return 0; }
+                public static int duplicateMapDecuple() { Map.of(1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 1, 10); return 0; }
                 public static int replacesNull() {
                     Map<Integer, Integer> map = new java.util.HashMap<>();
                     map.put(1, null); map.putIfAbsent(1, 7); return map.get(1);
@@ -4588,7 +4592,9 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "--export", "com.acme.Api.nullCopyOfValue():int", "--export", "com.acme.Api.nullCopyOfSource():int",
             "--export", "com.acme.Api.nullMapOfKey():int", "--export", "com.acme.Api.nullMapEntryValue():int",
             "--export", "com.acme.Api.singletonAllowsNull():int", "--export", "com.acme.Api.nullMapPair():int",
-            "--export", "com.acme.Api.duplicateMapPair():int");
+            "--export", "com.acme.Api.duplicateMapPair():int", "--export", "com.acme.Api.nullMapTriple():int",
+            "--export", "com.acme.Api.duplicateMapTriple():int", "--export", "com.acme.Api.nullMapDecuple():int",
+            "--export", "com.acme.Api.duplicateMapDecuple():int");
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final Path caller = writeC(project, "call_map.c", """
             #include <string.h>
@@ -4703,6 +4709,18 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     javan_result_free(&failure);
                     failure = javan_try_com_acme_Api_duplicateMapPair_void(&value);
                     if (failure.ok || failure.message == 0 || strstr(failure.message, "IllegalArgumentException") == 0) return 37;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_nullMapTriple_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 38;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_duplicateMapTriple_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "IllegalArgumentException") == 0) return 39;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_nullMapDecuple_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 40;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_duplicateMapDecuple_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "IllegalArgumentException") == 0) return 41;
                     javan_result_free(&failure);
                     JavanResult result = javan_try_com_acme_Api_size_void(&value);
                     if (!result.ok || value != 400) return 1;

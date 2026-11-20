@@ -453,6 +453,16 @@ final class EntryAnchoredTypedHandlerAdmissionTest {
     }
 
     @Test
+    void rejectsInvalidTypedHandlerForMultiEntryMapFactory() {
+        final List<Instruction> instructions = replace(canonicalInstructions(), 3, invoke(3, 184, "invokestatic",
+            new MethodRef("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;")));
+
+        assertThat(verify(instructions, List.of(HANDLER), 2, 2))
+            .extracting(Diagnostic::code)
+            .contains("JAVAN014");
+    }
+
+    @Test
     void rejectsDeclaredMaxStackBelowObservedWidth() {
         assertThat(verify(canonicalInstructions(), List.of(HANDLER), 1, 2))
             .extracting(Diagnostic::code)

@@ -2094,14 +2094,14 @@ public final class JdkCallSupport {
     }
 
     /**
-     * Identifies the two-entry map factory.
+     * Identifies supported fixed-arity map factories with at least two entries.
      *
      * @param methodRef referenced JDK method
-     * @return whether the method creates a two-entry map
+     * @return whether the method creates a multi-entry map
      */
-    public static boolean isMapPairFactory(final MethodRef methodRef) {
+    public static boolean isMapMultiEntryFactory(final MethodRef methodRef) {
         return "java/util/Map".equals(methodRef.owner()) && "of".equals(methodRef.name())
-            && "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;".equals(methodRef.descriptor())
+            && methodRef.descriptor().startsWith("(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;")
             && isSupported(methodRef);
     }
 
@@ -2216,7 +2216,7 @@ public final class JdkCallSupport {
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
-        if (isMapPairFactory(methodRef)) {
+        if (isMapMultiEntryFactory(methodRef)) {
             return List.of("java/lang/NullPointerException", "java/lang/IllegalArgumentException");
         }
         if (isMapCopyConstructor(methodRef) || isMapCopyOf(methodRef) || isMapSingleEntryFactory(methodRef)) {

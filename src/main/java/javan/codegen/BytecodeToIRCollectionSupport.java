@@ -75,7 +75,7 @@ final class BytecodeToIRCollectionSupport {
             return true;
         }
         if ("java/util/Map".equals(owner)) {
-            if (JdkCallSupport.isMapSingleEntryFactory(methodRef) || JdkCallSupport.isMapPairFactory(methodRef)) {
+            if (JdkCallSupport.isMapSingleEntryFactory(methodRef) || JdkCallSupport.isMapMultiEntryFactory(methodRef)) {
                 final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
                 final List<IrExpression> materialized = new ArrayList<>();
                 for (final IrExpression argument : arguments) {
@@ -90,52 +90,24 @@ final class BytecodeToIRCollectionSupport {
                     }
                 }
                 final String helper = "entry".equals(name) ? "javan_map_entry_new"
-                    : JdkCallSupport.isMapPairFactory(methodRef) ? "javan_map_pair" : "javan_map_singleton_java";
+                    : switch (materialized.size() / 2) {
+                        case 1 -> "javan_map_singleton_java";
+                        case 2 -> "javan_map_pair";
+                        case 3 -> "javan_map_triple";
+                        case 4 -> "javan_map_quadruple";
+                        case 5 -> "javan_map_quintuple";
+                        case 6 -> "javan_map_sextuple";
+                        case 7 -> "javan_map_septuple";
+                        case 8 -> "javan_map_octuple";
+                        case 9 -> "javan_map_nonuple";
+                        case 10 -> "javan_map_decuple";
+                        default -> throw unsupported(classFile, method, firstInstruction(method));
+                    };
                 pushObjectCall(instructions, stack, localDeclarations, helper, materialized);
                 return true;
             }
             if ("of".equals(name) && "()Ljava/util/Map;".equals(descriptor)) {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_empty", List.of())));
-                return true;
-            }
-            if ("of".equals(name) && "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;".equals(descriptor)) {
-                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_triple", arguments)));
-                return true;
-            }
-            if ("of".equals(name) && "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;".equals(descriptor)) {
-                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_quadruple", arguments)));
-                return true;
-            }
-            if ("of".equals(name) && "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;".equals(descriptor)) {
-                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_quintuple", arguments)));
-                return true;
-            }
-            if ("of".equals(name) && "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;".equals(descriptor)) {
-                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_sextuple", arguments)));
-                return true;
-            }
-            if ("of".equals(name) && "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;".equals(descriptor)) {
-                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_septuple", arguments)));
-                return true;
-            }
-            if ("of".equals(name) && "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;".equals(descriptor)) {
-                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_octuple", arguments)));
-                return true;
-            }
-            if ("of".equals(name) && "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;".equals(descriptor)) {
-                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_nonuple", arguments)));
-                return true;
-            }
-            if ("of".equals(name) && "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;".equals(descriptor)) {
-                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_decuple", arguments)));
                 return true;
             }
             if ("ofEntries".equals(name) && "([Ljava/util/Map$Entry;)Ljava/util/Map;".equals(descriptor)) {
