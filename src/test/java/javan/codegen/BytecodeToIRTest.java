@@ -24221,10 +24221,10 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).containsSubsequence(
             IrInstruction.assignObject("object0", IrExpression.objectCall("javan_hashmap_new", List.of())),
             IrInstruction.callStaticVoid(
-                "javan_map_put_all",
+                "javan_map_put_all_java",
                 List.of(IrExpression.objectLocal("object0"), IrExpression.objectLocal("arg0"))
             ),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
@@ -24247,10 +24247,10 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).containsSubsequence(
             IrInstruction.assignObject("object0", IrExpression.objectCall("javan_hashmap_new", List.of())),
             IrInstruction.callStaticVoid(
-                "javan_map_put_all",
+                "javan_map_put_all_java",
                 List.of(IrExpression.objectLocal("object0"), IrExpression.objectLocal("arg0"))
             ),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))

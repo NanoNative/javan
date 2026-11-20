@@ -464,8 +464,8 @@ final class BytecodeToIRCollectionSupport {
                 ));
                 return true;
             }
-            if ("(Ljava/util/Map;)V".equals(methodRef.descriptor())) {
-                instructions.add(IrInstruction.callStaticVoid("javan_map_put_all", List.of(receiver, arguments.getFirst())));
+            if (JdkCallSupport.isMapCopyConstructor(methodRef)) {
+                instructions.add(IrInstruction.callStaticVoid("javan_map_put_all_java", List.of(receiver, arguments.getFirst())));
                 return true;
             }
         }
@@ -484,7 +484,7 @@ final class BytecodeToIRCollectionSupport {
             instructions.add(IrInstruction.callStaticVoid("javan_map_initialize_capacity", List.of(receiver, arguments.getFirst())));
             return true;
         }
-        if (JdkCallSupport.isConcurrentMapCopyConstructor(methodRef)) {
+        if (JdkCallSupport.isMapCopyConstructor(methodRef)) {
             instructions.add(IrInstruction.callStaticVoid("javan_map_put_all_java", List.of(receiver, arguments.getFirst())));
             return true;
         }

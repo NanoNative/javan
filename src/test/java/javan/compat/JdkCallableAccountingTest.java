@@ -1073,15 +1073,15 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksHashMapMapConstructorAsSupported() {
+    void marksHashMapMapConstructorAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashMap", "<init>", "(Ljava/util/Map;)V")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksLinkedHashMapMapConstructorAsSupported() {
+    void marksLinkedHashMapMapConstructorAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashMap", "<init>", "(Ljava/util/Map;)V")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test

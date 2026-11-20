@@ -88,7 +88,8 @@ its caller. Some direct handlers around construction are not yet supported. A nu
 allowed, and two-argument `remove` with a non-null key and null expected value returns false. Other
 null-sensitive methods and constructors, application-defined key equality, compound callback
 operations and concurrent views still need their complete API semantics, so `ConcurrentHashMap` is
-not yet accounted as fully supported.
+not yet accounted as fully supported. Copy constructors of `HashMap` and `LinkedHashMap` likewise
+reject null sources, while accepting null keys and values in the source.
 
 The default `SecureRandom` constructor supports calls resolved as `SecureRandom.nextBytes` and
 `generateSeed`. The static `getSeed` entry is also supported. The supported random value methods

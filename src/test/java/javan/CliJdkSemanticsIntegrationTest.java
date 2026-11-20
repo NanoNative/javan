@@ -2226,6 +2226,37 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mapCopyConstructorsHandleNullEntriesAndNullSource() throws Exception {
+        final Path project = project("plain-map-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.HashMap;
+            import java.util.LinkedHashMap;
+            import java.util.Map;
+            public final class Main {
+                static HashMap<String, String> hash(Map<String, String> source) { return new HashMap<>(source); }
+                static LinkedHashMap<String, String> linked(Map<String, String> source) { return new LinkedHashMap<>(source); }
+                public static void main(String[] args) {
+                    Map<String, String> source = new HashMap<>(); source.put(null, null); source.put("key", "value");
+                    System.out.println(hash(source).containsKey(null)); System.out.println(hash(source).get("key"));
+                    System.out.println(linked(source).containsKey(null)); System.out.println(linked(source).get("key"));
+                    try { hash(null); } catch (NullPointerException expected) { System.out.println("hash null source"); }
+                    try { linked(null); } catch (NullPointerException expected) { System.out.println("linked null source"); }
+                    System.out.println(hash(Map.of("after", "yes")).get("after"));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/plain-map-constructor").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void concurrentMapConstructorDirectHandlerCatchesNullSource() throws Exception {
         final Path project = project("map-constructor-direct-handler");
         writeJava(project, "com.acme.Main", """
