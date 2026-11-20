@@ -2226,6 +2226,189 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void concurrentHashMapPreservesParallelWrites() throws Exception {
+        final Path project = project("concurrent-map-writes");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Map;
+            import java.util.concurrent.ConcurrentHashMap;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final Map<Integer, Integer> values = new ConcurrentHashMap<>();
+                static final AtomicInteger ready = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    final int start;
+                    Worker(int start) { this.start = start; }
+                    public void run() {
+                        ready.incrementAndGet();
+                        while (ready.get() < 2) Thread.yield();
+                        for (int i = 0; i < 500; i++) values.put(start + i, i);
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker(0)); Thread second = new Thread(new Worker(500));
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(values.size());
+                    System.out.println(values.get(0)); System.out.println(values.get(999));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        for (int attempt = 0; attempt < 3; attempt++) {
+            final ProcessResult result = process(project,
+                List.of(project.resolve(".javan/bin/concurrent-map-writes").toString()), Duration.ofSeconds(60),
+                Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+            assertThat(result.exitCode()).as(result.stderr()).isZero();
+            assertThat(result.stdout()).isEqualTo(expected);
+        }
+    }
+
+    @Test
+    void concurrentHashMapClearAndWritesLeaveUsableMap() throws Exception {
+        final Path project = project("concurrent-map-clear");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.ConcurrentHashMap;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final ConcurrentHashMap<Integer, Integer> values = new ConcurrentHashMap<>();
+                static final AtomicInteger ready = new AtomicInteger();
+                static final AtomicInteger badValues = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    final boolean clear;
+                    Worker(boolean clear) { this.clear = clear; }
+                    public void run() {
+                        ready.incrementAndGet();
+                        while (ready.get() < 2) Thread.yield();
+                        for (int i = 0; i < 500; i++) {
+                            if (clear) {
+                                values.clear();
+                                Integer observed = values.get(i);
+                                if (observed != null && observed.intValue() != i) badValues.incrementAndGet();
+                            }
+                            else values.put(i, i);
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker(false)); Thread second = new Thread(new Worker(true));
+                    first.start(); second.start(); first.join(); second.join();
+                    values.clear(); values.put(9, 17);
+                    System.out.println(values.size()); System.out.println(values.get(9));
+                    System.out.println(badValues.get());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        for (int attempt = 0; attempt < 3; attempt++) {
+            final ProcessResult result = process(project,
+                List.of(project.resolve(".javan/bin/concurrent-map-clear").toString()), Duration.ofSeconds(60),
+                Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+            assertThat(result.exitCode()).as(result.stderr()).isZero();
+            assertThat(result.stdout()).isEqualTo(expected);
+        }
+    }
+
+    @Test
+    void concurrentHashMapPutIfAbsentAndRemoveAreAtomic() throws Exception {
+        final Path project = project("concurrent-map-atomic");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.ConcurrentHashMap;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final ConcurrentHashMap<Integer, Integer> values = new ConcurrentHashMap<>();
+                static final AtomicInteger ready = new AtomicInteger();
+                static final AtomicInteger successes = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    final boolean remove;
+                    final int value;
+                    Worker(boolean remove, int value) { this.remove = remove; this.value = value; }
+                    public void run() {
+                        ready.incrementAndGet();
+                        while (ready.get() < 2) Thread.yield();
+                        if (remove) {
+                            if (values.remove(7, 5)) successes.incrementAndGet();
+                        } else if (values.putIfAbsent(1, value) == null) {
+                            successes.incrementAndGet();
+                        }
+                    }
+                }
+                static void pair(boolean remove) throws InterruptedException {
+                    ready.set(0); successes.set(0);
+                    Thread first = new Thread(new Worker(remove, 11)); Thread second = new Thread(new Worker(remove, 12));
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(successes.get()); System.out.println(values.size());
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    pair(false); values.clear(); values.put(7, 5); pair(true);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        for (int attempt = 0; attempt < 3; attempt++) {
+            final ProcessResult result = process(project,
+                List.of(project.resolve(".javan/bin/concurrent-map-atomic").toString()), Duration.ofSeconds(60),
+                Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+            assertThat(result.exitCode()).as(result.stderr()).isZero();
+            assertThat(result.stdout()).isEqualTo(expected);
+        }
+    }
+
+    @Test
+    void recordMapOperationsSurviveConcurrentMapMutation() throws Exception {
+        final Path project = project("concurrent-record-map");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Map;
+            import java.util.concurrent.ConcurrentHashMap;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                record Value(Map<String, String> entries) { }
+                static final Map<String, String> values = new ConcurrentHashMap<>();
+                static final AtomicInteger ready = new AtomicInteger();
+                static final class Writer implements Runnable {
+                    public void run() {
+                        ready.incrementAndGet();
+                        while (ready.get() < 2) Thread.yield();
+                        for (int i = 0; i < 500; i++) { values.put("key", "value"); values.clear(); }
+                    }
+                }
+                static final class Reader implements Runnable {
+                    public void run() {
+                        Value a = new Value(values); Value b = new Value(Map.of("key", "value"));
+                        ready.incrementAndGet();
+                        while (ready.get() < 2) Thread.yield();
+                        for (int i = 0; i < 500; i++) { a.hashCode(); a.equals(b); }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread writer = new Thread(new Writer()); Thread reader = new Thread(new Reader());
+                    writer.start(); reader.start(); writer.join(); reader.join();
+                    values.clear(); values.put("key", "value");
+                    System.out.println(new Value(values).equals(new Value(Map.of("key", "value"))));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        for (int attempt = 0; attempt < 3; attempt++) {
+            final ProcessResult result = process(project,
+                List.of(project.resolve(".javan/bin/concurrent-record-map").toString()), Duration.ofSeconds(60),
+                Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+            assertThat(result.exitCode()).as(result.stderr()).isZero();
+            assertThat(result.stdout()).isEqualTo(expected);
+        }
+    }
+
+    @Test
     void builtinEnumConstantsKeepIdentityAndClassDistinctFromStrings() throws Exception {
         final Path project = project("builtin-enum-identity");
         writeJava(project, "com.acme.Main", """

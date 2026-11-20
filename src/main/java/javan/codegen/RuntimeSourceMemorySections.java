@@ -12769,6 +12769,7 @@ final class RuntimeSourceMemorySections {
                 if (value == NULL) {
                     return;
                 }
+                javan_runtime_lock_enter();
                 javan_allocation_metadata snapshot;
                 if (javan_find_allocation(value, &snapshot) == 0
                     || snapshot.runtime_kind != JAVAN_RUNTIME_KIND_OBJECT_MAP) {
@@ -12783,6 +12784,7 @@ final class RuntimeSourceMemorySections {
                     javan_record_shape_validate(javan_map_key_unchecked(map, index), "s");
                     javan_record_shape_validate(javan_map_value_unchecked(map, index), "s");
                 }
+                javan_runtime_lock_leave();
                 return;
             }
             if (shape[0] == 'l') {
@@ -12835,10 +12837,12 @@ final class RuntimeSourceMemorySections {
                     : javan_record_object_equals_resolver_value(left, right);
             }
             if (shape[0] == 'm') {
+                javan_runtime_lock_enter();
                 javan_object_map* left_map = (javan_object_map*) left;
                 javan_object_map* right_map = (javan_object_map*) right;
                 int length = javan_map_logical_length(left_map);
                 if (length != javan_map_logical_length(right_map)) {
+                    javan_runtime_lock_leave();
                     return 0;
                 }
                 for (int index = 0; index < length; index++) {
@@ -12855,6 +12859,7 @@ final class RuntimeSourceMemorySections {
                                 javan_map_value_unchecked(right_map, candidate),
                                 "s"
                             ) == 0) {
+                                javan_runtime_lock_leave();
                                 return 0;
                             }
                             matched = 1;
@@ -12862,9 +12867,11 @@ final class RuntimeSourceMemorySections {
                         }
                     }
                     if (matched == 0) {
+                        javan_runtime_lock_leave();
                         return 0;
                     }
                 }
+                javan_runtime_lock_leave();
                 return 1;
             }
             if (shape[0] != 'l') {
@@ -12917,6 +12924,7 @@ final class RuntimeSourceMemorySections {
                     : javan_record_object_hash_code_resolver_value(value);
             }
             if (shape[0] == 'm') {
+                javan_runtime_lock_enter();
                 javan_object_map* map = (javan_object_map*) value;
                 uint32_t hash = 0U;
                 int length = javan_map_logical_length(map);
@@ -12927,6 +12935,7 @@ final class RuntimeSourceMemorySections {
                     int value_hash = entry_value == NULL ? 0 : javan_string_hash_code((const char*) entry_value);
                     hash = hash + ((uint32_t) key_hash ^ (uint32_t) value_hash);
                 }
+                javan_runtime_lock_leave();
                 return (int32_t) hash;
             }
             if (shape[0] != 'l') {
@@ -15526,7 +15535,7 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
-        void* javan_map_copy_of(void* value) {
+        static void* javan_map_copy_of_unlocked(void* value) {
             javan_object_map* source = javan_map_checked(value);
             void** javan_map_copy_roots[] = {
                 (void**) &source
@@ -15544,7 +15553,14 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
-        void javan_map_put_all(void* value, void* source_value) {
+        void* javan_map_copy_of(void* value) {
+            javan_runtime_lock_enter();
+            void* result = javan_map_copy_of_unlocked(value);
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        static void javan_map_put_all_unlocked(void* value, void* source_value) {
             javan_object_map* map = javan_map_checked(value);
             javan_object_map* source = javan_map_checked(source_value);
             javan_map_mutable_checked(map);
@@ -15563,7 +15579,13 @@ final class RuntimeSourceMemorySections {
             javan_root_frame_pop(javan_map_put_all_roots);
         }
 
-        void* javan_map_unmodifiable(void* value) {
+        void javan_map_put_all(void* value, void* source_value) {
+            javan_runtime_lock_enter();
+            javan_map_put_all_unlocked(value, source_value);
+            javan_runtime_lock_leave();
+        }
+
+        static void* javan_map_unmodifiable_unlocked(void* value) {
             javan_object_map* map = javan_map_checked(value);
             if (map->immutable != 0 && map->backing != NULL && (map->view_flags & JAVAN_MAP_VIEW_UNMODIFIABLE) != 0) {
                 return map;
@@ -15571,19 +15593,40 @@ final class RuntimeSourceMemorySections {
             return javan_map_new_view(map, 1, JAVAN_MAP_VIEW_UNMODIFIABLE);
         }
 
-        void* javan_map_get(void* value, void* key) {
+        void* javan_map_unmodifiable(void* value) {
+            javan_runtime_lock_enter();
+            void* result = javan_map_unmodifiable_unlocked(value);
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        static void* javan_map_get_unlocked(void* value, void* key) {
             javan_object_map* map = javan_map_checked(value);
             int index = javan_map_find(map, key);
             return index < 0 ? NULL : javan_map_value_unchecked(map, index);
         }
 
-        void* javan_map_get_or_default(void* value, void* key, void* fallback) {
+        void* javan_map_get(void* value, void* key) {
+            javan_runtime_lock_enter();
+            void* result = javan_map_get_unlocked(value, key);
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        static void* javan_map_get_or_default_unlocked(void* value, void* key, void* fallback) {
             javan_object_map* map = javan_map_checked(value);
             int index = javan_map_find(map, key);
             return index < 0 ? fallback : javan_map_value_unchecked(map, index);
         }
 
-        void* javan_map_put(void* value, void* key, void* element) {
+        void* javan_map_get_or_default(void* value, void* key, void* fallback) {
+            javan_runtime_lock_enter();
+            void* result = javan_map_get_or_default_unlocked(value, key, fallback);
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        static void* javan_map_put_unlocked(void* value, void* key, void* element) {
             javan_object_map* map = javan_map_checked(value);
             javan_map_mutable_checked(map);
             int index = javan_map_find(map, key);
@@ -15623,7 +15666,14 @@ final class RuntimeSourceMemorySections {
             return NULL;
         }
 
-        void* javan_map_put_if_absent(void* value, void* key, void* element) {
+        void* javan_map_put(void* value, void* key, void* element) {
+            javan_runtime_lock_enter();
+            void* result = javan_map_put_unlocked(value, key, element);
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        static void* javan_map_put_if_absent_unlocked(void* value, void* key, void* element) {
             javan_object_map* map = javan_map_checked(value);
             javan_map_mutable_checked(map);
             int index = javan_map_find(map, key);
@@ -15661,7 +15711,14 @@ final class RuntimeSourceMemorySections {
             return NULL;
         }
 
-        void* javan_map_replace(void* value, void* key, void* element) {
+        void* javan_map_put_if_absent(void* value, void* key, void* element) {
+            javan_runtime_lock_enter();
+            void* result = javan_map_put_if_absent_unlocked(value, key, element);
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        static void* javan_map_replace_unlocked(void* value, void* key, void* element) {
             javan_object_map* map = javan_map_checked(value);
             javan_map_mutable_checked(map);
             int index = javan_map_find(map, key);
@@ -15677,7 +15734,14 @@ final class RuntimeSourceMemorySections {
             return previous;
         }
 
-        int javan_map_replace_entry(void* value, void* key, void* expected_value, void* new_value) {
+        void* javan_map_replace(void* value, void* key, void* element) {
+            javan_runtime_lock_enter();
+            void* result = javan_map_replace_unlocked(value, key, element);
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        static int javan_map_replace_entry_unlocked(void* value, void* key, void* expected_value, void* new_value) {
             javan_object_map* map = javan_map_checked(value);
             javan_map_mutable_checked(map);
             int index = javan_map_find(map, key);
@@ -15693,6 +15757,13 @@ final class RuntimeSourceMemorySections {
             }
             map->values[index] = new_value;
             return 1;
+        }
+
+        int javan_map_replace_entry(void* value, void* key, void* expected_value, void* new_value) {
+            javan_runtime_lock_enter();
+            int result = javan_map_replace_entry_unlocked(value, key, expected_value, new_value);
+            javan_runtime_lock_leave();
+            return result;
         }
 
         static void javan_map_clear_prechecked(javan_object_map* map) {
@@ -15713,13 +15784,19 @@ final class RuntimeSourceMemorySections {
             map->mod_count++;
         }
 
-        void javan_map_clear(void* value) {
+        static void javan_map_clear_unlocked(void* value) {
             javan_object_map* map = javan_map_checked(value);
             javan_map_mutable_checked(map);
             javan_map_clear_prechecked(map);
         }
 
-        void javan_map_clear_java(void* value) {
+        void javan_map_clear(void* value) {
+            javan_runtime_lock_enter();
+            javan_map_clear_unlocked(value);
+            javan_runtime_lock_leave();
+        }
+
+        static void javan_map_clear_java_unlocked(void* value) {
             javan_object_map* map = javan_map_checked(value);
             if (map->immutable != 0) {
                 javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
@@ -15728,7 +15805,13 @@ final class RuntimeSourceMemorySections {
             javan_map_clear_prechecked(map);
         }
 
-        void* javan_map_remove(void* value, void* key) {
+        void javan_map_clear_java(void* value) {
+            javan_runtime_lock_enter();
+            javan_map_clear_java_unlocked(value);
+            javan_runtime_lock_leave();
+        }
+
+        static void* javan_map_remove_unlocked(void* value, void* key) {
             javan_object_map* map = javan_map_checked(value);
             javan_map_mutable_checked(map);
             int index = javan_map_find(map, key);
@@ -15750,7 +15833,14 @@ final class RuntimeSourceMemorySections {
             return previous;
         }
 
-        int javan_map_remove_entry(void* value, void* key, void* expected_value) {
+        void* javan_map_remove(void* value, void* key) {
+            javan_runtime_lock_enter();
+            void* result = javan_map_remove_unlocked(value, key);
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        static int javan_map_remove_entry_unlocked(void* value, void* key, void* expected_value) {
             javan_object_map* map = javan_map_checked(value);
             javan_map_mutable_checked(map);
             int index = javan_map_find(map, key);
@@ -15774,11 +15864,25 @@ final class RuntimeSourceMemorySections {
             return 1;
         }
 
-        int javan_map_contains_key(void* value, void* key) {
+        int javan_map_remove_entry(void* value, void* key, void* expected_value) {
+            javan_runtime_lock_enter();
+            int result = javan_map_remove_entry_unlocked(value, key, expected_value);
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        static int javan_map_contains_key_unlocked(void* value, void* key) {
             return javan_map_find(javan_map_checked(value), key) >= 0;
         }
 
-        int javan_map_contains_value(void* value, void* expected_value) {
+        int javan_map_contains_key(void* value, void* key) {
+            javan_runtime_lock_enter();
+            int result = javan_map_contains_key_unlocked(value, key);
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        static int javan_map_contains_value_unlocked(void* value, void* expected_value) {
             javan_object_map* map = javan_map_checked(value);
             int length = javan_map_logical_length(map);
             for (int index = 0; index < length; index++) {
@@ -15789,15 +15893,36 @@ final class RuntimeSourceMemorySections {
             return 0;
         }
 
-        int javan_map_size(void* value) {
+        int javan_map_contains_value(void* value, void* expected_value) {
+            javan_runtime_lock_enter();
+            int result = javan_map_contains_value_unlocked(value, expected_value);
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        static int javan_map_size_unlocked(void* value) {
             return javan_map_logical_length(javan_map_checked(value));
         }
 
-        int javan_map_is_empty(void* value) {
+        int javan_map_size(void* value) {
+            javan_runtime_lock_enter();
+            int result = javan_map_size_unlocked(value);
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        static int javan_map_is_empty_unlocked(void* value) {
             return javan_map_logical_length(javan_map_checked(value)) == 0;
         }
 
-        void* javan_map_key_set(void* value) {
+        int javan_map_is_empty(void* value) {
+            javan_runtime_lock_enter();
+            int result = javan_map_is_empty_unlocked(value);
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        static void* javan_map_key_set_unlocked(void* value) {
             javan_object_map* map = javan_map_checked(value);
             void* set_value = NULL;
             void** javan_map_key_set_roots[] = {
@@ -15815,7 +15940,14 @@ final class RuntimeSourceMemorySections {
             return set_value;
         }
 
-        void* javan_map_entry_set(void* value) {
+        void* javan_map_key_set(void* value) {
+            javan_runtime_lock_enter();
+            void* result = javan_map_key_set_unlocked(value);
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        static void* javan_map_entry_set_unlocked(void* value) {
             javan_object_map* map = javan_map_checked(value);
             void* map_root = map;
             void* list_value = NULL;
@@ -15837,6 +15969,13 @@ final class RuntimeSourceMemorySections {
             return list_value;
         }
 
+        void* javan_map_entry_set(void* value) {
+            javan_runtime_lock_enter();
+            void* result = javan_map_entry_set_unlocked(value);
+            javan_runtime_lock_leave();
+            return result;
+        }
+
         void* javan_map_entry_get_key(void* value) {
             return javan_map_entry_checked(value)->key;
         }
@@ -15845,7 +15984,7 @@ final class RuntimeSourceMemorySections {
             return javan_map_entry_checked(value)->value;
         }
 
-        void* javan_map_values(void* value) {
+        static void* javan_map_values_unlocked(void* value) {
             javan_object_map* map = javan_map_checked(value);
             void** javan_map_values_roots[] = {
                 (void**) &map
@@ -15858,6 +15997,13 @@ final class RuntimeSourceMemorySections {
             }
             javan_root_frame_pop(javan_map_values_roots);
             return list;
+        }
+
+        void* javan_map_values(void* value) {
+            javan_runtime_lock_enter();
+            void* result = javan_map_values_unlocked(value);
+            javan_runtime_lock_leave();
+            return result;
         }
 
         void* javan_materialized_lambda_new(int target_id) {

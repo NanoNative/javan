@@ -951,15 +951,15 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksConcurrentHashMapCapacityConstructorAsSupported() {
+    void marksConcurrentHashMapCapacityConstructorAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/ConcurrentHashMap", "<init>", "(I)V")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksConcurrentHashMapMapConstructorAsSupported() {
+    void marksConcurrentHashMapMapConstructorAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/ConcurrentHashMap", "<init>", "(Ljava/util/Map;)V")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
@@ -975,15 +975,15 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksConcurrentHashMapLoadFactorConstructorAsSupported() {
+    void marksConcurrentHashMapLoadFactorConstructorAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/ConcurrentHashMap", "<init>", "(IF)V")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksConcurrentHashMapConcurrencyLevelConstructorAsSupported() {
+    void marksConcurrentHashMapConcurrencyLevelConstructorAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/ConcurrentHashMap", "<init>", "(IFI)V")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
@@ -1089,9 +1089,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksConcurrentHashMapRemoveAsSupported() {
+    void marksConcurrentHashMapRemoveAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/ConcurrentHashMap", "remove", "(Ljava/lang/Object;)Ljava/lang/Object;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
@@ -1119,9 +1119,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksConcurrentHashMapRemoveKeyValueAsSupported() {
+    void marksConcurrentHashMapRemoveKeyValueAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/ConcurrentHashMap", "remove", "(Ljava/lang/Object;Ljava/lang/Object;)Z")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
@@ -1299,9 +1299,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksConcurrentHashMapKeySetAsSupported() {
+    void marksConcurrentHashMapKeySetAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/ConcurrentHashMap", "keySet", "()Ljava/util/Set;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
@@ -1323,9 +1323,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksConcurrentHashMapEntrySetAsSupported() {
+    void marksConcurrentHashMapEntrySetAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/ConcurrentHashMap", "entrySet", "()Ljava/util/Set;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test

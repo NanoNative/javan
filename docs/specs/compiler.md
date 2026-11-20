@@ -78,6 +78,11 @@ dispatch arbitrary application-defined `equals` methods. Search, addition and cl
 unknown in the support ledger while custom collection overrides and set equality remain incomplete.
 Other methods remain subject to their supported callable entries.
 
+Native map primitives serialize access to shared map storage, including access through `Map`
+references. This protects those primitives and record map traversal during concurrent mutation.
+`ConcurrentHashMap` is not yet accounted as fully supported: null handling, application-defined key
+equality, compound callback operations and concurrent views still need their complete API semantics.
+
 The default `SecureRandom` constructor supports calls resolved as `SecureRandom.nextBytes` and
 `generateSeed`. The static `getSeed` entry is also supported. The supported random value methods
 are `nextBoolean` and the zero-argument, single-bound and origin-bound `nextInt`, `nextLong`,

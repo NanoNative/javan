@@ -4488,6 +4488,58 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void staticLibraryConcurrentMapWritesRemainUsableAcrossCalls() throws Exception {
+        final Path project = project("library-concurrent-map");
+        writeJava(project, "com.acme.Api", """
+            package com.acme;
+            import java.util.Map;
+            import java.util.concurrent.ConcurrentHashMap;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Api {
+                static final Map<Integer, Integer> values = new ConcurrentHashMap<>();
+                static final AtomicInteger ready = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    final int start;
+                    Worker(int start) { this.start = start; }
+                    public void run() {
+                        ready.incrementAndGet();
+                        while (ready.get() < 2) Thread.yield();
+                        for (int i = 0; i < 200; i++) values.put(start + i, i);
+                    }
+                }
+                public static int size() throws InterruptedException {
+                    values.clear(); ready.set(0);
+                    Thread a = new Thread(new Worker(0)); Thread b = new Thread(new Worker(200));
+                    a.start(); b.start(); a.join(); b.join();
+                    return values.size();
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString(), "--kind", "staticlib",
+            "--export", "com.acme.Api.size():int");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path caller = writeC(project, "call_map.c", """
+            #include ".javan/dist/bindings/c/library-concurrent-map.h"
+            int main(void) {
+                for (int i = 0; i < 3; i++) {
+                    int value = 0;
+                    JavanResult result = javan_try_com_acme_Api_size_void(&value);
+                    if (!result.ok || value != 400) return 1;
+                    javan_result_free(&result);
+                }
+                return 0;
+            }
+            """);
+        final Path library = project.resolve(".javan/dist/liblibrary-concurrent-map.a");
+        final Path binary = project.resolve("call-map");
+        final ProcessResult compiler = process(project, List.of("cc", "-pthread", caller.toString(), library.toString(), "-o", binary.toString()));
+        assertThat(compiler.exitCode()).as(compiler.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(binary.toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+    }
+
+    @Test
     void staticLibraryObjectEqualsDispatchesAndReportsFailures() throws Exception {
         final Path project = project("library-object-equals");
         writeJava(project, "com.acme.Api", """
