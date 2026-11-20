@@ -923,15 +923,15 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksMapReplaceAsSupported() {
+    void marksMapReplaceAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "replace", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksMapReplaceKeyValueAsSupported() {
+    void marksMapReplaceKeyValueAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "replace", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test

@@ -80,10 +80,10 @@ Other methods remain subject to their supported callable entries.
 
 Native map primitives serialize access to shared map storage, including access through `Map`
 references. This protects those primitives and record map traversal during concurrent mutation.
-`ConcurrentHashMap` rejects null keys for `get`, `getOrDefault`, `containsKey`, `put`, `putIfAbsent`
-and `remove`, and null values for `containsValue`, `put` and `putIfAbsent`, including through `Map`
-references. A null default value is allowed, and two-argument `remove` with a non-null key and null
-expected value returns false. Other null-sensitive methods and constructors,
+`ConcurrentHashMap` rejects null keys for `get`, `getOrDefault`, `containsKey`, `put`, `putIfAbsent`,
+`remove` and `replace`, and null values for `containsValue`, `put`, `putIfAbsent` and `replace`,
+including through `Map` references. A null default value is allowed, and two-argument `remove` with
+a non-null key and null expected value returns false. Other null-sensitive methods and constructors,
 application-defined key equality, compound callback operations and concurrent views still need their
 complete API semantics, so `ConcurrentHashMap` is not yet accounted as fully supported.
 

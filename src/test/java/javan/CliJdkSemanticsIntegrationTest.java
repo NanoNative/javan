@@ -2226,6 +2226,63 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mapReplacementHandlesNullsAndImmutableReceivers() throws Exception {
+        final Path project = project("map-replace-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Collections;
+            import java.util.HashMap;
+            import java.util.Map;
+            import java.util.concurrent.ConcurrentHashMap;
+            public final class Main {
+                static String argument(String value) { System.out.println("argument"); return value; }
+                public static void main(String[] args) {
+                    Map<String, String> plain = new HashMap<>(); plain.put(null, null);
+                    System.out.println(plain.replace(null, "value") == null); System.out.println(plain.get(null));
+                    plain.put("nullable", null); System.out.println(plain.replace("nullable", null, "new"));
+                    System.out.println(plain.get("nullable")); System.out.println(plain.replace("missing", null, "x"));
+                    Map<String, String> concurrent = new ConcurrentHashMap<>(); concurrent.put("key", "old");
+                    try { concurrent.replace(null, "x"); } catch (NullPointerException expected) { System.out.println("null key"); }
+                    try { concurrent.replace("missing", null); } catch (NullPointerException expected) { System.out.println("null value"); }
+                    try { concurrent.replace(null, "old", "new"); } catch (NullPointerException expected) { System.out.println("null pair key"); }
+                    try { concurrent.replace("missing", null, "new"); } catch (NullPointerException expected) { System.out.println("null old"); }
+                    try { concurrent.replace("missing", "old", null); } catch (NullPointerException expected) { System.out.println("null new"); }
+                    System.out.println(concurrent.replace("key", "old", "new")); System.out.println(concurrent.get("key"));
+                    Map<String, String> view = Collections.unmodifiableMap(plain);
+                    try { view.replace("missing", "x"); } catch (UnsupportedOperationException expected) { System.out.println("immutable key"); }
+                    try { view.replace("missing", "x", "y"); } catch (UnsupportedOperationException expected) { System.out.println("immutable pair"); }
+                    try { Map.<String, String>of().replace("missing", "x"); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable literal"); }
+                    Map<String, String> missing = null;
+                    try { missing.replace(argument("a"), argument("b")); }
+                    catch (NullPointerException expected) { System.out.println("null receiver"); }
+                    try { missing.replace(argument("a"), argument("b"), argument("c")); }
+                    catch (NullPointerException expected) { System.out.println("null pair receiver"); }
+                    ConcurrentHashMap<String, String> direct = new ConcurrentHashMap<>();
+                    try { direct.replace("missing", null); } catch (NullPointerException expected) { System.out.println("direct null"); }
+                    Map<Object, Object> streams = new HashMap<>(); streams.put(System.out, System.err);
+                    System.out.println(streams.replace(System.out, System.err) == System.err);
+                    Map<String, String> retained = new HashMap<>(); retained.put("key", Integer.toString(42));
+                    String old = retained.replace("key", "new");
+                    for (int i = 0; i < 100; i++) Integer.toString(i);
+                    System.out.println(old);
+                    Map<Object, Object> objects = new HashMap<>(); Object first = new Object(); Object second = new Object();
+                    objects.put("key", first); System.out.println(objects.replace("key", first, second));
+                    System.out.println(objects.get("key") == second);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/map-replace-null").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void mapRemovalHandlesNullsAndImmutableReceivers() throws Exception {
         final Path project = project("map-remove-null");
         writeJava(project, "com.acme.Main", """

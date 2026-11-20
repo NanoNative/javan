@@ -4532,6 +4532,14 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     Map<Integer, Integer> map = null; map.remove(1, 2); return 0;
                 }
                 public static int immutableRemove() { Map.of().remove(1); return 0; }
+                public static int nullReplaceKey() { values.replace(null, 1); return 0; }
+                public static int nullReplaceValue() { values.replace(-1, null); return 0; }
+                public static int nullReplaceOld() { values.replace(-1, null, 1); return 0; }
+                public static int nullReplaceNew() { values.replace(-1, 1, null); return 0; }
+                public static int missingReplaceReceiver() {
+                    Map<Integer, Integer> map = null; map.replace(1, 2, 3); return 0;
+                }
+                public static int immutableReplace() { Map.of().replace(1, 2); return 0; }
                 public static int replacesNull() {
                     Map<Integer, Integer> map = new java.util.HashMap<>();
                     map.put(1, null); map.putIfAbsent(1, 7); return map.get(1);
@@ -4547,7 +4555,10 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "--export", "com.acme.Api.missingAbsentReceiver():int", "--export", "com.acme.Api.replacesNull():int",
             "--export", "com.acme.Api.nullRemoveKey():int", "--export", "com.acme.Api.nullRemovePairKey():int",
             "--export", "com.acme.Api.nullRemoveValue():int", "--export", "com.acme.Api.missingRemoveReceiver():int",
-            "--export", "com.acme.Api.immutableRemove():int");
+            "--export", "com.acme.Api.immutableRemove():int", "--export", "com.acme.Api.nullReplaceKey():int",
+            "--export", "com.acme.Api.nullReplaceValue():int", "--export", "com.acme.Api.nullReplaceOld():int",
+            "--export", "com.acme.Api.nullReplaceNew():int", "--export", "com.acme.Api.missingReplaceReceiver():int",
+            "--export", "com.acme.Api.immutableReplace():int");
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final Path caller = writeC(project, "call_map.c", """
             #include <string.h>
@@ -4603,6 +4614,24 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     present = javan_try_com_acme_Api_nullRemoveValue_void(&value);
                     if (!present.ok || value != 0) return 17;
                     javan_result_free(&present);
+                    failure = javan_try_com_acme_Api_nullReplaceKey_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 18;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_nullReplaceValue_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 19;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_nullReplaceOld_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 20;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_nullReplaceNew_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 21;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_missingReplaceReceiver_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 22;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_immutableReplace_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "UnsupportedOperationException") == 0) return 23;
+                    javan_result_free(&failure);
                     JavanResult result = javan_try_com_acme_Api_size_void(&value);
                     if (!result.ok || value != 400) return 1;
                     javan_result_free(&result);

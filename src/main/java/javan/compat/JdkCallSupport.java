@@ -2120,6 +2120,18 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies supported map value replacement operations.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method replaces a map value
+     */
+    public static boolean isMapReplace(final MethodRef methodRef) {
+        return isMapRuntimeOwner(methodRef.owner()) && isSupported(methodRef) && "replace".equals(methodRef.name())
+            && ("(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(methodRef.descriptor())
+                || "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z".equals(methodRef.descriptor()));
+    }
+
+    /**
      * Identifies supported map membership and defaulted lookup operations.
      *
      * @param methodRef referenced JDK method
@@ -2144,7 +2156,7 @@ public final class JdkCallSupport {
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
         if (isCollectionObjectAddition(methodRef) || isCollectionClear(methodRef) || isMapClear(methodRef)
             || (isMapObjectGetOrPut(methodRef) && "put".equals(methodRef.name())) || isMapPutIfAbsent(methodRef)
-            || isMapRemove(methodRef)) {
+            || isMapRemove(methodRef) || isMapReplace(methodRef)) {
             return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException");
         }
         if (isCollectionObjectSearch(methodRef) || isCollectionSizeQuery(methodRef) || isMapObjectGetOrPut(methodRef)

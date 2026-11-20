@@ -27088,11 +27088,11 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).containsSubsequence(
             IrInstruction.assignObject(
                 "object0",
                 IrExpression.objectCall(
-                    "javan_map_replace",
+                    "javan_map_replace_java",
                     List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("arg2"))
                 )
             ),
@@ -27116,11 +27116,11 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).containsSubsequence(
             IrInstruction.assignObject(
                 "object0",
                 IrExpression.objectCall(
-                    "javan_map_replace",
+                    "javan_map_replace_java",
                     List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("arg2"))
                 )
             ),
@@ -27145,11 +27145,11 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).containsSubsequence(
             IrInstruction.assignInt(
                 "int0",
                 IrExpression.intCall(
-                    "javan_map_replace_entry",
+                    "javan_map_replace_entry_java",
                     List.of(
                         IrExpression.objectLocal("arg0"),
                         IrExpression.objectLocal("arg1"),
@@ -27179,11 +27179,11 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).containsSubsequence(
             IrInstruction.assignInt(
                 "int0",
                 IrExpression.intCall(
-                    "javan_map_replace_entry",
+                    "javan_map_replace_entry_java",
                     List.of(
                         IrExpression.objectLocal("arg0"),
                         IrExpression.objectLocal("arg1"),

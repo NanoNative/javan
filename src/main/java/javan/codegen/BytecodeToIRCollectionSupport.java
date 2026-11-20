@@ -1355,7 +1355,9 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("replace(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(signature)) {
-                pushObjectCall(instructions, stack, localDeclarations, "javan_map_replace", List.of(receiver, arguments.get(0), arguments.get(1)));
+                pushObjectCall(instructions, stack, localDeclarations,
+                    JdkCallSupport.isMapReplace(methodRef) ? "javan_map_replace_java" : "javan_map_replace",
+                    List.of(receiver, arguments.get(0), arguments.get(1)));
                 return true;
             }
             if ("replace(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z".equals(signature)) {
@@ -1363,7 +1365,7 @@ final class BytecodeToIRCollectionSupport {
                     instructions,
                     stack,
                     localDeclarations,
-                    "javan_map_replace_entry",
+                    JdkCallSupport.isMapReplace(methodRef) ? "javan_map_replace_entry_java" : "javan_map_replace_entry",
                     List.of(receiver, arguments.get(0), arguments.get(1), arguments.get(2))
                 );
                 return true;
