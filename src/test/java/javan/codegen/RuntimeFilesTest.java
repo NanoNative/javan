@@ -7575,7 +7575,7 @@ final class RuntimeFilesTest {
             "javan_root_frame_push(javan_list_array_roots, 1);",
             "javan_root_frame_pop(javan_list_array_roots);",
             "void** javan_list_copy_roots[] = {",
-            "javan_root_frame_push(javan_list_copy_roots, 1);",
+            "javan_root_frame_push(javan_list_copy_roots, 2);",
             "javan_root_frame_pop(javan_list_copy_roots);",
             "void** javan_list_iterator_roots[] = {",
             "javan_root_frame_push(javan_list_iterator_roots, 1);",
