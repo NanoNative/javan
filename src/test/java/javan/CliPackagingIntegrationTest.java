@@ -1243,9 +1243,14 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     try { values.set(0, "x"); } catch (IndexOutOfBoundsException expected) { System.out.println("set empty"); }
                     try { missing.set(0, "x"); } catch (NullPointerException expected) { System.out.println("set null"); }
                     try { List.of().set(0, "x"); } catch (UnsupportedOperationException expected) { System.out.println("set immutable"); }
+                    try { values.remove(0); } catch (IndexOutOfBoundsException expected) { System.out.println("remove empty"); }
+                    try { missing.remove(0); } catch (NullPointerException expected) { System.out.println("remove null"); }
+                    try { List.of().remove(0); } catch (UnsupportedOperationException expected) { System.out.println("remove immutable"); }
                     concrete.add("first"); concrete.add("last");
                     System.out.println(values.get(0)); System.out.println(concrete.get(1));
                     System.out.println(abstractValues.set(0, "changed"));
+                    System.out.println(values.get(0));
+                    System.out.println(abstractValues.remove(0));
                     System.out.println(values.get(0));
                 }
             }
@@ -4721,6 +4726,9 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static int listSetBadIndex() { new java.util.ArrayList<String>().set(0, "x"); return 0; }
                 public static int listSetNull(int selector) { java.util.List<String> values = selector == 0 ? null : new java.util.ArrayList<>(); values.set(0, "x"); return 0; }
                 public static int listSetImmutable() { java.util.List.of().set(0, "x"); return 0; }
+                public static int listRemoveBadIndex() { new java.util.ArrayList<String>().remove(0); return 0; }
+                public static int listRemoveNull(int selector) { java.util.List<String> values = selector == 0 ? null : new java.util.ArrayList<>(); values.remove(0); return 0; }
+                public static int listRemoveImmutable() { java.util.List.of().remove(0); return 0; }
                 public static int replacesNull() {
                     Map<Integer, Integer> map = new java.util.HashMap<>();
                     map.put(1, null); map.putIfAbsent(1, 7); return map.get(1);
@@ -4761,7 +4769,8 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "--export", "com.acme.Api.nullListFirst(int):int", "--export", "com.acme.Api.nullListLast(int):int",
             "--export", "com.acme.Api.listGetBadIndex():int", "--export", "com.acme.Api.listGetNull(int):int",
             "--export", "com.acme.Api.listSetBadIndex():int", "--export", "com.acme.Api.listSetNull(int):int",
-            "--export", "com.acme.Api.listSetImmutable():int");
+            "--export", "com.acme.Api.listSetImmutable():int", "--export", "com.acme.Api.listRemoveBadIndex():int",
+            "--export", "com.acme.Api.listRemoveNull(int):int", "--export", "com.acme.Api.listRemoveImmutable():int");
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final Path caller = writeC(project, "call_map.c", """
             #include <string.h>
@@ -4966,6 +4975,15 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     javan_result_free(&failure);
                     failure = javan_try_com_acme_Api_listSetImmutable_void(&value);
                     if (failure.ok || failure.message == 0 || strstr(failure.message, "UnsupportedOperationException") == 0) return 67;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_listRemoveBadIndex_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "IndexOutOfBoundsException") == 0) return 68;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_listRemoveNull_int(0, &value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 69;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_listRemoveImmutable_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "UnsupportedOperationException") == 0) return 70;
                     javan_result_free(&failure);
                     JavanResult result = javan_try_com_acme_Api_size_void(&value);
                     if (!result.ok || value != 400) return 1;

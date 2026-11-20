@@ -957,7 +957,7 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("remove(I)Ljava/lang/Object;".equals(signature)) {
-                pushObjectCall(instructions, stack, localDeclarations, "javan_arraylist_remove_at", List.of(receiver, arguments.getFirst()));
+                pushObjectCall(instructions, stack, localDeclarations, "javan_arraylist_remove_at_java", List.of(receiver, arguments.getFirst()));
                 return true;
             }
             if ("removeLast()Ljava/lang/Object;".equals(signature)) {
@@ -1023,7 +1023,7 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("remove(I)Ljava/lang/Object;".equals(signature)) {
-                pushObjectCall(instructions, stack, localDeclarations, "javan_arraylist_remove_at", List.of(receiver, arguments.getFirst()));
+                pushObjectCall(instructions, stack, localDeclarations, "javan_arraylist_remove_at_java", List.of(receiver, arguments.getFirst()));
                 return true;
             }
             if ("set(ILjava/lang/Object;)Ljava/lang/Object;".equals(signature)) {

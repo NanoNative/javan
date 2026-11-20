@@ -115,6 +115,7 @@ Supported indexed `get` calls transport null-receiver and invalid-index failures
 handler shapes.
 Supported indexed `set` calls also transport immutable-list failures and preserve the replaced value
 while publishing it to the collector.
+Indexed `remove` transports the same failures and publishes the removed value safely.
 Application-defined collection implementations are not yet supported.
 
 The default `SecureRandom` constructor supports calls resolved as `SecureRandom.nextBytes` and

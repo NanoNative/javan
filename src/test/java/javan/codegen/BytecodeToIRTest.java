@@ -25510,8 +25510,14 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).containsExactly(
             IrInstruction.assignObject(
                 "object0",
-                IrExpression.objectCall("javan_arraylist_remove_at", List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1")))
+                IrExpression.objectCall("javan_arraylist_remove_at_java", List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1")))
             ),
+            IrInstruction.branchIf(
+                "label_pending_continue_2",
+                IrExpression.intComparison("==", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))
+            ),
+            IrInstruction.propagatePending(),
+            IrInstruction.label("label_pending_continue_2"),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
@@ -26005,8 +26011,14 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).containsExactly(
             IrInstruction.assignObject(
                 "object0",
-                IrExpression.objectCall("javan_arraylist_remove_at", List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1")))
+                IrExpression.objectCall("javan_arraylist_remove_at_java", List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1")))
             ),
+            IrInstruction.branchIf(
+                "label_pending_continue_2",
+                IrExpression.intComparison("==", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))
+            ),
+            IrInstruction.propagatePending(),
+            IrInstruction.label("label_pending_continue_2"),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
@@ -26087,8 +26099,14 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).containsExactly(
             IrInstruction.assignObject(
                 "object0",
-                IrExpression.objectCall("javan_arraylist_remove_at", List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1")))
+                IrExpression.objectCall("javan_arraylist_remove_at_java", List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1")))
             ),
+            IrInstruction.branchIf(
+                "label_pending_continue_2",
+                IrExpression.intComparison("==", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))
+            ),
+            IrInstruction.propagatePending(),
+            IrInstruction.label("label_pending_continue_2"),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }

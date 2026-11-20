@@ -2487,6 +2487,67 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void listRemoveIndexTransportsFailuresAndReturnsRemovedValue() throws Exception {
+        final Path project = project("list-remove-index-errors");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.AbstractList;
+            import java.util.ArrayList;
+            import java.util.List;
+            public final class Main {
+                public static void main(String[] args) {
+                    ArrayList<String> concrete = new ArrayList<>();
+                    List<String> values = concrete;
+                    AbstractList<String> abstractValues = concrete;
+                    List<String> missing = args.length == 0 ? null : values;
+                    try { missing.remove(0); } catch (NullPointerException expected) { System.out.println("null"); }
+                    try { values.remove(-1); } catch (IndexOutOfBoundsException expected) { System.out.println("negative"); }
+                    try { concrete.remove(0); } catch (IndexOutOfBoundsException expected) { System.out.println("empty"); }
+                    try { abstractValues.remove(Integer.MAX_VALUE); } catch (IndexOutOfBoundsException expected) { System.out.println("large"); }
+                    try { List.of().remove(0); } catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                    concrete.add("first"); concrete.add(null); concrete.add("last");
+                    System.out.println(values.remove(0));
+                    System.out.println(abstractValues.remove(0) == null);
+                    System.out.println(concrete.get(0));
+                    try { java.util.Collections.unmodifiableList(values).remove(0); }
+                    catch (UnsupportedOperationException expected) { System.out.println("view"); }
+                    System.out.println(values.get(0));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-remove-index-errors").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listRemoveIndexEvaluatesArgumentsBeforeNullFailure() throws Exception {
+        final Path project = project("list-remove-index-null-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.List;
+            public final class Main {
+                static List<String> missing() { System.out.println("receiver"); return null; }
+                static int index() { System.out.println("index"); return 0; }
+                public static void main(String[] args) {
+                    missing().remove(index());
+                    System.out.println("after");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-remove-index-null-order").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("receiver\nindex\n");
+        assertThat(result.stderr()).contains("NullPointerException");
+    }
+
+    @Test
     void listSetTransportsFailuresAndReturnsPreviousValue() throws Exception {
         final Path project = project("list-set-errors");
         writeJava(project, "com.acme.Main", """
@@ -2702,6 +2763,8 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                             if (!concrete.get(1).equals(Integer.toString(i + 1))) errors.incrementAndGet();
                             if (!list.set(0, Integer.toString(i + 2)).equals(Integer.toString(i))) errors.incrementAndGet();
                             if (!concrete.get(0).equals(Integer.toString(i + 2))) errors.incrementAndGet();
+                            if (!list.remove(0).equals(Integer.toString(i + 2))) errors.incrementAndGet();
+                            if (!concrete.get(0).equals(Integer.toString(i + 1))) errors.incrementAndGet();
                             List<String> empty = List.of();
                             if (!rejectsFirst(empty) || !rejectsLast(empty)) errors.incrementAndGet();
                         }

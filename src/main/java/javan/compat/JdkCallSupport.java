@@ -2129,6 +2129,19 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies indexed removal on supported list receivers.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method removes a list element by index
+     */
+    public static boolean isListIndexedRemove(final MethodRef methodRef) {
+        return ("java/util/List".equals(methodRef.owner()) || "java/util/ArrayList".equals(methodRef.owner())
+                || "java/util/AbstractList".equals(methodRef.owner()))
+            && "remove".equals(methodRef.name()) && "(I)Ljava/lang/Object;".equals(methodRef.descriptor())
+            && isSupported(methodRef);
+    }
+
+    /**
      * Identifies non-empty immutable list factory calls.
      *
      * @param methodRef referenced JDK method
@@ -2309,7 +2322,7 @@ public final class JdkCallSupport {
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
-        if (isListIndexedSet(methodRef)) {
+        if (isListIndexedSet(methodRef) || isListIndexedRemove(methodRef)) {
             return List.of("java/lang/NullPointerException", "java/lang/IndexOutOfBoundsException",
                 "java/lang/UnsupportedOperationException");
         }

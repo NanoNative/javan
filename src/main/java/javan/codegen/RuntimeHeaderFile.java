@@ -522,6 +522,7 @@ final class RuntimeHeaderFile {
         void* javan_arraylist_set(void* list, int index, void* value);
         void* javan_arraylist_set_java(void* list, int index, void* value);
         void* javan_arraylist_remove_at(void* list, int index);
+        void* javan_arraylist_remove_at_java(void* list, int index);
         void* javan_arraylist_remove_first(void* list);
         void* javan_arraylist_remove_last(void* list);
         void* javan_list_of(int count, ...);

@@ -483,9 +483,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksArrayListRemoveAtAsSupported() {
+    void marksArrayListRemoveAtAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "remove", "(I)Ljava/lang/Object;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
@@ -519,9 +519,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksListRemoveAtAsSupported() {
+    void marksListRemoveAtAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/List", "remove", "(I)Ljava/lang/Object;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
@@ -639,9 +639,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksAbstractListRemoveAtAsSupported() {
+    void marksAbstractListRemoveAtAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/AbstractList", "remove", "(I)Ljava/lang/Object;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
