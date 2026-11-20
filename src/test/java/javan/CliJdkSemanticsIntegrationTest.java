@@ -2226,6 +2226,64 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void concurrentMapConstructorDirectHandlerCatchesNullSource() throws Exception {
+        final Path project = project("map-constructor-direct-handler");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Map;
+            import java.util.concurrent.ConcurrentHashMap;
+            public final class Main {
+                public static void main(String[] args) {
+                    Map<String, String> source = null;
+                    try { new ConcurrentHashMap<>(source); }
+                    catch (NullPointerException expected) { System.out.println("null source"); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/map-constructor-direct-handler").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void concurrentMapConstructorRejectsNullEntriesAndSource() throws Exception {
+        final Path project = project("map-constructor-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.HashMap;
+            import java.util.Map;
+            import java.util.concurrent.ConcurrentHashMap;
+            public final class Main {
+                static ConcurrentHashMap<String, String> copy(Map<String, String> source) { return new ConcurrentHashMap<>(source); }
+                public static void main(String[] args) {
+                    Map<String, String> source = new HashMap<>(); source.put("key", "value");
+                    System.out.println(copy(source).get("key"));
+                    source.put("key", null);
+                    try { copy(source); } catch (NullPointerException expected) { System.out.println("null value"); }
+                    source.clear(); source.put(null, "value");
+                    try { copy(source); } catch (NullPointerException expected) { System.out.println("null key"); }
+                    try { copy(null); }
+                    catch (NullPointerException expected) { System.out.println("null source"); }
+                    System.out.println(copy(Map.of("after", "yes")).get("after"));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/map-constructor-null").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void mapPutAllHandlesInvalidEntriesAndImmutableReceivers() throws Exception {
         final Path project = project("map-put-all-null");
         writeJava(project, "com.acme.Main", """

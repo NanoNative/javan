@@ -83,10 +83,12 @@ references. This protects those primitives and record map traversal during concu
 `ConcurrentHashMap` rejects null keys for `get`, `getOrDefault`, `containsKey`, `put`, `putIfAbsent`,
 `remove` and `replace`, and null values for `containsValue`, `put`, `putIfAbsent` and `replace`,
 including through `Map` references. Bulk `putAll` rejects null entries when targeting a concurrent
-map. A null default value is allowed, and two-argument `remove` with a non-null key and null expected
-value returns false. Other null-sensitive methods and constructors,
-application-defined key equality, compound callback operations and concurrent views still need their
-complete API semantics, so `ConcurrentHashMap` is not yet accounted as fully supported.
+map. The map-copy constructor rejects null sources and null entries, and can transport the error to
+its caller. Some direct handlers around construction are not yet supported. A null default value is
+allowed, and two-argument `remove` with a non-null key and null expected value returns false. Other
+null-sensitive methods and constructors, application-defined key equality, compound callback
+operations and concurrent views still need their complete API semantics, so `ConcurrentHashMap` is
+not yet accounted as fully supported.
 
 The default `SecureRandom` constructor supports calls resolved as `SecureRandom.nextBytes` and
 `generateSeed`. The static `getSeed` entry is also supported. The supported random value methods

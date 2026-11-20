@@ -2080,6 +2080,18 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies the concurrent map constructor that copies a source map.
+     *
+     * @param methodRef referenced JDK constructor
+     * @return whether the constructor copies a map into a concurrent map
+     */
+    public static boolean isConcurrentMapCopyConstructor(final MethodRef methodRef) {
+        return "java/util/concurrent/ConcurrentHashMap".equals(methodRef.owner())
+            && "<init>".equals(methodRef.name()) && "(Ljava/util/Map;)V".equals(methodRef.descriptor())
+            && isSupported(methodRef);
+    }
+
+    /**
      * Identifies supported map bulk insertion operations.
      *
      * @param methodRef referenced JDK method
@@ -2165,6 +2177,9 @@ public final class JdkCallSupport {
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
+        if (isConcurrentMapCopyConstructor(methodRef)) {
+            return List.of("java/lang/NullPointerException");
+        }
         if (isCollectionObjectAddition(methodRef) || isCollectionClear(methodRef) || isMapClear(methodRef)
             || (isMapObjectGetOrPut(methodRef) && "put".equals(methodRef.name())) || isMapPutIfAbsent(methodRef)
             || isMapRemove(methodRef) || isMapReplace(methodRef) || isMapPutAll(methodRef)) {

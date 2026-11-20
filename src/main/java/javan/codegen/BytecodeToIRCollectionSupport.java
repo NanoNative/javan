@@ -484,10 +484,8 @@ final class BytecodeToIRCollectionSupport {
             instructions.add(IrInstruction.callStaticVoid("javan_map_initialize_capacity", List.of(receiver, arguments.getFirst())));
             return true;
         }
-        if ("java/util/concurrent/ConcurrentHashMap".equals(methodRef.owner())
-            && "<init>".equals(methodRef.name())
-            && "(Ljava/util/Map;)V".equals(methodRef.descriptor())) {
-            instructions.add(IrInstruction.callStaticVoid("javan_map_put_all", List.of(receiver, arguments.getFirst())));
+        if (JdkCallSupport.isConcurrentMapCopyConstructor(methodRef)) {
+            instructions.add(IrInstruction.callStaticVoid("javan_map_put_all_java", List.of(receiver, arguments.getFirst())));
             return true;
         }
         if ("java/util/concurrent/ConcurrentHashMap".equals(methodRef.owner())

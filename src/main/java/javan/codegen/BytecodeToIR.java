@@ -1438,7 +1438,8 @@ public final class BytecodeToIR {
             if (JdkCallSupport.isCollectionObjectAddition(reference) || JdkCallSupport.isCollectionClear(reference)
                 || JdkCallSupport.isMapClear(reference) || JdkCallSupport.isMapObjectGetOrPut(reference)
                 || JdkCallSupport.isMapMembershipOrDefaultQuery(reference) || JdkCallSupport.isMapPutIfAbsent(reference)
-                || JdkCallSupport.isMapRemove(reference) || JdkCallSupport.isMapReplace(reference) || JdkCallSupport.isMapPutAll(reference)) {
+                || JdkCallSupport.isMapRemove(reference) || JdkCallSupport.isMapReplace(reference) || JdkCallSupport.isMapPutAll(reference)
+                || JdkCallSupport.isConcurrentMapCopyConstructor(reference)) {
                 possibleTypes.addAll(JdkCallSupport.transportedPlatformThrowableTypes(reference));
             }
             if (("java/util/Iterator".equals(reference.owner()) || "java/util/ListIterator".equals(reference.owner()))
