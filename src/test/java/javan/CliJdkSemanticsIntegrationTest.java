@@ -2487,6 +2487,70 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void listSetTransportsFailuresAndReturnsPreviousValue() throws Exception {
+        final Path project = project("list-set-errors");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.AbstractList;
+            import java.util.ArrayList;
+            import java.util.List;
+            public final class Main {
+                public static void main(String[] args) {
+                    ArrayList<String> concrete = new ArrayList<>();
+                    List<String> values = concrete;
+                    AbstractList<String> abstractValues = concrete;
+                    List<String> missing = args.length == 0 ? null : values;
+                    try { missing.set(0, "x"); } catch (NullPointerException expected) { System.out.println("null"); }
+                    try { values.set(-1, "x"); } catch (IndexOutOfBoundsException expected) { System.out.println("negative"); }
+                    try { concrete.set(0, "x"); } catch (IndexOutOfBoundsException expected) { System.out.println("empty"); }
+                    try { abstractValues.set(Integer.MIN_VALUE, "x"); } catch (IndexOutOfBoundsException expected) { System.out.println("small"); }
+                    try { List.of().set(0, "x"); } catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                    concrete.add("first");
+                    System.out.println(values.set(0, null));
+                    System.out.println(concrete.set(0, "last") == null);
+                    System.out.println(values.get(0));
+                    System.out.println(abstractValues.set(0, "updated"));
+                    System.out.println(values.get(0));
+                    try { java.util.Collections.unmodifiableList(values).set(0, "x"); }
+                    catch (UnsupportedOperationException expected) { System.out.println("view"); }
+                    System.out.println(values.get(0));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-set-errors").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listSetEvaluatesArgumentsBeforeNullFailure() throws Exception {
+        final Path project = project("list-set-null-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.List;
+            public final class Main {
+                static List<String> missing() { System.out.println("receiver"); return null; }
+                static int index() { System.out.println("index"); return 0; }
+                static String value() { System.out.println("value"); return "x"; }
+                public static void main(String[] args) {
+                    missing().set(index(), value());
+                    System.out.println("after");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-set-null-order").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("receiver\nindex\nvalue\n");
+        assertThat(result.stderr()).contains("NullPointerException");
+    }
+
+    @Test
     void listGetTransportsNullAndIndexFailures() throws Exception {
         final Path project = project("list-get-errors");
         writeJava(project, "com.acme.Main", """
@@ -2636,6 +2700,8 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                             if (!concrete.getLast().equals(Integer.toString(i + 1))) errors.incrementAndGet();
                             if (!list.get(0).equals(Integer.toString(i))) errors.incrementAndGet();
                             if (!concrete.get(1).equals(Integer.toString(i + 1))) errors.incrementAndGet();
+                            if (!list.set(0, Integer.toString(i + 2)).equals(Integer.toString(i))) errors.incrementAndGet();
+                            if (!concrete.get(0).equals(Integer.toString(i + 2))) errors.incrementAndGet();
                             List<String> empty = List.of();
                             if (!rejectsFirst(empty) || !rejectsLast(empty)) errors.incrementAndGet();
                         }

@@ -453,9 +453,15 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksArrayListSetAsSupported() {
+    void marksArrayListSetAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "set", "(ILjava/lang/Object;)Ljava/lang/Object;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+    }
+
+    @Test
+    void marksListSetAsUnknown() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/List", "set", "(ILjava/lang/Object;)Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
@@ -639,9 +645,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksAbstractListSetAsSupported() {
+    void marksAbstractListSetAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/AbstractList", "set", "(ILjava/lang/Object;)Ljava/lang/Object;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test

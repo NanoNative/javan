@@ -1240,8 +1240,13 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     try { values.get(0); } catch (IndexOutOfBoundsException expected) { System.out.println("empty"); }
                     try { abstractValues.get(-1); } catch (IndexOutOfBoundsException expected) { System.out.println("negative"); }
                     try { missing.get(0); } catch (NullPointerException expected) { System.out.println("null"); }
+                    try { values.set(0, "x"); } catch (IndexOutOfBoundsException expected) { System.out.println("set empty"); }
+                    try { missing.set(0, "x"); } catch (NullPointerException expected) { System.out.println("set null"); }
+                    try { List.of().set(0, "x"); } catch (UnsupportedOperationException expected) { System.out.println("set immutable"); }
                     concrete.add("first"); concrete.add("last");
                     System.out.println(values.get(0)); System.out.println(concrete.get(1));
+                    System.out.println(abstractValues.set(0, "changed"));
+                    System.out.println(values.get(0));
                 }
             }
             """);
@@ -4713,6 +4718,9 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static int nullListLast(int selector) { java.util.ArrayList<String> values = selector == 0 ? null : new java.util.ArrayList<>(); values.getLast(); return 0; }
                 public static int listGetBadIndex() { new java.util.ArrayList<String>().get(0); return 0; }
                 public static int listGetNull(int selector) { java.util.List<String> values = selector == 0 ? null : new java.util.ArrayList<>(); values.get(0); return 0; }
+                public static int listSetBadIndex() { new java.util.ArrayList<String>().set(0, "x"); return 0; }
+                public static int listSetNull(int selector) { java.util.List<String> values = selector == 0 ? null : new java.util.ArrayList<>(); values.set(0, "x"); return 0; }
+                public static int listSetImmutable() { java.util.List.of().set(0, "x"); return 0; }
                 public static int replacesNull() {
                     Map<Integer, Integer> map = new java.util.HashMap<>();
                     map.put(1, null); map.putIfAbsent(1, 7); return map.get(1);
@@ -4751,7 +4759,9 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "--export", "com.acme.Api.nullListArrayElement():int", "--export", "com.acme.Api.singletonListAllowsNull():int",
             "--export", "com.acme.Api.emptyListFirst():int", "--export", "com.acme.Api.emptyListLast():int",
             "--export", "com.acme.Api.nullListFirst(int):int", "--export", "com.acme.Api.nullListLast(int):int",
-            "--export", "com.acme.Api.listGetBadIndex():int", "--export", "com.acme.Api.listGetNull(int):int");
+            "--export", "com.acme.Api.listGetBadIndex():int", "--export", "com.acme.Api.listGetNull(int):int",
+            "--export", "com.acme.Api.listSetBadIndex():int", "--export", "com.acme.Api.listSetNull(int):int",
+            "--export", "com.acme.Api.listSetImmutable():int");
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final Path caller = writeC(project, "call_map.c", """
             #include <string.h>
@@ -4947,6 +4957,15 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     javan_result_free(&failure);
                     failure = javan_try_com_acme_Api_listGetNull_int(0, &value);
                     if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 64;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_listSetBadIndex_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "IndexOutOfBoundsException") == 0) return 65;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_listSetNull_int(0, &value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 66;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_listSetImmutable_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "UnsupportedOperationException") == 0) return 67;
                     javan_result_free(&failure);
                     JavanResult result = javan_try_com_acme_Api_size_void(&value);
                     if (!result.ok || value != 400) return 1;

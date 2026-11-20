@@ -113,6 +113,8 @@ garbage collection. Supported `getFirst` and `getLast` calls transport null-rece
 failures within supported handler shapes.
 Supported indexed `get` calls transport null-receiver and invalid-index failures within supported
 handler shapes.
+Supported indexed `set` calls also transport immutable-list failures and preserve the replaced value
+while publishing it to the collector.
 Application-defined collection implementations are not yet supported.
 
 The default `SecureRandom` constructor supports calls resolved as `SecureRandom.nextBytes` and

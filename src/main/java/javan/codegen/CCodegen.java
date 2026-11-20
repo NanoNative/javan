@@ -3773,6 +3773,7 @@ public final class CCodegen {
                     "javan_list_get_java",
                     "javan_list_get_first",
                     "javan_list_get_last",
+                    "javan_arraylist_set_java",
                     "javan_set_empty",
                     "javan_set_copy_of",
                     "javan_set_of_singleton",

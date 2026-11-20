@@ -953,7 +953,7 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("set(ILjava/lang/Object;)Ljava/lang/Object;".equals(signature)) {
-                pushObjectCall(instructions, stack, localDeclarations, "javan_arraylist_set", List.of(receiver, arguments.get(0), arguments.get(1)));
+                pushObjectCall(instructions, stack, localDeclarations, "javan_arraylist_set_java", List.of(receiver, arguments.get(0), arguments.get(1)));
                 return true;
             }
             if ("remove(I)Ljava/lang/Object;".equals(signature)) {
@@ -1027,7 +1027,7 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("set(ILjava/lang/Object;)Ljava/lang/Object;".equals(signature)) {
-                pushObjectCall(instructions, stack, localDeclarations, "javan_arraylist_set", List.of(receiver, arguments.get(0), arguments.get(1)));
+                pushObjectCall(instructions, stack, localDeclarations, "javan_arraylist_set_java", List.of(receiver, arguments.get(0), arguments.get(1)));
                 return true;
             }
         }
@@ -1169,7 +1169,7 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("set(ILjava/lang/Object;)Ljava/lang/Object;".equals(signature)) {
-                pushObjectCall(instructions, stack, localDeclarations, "javan_arraylist_set", List.of(receiver, arguments.get(0), arguments.get(1)));
+                pushObjectCall(instructions, stack, localDeclarations, "javan_arraylist_set_java", List.of(receiver, arguments.get(0), arguments.get(1)));
                 return true;
             }
             if ("removeLast()Ljava/lang/Object;".equals(signature)) {
