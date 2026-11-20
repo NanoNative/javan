@@ -12162,7 +12162,8 @@ final class RuntimeSourceMemorySections {
             int allocation_found,
             const javan_allocation_metadata* allocation
         ) {
-            if (value == NULL || type_id != 0 || javan_builtin_enum_type(value) != NULL
+            if (value == NULL || type_id != 0 || value == javan_system_out() || value == javan_system_err()
+                || javan_is_system_class_loader(value) != 0 || javan_builtin_enum_type(value) != NULL
                 || javan_application_enum_type_id(value) != 0) {
                 return 0;
             }
@@ -14870,10 +14871,12 @@ final class RuntimeSourceMemorySections {
 
         void* javan_map_pair(void* first_key, void* first_value, void* second_key, void* second_value) {
             if (first_key == NULL || first_value == NULL || second_key == NULL || second_value == NULL) {
-                javan_panic("null Map.of entry");
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
             }
             if (javan_object_equals(first_key, second_key) != 0) {
-                javan_panic("duplicate Map.of key");
+                javan_pending_throw("java/lang/IllegalArgumentException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
             }
             void* first_key_root = first_key;
             void* first_value_root = first_value;

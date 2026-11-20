@@ -75,7 +75,7 @@ final class BytecodeToIRCollectionSupport {
             return true;
         }
         if ("java/util/Map".equals(owner)) {
-            if (JdkCallSupport.isMapSingleEntryFactory(methodRef)) {
+            if (JdkCallSupport.isMapSingleEntryFactory(methodRef) || JdkCallSupport.isMapPairFactory(methodRef)) {
                 final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
                 final List<IrExpression> materialized = new ArrayList<>();
                 for (final IrExpression argument : arguments) {
@@ -89,17 +89,13 @@ final class BytecodeToIRCollectionSupport {
                         materialized.add(IrExpression.objectLocal(local));
                     }
                 }
-                pushObjectCall(instructions, stack, localDeclarations,
-                    "entry".equals(name) ? "javan_map_entry_new" : "javan_map_singleton_java", materialized);
+                final String helper = "entry".equals(name) ? "javan_map_entry_new"
+                    : JdkCallSupport.isMapPairFactory(methodRef) ? "javan_map_pair" : "javan_map_singleton_java";
+                pushObjectCall(instructions, stack, localDeclarations, helper, materialized);
                 return true;
             }
             if ("of".equals(name) && "()Ljava/util/Map;".equals(descriptor)) {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_empty", List.of())));
-                return true;
-            }
-            if ("of".equals(name) && "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;".equals(descriptor)) {
-                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_pair", arguments)));
                 return true;
             }
             if ("of".equals(name) && "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;".equals(descriptor)) {

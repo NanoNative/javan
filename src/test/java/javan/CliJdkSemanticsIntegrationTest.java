@@ -2262,6 +2262,46 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void twoEntryMapFactoryRejectsNullAndDuplicateKeys() throws Exception {
+        final Path project = project("map-pair-errors");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.HashMap;
+            import java.util.Map;
+            public final class Main {
+                static String argument(String label, String value) { System.out.println(label); return value; }
+                public static void main(String[] args) {
+                    try { Map.of(argument("first", null), argument("second", "v"), argument("third", "k"), argument("fourth", "v")); }
+                    catch (NullPointerException expected) { System.out.println("null key"); }
+                    try { Map.<String, String>of("a", "x", "b", null); }
+                    catch (NullPointerException expected) { System.out.println("null value"); }
+                    try { Map.of(Integer.toString(42), "x", Integer.toString(42), "y"); }
+                    catch (IllegalArgumentException expected) { System.out.println("duplicate key"); }
+                    try { Map.<String, String>of("a", "x", "a", null); }
+                    catch (NullPointerException expected) { System.out.println("null before duplicate"); }
+                    Map<String, String> result = Map.of("a", Integer.toString(42), "b", Integer.toString(43));
+                    for (int i = 0; i < 100; i++) Integer.toString(i);
+                    System.out.println(result.get("a")); System.out.println(result.get("b"));
+                    System.out.println(Map.of(System.out, System.err, System.err, System.out).get(System.out) == System.err);
+                    Map<Object, String> distinct = new HashMap<>();
+                    distinct.put(System.out, "stream"); distinct.put("", "empty");
+                    Object loader = ClassLoader.getSystemClassLoader(); distinct.put(loader, "loader");
+                    System.out.println(distinct.size()); System.out.println(distinct.get(System.out));
+                    System.out.println(distinct.get("")); System.out.println(distinct.get(loader));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/map-pair-errors").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void mapEntryAndSingletonFactoryRejectNullsInArgumentOrder() throws Exception {
         final Path project = project("map-factory-null");
         writeJava(project, "com.acme.Main", """
