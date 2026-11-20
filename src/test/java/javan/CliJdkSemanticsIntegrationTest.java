@@ -2226,6 +2226,56 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mapPutIfAbsentHandlesNullsAndImmutableReceivers() throws Exception {
+        final Path project = project("map-put-if-absent-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Collections;
+            import java.util.HashMap;
+            import java.util.Map;
+            import java.util.concurrent.ConcurrentHashMap;
+            public final class Main {
+                static String argument(String value) { System.out.println("argument"); return value; }
+                public static void main(String[] args) {
+                    Map<String, String> plain = new HashMap<>();
+                    plain.put(null, null);
+                    System.out.println(plain.putIfAbsent(null, "value") == null);
+                    System.out.println(plain.get(null));
+                    System.out.println(plain.putIfAbsent(null, "other"));
+                    plain.putIfAbsent("missing", null); System.out.println(plain.containsKey("missing"));
+                    Map<String, String> concurrent = new ConcurrentHashMap<>();
+                    concurrent.put("existing", "old");
+                    try { concurrent.putIfAbsent(null, "value"); } catch (NullPointerException expected) { System.out.println("null key"); }
+                    try { concurrent.putIfAbsent("existing", null); } catch (NullPointerException expected) { System.out.println("null value"); }
+                    System.out.println(concurrent.putIfAbsent("existing", "new"));
+                    System.out.println(concurrent.putIfAbsent("new", "value") == null);
+                    Map<String, String> view = Collections.unmodifiableMap(plain);
+                    try { view.putIfAbsent(null, "x"); } catch (UnsupportedOperationException expected) { System.out.println("immutable existing"); }
+                    try { view.putIfAbsent("none", "x"); } catch (UnsupportedOperationException expected) { System.out.println("immutable absent"); }
+                    try { Map.<String, String>of().putIfAbsent("a", "b"); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable literal"); }
+                    Map<String, String> missing = null;
+                    try { missing.putIfAbsent(argument("a"), argument("b")); }
+                    catch (NullPointerException expected) { System.out.println("null receiver"); }
+                    ConcurrentHashMap<String, String> direct = new ConcurrentHashMap<>();
+                    try { direct.putIfAbsent("key", null); } catch (NullPointerException expected) { System.out.println("direct null"); }
+                    Map<Object, Object> objects = new HashMap<>(); objects.put("slot", null); Object replacement = new Object();
+                    objects.putIfAbsent("slot", replacement); System.out.println(objects.get("slot") == replacement);
+                    objects.putIfAbsent(System.out, System.err); System.out.println(objects.get(System.out) == System.err);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/map-put-if-absent-null").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void concurrentMapQueriesRejectNullThroughMapReferences() throws Exception {
         final Path project = project("concurrent-map-null-queries");
         writeJava(project, "com.acme.Main", """

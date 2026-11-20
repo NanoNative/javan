@@ -902,6 +902,13 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksMapPutIfAbsentAsUnknown() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "putIfAbsent",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+    }
+
+    @Test
     void marksMapClearAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "clear", "()V")))
             .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);

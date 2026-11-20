@@ -4520,13 +4520,24 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static int nullContainsValue() { values.containsValue(null); return 0; }
                 public static int nullDefaultKey() { values.getOrDefault(null, null); return 0; }
                 public static int absentDefault() { return values.getOrDefault(-1, null) == null ? 1 : 0; }
+                public static int nullAbsentKey() { values.putIfAbsent(null, 1); return 0; }
+                public static int nullAbsentValue() { values.putIfAbsent(1, null); return 0; }
+                public static int missingAbsentReceiver() {
+                    Map<Integer, Integer> map = null; map.putIfAbsent(1, 2); return 0;
+                }
+                public static int replacesNull() {
+                    Map<Integer, Integer> map = new java.util.HashMap<>();
+                    map.put(1, null); map.putIfAbsent(1, 7); return map.get(1);
+                }
             }
             """);
         final CliRun build = run(tempDir, "build", project.toString(), "--kind", "staticlib",
             "--export", "com.acme.Api.size():int", "--export", "com.acme.Api.nullKey():int",
             "--export", "com.acme.Api.nullValue():int", "--export", "com.acme.Api.nullGet():int",
             "--export", "com.acme.Api.nullContainsKey():int", "--export", "com.acme.Api.nullContainsValue():int",
-            "--export", "com.acme.Api.nullDefaultKey():int", "--export", "com.acme.Api.absentDefault():int");
+            "--export", "com.acme.Api.nullDefaultKey():int", "--export", "com.acme.Api.absentDefault():int",
+            "--export", "com.acme.Api.nullAbsentKey():int", "--export", "com.acme.Api.nullAbsentValue():int",
+            "--export", "com.acme.Api.missingAbsentReceiver():int", "--export", "com.acme.Api.replacesNull():int");
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final Path caller = writeC(project, "call_map.c", """
             #include <string.h>
@@ -4554,6 +4565,18 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     javan_result_free(&failure);
                     JavanResult present = javan_try_com_acme_Api_absentDefault_void(&value);
                     if (!present.ok || value != 1) return 8;
+                    javan_result_free(&present);
+                    failure = javan_try_com_acme_Api_nullAbsentKey_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 9;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_nullAbsentValue_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 10;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_missingAbsentReceiver_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 11;
+                    javan_result_free(&failure);
+                    present = javan_try_com_acme_Api_replacesNull_void(&value);
+                    if (!present.ok || value != 7) return 12;
                     javan_result_free(&present);
                     JavanResult result = javan_try_com_acme_Api_size_void(&value);
                     if (!result.ok || value != 400) return 1;

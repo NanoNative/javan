@@ -2096,6 +2096,18 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies supported map insertions that keep an existing non-null value.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method is a supported map put-if-absent call
+     */
+    public static boolean isMapPutIfAbsent(final MethodRef methodRef) {
+        return isMapRuntimeOwner(methodRef.owner()) && isSupported(methodRef)
+            && "putIfAbsent".equals(methodRef.name())
+            && "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(methodRef.descriptor());
+    }
+
+    /**
      * Identifies supported map membership and defaulted lookup operations.
      *
      * @param methodRef referenced JDK method
@@ -2119,7 +2131,7 @@ public final class JdkCallSupport {
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
         if (isCollectionObjectAddition(methodRef) || isCollectionClear(methodRef) || isMapClear(methodRef)
-            || (isMapObjectGetOrPut(methodRef) && "put".equals(methodRef.name()))) {
+            || (isMapObjectGetOrPut(methodRef) && "put".equals(methodRef.name())) || isMapPutIfAbsent(methodRef)) {
             return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException");
         }
         if (isCollectionObjectSearch(methodRef) || isCollectionSizeQuery(methodRef) || isMapObjectGetOrPut(methodRef)

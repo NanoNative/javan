@@ -1349,7 +1349,9 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("putIfAbsent(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(signature)) {
-                pushObjectCall(instructions, stack, localDeclarations, "javan_map_put_if_absent", List.of(receiver, arguments.get(0), arguments.get(1)));
+                pushObjectCall(instructions, stack, localDeclarations,
+                    JdkCallSupport.isMapPutIfAbsent(methodRef) ? "javan_map_put_if_absent_java" : "javan_map_put_if_absent",
+                    List.of(receiver, arguments.get(0), arguments.get(1)));
                 return true;
             }
             if ("replace(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(signature)) {

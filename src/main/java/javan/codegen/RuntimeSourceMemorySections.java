@@ -15746,7 +15746,11 @@ final class RuntimeSourceMemorySections {
             javan_map_mutable_checked(map);
             int index = javan_map_find(map, key);
             if (index >= 0) {
-                return map->values[index];
+                void* previous = map->values[index];
+                if (previous == NULL) {
+                    map->values[index] = element;
+                }
+                return previous;
             }
             int insertion_index = javan_map_insertion_index(map, key);
             void* key_root = key;
@@ -15781,6 +15785,24 @@ final class RuntimeSourceMemorySections {
 
         void* javan_map_put_if_absent(void* value, void* key, void* element) {
             javan_runtime_lock_enter();
+            void* result = javan_map_put_if_absent_unlocked(value, key, element);
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        void* javan_map_put_if_absent_java(void* value, void* key, void* element) {
+            javan_runtime_lock_enter();
+            javan_object_map* map = javan_map_checked(value);
+            if (map->immutable != 0) {
+                javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                javan_runtime_lock_leave();
+                return NULL;
+            }
+            if ((key == NULL || element == NULL) && javan_map_has_concurrent_backing(map) != 0) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                javan_runtime_lock_leave();
+                return NULL;
+            }
             void* result = javan_map_put_if_absent_unlocked(value, key, element);
             javan_runtime_lock_leave();
             return result;

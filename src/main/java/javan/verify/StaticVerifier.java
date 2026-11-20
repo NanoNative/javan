@@ -2133,7 +2133,7 @@ public final class StaticVerifier {
             if (instruction.methodRef().isPresent()) {
                 final MethodRef target = instruction.methodRef().orElseThrow();
                 mapAccess |= JdkCallSupport.isMapObjectGetOrPut(target)
-                    || JdkCallSupport.isMapMembershipOrDefaultQuery(target);
+                    || JdkCallSupport.isMapMembershipOrDefaultQuery(target) || JdkCallSupport.isMapPutIfAbsent(target);
             }
             typedOperation |= instruction.opcode() == 192 || instruction.opcode() == 191;
             if (instruction.opcode() == 191) {

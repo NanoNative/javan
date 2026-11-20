@@ -1437,7 +1437,7 @@ public final class BytecodeToIR {
             final MethodRef reference = bytecodeInstruction.methodRef().orElseThrow();
             if (JdkCallSupport.isCollectionObjectAddition(reference) || JdkCallSupport.isCollectionClear(reference)
                 || JdkCallSupport.isMapClear(reference) || JdkCallSupport.isMapObjectGetOrPut(reference)
-                || JdkCallSupport.isMapMembershipOrDefaultQuery(reference)) {
+                || JdkCallSupport.isMapMembershipOrDefaultQuery(reference) || JdkCallSupport.isMapPutIfAbsent(reference)) {
                 possibleTypes.addAll(JdkCallSupport.transportedPlatformThrowableTypes(reference));
             }
             if (("java/util/Iterator".equals(reference.owner()) || "java/util/ListIterator".equals(reference.owner()))
