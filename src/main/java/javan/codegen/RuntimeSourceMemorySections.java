@@ -13766,6 +13766,10 @@ final class RuntimeSourceMemorySections {
         }
 
         void* javan_set_copy_of(void* collection) {
+            if (collection == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
+            }
             javan_object_list* source = javan_list_checked(collection);
             void* result_value = NULL;
             void** javan_set_copy_roots[] = {
@@ -13776,7 +13780,13 @@ final class RuntimeSourceMemorySections {
             int length = javan_list_logical_length(source);
             result_value = javan_hashset_new();
             for (int index = 0; index < length; index++) {
-                javan_set_add(result_value, javan_list_get_unchecked(source, index));
+                void* element = javan_list_get_unchecked(source, index);
+                if (element == NULL) {
+                    javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                    javan_root_frame_pop(javan_set_copy_roots);
+                    return NULL;
+                }
+                javan_set_add(result_value, element);
             }
             ((javan_object_list*) result_value)->immutable = 1;
             javan_root_frame_pop(javan_set_copy_roots);

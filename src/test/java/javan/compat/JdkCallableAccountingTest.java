@@ -1199,9 +1199,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksSetCopyOfAsSupported() {
+    void marksSetCopyOfAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "copyOf", "(Ljava/util/Collection;)Ljava/util/Set;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test

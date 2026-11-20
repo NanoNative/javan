@@ -2297,6 +2297,39 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void setCopyOfRejectsNullsAndCollapsesDuplicates() throws Exception {
+        final Path project = project("set-copy-of-errors");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.Collection;
+            import java.util.Set;
+            public final class Main {
+                public static void main(String[] args) {
+                    Collection<String> missing = null;
+                    try { Set.copyOf(missing); } catch (NullPointerException expected) { System.out.println("null source"); }
+                    ArrayList<String> source = new ArrayList<>(); source.add("a"); source.add(null);
+                    try { Set.copyOf(source); } catch (NullPointerException expected) { System.out.println("null element"); }
+                    source.clear(); source.add(Integer.toString(42)); source.add("a"); source.add("a");
+                    Set<String> copy = Set.copyOf(source); source.clear();
+                    for (int i = 0; i < 100; i++) Integer.toString(i);
+                    System.out.println(copy.size()); System.out.println(copy.contains("42")); System.out.println(copy.contains("a"));
+                    try { copy.add("b"); } catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                    System.out.println(Set.copyOf(Set.of("after")).contains("after"));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/set-copy-of-errors").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void setFactoriesHandleNullsAndDuplicateElements() throws Exception {
         final Path project = project("set-factory-errors");
         writeJava(project, "com.acme.Main", """

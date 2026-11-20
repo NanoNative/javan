@@ -2080,6 +2080,17 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies the immutable set copy factory.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method copies a collection into a set
+     */
+    public static boolean isSetCopyOf(final MethodRef methodRef) {
+        return "java/util/Set".equals(methodRef.owner()) && "copyOf".equals(methodRef.name())
+            && "(Ljava/util/Collection;)Ljava/util/Set;".equals(methodRef.descriptor()) && isSupported(methodRef);
+    }
+
+    /**
      * Identifies non-empty immutable set factory calls.
      *
      * @param methodRef referenced JDK method
@@ -2241,7 +2252,8 @@ public final class JdkCallSupport {
         if (isMapMultiEntryFactory(methodRef) || isMapEntryArrayFactory(methodRef) || isSetFactory(methodRef)) {
             return List.of("java/lang/NullPointerException", "java/lang/IllegalArgumentException");
         }
-        if (isMapCopyConstructor(methodRef) || isMapCopyOf(methodRef) || isMapSingleEntryFactory(methodRef)) {
+        if (isMapCopyConstructor(methodRef) || isMapCopyOf(methodRef) || isMapSingleEntryFactory(methodRef)
+            || isSetCopyOf(methodRef)) {
             return List.of("java/lang/NullPointerException");
         }
         if (isCollectionObjectAddition(methodRef) || isCollectionClear(methodRef) || isMapClear(methodRef)

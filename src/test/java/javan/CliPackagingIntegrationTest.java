@@ -4575,6 +4575,9 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static int nullSetArray() { Object[] values = null; java.util.Set.of(values); return 0; }
                 public static int nullSetArrayElement() { Object[] values = new Object[] { 1, null }; java.util.Set.of(values); return 0; }
                 public static int duplicateSetArray() { Object[] values = new Object[] { 1, 1 }; java.util.Set.of(values); return 0; }
+                public static int nullSetCopySource() { java.util.Collection<Integer> source = null; java.util.Set.copyOf(source); return 0; }
+                public static int nullSetCopyElement() { java.util.ArrayList<Integer> source = new java.util.ArrayList<>(); source.add(null); java.util.Set.copyOf(source); return 0; }
+                public static int duplicateSetCopy() { return java.util.Set.copyOf(java.util.List.of(1, 1)).size(); }
                 public static int replacesNull() {
                     Map<Integer, Integer> map = new java.util.HashMap<>();
                     map.put(1, null); map.putIfAbsent(1, 7); return map.get(1);
@@ -4606,7 +4609,8 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "--export", "com.acme.Api.nullMapArrayEntry():int", "--export", "com.acme.Api.duplicateMapArrayEntry():int",
             "--export", "com.acme.Api.nullSetElement():int", "--export", "com.acme.Api.duplicateSetElements():int",
             "--export", "com.acme.Api.nullSetArray():int", "--export", "com.acme.Api.nullSetArrayElement():int",
-            "--export", "com.acme.Api.duplicateSetArray():int");
+            "--export", "com.acme.Api.duplicateSetArray():int", "--export", "com.acme.Api.nullSetCopySource():int",
+            "--export", "com.acme.Api.nullSetCopyElement():int", "--export", "com.acme.Api.duplicateSetCopy():int");
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final Path caller = writeC(project, "call_map.c", """
             #include <string.h>
@@ -4758,6 +4762,15 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     failure = javan_try_com_acme_Api_duplicateSetArray_void(&value);
                     if (failure.ok || failure.message == 0 || strstr(failure.message, "IllegalArgumentException") == 0) return 49;
                     javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_nullSetCopySource_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 50;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_nullSetCopyElement_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 51;
+                    javan_result_free(&failure);
+                    present = javan_try_com_acme_Api_duplicateSetCopy_void(&value);
+                    if (!present.ok || value != 1) return 52;
+                    javan_result_free(&present);
                     JavanResult result = javan_try_com_acme_Api_size_void(&value);
                     if (!result.ok || value != 400) return 1;
                     javan_result_free(&result);

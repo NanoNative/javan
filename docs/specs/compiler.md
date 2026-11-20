@@ -101,7 +101,8 @@ verification.
 
 Fixed-arity and array-based `Set.of` reject null elements and duplicate elements within the
 supported equality semantics. The immutable result retains its elements independently of an input
-array. Application-defined equality remains incomplete.
+array. `Set.copyOf` rejects null sources and elements, collapses duplicates and creates an immutable
+snapshot. Application-defined equality remains incomplete.
 
 The default `SecureRandom` constructor supports calls resolved as `SecureRandom.nextBytes` and
 `generateSeed`. The static `getSeed` entry is also supported. The supported random value methods
