@@ -4411,10 +4411,13 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     ArrayList<Object> list = null;
                     return list.contains("item") ? 1 : 0;
                 }
+                public static int missingSize() { ArrayList<Object> list = null; return list.size(); }
+                public static int missingEmpty() { ArrayList<Object> list = null; return list.isEmpty() ? 1 : 0; }
             }
             """);
         final CliRun build = run(tempDir, "build", project.toString(), "--kind", "staticlib",
-            "--export", "com.acme.Api.hit():int", "--export", "com.acme.Api.missing():int");
+            "--export", "com.acme.Api.hit():int", "--export", "com.acme.Api.missing():int",
+            "--export", "com.acme.Api.missingSize():int", "--export", "com.acme.Api.missingEmpty():int");
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final Path caller = writeC(project, "call_null_search.c", """
             #include <string.h>
@@ -4427,8 +4430,14 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 result = javan_try_com_acme_Api_missing_void(&value);
                 if (result.ok || result.message == 0 || strstr(result.message, "NullPointerException") == 0) return 2;
                 javan_result_free(&result);
+                result = javan_try_com_acme_Api_missingSize_void(&value);
+                if (result.ok || result.message == 0 || strstr(result.message, "NullPointerException") == 0) return 3;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_missingEmpty_void(&value);
+                if (result.ok || result.message == 0 || strstr(result.message, "NullPointerException") == 0) return 4;
+                javan_result_free(&result);
                 result = javan_try_com_acme_Api_hit_void(&value);
-                if (!result.ok || value != 1) return 3;
+                if (!result.ok || value != 1) return 5;
                 javan_result_free(&result);
                 return 0;
             }

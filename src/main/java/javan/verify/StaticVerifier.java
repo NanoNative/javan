@@ -655,7 +655,8 @@ public final class StaticVerifier {
             return false;
         }
         final MethodRef methodRef = instruction.methodRef().orElseThrow();
-        if (defersToSpecializedStreamReceiverDiagnostic(methodRef)) {
+        if (defersToSpecializedStreamReceiverDiagnostic(methodRef)
+            || JdkCallSupport.isCollectionSizeQuery(methodRef)) {
             return false;
         }
         return MethodDescriptor.parse(methodRef.descriptor()).parameterTypes().isEmpty();

@@ -2010,6 +2010,37 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nullCollectionSizeAndEmptyPropagateToCallers() throws Exception {
+        final Path project = project("null-collection-size");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.List;
+            import java.util.Set;
+            public final class Main {
+                static int size(List<Object> value) { return value.size(); }
+                public static void main(String[] args) {
+                    List<Object> list = null;
+                    Set<Object> set = null;
+                    ArrayList<Object> array = null;
+                    try { size(list); } catch (NullPointerException expected) { System.out.println("size"); }
+                    try { set.isEmpty(); } catch (NullPointerException expected) { System.out.println("empty"); }
+                    try { array.size(); } catch (NullPointerException expected) { System.out.println("array"); }
+                    ArrayList<Object> valid = new ArrayList<>();
+                    System.out.println(valid.size()); System.out.println(valid.isEmpty());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/null-collection-size").toString()), Duration.ofSeconds(60));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void builtinEnumConstantsKeepIdentityAndClassDistinctFromStrings() throws Exception {
         final Path project = project("builtin-enum-identity");
         writeJava(project, "com.acme.Main", """

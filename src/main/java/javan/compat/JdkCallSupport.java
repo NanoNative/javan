@@ -2019,11 +2019,7 @@ public final class JdkCallSupport {
      * @return whether a null receiver can be transported by the native search
      */
     public static boolean isCollectionObjectSearch(final MethodRef methodRef) {
-        final String owner = methodRef.owner();
-        if (!"java/util/Collection".equals(owner) && !"java/util/List".equals(owner)
-            && !"java/util/ArrayList".equals(owner) && !"java/util/AbstractList".equals(owner)
-            && !"java/util/Set".equals(owner) && !"java/util/HashSet".equals(owner)
-            && !"java/util/LinkedHashSet".equals(owner)) {
+        if (!isCollectionRuntimeOwner(methodRef.owner())) {
             return false;
         }
         return isSupported(methodRef)
@@ -2034,13 +2030,28 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies supported no-argument collection size queries.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method queries collection size or emptiness
+     */
+    public static boolean isCollectionSizeQuery(final MethodRef methodRef) {
+        if (!isCollectionRuntimeOwner(methodRef.owner())) {
+            return false;
+        }
+        return isSupported(methodRef)
+            && (("size".equals(methodRef.name()) && "()I".equals(methodRef.descriptor()))
+                || ("isEmpty".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())));
+    }
+
+    /**
      * Returns platform throwable types transported by a supported JDK call.
      *
      * @param methodRef method reference
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
-        if (isCollectionObjectSearch(methodRef)) {
+        if (isCollectionObjectSearch(methodRef) || isCollectionSizeQuery(methodRef)) {
             return List.of("java/lang/NullPointerException");
         }
         if ("java/lang/Object".equals(methodRef.owner()) && "equals".equals(methodRef.name())

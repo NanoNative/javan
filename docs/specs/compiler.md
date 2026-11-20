@@ -70,10 +70,10 @@ Direct `new Object()` creates a distinct managed instance with `java.lang.Object
 strings, boxed primitives and application enum constants. Some JDK value comparisons, including
 separate lists, maps, optionals and inherited platform equality, fail explicitly until their equality
 is implemented. The supported `TimeUnit`, `StandardCopyOption` and `LinkOption` constants have
-stable enum identity distinct from equal-looking strings. Collection searches transport a null
-receiver as `NullPointerException`, but searches do not yet dispatch arbitrary application-defined
-`equals` methods. Those search callables remain unknown in the support ledger. Other methods remain
-subject to their supported callable entries.
+stable enum identity distinct from equal-looking strings. Collection searches and size queries
+transport a null receiver as `NullPointerException`, but searches do not yet dispatch arbitrary
+application-defined `equals` methods. Those search callables remain unknown in the support ledger.
+Other methods remain subject to their supported callable entries.
 
 The default `SecureRandom` constructor supports calls resolved as `SecureRandom.nextBytes` and
 `generateSeed`. The static `getSeed` entry is also supported. The supported random value methods
