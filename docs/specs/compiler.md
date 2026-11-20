@@ -108,7 +108,11 @@ Fixed-arity and array-based `List.of` reject null elements, and the array overlo
 array. They create immutable ordered snapshots and retain duplicate elements. Other list operations
 and application-defined element equality remain incomplete. `List.copyOf` rejects null sources and
 elements and creates an immutable ordered snapshot.
-Reads using `List.get` publish the returned reference safely during concurrent garbage collection.
+Reads using `List.get`, `getFirst` and `getLast` publish returned references safely during concurrent
+garbage collection. Supported `getFirst` and `getLast` calls transport null-receiver and empty-list
+failures within supported handler shapes.
+Supported indexed `get` calls transport null-receiver and invalid-index failures within supported
+handler shapes.
 Application-defined collection implementations are not yet supported.
 
 The default `SecureRandom` constructor supports calls resolved as `SecureRandom.nextBytes` and

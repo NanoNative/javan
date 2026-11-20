@@ -2487,6 +2487,201 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void listGetTransportsNullAndIndexFailures() throws Exception {
+        final Path project = project("list-get-errors");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.AbstractList;
+            import java.util.ArrayList;
+            import java.util.List;
+            public final class Main {
+                public static void main(String[] args) {
+                    ArrayList<String> concrete = new ArrayList<>();
+                    List<String> values = concrete;
+                    AbstractList<String> abstractValues = concrete;
+                    List<String> missing = args.length == 0 ? null : values;
+                    ArrayList<String> missingConcrete = args.length == 0 ? null : concrete;
+                    AbstractList<String> missingAbstract = args.length == 0 ? null : concrete;
+                    int index = args.length;
+                    try { values.get(index); } catch (IndexOutOfBoundsException expected) { System.out.println("empty"); }
+                    try { concrete.get(-1); } catch (IndexOutOfBoundsException expected) { System.out.println("negative"); }
+                    try { missing.get(index); } catch (NullPointerException expected) { System.out.println("null list"); }
+                    try { missingConcrete.get(index); } catch (NullPointerException expected) { System.out.println("null concrete"); }
+                    try { missingAbstract.get(index); } catch (NullPointerException expected) { System.out.println("null abstract"); }
+                    try { abstractValues.get(index); } catch (IndexOutOfBoundsException expected) { System.out.println("abstract empty"); }
+                    concrete.add(null); concrete.add("last");
+                    System.out.println(values.get(0) == null);
+                    System.out.println(values.get(1));
+                    System.out.println(abstractValues.get(1));
+                    try { values.get(Integer.MAX_VALUE); } catch (IndexOutOfBoundsException expected) { System.out.println("large"); }
+                    try { values.get(Integer.MIN_VALUE); } catch (IndexOutOfBoundsException expected) { System.out.println("small"); }
+                    try { List.of("one").get(1); } catch (IndexOutOfBoundsException expected) { System.out.println("immutable"); }
+                    System.out.println(java.util.Collections.unmodifiableList(concrete).get(1));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/list-get-errors").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listGetEvaluatesArgumentsBeforeNullFailure() throws Exception {
+        final Path project = project("list-get-null-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.List;
+            public final class Main {
+                static List<String> missing() { System.out.println("receiver"); return null; }
+                static int index() { System.out.println("index"); return 0; }
+                public static void main(String[] args) {
+                    missing().get(index());
+                    System.out.println("after");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/list-get-null-order").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("receiver\nindex\n");
+        assertThat(result.stderr()).contains("NullPointerException");
+    }
+
+    @Test
+    void listEndpointsTransportEmptyAndNullFailures() throws Exception {
+        final Path project = project("list-endpoint-errors");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.List;
+            import java.util.NoSuchElementException;
+            public final class Main {
+                public static void main(String[] args) {
+                    ArrayList<String> concrete = new ArrayList<>();
+                    List<String> list = concrete;
+                    List<String> missing = args.length == 0 ? null : list;
+                    ArrayList<String> missingConcrete = args.length == 0 ? null : concrete;
+                    List<String> immutable = List.of();
+                    List<String> view = java.util.Collections.unmodifiableList(concrete);
+                    try { list.getFirst(); } catch (NoSuchElementException expected) { System.out.println("first empty"); }
+                    try { list.getLast(); } catch (NoSuchElementException expected) { System.out.println("last empty"); }
+                    try { concrete.getFirst(); } catch (NoSuchElementException expected) { System.out.println("concrete first empty"); }
+                    try { concrete.getLast(); } catch (NoSuchElementException expected) { System.out.println("concrete last empty"); }
+                    try { missing.getFirst(); } catch (NullPointerException expected) { System.out.println("first null"); }
+                    try { missing.getLast(); } catch (NullPointerException expected) { System.out.println("last null"); }
+                    try { missingConcrete.getFirst(); } catch (NullPointerException expected) { System.out.println("concrete first null"); }
+                    try { missingConcrete.getLast(); } catch (NullPointerException expected) { System.out.println("concrete last null"); }
+                    try { immutable.getFirst(); } catch (NoSuchElementException expected) { System.out.println("immutable first empty"); }
+                    try { immutable.getLast(); } catch (NoSuchElementException expected) { System.out.println("immutable last empty"); }
+                    try { List.of().getFirst(); } catch (NoSuchElementException expected) { System.out.println("direct first empty"); }
+                    try { List.of().getLast(); } catch (NoSuchElementException expected) { System.out.println("direct last empty"); }
+                    try { view.getFirst(); } catch (NoSuchElementException expected) { System.out.println("view first empty"); }
+                    try { view.getLast(); } catch (NoSuchElementException expected) { System.out.println("view last empty"); }
+                    concrete.add(null); concrete.add("last");
+                    System.out.println(list.getFirst() == null);
+                    System.out.println(list.getLast());
+                    System.out.println(concrete.getFirst() == null);
+                    System.out.println(concrete.getLast());
+                    System.out.println(view.getFirst() == null);
+                    System.out.println(view.getLast());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/list-endpoint-errors").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listEndpointsRetainValuesDuringConcurrentCollection() throws Exception {
+        final Path project = project("list-endpoints-concurrent-gc");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.List;
+            import java.util.NoSuchElementException;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static boolean rejectsFirst(List<String> values) {
+                    try { values.getFirst(); } catch (NoSuchElementException expected) { return true; }
+                    return false;
+                }
+                static boolean rejectsLast(List<String> values) {
+                    try { values.getLast(); } catch (NoSuchElementException expected) { return true; }
+                    return false;
+                }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            ArrayList<String> concrete = new ArrayList<>();
+                            concrete.add(Integer.toString(i)); concrete.add(Integer.toString(i + 1));
+                            List<String> list = concrete;
+                            for (int j = 0; j < 4; j++) Integer.toString(i + j);
+                            if (!list.getFirst().equals(Integer.toString(i))) errors.incrementAndGet();
+                            if (!list.getLast().equals(Integer.toString(i + 1))) errors.incrementAndGet();
+                            if (!concrete.getFirst().equals(Integer.toString(i))) errors.incrementAndGet();
+                            if (!concrete.getLast().equals(Integer.toString(i + 1))) errors.incrementAndGet();
+                            if (!list.get(0).equals(Integer.toString(i))) errors.incrementAndGet();
+                            if (!concrete.get(1).equals(Integer.toString(i + 1))) errors.incrementAndGet();
+                            List<String> empty = List.of();
+                            if (!rejectsFirst(empty) || !rejectsLast(empty)) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/list-endpoints-concurrent-gc").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
+    void listEndpointUncaughtFailureStopsBeforeLaterEffects() throws Exception {
+        final Path project = project("list-endpoint-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            public final class Main {
+                public static void main(String[] args) {
+                    System.out.println("before");
+                    ArrayList<String> values = new ArrayList<>();
+                    System.out.println(values.getFirst());
+                    System.out.println("after");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/list-endpoint-uncaught").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("before\n");
+        assertThat(result.stderr()).contains("NoSuchElementException");
+    }
+
+    @Test
     void listCopyOfRejectsNullsAndPreservesSnapshot() throws Exception {
         final Path project = project("list-copy-of-errors");
         writeJava(project, "com.acme.Main", """

@@ -25377,13 +25377,14 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).containsSubsequence(
             IrInstruction.assignObject(
                 "object0",
-                IrExpression.objectCall("javan_list_get", List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1")))
+                IrExpression.objectCall("javan_list_get_java", List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1")))
             ),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
+        assertThat(function.instructions()).contains(IrInstruction.propagatePending());
     }
 
     @Test
@@ -25400,13 +25401,14 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).containsSubsequence(
             IrInstruction.assignObject(
                 "object0",
                 IrExpression.objectCall("javan_list_get_first", List.of(IrExpression.objectLocal("arg0")))
             ),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
+        assertThat(function.instructions()).contains(IrInstruction.propagatePending());
     }
 
     @Test
@@ -25423,13 +25425,14 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).containsSubsequence(
             IrInstruction.assignObject(
                 "object0",
                 IrExpression.objectCall("javan_list_get_last", List.of(IrExpression.objectLocal("arg0")))
             ),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
+        assertThat(function.instructions()).contains(IrInstruction.propagatePending());
     }
 
     @Test
@@ -25839,13 +25842,14 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).containsSubsequence(
             IrInstruction.assignObject(
                 "object0",
-                IrExpression.objectCall("javan_list_get", List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1")))
+                IrExpression.objectCall("javan_list_get_java", List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1")))
             ),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
+        assertThat(function.instructions()).contains(IrInstruction.propagatePending());
     }
 
     @Test
@@ -26485,13 +26489,14 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).containsSubsequence(
             IrInstruction.assignObject(
                 "object0",
                 IrExpression.objectCall("javan_list_get_first", List.of(IrExpression.objectLocal("arg0")))
             ),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
+        assertThat(function.instructions()).contains(IrInstruction.propagatePending());
     }
 
     @Test
@@ -26589,13 +26594,14 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).containsSubsequence(
             IrInstruction.assignObject(
                 "object0",
-                IrExpression.objectCall("javan_list_get", List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1")))
+                IrExpression.objectCall("javan_list_get_java", List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1")))
             ),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
+        assertThat(function.instructions()).contains(IrInstruction.propagatePending());
     }
 
     @Test
@@ -26612,13 +26618,14 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).containsSubsequence(
             IrInstruction.assignObject(
                 "object0",
                 IrExpression.objectCall("javan_list_get_last", List.of(IrExpression.objectLocal("arg0")))
             ),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
+        assertThat(function.instructions()).contains(IrInstruction.propagatePending());
     }
 
     @Test

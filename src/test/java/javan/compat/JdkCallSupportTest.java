@@ -4443,6 +4443,26 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void listGetTransportsNullAndBoundsFailures() {
+        for (final String owner : List.of("java/util/List", "java/util/AbstractList", "java/util/ArrayList")) {
+            assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
+                owner, "get", "(I)Ljava/lang/Object;"
+            ))).containsExactly("java/lang/NullPointerException", "java/lang/IndexOutOfBoundsException");
+        }
+    }
+
+    @Test
+    void listEndpointsTransportNullAndEmptyFailures() {
+        for (final String owner : List.of("java/util/List", "java/util/ArrayList")) {
+            for (final String name : List.of("getFirst", "getLast")) {
+                assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
+                    owner, name, "()Ljava/lang/Object;"
+                ))).containsExactly("java/lang/NullPointerException", "java/util/NoSuchElementException");
+            }
+        }
+    }
+
+    @Test
     void listOfTransportsNullFactoryFailures() {
         assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
             "java/util/List", "of", "(Ljava/lang/Object;)Ljava/util/List;"

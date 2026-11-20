@@ -13643,17 +13643,39 @@ final class RuntimeSourceMemorySections {
             return javan_list_get_unchecked(list, index);
         }
 
-        void* javan_list_get_first(void* value) {
-            return javan_list_get(value, 0);
+        void* javan_list_get_java(void* value, int index) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
+            }
+            javan_object_list* list = javan_list_checked(value);
+            if (index < 0 || index >= javan_list_logical_length(list)) {
+                javan_pending_throw("java/lang/IndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
+            }
+            return javan_list_get_unchecked(list, index);
         }
 
-        void* javan_list_get_last(void* value) {
+        static void* javan_list_get_endpoint(void* value, int last) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
+            }
             javan_object_list* list = javan_list_checked(value);
             int length = javan_list_logical_length(list);
             if (length == 0) {
-                javan_panic("list is empty");
+                javan_pending_throw("java/util/NoSuchElementException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
             }
-            return javan_list_get_unchecked(list, length - 1);
+            return javan_list_get_unchecked(list, last ? length - 1 : 0);
+        }
+
+        void* javan_list_get_first(void* value) {
+            return javan_list_get_endpoint(value, 0);
+        }
+
+        void* javan_list_get_last(void* value) {
+            return javan_list_get_endpoint(value, 1);
         }
 
         void* javan_list_iterator_at(void* value, int index) {

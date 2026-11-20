@@ -542,6 +542,7 @@ final class RuntimeHeaderFile {
         void javan_collection_clear_java(void* list);
         void javan_list_clear(void* list);
         void* javan_list_get(void* list, int index);
+        void* javan_list_get_java(void* list, int index);
         void* javan_list_get_first(void* list);
         void* javan_list_get_last(void* list);
         void* javan_list_iterator(void* list);

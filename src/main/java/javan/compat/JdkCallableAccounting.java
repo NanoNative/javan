@@ -32,6 +32,8 @@ final class JdkCallableAccounting {
             || JdkCallSupport.isSetCopyOf(methodRef)
             || JdkCallSupport.isListCopyOf(methodRef)
             || JdkCallSupport.isListFactory(methodRef)
+            || JdkCallSupport.isListEndpoint(methodRef)
+            || JdkCallSupport.isListIndexedGet(methodRef)
             || ("java/util/List".equals(methodRef.owner()) && "of".equals(methodRef.name())
                 && "()Ljava/util/List;".equals(methodRef.descriptor()) && JdkCallSupport.isSupported(methodRef))
             || ("java/util/Map".equals(methodRef.owner()) && JdkCallSupport.isSupported(methodRef)

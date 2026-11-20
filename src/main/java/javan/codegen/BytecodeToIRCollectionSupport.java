@@ -933,7 +933,7 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("get(I)Ljava/lang/Object;".equals(signature)) {
-                pushObjectCall(instructions, stack, localDeclarations, "javan_list_get", List.of(receiver, arguments.getFirst()));
+                pushObjectCall(instructions, stack, localDeclarations, "javan_list_get_java", List.of(receiver, arguments.getFirst()));
                 return true;
             }
             if ("getFirst()Ljava/lang/Object;".equals(signature)) {
@@ -995,7 +995,7 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("get(I)Ljava/lang/Object;".equals(signature)) {
-                pushObjectCall(instructions, stack, localDeclarations, "javan_list_get", List.of(receiver, arguments.getFirst()));
+                pushObjectCall(instructions, stack, localDeclarations, "javan_list_get_java", List.of(receiver, arguments.getFirst()));
                 return true;
             }
             if ("indexOf(Ljava/lang/Object;)I".equals(signature)) {
@@ -1185,15 +1185,15 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("get(I)Ljava/lang/Object;".equals(signature)) {
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_get", List.of(receiver, arguments.getFirst()))));
+                pushObjectCall(instructions, stack, localDeclarations, "javan_list_get_java", List.of(receiver, arguments.getFirst()));
                 return true;
             }
             if ("getFirst()Ljava/lang/Object;".equals(signature)) {
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_get_first", List.of(receiver))));
+                pushObjectCall(instructions, stack, localDeclarations, "javan_list_get_first", List.of(receiver));
                 return true;
             }
             if ("getLast()Ljava/lang/Object;".equals(signature)) {
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_get_last", List.of(receiver))));
+                pushObjectCall(instructions, stack, localDeclarations, "javan_list_get_last", List.of(receiver));
                 return true;
             }
         }

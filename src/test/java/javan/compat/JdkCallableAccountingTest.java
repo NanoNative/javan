@@ -427,21 +427,29 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksArrayListGetAsSupported() {
+    void marksArrayListGetAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "get", "(I)Ljava/lang/Object;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksArrayListGetFirstAsSupported() {
+    void marksArrayListGetFirstAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "getFirst", "()Ljava/lang/Object;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksArrayListGetLastAsSupported() {
+    void marksArrayListGetLastAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "getLast", "()Ljava/lang/Object;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+    }
+
+    @Test
+    void marksListEndpointsAsUnknown() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/List", "getFirst", "()Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/List", "getLast", "()Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
@@ -577,9 +585,15 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksAbstractListGetAsSupported() {
+    void marksAbstractListGetAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/AbstractList", "get", "(I)Ljava/lang/Object;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+    }
+
+    @Test
+    void marksListGetAsUnknown() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/List", "get", "(I)Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test

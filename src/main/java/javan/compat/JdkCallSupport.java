@@ -2091,6 +2091,31 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies first and last element queries on supported list receivers.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method accesses a list endpoint
+     */
+    public static boolean isListEndpoint(final MethodRef methodRef) {
+        return ("java/util/List".equals(methodRef.owner()) || "java/util/ArrayList".equals(methodRef.owner()))
+            && ("getFirst".equals(methodRef.name()) || "getLast".equals(methodRef.name()))
+            && "()Ljava/lang/Object;".equals(methodRef.descriptor()) && isSupported(methodRef);
+    }
+
+    /**
+     * Identifies indexed access on supported list receivers.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method accesses a list element by index
+     */
+    public static boolean isListIndexedGet(final MethodRef methodRef) {
+        return ("java/util/List".equals(methodRef.owner()) || "java/util/ArrayList".equals(methodRef.owner())
+                || "java/util/AbstractList".equals(methodRef.owner()))
+            && "get".equals(methodRef.name()) && "(I)Ljava/lang/Object;".equals(methodRef.descriptor())
+            && isSupported(methodRef);
+    }
+
+    /**
      * Identifies non-empty immutable list factory calls.
      *
      * @param methodRef referenced JDK method
@@ -2271,6 +2296,12 @@ public final class JdkCallSupport {
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
+        if (isListIndexedGet(methodRef)) {
+            return List.of("java/lang/NullPointerException", "java/lang/IndexOutOfBoundsException");
+        }
+        if (isListEndpoint(methodRef)) {
+            return List.of("java/lang/NullPointerException", "java/util/NoSuchElementException");
+        }
         if (isMapMultiEntryFactory(methodRef) || isMapEntryArrayFactory(methodRef) || isSetFactory(methodRef)) {
             return List.of("java/lang/NullPointerException", "java/lang/IllegalArgumentException");
         }
