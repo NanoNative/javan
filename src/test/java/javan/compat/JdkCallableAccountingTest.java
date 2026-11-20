@@ -361,9 +361,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksCollectionAddAsSupported() {
+    void marksCollectionAddAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collection", "add", "(Ljava/lang/Object;)Z")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
@@ -547,9 +547,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksAbstractListAddAsSupported() {
+    void marksAbstractListAddAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/AbstractList", "add", "(Ljava/lang/Object;)Z")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test

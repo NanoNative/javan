@@ -2041,6 +2041,67 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nullCollectionAddEvaluatesArgumentAndPropagatesToCallers() throws Exception {
+        final Path project = project("null-collection-add");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.Collection;
+            import java.util.Set;
+            public final class Main {
+                static int order;
+                static Collection<Object> receiver() { order = order * 10 + 1; return null; }
+                static Object argument() { order = order * 10 + 2; return System.out; }
+                static boolean add(Collection<Object> target, Object value) { return target.add(value); }
+                public static void main(String[] args) {
+                    try { receiver().add(argument()); }
+                    catch (NullPointerException expected) { System.out.println("caught"); }
+                    System.out.println(order);
+                    Set<Object> set = null;
+                    try { add(set, "item"); }
+                    catch (NullPointerException expected) { System.out.println("caller caught"); }
+                    ArrayList<Object> values = new ArrayList<>();
+                    System.out.println(add(values, "item")); System.out.println(values.size());
+                    System.out.println(values.add(System.out));
+                    ArrayList<Object> missing = null;
+                    try { missing.add(System.err); }
+                    catch (NullPointerException expected) { System.out.println("stream caught"); }
+                    System.out.println(values.size());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/null-collection-add").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void immutableCollectionAddCatchIsRejectedRepeatably() throws Exception {
+        final Path project = project("immutable-add-unsupported");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.List;
+            public final class Main {
+                public static void main(String[] args) {
+                    List<Object> values = List.of();
+                    try { values.add("item"); }
+                    catch (UnsupportedOperationException expected) { System.out.println("caught"); }
+                }
+            }
+            """);
+        for (int attempt = 0; attempt < 2; attempt++) {
+            final CliRun build = run(tempDir, "build", project.toString());
+            assertThat(build.exitCode()).isEqualTo(2);
+            assertThat(build.stderr()).contains("error[JAVAN014]", "exception handlers are not supported");
+        }
+    }
+
+    @Test
     void builtinEnumConstantsKeepIdentityAndClassDistinctFromStrings() throws Exception {
         final Path project = project("builtin-enum-identity");
         writeJava(project, "com.acme.Main", """

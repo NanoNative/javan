@@ -2030,6 +2030,17 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies supported single-element collection additions.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method adds one object to a collection
+     */
+    public static boolean isCollectionObjectAddition(final MethodRef methodRef) {
+        return isCollectionRuntimeOwner(methodRef.owner()) && "add".equals(methodRef.name())
+            && "(Ljava/lang/Object;)Z".equals(methodRef.descriptor()) && isSupported(methodRef);
+    }
+
+    /**
      * Identifies supported no-argument collection size queries.
      *
      * @param methodRef referenced JDK method
@@ -2051,7 +2062,8 @@ public final class JdkCallSupport {
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
-        if (isCollectionObjectSearch(methodRef) || isCollectionSizeQuery(methodRef)) {
+        if (isCollectionObjectSearch(methodRef) || isCollectionObjectAddition(methodRef)
+            || isCollectionSizeQuery(methodRef)) {
             return List.of("java/lang/NullPointerException");
         }
         if ("java/lang/Object".equals(methodRef.owner()) && "equals".equals(methodRef.name())

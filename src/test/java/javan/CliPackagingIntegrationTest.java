@@ -4397,7 +4397,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void staticLibraryCollectionSearchReportsNullReceiverAndCanBeReused() throws Exception {
+    void staticLibraryCollectionOperationsReportNullReceiverAndCanBeReused() throws Exception {
         final Path project = project("library-null-search");
         writeJava(project, "com.acme.Api", """
             package com.acme;
@@ -4413,11 +4413,13 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 }
                 public static int missingSize() { ArrayList<Object> list = null; return list.size(); }
                 public static int missingEmpty() { ArrayList<Object> list = null; return list.isEmpty() ? 1 : 0; }
+                public static int missingAdd() { ArrayList<Object> list = null; return list.add(System.err) ? 1 : 0; }
             }
             """);
         final CliRun build = run(tempDir, "build", project.toString(), "--kind", "staticlib",
             "--export", "com.acme.Api.hit():int", "--export", "com.acme.Api.missing():int",
-            "--export", "com.acme.Api.missingSize():int", "--export", "com.acme.Api.missingEmpty():int");
+            "--export", "com.acme.Api.missingSize():int", "--export", "com.acme.Api.missingEmpty():int",
+            "--export", "com.acme.Api.missingAdd():int");
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final Path caller = writeC(project, "call_null_search.c", """
             #include <string.h>
@@ -4436,8 +4438,11 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 result = javan_try_com_acme_Api_missingEmpty_void(&value);
                 if (result.ok || result.message == 0 || strstr(result.message, "NullPointerException") == 0) return 4;
                 javan_result_free(&result);
+                result = javan_try_com_acme_Api_missingAdd_void(&value);
+                if (result.ok || result.message == 0 || strstr(result.message, "NullPointerException") == 0) return 5;
+                javan_result_free(&result);
                 result = javan_try_com_acme_Api_hit_void(&value);
-                if (!result.ok || value != 1) return 5;
+                if (!result.ok || value != 1) return 6;
                 javan_result_free(&result);
                 return 0;
             }

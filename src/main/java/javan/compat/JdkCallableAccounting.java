@@ -16,6 +16,7 @@ final class JdkCallableAccounting {
         if (JdkCallSupport.isContextLimitedOptionalOrElseThrowCall(methodRef)
             || JdkCallSupport.isSecureRandomSupertypeCall(methodRef)
             || JdkCallSupport.isCollectionObjectSearch(methodRef)
+            || JdkCallSupport.isCollectionObjectAddition(methodRef)
             || ("java/lang/Object".equals(methodRef.owner()) && "equals".equals(methodRef.name())
                 && "(Ljava/lang/Object;)Z".equals(methodRef.descriptor()))) {
             return Status.UNKNOWN;

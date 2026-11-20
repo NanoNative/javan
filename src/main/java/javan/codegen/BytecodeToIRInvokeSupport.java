@@ -189,8 +189,9 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         final MethodRef target = instruction.methodRef().orElseThrow();
-        final boolean guardedCollectionSearch = JdkCallSupport.isCollectionObjectSearch(target);
-        final boolean guardedCollectionReceiver = guardedCollectionSearch || JdkCallSupport.isCollectionSizeQuery(target);
+        final boolean guardedCollectionArgument = JdkCallSupport.isCollectionObjectSearch(target)
+            || JdkCallSupport.isCollectionObjectAddition(target);
+        final boolean guardedCollectionReceiver = guardedCollectionArgument || JdkCallSupport.isCollectionSizeQuery(target);
         if (!guardedCollectionReceiver && !guardedMapGet(target)
             && !guardedOptionalReceiver(target)
             && !(classes.containsKey(target.owner())
@@ -234,7 +235,7 @@ final class BytecodeToIRInvokeSupport {
             stack.set(receiverIndex, new StackValue(receiver.kind(), receiver.throwable(),
                 Optional.of(materialized), receiver.dynamicLambda()));
         }
-        if (guardedCollectionSearch) {
+        if (guardedCollectionArgument) {
             final StackValue argument = stack.get(receiverIndex + 1);
             final boolean streamArgument = argument.kind() == StackKind.PRINT_STREAM
                 || argument.kind() == StackKind.ERROR_PRINT_STREAM;
