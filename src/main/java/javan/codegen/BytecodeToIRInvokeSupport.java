@@ -189,12 +189,11 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         final MethodRef target = instruction.methodRef().orElseThrow();
-        final boolean guardedCollectionArgument = JdkCallSupport.isCollectionObjectSearch(target)
-            || JdkCallSupport.isCollectionObjectAddition(target);
-        final boolean guardedCollectionOrMapReceiver = guardedCollectionArgument || JdkCallSupport.isCollectionSizeQuery(target)
+        final boolean guardedObjectArguments = JdkCallSupport.isCollectionObjectSearch(target)
+            || JdkCallSupport.isCollectionObjectAddition(target) || JdkCallSupport.isMapObjectGetOrPut(target);
+        final boolean guardedCollectionOrMapReceiver = guardedObjectArguments || JdkCallSupport.isCollectionSizeQuery(target)
             || JdkCallSupport.isCollectionClear(target) || JdkCallSupport.isMapClear(target);
-        if (!guardedCollectionOrMapReceiver && !guardedMapGet(target)
-            && !guardedOptionalReceiver(target)
+        if (!guardedCollectionOrMapReceiver && !guardedOptionalReceiver(target)
             && !(classes.containsKey(target.owner())
                 && classes.get(target.owner()).application()
                 && !"<init>".equals(target.name()))) {
@@ -236,24 +235,26 @@ final class BytecodeToIRInvokeSupport {
             stack.set(receiverIndex, new StackValue(receiver.kind(), receiver.throwable(),
                 Optional.of(materialized), receiver.dynamicLambda()));
         }
-        if (guardedCollectionArgument) {
-            final StackValue argument = stack.get(receiverIndex + 1);
-            final boolean streamArgument = argument.kind() == StackKind.PRINT_STREAM
-                || argument.kind() == StackKind.ERROR_PRINT_STREAM;
-            if (argument.expression().isEmpty() && !streamArgument) {
-                throw unsupported(classFile, method, instruction);
-            }
-            final IrExpression argumentExpression = stackValueExpression(argument);
-            if (argumentExpression.kind() != IrExpression.Kind.LOCAL
-                && argumentExpression.kind() != IrExpression.Kind.OBJECT_NULL
-                && argumentExpression.kind() != IrExpression.Kind.STRING_LITERAL) {
-                final String argumentLocal = "object" + localDeclarations.size();
-                localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, argumentLocal));
-                instructions.add(IrInstruction.assignObject(argumentLocal, argumentExpression));
-                stack.set(receiverIndex + 1, streamArgument
-                    ? StackValue.objectExpression(IrExpression.objectLocal(argumentLocal))
-                    : new StackValue(argument.kind(), argument.throwable(),
-                        Optional.of(IrExpression.objectLocal(argumentLocal)), argument.dynamicLambda()));
+        if (guardedObjectArguments) {
+            for (int argumentIndex = receiverIndex + 1; argumentIndex < stack.size(); argumentIndex++) {
+                final StackValue argument = stack.get(argumentIndex);
+                final boolean streamArgument = argument.kind() == StackKind.PRINT_STREAM
+                    || argument.kind() == StackKind.ERROR_PRINT_STREAM;
+                if (argument.expression().isEmpty() && !streamArgument) {
+                    throw unsupported(classFile, method, instruction);
+                }
+                final IrExpression argumentExpression = stackValueExpression(argument);
+                if (argumentExpression.kind() != IrExpression.Kind.LOCAL
+                    && argumentExpression.kind() != IrExpression.Kind.OBJECT_NULL
+                    && argumentExpression.kind() != IrExpression.Kind.STRING_LITERAL) {
+                    final String argumentLocal = "object" + localDeclarations.size();
+                    localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, argumentLocal));
+                    instructions.add(IrInstruction.assignObject(argumentLocal, argumentExpression));
+                    stack.set(argumentIndex, streamArgument
+                        ? StackValue.objectExpression(IrExpression.objectLocal(argumentLocal))
+                        : new StackValue(argument.kind(), argument.throwable(),
+                            Optional.of(IrExpression.objectLocal(argumentLocal)), argument.dynamicLambda()));
+                }
             }
         }
         final List<StackValue> successStack = List.copyOf(stack);
@@ -276,17 +277,6 @@ final class BytecodeToIRInvokeSupport {
         );
         instructions.add(IrInstruction.label(successLabel));
         stack.addAll(successStack);
-    }
-
-    private static boolean guardedMapGet(final MethodRef target) {
-        return ("java/util/Map".equals(target.owner())
-                || "java/util/HashMap".equals(target.owner())
-                || "java/util/LinkedHashMap".equals(target.owner())
-                || "java/util/TreeMap".equals(target.owner())
-                || "java/util/concurrent/ConcurrentHashMap".equals(target.owner()))
-            && "get".equals(target.name())
-            && "(Ljava/lang/Object;)Ljava/lang/Object;".equals(target.descriptor())
-            && JdkCallSupport.supportedCall(target).isPresent();
     }
 
     private static boolean guardedOptionalReceiver(final MethodRef target) {

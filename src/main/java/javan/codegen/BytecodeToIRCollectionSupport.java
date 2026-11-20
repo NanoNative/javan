@@ -1329,7 +1329,9 @@ final class BytecodeToIRCollectionSupport {
         }
         if (isJdkMapOwner(methodRef.owner())) {
             if ("get(Ljava/lang/Object;)Ljava/lang/Object;".equals(signature)) {
-                pushObjectCall(instructions, stack, localDeclarations, "javan_map_get", List.of(receiver, arguments.getFirst()));
+                pushObjectCall(instructions, stack, localDeclarations,
+                    JdkCallSupport.isMapObjectGetOrPut(methodRef) ? "javan_map_get_java" : "javan_map_get",
+                    List.of(receiver, arguments.getFirst()));
                 return true;
             }
             if ("getOrDefault(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(signature)) {
@@ -1339,7 +1341,9 @@ final class BytecodeToIRCollectionSupport {
             if ("put(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(signature)
                 || ("java/util/EnumMap".equals(methodRef.owner())
                 && "put(Ljava/lang/Enum;Ljava/lang/Object;)Ljava/lang/Object;".equals(signature))) {
-                pushObjectCall(instructions, stack, localDeclarations, "javan_map_put", List.of(receiver, arguments.get(0), arguments.get(1)));
+                pushObjectCall(instructions, stack, localDeclarations,
+                    JdkCallSupport.isMapObjectGetOrPut(methodRef) ? "javan_map_put_java" : "javan_map_put",
+                    List.of(receiver, arguments.get(0), arguments.get(1)));
                 return true;
             }
             if ("putIfAbsent(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(signature)) {

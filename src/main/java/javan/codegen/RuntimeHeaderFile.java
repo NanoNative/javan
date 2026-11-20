@@ -6,7 +6,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 
 final class RuntimeHeaderFile {
-    private static final String CONTENT = """
+    private static final String CONTENT_PREFIX = """
         #ifndef JAVAN_RUNTIME_H
         #define JAVAN_RUNTIME_H
 
@@ -576,7 +576,11 @@ final class RuntimeHeaderFile {
         int javan_set_add(void* set, void* value);
         void javan_set_initialize_capacity(void* set, int capacity);
         void javan_set_initialize_capacity_with_load_factor(void* set, int capacity, float load_factor);
+        """;
+
+    private static final String CONTENT_SUFFIX = """
         void* javan_hashmap_new(void);
+        void* javan_concurrent_hashmap_new(void);
         void* javan_hashmap_new_with_expected_mappings(int num_mappings);
         void* javan_linkedhashmap_new_with_expected_mappings(int num_mappings);
         void javan_enummap_initialize(void* map, void* key_type);
@@ -588,8 +592,10 @@ final class RuntimeHeaderFile {
         void javan_map_put_all(void* map, void* source);
         void* javan_map_unmodifiable(void* map);
         void* javan_map_get(void* map, void* key);
+        void* javan_map_get_java(void* map, void* key);
         void* javan_map_get_or_default(void* map, void* key, void* fallback);
         void* javan_map_put(void* map, void* key, void* value);
+        void* javan_map_put_java(void* map, void* key, void* value);
         void* javan_map_put_if_absent(void* map, void* key, void* value);
         void* javan_map_replace(void* map, void* key, void* value);
         int javan_map_replace_entry(void* map, void* key, void* expected_value, void* new_value);
@@ -1201,6 +1207,6 @@ final class RuntimeHeaderFile {
     }
 
     static Path writeTo(final Path generatedDirectory) throws IOException {
-        return Files2.writeString(generatedDirectory.resolve("javan_runtime.h"), CONTENT);
+        return Files2.writeString(generatedDirectory.resolve("javan_runtime.h"), CONTENT_PREFIX.concat(CONTENT_SUFFIX));
     }
 }

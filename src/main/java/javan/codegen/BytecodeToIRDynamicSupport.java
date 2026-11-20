@@ -1844,7 +1844,9 @@ final class BytecodeToIRDynamicSupport {
             final String localName = "object" + localDeclarations.size();
             localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
             final IrExpression local = IrExpression.objectLocal(localName);
-            instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall("javan_hashmap_new", List.of())));
+            final String constructor = "java/util/concurrent/ConcurrentHashMap".equals(owner)
+                ? "javan_concurrent_hashmap_new" : "javan_hashmap_new";
+            instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall(constructor, List.of())));
             stack.add(StackValue.objectExpression(local));
             return;
         }

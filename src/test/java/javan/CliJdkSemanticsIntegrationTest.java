@@ -2226,6 +2226,56 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void concurrentMapGetAndPutRejectNullThroughMapReferences() throws Exception {
+        final Path project = project("concurrent-map-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Collections;
+            import java.util.HashMap;
+            import java.util.Map;
+            import java.util.concurrent.ConcurrentHashMap;
+            public final class Main {
+                static String argument(String value) { System.out.println("argument"); return value; }
+                static void inspect(Map<String, String> values) {
+                    try { values.put(null, "value"); System.out.println("put accepted"); }
+                    catch (NullPointerException expected) { System.out.println("null key"); }
+                    try { values.get(null); System.out.println("get accepted"); }
+                    catch (NullPointerException expected) { System.out.println("null lookup"); }
+                    try { values.put("key", null); System.out.println("value accepted"); }
+                    catch (NullPointerException expected) { System.out.println("null value"); }
+                }
+                public static void main(String[] args) {
+                    inspect(new HashMap<>()); inspect(new ConcurrentHashMap<>());
+                    inspect(new ConcurrentHashMap<>(4)); inspect(new ConcurrentHashMap<>(4, 0.75f));
+                    inspect(new ConcurrentHashMap<>(4, 0.75f, 2)); inspect(new ConcurrentHashMap<>(Map.of("a", "b")));
+                    Map<String, String> view = Collections.unmodifiableMap(new ConcurrentHashMap<>());
+                    try { view.get(null); } catch (NullPointerException expected) { System.out.println("view null"); }
+                    try { view.put(null, null); } catch (UnsupportedOperationException expected) { System.out.println("view immutable"); }
+                    try { Map.<String, String>of().put("key", "value"); }
+                    catch (UnsupportedOperationException expected) { System.out.println("literal immutable"); }
+                    Map<String, String> missing = null;
+                    try { missing.get(argument("x")); } catch (NullPointerException expected) { System.out.println("get receiver"); }
+                    try { missing.put(argument("x"), argument("y")); } catch (NullPointerException expected) { System.out.println("put receiver"); }
+                    ConcurrentHashMap<String, String> direct = new ConcurrentHashMap<>();
+                    try { direct.put(null, "x"); } catch (NullPointerException expected) { System.out.println("direct put"); }
+                    try { direct.get(null); } catch (NullPointerException expected) { System.out.println("direct get"); }
+                    direct.put("ok", "value"); System.out.println(direct.get("ok"));
+                    Map<Object, Object> streams = new HashMap<>();
+                    streams.put(System.out, System.err); System.out.println(streams.get(System.out) == System.err);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/concurrent-map-null").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void concurrentHashMapPreservesParallelWrites() throws Exception {
         final Path project = project("concurrent-map-writes");
         writeJava(project, "com.acme.Main", """
@@ -4544,7 +4594,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
             final Map<String, Integer> values = Collections.unmodifiableMap(mutable);
             values.put("y", 9);
             """,
-            "unsupported operation on immutable map"
+            "UnsupportedOperationException"
         );
     }
 

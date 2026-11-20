@@ -4513,16 +4513,30 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     a.start(); b.start(); a.join(); b.join();
                     return values.size();
                 }
+                public static int nullKey() { values.put(null, 1); return 0; }
+                public static int nullValue() { values.put(1, null); return 0; }
+                public static int nullGet() { values.get(null); return 0; }
             }
             """);
         final CliRun build = run(tempDir, "build", project.toString(), "--kind", "staticlib",
-            "--export", "com.acme.Api.size():int");
+            "--export", "com.acme.Api.size():int", "--export", "com.acme.Api.nullKey():int",
+            "--export", "com.acme.Api.nullValue():int", "--export", "com.acme.Api.nullGet():int");
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final Path caller = writeC(project, "call_map.c", """
+            #include <string.h>
             #include ".javan/dist/bindings/c/library-concurrent-map.h"
             int main(void) {
                 for (int i = 0; i < 3; i++) {
                     int value = 0;
+                    JavanResult failure = javan_try_com_acme_Api_nullKey_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 2;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_nullValue_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 3;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_nullGet_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 4;
+                    javan_result_free(&failure);
                     JavanResult result = javan_try_com_acme_Api_size_void(&value);
                     if (!result.ok || value != 400) return 1;
                     javan_result_free(&result);

@@ -2080,16 +2080,33 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies supported map lookups and single-entry insertions.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method reads or inserts a map entry
+     */
+    public static boolean isMapObjectGetOrPut(final MethodRef methodRef) {
+        if (!isMapRuntimeOwner(methodRef.owner()) || !isSupported(methodRef)) {
+            return false;
+        }
+        return ("get".equals(methodRef.name())
+                && "(Ljava/lang/Object;)Ljava/lang/Object;".equals(methodRef.descriptor()))
+            || ("put".equals(methodRef.name())
+                && "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(methodRef.descriptor()));
+    }
+
+    /**
      * Returns platform throwable types transported by a supported JDK call.
      *
      * @param methodRef method reference
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
-        if (isCollectionObjectAddition(methodRef) || isCollectionClear(methodRef) || isMapClear(methodRef)) {
+        if (isCollectionObjectAddition(methodRef) || isCollectionClear(methodRef) || isMapClear(methodRef)
+            || (isMapObjectGetOrPut(methodRef) && "put".equals(methodRef.name()))) {
             return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException");
         }
-        if (isCollectionObjectSearch(methodRef) || isCollectionSizeQuery(methodRef)) {
+        if (isCollectionObjectSearch(methodRef) || isCollectionSizeQuery(methodRef) || isMapObjectGetOrPut(methodRef)) {
             return List.of("java/lang/NullPointerException");
         }
         if ("java/lang/Object".equals(methodRef.owner()) && "equals".equals(methodRef.name())
