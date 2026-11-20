@@ -75,18 +75,26 @@ final class BytecodeToIRCollectionSupport {
             return true;
         }
         if ("java/util/Map".equals(owner)) {
-            if ("entry".equals(name) && "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map$Entry;".equals(descriptor)) {
+            if (JdkCallSupport.isMapSingleEntryFactory(methodRef)) {
                 final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_entry_new", arguments)));
+                final List<IrExpression> materialized = new ArrayList<>();
+                for (final IrExpression argument : arguments) {
+                    if (argument.kind() == IrExpression.Kind.LOCAL || argument.kind() == IrExpression.Kind.OBJECT_NULL
+                        || argument.kind() == IrExpression.Kind.STRING_LITERAL) {
+                        materialized.add(argument);
+                    } else {
+                        final String local = "object" + localDeclarations.size();
+                        localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, local));
+                        instructions.add(IrInstruction.assignObject(local, argument));
+                        materialized.add(IrExpression.objectLocal(local));
+                    }
+                }
+                pushObjectCall(instructions, stack, localDeclarations,
+                    "entry".equals(name) ? "javan_map_entry_new" : "javan_map_singleton_java", materialized);
                 return true;
             }
             if ("of".equals(name) && "()Ljava/util/Map;".equals(descriptor)) {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_empty", List.of())));
-                return true;
-            }
-            if ("of".equals(name) && "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;".equals(descriptor)) {
-                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_singleton", arguments)));
                 return true;
             }
             if ("of".equals(name) && "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;".equals(descriptor)) {

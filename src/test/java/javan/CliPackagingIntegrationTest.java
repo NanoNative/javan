@@ -4558,6 +4558,9 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     Map.copyOf(source); return 0;
                 }
                 public static int nullCopyOfSource() { Map.copyOf(null); return 0; }
+                public static int nullMapOfKey() { Map.of(null, 1); return 0; }
+                public static int nullMapEntryValue() { Map.entry(1, null); return 0; }
+                public static int singletonAllowsNull() { return java.util.Collections.singletonMap(null, null).containsKey(null) ? 1 : 0; }
                 public static int replacesNull() {
                     Map<Integer, Integer> map = new java.util.HashMap<>();
                     map.put(1, null); map.putIfAbsent(1, 7); return map.get(1);
@@ -4580,7 +4583,9 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "--export", "com.acme.Api.nullPutAllSource():int", "--export", "com.acme.Api.immutablePutAll():int",
             "--export", "com.acme.Api.nullCopyValue():int", "--export", "com.acme.Api.nullCopySource():int",
             "--export", "com.acme.Api.nullHashCopySource():int", "--export", "com.acme.Api.nullLinkedCopySource():int",
-            "--export", "com.acme.Api.nullCopyOfValue():int", "--export", "com.acme.Api.nullCopyOfSource():int");
+            "--export", "com.acme.Api.nullCopyOfValue():int", "--export", "com.acme.Api.nullCopyOfSource():int",
+            "--export", "com.acme.Api.nullMapOfKey():int", "--export", "com.acme.Api.nullMapEntryValue():int",
+            "--export", "com.acme.Api.singletonAllowsNull():int");
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final Path caller = writeC(project, "call_map.c", """
             #include <string.h>
@@ -4681,6 +4686,15 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     failure = javan_try_com_acme_Api_nullCopyOfSource_void(&value);
                     if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 32;
                     javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_nullMapOfKey_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 33;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_nullMapEntryValue_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 34;
+                    javan_result_free(&failure);
+                    present = javan_try_com_acme_Api_singletonAllowsNull_void(&value);
+                    if (!present.ok || value != 1) return 35;
+                    javan_result_free(&present);
                     JavanResult result = javan_try_com_acme_Api_size_void(&value);
                     if (!result.ok || value != 400) return 1;
                     javan_result_free(&result);

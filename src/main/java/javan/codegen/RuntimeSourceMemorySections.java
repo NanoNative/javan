@@ -14823,7 +14823,8 @@ final class RuntimeSourceMemorySections {
 
         void* javan_map_entry_new(void* key, void* value) {
             if (key == NULL || value == NULL) {
-                javan_panic("null Map.entry component");
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
             }
             void* key_root = key;
             void* value_root = value;
@@ -14857,6 +14858,14 @@ final class RuntimeSourceMemorySections {
             map->length = 1;
             javan_root_frame_pop(javan_map_singleton_roots);
             return map;
+        }
+
+        void* javan_map_singleton_java(void* key, void* value) {
+            if (key == NULL || value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
+            }
+            return javan_map_singleton(key, value);
         }
 
         void* javan_map_pair(void* first_key, void* first_value, void* second_key, void* second_value) {

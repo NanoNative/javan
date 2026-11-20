@@ -2080,6 +2080,20 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies map entry and single-entry map factories.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method creates a single non-null entry
+     */
+    public static boolean isMapSingleEntryFactory(final MethodRef methodRef) {
+        return "java/util/Map".equals(methodRef.owner()) && isSupported(methodRef)
+            && (("entry".equals(methodRef.name())
+                    && "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map$Entry;".equals(methodRef.descriptor()))
+                || ("of".equals(methodRef.name())
+                    && "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;".equals(methodRef.descriptor())));
+    }
+
+    /**
      * Identifies the immutable map copy factory.
      *
      * @param methodRef referenced JDK method
@@ -2190,7 +2204,7 @@ public final class JdkCallSupport {
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
-        if (isMapCopyConstructor(methodRef) || isMapCopyOf(methodRef)) {
+        if (isMapCopyConstructor(methodRef) || isMapCopyOf(methodRef) || isMapSingleEntryFactory(methodRef)) {
             return List.of("java/lang/NullPointerException");
         }
         if (isCollectionObjectAddition(methodRef) || isCollectionClear(methodRef) || isMapClear(methodRef)

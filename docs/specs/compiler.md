@@ -90,7 +90,9 @@ null-sensitive methods and constructors, application-defined key equality, compo
 operations and concurrent views still need their complete API semantics, so `ConcurrentHashMap` is
 not yet accounted as fully supported. Copy constructors of `HashMap` and `LinkedHashMap` likewise
 reject null sources, while accepting null keys and values in the source. `Map.copyOf` rejects null
-sources and null entries and creates an immutable snapshot.
+sources and null entries and creates an immutable snapshot. `Map.entry` and the single-entry
+`Map.of` reject null arguments. Larger `Map.of` overloads and `Map.ofEntries` still need complete
+exception handling.
 
 The default `SecureRandom` constructor supports calls resolved as `SecureRandom.nextBytes` and
 `generateSeed`. The static `getSeed` entry is also supported. The supported random value methods

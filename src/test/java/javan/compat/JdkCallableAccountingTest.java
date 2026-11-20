@@ -271,15 +271,15 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksMapOfPairAsSupported() {
+    void marksMapOfPairAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksMapOfTripleAsSupported() {
+    void marksMapOfTripleAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
@@ -835,51 +835,51 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksMapOfQuadrupleAsSupported() {
+    void marksMapOfQuadrupleAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksMapOfQuintupleAsSupported() {
+    void marksMapOfQuintupleAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksMapOfSextupleAsSupported() {
+    void marksMapOfSextupleAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksMapOfSeptupleAsSupported() {
+    void marksMapOfSeptupleAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksMapOfOctupleAsSupported() {
+    void marksMapOfOctupleAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksMapOfNonupleAsSupported() {
+    void marksMapOfNonupleAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksMapOfDecupleAsSupported() {
+    void marksMapOfDecupleAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksMapOfEntriesAsSupported() {
+    void marksMapOfEntriesAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "ofEntries", "([Ljava/util/Map$Entry;)Ljava/util/Map;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
@@ -959,9 +959,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksMapEntryAsSupported() {
+    void marksMapEntryAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "entry", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map$Entry;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
@@ -1187,9 +1187,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksMapOfSingletonAsSupported() {
+    void marksMapOfSingletonAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test

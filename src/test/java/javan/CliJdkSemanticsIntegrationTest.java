@@ -2262,6 +2262,45 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mapEntryAndSingletonFactoryRejectNullsInArgumentOrder() throws Exception {
+        final Path project = project("map-factory-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Collections;
+            import java.util.Map;
+            public final class Main {
+                static String argument(String name, String value) { System.out.println(name); return value; }
+                public static void main(String[] args) {
+                    try { Map.of(argument("first", null), argument("second", "value")); }
+                    catch (NullPointerException expected) { System.out.println("null key"); }
+                    try { Map.<String, String>of("key", null); } catch (NullPointerException expected) { System.out.println("null value"); }
+                    try { Map.entry(argument("third", null), argument("fourth", "value")); }
+                    catch (NullPointerException expected) { System.out.println("null entry key"); }
+                    try { Map.<String, String>entry("key", null); } catch (NullPointerException expected) { System.out.println("null entry value"); }
+                    Map<String, String> singleton = Collections.singletonMap(null, null);
+                    System.out.println(singleton.containsKey(null));
+                    System.out.println(Map.of("after", "yes").get("after"));
+                    System.out.println(Map.entry("after", "yes").getValue());
+                    Map<String, String> retained = Map.of("dynamic", Integer.toString(42));
+                    Map.Entry<String, String> entry = Map.entry("dynamic", Integer.toString(43));
+                    for (int i = 0; i < 100; i++) Integer.toString(i);
+                    System.out.println(retained.get("dynamic")); System.out.println(entry.getValue());
+                    System.out.println(Map.of(System.out, System.err).get(System.out) == System.err);
+                    System.out.println(Map.entry(System.out, System.err).getValue() == System.err);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/map-factory-null").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void mapCopyOfRejectsNullsAndKeepsAnImmutableSnapshot() throws Exception {
         final Path project = project("map-copy-of-null");
         writeJava(project, "com.acme.Main", """
