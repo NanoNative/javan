@@ -644,6 +644,7 @@ public final class JdkCallSupport {
         runtime("ArrayList.addAll", "java/util/ArrayList", "addAll", "(Ljava/util/Collection;)Z"),
         runtime("ArrayList.removeAll", "java/util/ArrayList", "removeAll", "(Ljava/util/Collection;)Z"),
         runtime("ArrayList.retainAll", "java/util/ArrayList", "retainAll", "(Ljava/util/Collection;)Z"),
+        runtime("ArrayList.clear", "java/util/ArrayList", "clear", "()V"),
         runtime("ArrayList.size", "java/util/ArrayList", "size", "()I"),
         runtime("ArrayList.isEmpty", "java/util/ArrayList", "isEmpty", "()Z"),
         runtime("ArrayList.contains", "java/util/ArrayList", "contains", "(Ljava/lang/Object;)Z"),
@@ -711,6 +712,7 @@ public final class JdkCallSupport {
         runtime("List.removeAll", "java/util/List", "removeAll", "(Ljava/util/Collection;)Z"),
         runtime("List.retainAll", "java/util/List", "retainAll", "(Ljava/util/Collection;)Z"),
         runtime("List.removeIf", "java/util/List", "removeIf", "(Ljava/util/function/Predicate;)Z"),
+        runtime("List.clear", "java/util/List", "clear", "()V"),
         runtime("List.size", "java/util/List", "size", "()I"),
         runtime("List.isEmpty", "java/util/List", "isEmpty", "()Z"),
         runtime("List.contains", "java/util/List", "contains", "(Ljava/lang/Object;)Z"),
@@ -2056,13 +2058,24 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies supported collection clear operations.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method clears a supported collection
+     */
+    public static boolean isCollectionClear(final MethodRef methodRef) {
+        return isCollectionRuntimeOwner(methodRef.owner()) && "clear".equals(methodRef.name())
+            && "()V".equals(methodRef.descriptor()) && isSupported(methodRef);
+    }
+
+    /**
      * Returns platform throwable types transported by a supported JDK call.
      *
      * @param methodRef method reference
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
-        if (isCollectionObjectAddition(methodRef)) {
+        if (isCollectionObjectAddition(methodRef) || isCollectionClear(methodRef)) {
             return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException");
         }
         if (isCollectionObjectSearch(methodRef) || isCollectionSizeQuery(methodRef)) {

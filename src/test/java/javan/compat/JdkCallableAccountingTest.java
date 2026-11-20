@@ -559,9 +559,21 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksAbstractListClearAsSupported() {
+    void marksListClearAsUnknown() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/List", "clear", "()V")))
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+    }
+
+    @Test
+    void marksArrayListClearAsUnknown() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "clear", "()V")))
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+    }
+
+    @Test
+    void marksAbstractListClearAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/AbstractList", "clear", "()V")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
@@ -709,9 +721,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksCollectionClearAsSupported() {
+    void marksCollectionClearAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collection", "clear", "()V")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
@@ -721,9 +733,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksSetClearAsSupported() {
+    void marksSetClearAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "clear", "()V")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
@@ -745,9 +757,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksHashSetClearAsSupported() {
+    void marksHashSetClearAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashSet", "clear", "()V")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
@@ -793,9 +805,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksLinkedHashSetClearAsSupported() {
+    void marksLinkedHashSetClearAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashSet", "clear", "()V")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test

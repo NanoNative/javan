@@ -191,7 +191,8 @@ final class BytecodeToIRInvokeSupport {
         final MethodRef target = instruction.methodRef().orElseThrow();
         final boolean guardedCollectionArgument = JdkCallSupport.isCollectionObjectSearch(target)
             || JdkCallSupport.isCollectionObjectAddition(target);
-        final boolean guardedCollectionReceiver = guardedCollectionArgument || JdkCallSupport.isCollectionSizeQuery(target);
+        final boolean guardedCollectionReceiver = guardedCollectionArgument || JdkCallSupport.isCollectionSizeQuery(target)
+            || JdkCallSupport.isCollectionClear(target);
         if (!guardedCollectionReceiver && !guardedMapGet(target)
             && !guardedOptionalReceiver(target)
             && !(classes.containsKey(target.owner())

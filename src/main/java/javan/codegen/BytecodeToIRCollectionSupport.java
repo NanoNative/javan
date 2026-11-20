@@ -943,6 +943,11 @@ final class BytecodeToIRCollectionSupport {
         final IrExpression receiver
     ) {
         final String signature = methodRef.name() + methodRef.descriptor();
+        if (JdkCallSupport.isCollectionClear(methodRef)) {
+            instructions.add(IrInstruction.callStaticVoid("javan_collection_clear_java", List.of(receiver)));
+            return true;
+        }
+
         if (JdkCallSupport.isCollectionObjectAddition(methodRef)) {
             pushIntCall(instructions, stack, localDeclarations, "javan_collection_add_java", List.of(receiver, arguments.getFirst()));
             return true;
@@ -1033,10 +1038,6 @@ final class BytecodeToIRCollectionSupport {
                 pushIntCall(instructions, stack, localDeclarations, "javan_arraylist_add_all_at", List.of(receiver, arguments.get(0), arguments.get(1)));
                 return true;
             }
-            if ("clear()V".equals(signature)) {
-                instructions.add(IrInstruction.callStaticVoid("javan_list_clear", List.of(receiver)));
-                return true;
-            }
             if ("get(I)Ljava/lang/Object;".equals(signature)) {
                 pushObjectCall(instructions, stack, localDeclarations, "javan_list_get", List.of(receiver, arguments.getFirst()));
                 return true;
@@ -1124,10 +1125,6 @@ final class BytecodeToIRCollectionSupport {
                 stack.add(StackValue.intExpression(IrExpression.intCall("javan_list_contains_all", List.of(receiver, arguments.getFirst()))));
                 return true;
             }
-            if ("clear()V".equals(signature)) {
-                instructions.add(IrInstruction.callStaticVoid("javan_list_clear", List.of(receiver)));
-                return true;
-            }
             if ("iterator()Ljava/util/Iterator;".equals(signature)) {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator", List.of(receiver))));
                 return true;
@@ -1191,10 +1188,6 @@ final class BytecodeToIRCollectionSupport {
             }
             if ("containsAll(Ljava/util/Collection;)Z".equals(signature)) {
                 stack.add(StackValue.intExpression(IrExpression.intCall("javan_list_contains_all", List.of(receiver, arguments.getFirst()))));
-                return true;
-            }
-            if ("clear()V".equals(signature)) {
-                instructions.add(IrInstruction.callStaticVoid("javan_list_clear", List.of(receiver)));
                 return true;
             }
             if ("size()I".equals(signature)) {

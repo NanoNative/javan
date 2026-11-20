@@ -2123,6 +2123,72 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void listAndArrayListClearRemoveAllElements() throws Exception {
+        final Path project = project("collection-clear");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.AbstractList;
+            import java.util.ArrayList;
+            import java.util.Collection;
+            import java.util.List;
+            public final class Main {
+                static void clear(List<Object> value) { value.clear(); }
+                public static void main(String[] args) {
+                    ArrayList<Object> values = new ArrayList<>(); values.add("a"); values.add("b");
+                    clear(values); System.out.println(values.size());
+                    values.add("c"); values.clear(); System.out.println(values.isEmpty());
+                    values.add("d"); AbstractList<Object> base = values; base.clear();
+                    System.out.println(values.size());
+                    values.add("e"); Collection<Object> view = values; view.clear();
+                    System.out.println(values.isEmpty());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/collection-clear").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void collectionClearTransportsNullAndImmutableFailures() throws Exception {
+        final Path project = project("collection-clear-exceptions");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.Collection;
+            import java.util.Collections;
+            import java.util.List;
+            import java.util.Set;
+            public final class Main {
+                static void clear(Collection<Object> values) { values.clear(); }
+                static void check(Collection<Object> values) {
+                    try { clear(values); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                }
+                public static void main(String[] args) {
+                    try { clear(null); } catch (NullPointerException expected) { System.out.println("null"); }
+                    ArrayList<Object> backing = new ArrayList<>(); backing.add("item");
+                    check(List.of()); check(Set.of()); check(Collections.unmodifiableList(backing));
+                    System.out.println(backing.size()); clear(backing); System.out.println(backing.size());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/collection-clear-exceptions").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void builtinEnumConstantsKeepIdentityAndClassDistinctFromStrings() throws Exception {
         final Path project = project("builtin-enum-identity");
         writeJava(project, "com.acme.Main", """

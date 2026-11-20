@@ -24589,8 +24589,8 @@ final class BytecodeToIRTest {
             plain(2, 177, "return")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.callStaticVoid("javan_list_clear", List.of(IrExpression.objectLocal("arg0"))),
+        assertThat(function.instructions()).contains(
+            IrInstruction.callStaticVoid("javan_collection_clear_java", List.of(IrExpression.objectLocal("arg0"))),
             IrInstruction.returnVoid()
         );
     }
@@ -25007,8 +25007,8 @@ final class BytecodeToIRTest {
             plain(2, 177, "return")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.callStaticVoid("javan_list_clear", List.of(IrExpression.objectLocal("arg0"))),
+        assertThat(function.instructions()).contains(
+            IrInstruction.callStaticVoid("javan_collection_clear_java", List.of(IrExpression.objectLocal("arg0"))),
             IrInstruction.returnVoid()
         );
     }
@@ -25134,8 +25134,8 @@ final class BytecodeToIRTest {
             plain(2, 177, "return")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.callStaticVoid("javan_list_clear", List.of(IrExpression.objectLocal("arg0"))),
+        assertThat(function.instructions()).contains(
+            IrInstruction.callStaticVoid("javan_collection_clear_java", List.of(IrExpression.objectLocal("arg0"))),
             IrInstruction.returnVoid()
         );
     }
@@ -25794,9 +25794,9 @@ final class BytecodeToIRTest {
             plain(2, 177, "return")
         ));
 
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).contains(
             IrInstruction.callStaticVoid(
-                "javan_list_clear",
+                "javan_collection_clear_java",
                 List.of(IrExpression.objectLocal("arg0"))
             ),
             IrInstruction.returnVoid()

@@ -4415,12 +4415,17 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static int missingEmpty() { ArrayList<Object> list = null; return list.isEmpty() ? 1 : 0; }
                 public static int missingAdd() { ArrayList<Object> list = null; return list.add(System.err) ? 1 : 0; }
                 public static int immutableAdd() { java.util.List<Object> list = java.util.List.of(); return list.add("item") ? 1 : 0; }
+                public static int cleared() { java.util.List<Object> list = new ArrayList<>(); list.add("item"); list.clear(); return list.size(); }
+                public static int missingClear() { java.util.List<Object> list = null; list.clear(); return 0; }
+                public static int immutableClear() { java.util.List<Object> list = java.util.List.of(); list.clear(); return 0; }
             }
             """);
         final CliRun build = run(tempDir, "build", project.toString(), "--kind", "staticlib",
             "--export", "com.acme.Api.hit():int", "--export", "com.acme.Api.missing():int",
             "--export", "com.acme.Api.missingSize():int", "--export", "com.acme.Api.missingEmpty():int",
-            "--export", "com.acme.Api.missingAdd():int", "--export", "com.acme.Api.immutableAdd():int");
+            "--export", "com.acme.Api.missingAdd():int", "--export", "com.acme.Api.immutableAdd():int",
+            "--export", "com.acme.Api.cleared():int", "--export", "com.acme.Api.missingClear():int",
+            "--export", "com.acme.Api.immutableClear():int");
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final Path caller = writeC(project, "call_null_search.c", """
             #include <string.h>
@@ -4445,8 +4450,17 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 result = javan_try_com_acme_Api_immutableAdd_void(&value);
                 if (result.ok || result.message == 0 || strstr(result.message, "UnsupportedOperationException") == 0) return 6;
                 javan_result_free(&result);
+                result = javan_try_com_acme_Api_cleared_void(&value);
+                if (!result.ok || value != 0) return 7;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_missingClear_void(&value);
+                if (result.ok || result.message == 0 || strstr(result.message, "NullPointerException") == 0) return 8;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_immutableClear_void(&value);
+                if (result.ok || result.message == 0 || strstr(result.message, "UnsupportedOperationException") == 0) return 9;
+                javan_result_free(&result);
                 result = javan_try_com_acme_Api_hit_void(&value);
-                if (!result.ok || value != 1) return 7;
+                if (!result.ok || value != 1) return 10;
                 javan_result_free(&result);
                 return 0;
             }

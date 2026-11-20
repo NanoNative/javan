@@ -13541,9 +13541,7 @@ final class RuntimeSourceMemorySections {
             return 1;
         }
 
-        void javan_list_clear(void* value) {
-            javan_object_list* list = javan_list_checked(value);
-            javan_list_mutable_checked(list);
+        static void javan_list_clear_prechecked(javan_object_list* list) {
             int length = javan_list_logical_length(list);
             if (length == 0) {
                 return;
@@ -13551,6 +13549,21 @@ final class RuntimeSourceMemorySections {
             memset(list->values, 0, (unsigned long) length * sizeof(void*));
             list->length = 0;
             list->mod_count++;
+        }
+
+        void javan_list_clear(void* value) {
+            javan_object_list* list = javan_list_checked(value);
+            javan_list_mutable_checked(list);
+            javan_list_clear_prechecked(list);
+        }
+
+        void javan_collection_clear_java(void* value) {
+            javan_object_list* list = javan_list_checked(value);
+            if (list->immutable != 0) {
+                javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return;
+            }
+            javan_list_clear_prechecked(list);
         }
 
         void* javan_list_get(void* value, int index) {
