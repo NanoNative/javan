@@ -1211,6 +1211,16 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksListFactoriesAsUnknown() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/List", "of", "()Ljava/util/List;")))
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/List", "of", "(Ljava/lang/Object;)Ljava/util/List;")))
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/List", "of", "([Ljava/lang/Object;)Ljava/util/List;")))
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+    }
+
+    @Test
     void marksSetOfSingletonAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "of", "(Ljava/lang/Object;)Ljava/util/Set;")))
             .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);

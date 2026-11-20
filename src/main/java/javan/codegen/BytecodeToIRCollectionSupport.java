@@ -77,18 +77,7 @@ final class BytecodeToIRCollectionSupport {
         if (JdkCallSupport.isMapSingleEntryFactory(methodRef) || JdkCallSupport.isMapMultiEntryFactory(methodRef)
             || JdkCallSupport.isSetFactory(methodRef)) {
             final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-            final List<IrExpression> materialized = new ArrayList<>();
-            for (final IrExpression argument : arguments) {
-                if (argument.kind() == IrExpression.Kind.LOCAL || argument.kind() == IrExpression.Kind.OBJECT_NULL
-                    || argument.kind() == IrExpression.Kind.STRING_LITERAL) {
-                    materialized.add(argument);
-                } else {
-                    final String local = "object" + localDeclarations.size();
-                    localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, local));
-                    instructions.add(IrInstruction.assignObject(local, argument));
-                    materialized.add(IrExpression.objectLocal(local));
-                }
-            }
+            final List<IrExpression> materialized = materializeFactoryArguments(arguments, instructions, localDeclarations);
             final String helper;
             if (JdkCallSupport.isSetFactory(methodRef)) {
                 helper = "([Ljava/lang/Object;)Ljava/util/Set;".equals(descriptor) ? "javan_set_of_array"
@@ -223,15 +212,40 @@ final class BytecodeToIRCollectionSupport {
             return false;
         }
         final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
+        final List<IrExpression> materialized = materializeFactoryArguments(arguments, instructions, localDeclarations);
         if ("([Ljava/lang/Object;)Ljava/util/List;".equals(descriptor)) {
-            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_of_array", arguments)));
+            pushObjectCall(instructions, stack, localDeclarations, "javan_list_of_array", materialized);
             return true;
         }
         final List<IrExpression> callArguments = new ArrayList<>();
-        callArguments.add(IrExpression.intLiteral(arguments.size()));
-        callArguments.addAll(arguments);
-        stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_of", callArguments)));
+        callArguments.add(IrExpression.intLiteral(materialized.size()));
+        callArguments.addAll(materialized);
+        if (materialized.isEmpty()) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_of", callArguments)));
+        } else {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_list_of_java", callArguments);
+        }
         return true;
+    }
+
+    private static List<IrExpression> materializeFactoryArguments(
+        final List<IrExpression> arguments,
+        final List<IrInstruction> instructions,
+        final Map<Integer, IrLocal> localDeclarations
+    ) {
+        final List<IrExpression> materialized = new ArrayList<>();
+        for (final IrExpression argument : arguments) {
+            if (argument.kind() == IrExpression.Kind.LOCAL || argument.kind() == IrExpression.Kind.OBJECT_NULL
+                || argument.kind() == IrExpression.Kind.STRING_LITERAL) {
+                materialized.add(argument);
+            } else {
+                final String local = "object" + localDeclarations.size();
+                localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, local));
+                instructions.add(IrInstruction.assignObject(local, argument));
+                materialized.add(IrExpression.objectLocal(local));
+            }
+        }
+        return materialized;
     }
 
     static boolean lowerJdkCollectionInstanceCall(

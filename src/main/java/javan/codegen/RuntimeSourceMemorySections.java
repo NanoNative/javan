@@ -13342,19 +13342,11 @@ final class RuntimeSourceMemorySections {
             return previous;
         }
 
-        void* javan_list_of(int count, ...) {
-            if (count < 0) {
-                javan_panic("negative list size");
-            }
-            void* values[count > 0 ? count : 1];
+        static void* javan_list_from_values(void** values, int count) {
             void** roots[count > 0 ? count : 1];
-            va_list arguments;
-            va_start(arguments, count);
             for (int index = 0; index < count; index++) {
-                values[index] = va_arg(arguments, void*);
                 roots[index] = &values[index];
             }
-            va_end(arguments);
             if (count > 0) {
                 javan_root_frame_push(roots, count);
             }
@@ -13368,7 +13360,45 @@ final class RuntimeSourceMemorySections {
             return list;
         }
 
+        void* javan_list_of(int count, ...) {
+            if (count < 0) {
+                javan_panic("negative list size");
+            }
+            void* values[count > 0 ? count : 1];
+            va_list arguments;
+            va_start(arguments, count);
+            for (int index = 0; index < count; index++) {
+                values[index] = va_arg(arguments, void*);
+            }
+            va_end(arguments);
+            return javan_list_from_values(values, count);
+        }
+
+        void* javan_list_of_java(int count, ...) {
+            if (count < 0) {
+                javan_panic("negative list size");
+            }
+            void* values[count > 0 ? count : 1];
+            va_list arguments;
+            va_start(arguments, count);
+            for (int index = 0; index < count; index++) {
+                values[index] = va_arg(arguments, void*);
+            }
+            va_end(arguments);
+            for (int index = 0; index < count; index++) {
+                if (values[index] == NULL) {
+                    javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                    return NULL;
+                }
+            }
+            return javan_list_from_values(values, count);
+        }
+
         void* javan_list_of_array(void* array) {
+            if (array == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
+            }
             javan_array_header* header = javan_array_checked(array);
             javan_array_kind_checked(header, JAVAN_ARRAY_KIND_OBJECT);
             javan_object_array* values = (javan_object_array*) header;
@@ -13376,6 +13406,13 @@ final class RuntimeSourceMemorySections {
                 (void**) &values
             };
             javan_root_frame_push(javan_list_array_roots, 1);
+            for (int index = 0; index < values->length; index++) {
+                if (values->values[index] == NULL) {
+                    javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                    javan_root_frame_pop(javan_list_array_roots);
+                    return NULL;
+                }
+            }
             javan_object_list* list = javan_list_new_with_capacity(values->length, 1);
             for (int index = 0; index < values->length; index++) {
                 javan_list_append_raw(list, values->values[index]);

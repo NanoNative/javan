@@ -4443,6 +4443,19 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void listOfTransportsNullFactoryFailures() {
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
+            "java/util/List", "of", "(Ljava/lang/Object;)Ljava/util/List;"
+        ))).containsExactly("java/lang/NullPointerException");
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
+            "java/util/List", "of", "([Ljava/lang/Object;)Ljava/util/List;"
+        ))).containsExactly("java/lang/NullPointerException");
+        assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
+            "java/util/List", "of", "()Ljava/util/List;"
+        ))).isEmpty();
+    }
+
+    @Test
     void stringIsBlankTransportsNullReceiverFailure() {
         assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
             "java/lang/String",

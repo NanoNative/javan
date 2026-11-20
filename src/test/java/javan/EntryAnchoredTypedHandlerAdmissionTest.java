@@ -503,6 +503,16 @@ final class EntryAnchoredTypedHandlerAdmissionTest {
     }
 
     @Test
+    void rejectsInvalidTypedHandlerForListFactory() {
+        final List<Instruction> instructions = replace(canonicalInstructions(), 3, invoke(3, 184, "invokestatic",
+            new MethodRef("java/util/List", "of", "(Ljava/lang/Object;)Ljava/util/List;")));
+
+        assertThat(verify(instructions, List.of(HANDLER), 2, 2))
+            .extracting(Diagnostic::code)
+            .contains("JAVAN014");
+    }
+
+    @Test
     void rejectsDeclaredMaxStackBelowObservedWidth() {
         assertThat(verify(canonicalInstructions(), List.of(HANDLER), 1, 2))
             .extracting(Diagnostic::code)

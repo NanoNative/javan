@@ -104,7 +104,10 @@ supported equality semantics. The immutable result retains its elements independ
 array. `Set.copyOf` rejects null sources and elements, collapses duplicates and creates an immutable
 snapshot. Application-defined equality remains incomplete.
 
-`List.copyOf` rejects null sources and elements and creates an immutable ordered snapshot.
+Fixed-arity and array-based `List.of` reject null elements, and the array overload rejects a null
+array. They create immutable ordered snapshots and retain duplicate elements. Other list operations
+and application-defined element equality remain incomplete. `List.copyOf` rejects null sources and
+elements and creates an immutable ordered snapshot.
 Reads using `List.get` publish the returned reference safely during concurrent garbage collection.
 Application-defined collection implementations are not yet supported.
 

@@ -1222,6 +1222,46 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsListOfNullFailures() throws Exception {
+        final Path project = tempDir.resolve("selfhost-list-of-null");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.List;
+            public final class Main {
+                public static void main(String[] args) {
+                    String missing = args.length == 0 ? null : "value";
+                    String[] missingArray = args.length == 0 ? null : new String[] {"value"};
+                    String[] elements = {"first", missing, "last"};
+                    try { List.of(missing); } catch (NullPointerException expected) { System.out.println("single"); }
+                    try { List.of("first", missing); } catch (NullPointerException expected) { System.out.println("pair"); }
+                    try { List.of(elements); } catch (NullPointerException expected) { System.out.println("element"); }
+                    try { List.of(missingArray); } catch (NullPointerException expected) { System.out.println("array"); }
+                    System.out.println(List.of("after", "after").size());
+                    System.out.println(java.util.Collections.singletonList(null).get(0) == null);
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-list-of-null"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-list-of-null").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout());
+    }
+
+    @Test
     void nativeBuiltJavanBuildsStringIsBlank() throws Exception {
         final Path project = tempDir.resolve("selfhost-string-is-blank");
         final Path classes = project.resolve("classes");
@@ -4580,6 +4620,10 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static int duplicateSetCopy() { return java.util.Set.copyOf(java.util.List.of(1, 1)).size(); }
                 public static int nullListCopySource() { java.util.Collection<Integer> source = null; java.util.List.copyOf(source); return 0; }
                 public static int nullListCopyElement() { java.util.ArrayList<Integer> source = new java.util.ArrayList<>(); source.add(null); java.util.List.copyOf(source); return 0; }
+                public static int nullListElement() { Object value = null; java.util.List.of(value); return 0; }
+                public static int nullListArray() { Object[] values = null; java.util.List.of(values); return 0; }
+                public static int nullListArrayElement() { Object[] values = new Object[] { 1, null }; java.util.List.of(values); return 0; }
+                public static int singletonListAllowsNull() { return java.util.Collections.singletonList(null).get(0) == null ? 1 : 0; }
                 public static int replacesNull() {
                     Map<Integer, Integer> map = new java.util.HashMap<>();
                     map.put(1, null); map.putIfAbsent(1, 7); return map.get(1);
@@ -4613,7 +4657,9 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "--export", "com.acme.Api.nullSetArray():int", "--export", "com.acme.Api.nullSetArrayElement():int",
             "--export", "com.acme.Api.duplicateSetArray():int", "--export", "com.acme.Api.nullSetCopySource():int",
             "--export", "com.acme.Api.nullSetCopyElement():int", "--export", "com.acme.Api.duplicateSetCopy():int",
-            "--export", "com.acme.Api.nullListCopySource():int", "--export", "com.acme.Api.nullListCopyElement():int");
+            "--export", "com.acme.Api.nullListCopySource():int", "--export", "com.acme.Api.nullListCopyElement():int",
+            "--export", "com.acme.Api.nullListElement():int", "--export", "com.acme.Api.nullListArray():int",
+            "--export", "com.acme.Api.nullListArrayElement():int", "--export", "com.acme.Api.singletonListAllowsNull():int");
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final Path caller = writeC(project, "call_map.c", """
             #include <string.h>
@@ -4780,6 +4826,18 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     failure = javan_try_com_acme_Api_nullListCopyElement_void(&value);
                     if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 54;
                     javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_nullListElement_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 55;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_nullListArray_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 56;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_nullListArrayElement_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 57;
+                    javan_result_free(&failure);
+                    present = javan_try_com_acme_Api_singletonListAllowsNull_void(&value);
+                    if (!present.ok || value != 1) return 58;
+                    javan_result_free(&present);
                     JavanResult result = javan_try_com_acme_Api_size_void(&value);
                     if (!result.ok || value != 400) return 1;
                     javan_result_free(&result);

@@ -2334,6 +2334,159 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void listOfRejectsNullElementsAndArrays() throws Exception {
+        final Path project = project("list-of-null-errors");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.List;
+            public final class Main {
+                public static void main(String[] args) {
+                    String missing = args.length == 0 ? null : "value";
+                    String[] missingArray = args.length == 0 ? null : new String[] {"value"};
+                    String[] elements = {"first", missing, "last"};
+                    try { List.of(missing); } catch (NullPointerException expected) { System.out.println("single"); }
+                    try { List.of("first", missing); } catch (NullPointerException expected) { System.out.println("pair"); }
+                    try { List.of(elements); } catch (NullPointerException expected) { System.out.println("element"); }
+                    try { List.of(missingArray); } catch (NullPointerException expected) { System.out.println("array"); }
+                    System.out.println(List.of("after", "after").size());
+                    System.out.println(java.util.Collections.singletonList(null).size());
+                    System.out.println(java.util.Collections.singletonList(null).get(0) == null);
+                    String[] source = {"before", "last"};
+                    List<String> snapshot = List.of(source);
+                    source[0] = "changed";
+                    System.out.println(snapshot.get(0));
+                    System.out.println(List.of(new String[0]).isEmpty());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/list-of-null-errors").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listOfRejectsNullAtEveryFixedArityPosition() throws Exception {
+        final Path project = project("list-of-null-positions");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.List;
+            public final class Main {
+                public static void main(String[] args) {
+                    int failures = 0;
+                    for (int position = 0; position < 10; position++) {
+                        String a = position == 0 ? null : "a";
+                        String b = position == 1 ? null : "b";
+                        String c = position == 2 ? null : "c";
+                        String d = position == 3 ? null : "d";
+                        String e = position == 4 ? null : "e";
+                        String f = position == 5 ? null : "f";
+                        String g = position == 6 ? null : "g";
+                        String h = position == 7 ? null : "h";
+                        String i = position == 8 ? null : "i";
+                        String j = position == 9 ? null : "j";
+                        try { List.of(a); } catch (NullPointerException expected) { failures++; }
+                        try { List.of(a, b); } catch (NullPointerException expected) { failures++; }
+                        try { List.of(a, b, c); } catch (NullPointerException expected) { failures++; }
+                        try { List.of(a, b, c, d); } catch (NullPointerException expected) { failures++; }
+                        try { List.of(a, b, c, d, e); } catch (NullPointerException expected) { failures++; }
+                        try { List.of(a, b, c, d, e, f); } catch (NullPointerException expected) { failures++; }
+                        try { List.of(a, b, c, d, e, f, g); } catch (NullPointerException expected) { failures++; }
+                        try { List.of(a, b, c, d, e, f, g, h); } catch (NullPointerException expected) { failures++; }
+                        try { List.of(a, b, c, d, e, f, g, h, i); } catch (NullPointerException expected) { failures++; }
+                        try { List.of(a, b, c, d, e, f, g, h, i, j); }
+                        catch (NullPointerException expected) { failures++; }
+                    }
+                    System.out.println(failures);
+                    List<String> values = List.of("a", "b", "c", "d", "e", "f", "g", "h", "i", "j");
+                    System.out.println(values.size());
+                    System.out.println(values.get(0));
+                    System.out.println(values.get(9));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/list-of-null-positions").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listOfEvaluatesArgumentsBeforeUncaughtNullFailure() throws Exception {
+        final Path project = project("list-of-null-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.List;
+            public final class Main {
+                static String value(int index) {
+                    System.out.println(index);
+                    return index == 2 ? null : Integer.toString(index);
+                }
+                public static void main(String[] args) {
+                    List.of(value(1), value(2), value(3));
+                    System.out.println("after");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/list-of-null-order").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("1\n2\n3\n");
+        assertThat(result.stderr()).contains("NullPointerException");
+    }
+
+    @Test
+    void listOfRetainsValuesDuringConcurrentCollection() throws Exception {
+        final Path project = project("list-of-concurrent-gc");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.List;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            String value = Integer.toString(i);
+                            List<String> fixed = List.of(value, Integer.toString(i + 1), "fixed");
+                            String[] source = {value, "array"};
+                            List<String> fromArray = List.of(source);
+                            source[0] = null;
+                            for (int j = 0; j < 4; j++) Integer.toString(i + j);
+                            if (!fixed.get(0).equals(value) || !fixed.get(1).equals(Integer.toString(i + 1)))
+                                errors.incrementAndGet();
+                            if (!fromArray.get(0).equals(value)) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/list-of-concurrent-gc").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
     void listCopyOfRejectsNullsAndPreservesSnapshot() throws Exception {
         final Path project = project("list-copy-of-errors");
         writeJava(project, "com.acme.Main", """

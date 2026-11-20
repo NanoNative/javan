@@ -2091,6 +2091,17 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies non-empty immutable list factory calls.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method creates a list from fixed or array arguments
+     */
+    public static boolean isListFactory(final MethodRef methodRef) {
+        return "java/util/List".equals(methodRef.owner()) && "of".equals(methodRef.name())
+            && !"()Ljava/util/List;".equals(methodRef.descriptor()) && isSupported(methodRef);
+    }
+
+    /**
      * Identifies the immutable set copy factory.
      *
      * @param methodRef referenced JDK method
@@ -2264,7 +2275,7 @@ public final class JdkCallSupport {
             return List.of("java/lang/NullPointerException", "java/lang/IllegalArgumentException");
         }
         if (isMapCopyConstructor(methodRef) || isMapCopyOf(methodRef) || isMapSingleEntryFactory(methodRef)
-            || isSetCopyOf(methodRef) || isListCopyOf(methodRef)) {
+            || isSetCopyOf(methodRef) || isListCopyOf(methodRef) || isListFactory(methodRef)) {
             return List.of("java/lang/NullPointerException");
         }
         if (isCollectionObjectAddition(methodRef) || isCollectionClear(methodRef) || isMapClear(methodRef)
