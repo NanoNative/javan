@@ -13780,498 +13780,116 @@ final class RuntimeSourceMemorySections {
             return result_value;
         }
 
-        void* javan_set_of_singleton(void* value) {
-            if (value == NULL) {
-                javan_panic("null Set.of element");
+        static void* javan_set_fixed_factory(void** values, int count) {
+            for (int index = 0; index < count; index++) {
+                if (values[index] == NULL) {
+                    javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                    return NULL;
+                }
+                for (int previous = 0; previous < index; previous++) {
+                    if (javan_object_equals(values[previous], values[index]) != 0) {
+                        javan_pending_throw("java/lang/IllegalArgumentException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                        return NULL;
+                    }
+                }
             }
-            return javan_set_singleton(value);
+            void** roots[10];
+            for (int index = 0; index < count; index++) {
+                roots[index] = &values[index];
+            }
+            javan_root_frame_push(roots, count);
+            javan_object_list* set = javan_set_new_with_capacity(count);
+            for (int index = 0; index < count; index++) {
+                set->values[index] = values[index];
+            }
+            set->length = count;
+            set->immutable = 1;
+            javan_root_frame_pop(roots);
+            return set;
+        }
+
+        void* javan_set_of_singleton(void* value) {
+            void* values[] = { value };
+            return javan_set_fixed_factory(values, 1);
         }
 
         void* javan_set_of_pair(void* left, void* right) {
-            if (left == NULL || right == NULL) {
-                javan_panic("null Set.of element");
-            }
-            if (javan_object_equals(left, right) != 0) {
-                javan_panic("duplicate Set.of element");
-            }
-            void* left_root = left;
-            void* right_root = right;
-            void** javan_set_of_pair_roots[] = {
-                (void**) &left_root,
-                (void**) &right_root
-            };
-            javan_root_frame_push(javan_set_of_pair_roots, 2);
-            javan_object_list* set = (javan_object_list*) javan_hashset_new();
-            javan_set_add(set, left_root);
-            javan_set_add(set, right_root);
-            set->immutable = 1;
-            javan_root_frame_pop(javan_set_of_pair_roots);
-            return set;
+            void* values[] = { left, right };
+            return javan_set_fixed_factory(values, 2);
         }
 
         void* javan_set_of_triple(void* left, void* middle, void* right) {
-            if (left == NULL || middle == NULL || right == NULL) {
-                javan_panic("null Set.of element");
-            }
-            if (javan_object_equals(left, middle) != 0
-                || javan_object_equals(left, right) != 0
-                || javan_object_equals(middle, right) != 0) {
-                javan_panic("duplicate Set.of element");
-            }
-            void* left_root = left;
-            void* middle_root = middle;
-            void* right_root = right;
-            void** javan_set_of_triple_roots[] = {
-                (void**) &left_root,
-                (void**) &middle_root,
-                (void**) &right_root
-            };
-            javan_root_frame_push(javan_set_of_triple_roots, 3);
-            javan_object_list* set = (javan_object_list*) javan_hashset_new();
-            javan_set_add(set, left_root);
-            javan_set_add(set, middle_root);
-            javan_set_add(set, right_root);
-            set->immutable = 1;
-            javan_root_frame_pop(javan_set_of_triple_roots);
-            return set;
+            void* values[] = { left, middle, right };
+            return javan_set_fixed_factory(values, 3);
         }
 
         void* javan_set_of_quadruple(void* first, void* second, void* third, void* fourth) {
-            if (first == NULL || second == NULL || third == NULL || fourth == NULL) {
-                javan_panic("null Set.of element");
-            }
-            if (javan_object_equals(first, second) != 0
-                || javan_object_equals(first, third) != 0
-                || javan_object_equals(first, fourth) != 0
-                || javan_object_equals(second, third) != 0
-                || javan_object_equals(second, fourth) != 0
-                || javan_object_equals(third, fourth) != 0) {
-                javan_panic("duplicate Set.of element");
-            }
-            void* first_root = first;
-            void* second_root = second;
-            void* third_root = third;
-            void* fourth_root = fourth;
-            void** javan_set_of_quadruple_roots[] = {
-                (void**) &first_root,
-                (void**) &second_root,
-                (void**) &third_root,
-                (void**) &fourth_root
-            };
-            javan_root_frame_push(javan_set_of_quadruple_roots, 4);
-            javan_object_list* set = (javan_object_list*) javan_hashset_new();
-            javan_set_add(set, first_root);
-            javan_set_add(set, second_root);
-            javan_set_add(set, third_root);
-            javan_set_add(set, fourth_root);
-            set->immutable = 1;
-            javan_root_frame_pop(javan_set_of_quadruple_roots);
-            return set;
+            void* values[] = { first, second, third, fourth };
+            return javan_set_fixed_factory(values, 4);
         }
 
         void* javan_set_of_quintuple(void* first, void* second, void* third, void* fourth, void* fifth) {
-            if (first == NULL || second == NULL || third == NULL || fourth == NULL || fifth == NULL) {
-                javan_panic("null Set.of element");
-            }
-            if (javan_object_equals(first, second) != 0
-                || javan_object_equals(first, third) != 0
-                || javan_object_equals(first, fourth) != 0
-                || javan_object_equals(first, fifth) != 0
-                || javan_object_equals(second, third) != 0
-                || javan_object_equals(second, fourth) != 0
-                || javan_object_equals(second, fifth) != 0
-                || javan_object_equals(third, fourth) != 0
-                || javan_object_equals(third, fifth) != 0
-                || javan_object_equals(fourth, fifth) != 0) {
-                javan_panic("duplicate Set.of element");
-            }
-            void* first_root = first;
-            void* second_root = second;
-            void* third_root = third;
-            void* fourth_root = fourth;
-            void* fifth_root = fifth;
-            void** javan_set_of_quintuple_roots[] = {
-                (void**) &first_root,
-                (void**) &second_root,
-                (void**) &third_root,
-                (void**) &fourth_root,
-                (void**) &fifth_root
-            };
-            javan_root_frame_push(javan_set_of_quintuple_roots, 5);
-            javan_object_list* set = (javan_object_list*) javan_hashset_new();
-            javan_set_add(set, first_root);
-            javan_set_add(set, second_root);
-            javan_set_add(set, third_root);
-            javan_set_add(set, fourth_root);
-            javan_set_add(set, fifth_root);
-            set->immutable = 1;
-            javan_root_frame_pop(javan_set_of_quintuple_roots);
-            return set;
+            void* values[] = { first, second, third, fourth, fifth };
+            return javan_set_fixed_factory(values, 5);
         }
 
         void* javan_set_of_sextuple(void* first, void* second, void* third, void* fourth, void* fifth, void* sixth) {
-            if (first == NULL || second == NULL || third == NULL || fourth == NULL || fifth == NULL || sixth == NULL) {
-                javan_panic("null Set.of element");
-            }
-            if (javan_object_equals(first, second) != 0
-                || javan_object_equals(first, third) != 0
-                || javan_object_equals(first, fourth) != 0
-                || javan_object_equals(first, fifth) != 0
-                || javan_object_equals(first, sixth) != 0
-                || javan_object_equals(second, third) != 0
-                || javan_object_equals(second, fourth) != 0
-                || javan_object_equals(second, fifth) != 0
-                || javan_object_equals(second, sixth) != 0
-                || javan_object_equals(third, fourth) != 0
-                || javan_object_equals(third, fifth) != 0
-                || javan_object_equals(third, sixth) != 0
-                || javan_object_equals(fourth, fifth) != 0
-                || javan_object_equals(fourth, sixth) != 0
-                || javan_object_equals(fifth, sixth) != 0) {
-                javan_panic("duplicate Set.of element");
-            }
-            void* first_root = first;
-            void* second_root = second;
-            void* third_root = third;
-            void* fourth_root = fourth;
-            void* fifth_root = fifth;
-            void* sixth_root = sixth;
-            void** javan_set_of_sextuple_roots[] = {
-                (void**) &first_root,
-                (void**) &second_root,
-                (void**) &third_root,
-                (void**) &fourth_root,
-                (void**) &fifth_root,
-                (void**) &sixth_root
-            };
-            javan_root_frame_push(javan_set_of_sextuple_roots, 6);
-            javan_object_list* set = (javan_object_list*) javan_hashset_new();
-            javan_set_add(set, first_root);
-            javan_set_add(set, second_root);
-            javan_set_add(set, third_root);
-            javan_set_add(set, fourth_root);
-            javan_set_add(set, fifth_root);
-            javan_set_add(set, sixth_root);
-            set->immutable = 1;
-            javan_root_frame_pop(javan_set_of_sextuple_roots);
-            return set;
+            void* values[] = { first, second, third, fourth, fifth, sixth };
+            return javan_set_fixed_factory(values, 6);
         }
 
         void* javan_set_of_septuple(void* first, void* second, void* third, void* fourth, void* fifth, void* sixth, void* seventh) {
-            if (first == NULL || second == NULL || third == NULL || fourth == NULL || fifth == NULL || sixth == NULL || seventh == NULL) {
-                javan_panic("null Set.of element");
-            }
-            if (javan_object_equals(first, second) != 0
-                || javan_object_equals(first, third) != 0
-                || javan_object_equals(first, fourth) != 0
-                || javan_object_equals(first, fifth) != 0
-                || javan_object_equals(first, sixth) != 0
-                || javan_object_equals(first, seventh) != 0
-                || javan_object_equals(second, third) != 0
-                || javan_object_equals(second, fourth) != 0
-                || javan_object_equals(second, fifth) != 0
-                || javan_object_equals(second, sixth) != 0
-                || javan_object_equals(second, seventh) != 0
-                || javan_object_equals(third, fourth) != 0
-                || javan_object_equals(third, fifth) != 0
-                || javan_object_equals(third, sixth) != 0
-                || javan_object_equals(third, seventh) != 0
-                || javan_object_equals(fourth, fifth) != 0
-                || javan_object_equals(fourth, sixth) != 0
-                || javan_object_equals(fourth, seventh) != 0
-                || javan_object_equals(fifth, sixth) != 0
-                || javan_object_equals(fifth, seventh) != 0
-                || javan_object_equals(sixth, seventh) != 0) {
-                javan_panic("duplicate Set.of element");
-            }
-            void* first_root = first;
-            void* second_root = second;
-            void* third_root = third;
-            void* fourth_root = fourth;
-            void* fifth_root = fifth;
-            void* sixth_root = sixth;
-            void* seventh_root = seventh;
-            void** javan_set_of_septuple_roots[] = {
-                (void**) &first_root,
-                (void**) &second_root,
-                (void**) &third_root,
-                (void**) &fourth_root,
-                (void**) &fifth_root,
-                (void**) &sixth_root,
-                (void**) &seventh_root
-            };
-            javan_root_frame_push(javan_set_of_septuple_roots, 7);
-            javan_object_list* set = (javan_object_list*) javan_hashset_new();
-            javan_set_add(set, first_root);
-            javan_set_add(set, second_root);
-            javan_set_add(set, third_root);
-            javan_set_add(set, fourth_root);
-            javan_set_add(set, fifth_root);
-            javan_set_add(set, sixth_root);
-            javan_set_add(set, seventh_root);
-            set->immutable = 1;
-            javan_root_frame_pop(javan_set_of_septuple_roots);
-            return set;
+            void* values[] = { first, second, third, fourth, fifth, sixth, seventh };
+            return javan_set_fixed_factory(values, 7);
         }
 
         void* javan_set_of_octuple(void* first, void* second, void* third, void* fourth, void* fifth, void* sixth, void* seventh, void* eighth) {
-            if (first == NULL || second == NULL || third == NULL || fourth == NULL || fifth == NULL || sixth == NULL || seventh == NULL || eighth == NULL) {
-                javan_panic("null Set.of element");
-            }
-            if (javan_object_equals(first, second) != 0
-                || javan_object_equals(first, third) != 0
-                || javan_object_equals(first, fourth) != 0
-                || javan_object_equals(first, fifth) != 0
-                || javan_object_equals(first, sixth) != 0
-                || javan_object_equals(first, seventh) != 0
-                || javan_object_equals(first, eighth) != 0
-                || javan_object_equals(second, third) != 0
-                || javan_object_equals(second, fourth) != 0
-                || javan_object_equals(second, fifth) != 0
-                || javan_object_equals(second, sixth) != 0
-                || javan_object_equals(second, seventh) != 0
-                || javan_object_equals(second, eighth) != 0
-                || javan_object_equals(third, fourth) != 0
-                || javan_object_equals(third, fifth) != 0
-                || javan_object_equals(third, sixth) != 0
-                || javan_object_equals(third, seventh) != 0
-                || javan_object_equals(third, eighth) != 0
-                || javan_object_equals(fourth, fifth) != 0
-                || javan_object_equals(fourth, sixth) != 0
-                || javan_object_equals(fourth, seventh) != 0
-                || javan_object_equals(fourth, eighth) != 0
-                || javan_object_equals(fifth, sixth) != 0
-                || javan_object_equals(fifth, seventh) != 0
-                || javan_object_equals(fifth, eighth) != 0
-                || javan_object_equals(sixth, seventh) != 0
-                || javan_object_equals(sixth, eighth) != 0
-                || javan_object_equals(seventh, eighth) != 0) {
-                javan_panic("duplicate Set.of element");
-            }
-            void* first_root = first;
-            void* second_root = second;
-            void* third_root = third;
-            void* fourth_root = fourth;
-            void* fifth_root = fifth;
-            void* sixth_root = sixth;
-            void* seventh_root = seventh;
-            void* eighth_root = eighth;
-            void** javan_set_of_octuple_roots[] = {
-                (void**) &first_root,
-                (void**) &second_root,
-                (void**) &third_root,
-                (void**) &fourth_root,
-                (void**) &fifth_root,
-                (void**) &sixth_root,
-                (void**) &seventh_root,
-                (void**) &eighth_root
-            };
-            javan_root_frame_push(javan_set_of_octuple_roots, 8);
-            javan_object_list* set = (javan_object_list*) javan_hashset_new();
-            javan_set_add(set, first_root);
-            javan_set_add(set, second_root);
-            javan_set_add(set, third_root);
-            javan_set_add(set, fourth_root);
-            javan_set_add(set, fifth_root);
-            javan_set_add(set, sixth_root);
-            javan_set_add(set, seventh_root);
-            javan_set_add(set, eighth_root);
-            set->immutable = 1;
-            javan_root_frame_pop(javan_set_of_octuple_roots);
-            return set;
+            void* values[] = { first, second, third, fourth, fifth, sixth, seventh, eighth };
+            return javan_set_fixed_factory(values, 8);
         }
 
         void* javan_set_of_nonuple(void* first, void* second, void* third, void* fourth, void* fifth, void* sixth, void* seventh, void* eighth, void* ninth) {
-            if (first == NULL || second == NULL || third == NULL || fourth == NULL || fifth == NULL || sixth == NULL || seventh == NULL || eighth == NULL || ninth == NULL) {
-                javan_panic("null Set.of element");
-            }
-            if (javan_object_equals(first, second) != 0
-                || javan_object_equals(first, third) != 0
-                || javan_object_equals(first, fourth) != 0
-                || javan_object_equals(first, fifth) != 0
-                || javan_object_equals(first, sixth) != 0
-                || javan_object_equals(first, seventh) != 0
-                || javan_object_equals(first, eighth) != 0
-                || javan_object_equals(first, ninth) != 0
-                || javan_object_equals(second, third) != 0
-                || javan_object_equals(second, fourth) != 0
-                || javan_object_equals(second, fifth) != 0
-                || javan_object_equals(second, sixth) != 0
-                || javan_object_equals(second, seventh) != 0
-                || javan_object_equals(second, eighth) != 0
-                || javan_object_equals(second, ninth) != 0
-                || javan_object_equals(third, fourth) != 0
-                || javan_object_equals(third, fifth) != 0
-                || javan_object_equals(third, sixth) != 0
-                || javan_object_equals(third, seventh) != 0
-                || javan_object_equals(third, eighth) != 0
-                || javan_object_equals(third, ninth) != 0
-                || javan_object_equals(fourth, fifth) != 0
-                || javan_object_equals(fourth, sixth) != 0
-                || javan_object_equals(fourth, seventh) != 0
-                || javan_object_equals(fourth, eighth) != 0
-                || javan_object_equals(fourth, ninth) != 0
-                || javan_object_equals(fifth, sixth) != 0
-                || javan_object_equals(fifth, seventh) != 0
-                || javan_object_equals(fifth, eighth) != 0
-                || javan_object_equals(fifth, ninth) != 0
-                || javan_object_equals(sixth, seventh) != 0
-                || javan_object_equals(sixth, eighth) != 0
-                || javan_object_equals(sixth, ninth) != 0
-                || javan_object_equals(seventh, eighth) != 0
-                || javan_object_equals(seventh, ninth) != 0
-                || javan_object_equals(eighth, ninth) != 0) {
-                javan_panic("duplicate Set.of element");
-            }
-            void* first_root = first;
-            void* second_root = second;
-            void* third_root = third;
-            void* fourth_root = fourth;
-            void* fifth_root = fifth;
-            void* sixth_root = sixth;
-            void* seventh_root = seventh;
-            void* eighth_root = eighth;
-            void* ninth_root = ninth;
-            void** javan_set_of_nonuple_roots[] = {
-                (void**) &first_root,
-                (void**) &second_root,
-                (void**) &third_root,
-                (void**) &fourth_root,
-                (void**) &fifth_root,
-                (void**) &sixth_root,
-                (void**) &seventh_root,
-                (void**) &eighth_root,
-                (void**) &ninth_root
-            };
-            javan_root_frame_push(javan_set_of_nonuple_roots, 9);
-            javan_object_list* set = (javan_object_list*) javan_hashset_new();
-            javan_set_add(set, first_root);
-            javan_set_add(set, second_root);
-            javan_set_add(set, third_root);
-            javan_set_add(set, fourth_root);
-            javan_set_add(set, fifth_root);
-            javan_set_add(set, sixth_root);
-            javan_set_add(set, seventh_root);
-            javan_set_add(set, eighth_root);
-            javan_set_add(set, ninth_root);
-            set->immutable = 1;
-            javan_root_frame_pop(javan_set_of_nonuple_roots);
-            return set;
+            void* values[] = { first, second, third, fourth, fifth, sixth, seventh, eighth, ninth };
+            return javan_set_fixed_factory(values, 9);
         }
 
         void* javan_set_of_decuple(void* first, void* second, void* third, void* fourth, void* fifth, void* sixth, void* seventh, void* eighth, void* ninth, void* tenth) {
-            if (first == NULL || second == NULL || third == NULL || fourth == NULL || fifth == NULL || sixth == NULL || seventh == NULL || eighth == NULL || ninth == NULL || tenth == NULL) {
-                javan_panic("null Set.of element");
-            }
-            if (javan_object_equals(first, second) != 0
-                || javan_object_equals(first, third) != 0
-                || javan_object_equals(first, fourth) != 0
-                || javan_object_equals(first, fifth) != 0
-                || javan_object_equals(first, sixth) != 0
-                || javan_object_equals(first, seventh) != 0
-                || javan_object_equals(first, eighth) != 0
-                || javan_object_equals(first, ninth) != 0
-                || javan_object_equals(first, tenth) != 0
-                || javan_object_equals(second, third) != 0
-                || javan_object_equals(second, fourth) != 0
-                || javan_object_equals(second, fifth) != 0
-                || javan_object_equals(second, sixth) != 0
-                || javan_object_equals(second, seventh) != 0
-                || javan_object_equals(second, eighth) != 0
-                || javan_object_equals(second, ninth) != 0
-                || javan_object_equals(second, tenth) != 0
-                || javan_object_equals(third, fourth) != 0
-                || javan_object_equals(third, fifth) != 0
-                || javan_object_equals(third, sixth) != 0
-                || javan_object_equals(third, seventh) != 0
-                || javan_object_equals(third, eighth) != 0
-                || javan_object_equals(third, ninth) != 0
-                || javan_object_equals(third, tenth) != 0
-                || javan_object_equals(fourth, fifth) != 0
-                || javan_object_equals(fourth, sixth) != 0
-                || javan_object_equals(fourth, seventh) != 0
-                || javan_object_equals(fourth, eighth) != 0
-                || javan_object_equals(fourth, ninth) != 0
-                || javan_object_equals(fourth, tenth) != 0
-                || javan_object_equals(fifth, sixth) != 0
-                || javan_object_equals(fifth, seventh) != 0
-                || javan_object_equals(fifth, eighth) != 0
-                || javan_object_equals(fifth, ninth) != 0
-                || javan_object_equals(fifth, tenth) != 0
-                || javan_object_equals(sixth, seventh) != 0
-                || javan_object_equals(sixth, eighth) != 0
-                || javan_object_equals(sixth, ninth) != 0
-                || javan_object_equals(sixth, tenth) != 0
-                || javan_object_equals(seventh, eighth) != 0
-                || javan_object_equals(seventh, ninth) != 0
-                || javan_object_equals(seventh, tenth) != 0
-                || javan_object_equals(eighth, ninth) != 0
-                || javan_object_equals(eighth, tenth) != 0
-                || javan_object_equals(ninth, tenth) != 0) {
-                javan_panic("duplicate Set.of element");
-            }
-            void* first_root = first;
-            void* second_root = second;
-            void* third_root = third;
-            void* fourth_root = fourth;
-            void* fifth_root = fifth;
-            void* sixth_root = sixth;
-            void* seventh_root = seventh;
-            void* eighth_root = eighth;
-            void* ninth_root = ninth;
-            void* tenth_root = tenth;
-            void** javan_set_of_decuple_roots[] = {
-                (void**) &first_root,
-                (void**) &second_root,
-                (void**) &third_root,
-                (void**) &fourth_root,
-                (void**) &fifth_root,
-                (void**) &sixth_root,
-                (void**) &seventh_root,
-                (void**) &eighth_root,
-                (void**) &ninth_root,
-                (void**) &tenth_root
-            };
-            javan_root_frame_push(javan_set_of_decuple_roots, 10);
-            javan_object_list* set = (javan_object_list*) javan_hashset_new();
-            javan_set_add(set, first_root);
-            javan_set_add(set, second_root);
-            javan_set_add(set, third_root);
-            javan_set_add(set, fourth_root);
-            javan_set_add(set, fifth_root);
-            javan_set_add(set, sixth_root);
-            javan_set_add(set, seventh_root);
-            javan_set_add(set, eighth_root);
-            javan_set_add(set, ninth_root);
-            javan_set_add(set, tenth_root);
-            set->immutable = 1;
-            javan_root_frame_pop(javan_set_of_decuple_roots);
-            return set;
+            void* values[] = { first, second, third, fourth, fifth, sixth, seventh, eighth, ninth, tenth };
+            return javan_set_fixed_factory(values, 10);
         }
 
         void* javan_set_of_array(void* array) {
+            if (array == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
+            }
             javan_array_header* header = javan_array_checked(array);
             javan_array_kind_checked(header, JAVAN_ARRAY_KIND_OBJECT);
             javan_object_array* values = (javan_object_array*) header;
-            void* result_value = NULL;
-            void** javan_set_of_array_roots[] = {
-                (void**) &values,
-                (void**) &result_value
-            };
-            javan_root_frame_push(javan_set_of_array_roots, 2);
-            result_value = javan_hashset_new();
+            void** roots[] = { (void**) &values };
+            javan_root_frame_push(roots, 1);
             for (int index = 0; index < values->length; index++) {
-                void* element = values->values[index];
-                if (element == NULL) {
-                    javan_panic("null Set.of element");
+                if (values->values[index] == NULL) {
+                    javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                    javan_root_frame_pop(roots);
+                    return NULL;
                 }
-                if (javan_set_add(result_value, element) == 0) {
-                    javan_panic("duplicate Set.of element");
+                for (int previous = 0; previous < index; previous++) {
+                    if (javan_object_equals(values->values[previous], values->values[index]) != 0) {
+                        javan_pending_throw("java/lang/IllegalArgumentException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                        javan_root_frame_pop(roots);
+                        return NULL;
+                    }
                 }
             }
-            ((javan_object_list*) result_value)->immutable = 1;
-            javan_root_frame_pop(javan_set_of_array_roots);
-            return result_value;
+            javan_object_list* set = javan_set_new_with_capacity(values->length);
+            for (int index = 0; index < values->length; index++) {
+                set->values[index] = values->values[index];
+            }
+            set->length = values->length;
+            set->immutable = 1;
+            javan_root_frame_pop(roots);
+            return set;
         }
 
         void* javan_set_singleton(void* value) {

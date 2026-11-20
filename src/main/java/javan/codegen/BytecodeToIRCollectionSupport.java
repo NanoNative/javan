@@ -74,38 +74,59 @@ final class BytecodeToIRCollectionSupport {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_linkedhashset_new_with_expected_elements", arguments)));
             return true;
         }
-        if ("java/util/Map".equals(owner)) {
-            if (JdkCallSupport.isMapSingleEntryFactory(methodRef) || JdkCallSupport.isMapMultiEntryFactory(methodRef)) {
-                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-                final List<IrExpression> materialized = new ArrayList<>();
-                for (final IrExpression argument : arguments) {
-                    if (argument.kind() == IrExpression.Kind.LOCAL || argument.kind() == IrExpression.Kind.OBJECT_NULL
-                        || argument.kind() == IrExpression.Kind.STRING_LITERAL) {
-                        materialized.add(argument);
-                    } else {
-                        final String local = "object" + localDeclarations.size();
-                        localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, local));
-                        instructions.add(IrInstruction.assignObject(local, argument));
-                        materialized.add(IrExpression.objectLocal(local));
-                    }
+        if (JdkCallSupport.isMapSingleEntryFactory(methodRef) || JdkCallSupport.isMapMultiEntryFactory(methodRef)
+            || JdkCallSupport.isSetFactory(methodRef)) {
+            final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
+            final List<IrExpression> materialized = new ArrayList<>();
+            for (final IrExpression argument : arguments) {
+                if (argument.kind() == IrExpression.Kind.LOCAL || argument.kind() == IrExpression.Kind.OBJECT_NULL
+                    || argument.kind() == IrExpression.Kind.STRING_LITERAL) {
+                    materialized.add(argument);
+                } else {
+                    final String local = "object" + localDeclarations.size();
+                    localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, local));
+                    instructions.add(IrInstruction.assignObject(local, argument));
+                    materialized.add(IrExpression.objectLocal(local));
                 }
-                final String helper = "entry".equals(name) ? "javan_map_entry_new"
-                    : switch (materialized.size() / 2) {
-                        case 1 -> "javan_map_singleton_java";
-                        case 2 -> "javan_map_pair";
-                        case 3 -> "javan_map_triple";
-                        case 4 -> "javan_map_quadruple";
-                        case 5 -> "javan_map_quintuple";
-                        case 6 -> "javan_map_sextuple";
-                        case 7 -> "javan_map_septuple";
-                        case 8 -> "javan_map_octuple";
-                        case 9 -> "javan_map_nonuple";
-                        case 10 -> "javan_map_decuple";
+            }
+            final String helper;
+            if (JdkCallSupport.isSetFactory(methodRef)) {
+                helper = "([Ljava/lang/Object;)Ljava/util/Set;".equals(descriptor) ? "javan_set_of_array"
+                    : switch (materialized.size()) {
+                        case 1 -> "javan_set_of_singleton";
+                        case 2 -> "javan_set_of_pair";
+                        case 3 -> "javan_set_of_triple";
+                        case 4 -> "javan_set_of_quadruple";
+                        case 5 -> "javan_set_of_quintuple";
+                        case 6 -> "javan_set_of_sextuple";
+                        case 7 -> "javan_set_of_septuple";
+                        case 8 -> "javan_set_of_octuple";
+                        case 9 -> "javan_set_of_nonuple";
+                        case 10 -> "javan_set_of_decuple";
                         default -> throw unsupported(classFile, method, firstInstruction(method));
                     };
-                pushObjectCall(instructions, stack, localDeclarations, helper, materialized);
-                return true;
+            } else if ("entry".equals(name)) {
+                helper = "javan_map_entry_new";
+            } else {
+                helper = switch (materialized.size() / 2) {
+                    case 1 -> "javan_map_singleton_java";
+                    case 2 -> "javan_map_pair";
+                    case 3 -> "javan_map_triple";
+                    case 4 -> "javan_map_quadruple";
+                    case 5 -> "javan_map_quintuple";
+                    case 6 -> "javan_map_sextuple";
+                    case 7 -> "javan_map_septuple";
+                    case 8 -> "javan_map_octuple";
+                    case 9 -> "javan_map_nonuple";
+                    case 10 -> "javan_map_decuple";
+                    default -> throw unsupported(classFile, method, firstInstruction(method));
+                };
             }
+            pushObjectCall(instructions, stack, localDeclarations, helper, materialized);
+            return true;
+        }
+
+        if ("java/util/Map".equals(owner)) {
             if ("of".equals(name) && "()Ljava/util/Map;".equals(descriptor)) {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_empty", List.of())));
                 return true;
@@ -186,61 +207,6 @@ final class BytecodeToIRCollectionSupport {
             }
             if ("of".equals(name) && "()Ljava/util/Set;".equals(descriptor)) {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_set_empty", List.of())));
-                return true;
-            }
-            if ("of".equals(name) && "(Ljava/lang/Object;)Ljava/util/Set;".equals(descriptor)) {
-                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_set_of_singleton", arguments)));
-                return true;
-            }
-            if ("of".equals(name) && "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;".equals(descriptor)) {
-                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_set_of_pair", arguments)));
-                return true;
-            }
-            if ("of".equals(name) && "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;".equals(descriptor)) {
-                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_set_of_triple", arguments)));
-                return true;
-            }
-            if ("of".equals(name) && "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;".equals(descriptor)) {
-                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_set_of_quadruple", arguments)));
-                return true;
-            }
-            if ("of".equals(name) && "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;".equals(descriptor)) {
-                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_set_of_quintuple", arguments)));
-                return true;
-            }
-            if ("of".equals(name) && "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;".equals(descriptor)) {
-                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_set_of_sextuple", arguments)));
-                return true;
-            }
-            if ("of".equals(name) && "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;".equals(descriptor)) {
-                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_set_of_septuple", arguments)));
-                return true;
-            }
-            if ("of".equals(name) && "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;".equals(descriptor)) {
-                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_set_of_octuple", arguments)));
-                return true;
-            }
-            if ("of".equals(name) && "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;".equals(descriptor)) {
-                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_set_of_nonuple", arguments)));
-                return true;
-            }
-            if ("of".equals(name) && "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;".equals(descriptor)) {
-                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_set_of_decuple", arguments)));
-                return true;
-            }
-            if ("of".equals(name) && "([Ljava/lang/Object;)Ljava/util/Set;".equals(descriptor)) {
-                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_set_of_array", arguments)));
                 return true;
             }
             return false;

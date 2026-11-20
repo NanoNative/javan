@@ -4570,6 +4570,11 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static int nullMapEntryArray() { Map.Entry<Integer,Integer>[] entries = null; Map.ofEntries(entries); return 0; }
                 public static int nullMapArrayEntry() { Map.Entry<Integer,Integer>[] entries = new Map.Entry[] { null }; Map.ofEntries(entries); return 0; }
                 public static int duplicateMapArrayEntry() { Map.Entry<Integer,Integer>[] entries = new Map.Entry[] { Map.entry(1, 1), Map.entry(1, 2) }; Map.ofEntries(entries); return 0; }
+                public static int nullSetElement() { Object value = null; java.util.Set.of(value); return 0; }
+                public static int duplicateSetElements() { java.util.Set.of(1, 1); return 0; }
+                public static int nullSetArray() { Object[] values = null; java.util.Set.of(values); return 0; }
+                public static int nullSetArrayElement() { Object[] values = new Object[] { 1, null }; java.util.Set.of(values); return 0; }
+                public static int duplicateSetArray() { Object[] values = new Object[] { 1, 1 }; java.util.Set.of(values); return 0; }
                 public static int replacesNull() {
                     Map<Integer, Integer> map = new java.util.HashMap<>();
                     map.put(1, null); map.putIfAbsent(1, 7); return map.get(1);
@@ -4598,7 +4603,10 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "--export", "com.acme.Api.duplicateMapPair():int", "--export", "com.acme.Api.nullMapTriple():int",
             "--export", "com.acme.Api.duplicateMapTriple():int", "--export", "com.acme.Api.nullMapDecuple():int",
             "--export", "com.acme.Api.duplicateMapDecuple():int", "--export", "com.acme.Api.nullMapEntryArray():int",
-            "--export", "com.acme.Api.nullMapArrayEntry():int", "--export", "com.acme.Api.duplicateMapArrayEntry():int");
+            "--export", "com.acme.Api.nullMapArrayEntry():int", "--export", "com.acme.Api.duplicateMapArrayEntry():int",
+            "--export", "com.acme.Api.nullSetElement():int", "--export", "com.acme.Api.duplicateSetElements():int",
+            "--export", "com.acme.Api.nullSetArray():int", "--export", "com.acme.Api.nullSetArrayElement():int",
+            "--export", "com.acme.Api.duplicateSetArray():int");
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final Path caller = writeC(project, "call_map.c", """
             #include <string.h>
@@ -4734,6 +4742,21 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     javan_result_free(&failure);
                     failure = javan_try_com_acme_Api_duplicateMapArrayEntry_void(&value);
                     if (failure.ok || failure.message == 0 || strstr(failure.message, "IllegalArgumentException") == 0) return 44;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_nullSetElement_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 45;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_duplicateSetElements_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "IllegalArgumentException") == 0) return 46;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_nullSetArray_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 47;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_nullSetArrayElement_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 48;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_duplicateSetArray_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "IllegalArgumentException") == 0) return 49;
                     javan_result_free(&failure);
                     JavanResult result = javan_try_com_acme_Api_size_void(&value);
                     if (!result.ok || value != 400) return 1;

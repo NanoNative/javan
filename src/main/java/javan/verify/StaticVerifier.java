@@ -2113,7 +2113,7 @@ public final class StaticVerifier {
         }
         final String catchType = handler.catchType().orElseThrow();
         int hasThrowableTransport = 0;
-        boolean mapAccess = false;
+        boolean guardedContainerAccess = false;
         boolean typedOperation = false;
         final List<Instruction> instructions = code.instructions();
         final boolean reflectiveInvocationRange = containsMethodInvocation(instructions, handler);
@@ -2132,11 +2132,12 @@ public final class StaticVerifier {
             }
             if (instruction.methodRef().isPresent()) {
                 final MethodRef target = instruction.methodRef().orElseThrow();
-                mapAccess |= JdkCallSupport.isMapObjectGetOrPut(target)
+                guardedContainerAccess |= JdkCallSupport.isMapObjectGetOrPut(target)
                     || JdkCallSupport.isMapMembershipOrDefaultQuery(target) || JdkCallSupport.isMapPutIfAbsent(target)
                     || JdkCallSupport.isMapRemove(target) || JdkCallSupport.isMapReplace(target) || JdkCallSupport.isMapPutAll(target)
                     || JdkCallSupport.isMapCopyOf(target) || JdkCallSupport.isMapSingleEntryFactory(target)
-                    || JdkCallSupport.isMapMultiEntryFactory(target) || JdkCallSupport.isMapEntryArrayFactory(target);
+                    || JdkCallSupport.isMapMultiEntryFactory(target) || JdkCallSupport.isMapEntryArrayFactory(target)
+                    || JdkCallSupport.isSetFactory(target);
             }
             typedOperation |= instruction.opcode() == 192 || instruction.opcode() == 191;
             if (instruction.opcode() == 191) {
@@ -2224,7 +2225,7 @@ public final class StaticVerifier {
                 return false;
             }
         }
-        if (mapAccess && typedOperation) {
+        if (guardedContainerAccess && typedOperation) {
             // The general handler path does not prove the typed stack and handler shape for this sequence.
             return false;
         }

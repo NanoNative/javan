@@ -265,9 +265,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksSetOfVarargsArrayAsSupported() {
+    void marksSetOfVarargsArrayAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "of", "([Ljava/lang/Object;)Ljava/util/Set;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
@@ -1205,63 +1205,63 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksSetOfSingletonAsSupported() {
+    void marksSetOfSingletonAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "of", "(Ljava/lang/Object;)Ljava/util/Set;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksSetOfPairAsSupported() {
+    void marksSetOfPairAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksSetOfTripleAsSupported() {
+    void marksSetOfTripleAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksSetOfQuadrupleAsSupported() {
+    void marksSetOfQuadrupleAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksSetOfQuintupleAsSupported() {
+    void marksSetOfQuintupleAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksSetOfSextupleAsSupported() {
+    void marksSetOfSextupleAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksSetOfSeptupleAsSupported() {
+    void marksSetOfSeptupleAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksSetOfOctupleAsSupported() {
+    void marksSetOfOctupleAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksSetOfNonupleAsSupported() {
+    void marksSetOfNonupleAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
-    void marksSetOfDecupleAsSupported() {
+    void marksSetOfDecupleAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test

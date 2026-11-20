@@ -95,6 +95,10 @@ overloads reject null arguments. The multi-entry overloads and `Map.ofEntries` r
 within the supported key semantics. `Map.ofEntries` also rejects null arrays and entries. It consumes
 native map entries and does not yet support application-defined `Map.Entry` implementations.
 
+Fixed-arity and array-based `Set.of` reject null elements and duplicate elements within the
+supported equality semantics. The immutable result retains its elements independently of an input
+array. Application-defined equality remains incomplete.
+
 The default `SecureRandom` constructor supports calls resolved as `SecureRandom.nextBytes` and
 `generateSeed`. The static `getSeed` entry is also supported. The supported random value methods
 are `nextBoolean` and the zero-argument, single-bound and origin-bound `nextInt`, `nextLong`,

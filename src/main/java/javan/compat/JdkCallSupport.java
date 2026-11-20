@@ -2080,6 +2080,17 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies non-empty immutable set factory calls.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method creates a set from fixed or array arguments
+     */
+    public static boolean isSetFactory(final MethodRef methodRef) {
+        return "java/util/Set".equals(methodRef.owner()) && "of".equals(methodRef.name())
+            && !"()Ljava/util/Set;".equals(methodRef.descriptor()) && isSupported(methodRef);
+    }
+
+    /**
      * Identifies map entry and single-entry map factories.
      *
      * @param methodRef referenced JDK method
@@ -2227,7 +2238,7 @@ public final class JdkCallSupport {
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
-        if (isMapMultiEntryFactory(methodRef) || isMapEntryArrayFactory(methodRef)) {
+        if (isMapMultiEntryFactory(methodRef) || isMapEntryArrayFactory(methodRef) || isSetFactory(methodRef)) {
             return List.of("java/lang/NullPointerException", "java/lang/IllegalArgumentException");
         }
         if (isMapCopyConstructor(methodRef) || isMapCopyOf(methodRef) || isMapSingleEntryFactory(methodRef)) {

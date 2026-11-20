@@ -12662,10 +12662,11 @@ final class BytecodeToIRTest {
             plain(2, 176, "areturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(
+        assertThat(function.instructions()).containsSubsequence(
+            IrInstruction.assignObject("object0",
                 IrExpression.objectCall("javan_set_of_singleton", List.of(IrExpression.objectLocal("arg0")))
-            )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 
@@ -12683,10 +12684,11 @@ final class BytecodeToIRTest {
             plain(3, 176, "areturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(
+        assertThat(function.instructions()).containsSubsequence(
+            IrInstruction.assignObject("object0",
                 IrExpression.objectCall("javan_set_of_pair", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
-            )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 
@@ -12705,13 +12707,14 @@ final class BytecodeToIRTest {
             plain(4, 176, "areturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(
+        assertThat(function.instructions()).containsSubsequence(
+            IrInstruction.assignObject("object0",
                 IrExpression.objectCall(
                     "javan_set_of_triple",
                     List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("arg2"))
                 )
-            )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 
@@ -12731,8 +12734,8 @@ final class BytecodeToIRTest {
             plain(5, 176, "areturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(
+        assertThat(function.instructions()).containsSubsequence(
+            IrInstruction.assignObject("object0",
                 IrExpression.objectCall(
                     "javan_set_of_quadruple",
                     List.of(
@@ -12742,7 +12745,8 @@ final class BytecodeToIRTest {
                         IrExpression.objectLocal("arg3")
                     )
                 )
-            )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 
@@ -12763,8 +12767,8 @@ final class BytecodeToIRTest {
             plain(6, 176, "areturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(
+        assertThat(function.instructions()).containsSubsequence(
+            IrInstruction.assignObject("object0",
                 IrExpression.objectCall(
                     "javan_set_of_quintuple",
                     List.of(
@@ -12775,7 +12779,8 @@ final class BytecodeToIRTest {
                         IrExpression.objectLocal("arg4")
                     )
                 )
-            )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 
@@ -12797,8 +12802,8 @@ final class BytecodeToIRTest {
             plain(7, 176, "areturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(
+        assertThat(function.instructions()).containsSubsequence(
+            IrInstruction.assignObject("object0",
                 IrExpression.objectCall(
                     "javan_set_of_sextuple",
                     List.of(
@@ -12810,7 +12815,8 @@ final class BytecodeToIRTest {
                         IrExpression.objectLocal("arg5")
                     )
                 )
-            )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 
@@ -12833,8 +12839,8 @@ final class BytecodeToIRTest {
             plain(8, 176, "areturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(
+        assertThat(function.instructions()).containsSubsequence(
+            IrInstruction.assignObject("object0",
                 IrExpression.objectCall(
                     "javan_set_of_septuple",
                     List.of(
@@ -12847,7 +12853,8 @@ final class BytecodeToIRTest {
                         IrExpression.objectLocal("arg6")
                     )
                 )
-            )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 
@@ -12871,8 +12878,8 @@ final class BytecodeToIRTest {
             plain(9, 176, "areturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(
+        assertThat(function.instructions()).containsSubsequence(
+            IrInstruction.assignObject("object0",
                 IrExpression.objectCall(
                     "javan_set_of_octuple",
                     List.of(
@@ -12886,7 +12893,8 @@ final class BytecodeToIRTest {
                         IrExpression.objectLocal("arg7")
                     )
                 )
-            )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 
@@ -12911,8 +12919,8 @@ final class BytecodeToIRTest {
             plain(10, 176, "areturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(
+        assertThat(function.instructions()).containsSubsequence(
+            IrInstruction.assignObject("object0",
                 IrExpression.objectCall(
                     "javan_set_of_nonuple",
                     List.of(
@@ -12927,7 +12935,8 @@ final class BytecodeToIRTest {
                         IrExpression.objectLocal("arg8")
                     )
                 )
-            )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 
@@ -12953,8 +12962,8 @@ final class BytecodeToIRTest {
             plain(11, 176, "areturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(
+        assertThat(function.instructions()).containsSubsequence(
+            IrInstruction.assignObject("object0",
                 IrExpression.objectCall(
                     "javan_set_of_decuple",
                     List.of(
@@ -12970,7 +12979,8 @@ final class BytecodeToIRTest {
                         IrExpression.objectLocal("arg9")
                     )
                 )
-            )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 
@@ -12987,13 +12997,14 @@ final class BytecodeToIRTest {
             plain(2, 176, "areturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(
+        assertThat(function.instructions()).containsSubsequence(
+            IrInstruction.assignObject("object0",
                 IrExpression.objectCall(
                     "javan_set_of_array",
                     List.of(IrExpression.objectLocal("arg0"))
                 )
-            )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 

@@ -2262,6 +2262,76 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void setFactoriesHandleNullsAndDuplicateElements() throws Exception {
+        final Path project = project("set-factory-errors");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Collections;
+            import java.util.Set;
+            public final class Main {
+              static String argument(String label, String value) { System.out.println(label); return value; }
+              public static void main(String[] args) {
+                String invalid = null;
+                System.out.println(Set.of("v0").size());
+                try { Set.of(invalid); } catch (NullPointerException expected) { System.out.println("null-1"); }
+                System.out.println(Set.of("v0", "v1").size());
+                try { Set.<String>of("v0", null); } catch (NullPointerException expected) { System.out.println("null-2"); }
+                try { Set.of("v0", "v0"); } catch (IllegalArgumentException expected) { System.out.println("duplicate-2"); }
+                System.out.println(Set.of("v0", "v1", "v2").size());
+                try { Set.<String>of("v0", "v1", null); } catch (NullPointerException expected) { System.out.println("null-3"); }
+                try { Set.of("v0", "v1", "v0"); } catch (IllegalArgumentException expected) { System.out.println("duplicate-3"); }
+                System.out.println(Set.of("v0", "v1", "v2", "v3").size());
+                try { Set.<String>of("v0", "v1", "v2", null); } catch (NullPointerException expected) { System.out.println("null-4"); }
+                try { Set.of("v0", "v1", "v2", "v0"); } catch (IllegalArgumentException expected) { System.out.println("duplicate-4"); }
+                System.out.println(Set.of("v0", "v1", "v2", "v3", "v4").size());
+                try { Set.<String>of("v0", "v1", "v2", "v3", null); } catch (NullPointerException expected) { System.out.println("null-5"); }
+                try { Set.of("v0", "v1", "v2", "v3", "v0"); } catch (IllegalArgumentException expected) { System.out.println("duplicate-5"); }
+                System.out.println(Set.of("v0", "v1", "v2", "v3", "v4", "v5").size());
+                try { Set.<String>of("v0", "v1", "v2", "v3", "v4", null); } catch (NullPointerException expected) { System.out.println("null-6"); }
+                try { Set.of("v0", "v1", "v2", "v3", "v4", "v0"); } catch (IllegalArgumentException expected) { System.out.println("duplicate-6"); }
+                System.out.println(Set.of("v0", "v1", "v2", "v3", "v4", "v5", "v6").size());
+                try { Set.<String>of("v0", "v1", "v2", "v3", "v4", "v5", null); } catch (NullPointerException expected) { System.out.println("null-7"); }
+                try { Set.of("v0", "v1", "v2", "v3", "v4", "v5", "v0"); } catch (IllegalArgumentException expected) { System.out.println("duplicate-7"); }
+                System.out.println(Set.of("v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7").size());
+                try { Set.<String>of("v0", "v1", "v2", "v3", "v4", "v5", "v6", null); } catch (NullPointerException expected) { System.out.println("null-8"); }
+                try { Set.of("v0", "v1", "v2", "v3", "v4", "v5", "v6", "v0"); } catch (IllegalArgumentException expected) { System.out.println("duplicate-8"); }
+                System.out.println(Set.of("v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8").size());
+                try { Set.<String>of("v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", null); } catch (NullPointerException expected) { System.out.println("null-9"); }
+                try { Set.of("v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v0"); } catch (IllegalArgumentException expected) { System.out.println("duplicate-9"); }
+                System.out.println(Set.of("v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9").size());
+                try { Set.<String>of("v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", null); } catch (NullPointerException expected) { System.out.println("null-10"); }
+                try { Set.of("v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v0"); } catch (IllegalArgumentException expected) { System.out.println("duplicate-10"); }
+                String[] values = null;
+                try { Set.of(values); } catch (NullPointerException expected) { System.out.println("null array"); }
+                values = new String[] {"a", null};
+                try { Set.of(values); } catch (NullPointerException expected) { System.out.println("null element"); }
+                values = new String[] {"a", "a"};
+                try { Set.of(values); } catch (IllegalArgumentException expected) { System.out.println("duplicate array"); }
+                System.out.println(Collections.singleton(null).contains(null));
+                System.out.println(Set.of("after").contains("after"));
+                try { Set.of(argument("first", null), argument("second", "b"), argument("third", "c")); }
+                catch (NullPointerException expected) { System.out.println("ordered null"); }
+                Set<String> retained = Set.of(Integer.toString(42), "b", "c", "d", "e", "f", "g", "h", "i", "j");
+                String[] source = {Integer.toString(43), "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"};
+                Set<String> fromArray = Set.of(source); source[0] = "changed";
+                for (int i = 0; i < 100; i++) Integer.toString(i);
+                System.out.println(retained.contains("42")); System.out.println(fromArray.contains("43"));
+                try { retained.add("other"); } catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                System.out.println(Set.of(System.out, System.err, "").size());
+              }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/set-factory-errors").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void mapOfEntriesHandlesNullArraysNullEntriesAndDuplicates() throws Exception {
         final Path project = project("map-of-entries-errors");
         writeJava(project, "com.acme.Main", """
