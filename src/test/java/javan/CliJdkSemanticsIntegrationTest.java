@@ -2487,6 +2487,50 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void listRemoveEndpointsTransportFailuresAndReturnRemovedValues() throws Exception {
+        final Path project = project("list-remove-endpoint-errors");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.Collections;
+            import java.util.List;
+            import java.util.NoSuchElementException;
+            public final class Main {
+                public static void main(String[] args) {
+                    ArrayList<String> concrete = new ArrayList<>();
+                    List<String> values = concrete;
+                    List<String> missing = args.length == 0 ? null : values;
+                    ArrayList<String> missingConcrete = args.length == 0 ? null : concrete;
+                    try { missing.removeFirst(); } catch (NullPointerException expected) { System.out.println("first null"); }
+                    try { missingConcrete.removeLast(); } catch (NullPointerException expected) { System.out.println("last null"); }
+                    try { values.removeFirst(); } catch (NoSuchElementException expected) { System.out.println("first empty"); }
+                    try { concrete.removeLast(); } catch (NoSuchElementException expected) { System.out.println("last empty"); }
+                    try { List.of().removeFirst(); } catch (UnsupportedOperationException expected) { System.out.println("first immutable"); }
+                    try { List.of().removeLast(); } catch (UnsupportedOperationException expected) { System.out.println("last immutable"); }
+                    try { Collections.emptyList().removeFirst(); } catch (NoSuchElementException expected) { System.out.println("first legacy empty"); }
+                    try { Collections.unmodifiableList(values).removeLast(); } catch (NoSuchElementException expected) { System.out.println("last empty view"); }
+                    try { Collections.unmodifiableList(List.of()).removeFirst(); } catch (NoSuchElementException expected) { System.out.println("first immutable view"); }
+                    try { List.copyOf(Collections.emptyList()).removeLast(); } catch (UnsupportedOperationException expected) { System.out.println("last immutable copy"); }
+                    concrete.add("first"); concrete.add(null); concrete.add("last");
+                    try { Collections.unmodifiableList(values).removeLast(); }
+                    catch (UnsupportedOperationException expected) { System.out.println("nonempty view"); }
+                    System.out.println(values.removeFirst());
+                    System.out.println(concrete.removeLast());
+                    System.out.println(values.removeFirst() == null);
+                    System.out.println(values.isEmpty());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-remove-endpoint-errors").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void listRemoveIndexTransportsFailuresAndReturnsRemovedValue() throws Exception {
         final Path project = project("list-remove-index-errors");
         writeJava(project, "com.acme.Main", """
@@ -2748,6 +2792,14 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                     try { values.getLast(); } catch (NoSuchElementException expected) { return true; }
                     return false;
                 }
+                static boolean rejectsEmptyRemoval(List<String> values) {
+                    try { values.removeFirst(); } catch (NoSuchElementException expected) { return true; }
+                    return false;
+                }
+                static boolean rejectsImmutableRemoval(List<String> values) {
+                    try { values.removeLast(); } catch (UnsupportedOperationException expected) { return true; }
+                    return false;
+                }
                 static final class Worker implements Runnable {
                     public void run() {
                         for (int i = 0; i < 100; i++) {
@@ -2765,8 +2817,12 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                             if (!concrete.get(0).equals(Integer.toString(i + 2))) errors.incrementAndGet();
                             if (!list.remove(0).equals(Integer.toString(i + 2))) errors.incrementAndGet();
                             if (!concrete.get(0).equals(Integer.toString(i + 1))) errors.incrementAndGet();
+                            concrete.add(Integer.toString(i + 3));
+                            if (!list.removeFirst().equals(Integer.toString(i + 1))) errors.incrementAndGet();
+                            if (!concrete.removeLast().equals(Integer.toString(i + 3))) errors.incrementAndGet();
                             List<String> empty = List.of();
                             if (!rejectsFirst(empty) || !rejectsLast(empty)) errors.incrementAndGet();
+                            if (!rejectsImmutableRemoval(empty) || !rejectsEmptyRemoval(java.util.Collections.emptyList())) errors.incrementAndGet();
                         }
                     }
                 }
@@ -4464,7 +4520,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/arraylist-direct-owner-remove-first-empty").toString()));
 
         assertThat(nativeRun.exitCode()).isNotZero();
-        assertThat(nativeRun.stderr()).contains("list is empty");
+        assertThat(nativeRun.stderr()).contains("NoSuchElementException");
     }
 
     @Test
@@ -4493,7 +4549,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/arraylist-direct-owner-remove-at-oob").toString()));
 
         assertThat(nativeRun.exitCode()).isNotZero();
-        assertThat(nativeRun.stderr()).contains("index out of bounds");
+        assertThat(nativeRun.stderr()).contains("IndexOutOfBoundsException");
     }
 
     @Test
@@ -4522,7 +4578,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/list-remove-at-oob").toString()));
 
         assertThat(nativeRun.exitCode()).isNotZero();
-        assertThat(nativeRun.stderr()).contains("index out of bounds");
+        assertThat(nativeRun.stderr()).contains("IndexOutOfBoundsException");
     }
 
     @Test

@@ -750,6 +750,7 @@ public final class JdkCallSupport {
         runtime("List.getFirst", "java/util/List", "getFirst", "()Ljava/lang/Object;"),
         runtime("List.getLast", "java/util/List", "getLast", "()Ljava/lang/Object;"),
         runtime("List.remove", "java/util/List", "remove", "(I)Ljava/lang/Object;"),
+        runtime("List.removeFirst", "java/util/List", "removeFirst", "()Ljava/lang/Object;"),
         runtime("List.removeLast", "java/util/List", "removeLast", "()Ljava/lang/Object;"),
         runtime("List.set", "java/util/List", "set", "(ILjava/lang/Object;)Ljava/lang/Object;"),
         runtime("List.addFirst", "java/util/List", "addFirst", "(Ljava/lang/Object;)V"),
@@ -1266,7 +1267,7 @@ public final class JdkCallSupport {
             return "(I)Ljava/lang/Object;".equals(descriptor)
                 || "(Ljava/lang/Object;)Z".equals(descriptor);
         }
-        if ("removeLast".equals(name)) {
+        if ("removeFirst".equals(name) || "removeLast".equals(name)) {
             return "()Ljava/lang/Object;".equals(descriptor);
         }
         if ("set".equals(name)) {
@@ -2103,6 +2104,18 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies first and last element removal on supported list receivers.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method removes a list endpoint
+     */
+    public static boolean isListEndpointRemove(final MethodRef methodRef) {
+        return ("java/util/List".equals(methodRef.owner()) || "java/util/ArrayList".equals(methodRef.owner()))
+            && ("removeFirst".equals(methodRef.name()) || "removeLast".equals(methodRef.name()))
+            && "()Ljava/lang/Object;".equals(methodRef.descriptor()) && isSupported(methodRef);
+    }
+
+    /**
      * Identifies indexed access on supported list receivers.
      *
      * @param methodRef referenced JDK method
@@ -2322,6 +2335,10 @@ public final class JdkCallSupport {
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
+        if (isListEndpointRemove(methodRef)) {
+            return List.of("java/lang/NullPointerException", "java/util/NoSuchElementException",
+                "java/lang/UnsupportedOperationException");
+        }
         if (isListIndexedSet(methodRef) || isListIndexedRemove(methodRef)) {
             return List.of("java/lang/NullPointerException", "java/lang/IndexOutOfBoundsException",
                 "java/lang/UnsupportedOperationException");

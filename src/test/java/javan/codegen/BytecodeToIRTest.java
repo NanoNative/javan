@@ -12038,7 +12038,8 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.objectCall("javan_list_of", List.of(IrExpression.intLiteral(0))))
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_collections_empty_list", List.of())),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 
@@ -25486,8 +25487,14 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).containsExactly(
             IrInstruction.assignObject(
                 "object0",
-                IrExpression.objectCall("javan_arraylist_remove_last", List.of(IrExpression.objectLocal("arg0")))
+                IrExpression.objectCall("javan_arraylist_remove_last_java", List.of(IrExpression.objectLocal("arg0")))
             ),
+            IrInstruction.branchIf(
+                "label_pending_continue_1",
+                IrExpression.intComparison("==", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))
+            ),
+            IrInstruction.propagatePending(),
+            IrInstruction.label("label_pending_continue_1"),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
@@ -25635,8 +25642,14 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).containsExactly(
             IrInstruction.assignObject(
                 "object0",
-                IrExpression.objectCall("javan_arraylist_remove_first", List.of(IrExpression.objectLocal("arg0")))
+                IrExpression.objectCall("javan_arraylist_remove_first_java", List.of(IrExpression.objectLocal("arg0")))
             ),
+            IrInstruction.branchIf(
+                "label_pending_continue_1",
+                IrExpression.intComparison("==", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))
+            ),
+            IrInstruction.propagatePending(),
+            IrInstruction.label("label_pending_continue_1"),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
@@ -26505,8 +26518,14 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).containsExactly(
             IrInstruction.assignObject(
                 "object0",
-                IrExpression.objectCall("javan_arraylist_remove_last", List.of(IrExpression.objectLocal("arg0")))
+                IrExpression.objectCall("javan_arraylist_remove_last_java", List.of(IrExpression.objectLocal("arg0")))
             ),
+            IrInstruction.branchIf(
+                "label_pending_continue_1",
+                IrExpression.intComparison("==", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))
+            ),
+            IrInstruction.propagatePending(),
+            IrInstruction.label("label_pending_continue_1"),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }

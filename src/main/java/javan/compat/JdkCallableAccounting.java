@@ -33,6 +33,7 @@ final class JdkCallableAccounting {
             || JdkCallSupport.isListCopyOf(methodRef)
             || JdkCallSupport.isListFactory(methodRef)
             || JdkCallSupport.isListEndpoint(methodRef)
+            || JdkCallSupport.isListEndpointRemove(methodRef)
             || JdkCallSupport.isListIndexedGet(methodRef)
             || JdkCallSupport.isListIndexedSet(methodRef)
             || JdkCallSupport.isListIndexedRemove(methodRef)

@@ -92,6 +92,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_SERVICE_ITERATOR_MAGIC 0x4a534954
         #define JAVAN_LIST_VIEW_UNMODIFIABLE 1
         #define JAVAN_LIST_VIEW_SET 2
+        #define JAVAN_LIST_EMPTY_COLLECTION 4
         #define JAVAN_MAP_VIEW_UNMODIFIABLE 1
         #define JAVAN_BUILTIN_INSTANCEOF_COLLECTION 1
         #define JAVAN_BUILTIN_INSTANCEOF_MAP 2
@@ -13349,33 +13350,41 @@ final class RuntimeSourceMemorySections {
             return javan_arraylist_remove_at(list, index);
         }
 
-        void* javan_arraylist_remove_first(void* value) {
+        static void* javan_arraylist_remove_endpoint_java(void* value, int last) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
+            }
             javan_object_list* list = javan_list_checked(value);
-            javan_list_mutable_checked(list);
-            if (list->length == 0) {
-                javan_panic("list is empty");
+            int length = javan_list_logical_length(list);
+            if (list->immutable != 0 && list->backing == NULL
+                && (list->view_flags & JAVAN_LIST_EMPTY_COLLECTION) == 0) {
+                javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
             }
-            void* previous = list->values[0];
-            if (list->length > 1) {
-                memmove(list->values, list->values + 1, (unsigned long) (list->length - 1) * sizeof(void*));
+            if (length == 0) {
+                javan_pending_throw("java/util/NoSuchElementException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
             }
-            list->length--;
-            list->values[list->length] = NULL;
-            list->mod_count++;
-            return previous;
+            if (list->immutable != 0) {
+                javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return NULL;
+            }
+            return javan_arraylist_remove_at(list, last ? length - 1 : 0);
         }
 
-        void* javan_arraylist_remove_last(void* value) {
-            javan_object_list* list = javan_list_checked(value);
-            javan_list_mutable_checked(list);
-            if (list->length == 0) {
-                javan_panic("list is empty");
-            }
-            list->length--;
-            void* previous = list->values[list->length];
-            list->values[list->length] = NULL;
-            list->mod_count++;
-            return previous;
+        void* javan_arraylist_remove_first_java(void* value) {
+            return javan_arraylist_remove_endpoint_java(value, 0);
+        }
+
+        void* javan_arraylist_remove_last_java(void* value) {
+            return javan_arraylist_remove_endpoint_java(value, 1);
+        }
+
+        void* javan_collections_empty_list(void) {
+            javan_object_list* list = javan_list_new_with_capacity(0, 1);
+            list->view_flags = JAVAN_LIST_EMPTY_COLLECTION;
+            return list;
         }
 
         static void* javan_list_from_values(void** values, int count) {

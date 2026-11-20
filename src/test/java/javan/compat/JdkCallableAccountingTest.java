@@ -465,9 +465,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksArrayListRemoveLastAsSupported() {
+    void marksArrayListRemoveLastAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "removeLast", "()Ljava/lang/Object;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
@@ -489,9 +489,17 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksArrayListRemoveFirstAsSupported() {
+    void marksArrayListRemoveFirstAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "removeFirst", "()Ljava/lang/Object;")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+    }
+
+    @Test
+    void marksListEndpointRemovalsAsUnknown() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/List", "removeFirst", "()Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/List", "removeLast", "()Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test

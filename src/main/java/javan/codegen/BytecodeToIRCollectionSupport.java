@@ -156,7 +156,7 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("emptyList".equals(name) && "()Ljava/util/List;".equals(descriptor)) {
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_of", List.of(IrExpression.intLiteral(0)))));
+                pushObjectCall(instructions, stack, localDeclarations, "javan_collections_empty_list", List.of());
                 return true;
             }
             if ("unmodifiableList".equals(name) && "(Ljava/util/List;)Ljava/util/List;".equals(descriptor)) {
@@ -961,7 +961,7 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("removeLast()Ljava/lang/Object;".equals(signature)) {
-                pushObjectCall(instructions, stack, localDeclarations, "javan_arraylist_remove_last", List.of(receiver));
+                pushObjectCall(instructions, stack, localDeclarations, "javan_arraylist_remove_last_java", List.of(receiver));
                 return true;
             }
             if ("addFirst(Ljava/lang/Object;)V".equals(signature)) {
@@ -973,7 +973,7 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("removeFirst()Ljava/lang/Object;".equals(signature)) {
-                pushObjectCall(instructions, stack, localDeclarations, "javan_arraylist_remove_first", List.of(receiver));
+                pushObjectCall(instructions, stack, localDeclarations, "javan_arraylist_remove_first_java", List.of(receiver));
                 return true;
             }
             if ("listIterator()Ljava/util/ListIterator;".equals(signature)) {
@@ -1173,7 +1173,7 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("removeLast()Ljava/lang/Object;".equals(signature)) {
-                pushObjectCall(instructions, stack, localDeclarations, "javan_arraylist_remove_last", List.of(receiver));
+                pushObjectCall(instructions, stack, localDeclarations, "javan_arraylist_remove_last_java", List.of(receiver));
                 return true;
             }
             if ("size()I".equals(signature)) {

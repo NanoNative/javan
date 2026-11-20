@@ -1246,12 +1246,17 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     try { values.remove(0); } catch (IndexOutOfBoundsException expected) { System.out.println("remove empty"); }
                     try { missing.remove(0); } catch (NullPointerException expected) { System.out.println("remove null"); }
                     try { List.of().remove(0); } catch (UnsupportedOperationException expected) { System.out.println("remove immutable"); }
+                    try { values.removeFirst(); } catch (java.util.NoSuchElementException expected) { System.out.println("remove first empty"); }
+                    try { missing.removeLast(); } catch (NullPointerException expected) { System.out.println("remove last null"); }
+                    try { List.of().removeFirst(); } catch (UnsupportedOperationException expected) { System.out.println("remove first immutable"); }
+                    try { java.util.Collections.emptyList().removeLast(); } catch (java.util.NoSuchElementException expected) { System.out.println("remove last legacy empty"); }
                     concrete.add("first"); concrete.add("last");
                     System.out.println(values.get(0)); System.out.println(concrete.get(1));
                     System.out.println(abstractValues.set(0, "changed"));
                     System.out.println(values.get(0));
                     System.out.println(abstractValues.remove(0));
                     System.out.println(values.get(0));
+                    System.out.println(values.removeFirst());
                 }
             }
             """);
@@ -4729,6 +4734,10 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static int listRemoveBadIndex() { new java.util.ArrayList<String>().remove(0); return 0; }
                 public static int listRemoveNull(int selector) { java.util.List<String> values = selector == 0 ? null : new java.util.ArrayList<>(); values.remove(0); return 0; }
                 public static int listRemoveImmutable() { java.util.List.of().remove(0); return 0; }
+                public static int listRemoveFirstEmpty() { new java.util.ArrayList<String>().removeFirst(); return 0; }
+                public static int listRemoveLastNull(int selector) { java.util.List<String> values = selector == 0 ? null : new java.util.ArrayList<>(); values.removeLast(); return 0; }
+                public static int listRemoveFirstImmutable() { java.util.List.of().removeFirst(); return 0; }
+                public static int listRemoveLastLegacyEmpty() { java.util.Collections.emptyList().removeLast(); return 0; }
                 public static int replacesNull() {
                     Map<Integer, Integer> map = new java.util.HashMap<>();
                     map.put(1, null); map.putIfAbsent(1, 7); return map.get(1);
@@ -4770,7 +4779,9 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "--export", "com.acme.Api.listGetBadIndex():int", "--export", "com.acme.Api.listGetNull(int):int",
             "--export", "com.acme.Api.listSetBadIndex():int", "--export", "com.acme.Api.listSetNull(int):int",
             "--export", "com.acme.Api.listSetImmutable():int", "--export", "com.acme.Api.listRemoveBadIndex():int",
-            "--export", "com.acme.Api.listRemoveNull(int):int", "--export", "com.acme.Api.listRemoveImmutable():int");
+            "--export", "com.acme.Api.listRemoveNull(int):int", "--export", "com.acme.Api.listRemoveImmutable():int",
+            "--export", "com.acme.Api.listRemoveFirstEmpty():int", "--export", "com.acme.Api.listRemoveLastNull(int):int",
+            "--export", "com.acme.Api.listRemoveFirstImmutable():int", "--export", "com.acme.Api.listRemoveLastLegacyEmpty():int");
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final Path caller = writeC(project, "call_map.c", """
             #include <string.h>
@@ -4984,6 +4995,18 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     javan_result_free(&failure);
                     failure = javan_try_com_acme_Api_listRemoveImmutable_void(&value);
                     if (failure.ok || failure.message == 0 || strstr(failure.message, "UnsupportedOperationException") == 0) return 70;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_listRemoveFirstEmpty_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NoSuchElementException") == 0) return 71;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_listRemoveLastNull_int(0, &value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 72;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_listRemoveFirstImmutable_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "UnsupportedOperationException") == 0) return 73;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_listRemoveLastLegacyEmpty_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NoSuchElementException") == 0) return 74;
                     javan_result_free(&failure);
                     JavanResult result = javan_try_com_acme_Api_size_void(&value);
                     if (!result.ok || value != 400) return 1;
