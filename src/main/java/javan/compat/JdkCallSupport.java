@@ -2069,13 +2069,24 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies supported map clear operations.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method clears a supported map
+     */
+    public static boolean isMapClear(final MethodRef methodRef) {
+        return isMapRuntimeOwner(methodRef.owner()) && "clear".equals(methodRef.name())
+            && "()V".equals(methodRef.descriptor()) && isSupported(methodRef);
+    }
+
+    /**
      * Returns platform throwable types transported by a supported JDK call.
      *
      * @param methodRef method reference
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
-        if (isCollectionObjectAddition(methodRef) || isCollectionClear(methodRef)) {
+        if (isCollectionObjectAddition(methodRef) || isCollectionClear(methodRef) || isMapClear(methodRef)) {
             return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException");
         }
         if (isCollectionObjectSearch(methodRef) || isCollectionSizeQuery(methodRef)) {

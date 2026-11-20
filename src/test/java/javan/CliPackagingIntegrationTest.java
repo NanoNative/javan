@@ -4418,6 +4418,9 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static int cleared() { java.util.List<Object> list = new ArrayList<>(); list.add("item"); list.clear(); return list.size(); }
                 public static int missingClear() { java.util.List<Object> list = null; list.clear(); return 0; }
                 public static int immutableClear() { java.util.List<Object> list = java.util.List.of(); list.clear(); return 0; }
+                public static int mapCleared() { java.util.Map<String, String> map = new java.util.HashMap<>(); map.put("a", "b"); map.clear(); return map.size(); }
+                public static int missingMapClear() { java.util.Map<String, String> map = null; map.clear(); return 0; }
+                public static int immutableMapClear() { java.util.Map<String, String> map = java.util.Map.of(); map.clear(); return 0; }
             }
             """);
         final CliRun build = run(tempDir, "build", project.toString(), "--kind", "staticlib",
@@ -4425,7 +4428,8 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "--export", "com.acme.Api.missingSize():int", "--export", "com.acme.Api.missingEmpty():int",
             "--export", "com.acme.Api.missingAdd():int", "--export", "com.acme.Api.immutableAdd():int",
             "--export", "com.acme.Api.cleared():int", "--export", "com.acme.Api.missingClear():int",
-            "--export", "com.acme.Api.immutableClear():int");
+            "--export", "com.acme.Api.immutableClear():int", "--export", "com.acme.Api.mapCleared():int",
+            "--export", "com.acme.Api.missingMapClear():int", "--export", "com.acme.Api.immutableMapClear():int");
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final Path caller = writeC(project, "call_null_search.c", """
             #include <string.h>
@@ -4459,8 +4463,17 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 result = javan_try_com_acme_Api_immutableClear_void(&value);
                 if (result.ok || result.message == 0 || strstr(result.message, "UnsupportedOperationException") == 0) return 9;
                 javan_result_free(&result);
+                result = javan_try_com_acme_Api_mapCleared_void(&value);
+                if (!result.ok || value != 0) return 10;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_missingMapClear_void(&value);
+                if (result.ok || result.message == 0 || strstr(result.message, "NullPointerException") == 0) return 11;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_immutableMapClear_void(&value);
+                if (result.ok || result.message == 0 || strstr(result.message, "UnsupportedOperationException") == 0) return 12;
+                javan_result_free(&result);
                 result = javan_try_com_acme_Api_hit_void(&value);
-                if (!result.ok || value != 1) return 10;
+                if (!result.ok || value != 1) return 13;
                 javan_result_free(&result);
                 return 0;
             }

@@ -2189,6 +2189,43 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mapClearTransportsNullAndImmutableFailures() throws Exception {
+        final Path project = project("map-clear-exceptions");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Collections;
+            import java.util.HashMap;
+            import java.util.Map;
+            public final class Main {
+                static void clear(Map<String, String> value) { value.clear(); }
+                static void check(Map<String, String> value) {
+                    try { clear(value); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                }
+                public static void main(String[] args) {
+                    try { clear(null); } catch (NullPointerException expected) { System.out.println("null"); }
+                    HashMap<String, String> backing = new HashMap<>(); backing.put("a", "b");
+                    check(Map.of()); check(Collections.unmodifiableMap(backing));
+                    System.out.println(backing.size()); clear(backing); System.out.println(backing.size());
+                    backing.put("c", "d"); backing.clear(); System.out.println(backing.size());
+                    java.util.TreeMap<String, String> sorted = new java.util.TreeMap<>();
+                    sorted.put("a", "b"); sorted.clear(); System.out.println(sorted.size());
+                    java.util.concurrent.ConcurrentHashMap<String, String> concurrent = new java.util.concurrent.ConcurrentHashMap<>();
+                    concurrent.put("a", "b"); concurrent.clear(); System.out.println(concurrent.size());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/map-clear-exceptions").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void builtinEnumConstantsKeepIdentityAndClassDistinctFromStrings() throws Exception {
         final Path project = project("builtin-enum-identity");
         writeJava(project, "com.acme.Main", """

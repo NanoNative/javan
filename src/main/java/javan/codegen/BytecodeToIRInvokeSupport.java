@@ -191,9 +191,9 @@ final class BytecodeToIRInvokeSupport {
         final MethodRef target = instruction.methodRef().orElseThrow();
         final boolean guardedCollectionArgument = JdkCallSupport.isCollectionObjectSearch(target)
             || JdkCallSupport.isCollectionObjectAddition(target);
-        final boolean guardedCollectionReceiver = guardedCollectionArgument || JdkCallSupport.isCollectionSizeQuery(target)
-            || JdkCallSupport.isCollectionClear(target);
-        if (!guardedCollectionReceiver && !guardedMapGet(target)
+        final boolean guardedCollectionOrMapReceiver = guardedCollectionArgument || JdkCallSupport.isCollectionSizeQuery(target)
+            || JdkCallSupport.isCollectionClear(target) || JdkCallSupport.isMapClear(target);
+        if (!guardedCollectionOrMapReceiver && !guardedMapGet(target)
             && !guardedOptionalReceiver(target)
             && !(classes.containsKey(target.owner())
                 && classes.get(target.owner()).application()
@@ -203,7 +203,7 @@ final class BytecodeToIRInvokeSupport {
         final IrExpression nullMessage = IrExpression.stringLiteral(
             "Cannot invoke " + target.owner() + "." + target.name() + " on null"
         );
-        if (!guardedCollectionReceiver && BytecodeToIRControlFlowSupport.exceptionHandler(
+        if (!guardedCollectionOrMapReceiver && BytecodeToIRControlFlowSupport.exceptionHandler(
             classFile,
             method,
             instruction,
@@ -224,7 +224,7 @@ final class BytecodeToIRInvokeSupport {
         }
         final IrExpression receiverExpression = receiver.expression().orElseThrow();
         final IrExpression materialized;
-        if (guardedCollectionReceiver && (receiverExpression.kind() == IrExpression.Kind.LOCAL
+        if (guardedCollectionOrMapReceiver && (receiverExpression.kind() == IrExpression.Kind.LOCAL
             || receiverExpression.kind() == IrExpression.Kind.OBJECT_NULL
             || receiverExpression.kind() == IrExpression.Kind.STRING_LITERAL)) {
             materialized = receiverExpression;

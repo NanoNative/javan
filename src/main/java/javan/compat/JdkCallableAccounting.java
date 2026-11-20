@@ -18,6 +18,7 @@ final class JdkCallableAccounting {
             || JdkCallSupport.isCollectionObjectSearch(methodRef)
             || JdkCallSupport.isCollectionObjectAddition(methodRef)
             || JdkCallSupport.isCollectionClear(methodRef)
+            || JdkCallSupport.isMapClear(methodRef)
             || ("java/lang/Object".equals(methodRef.owner()) && "equals".equals(methodRef.name())
                 && "(Ljava/lang/Object;)Z".equals(methodRef.descriptor()))) {
             return Status.UNKNOWN;

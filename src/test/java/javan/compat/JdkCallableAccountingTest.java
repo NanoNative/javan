@@ -889,9 +889,11 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksMapClearAsSupported() {
+    void marksMapClearAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "clear", "()V")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashMap", "clear", "()V")))
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test

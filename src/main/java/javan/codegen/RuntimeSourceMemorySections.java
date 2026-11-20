@@ -15695,9 +15695,7 @@ final class RuntimeSourceMemorySections {
             return 1;
         }
 
-        void javan_map_clear(void* value) {
-            javan_object_map* map = javan_map_checked(value);
-            javan_map_mutable_checked(map);
+        static void javan_map_clear_prechecked(javan_object_map* map) {
             if (map->backing != NULL) {
                 javan_map_clear((void*) map->backing);
                 return;
@@ -15713,6 +15711,21 @@ final class RuntimeSourceMemorySections {
             map->length = 0;
             javan_map_rebuild_index(map);
             map->mod_count++;
+        }
+
+        void javan_map_clear(void* value) {
+            javan_object_map* map = javan_map_checked(value);
+            javan_map_mutable_checked(map);
+            javan_map_clear_prechecked(map);
+        }
+
+        void javan_map_clear_java(void* value) {
+            javan_object_map* map = javan_map_checked(value);
+            if (map->immutable != 0) {
+                javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return;
+            }
+            javan_map_clear_prechecked(map);
         }
 
         void* javan_map_remove(void* value, void* key) {

@@ -1360,8 +1360,8 @@ final class BytecodeToIRCollectionSupport {
                 );
                 return true;
             }
-            if ("clear()V".equals(signature)) {
-                instructions.add(IrInstruction.callStaticVoid("javan_map_clear", List.of(receiver)));
+            if (JdkCallSupport.isMapClear(methodRef)) {
+                instructions.add(IrInstruction.callStaticVoid("javan_map_clear_java", List.of(receiver)));
                 return true;
             }
             if ("putAll(Ljava/util/Map;)V".equals(signature)) {
