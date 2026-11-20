@@ -4397,6 +4397,115 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void staticLibraryObjectEqualsDispatchesAndReportsFailures() throws Exception {
+        final Path project = project("library-object-equals");
+        writeJava(project, "com.acme.Api", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.concurrent.TimeUnit;
+            public final class Api {
+                static int calls;
+                static final class Custom {
+                    public boolean equals(Object other) { calls = calls + 1; return false; }
+                }
+                static final class Throwing {
+                    public boolean equals(Object other) { throw new IllegalStateException(); }
+                }
+                public static Object custom() { return new Custom(); }
+                public static Object throwing() { return new Throwing(); }
+                public static Object plain() { return new Object(); }
+                public static Object list() { return new ArrayList<>(); }
+                public static Object unit() { return TimeUnit.SECONDS; }
+                public static Object name() { return "SECONDS"; }
+                public static int isEnum(Object value) { return value.getClass().isEnum() ? 1 : 0; }
+                public static int same(Object left, Object right) { return left.equals(right) ? 1 : 0; }
+                public static int calls() { return calls; }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString(), "--kind", "staticlib",
+            "--export", "com.acme.Api.custom():object", "--export", "com.acme.Api.throwing():object",
+            "--export", "com.acme.Api.plain():object", "--export", "com.acme.Api.list():object",
+            "--export", "com.acme.Api.same(object,object):int", "--export", "com.acme.Api.calls():int",
+            "--export", "com.acme.Api.unit():object", "--export", "com.acme.Api.name():object",
+            "--export", "com.acme.Api.isEnum(object):int");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path caller = writeC(project, "call_equals.c", """
+            #include <string.h>
+            #include ".javan/dist/bindings/c/library-object-equals.h"
+            int main(void) {
+                JavanObjectHandle *custom = 0, *throwing = 0, *plain = 0, *list1 = 0, *list2 = 0, *unit = 0, *name = 0;
+                int value = 0;
+                JavanResult result = javan_try_com_acme_Api_custom_void(&custom);
+                if (!result.ok || custom == 0) return 1;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_throwing_void(&throwing);
+                if (!result.ok || throwing == 0) return 2;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_plain_void(&plain);
+                if (!result.ok || plain == 0) return 3;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_list_void(&list1);
+                if (!result.ok || list1 == 0) return 4;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_list_void(&list2);
+                if (!result.ok || list2 == 0) return 5;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_unit_void(&unit);
+                if (!result.ok || unit == 0) return 12;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_name_void(&name);
+                if (!result.ok || name == 0) return 13;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_same_object_object(unit, name, &value);
+                if (!result.ok || value != 0) return 14;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_same_object_object(name, unit, &value);
+                if (!result.ok || value != 0) return 15;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_same_object_object(unit, unit, &value);
+                if (!result.ok || value != 1) return 16;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_isEnum_object(unit, &value);
+                if (!result.ok || value != 1) return 17;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_same_object_object(custom, custom, &value);
+                if (!result.ok || value != 0) return 6;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_calls_void(&value);
+                if (!result.ok || value != 1) return 7;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_same_object_object(plain, plain, &value);
+                if (!result.ok || value != 1) return 8;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_same_object_object(0, plain, &value);
+                if (result.ok || result.message == 0 || strstr(result.message, "NullPointerException") == 0) return 9;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_same_object_object(throwing, plain, &value);
+                if (result.ok || result.message == 0 || strstr(result.message, "IllegalStateException") == 0) return 10;
+                javan_result_free(&result);
+                result = javan_try_com_acme_Api_same_object_object(list1, list2, &value);
+                if (result.ok || result.message == 0 || strstr(result.message, "unsupported Object.equals") == 0) return 11;
+                javan_result_free(&result);
+                javan_object_handle_release(custom);
+                javan_object_handle_release(throwing);
+                javan_object_handle_release(plain);
+                javan_object_handle_release(list1);
+                javan_object_handle_release(list2);
+                javan_object_handle_release(unit);
+                javan_object_handle_release(name);
+                return 0;
+            }
+            """);
+        final Path library = project.resolve(".javan/dist/liblibrary-object-equals.a");
+        final Path binary = project.resolve("call-object-equals");
+        final ProcessResult compiler = process(project, List.of("cc", caller.toString(), library.toString(), "-o", binary.toString()));
+        assertThat(compiler.exitCode()).as(compiler.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(binary.toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+    }
+
+    @Test
     void staticLibraryObjectHandleExportBuildsAndRunsFromC() throws Exception {
         final Path project = project("library-object-handle");
         writeJava(project, "com.acme.Handles", """

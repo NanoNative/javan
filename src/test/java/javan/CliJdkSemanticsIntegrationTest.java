@@ -1902,6 +1902,272 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void builtinEnumConstantsKeepIdentityAndClassDistinctFromStrings() throws Exception {
+        final Path project = project("builtin-enum-identity");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.nio.file.LinkOption;
+            import java.nio.file.StandardCopyOption;
+            import java.util.concurrent.TimeUnit;
+            public final class Main {
+                static void inspect(Object value, String name) {
+                    System.out.println(value == name);
+                    System.out.println(value.equals(name));
+                    System.out.println(name.equals(value));
+                    System.out.println(String.class.isInstance(value));
+                    System.out.println(value.getClass().getName());
+                    System.out.println(value.getClass().isEnum());
+                    System.out.println(value.getClass().isInstance(value));
+                    System.out.println(value.getClass().isInstance(name));
+                    System.out.println(value.getClass().cast(value) == value);
+                    System.out.println(Enum.class.isInstance(value));
+                    System.out.println(java.io.Serializable.class.isInstance(value));
+                    System.out.println(Comparable.class.isInstance(value));
+                    System.out.println(java.lang.constant.Constable.class.isInstance(value));
+                    System.out.println(java.nio.file.CopyOption.class.isInstance(value));
+                    System.out.println(java.nio.file.OpenOption.class.isInstance(value));
+                    System.out.println(System.identityHashCode(value) == System.identityHashCode(value));
+                }
+                public static void main(String[] args) {
+                    inspect(TimeUnit.NANOSECONDS, "NANOSECONDS");
+                    inspect(TimeUnit.MICROSECONDS, "MICROSECONDS");
+                    inspect(TimeUnit.MILLISECONDS, "MILLISECONDS");
+                    inspect(TimeUnit.SECONDS, "SECONDS");
+                    inspect(TimeUnit.MINUTES, "MINUTES");
+                    inspect(TimeUnit.HOURS, "HOURS");
+                    inspect(TimeUnit.DAYS, "DAYS");
+                    inspect(StandardCopyOption.REPLACE_EXISTING, "REPLACE_EXISTING");
+                    inspect(LinkOption.NOFOLLOW_LINKS, "NOFOLLOW_LINKS");
+                    System.out.println((Object) TimeUnit.SECONDS == (Object) TimeUnit.SECONDS);
+                    System.out.println((Object) TimeUnit.SECONDS == (Object) TimeUnit.MINUTES);
+                    java.util.ArrayList<Object> values = new java.util.ArrayList<>();
+                    values.add(TimeUnit.SECONDS);
+                    for (int i = 0; i < 30; i++) new String(new char[] { 'x' });
+                    System.out.println(values.get(0) == TimeUnit.SECONDS);
+                    java.util.HashMap<Object, Integer> keys = new java.util.HashMap<>();
+                    keys.put(TimeUnit.SECONDS, 1); keys.put("SECONDS", 2);
+                    System.out.println(keys.size());
+                    System.out.println(keys.get(TimeUnit.SECONDS)); System.out.println(keys.get("SECONDS"));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/builtin-enum-identity").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void enumIdentityRemainsSafeDuringConcurrentInitializationAndCollection() throws Exception {
+        final Path project = project("enum-identity-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                enum Color { RED }
+                static final AtomicInteger ready = new AtomicInteger();
+                static final AtomicInteger errors = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    final boolean initialize;
+                    Worker(boolean initialize) { this.initialize = initialize; }
+                    public void run() {
+                        ready.incrementAndGet();
+                        while (ready.get() < 2) Thread.yield();
+                        for (int i = 0; i < 100; i++) {
+                            String name = new String(new char[] { 'R', 'E', 'D' });
+                            if (initialize) {
+                                Object value = Color.RED;
+                                if (name.equals(value) || value.equals(name)
+                                    || !value.getClass().isEnum() || !value.getClass().isInstance(value)) {
+                                    errors.incrementAndGet();
+                                }
+                            } else if (!name.equals("RED")) {
+                                errors.incrementAndGet();
+                            }
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker(true)); Thread second = new Thread(new Worker(false));
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/enum-identity-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
+    void objectEqualsDispatchesToApplicationOverride() throws Exception {
+        final Path project = project("object-equals-dispatch");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static class Custom {
+                    int calls;
+                    public boolean equals(Object value) { calls = calls + 1; return false; }
+                }
+                static final class Child extends Custom { }
+                enum Color { RED }
+                enum Other { RED }
+                record Pair(int value) { }
+                static boolean same(Object left, Object right) { return left.equals(right); }
+                public static void main(String[] args) {
+                    Custom custom = new Custom();
+                    System.out.println(same(custom, custom));
+                    System.out.println(custom.calls);
+                    Child child = new Child();
+                    System.out.println(same(child, child)); System.out.println(child.calls);
+                    System.out.println(same("abc", new String("abc")));
+                    Object first = new String(new char[] { 'a', 0, 'x' });
+                    Object same = new String(new char[] { 'a', 0, 'x' });
+                    Object different = new String(new char[] { 'a', 0, 'y' });
+                    System.out.println(same(first, same)); System.out.println(same(first, different));
+                    Object highA = new String(new char[] { (char) 0xd800 });
+                    Object highB = new String(new char[] { (char) 0xd801 });
+                    System.out.println(same(highA, highA)); System.out.println(same(highA, highB));
+                    System.out.println(same(new Object(), null));
+                    System.out.println(same(Color.RED, Color.RED));
+                    System.out.println(same(Color.RED, Other.RED));
+                    System.out.println(same(Color.RED, "RED"));
+                    System.out.println(same("RED", Color.RED));
+                    System.out.println(same(Color.RED, Color.RED.name()));
+                    System.out.println(same(Color.RED.name(), Color.RED));
+                    String enumName = "RED";
+                    System.out.println(enumName.equals(Color.RED));
+                    Object enumValue = Color.RED;
+                    System.out.println(enumValue.getClass().getName());
+                    System.out.println(enumValue.getClass().isEnum());
+                    System.out.println(enumValue.getClass().isInstance(enumValue));
+                    java.util.HashMap<Object, Integer> enumKeys = new java.util.HashMap<>();
+                    enumKeys.put(enumValue, 1); enumKeys.put(enumName, 2);
+                    System.out.println(enumKeys.size());
+                    System.out.println(enumKeys.get(enumValue)); System.out.println(enumKeys.get(enumName));
+                    System.out.println(same(custom, Color.RED)); System.out.println(custom.calls);
+                    System.out.println(same(new Pair(1), new Pair(1)));
+                    System.out.println(same(new Pair(1), new Pair(2)));
+                    System.out.println(same(System.out, System.err));
+                    System.out.println(same(System.out, ""));
+                    System.out.println(same("", System.err));
+                    Object loader = ClassLoader.getSystemClassLoader();
+                    System.out.println(same(loader, ""));
+                    System.out.println(same("", loader));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/object-equals-dispatch").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void objectEqualsPropagatesNullAndOverrideExceptions() throws Exception {
+        final Path project = project("object-equals-exceptions");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int order;
+                static int failure;
+                static final class Throwing {
+                    public boolean equals(Object value) { throw new IllegalStateException(); }
+                }
+                static Object receiver(Object value) { order = order * 10 + 1; return value; }
+                static Object argument() { order = order * 10 + 2; return null; }
+                static boolean ordered(Object value) { return receiver(value).equals(argument()); }
+                static boolean catchOrderedNull() {
+                    try { return ordered(null); }
+                    catch (NullPointerException ex) { failure = 3; return false; }
+                }
+                static boolean invoke(Object value) {
+                    try { return value.equals(null); }
+                    catch (NullPointerException ex) { failure = 1; return false; }
+                    catch (IllegalStateException ex) { failure = 2; return false; }
+                }
+                public static void main(String[] args) {
+                    System.out.println(invoke(null)); System.out.println(failure);
+                    failure = 0;
+                    System.out.println(invoke(new Throwing())); System.out.println(failure);
+                    failure = 0;
+                    System.out.println(invoke(new Object())); System.out.println(failure);
+                    System.out.println(ordered(new Object())); System.out.println(order);
+                    order = 0; failure = 0;
+                    System.out.println(catchOrderedNull()); System.out.println(order); System.out.println(failure);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/object-equals-exceptions").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void objectEqualsRejectsUnsupportedRuntimeValueComparisons() throws Exception {
+        final Path project = project("object-equals-unsupported-list");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            public final class Main {
+                static boolean same(Object left, Object right) { return left.equals(right); }
+                public static void main(String[] args) {
+                    System.out.println(same(new ArrayList<>(), new ArrayList<>()));
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        for (int attempt = 0; attempt < 2; attempt++) {
+            final ProcessResult result = process(project,
+                List.of(project.resolve(".javan/bin/object-equals-unsupported-list").toString()));
+            assertThat(result.exitCode()).isNotZero();
+            assertThat(result.stderr()).contains("unsupported Object.equals runtime receiver");
+        }
+    }
+
+    @Test
+    void objectEqualsRejectsUnimplementedInheritedPlatformEquality() throws Exception {
+        final Path project = project("object-equals-platform-subclass");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            public final class Main {
+                static final class Custom extends ArrayList<Object> { }
+                static boolean same(Object left, Object right) { return left.equals(right); }
+                public static void main(String[] args) {
+                    System.out.println(same(new Custom(), new ArrayList<>()));
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        for (int attempt = 0; attempt < 2; attempt++) {
+            final ProcessResult result = process(project,
+                List.of(project.resolve(".javan/bin/object-equals-platform-subclass").toString()));
+            assertThat(result.exitCode()).isNotZero();
+            assertThat(result.stderr()).contains("unsupported Object.equals inherited runtime receiver");
+        }
+    }
+
+    @Test
     void plainObjectsRetainIdentityAndClassThroughCollection() throws Exception {
         final Path project = project("plain-object-identity");
         writeJava(project, "com.acme.Main", """

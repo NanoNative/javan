@@ -336,8 +336,11 @@ final class RuntimeHeaderFile {
         unsigned long javan_heap_active_threads(void);
         unsigned long javan_heap_threads_with_target(void);
         int javan_heap_current_thread_root_present(void);
+        void* javan_builtin_enum_constant(const char* owner, const char* name);
+        const char* javan_builtin_enum_type(void* value);
         int javan_object_non_null(void* value);
         int javan_object_builtin_instance_of(void* value, int target);
+        int javan_object_registered_type_id(void* value);
         int javan_object_type_in(void* value, int count, ...);
         void* javan_object_array_new(int length, const char* class_name);
         void* javan_object_array_get(void* array, int index);
@@ -614,6 +617,7 @@ final class RuntimeHeaderFile {
         void* javan_map_entry_get_value(void* value);
         void* javan_map_values(void* map);
         int javan_object_equals(void* left, void* right);
+        int javan_object_virtual_equals(void* left, void* right);
         void javan_register_record_object_method_resolvers(
             int (*equals_resolver)(void*, void*),
             int (*hash_code_resolver)(void*),

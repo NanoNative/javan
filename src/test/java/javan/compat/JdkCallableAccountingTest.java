@@ -21,6 +21,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void objectEqualsRemainsUnknownForUnsupportedRuntimeReceivers() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Object", "equals", "(Ljava/lang/Object;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+    }
+
+    @Test
     void marksSupportedCallableAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Object", "<init>", "()V")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

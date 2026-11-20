@@ -19778,7 +19778,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersSupportedJdkEnumConstantFieldToStringLiteral() {
+    void lowersSupportedJdkEnumConstantFieldToRuntimeConstant() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -19794,12 +19794,14 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.stringLiteral("NOFOLLOW_LINKS"))
+            IrInstruction.returnObject(IrExpression.objectCall("javan_builtin_enum_constant", List.of(
+                IrExpression.stringLiteral("java/nio/file/LinkOption"), IrExpression.stringLiteral("NOFOLLOW_LINKS")
+            )))
         );
     }
 
     @Test
-    void lowersSupportedStandardCopyOptionFieldToStringLiteral() {
+    void lowersSupportedStandardCopyOptionFieldToRuntimeConstant() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -19815,7 +19817,9 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.stringLiteral("REPLACE_EXISTING"))
+            IrInstruction.returnObject(IrExpression.objectCall("javan_builtin_enum_constant", List.of(
+                IrExpression.stringLiteral("java/nio/file/StandardCopyOption"), IrExpression.stringLiteral("REPLACE_EXISTING")
+            )))
         );
     }
 

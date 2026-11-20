@@ -1284,6 +1284,13 @@ public final class ReachabilityAnalyzer {
             addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
             return;
         }
+        if (instruction.opcode() == 182 && "java/lang/Object".equals(target.owner()) && "equals".equals(target.name())
+            && "(Ljava/lang/Object;)Z".equals(target.descriptor())) {
+            final List<EntryPoint> targetMethods = dispatchTargets.virtualTargets(target);
+            enqueueAll(work, workSet, targetMethods);
+            addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
+            return;
+        }
         if ("java/util/random/RandomGenerator".equals(target.owner())
             && (("nextLong".equals(target.name()) && "()J".equals(target.descriptor()))
                 || ("nextBytes".equals(target.name()) && "([B)V".equals(target.descriptor()))
@@ -2986,6 +2993,9 @@ public final class ReachabilityAnalyzer {
     }
 
     private static boolean isSubtypeOf(final Map<String, ClassFile> classes, final String candidate, final String expectedSuper) {
+        if ("java/lang/Object".equals(expectedSuper) && classes.containsKey(candidate)) {
+            return true;
+        }
         String current = candidate;
         while (classes.containsKey(current)) {
             if (current.equals(expectedSuper)) {

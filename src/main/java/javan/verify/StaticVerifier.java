@@ -3476,14 +3476,17 @@ public final class StaticVerifier {
         if (!visiting.add(target)) {
             return Set.of();
         }
-        if ("java/util/random/RandomGenerator".equals(target.owner())
+        if (("java/lang/Object".equals(target.owner()) && "equals".equals(target.name())
+                && "(Ljava/lang/Object;)Z".equals(target.descriptor()))
+            || ("java/util/random/RandomGenerator".equals(target.owner())
             && (("nextLong".equals(target.name()) && "()J".equals(target.descriptor()))
                 || ("nextBytes".equals(target.name()) && "([B)V".equals(target.descriptor()))
                 || ("nextInt".equals(target.name()) && ("(I)I".equals(target.descriptor())
-                    || "()I".equals(target.descriptor()))))) {
+                    || "()I".equals(target.descriptor())))))) {
             final Set<String> result = new HashSet<>();
             for (final ClassFile candidate : classes.values()) {
-                if (candidate.isInterface() || !isAssignableTo(classes, candidate.name(), target.owner())) {
+                if (candidate.isInterface() || !("java/lang/Object".equals(target.owner())
+                    || isAssignableTo(classes, candidate.name(), target.owner()))) {
                     continue;
                 }
                 ClassFile current = candidate;

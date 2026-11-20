@@ -67,6 +67,9 @@ public final class CCodegen {
     private static final String GENERATED_ENUM_BY_NAME_SYMBOL = "javan_generated_enum_by_name";
     private static final String GENERATED_ENUM_BY_ORDINAL_SYMBOL = "javan_generated_enum_by_ordinal";
     private static final String GENERATED_OBJECT_CLONE_SYMBOL = "javan_generated_object_clone";
+    private static final String OBJECT_EQUALS_DISPATCH = BytecodeToIR.dispatchSymbol(
+        new MethodRef("java/lang/Object", "equals", "(Ljava/lang/Object;)Z")
+    );
     private static final String RECORD_REFERENCE_EQUALS_DISPATCH = "javan_dispatch_record_reference_equals";
     private static final String RECORD_REFERENCE_HASH_CODE_DISPATCH = "javan_dispatch_record_reference_hash_code";
     private static final String FALLIBLE_APPLY_METHOD_NAME = "applyWithException";
@@ -1144,6 +1147,17 @@ public final class CCodegen {
     private static void emitGeneratedEnumOrdinalHelper(final IrProgram program, final StringBuilder c) {
         final java.util.Map<String, Integer> typeIds = typeIds(program);
         c.append("static int javan_generated_enum_ordinal(int enum_type_id, void* value) {").append(System.lineSeparator());
+        c.append("    if (enum_type_id == 0) {").append(System.lineSeparator());
+        c.append("        if (value == 0) return -1;").append(System.lineSeparator());
+        for (final IrClass classInfo : program.classes()) {
+            for (final String constant : classInfo.enumConstants()) {
+                c.append("        if (value == ").append(staticFieldSymbol(classInfo.jvmName(), constant))
+                    .append(") return ").append(typeIds.get(classInfo.jvmName()).intValue()).append(";")
+                    .append(System.lineSeparator());
+            }
+        }
+        c.append("        return -1;").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
         c.append("    switch (enum_type_id) {").append(System.lineSeparator());
         for (final IrClass classInfo : program.classes()) {
             if (classInfo.enumConstants().isEmpty()) {
@@ -1195,6 +1209,15 @@ public final class CCodegen {
             .append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+    }
+
+    private static boolean hasEnumConstants(final IrProgram program) {
+        for (final IrClass classInfo : program.classes()) {
+            if (!classInfo.enumConstants().isEmpty()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean hasRecordShapeEnumResolver(final IrProgram program) {
@@ -1931,6 +1954,39 @@ public final class CCodegen {
         c.append("    if (self == 0) {").append(System.lineSeparator());
         c.append("        javan_panic(\"null dispatch\");").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
+        if (OBJECT_EQUALS_DISPATCH.equals(dispatch.symbol())) {
+            final List<IrClass> unresolved = new ArrayList<>();
+            for (final IrClass classInfo : program.classes()) {
+                boolean dispatched = false;
+                for (final IrDispatchTarget target : dispatch.targets()) {
+                    if (classInfo.jvmName().equals(target.owner())) {
+                        dispatched = true;
+                        break;
+                    }
+                }
+                if (!dispatched && hasUnresolvedPlatformSuperclass(classInfo, program.classes())) {
+                    unresolved.add(classInfo);
+                }
+            }
+            if (!dispatch.targets().isEmpty() || !unresolved.isEmpty()) {
+                c.append("    switch (javan_object_registered_type_id(self)) {").append(System.lineSeparator());
+                for (final IrDispatchTarget target : dispatch.targets()) {
+                    c.append("        case ").append(typeIds.get(target.owner()).intValue())
+                        .append(": return ").append(target.functionSymbol())
+                        .append("(").append(dispatchArguments(dispatch)).append(");").append(System.lineSeparator());
+                }
+                for (final IrClass classInfo : unresolved) {
+                    c.append("        case ").append(typeIds.get(classInfo.jvmName()).intValue())
+                        .append(": javan_panic(\"unsupported Object.equals inherited runtime receiver\"); return 0;")
+                        .append(System.lineSeparator());
+                }
+                c.append("        default: break;").append(System.lineSeparator());
+                c.append("    }").append(System.lineSeparator());
+            }
+            c.append("    return javan_object_virtual_equals(self, arg0);").append(System.lineSeparator());
+            c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+            return;
+        }
         if (!RECORD_REFERENCE_EQUALS_DISPATCH.equals(dispatch.symbol())
             && !RECORD_REFERENCE_HASH_CODE_DISPATCH.equals(dispatch.symbol())) {
             for (final IrDispatchTarget target : dispatch.targets()) {
@@ -1977,6 +2033,28 @@ public final class CCodegen {
         c.append("    }").append(System.lineSeparator());
         emitDefaultReturn(dispatch.returnType(), c);
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+    }
+
+    private static boolean hasUnresolvedPlatformSuperclass(final IrClass type, final List<IrClass> classes) {
+        String parent = type.superName();
+        final Set<String> visited = new LinkedHashSet<>();
+        while (parent != null && !parent.isEmpty() && !"java/lang/Object".equals(parent)) {
+            if (!visited.add(parent)) {
+                return true;
+            }
+            IrClass found = null;
+            for (final IrClass candidate : classes) {
+                if (candidate.jvmName().equals(parent)) {
+                    found = candidate;
+                    break;
+                }
+            }
+            if (found == null) {
+                return true;
+            }
+            parent = found.superName();
+        }
+        return false;
     }
 
     private static void emitThreadHelpers(final IrProgram program, final StringBuilder c) {
@@ -2247,8 +2325,9 @@ public final class CCodegen {
         if (entry) {
             c.append("    javan_register_generated_type_descriptors();").append(System.lineSeparator());
             c.append("    javan_register_generated_roots();").append(System.lineSeparator());
-            c.append("    javan_register_enum_ordinal_resolver(javan_generated_enum_ordinal);")
-                .append(System.lineSeparator());
+            c.append("    javan_register_enum_ordinal_resolver(")
+                .append(hasEnumConstants(program) ? "javan_generated_enum_ordinal" : "(int (*)(int, void*)) 0")
+                .append(");").append(System.lineSeparator());
             emitRecordReferenceObjectMethodResolverRegistration(program, c);
             if (program.classInitializationDependencies().containsKey(function.owner())) {
                 c.append("    ").append(classInitializationSymbol(function.owner())).append("();")
@@ -2494,8 +2573,9 @@ public final class CCodegen {
         c.append("    javan_runtime_validate_floating_layout();").append(System.lineSeparator());
         c.append("    javan_register_generated_type_descriptors();").append(System.lineSeparator());
         c.append("    javan_register_generated_roots();").append(System.lineSeparator());
-        c.append("    javan_register_enum_ordinal_resolver(javan_generated_enum_ordinal);")
-            .append(System.lineSeparator());
+        c.append("    javan_register_enum_ordinal_resolver(")
+            .append(hasEnumConstants(program) ? "javan_generated_enum_ordinal" : "(int (*)(int, void*)) 0")
+            .append(");").append(System.lineSeparator());
         emitRecordReferenceObjectMethodResolverRegistration(program, c);
         c.append("    javan_gc_safe_point();").append(System.lineSeparator());
         c.append("    javan_library_initialized = 1;").append(System.lineSeparator());
@@ -5095,12 +5175,14 @@ public final class CCodegen {
 
     private static void emitEnumConstantInitializers(final IrClass classInfo, final StringBuilder c) {
         for (final String constant : classInfo.enumConstants()) {
+            c.append("    javan_runtime_lock_enter();").append(System.lineSeparator());
             c.append("    ")
                 .append(staticFieldSymbol(classInfo.jvmName(), constant))
                 .append(" = javan_string_from(\"")
                 .append(escapeCString(constant))
                 .append("\");")
                 .append(System.lineSeparator());
+            c.append("    javan_runtime_lock_leave();").append(System.lineSeparator());
         }
     }
 

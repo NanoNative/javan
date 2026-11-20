@@ -779,9 +779,51 @@ final class BytecodeToIRInvokeSupport {
         if ("java/lang/Object".equals(methodRef.owner())
             && "equals".equals(methodRef.name())
             && "(Ljava/lang/Object;)Z".equals(methodRef.descriptor())) {
-            final IrExpression argument = popObject(classFile, method, stack);
-            final IrExpression receiver = popObject(classFile, method, stack);
-            stack.add(StackValue.intExpression(IrExpression.intCall("javan_object_equals", List.of(receiver, argument))));
+            final IrExpression argument = popObject(classFile, method, instruction, stack);
+            final IrExpression receiver = popObject(classFile, method, instruction, stack);
+            final IrExpression savedReceiver;
+            if (receiver.kind() == IrExpression.Kind.LOCAL || receiver.kind() == IrExpression.Kind.OBJECT_NULL
+                || receiver.kind() == IrExpression.Kind.STRING_LITERAL) {
+                savedReceiver = receiver;
+            } else {
+                final String receiverLocal = newObjectLocal(localDeclarations);
+                instructions.add(IrInstruction.assignObject(receiverLocal, receiver));
+                savedReceiver = IrExpression.objectLocal(receiverLocal);
+            }
+            final IrExpression savedArgument;
+            if (argument.kind() == IrExpression.Kind.LOCAL || argument.kind() == IrExpression.Kind.OBJECT_NULL
+                || argument.kind() == IrExpression.Kind.STRING_LITERAL) {
+                savedArgument = argument;
+            } else {
+                final String argumentLocal = newObjectLocal(localDeclarations);
+                instructions.add(IrInstruction.assignObject(argumentLocal, argument));
+                savedArgument = IrExpression.objectLocal(argumentLocal);
+            }
+            final List<StackValue> successStack = List.copyOf(stack);
+            final String receiverPresent = "label_object_equals_receiver_" + instruction.offset();
+            instructions.add(IrInstruction.branchIf(receiverPresent,
+                IrExpression.objectComparison("!=", savedReceiver, IrExpression.objectNull())));
+            routePendingPlatformException(classFile, method, instruction, instructions, stack,
+                pendingExceptionHandlerStacks, sourceLines, "java/lang/NullPointerException", IrExpression.objectNull());
+            instructions.add(IrInstruction.label(receiverPresent));
+            stack.addAll(successStack);
+            final List<EntryPoint> targets = virtualTargets(classes, methodRef, instantiatedTypes);
+            final List<IrExpression> arguments = List.of(savedReceiver, savedArgument);
+            boolean requiresDispatch = !targets.isEmpty();
+            for (final ClassFile candidate : classes.values()) {
+                if (candidate.isEnum() || candidate.superName() == null
+                    || !candidate.superName().isEmpty() && !"java/lang/Object".equals(candidate.superName())) {
+                    requiresDispatch = true;
+                    break;
+                }
+            }
+            if (requiresDispatch) {
+                final String symbol = dispatchSymbol(methodRef);
+                dispatches.putIfAbsent(symbol, dispatch(classes, symbol, MethodDescriptor.parse(methodRef.descriptor()), targets));
+                pushIntCall(instructions, stack, localDeclarations, symbol, arguments);
+            } else {
+                stack.add(StackValue.intExpression(IrExpression.intCall("javan_object_virtual_equals", arguments)));
+            }
             return;
         }
         if ("java/lang/Object".equals(methodRef.owner())
@@ -2900,7 +2942,9 @@ final class BytecodeToIRInvokeSupport {
         if (owner != null && owner.isEnum()) {
             return IrExpression.objectStaticField(fieldRef.owner(), fieldRef.name());
         }
-        return IrExpression.stringLiteral(fieldRef.name());
+        return IrExpression.objectCall("javan_builtin_enum_constant", List.of(
+            IrExpression.stringLiteral(fieldRef.owner()), IrExpression.stringLiteral(fieldRef.name())
+        ));
     }
 
     private static Optional<Integer> enumOrdinalForStaticField(

@@ -4818,6 +4818,9 @@ public final class BytecodeToIR {
     }
 
     static boolean isSubtypeOf(final Map<String, ClassFile> classes, final String candidate, final String expectedSuper) {
+        if ("java/lang/Object".equals(expectedSuper) && classes.containsKey(candidate)) {
+            return true;
+        }
         String current = candidate;
         while (classes.containsKey(current)) {
             if (current.equals(expectedSuper)) {

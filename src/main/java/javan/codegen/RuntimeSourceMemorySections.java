@@ -887,6 +887,21 @@ final class RuntimeSourceMemorySections {
         static void javan_runtime_class_registry_validate_unlocked(void);
         static void javan_gc_mark_object_handles(void);
         static int javan_registered_type_id(void* value);
+        typedef int (*javan_enum_ordinal_resolver_fn)(int, void*);
+        static _Atomic(javan_enum_ordinal_resolver_fn) javan_enum_ordinal_resolver = NULL;
+        static int javan_application_enum_type_id(void* value) {
+            if (value == NULL) {
+                return 0;
+            }
+            javan_enum_ordinal_resolver_fn resolver = atomic_load_explicit(&javan_enum_ordinal_resolver, memory_order_acquire);
+            if (resolver == NULL) {
+                return 0;
+            }
+            javan_runtime_lock_enter();
+            const int type_id = resolver(0, value);
+            javan_runtime_lock_leave();
+            return type_id > 0 ? type_id : 0;
+        }
         static JavanTypeDescriptor* javan_type_descriptor_for(int type_id);
         static int javan_probably_string_key(void* value);
         static javan_materialized_lambda_state* javan_materialized_lambda_state_node_unlocked(void* value);
@@ -1831,6 +1846,7 @@ final class RuntimeSourceMemorySections {
                 return;
             }
             if (javan_runtime_class_registry_contains(value) == 0
+                && javan_builtin_enum_type(value) == NULL
                 && javan_find_allocation_locked(value, NULL) == NULL) {
                 javan_panic("invalid runtime managed reference");
             }
@@ -3222,6 +3238,10 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        int javan_object_registered_type_id(void* value) {
+            return javan_registered_type_id(value);
+        }
+
         int javan_object_non_null(void* value) {
             return value != NULL;
         }
@@ -4452,6 +4472,59 @@ final class RuntimeSourceMemorySections {
             return javan_runtime_class_new("java.util.concurrent.ThreadPerTaskExecutor");
         }
 
+        static char javan_enum_nanos[] = "NANOSECONDS";
+        static char javan_enum_micros[] = "MICROSECONDS";
+        static char javan_enum_millis[] = "MILLISECONDS";
+        static char javan_enum_seconds[] = "SECONDS";
+        static char javan_enum_minutes[] = "MINUTES";
+        static char javan_enum_hours[] = "HOURS";
+        static char javan_enum_days[] = "DAYS";
+        static char javan_enum_replace[] = "REPLACE_EXISTING";
+        static char javan_enum_nofollow[] = "NOFOLLOW_LINKS";
+
+        typedef struct {
+            char* value;
+            const char* owner;
+            const char* binary_name;
+        } javan_builtin_enum_entry;
+
+        static const javan_builtin_enum_entry javan_builtin_enum_entries[] = {
+            {javan_enum_nanos, "java/util/concurrent/TimeUnit", "java.util.concurrent.TimeUnit"},
+            {javan_enum_micros, "java/util/concurrent/TimeUnit", "java.util.concurrent.TimeUnit"},
+            {javan_enum_millis, "java/util/concurrent/TimeUnit", "java.util.concurrent.TimeUnit"},
+            {javan_enum_seconds, "java/util/concurrent/TimeUnit", "java.util.concurrent.TimeUnit"},
+            {javan_enum_minutes, "java/util/concurrent/TimeUnit", "java.util.concurrent.TimeUnit"},
+            {javan_enum_hours, "java/util/concurrent/TimeUnit", "java.util.concurrent.TimeUnit"},
+            {javan_enum_days, "java/util/concurrent/TimeUnit", "java.util.concurrent.TimeUnit"},
+            {javan_enum_replace, "java/nio/file/StandardCopyOption", "java.nio.file.StandardCopyOption"},
+            {javan_enum_nofollow, "java/nio/file/LinkOption", "java.nio.file.LinkOption"}
+        };
+
+        void* javan_builtin_enum_constant(const char* owner, const char* name) {
+            if (owner == NULL || name == NULL) {
+                javan_panic("invalid builtin enum constant");
+            }
+            const unsigned long count = sizeof(javan_builtin_enum_entries) / sizeof(javan_builtin_enum_entries[0]);
+            for (unsigned long index = 0; index < count; index++) {
+                const javan_builtin_enum_entry* entry = &javan_builtin_enum_entries[index];
+                if (strcmp(owner, entry->owner) == 0 && strcmp(name, entry->value) == 0) {
+                    return entry->value;
+                }
+            }
+            javan_panic("unsupported builtin enum constant");
+            return NULL;
+        }
+
+        const char* javan_builtin_enum_type(void* value) {
+            const unsigned long count = sizeof(javan_builtin_enum_entries) / sizeof(javan_builtin_enum_entries[0]);
+            for (unsigned long index = 0; index < count; index++) {
+                if (value == (void*) javan_builtin_enum_entries[index].value) {
+                    return javan_builtin_enum_entries[index].binary_name;
+                }
+            }
+            return NULL;
+        }
+
         static int javan_runtime_class_accepts_type_id(javan_runtime_class_state* state, int type_id) {
             if (state == NULL || type_id == 0) {
                 return 0;
@@ -4470,6 +4543,28 @@ final class RuntimeSourceMemorySections {
         static int javan_runtime_class_builtin_instance(javan_runtime_class_state* state, void* object_value) {
             if (state->exact_type_id == JAVAN_CLASS_EXACT_OBJECT) {
                 return object_value != NULL ? 1 : 0;
+            }
+            const char* enum_type = javan_builtin_enum_type(object_value);
+            const int application_enum = javan_application_enum_type_id(object_value);
+            if (enum_type != NULL || application_enum != 0) {
+                if ((enum_type != NULL && strcmp(state->binary_name, enum_type) == 0)
+                    || (application_enum != 0 && javan_runtime_class_accepts_type_id(state, application_enum) != 0)
+                    || strcmp(state->binary_name, "java.lang.Enum") == 0
+                    || strcmp(state->binary_name, "java.io.Serializable") == 0
+                    || strcmp(state->binary_name, "java.lang.Comparable") == 0
+                    || strcmp(state->binary_name, "java.lang.constant.Constable") == 0) {
+                    return 1;
+                }
+                if (enum_type != NULL && (strcmp(enum_type, "java.nio.file.StandardCopyOption") == 0
+                        || strcmp(enum_type, "java.nio.file.LinkOption") == 0)
+                    && strcmp(state->binary_name, "java.nio.file.CopyOption") == 0) {
+                    return 1;
+                }
+                if (enum_type != NULL && strcmp(enum_type, "java.nio.file.LinkOption") == 0
+                    && strcmp(state->binary_name, "java.nio.file.OpenOption") == 0) {
+                    return 1;
+                }
+                return 0;
             }
             javan_allocation_metadata snapshot;
             int found = javan_find_allocation(object_value, &snapshot);
@@ -4590,6 +4685,18 @@ final class RuntimeSourceMemorySections {
         void* javan_object_get_class(void* value) {
             if (value == NULL) {
                 javan_panic("null object");
+            }
+            const char* enum_type = javan_builtin_enum_type(value);
+            if (enum_type != NULL) {
+                return javan_runtime_class_literal(enum_type, 0, 1, 0, 0);
+            }
+            const int application_enum = javan_application_enum_type_id(value);
+            if (application_enum != 0) {
+                JavanTypeDescriptor* descriptor = javan_type_descriptor_for(application_enum);
+                if (descriptor == NULL || descriptor->name == NULL || descriptor->is_enum == 0) {
+                    javan_panic("invalid application enum metadata");
+                }
+                return javan_runtime_class_literal(descriptor->name, application_enum, 1, 0, 1, application_enum);
             }
             if (javan_is_system_class_loader(value) != 0) {
                 return javan_runtime_class_literal("java.lang.ClassLoader", JAVAN_CLASS_EXACT_CLASS_LOADER, 0, 0, 0);
@@ -12046,7 +12153,8 @@ final class RuntimeSourceMemorySections {
             int allocation_found,
             const javan_allocation_metadata* allocation
         ) {
-            if (value == NULL || type_id != 0) {
+            if (value == NULL || type_id != 0 || javan_builtin_enum_type(value) != NULL
+                || javan_application_enum_type_id(value) != 0) {
                 return 0;
             }
             if (allocation_found != 0) {
@@ -12065,6 +12173,9 @@ final class RuntimeSourceMemorySections {
                 return 1;
             }
             if (right == NULL) {
+                return 0;
+            }
+            if (javan_builtin_enum_type(right) != NULL || javan_application_enum_type_id(right) != 0) {
                 return 0;
             }
             javan_allocation_metadata allocation;
@@ -12142,6 +12253,45 @@ final class RuntimeSourceMemorySections {
                 return 0;
             }
             return 0;
+        }
+
+        int javan_object_virtual_equals(void* left, void* right) {
+            if (left == javan_system_out() || left == javan_system_err()
+                || right == javan_system_out() || right == javan_system_err()
+                || javan_is_system_class_loader(left) != 0 || javan_is_system_class_loader(right) != 0) {
+                return left == right;
+            }
+            if (left == right || right == NULL) {
+                return javan_object_equals(left, right);
+            }
+            const int left_type = javan_registered_type_id(left);
+            if (left_type > 0) {
+                return 0;
+            }
+            if (left_type == JAVAN_TYPE_JAVA_NIO_FILE_ATTRIBUTE_FILE_TIME
+                || left_type == JAVAN_TYPE_JAVA_TIME_DURATION) {
+                javan_panic("unsupported Object.equals runtime receiver");
+            }
+            javan_allocation_metadata allocation;
+            if (javan_find_allocation(left, &allocation) != 0) {
+                if (allocation.kind == JAVAN_HEAP_KIND_ARRAY
+                    || allocation.runtime_kind == JAVAN_RUNTIME_KIND_PLAIN_OBJECT) {
+                    return 0;
+                }
+                if (allocation.runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_LIST
+                    || allocation.runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_MAP
+                    || allocation.runtime_kind == JAVAN_RUNTIME_KIND_OPTIONAL
+                    || allocation.runtime_kind == JAVAN_RUNTIME_KIND_MAP_ENTRY
+                    || allocation.runtime_kind == JAVAN_RUNTIME_KIND_UUID
+                    || allocation.runtime_kind == JAVAN_RUNTIME_KIND_URI
+                    || allocation.runtime_kind == JAVAN_RUNTIME_KIND_INET_ADDRESS
+                    || allocation.runtime_kind == JAVAN_RUNTIME_KIND_INET_SOCKET_ADDRESS
+                    || allocation.runtime_kind == JAVAN_RUNTIME_KIND_METHOD
+                    || allocation.runtime_kind == JAVAN_RUNTIME_KIND_HTTP_HEADERS) {
+                    javan_panic("unsupported Object.equals runtime receiver");
+                }
+            }
+            return javan_object_equals(left, right);
         }
 
         static int javan_map_key_hash(void* value) {
@@ -14397,17 +14547,19 @@ final class RuntimeSourceMemorySections {
             map->indexed_length = map->length;
         }
 
-        static int (*javan_enum_ordinal_resolver)(int, void*) = NULL;
-
         void javan_register_enum_ordinal_resolver(int (*resolver)(int, void*)) {
-            javan_enum_ordinal_resolver = resolver;
+            atomic_store_explicit(&javan_enum_ordinal_resolver, resolver, memory_order_release);
         }
 
         static int javan_map_enum_ordinal(int enum_type_id, void* key) {
-            if (javan_enum_ordinal_resolver == NULL) {
+            javan_enum_ordinal_resolver_fn resolver = atomic_load_explicit(&javan_enum_ordinal_resolver, memory_order_acquire);
+            if (resolver == NULL) {
                 return -1;
             }
-            return javan_enum_ordinal_resolver(enum_type_id, key);
+            javan_runtime_lock_enter();
+            const int ordinal = resolver(enum_type_id, key);
+            javan_runtime_lock_leave();
+            return ordinal;
         }
 
         static int javan_map_find(javan_object_map* map, void* key) {
