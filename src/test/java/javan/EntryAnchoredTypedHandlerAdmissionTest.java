@@ -413,6 +413,16 @@ final class EntryAnchoredTypedHandlerAdmissionTest {
     }
 
     @Test
+    void rejectsInvalidTypedHandlerForMapPutAll() {
+        final List<Instruction> instructions = replace(canonicalInstructions(), 3, invoke(3, 185, "invokeinterface",
+            new MethodRef("java/util/Map", "putAll", "(Ljava/util/Map;)V")));
+
+        assertThat(verify(instructions, List.of(HANDLER), 2, 2))
+            .extracting(Diagnostic::code)
+            .contains("JAVAN014");
+    }
+
+    @Test
     void rejectsDeclaredMaxStackBelowObservedWidth() {
         assertThat(verify(canonicalInstructions(), List.of(HANDLER), 1, 2))
             .extracting(Diagnostic::code)

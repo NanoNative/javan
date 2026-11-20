@@ -4540,6 +4540,12 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     Map<Integer, Integer> map = null; map.replace(1, 2, 3); return 0;
                 }
                 public static int immutableReplace() { Map.of().replace(1, 2); return 0; }
+                public static int nullPutAllValue() {
+                    Map<Integer, Integer> source = new java.util.HashMap<>(); source.put(999, null);
+                    values.putAll(source); return 0;
+                }
+                public static int nullPutAllSource() { values.putAll(null); return 0; }
+                public static int immutablePutAll() { Map.of().putAll(null); return 0; }
                 public static int replacesNull() {
                     Map<Integer, Integer> map = new java.util.HashMap<>();
                     map.put(1, null); map.putIfAbsent(1, 7); return map.get(1);
@@ -4558,7 +4564,8 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "--export", "com.acme.Api.immutableRemove():int", "--export", "com.acme.Api.nullReplaceKey():int",
             "--export", "com.acme.Api.nullReplaceValue():int", "--export", "com.acme.Api.nullReplaceOld():int",
             "--export", "com.acme.Api.nullReplaceNew():int", "--export", "com.acme.Api.missingReplaceReceiver():int",
-            "--export", "com.acme.Api.immutableReplace():int");
+            "--export", "com.acme.Api.immutableReplace():int", "--export", "com.acme.Api.nullPutAllValue():int",
+            "--export", "com.acme.Api.nullPutAllSource():int", "--export", "com.acme.Api.immutablePutAll():int");
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final Path caller = writeC(project, "call_map.c", """
             #include <string.h>
@@ -4631,6 +4638,15 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     javan_result_free(&failure);
                     failure = javan_try_com_acme_Api_immutableReplace_void(&value);
                     if (failure.ok || failure.message == 0 || strstr(failure.message, "UnsupportedOperationException") == 0) return 23;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_nullPutAllValue_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 24;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_nullPutAllSource_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 25;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_immutablePutAll_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "UnsupportedOperationException") == 0) return 26;
                     javan_result_free(&failure);
                     JavanResult result = javan_try_com_acme_Api_size_void(&value);
                     if (!result.ok || value != 400) return 1;

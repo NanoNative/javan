@@ -15611,6 +15611,35 @@ final class RuntimeSourceMemorySections {
             javan_runtime_lock_leave();
         }
 
+        void javan_map_put_all_java(void* value, void* source_value) {
+            javan_runtime_lock_enter();
+            javan_object_map* map = javan_map_checked(value);
+            if (map->immutable != 0) {
+                javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                javan_runtime_lock_leave();
+                return;
+            }
+            if (source_value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                javan_runtime_lock_leave();
+                return;
+            }
+            javan_object_map* source = javan_map_checked(source_value);
+            void** roots[] = { (void**) &map, (void**) &source };
+            javan_root_frame_push(roots, 2);
+            int length = javan_map_logical_length(source);
+            for (int index = 0; index < length; index++) {
+                void* key = javan_map_key_unchecked(source, index);
+                void* element = javan_map_value_unchecked(source, index);
+                javan_map_put_java(map, key, element);
+                if (javan_pending_has() != 0) {
+                    break;
+                }
+            }
+            javan_root_frame_pop(roots);
+            javan_runtime_lock_leave();
+        }
+
         static void* javan_map_unmodifiable_unlocked(void* value) {
             javan_object_map* map = javan_map_checked(value);
             if (map->immutable != 0 && map->backing != NULL && (map->view_flags & JAVAN_MAP_VIEW_UNMODIFIABLE) != 0) {

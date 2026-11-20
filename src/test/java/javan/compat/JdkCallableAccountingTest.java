@@ -917,9 +917,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksMapPutAllAsSupported() {
+    void marksMapPutAllAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "putAll", "(Ljava/util/Map;)V")))
-            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test

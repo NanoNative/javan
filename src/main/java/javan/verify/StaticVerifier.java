@@ -2134,7 +2134,7 @@ public final class StaticVerifier {
                 final MethodRef target = instruction.methodRef().orElseThrow();
                 mapAccess |= JdkCallSupport.isMapObjectGetOrPut(target)
                     || JdkCallSupport.isMapMembershipOrDefaultQuery(target) || JdkCallSupport.isMapPutIfAbsent(target)
-                    || JdkCallSupport.isMapRemove(target) || JdkCallSupport.isMapReplace(target);
+                    || JdkCallSupport.isMapRemove(target) || JdkCallSupport.isMapReplace(target) || JdkCallSupport.isMapPutAll(target);
             }
             typedOperation |= instruction.opcode() == 192 || instruction.opcode() == 191;
             if (instruction.opcode() == 191) {

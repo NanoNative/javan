@@ -2226,6 +2226,48 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mapPutAllHandlesInvalidEntriesAndImmutableReceivers() throws Exception {
+        final Path project = project("map-put-all-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Collections;
+            import java.util.HashMap;
+            import java.util.LinkedHashMap;
+            import java.util.Map;
+            import java.util.concurrent.ConcurrentHashMap;
+            public final class Main {
+                static Map<String, String> argument() { System.out.println("argument"); return null; }
+                public static void main(String[] args) {
+                    Map<String, String> plain = new HashMap<>();
+                    Map<String, String> source = new LinkedHashMap<>();
+                    source.put("first", "value"); source.put("bad", null); source.put("last", "value");
+                    plain.putAll(source); System.out.println(plain.containsKey("bad"));
+                    Map<String, String> concurrent = new ConcurrentHashMap<>();
+                    try { concurrent.putAll(source); } catch (NullPointerException expected) { System.out.println("null value"); }
+                    System.out.println(concurrent.get("first")); System.out.println(concurrent.containsKey("last"));
+                    source.clear(); source.put(null, "value");
+                    try { concurrent.putAll(source); } catch (NullPointerException expected) { System.out.println("null key"); }
+                    try { concurrent.putAll(null); } catch (NullPointerException expected) { System.out.println("null source"); }
+                    Map<String, String> immutable = Collections.unmodifiableMap(plain);
+                    try { immutable.putAll(null); } catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                    Map<String, String> missing = null;
+                    try { missing.putAll(argument()); } catch (NullPointerException expected) { System.out.println("null receiver"); }
+                    concurrent.putAll(Map.of("good", "yes")); System.out.println(concurrent.get("good"));
+                    concurrent.putAll(concurrent); System.out.println(concurrent.get("good"));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/map-put-all-null").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void mapReplacementHandlesNullsAndImmutableReceivers() throws Exception {
         final Path project = project("map-replace-null");
         writeJava(project, "com.acme.Main", """

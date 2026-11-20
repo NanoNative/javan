@@ -1375,7 +1375,9 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("putAll(Ljava/util/Map;)V".equals(signature)) {
-                instructions.add(IrInstruction.callStaticVoid("javan_map_put_all", List.of(receiver, arguments.getFirst())));
+                instructions.add(IrInstruction.callStaticVoid(
+                    JdkCallSupport.isMapPutAll(methodRef) ? "javan_map_put_all_java" : "javan_map_put_all",
+                    List.of(receiver, arguments.getFirst())));
                 return true;
             }
             if ("forEach(Ljava/util/function/BiConsumer;)V".equals(signature)) {

@@ -2080,6 +2080,17 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies supported map bulk insertion operations.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method inserts entries from a map
+     */
+    public static boolean isMapPutAll(final MethodRef methodRef) {
+        return isMapRuntimeOwner(methodRef.owner()) && isSupported(methodRef)
+            && "putAll".equals(methodRef.name()) && "(Ljava/util/Map;)V".equals(methodRef.descriptor());
+    }
+
+    /**
      * Identifies supported map lookups and single-entry insertions.
      *
      * @param methodRef referenced JDK method
@@ -2156,7 +2167,7 @@ public final class JdkCallSupport {
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
         if (isCollectionObjectAddition(methodRef) || isCollectionClear(methodRef) || isMapClear(methodRef)
             || (isMapObjectGetOrPut(methodRef) && "put".equals(methodRef.name())) || isMapPutIfAbsent(methodRef)
-            || isMapRemove(methodRef) || isMapReplace(methodRef)) {
+            || isMapRemove(methodRef) || isMapReplace(methodRef) || isMapPutAll(methodRef)) {
             return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException");
         }
         if (isCollectionObjectSearch(methodRef) || isCollectionSizeQuery(methodRef) || isMapObjectGetOrPut(methodRef)

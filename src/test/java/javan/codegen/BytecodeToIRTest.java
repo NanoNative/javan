@@ -26983,9 +26983,9 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).isEmpty();
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).containsSubsequence(
             IrInstruction.callStaticVoid(
-                "javan_map_put_all",
+                "javan_map_put_all_java",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
             ),
             IrInstruction.returnVoid()

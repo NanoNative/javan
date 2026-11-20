@@ -590,6 +590,7 @@ final class RuntimeHeaderFile {
         void javan_map_initialize_capacity_with_load_factor_and_concurrency(void* map, int capacity, float load_factor, int concurrency_level);
         void* javan_map_copy_of(void* map);
         void javan_map_put_all(void* map, void* source);
+        void javan_map_put_all_java(void* map, void* source);
         void* javan_map_unmodifiable(void* map);
         void* javan_map_get(void* map, void* key);
         void* javan_map_get_java(void* map, void* key);
