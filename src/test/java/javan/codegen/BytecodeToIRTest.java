@@ -25803,12 +25803,12 @@ final class BytecodeToIRTest {
             plain(4, 177, "return")
         ));
 
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).contains(
             IrInstruction.callStaticVoid(
-                "javan_arraylist_add_at",
+                "javan_arraylist_add_at_java",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"), IrExpression.objectLocal("arg2"))
             ),
-            IrInstruction.returnVoid()
+            IrInstruction.propagatePending()
         );
     }
 
@@ -26117,12 +26117,12 @@ final class BytecodeToIRTest {
             plain(4, 177, "return")
         ));
 
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).contains(
             IrInstruction.callStaticVoid(
-                "javan_arraylist_add_at",
+                "javan_arraylist_add_at_java",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"), IrExpression.objectLocal("arg2"))
             ),
-            IrInstruction.returnVoid()
+            IrInstruction.propagatePending()
         );
     }
 

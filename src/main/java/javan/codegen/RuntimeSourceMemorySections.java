@@ -13204,6 +13204,23 @@ final class RuntimeSourceMemorySections {
             list->mod_count++;
         }
 
+        void javan_arraylist_add_at_java(void* value, int index, void* element) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return;
+            }
+            javan_runtime_lock_enter();
+            javan_object_list* list = javan_list_checked(value);
+            if (list->immutable != 0) {
+                javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+            } else if (index < 0 || index > javan_list_logical_length(list)) {
+                javan_pending_throw("java/lang/IndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+            } else {
+                javan_arraylist_add_at(list, index, element);
+            }
+            javan_runtime_lock_leave();
+        }
+
         int javan_arraylist_add_all_at(void* value, int index, void* collection) {
             javan_object_list* list = javan_list_checked(value);
             javan_object_list* source = javan_list_checked(collection);

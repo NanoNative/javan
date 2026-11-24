@@ -4742,6 +4742,9 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static int listRemoveObjectImmutable() { return java.util.List.of("x").remove("x") ? 1 : 0; }
                 public static int setRemoveObjectNull(int selector) { java.util.Set<String> values = selector == 0 ? null : new java.util.HashSet<>(); return values.remove("x") ? 1 : 0; }
                 public static int setRemoveObjectImmutable() { return java.util.Set.of("x").remove("x") ? 1 : 0; }
+                public static int listAddIndexNull(int selector) { java.util.List<String> values = selector == 0 ? null : new java.util.ArrayList<>(); values.add(0, "x"); return 0; }
+                public static int listAddIndexBounds() { new java.util.ArrayList<String>().add(1, "x"); return 0; }
+                public static int listAddIndexImmutable() { java.util.List.of().add(0, "x"); return 0; }
                 public static int listRemoveFirstEmpty() { new java.util.ArrayList<String>().removeFirst(); return 0; }
                 public static int listRemoveLastNull(int selector) { java.util.List<String> values = selector == 0 ? null : new java.util.ArrayList<>(); values.removeLast(); return 0; }
                 public static int listRemoveFirstImmutable() { java.util.List.of().removeFirst(); return 0; }
@@ -4794,6 +4797,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "--export", "com.acme.Api.listRemoveNull(int):int", "--export", "com.acme.Api.listRemoveImmutable():int",
             "--export", "com.acme.Api.listRemoveObjectNull(int):int", "--export", "com.acme.Api.listRemoveObjectImmutable():int",
             "--export", "com.acme.Api.setRemoveObjectNull(int):int", "--export", "com.acme.Api.setRemoveObjectImmutable():int",
+            "--export", "com.acme.Api.listAddIndexNull(int):int", "--export", "com.acme.Api.listAddIndexBounds():int", "--export", "com.acme.Api.listAddIndexImmutable():int",
             "--export", "com.acme.Api.listRemoveFirstEmpty():int", "--export", "com.acme.Api.listRemoveLastNull(int):int",
             "--export", "com.acme.Api.listRemoveFirstImmutable():int", "--export", "com.acme.Api.listRemoveLastLegacyEmpty():int",
             "--export", "com.acme.Api.listAddFirstNull(int):int", "--export", "com.acme.Api.listAddLastNull(int):int",
@@ -5023,6 +5027,15 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     javan_result_free(&failure);
                     failure = javan_try_com_acme_Api_setRemoveObjectImmutable_void(&value);
                     if (failure.ok || failure.message == 0 || strstr(failure.message, "UnsupportedOperationException") == 0) return 82;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_listAddIndexNull_int(0, &value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 83;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_listAddIndexBounds_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "IndexOutOfBoundsException") == 0) return 84;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_listAddIndexImmutable_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "UnsupportedOperationException") == 0) return 85;
                     javan_result_free(&failure);
                     failure = javan_try_com_acme_Api_listRemoveFirstEmpty_void(&value);
                     if (failure.ok || failure.message == 0 || strstr(failure.message, "NoSuchElementException") == 0) return 71;

@@ -2168,6 +2168,19 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies indexed insertion on supported list receivers.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method inserts a list element at an index
+     */
+    public static boolean isListIndexedAdd(final MethodRef methodRef) {
+        return ("java/util/List".equals(methodRef.owner()) || "java/util/ArrayList".equals(methodRef.owner())
+                || "java/util/AbstractList".equals(methodRef.owner()))
+            && "add".equals(methodRef.name()) && "(ILjava/lang/Object;)V".equals(methodRef.descriptor())
+            && isSupported(methodRef);
+    }
+
+    /**
      * Identifies object removal on supported collection receivers.
      *
      * @param methodRef referenced JDK method
@@ -2366,7 +2379,7 @@ public final class JdkCallSupport {
             return List.of("java/lang/NullPointerException", "java/util/NoSuchElementException",
                 "java/lang/UnsupportedOperationException");
         }
-        if (isListIndexedSet(methodRef) || isListIndexedRemove(methodRef)) {
+        if (isListIndexedSet(methodRef) || isListIndexedRemove(methodRef) || isListIndexedAdd(methodRef)) {
             return List.of("java/lang/NullPointerException", "java/lang/IndexOutOfBoundsException",
                 "java/lang/UnsupportedOperationException");
         }

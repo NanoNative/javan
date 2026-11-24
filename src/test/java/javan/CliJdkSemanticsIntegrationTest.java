@@ -2544,6 +2544,96 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void listIndexedAddTransportsFailuresAndPreservesOrder() throws Exception {
+        final Path project = project("list-indexed-add-errors");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.AbstractList;
+            import java.util.ArrayList;
+            import java.util.Collections;
+            import java.util.List;
+            public final class Main {
+                public static void main(String[] args) {
+                    ArrayList<String> concrete = new ArrayList<>();
+                    List<String> values = concrete;
+                    AbstractList<String> abstractValues = concrete;
+                    List<String> missing = args.length == 0 ? null : values;
+                    try { missing.add(0, "x"); } catch (NullPointerException expected) { System.out.println("null"); }
+                    try { values.add(-1, "x"); } catch (IndexOutOfBoundsException expected) { System.out.println("negative"); }
+                    try { concrete.add(1, "x"); } catch (IndexOutOfBoundsException expected) { System.out.println("large"); }
+                    try { List.of().add(-1, "x"); } catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                    try { Collections.unmodifiableList(values).add(0, "x"); } catch (UnsupportedOperationException expected) { System.out.println("view"); }
+                    values.add(0, "b"); concrete.add(0, "a"); abstractValues.add(2, null);
+                    System.out.println(values.size()); System.out.println(values.get(0));
+                    System.out.println(values.get(1)); System.out.println(values.get(2) == null);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-indexed-add-errors").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listIndexedAddEvaluatesArgumentsBeforeNullFailure() throws Exception {
+        final Path project = project("list-indexed-add-null-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.List;
+            public final class Main {
+                static List<String> missing() { System.out.println("receiver"); return null; }
+                static int index() { System.out.println("index"); return 0; }
+                static String value() { System.out.println("value"); return "x"; }
+                public static void main(String[] args) {
+                    missing().add(index(), value());
+                    System.out.println("after");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-indexed-add-null-order").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("receiver\nindex\nvalue\n");
+        assertThat(result.stderr()).contains("NullPointerException");
+    }
+
+    @Test
+    void listIndexedAddKeepsReceiverDuringArgumentAllocation() throws Exception {
+        final Path project = project("list-indexed-add-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.List;
+            public final class Main {
+                static List<String> list() { return new ArrayList<>(); }
+                static int index() { return new String(new char[] {'x'}).length() - 1; }
+                static String value() { return new String(new char[] {'v','a','l','u','e'}); }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) list().add(index(), value());
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println("done");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-indexed-add-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("done\n");
+    }
+
+    @Test
     void setRemoveObjectTransportsFailures() throws Exception {
         final Path project = project("set-remove-object-errors");
         writeJava(project, "com.acme.Main", """

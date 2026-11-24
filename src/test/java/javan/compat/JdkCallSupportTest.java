@@ -4462,6 +4462,16 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void listAddIndexTransportsNullBoundsAndImmutableFailures() {
+        for (final String owner : List.of("java/util/List", "java/util/AbstractList", "java/util/ArrayList")) {
+            assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
+                owner, "add", "(ILjava/lang/Object;)V"
+            ))).containsExactly("java/lang/NullPointerException", "java/lang/IndexOutOfBoundsException",
+                "java/lang/UnsupportedOperationException");
+        }
+    }
+
+    @Test
     void listRemoveIndexTransportsNullBoundsAndImmutableFailures() {
         for (final String owner : List.of("java/util/List", "java/util/AbstractList", "java/util/ArrayList")) {
             assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(

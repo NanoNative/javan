@@ -921,7 +921,7 @@ final class BytecodeToIRCollectionSupport {
         }
         if (isJdkListClass(methodRef.owner())) {
             if ("add(ILjava/lang/Object;)V".equals(signature)) {
-                instructions.add(IrInstruction.callStaticVoid("javan_arraylist_add_at", List.of(receiver, arguments.get(0), arguments.get(1))));
+                instructions.add(IrInstruction.callStaticVoid("javan_arraylist_add_at_java", List.of(receiver, arguments.get(0), arguments.get(1))));
                 return true;
             }
             if ("addAll(ILjava/util/Collection;)Z".equals(signature)) {
@@ -987,7 +987,7 @@ final class BytecodeToIRCollectionSupport {
         }
         if ("java/util/AbstractList".equals(methodRef.owner())) {
             if ("add(ILjava/lang/Object;)V".equals(signature)) {
-                instructions.add(IrInstruction.callStaticVoid("javan_arraylist_add_at", List.of(receiver, arguments.get(0), arguments.get(1))));
+                instructions.add(IrInstruction.callStaticVoid("javan_arraylist_add_at_java", List.of(receiver, arguments.get(0), arguments.get(1))));
                 return true;
             }
             if ("addAll(ILjava/util/Collection;)Z".equals(signature)) {

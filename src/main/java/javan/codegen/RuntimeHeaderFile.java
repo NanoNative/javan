@@ -514,6 +514,7 @@ final class RuntimeHeaderFile {
         int javan_collection_add_java(void* list, void* element);
         int javan_collection_add(void* list, void* value);
         void javan_arraylist_add_at(void* list, int index, void* value);
+        void javan_arraylist_add_at_java(void* list, int index, void* value);
         int javan_arraylist_add_all_at(void* list, int index, void* collection);
         int javan_arraylist_add_all(void* list, void* collection);
         int javan_collection_add_all(void* list, void* collection);
