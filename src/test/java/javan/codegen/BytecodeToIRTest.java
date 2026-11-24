@@ -24713,10 +24713,11 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).contains(
-            IrInstruction.returnInt(IrExpression.intCall(
-                "javan_list_remove",
+            IrInstruction.assignInt("int0", IrExpression.intCall(
+                "javan_collection_remove_java",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
-            ))
+            )),
+            IrInstruction.propagatePending()
         );
     }
 
@@ -25009,7 +25010,7 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).contains(
             IrInstruction.assignInt("int0", IrExpression.intCall(
-                "javan_list_remove_java",
+                "javan_collection_remove_java",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
             )),
             IrInstruction.propagatePending()
@@ -25136,10 +25137,11 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).contains(
-            IrInstruction.returnInt(IrExpression.intCall(
-                "javan_list_remove",
+            IrInstruction.assignInt("int0", IrExpression.intCall(
+                "javan_collection_remove_java",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
-            ))
+            )),
+            IrInstruction.propagatePending()
         );
     }
 
@@ -25546,7 +25548,7 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).contains(
             IrInstruction.assignInt("int0", IrExpression.intCall(
-                "javan_list_remove_java",
+                "javan_collection_remove_java",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
             )),
             IrInstruction.propagatePending()
@@ -26170,7 +26172,7 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).contains(
             IrInstruction.assignInt("int0", IrExpression.intCall(
-                "javan_list_remove_java",
+                "javan_collection_remove_java",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
             )),
             IrInstruction.propagatePending()
