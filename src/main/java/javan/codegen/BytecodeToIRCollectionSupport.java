@@ -1057,7 +1057,7 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("remove(Ljava/lang/Object;)Z".equals(signature)) {
-                stack.add(StackValue.intExpression(IrExpression.intCall("javan_list_remove", List.of(receiver, arguments.getFirst()))));
+                pushIntCall(instructions, stack, localDeclarations, "javan_list_remove_java", List.of(receiver, arguments.getFirst()));
                 return true;
             }
             if ("removeIf(Ljava/util/function/Predicate;)Z".equals(signature)) {

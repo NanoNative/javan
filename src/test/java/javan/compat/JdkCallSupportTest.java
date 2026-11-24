@@ -4472,6 +4472,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void listRemoveObjectTransportsNullAndImmutableFailures() {
+        for (final String owner : List.of("java/util/List", "java/util/ArrayList", "java/util/Collection")) {
+            assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
+                owner, "remove", "(Ljava/lang/Object;)Z"
+            ))).containsExactly("java/lang/NullPointerException", "java/lang/UnsupportedOperationException");
+        }
+    }
+
+    @Test
     void listEndpointAddTransportsNullAndImmutableFailures() {
         for (final String owner : List.of("java/util/List", "java/util/ArrayList")) {
             for (final String name : List.of("addFirst", "addLast")) {

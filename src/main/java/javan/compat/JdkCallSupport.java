@@ -2168,6 +2168,19 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies object removal on supported list and collection receivers.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method removes an object from a supported collection
+     */
+    public static boolean isListObjectRemove(final MethodRef methodRef) {
+        return ("java/util/List".equals(methodRef.owner()) || "java/util/ArrayList".equals(methodRef.owner())
+                || "java/util/Collection".equals(methodRef.owner()))
+            && "remove".equals(methodRef.name()) && "(Ljava/lang/Object;)Z".equals(methodRef.descriptor())
+            && isSupported(methodRef);
+    }
+
+    /**
      * Identifies non-empty immutable list factory calls.
      *
      * @param methodRef referenced JDK method
@@ -2369,7 +2382,7 @@ public final class JdkCallSupport {
             || isSetCopyOf(methodRef) || isListCopyOf(methodRef) || isListFactory(methodRef)) {
             return List.of("java/lang/NullPointerException");
         }
-        if (isCollectionObjectAddition(methodRef) || isListEndpointAdd(methodRef)
+        if (isCollectionObjectAddition(methodRef) || isListEndpointAdd(methodRef) || isListObjectRemove(methodRef)
             || isCollectionClear(methodRef) || isMapClear(methodRef)
             || (isMapObjectGetOrPut(methodRef) && "put".equals(methodRef.name())) || isMapPutIfAbsent(methodRef)
             || isMapRemove(methodRef) || isMapReplace(methodRef) || isMapPutAll(methodRef)) {

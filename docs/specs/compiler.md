@@ -116,6 +116,8 @@ handler shapes.
 Supported indexed `set` calls also transport immutable-list failures and preserve the replaced value
 while publishing it to the collector.
 Indexed `remove` transports the same failures and publishes the removed value safely.
+Object removal through `List`, `ArrayList` and `Collection` transports null-receiver and
+immutable-collection failures for the currently supported collection representations.
 Supported endpoint removals transport null, empty and immutable-list failures and publish removed
 values safely.
 Supported endpoint insertions transport null and immutable-list failures and retain inserted values

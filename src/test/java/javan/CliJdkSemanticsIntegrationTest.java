@@ -2544,6 +2544,111 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void listRemoveObjectTransportsFailuresAndRemovesFirstMatch() throws Exception {
+        final Path project = project("list-remove-object-errors");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.Collection;
+            import java.util.Collections;
+            import java.util.HashSet;
+            import java.util.List;
+            import java.util.Set;
+            public final class Main {
+                public static void main(String[] args) {
+                    ArrayList<String> concrete = new ArrayList<>();
+                    List<String> values = concrete;
+                    List<String> missing = args.length == 0 ? null : values;
+                    ArrayList<String> missingConcrete = args.length == 0 ? null : concrete;
+                    try { missing.remove("x"); } catch (NullPointerException expected) { System.out.println("list null"); }
+                    try { missingConcrete.remove("x"); } catch (NullPointerException expected) { System.out.println("concrete null"); }
+                    try { List.of().remove("x"); } catch (UnsupportedOperationException expected) { System.out.println("immutable absent"); }
+                    try { List.of("x").remove("x"); } catch (UnsupportedOperationException expected) { System.out.println("immutable present"); }
+                    try { Collections.unmodifiableList(values).remove(null); } catch (UnsupportedOperationException expected) { System.out.println("view"); }
+                    Collection<String> immutableSet = Set.of("x");
+                    try { immutableSet.remove("x"); } catch (UnsupportedOperationException expected) { System.out.println("collection set immutable"); }
+                    Collection<String> mutableSet = new HashSet<>();
+                    mutableSet.add("x");
+                    System.out.println(mutableSet.remove("x"));
+                    System.out.println(mutableSet.remove("x"));
+                    values.add("a"); values.add(null); values.add("a");
+                    System.out.println(values.remove("missing"));
+                    System.out.println(values.remove("a"));
+                    System.out.println(values.remove(null));
+                    System.out.println(values.size());
+                    System.out.println(values.get(0));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-remove-object-errors").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listRemoveObjectEvaluatesArgumentBeforeNullFailure() throws Exception {
+        final Path project = project("list-remove-object-null-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.List;
+            public final class Main {
+                static List<String> missing() { System.out.println("receiver"); return null; }
+                static String value() { System.out.println("value"); return "x"; }
+                public static void main(String[] args) {
+                    missing().remove(value());
+                    System.out.println("after");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-remove-object-null-order").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("receiver\nvalue\n");
+        assertThat(result.stderr()).contains("NullPointerException");
+    }
+
+    @Test
+    void listRemoveObjectKeepsReceiverDuringArgumentAllocation() throws Exception {
+        final Path project = project("list-remove-object-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static ArrayList<String> list() {
+                    ArrayList<String> values = new ArrayList<>();
+                    values.add("keep"); values.add("remove");
+                    return values;
+                }
+                static String value() { return new String(new char[] {'r','e','m','o','v','e'}); }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++)
+                            if (!list().remove(value())) errors.incrementAndGet();
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-remove-object-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
     void listRemoveEndpointsTransportFailuresAndReturnRemovedValues() throws Exception {
         final Path project = project("list-remove-endpoint-errors");
         writeJava(project, "com.acme.Main", """

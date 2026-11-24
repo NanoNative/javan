@@ -2141,6 +2141,7 @@ public final class StaticVerifier {
                     || JdkCallSupport.isListCopyOf(target) || JdkCallSupport.isListFactory(target)
                     || JdkCallSupport.isListEndpoint(target) || JdkCallSupport.isListIndexedGet(target)
                     || JdkCallSupport.isListIndexedSet(target) || JdkCallSupport.isListIndexedRemove(target)
+                    || JdkCallSupport.isListObjectRemove(target)
                     || JdkCallSupport.isListEndpointRemove(target) || JdkCallSupport.isListEndpointAdd(target);
             }
             typedOperation |= instruction.opcode() == 192 || instruction.opcode() == 191;
