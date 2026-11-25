@@ -229,7 +229,8 @@ final class RuntimeSourceMemorySections {
 
         typedef struct {
             int magic;
-            int reserved0;
+            /* Literals can be borrowed; tracked values still require heap validation. */
+            int value_is_managed;
             void* value;
         } javan_atomic_reference_state;
 
@@ -1979,10 +1980,14 @@ final class RuntimeSourceMemorySections {
                 }
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE) {
                 javan_atomic_reference_state* state = (javan_atomic_reference_state*) node->value;
-                if (state->magic != JAVAN_ATOMIC_REFERENCE_MAGIC) {
+                if (state->magic != JAVAN_ATOMIC_REFERENCE_MAGIC
+                    || (state->value_is_managed != 0 && state->value_is_managed != 1)
+                    || (state->value_is_managed != 0 && state->value == NULL)) {
                     javan_panic("invalid runtime atomic reference metadata");
                 }
-                javan_validate_runtime_managed_reference(state->value);
+                if (state->value_is_managed != 0) {
+                    javan_validate_runtime_managed_reference(state->value);
+                }
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_SECURE_RANDOM) {
                 javan_secure_random_state* state = (javan_secure_random_state*) node->value;
                 if (state->magic != JAVAN_SECURE_RANDOM_MAGIC) {
@@ -16476,16 +16481,21 @@ final class RuntimeSourceMemorySections {
             void* value = javan_alloc(sizeof(javan_atomic_reference_state));
             javan_atomic_reference_state* state = (javan_atomic_reference_state*) value;
             state->magic = JAVAN_ATOMIC_REFERENCE_MAGIC;
-            state->reserved0 = 0;
+            state->value_is_managed = 0;
             state->value = NULL;
             javan_update_runtime_allocation_kind(value, JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE);
             return value;
         }
 
+        static void javan_atomic_reference_store(javan_atomic_reference_state* state, void* next_value) {
+            state->value = next_value;
+            state->value_is_managed = next_value != NULL && javan_find_allocation_locked(next_value, NULL) != NULL;
+        }
+
         void javan_atomic_reference_init(void* value, void* initial_value) {
             javan_runtime_lock_enter();
             javan_atomic_reference_state* state = javan_atomic_reference_checked(value);
-            state->value = initial_value;
+            javan_atomic_reference_store(state, initial_value);
             javan_runtime_lock_leave();
         }
 
@@ -16501,7 +16511,7 @@ final class RuntimeSourceMemorySections {
             javan_atomic_reference_state* state = javan_atomic_reference_checked(value);
             int result = 0;
             if (state->value == expected_value) {
-                state->value = next_value;
+                javan_atomic_reference_store(state, next_value);
                 result = 1;
             }
             javan_runtime_lock_leave();
@@ -16511,7 +16521,7 @@ final class RuntimeSourceMemorySections {
         void javan_atomic_reference_set(void* value, void* next_value) {
             javan_runtime_lock_enter();
             javan_atomic_reference_state* state = javan_atomic_reference_checked(value);
-            state->value = next_value;
+            javan_atomic_reference_store(state, next_value);
             javan_runtime_lock_leave();
         }
 

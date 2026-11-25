@@ -44,6 +44,107 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @NativeTest
 final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
     @Test
+    void atomicIntegerConstructionSurvivesConcurrentCollection() throws Exception {
+        checkAtomicConstruction("atomic-integer-construction-gc", """
+            AtomicInteger value = new AtomicInteger(i);
+            if (value.get() != i) failures.incrementAndGet();
+            """);
+    }
+
+    @Test
+    void atomicLongConstructionSurvivesConcurrentCollection() throws Exception {
+        checkAtomicConstruction("atomic-long-construction-gc", """
+            AtomicLong value = new AtomicLong(i);
+            if (value.get() != i) failures.incrementAndGet();
+            """);
+    }
+
+    @Test
+    void atomicBooleanConstructionSurvivesConcurrentCollection() throws Exception {
+        checkAtomicConstruction("atomic-boolean-construction-gc", """
+            AtomicBoolean value = new AtomicBoolean(true);
+            if (!value.get()) failures.incrementAndGet();
+            """);
+    }
+
+    @Test
+    void atomicReferenceConstructionSurvivesConcurrentCollection() throws Exception {
+        checkAtomicConstruction("atomic-reference-construction-gc", """
+            AtomicReference<String> value = new AtomicReference<>(new String("example"));
+            if (!value.get().equals("example")) failures.incrementAndGet();
+            """);
+    }
+
+    @Test
+    void atomicReferenceAcceptsLiteralAndManagedValuesDuringCollection() throws Exception {
+        checkAtomicConstruction("atomic-reference-values-gc", """
+            String owned = new String("owned");
+            AtomicReference<String> value = new AtomicReference<>("example");
+            if (!value.get().equals("example")) failures.incrementAndGet();
+            value.set(owned);
+            if (value.get() != owned) failures.incrementAndGet();
+            if (!value.compareAndSet(owned, "changed")) failures.incrementAndGet();
+            if (!value.get().equals("changed")) failures.incrementAndGet();
+            if (value.compareAndSet(owned, "unexpected")) failures.incrementAndGet();
+            value.set(null);
+            if (value.get() != null || !value.compareAndSet(null, owned)) failures.incrementAndGet();
+            if (value.get() != owned) failures.incrementAndGet();
+            """);
+    }
+
+    @Test
+    void atomicReferenceKeepsItsOnlyManagedValueAlive() throws Exception {
+        checkAtomicConstruction("atomic-reference-owned-value-gc", """
+            static AtomicReference<String> make() {
+                return new AtomicReference<>(new String("owned"));
+            }
+            """, """
+            AtomicReference<String> value = make();
+            if (!value.get().equals("owned")) failures.incrementAndGet();
+            """);
+    }
+
+    private void checkAtomicConstruction(final String name, final String operation) throws Exception {
+        checkAtomicConstruction(name, "", operation);
+    }
+
+    private void checkAtomicConstruction(final String name, final String methods, final String operation) throws Exception {
+        final Path project = project(name);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.*;
+            public final class Main {
+                static final AtomicInteger failures = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 5000; i++) {
+                            String value = new String("example");
+                            if (value.length() != 7) failures.incrementAndGet();
+                        }
+                    }
+                }
+                %s
+                public static void main(String[] args) throws Exception {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start();
+                    for (int i = 0; i < 2000; i++) {
+                        %s
+                    }
+                    first.join(); second.join();
+                    System.out.println(failures.get());
+                }
+            }
+            """.formatted(methods, operation));
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/" + name).toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stderr()).isEmpty();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
     void atomicIntegerAdditionMatchesJvmAtIntegerBoundaries() throws Exception {
         final Path project = project("atomic-integer-add");
         writeJava(project, "com.acme.Main", """

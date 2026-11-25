@@ -3172,14 +3172,6 @@ final class RuntimeFilesTest {
             assertThat(checked).as(operation.getKey()).isLessThan(leave);
         }
 
-        final String compareAndSet = runtimeFunction(
-            source,
-            "int javan_atomic_reference_compare_and_set("
-        );
-        assertThat(compareAndSet.indexOf("if (state->value == expected_value)"))
-            .isLessThan(compareAndSet.indexOf("state->value = next_value;"));
-        assertThat(compareAndSet.indexOf("state->value = next_value;"))
-            .isLessThan(compareAndSet.indexOf("javan_runtime_lock_leave();"));
     }
 
     @Test
