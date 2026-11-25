@@ -888,54 +888,86 @@ final class RuntimeSourceIoSections {
             return javan_access_path(path, W_OK) == 0;
         }
 
-        void* javan_files_read_string(void* path_value) {
+        void javan_files_read_string_into(void** result, void* path_value) {
+            if (result == NULL) {
+                javan_panic("invalid readString result");
+            }
+            javan_runtime_lock_enter();
+            *result = NULL;
+            javan_runtime_lock_leave();
             const char* path = javan_path_checked(path_value);
             FILE* file = javan_file_open(path, "rb");
             if (file == NULL) {
-                return javan_files_io_failure("readString failed");
+                javan_files_io_failure("readString failed");
+                return;
             }
             javan_native_resource_frame file_resource;
             javan_native_resource_push(&file_resource, file, javan_native_file_cleanup);
             if (fseek(file, 0, SEEK_END) != 0) {
                 javan_native_resource_pop(&file_resource);
                 fclose(file);
-                return javan_files_io_failure("readString failed");
+                javan_files_io_failure("readString failed");
+                return;
             }
             long length = ftell(file);
             if (length < 0) {
                 javan_native_resource_pop(&file_resource);
                 fclose(file);
-                return javan_files_io_failure("readString failed");
+                javan_files_io_failure("readString failed");
+                return;
             }
             if (fseek(file, 0, SEEK_SET) != 0) {
                 javan_native_resource_pop(&file_resource);
                 fclose(file);
-                return javan_files_io_failure("readString failed");
+                javan_files_io_failure("readString failed");
+                return;
             }
             if (length > INT_MAX) {
                 javan_native_resource_pop(&file_resource);
                 fclose(file);
-                return javan_files_io_failure("readString failed");
+                javan_files_io_failure("readString failed");
+                return;
             }
-            char* bytes = (char*) javan_alloc((unsigned long) (length == 0 ? 1 : length));
-            if (length > 0 && fread(bytes, 1, (unsigned long) length, file) != (unsigned long) length) {
+            void* bytes_root = NULL;
+            void** roots[] = {&bytes_root, result};
+            javan_root_frame_push(roots, 2);
+            javan_runtime_lock_enter();
+            bytes_root = javan_alloc((unsigned long) (length == 0 ? 1 : length));
+            javan_runtime_lock_leave();
+            if (length > 0 && fread(bytes_root, 1, (unsigned long) length, file) != (unsigned long) length) {
+                javan_runtime_lock_enter();
+                javan_free(bytes_root);
+                bytes_root = NULL;
+                javan_runtime_lock_leave();
+                javan_root_frame_pop(roots);
                 javan_native_resource_pop(&file_resource);
                 fclose(file);
-                javan_free(bytes);
-                return javan_files_io_failure("readString failed");
+                javan_files_io_failure("readString failed");
+                return;
             }
-            void* bytes_root = bytes;
-            void** roots[] = {
-                (void**) &bytes_root
-            };
-            javan_root_frame_push(roots, 1);
-            void* result = javan_string_from_utf8_bytes((const char*) bytes_root, (int) length);
-            javan_root_frame_pop(roots);
-            javan_free(bytes);
+            javan_string_from_utf8_bytes_into(result, (const char*) bytes_root, (int) length);
+            javan_runtime_lock_enter();
+            javan_free(bytes_root);
+            bytes_root = NULL;
+            javan_runtime_lock_leave();
             javan_native_resource_pop(&file_resource);
             if (fclose(file) != 0) {
-                return javan_files_io_failure("readString close failed");
+                javan_runtime_lock_enter();
+                *result = NULL;
+                javan_runtime_lock_leave();
+                javan_root_frame_pop(roots);
+                javan_files_io_failure("readString close failed");
+                return;
             }
+            javan_root_frame_pop(roots);
+        }
+
+        void* javan_files_read_string(void* path_value) {
+            void* result = NULL;
+            void** roots[] = {&result};
+            javan_root_frame_push(roots, 1);
+            javan_files_read_string_into(&result, path_value);
+            javan_root_frame_pop(roots);
             return result;
         }
 

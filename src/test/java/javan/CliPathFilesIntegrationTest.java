@@ -24,6 +24,48 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @NativeTest
 final class CliPathFilesIntegrationTest extends CliIntegrationSupport {
     @Test
+    void filesReadStringSurvivesConcurrentCollection() throws Exception {
+        final Path project = project("files-read-string-gc");
+        Files.writeString(project.resolve("data.txt"), "example", StandardCharsets.UTF_8);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.nio.file.Files;
+            import java.nio.file.Path;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger failures = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 3000; i++) {
+                            String value = new String("example");
+                            if (value.length() != 7) failures.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start();
+                    Path path = Path.of("data.txt");
+                    for (int i = 0; i < 1000; i++) {
+                        String value = Files.readString(path);
+                        if (!value.equals("example")) failures.incrementAndGet();
+                    }
+                    first.join(); second.join();
+                    System.out.println(failures.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/files-read-string-gc").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stderr()).isEmpty();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
     void filesReadAllBytesSurvivesConcurrentCollection() throws Exception {
         final Path project = project("files-read-all-bytes-gc");
         Files.write(project.resolve("data.bin"), new byte[]{65, 66, 67});

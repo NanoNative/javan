@@ -708,6 +708,7 @@ final class RuntimeHeaderFile {
         int javan_files_create_directories_if_possible(void* path);
         void* javan_files_copy(void* source, void* target, void* options);
         void* javan_files_read_string(void* path);
+        void javan_files_read_string_into(void** result, void* path);
         void* javan_files_write_string(void* path, void* value, void* options);
         void* javan_files_write_bytes(void* path, void* bytes, void* options);
         void* javan_files_read_all_bytes(void* path);

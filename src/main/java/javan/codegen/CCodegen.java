@@ -5514,6 +5514,7 @@ public final class CCodegen {
             || "javan_character_to_chars".equals(expression.value())
             || "javan_string_to_char_array".equals(expression.value())
             || "javan_files_read_all_bytes".equals(expression.value())
+            || "javan_files_read_string".equals(expression.value())
             || isArrayCopyIntoCall(expression.value())
             || isStringResultIntoCall(expression.value())
             || isSocketStreamResultIntoCall(expression.value())

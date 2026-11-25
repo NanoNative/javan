@@ -9927,8 +9927,8 @@ final class RuntimeSourceMemorySections {
             return output_length;
         }
 
-        static void* javan_string_from_utf8_bytes(const char* value, int length) {
-            if (value == NULL || length < 0) {
+        static void javan_string_from_utf8_bytes_into(void** result, const char* value, int length) {
+            if (result == NULL || value == NULL || length < 0) {
                 javan_panic("invalid UTF-8 string input");
             }
             const unsigned char* input = (const unsigned char*) value;
@@ -9952,13 +9952,15 @@ final class RuntimeSourceMemorySections {
             }
             void* source_root = (void*) value;
             void** javan_string_utf8_bytes_roots[] = {
-                (void**) &source_root
+                (void**) &source_root,
+                result
             };
-            javan_root_frame_push(javan_string_utf8_bytes_roots, 1);
-            char* result = javan_string_alloc((unsigned long) output_length + 1UL);
+            javan_root_frame_push(javan_string_utf8_bytes_roots, 2);
+            char* output = (char*) javan_alloc_runtime_rooted(
+                (unsigned long) output_length + 1UL, result, JAVAN_RUNTIME_KIND_STRING
+            );
             input = (const unsigned char*) source_root;
             input_index = 0;
-            char* output = result;
             while (input_index < length) {
                 if (input[input_index] == 0U) {
                     *output++ = (char) 0xC0U;
@@ -9973,6 +9975,14 @@ final class RuntimeSourceMemorySections {
             }
             *output = '\\0';
             javan_root_frame_pop(javan_string_utf8_bytes_roots);
+        }
+
+        static void* javan_string_from_utf8_bytes(const char* value, int length) {
+            void* result = NULL;
+            void** roots[] = {&result};
+            javan_root_frame_push(roots, 1);
+            javan_string_from_utf8_bytes_into(&result, value, length);
+            javan_root_frame_pop(roots);
             return result;
         }
 
