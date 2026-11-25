@@ -1194,6 +1194,12 @@ public final class BytecodeToIR {
                 && containsNontrivialDeferredValue(stack, stack.size() - branchOperands)) {
                 snapshotOperandStack(instructions, stack, locals, localDeclarations, false);
             }
+            if (BytecodeToIRControlFlowSupport.lowerBooleanBranchMerge(
+                bytecode, index, instructions, stack, localDeclarations, skippedOffsets, replacementLabelOffsets
+            )) {
+                BytecodeToIRControlFlowSupport.annotateNewInstructions(instructions, instructionStart, sourceLocation);
+                continue;
+            }
             if (BytecodeToIRControlFlowSupport.lowerBranchValueSelection(
                 classes,
                 classFile,

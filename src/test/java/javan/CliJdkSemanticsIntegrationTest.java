@@ -2708,6 +2708,33 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void shortCircuitStringSwitchReturnsSelectedBoolean() throws Exception {
+        final Path project = project("short-circuit-string-switch");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static boolean test(String value) {
+                    return value.startsWith("[") || switch (value) {
+                        case "one", "two" -> true;
+                        default -> false;
+                    };
+                }
+                public static void main(String[] args) {
+                    System.out.println(test("[x"));
+                    System.out.println(test("one"));
+                    System.out.println(test("missing"));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/short-circuit-string-switch").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void conditionalArrayValueHandlesShortCircuitTarget() throws Exception {
         final Path project = project("conditional-array-short-circuit");
         writeJava(project, "com.acme.Main", """

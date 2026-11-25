@@ -554,6 +554,45 @@ final class BytecodeToIRControlFlowSupport {
             IrExpression.objectComparison(nullOperator(instruction.opcode()), value, IrExpression.objectNull())
         ));
     }
+    static boolean lowerBooleanBranchMerge(
+        final List<Instruction> bytecode,
+        final int index,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final List<Integer> skippedOffsets,
+        final List<Integer> replacementLabelOffsets
+    ) {
+        if (!stack.isEmpty() || index + 3 >= bytecode.size()) {
+            return false;
+        }
+        final Instruction first = bytecode.get(index);
+        final Instruction jump = bytecode.get(index + 1);
+        final Instruction second = bytecode.get(index + 2);
+        final int doneOffset = bytecode.get(index + 3).offset();
+        if ((first.opcode() != 3 && first.opcode() != 4)
+            || (second.opcode() != 3 && second.opcode() != 4)
+            || (jump.opcode() != 167 && jump.opcode() != 200)
+            || branchTarget(jump) != doneOffset
+            || !hasEarlierControlFlowEntry(bytecode, index, first.offset(), first.offset() + 1)
+            || !hasEarlierControlFlowEntry(bytecode, index, second.offset(), second.offset() + 1)
+            || hasEarlierControlFlowEntry(bytecode, bytecode.size(), jump.offset(), second.offset())
+            || hasEarlierControlFlowEntry(bytecode, index, doneOffset, doneOffset + 1)) {
+            return false;
+        }
+        final String name = "booleanMerge" + localDeclarations.size() + "_" + first.offset();
+        localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.INT, name));
+        instructions.add(IrInstruction.assignInt(name, IrExpression.intLiteral(first.opcode() - 3)));
+        instructions.add(IrInstruction.jump(label(doneOffset)));
+        instructions.add(IrInstruction.label(label(second.offset())));
+        instructions.add(IrInstruction.assignInt(name, IrExpression.intLiteral(second.opcode() - 3)));
+        stack.add(StackValue.intExpression(IrExpression.intLocal(name)));
+        addInt(skippedOffsets, jump.offset());
+        addInt(skippedOffsets, second.offset());
+        addInt(replacementLabelOffsets, second.offset());
+        return true;
+    }
+
     static boolean lowerBranchValueSelection(
         final Map<String, ClassFile> classes,
         final ClassFile classFile,
