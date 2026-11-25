@@ -12,7 +12,9 @@ import org.junit.jupiter.api.parallel.Resources;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
@@ -22,6 +24,60 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @ResourceLock(value = Resources.SYSTEM_PROPERTIES, mode = ResourceAccessMode.READ)
 @NativeTest
 final class CliResourceRuntimeIntegrationTest extends CliIntegrationSupport {
+    @Test
+    void classResourceStreamSurvivesConcurrentCollection() throws Exception {
+        checkResourceStreamDuringCollection("class-resource-gc", "Main.class.getResourceAsStream(\"/data.txt\")");
+    }
+
+    @Test
+    void systemResourceStreamSurvivesConcurrentCollection() throws Exception {
+        checkResourceStreamDuringCollection("system-resource-gc", "ClassLoader.getSystemResourceAsStream(\"data.txt\")");
+    }
+
+    @Test
+    void classLoaderResourceStreamSurvivesConcurrentCollection() throws Exception {
+        checkResourceStreamDuringCollection("loader-resource-gc", "ClassLoader.getSystemClassLoader().getResourceAsStream(\"data.txt\")");
+    }
+
+    private void checkResourceStreamDuringCollection(final String name, final String lookup) throws Exception {
+        final Path project = project(name);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.io.InputStream;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger failures = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 2000; i++) {
+                            String value = new String("example");
+                            if (value.length() != 7) failures.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start();
+                    for (int i = 0; i < 1000; i++) {
+                        InputStream stream = %s;
+                        if (stream.read() != 65) failures.incrementAndGet();
+                        stream.close();
+                    }
+                    first.join(); second.join();
+                    System.out.println(failures.get());
+                }
+            }
+            """.formatted(lookup));
+        writeResource(project, "data.txt", "A");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/" + name).toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stderr()).isEmpty();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
     @Test
     void nativeBuildReadsResourceFromDependencyJar() throws Exception {
         final Path dependency = addJarResource(
