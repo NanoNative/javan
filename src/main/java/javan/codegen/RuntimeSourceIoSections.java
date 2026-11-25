@@ -725,9 +725,11 @@ final class RuntimeSourceIoSections {
         }
 
         static void* javan_files_io_failure(const char* message) {
+            javan_runtime_lock_enter();
             void* rooted_message = javan_string_from(message);
             void** roots[] = { &rooted_message };
             javan_root_frame_push(roots, 1);
+            javan_runtime_lock_leave();
             javan_pending_throw(
                 "java/io/IOException",
                 rooted_message,
