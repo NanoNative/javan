@@ -120,6 +120,7 @@ Indexed insertion transports null-receiver, invalid-index and immutable-list fai
 the inserted value through concurrent collection.
 Indexed bulk insertion reads supported collection views, handles self-insertion and transports
 null, invalid-index, immutable-list and representational-size failures within supported handlers.
+Bulk append through `List` or `ArrayList` supports the same collection views and failure transport.
 Object removal through supported list, set and `Collection` owners transports null-receiver and
 immutable-collection failures for the currently supported collection representations.
 Supported endpoint removals transport null, empty and immutable-list failures and publish removed

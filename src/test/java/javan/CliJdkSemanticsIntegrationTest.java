@@ -2544,6 +2544,186 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void listAddAllAcceptsViewsAndSelf() throws Exception {
+        final Path project = project("list-add-all-views");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.Collections;
+            import java.util.List;
+            public final class Main {
+                static void print(List<String> values) {
+                    System.out.println(values.size());
+                    for (int i = 0; i < values.size(); i++) System.out.println(values.get(i));
+                }
+                public static void main(String[] args) {
+                    List<String> values = new ArrayList<>();
+                    values.add("a");
+                    List<String> source = new ArrayList<>();
+                    source.add("b");
+                    System.out.println(values.addAll(Collections.unmodifiableList(source)));
+                    print(values);
+                    System.out.println(values.addAll(Collections.unmodifiableList(values)));
+                    print(values);
+                    System.out.println(values.addAll(List.of()));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-add-all-views").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listAddAllAcceptsSetSource() throws Exception {
+        final Path project = project("list-add-all-set");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.List;
+            import java.util.Set;
+            public final class Main {
+                public static void main(String[] args) {
+                    List<String> values = new ArrayList<>(); values.add("a");
+                    System.out.println(values.addAll(Set.of("b")));
+                    System.out.println(values.size()); System.out.println(values.get(1));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-add-all-set").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listCopyConstructorAcceptsView() throws Exception {
+        final Path project = project("list-copy-constructor-view");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.Collections;
+            import java.util.List;
+            public final class Main {
+                public static void main(String[] args) {
+                    List<String> source = new ArrayList<>();
+                    source.add("a"); source.add("b");
+                    List<String> copied = new ArrayList<>(Collections.unmodifiableList(source));
+                    source.add("c");
+                    System.out.println(copied.size());
+                    System.out.println(copied.get(0)); System.out.println(copied.get(1));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-copy-constructor-view").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listAddAllTransportsFailures() throws Exception {
+        final Path project = project("list-add-all-errors");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.Collections;
+            import java.util.List;
+            public final class Main {
+                public static void main(String[] args) {
+                    ArrayList<String> concrete = new ArrayList<>();
+                    List<String> values = concrete;
+                    List<String> missing = args.length == 0 ? null : values;
+                    try { missing.addAll(values); } catch (NullPointerException expected) { System.out.println("receiver"); }
+                    try { values.addAll(null); } catch (NullPointerException expected) { System.out.println("source"); }
+                    try { concrete.addAll(null); } catch (NullPointerException expected) { System.out.println("concrete source"); }
+                    try { List.of().addAll(null); } catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                    try { Collections.unmodifiableList(values).addAll(List.of()); } catch (UnsupportedOperationException expected) { System.out.println("view"); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-add-all-errors").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listAddAllEvaluatesArgumentsBeforeNullFailure() throws Exception {
+        final Path project = project("list-add-all-null-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Collection;
+            import java.util.List;
+            public final class Main {
+                static List<String> missing() { System.out.println("receiver"); return null; }
+                static Collection<String> source() { System.out.println("source"); return List.of("x"); }
+                public static void main(String[] args) {
+                    missing().addAll(source());
+                    System.out.println("after");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-add-all-null-order").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("receiver\nsource\n");
+        assertThat(result.stderr()).contains("NullPointerException");
+    }
+
+    @Test
+    void listAddAllSurvivesConcurrentCollection() throws Exception {
+        final Path project = project("list-add-all-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.Collections;
+            import java.util.List;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            List<String> values = new ArrayList<>();
+                            values.add(new String(new char[] {'a'}));
+                            values.add(new String(new char[] {'b'}));
+                            if (!values.addAll(Collections.unmodifiableList(values))) errors.incrementAndGet();
+                            if (values.size() != 4 || !values.get(0).equals("a") || !values.get(1).equals("b")
+                                || !values.get(2).equals("a") || !values.get(3).equals("b")) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-add-all-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
     void listIndexedAddAllAcceptsViewsAndSelf() throws Exception {
         final Path project = project("list-indexed-add-all-views");
         writeJava(project, "com.acme.Main", """

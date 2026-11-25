@@ -26208,7 +26208,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersListAddAllToRuntimeCall() {
+    void propagatesListAddAllFailures() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -26222,12 +26222,12 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).contains(
             IrInstruction.assignInt(
                 "int0",
-                IrExpression.intCall("javan_arraylist_add_all", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
+                IrExpression.intCall("javan_arraylist_add_all_java", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
             ),
-            IrInstruction.returnInt(IrExpression.intLocal("int0"))
+            IrInstruction.propagatePending()
         );
     }
 

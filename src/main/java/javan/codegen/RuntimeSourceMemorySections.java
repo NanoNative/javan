@@ -13298,25 +13298,19 @@ final class RuntimeSourceMemorySections {
 
         int javan_arraylist_add_all(void* value, void* collection) {
             javan_object_list* list = javan_list_checked(value);
-            javan_object_list* source = javan_list_checked(collection);
-            javan_list_mutable_checked(list);
-            int copied = source->length;
-            if (copied == 0) {
+            return javan_arraylist_add_all_at(list, list->length, collection);
+        }
+
+        int javan_arraylist_add_all_java(void* value, void* collection) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
                 return 0;
             }
-            void** javan_list_add_all_roots[] = {
-                (void**) &list,
-                (void**) &source
-            };
-            javan_root_frame_push(javan_list_add_all_roots, 2);
-            javan_list_ensure_capacity(list, list->length + copied);
-            for (int index = 0; index < copied; index++) {
-                list->values[list->length + index] = source->values[index];
-            }
-            list->length += copied;
-            javan_root_frame_pop(javan_list_add_all_roots);
-            list->mod_count++;
-            return 1;
+            javan_runtime_lock_enter();
+            javan_object_list* list = javan_list_checked(value);
+            int result = javan_arraylist_add_all_at_java(list, javan_list_logical_length(list), collection);
+            javan_runtime_lock_leave();
+            return result;
         }
 
         int javan_collection_add_all(void* value, void* collection) {

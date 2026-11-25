@@ -929,7 +929,7 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("addAll(Ljava/util/Collection;)Z".equals(signature)) {
-                pushIntCall(instructions, stack, localDeclarations, "javan_arraylist_add_all", List.of(receiver, arguments.getFirst()));
+                pushIntCall(instructions, stack, localDeclarations, "javan_arraylist_add_all_java", List.of(receiver, arguments.getFirst()));
                 return true;
             }
             if ("get(I)Ljava/lang/Object;".equals(signature)) {
