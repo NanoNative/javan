@@ -782,8 +782,11 @@ final class BytecodeToIRThreadSupport {
                 continue;
             }
             final Optional<EntryPoint> resolved = lowerableResolvedVirtualTarget(classes, candidate.name(), RUNNABLE_RUN);
-            if (resolved.isPresent() && !result.contains(resolved.orElseThrow())) {
-                result.add(resolved.orElseThrow());
+            if (resolved.isPresent()) {
+                final EntryPoint entry = resolved.orElseThrow();
+                if (!result.contains(entry)) {
+                    result.add(entry);
+                }
             }
         }
         return List.copyOf(result);

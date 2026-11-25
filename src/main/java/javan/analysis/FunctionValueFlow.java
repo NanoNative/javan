@@ -10,6 +10,7 @@ import javan.classfile.Instruction;
 import javan.classfile.LambdaMetafactoryCall;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
+import javan.compat.JdkCallSupport;
 import javan.util.Strings2;
 
 import java.util.ArrayList;
@@ -27,9 +28,12 @@ public final class FunctionValueFlow {
     private static final int MATERIALIZED = 1;
     private static final int CONCRETE = 2;
     private static final int UNSAFE = 4;
+    private static final int PLATFORM = 8;
+    private static final int BOUNDED = 16;
     private static final Fact NONE_FACT = new Fact(0, List.of(), false);
     private static final Fact MATERIALIZED_FACT = new Fact(MATERIALIZED, List.of(), false);
     private static final Fact UNSAFE_FACT = new Fact(UNSAFE, List.of(), true);
+    private static final Fact PLATFORM_FACT = new Fact(PLATFORM, List.of(), false);
     private static final int ACC_FINAL = 0x0010;
     private static final int ACC_PRIVATE = 0x0002;
     private static final String FUNCTION_DESCRIPTOR = "Ljava/util/function/Function;";
@@ -307,12 +311,12 @@ public final class FunctionValueFlow {
             classes,
             reachableMethods,
             CallbackKind.FUNCTION
-        ) ? new Engine(classes, reachableMethods, declaredExternalLeaves, CallbackKind.FUNCTION, methodFlows).analyze() : FlowResult.empty();
+        ) ? new Engine(classes, reachableMethods, declaredExternalLeaves, List.of(), List.of(), CallbackKind.FUNCTION, methodFlows).analyze() : FlowResult.empty();
         final FlowResult supplier = containsTrackedUse(
             classes,
             reachableMethods,
             CallbackKind.SUPPLIER
-        ) ? new Engine(classes, reachableMethods, declaredExternalLeaves, CallbackKind.SUPPLIER, methodFlows).analyze() : FlowResult.empty();
+        ) ? new Engine(classes, reachableMethods, declaredExternalLeaves, List.of(), List.of(), CallbackKind.SUPPLIER, methodFlows).analyze() : FlowResult.empty();
         return new Result(
             function.kinds(),
             supplier.kinds(),
@@ -320,6 +324,49 @@ public final class FunctionValueFlow {
             supplier.provenance(),
             true
         );
+    }
+
+    record CollectionQuery(List<String> types, boolean bounded, boolean unknown) {
+        CollectionQuery {
+            final Provenance normalized = new Provenance(types, unknown);
+            types = normalized.types();
+            unknown = normalized.unknown();
+        }
+
+        static CollectionQuery unavailable() {
+            return new CollectionQuery(List.of(), false, true);
+        }
+    }
+
+    static Map<String, CollectionQuery> analyzeCollectionQueries(
+        final Map<String, ClassFile> classes,
+        final CallGraph graph,
+        final List<EntryPoint> declaredExternalLeaves,
+        final List<EntryPoint> roots
+    ) {
+        final List<EntryPoint> reachableMethods = graph.reachableMethods();
+        if (!containsTrackedUse(classes, reachableMethods, CallbackKind.COLLECTION_QUERY)) {
+            return Map.of();
+        }
+        final Map<String, CollectionQuery> result = new LinkedHashMap<>(
+            new Engine(classes, reachableMethods, declaredExternalLeaves, roots, graph.callEdges(),
+                CallbackKind.COLLECTION_QUERY, new MethodFlowCache()).analyzeQueries()
+        );
+        for (final EntryPoint entry : reachableMethods) {
+            final ClassFile owner = classes.get(entry.className());
+            final Optional<MethodInfo> method = owner == null ? Optional.empty()
+                : owner.method(entry.methodName(), entry.descriptor());
+            if (method.isEmpty() || method.orElseThrow().code().isEmpty()) {
+                continue;
+            }
+            for (final Instruction instruction : method.orElseThrow().code().orElseThrow().instructions()) {
+                if (instruction.methodRef().isPresent()
+                    && JdkCallSupport.isCollectionContains(instruction.methodRef().orElseThrow())) {
+                    result.putIfAbsent(collectionSiteKey(entry, instruction), CollectionQuery.unavailable());
+                }
+            }
+        }
+        return Map.copyOf(result);
     }
 
     private static boolean containsTrackedUse(
@@ -447,15 +494,19 @@ public final class FunctionValueFlow {
         private final List<EntryPoint> reachableMethods;
         private final EntryPointMembership reachableSet;
         private final EntryPointMembership declaredExternalLeaves;
+        private final EntryPointMembership externalRoots;
         private final CallbackKind callbackKind;
-        private final Map<EntryPoint, Fact[]> parameterFacts = new LinkedHashMap<>();
-        private final Map<EntryPoint, Fact> returnFacts = new LinkedHashMap<>();
+        private final Map<String, Fact[]> parameterFacts = new LinkedHashMap<>();
+        private final Map<String, Fact> returnFacts = new LinkedHashMap<>();
         private final Set<FieldRef> finalCallbackFields = new LinkedHashSet<>();
         private final Map<FieldRef, Fact> fieldFacts = new LinkedHashMap<>();
         private final Map<Site, Fact> callbackFacts = new LinkedHashMap<>();
+        private final Map<String, Fact> collectionFacts = new LinkedHashMap<>();
+        private final Map<String, List<EntryPoint>> unknownDynamicTargets = new HashMap<>();
+        private final Map<String, List<EntryPoint>> dynamicCallEdges = new HashMap<>();
         private final Map<String, Boolean> callbackTypeCache = new HashMap<>();
         private final MethodFlowCache methodFlows;
-        private final Map<EntryPoint, List<EntryPoint>> callers = new HashMap<>();
+        private final Map<String, List<EntryPoint>> callers = new HashMap<>();
         private final Map<FieldRef, List<EntryPoint>> fieldReaders = new HashMap<>();
         private final List<EntryPoint> pendingMethods = new ArrayList<>();
         private final EntryPointMembership queuedMethods = new EntryPointMembership(List.of());
@@ -464,6 +515,8 @@ public final class FunctionValueFlow {
             final Map<String, ClassFile> classes,
             final List<EntryPoint> reachableMethods,
             final List<EntryPoint> declaredExternalLeaves,
+            final List<EntryPoint> externalRoots,
+            final List<CallEdge> callEdges,
             final CallbackKind callbackKind,
             final MethodFlowCache methodFlows
         ) {
@@ -471,12 +524,40 @@ public final class FunctionValueFlow {
             this.reachableMethods = List.copyOf(reachableMethods);
             this.reachableSet = new EntryPointMembership(reachableMethods);
             this.declaredExternalLeaves = new EntryPointMembership(declaredExternalLeaves);
+            this.externalRoots = new EntryPointMembership(externalRoots);
             this.callbackKind = callbackKind;
             this.methodFlows = methodFlows;
+            for (final CallEdge edge : callEdges) {
+                final EntryPoint callee = edge.callee();
+                addDependency(dynamicCallEdges,
+                    edge.caller().display() + "#" + callee.methodName() + callee.descriptor(), callee);
+            }
             initializeFacts();
         }
 
         private FlowResult analyze() {
+            runAnalysis();
+            final Map<Site, ValueKind> kinds = new LinkedHashMap<>();
+            final Map<Site, Provenance> provenance = new LinkedHashMap<>();
+            for (final Map.Entry<Site, Fact> entry : callbackFacts.entrySet()) {
+                kinds.put(entry.getKey(), kind(entry.getValue()));
+                provenance.put(entry.getKey(), entry.getValue().provenance());
+            }
+            return new FlowResult(Map.copyOf(kinds), Map.copyOf(provenance));
+        }
+
+        private Map<String, CollectionQuery> analyzeQueries() {
+            runAnalysis();
+            final Map<String, CollectionQuery> result = new LinkedHashMap<>();
+            for (final Map.Entry<String, Fact> entry : collectionFacts.entrySet()) {
+                final Fact fact = entry.getValue();
+                result.put(entry.getKey(), new CollectionQuery(fact.types(),
+                    (fact.kinds() & BOUNDED) != 0, fact.unknown() || fact.kinds() == 0));
+            }
+            return Map.copyOf(result);
+        }
+
+        private void runAnalysis() {
             for (final EntryPoint entryPoint : reachableMethods) {
                 enqueueMethod(entryPoint);
             }
@@ -487,13 +568,6 @@ public final class FunctionValueFlow {
                 queuedMethods.remove(entryPoint);
                 simulate(entryPoint);
             }
-            final Map<Site, ValueKind> kinds = new LinkedHashMap<>();
-            final Map<Site, Provenance> provenance = new LinkedHashMap<>();
-            for (final Map.Entry<Site, Fact> entry : callbackFacts.entrySet()) {
-                kinds.put(entry.getKey(), kind(entry.getValue()));
-                provenance.put(entry.getKey(), entry.getValue().provenance());
-            }
-            return new FlowResult(Map.copyOf(kinds), Map.copyOf(provenance));
         }
 
         private void initializeFacts() {
@@ -504,15 +578,20 @@ public final class FunctionValueFlow {
                 }
                 final Fact[] locals = facts(method.code().orElseThrow().maxLocals());
                 if (!method.isStatic() && locals.length > 0) {
-                    locals[0] = isClosedWorldConcreteCallbackClass(entryPoint.className())
-                        ? Fact.concrete(entryPoint.className())
-                        : Fact.unsafe();
+                    locals[0] = Fact.unsafe();
+                    if (callbackKind != CallbackKind.COLLECTION_QUERY
+                        && isClosedWorldConcreteCallbackClass(entryPoint.className())) {
+                        locals[0] = Fact.concrete(entryPoint.className());
+                    }
                 }
-                if (method.isPublicStaticMain()) {
+                if (method.isPublicStaticMain() || externalRoots.contains(entryPoint)) {
                     markReferenceParameters(method, locals, Fact.unsafe());
                 }
-                parameterFacts.put(entryPoint, locals);
-                returnFacts.put(entryPoint, Fact.none());
+                parameterFacts.put(entryPoint.display(), locals);
+                returnFacts.put(entryPoint.display(), Fact.none());
+            }
+            if (callbackKind == CallbackKind.COLLECTION_QUERY) {
+                return;
             }
             for (final ClassFile classFile : classes.values()) {
                 for (final FieldInfo field : classFile.fields()) {
@@ -607,11 +686,41 @@ public final class FunctionValueFlow {
             final int maxLocals,
             final FlowStatus status
         ) {
-            Fact[] source = parameterFacts.get(entryPoint);
+            Fact[] source = parameterFacts.get(entryPoint.display());
             if (source == null) {
                 source = facts(maxLocals);
             }
-            return new State(java.util.Arrays.copyOf(source, maxLocals), List.of(), status);
+            final Fact[] initial = java.util.Arrays.copyOf(source, maxLocals);
+            final Optional<MethodInfo> entryMethod = method(entryPoint);
+            if (callbackKind == CallbackKind.COLLECTION_QUERY && entryMethod.isPresent()) {
+                final MethodInfo entry = entryMethod.orElseThrow();
+                final String descriptor = entry.descriptor();
+                int index = 1;
+                int local = entry.isStatic() ? 0 : 1;
+                while (index < descriptor.length() && descriptor.charAt(index) != ')') {
+                    final Optional<ParsedType> parsed = parseType(descriptor, index, false);
+                    if (parsed.isEmpty()) {
+                        status.reject();
+                        break;
+                    }
+                    final ParsedType parameter = parsed.orElseThrow();
+                    final String parameterDescriptor = descriptor.substring(index, parameter.nextIndex());
+                    if (parameter.type().reference() && local < initial.length) {
+                        if (platformValue(parameterDescriptor)) {
+                            initial[local] = Fact.platform();
+                        } else if (parameterDescriptor.startsWith("L")) {
+                            final String type = parameterDescriptor.substring(1, parameterDescriptor.length() - 1);
+                            final ClassFile exact = classes.get(type);
+                            if (exact != null && exact.isFinal() && !type.startsWith("java/")) {
+                                initial[local] = Fact.concrete(type);
+                            }
+                        }
+                    }
+                    local += parameter.type().width();
+                    index = parameter.nextIndex();
+                }
+            }
+            return new State(initial, List.of(), status);
         }
 
         private List<Integer> transfer(
@@ -628,7 +737,9 @@ public final class FunctionValueFlow {
                 return next(index, bytecode);
             }
             if (opcode >= 1 && opcode <= 20) {
-                state.stack().add(new Slot(Fact.unsafe(), opcode == 9 || opcode == 10 || opcode == 14
+                final boolean platformValue = callbackKind == CallbackKind.COLLECTION_QUERY
+                    && (opcode == 1 || instruction.stringValue().isPresent());
+                state.stack().add(new Slot(platformValue ? Fact.platform() : Fact.unsafe(), opcode == 9 || opcode == 10 || opcode == 14
                     || opcode == 15 || opcode == 20 ? 2 : 1));
                 return next(index, bytecode);
             }
@@ -732,7 +843,9 @@ public final class FunctionValueFlow {
                 }
                 final String className = instruction.className().orElseThrow();
                 state.stack().add(new Slot(
-                    isClosedWorldConcreteCallbackClass(className)
+                    callbackKind == CallbackKind.COLLECTION_QUERY && className.startsWith("java/")
+                        ? Fact.platform()
+                        : isClosedWorldConcreteCallbackClass(className)
                         ? Fact.concrete(className)
                         : Fact.unsafe(),
                     1
@@ -741,7 +854,8 @@ public final class FunctionValueFlow {
             }
             if (opcode == 188 || opcode == 189) {
                 pop(state);
-                state.stack().add(new Slot(Fact.unsafe(), 1));
+                state.stack().add(new Slot(callbackKind == CallbackKind.COLLECTION_QUERY
+                    ? Fact.platform() : Fact.unsafe(), 1));
                 return next(index, bytecode);
             }
             if (opcode == 190) {
@@ -777,7 +891,8 @@ public final class FunctionValueFlow {
                 for (int count = 0; count < dimensions; count++) {
                     pop(state);
                 }
-                state.stack().add(new Slot(Fact.unsafe(), 1));
+                state.stack().add(new Slot(callbackKind == CallbackKind.COLLECTION_QUERY
+                    ? Fact.platform() : Fact.unsafe(), 1));
                 return next(index, bytecode);
             }
             if (opcode == 198 || opcode == 199) {
@@ -824,6 +939,10 @@ public final class FunctionValueFlow {
         }
 
         private Slot fieldValue(final EntryPoint reader, final FieldRef field, final ValueType type) {
+            if (callbackKind == CallbackKind.COLLECTION_QUERY) {
+                return new Slot(type.reference() && platformValue(field.descriptor())
+                    ? Fact.platform() : Fact.unsafe(), type.width());
+            }
             if (!type.reference() || !finalCallbackFields.contains(field)) {
                 return new Slot(Fact.unsafe(), type.width());
             }
@@ -832,7 +951,7 @@ public final class FunctionValueFlow {
         }
 
         private void addFieldFact(final FieldRef field, final Fact fact) {
-            if (!finalCallbackFields.contains(field)) {
+            if (callbackKind == CallbackKind.COLLECTION_QUERY || !finalCallbackFields.contains(field)) {
                 return;
             }
             final Fact current = fieldFacts.getOrDefault(field, Fact.none());
@@ -861,13 +980,18 @@ public final class FunctionValueFlow {
             final Descriptor descriptor = resolvedDescriptor.orElseThrow();
             final List<Slot> arguments = popArguments(state, descriptor.parameters().size());
             final Slot receiver = instruction.opcode() == 184 ? new Slot(Fact.unsafe(), 1) : pop(state);
-            if (instruction.opcode() == 185 && directUse(callbackKind).equals(methodRef)) {
+            if (callbackKind != CallbackKind.COLLECTION_QUERY
+                && instruction.opcode() == 185 && directUse(callbackKind).equals(methodRef)) {
                 addCallbackFact(site(caller, instruction), receiver.fact());
                 pushReturn(state, descriptor.result(), Fact.unsafe());
                 return;
             }
             if (isIndirectUse(callbackKind, methodRef) && !arguments.isEmpty()) {
-                addCallbackFact(site(caller, instruction), arguments.getLast().fact());
+                if (callbackKind == CallbackKind.COLLECTION_QUERY) {
+                    addCollectionFact(collectionSiteKey(caller, instruction), arguments.getLast().fact());
+                } else {
+                    addCallbackFact(site(caller, instruction), arguments.getLast().fact());
+                }
             }
             if (isRequireNonNull(methodRef) && !arguments.isEmpty()) {
                 pushReturn(state, descriptor.result(), arguments.getFirst().fact());
@@ -875,16 +999,26 @@ public final class FunctionValueFlow {
             }
             final Optional<EntryPoint> target = exactTarget(instruction, methodRef);
             if (target.isPresent()) {
-                addDependency(callers, target.orElseThrow(), caller);
+                addDependency(callers, target.orElseThrow().display(), caller);
                 contributeCall(target.orElseThrow(), receiver, arguments, state);
-                pushReturn(
-                    state,
-                    descriptor.result(),
-                    returnFacts.getOrDefault(target.orElseThrow(), Fact.none())
-                );
+                final Fact returned = resultFact(methodRef,
+                    returnFacts.getOrDefault(target.orElseThrow().display(), Fact.none()));
+                pushReturn(state, descriptor.result(), returned);
                 return;
             }
-            pushReturn(state, descriptor.result(), Fact.unsafe());
+            if (callbackKind == CallbackKind.COLLECTION_QUERY) {
+                final String key = instruction.opcode() + ":" + methodRef.display();
+                List<EntryPoint> possibleTargets = unknownDynamicTargets.get(key);
+                if (possibleTargets == null) {
+                    possibleTargets = unsafeCallTargets(instruction, methodRef);
+                    unknownDynamicTargets.put(key, possibleTargets);
+                }
+                for (final EntryPoint possible : possibleTargets) {
+                    markParametersUnsafe(possible);
+                }
+                markDynamicCallEdgesUnsafe(caller, methodRef);
+            }
+            pushReturn(state, descriptor.result(), resultFact(methodRef, Fact.unsafe()));
         }
 
         private void dynamic(
@@ -907,12 +1041,15 @@ public final class FunctionValueFlow {
             final List<Slot> captures = popArguments(state, descriptor.parameters().size());
             final Optional<LambdaMetafactoryCall> lambda = LambdaMetafactoryCall.resolve(dynamicRef);
             if (lambda.isEmpty()) {
-                pushReturn(state, descriptor.result(), Fact.unsafe());
+                pushReturn(state, descriptor.result(), callbackKind == CallbackKind.COLLECTION_QUERY
+                    && platformValue(dynamicRef.descriptor().substring(dynamicRef.descriptor().indexOf(')') + 1))
+                    ? Fact.platform() : Fact.unsafe());
                 return;
             }
             final LambdaMetafactoryCall resolved = lambda.orElseThrow();
             contributeLambdaInvocation(resolved, captures, state);
-            final boolean materialized = isMaterializedCallback(resolved, method, instruction);
+            final boolean materialized = callbackKind != CallbackKind.COLLECTION_QUERY
+                && isMaterializedCallback(resolved, method, instruction);
             pushReturn(
                 state,
                 descriptor.result(),
@@ -1088,7 +1225,7 @@ public final class FunctionValueFlow {
         }
 
         private void addParameterFacts(final EntryPoint target, final Fact[] contribution) {
-            final Fact[] current = parameterFacts.get(target);
+            final Fact[] current = parameterFacts.get(target.display());
             if (current == null) {
                 return;
             }
@@ -1106,11 +1243,11 @@ public final class FunctionValueFlow {
         }
 
         private void addReturnFact(final EntryPoint entryPoint, final Fact fact) {
-            final Fact current = returnFacts.getOrDefault(entryPoint, Fact.none());
+            final Fact current = returnFacts.getOrDefault(entryPoint.display(), Fact.none());
             final Fact merged = current.merge(fact);
             if (merged != current) {
-                returnFacts.put(entryPoint, merged);
-                enqueueMethods(callers.get(entryPoint));
+                returnFacts.put(entryPoint.display(), merged);
+                enqueueMethods(callers.get(entryPoint.display()));
             }
         }
 
@@ -1119,6 +1256,14 @@ public final class FunctionValueFlow {
             final Fact merged = current.merge(fact);
             if (merged != current) {
                 callbackFacts.put(site, merged);
+            }
+        }
+
+        private void addCollectionFact(final String site, final Fact fact) {
+            final Fact current = collectionFacts.getOrDefault(site, Fact.none());
+            final Fact merged = current.merge(fact);
+            if (merged != current) {
+                collectionFacts.put(site, merged);
             }
         }
 
@@ -1147,9 +1292,14 @@ public final class FunctionValueFlow {
                 methods = new ArrayList<>();
                 dependencies.put(source, methods);
             }
-            if (!methods.contains(dependent)) {
-                methods.add(dependent);
+            for (final EntryPoint method : methods) {
+                if (method.className().equals(dependent.className())
+                    && method.methodName().equals(dependent.methodName())
+                    && method.descriptor().equals(dependent.descriptor())) {
+                    return;
+                }
             }
+            methods.add(dependent);
         }
 
         private void markUnsafe(final EntryPoint entryPoint, final MethodInfo method) {
@@ -1166,14 +1316,19 @@ public final class FunctionValueFlow {
                 }
                 if (instruction.methodRef().isPresent()
                     && isTrackedUse(callbackKind, instruction.methodRef().orElseThrow())) {
-                    addCallbackFact(site(entryPoint, instruction), Fact.unsafe());
+                    if (callbackKind == CallbackKind.COLLECTION_QUERY) {
+                        addCollectionFact(collectionSiteKey(entryPoint, instruction), Fact.unsafe());
+                    } else {
+                        addCallbackFact(site(entryPoint, instruction), Fact.unsafe());
+                    }
                 }
                 if (instruction.methodRef().isPresent()) {
-                    for (final EntryPoint target : unsafeCallTargets(
-                        instruction,
-                        instruction.methodRef().orElseThrow()
-                    )) {
+                    final MethodRef called = instruction.methodRef().orElseThrow();
+                    for (final EntryPoint target : unsafeCallTargets(instruction, called)) {
                         markParametersUnsafe(target);
+                    }
+                    if (callbackKind == CallbackKind.COLLECTION_QUERY) {
+                        markDynamicCallEdgesUnsafe(entryPoint, called);
                     }
                 }
                 if (instruction.dynamicRef().isPresent()) {
@@ -1217,8 +1372,18 @@ public final class FunctionValueFlow {
             return List.copyOf(result);
         }
 
+        private void markDynamicCallEdgesUnsafe(final EntryPoint caller, final MethodRef methodRef) {
+            final List<EntryPoint> edges = dynamicCallEdges.get(
+                caller.display() + "#" + methodRef.name() + methodRef.descriptor());
+            if (edges != null) {
+                for (final EntryPoint target : edges) {
+                    markParametersUnsafe(target);
+                }
+            }
+        }
+
         private void markParametersUnsafe(final EntryPoint target) {
-            final Fact[] current = parameterFacts.get(target);
+            final Fact[] current = parameterFacts.get(target.display());
             final Optional<MethodInfo> resolvedMethod = method(target);
             if (current == null || resolvedMethod.isEmpty()) {
                 return;
@@ -1284,7 +1449,17 @@ public final class FunctionValueFlow {
         }
 
         private Fact narrow(final Fact fact, final String target) {
-            if (fact.unknown() || fact.types().isEmpty()) {
+            if (callbackKind == CallbackKind.COLLECTION_QUERY) {
+                final String descriptor = target.startsWith("[") ? target : "L" + target + ";";
+                if (platformValue(descriptor)) {
+                    return Fact.platform();
+                }
+                final ClassFile exact = classes.get(target);
+                if (exact != null && exact.isFinal() && !target.startsWith("java/")) {
+                    return Fact.concrete(target);
+                }
+            }
+            if (fact.unknown() || fact.types().isEmpty() || (fact.kinds() & BOUNDED) != 0) {
                 return fact;
             }
             final List<String> types = new ArrayList<>();
@@ -1305,7 +1480,35 @@ public final class FunctionValueFlow {
                 : classFile.method(entryPoint.methodName(), entryPoint.descriptor());
         }
 
+        private boolean platformValue(final String descriptor) {
+            if (knownPlatformValue(descriptor)) {
+                return true;
+            }
+            if (!descriptor.startsWith("L") || !descriptor.endsWith(";")) {
+                return false;
+            }
+            final ClassFile type = classes.get(descriptor.substring(1, descriptor.length() - 1));
+            return type != null && type.isEnum();
+        }
+
+        private Fact resultFact(final MethodRef methodRef, final Fact fallback) {
+            if (callbackKind != CallbackKind.COLLECTION_QUERY) {
+                return fallback;
+            }
+            final String result = methodRef.descriptor().substring(methodRef.descriptor().indexOf(')') + 1);
+            if (platformValue(result)) {
+                return Fact.platform();
+            }
+            if ("Ljava/nio/file/Path;".equals(result)) {
+                return Fact.bounded("java/nio/file/Path");
+            }
+            return fallback;
+        }
+
         private boolean isCallbackValueDescriptor(final String descriptor) {
+            if (callbackKind == CallbackKind.COLLECTION_QUERY) {
+                return descriptor.startsWith("L") || descriptor.startsWith("[");
+            }
             if (callbackDescriptor(callbackKind).equals(descriptor)) {
                 return true;
             }
@@ -1319,7 +1522,7 @@ public final class FunctionValueFlow {
             return classFile != null
                 && !classFile.isInterface()
                 && !className.startsWith("java/")
-                && isAssignableToCallback(className);
+                && (callbackKind == CallbackKind.COLLECTION_QUERY || isAssignableToCallback(className));
         }
 
         private boolean isAssignableToCallback(final String candidate) {
@@ -1547,6 +1750,18 @@ public final class FunctionValueFlow {
         };
     }
 
+    private static boolean knownPlatformValue(final String descriptor) {
+        if (descriptor.startsWith("[")) {
+            return true;
+        }
+        return switch (descriptor) {
+            case "Ljava/lang/String;", "Ljava/lang/Class;", "Ljava/lang/Boolean;", "Ljava/lang/Byte;",
+                "Ljava/lang/Short;", "Ljava/lang/Character;", "Ljava/lang/Integer;", "Ljava/lang/Long;",
+                "Ljava/lang/Float;", "Ljava/lang/Double;" -> true;
+            default -> false;
+        };
+    }
+
     private static boolean isRequireNonNull(final MethodRef methodRef) {
         if (!"java/util/Objects".equals(methodRef.owner())
             || !"requireNonNull".equals(methodRef.name())) {
@@ -1560,7 +1775,8 @@ public final class FunctionValueFlow {
         final CallbackKind callbackKind,
         final MethodRef methodRef
     ) {
-        return directUse(callbackKind).equals(methodRef) || isIndirectUse(callbackKind, methodRef);
+        return callbackKind == CallbackKind.COLLECTION_QUERY ? JdkCallSupport.isCollectionContains(methodRef)
+            : directUse(callbackKind).equals(methodRef) || isIndirectUse(callbackKind, methodRef);
     }
 
     private static MethodRef directUse(final CallbackKind callbackKind) {
@@ -1579,6 +1795,9 @@ public final class FunctionValueFlow {
         final CallbackKind callbackKind,
         final MethodRef methodRef
     ) {
+        if (callbackKind == CallbackKind.COLLECTION_QUERY) {
+            return JdkCallSupport.isCollectionContains(methodRef);
+        }
         return callbackKind == CallbackKind.FUNCTION
             ? isIndirectFunctionUse(methodRef)
             : isIndirectSupplierUse(methodRef);
@@ -1612,6 +1831,10 @@ public final class FunctionValueFlow {
 
     private static boolean isInlineSupplierConsumer(final MethodRef methodRef) {
         return SUPPLIER_GET.equals(methodRef) || isIndirectSupplierUse(methodRef);
+    }
+
+    static String collectionSiteKey(final EntryPoint entryPoint, final Instruction instruction) {
+        return entryPoint.display() + "#" + instruction.offset();
     }
 
     private static Site site(final EntryPoint entryPoint, final Instruction instruction) {
@@ -1794,8 +2017,16 @@ public final class FunctionValueFlow {
             return MATERIALIZED_FACT;
         }
 
+        private static Fact platform() {
+            return PLATFORM_FACT;
+        }
+
         private static Fact concrete(final String type) {
             return new Fact(CONCRETE, List.of(type), false);
+        }
+
+        private static Fact bounded(final String type) {
+            return new Fact(CONCRETE | BOUNDED, List.of(type), false);
         }
 
         private static Fact unsafe() {
@@ -1853,7 +2084,8 @@ public final class FunctionValueFlow {
 
     private enum CallbackKind {
         FUNCTION,
-        SUPPLIER
+        SUPPLIER,
+        COLLECTION_QUERY
     }
 
     private static final class FlowStatus {

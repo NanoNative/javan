@@ -71,6 +71,7 @@ public final class CCodegen {
         new MethodRef("java/lang/Object", "equals", "(Ljava/lang/Object;)Z")
     );
     private static final String RECORD_REFERENCE_EQUALS_DISPATCH = "javan_dispatch_record_reference_equals";
+    private static final String COLLECTION_EQUALS_DISPATCH = "javan_dispatch_collection_equals";
     private static final String RECORD_REFERENCE_HASH_CODE_DISPATCH = "javan_dispatch_record_reference_hash_code";
     private static final String FALLIBLE_APPLY_METHOD_NAME = "applyWithException";
 
@@ -1954,6 +1955,28 @@ public final class CCodegen {
         c.append("    if (self == 0) {").append(System.lineSeparator());
         c.append("        javan_panic(\"null dispatch\");").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
+        if (COLLECTION_EQUALS_DISPATCH.equals(dispatch.symbol())) {
+            c.append("    switch (javan_object_registered_type_id(self)) {").append(System.lineSeparator());
+            for (final IrDispatchTarget target : dispatch.targets()) {
+                c.append("        case ").append(typeIds.get(target.owner()).intValue())
+                    .append(": return ").append(target.functionSymbol())
+                    .append("(").append(dispatchArguments(dispatch)).append(");").append(System.lineSeparator());
+            }
+            c.append("        default: return -1;").append(System.lineSeparator());
+            c.append("    }").append(System.lineSeparator());
+            c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+            c.append("static int (*javan_select_collection_equals(void* self))(void*, void*) {")
+                .append(System.lineSeparator());
+            c.append("    switch (javan_object_registered_type_id(self)) {").append(System.lineSeparator());
+            for (final IrDispatchTarget target : dispatch.targets()) {
+                c.append("        case ").append(typeIds.get(target.owner()).intValue())
+                    .append(": return ").append(target.functionSymbol()).append(";").append(System.lineSeparator());
+            }
+            c.append("        default: return 0;").append(System.lineSeparator());
+            c.append("    }").append(System.lineSeparator());
+            c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+            return;
+        }
         if (OBJECT_EQUALS_DISPATCH.equals(dispatch.symbol())) {
             final List<IrClass> unresolved = new ArrayList<>();
             for (final IrClass classInfo : program.classes()) {
@@ -2328,7 +2351,7 @@ public final class CCodegen {
             c.append("    javan_register_enum_ordinal_resolver(")
                 .append(hasEnumConstants(program) ? "javan_generated_enum_ordinal" : "(int (*)(int, void*)) 0")
                 .append(");").append(System.lineSeparator());
-            emitRecordReferenceObjectMethodResolverRegistration(program, c);
+            emitObjectMethodResolverRegistration(program, c);
             if (program.classInitializationDependencies().containsKey(function.owner())) {
                 c.append("    ").append(classInitializationSymbol(function.owner())).append("();")
                     .append(System.lineSeparator());
@@ -2526,10 +2549,14 @@ public final class CCodegen {
             .append(System.lineSeparator());
     }
 
-    private static void emitRecordReferenceObjectMethodResolverRegistration(
+    private static void emitObjectMethodResolverRegistration(
         final IrProgram program,
         final StringBuilder c
     ) {
+        if (hasDispatch(program, COLLECTION_EQUALS_DISPATCH)) {
+            c.append("    javan_register_collection_equals_resolver(")
+                .append("javan_select_collection_equals").append(");").append(System.lineSeparator());
+        }
         if (!hasDispatch(program, RECORD_REFERENCE_EQUALS_DISPATCH)
             && !hasDispatch(program, RECORD_REFERENCE_HASH_CODE_DISPATCH)) {
             return;
@@ -2576,7 +2603,7 @@ public final class CCodegen {
         c.append("    javan_register_enum_ordinal_resolver(")
             .append(hasEnumConstants(program) ? "javan_generated_enum_ordinal" : "(int (*)(int, void*)) 0")
             .append(");").append(System.lineSeparator());
-        emitRecordReferenceObjectMethodResolverRegistration(program, c);
+        emitObjectMethodResolverRegistration(program, c);
         c.append("    javan_gc_safe_point();").append(System.lineSeparator());
         c.append("    javan_library_initialized = 1;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());

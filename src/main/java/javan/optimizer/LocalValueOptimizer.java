@@ -230,10 +230,12 @@ public final class LocalValueOptimizer {
         do {
             changed = false;
             for (final IrInstruction instruction : function.instructions()) {
-                if ((instruction.op() == IrInstruction.Op.ASSIGN_INT
-                    || instruction.op() == IrInstruction.Op.ASSIGN_OBJECT)
-                    && tracked.contains(instruction.value().orElseThrow())) {
-                    changed |= collectSlots(instruction.expression().orElseThrow(), tracked);
+                if (instruction.op() == IrInstruction.Op.ASSIGN_INT
+                    || instruction.op() == IrInstruction.Op.ASSIGN_OBJECT) {
+                    final String value = instruction.value().orElseThrow();
+                    if (tracked.contains(value)) {
+                        changed |= collectSlots(instruction.expression().orElseThrow(), tracked);
+                    }
                 } else if (isFieldWrite(instruction)) {
                     final String field = fieldAssignmentKey(instruction);
                     if (field != null && tracked.contains(field)) {

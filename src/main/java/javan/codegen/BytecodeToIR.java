@@ -291,6 +291,26 @@ public final class BytecodeToIR {
         if (usesMethodInvocation(classes, reachableMethods)) {
             addReflectiveInvocationDispatches(classes, reflectedClasses, callGraph.instantiatedTypes(), dispatches);
         }
+        if (usesCollectionContains(classes, reachableMethods)) {
+            final MethodRef equals = new MethodRef("java/lang/Object", "equals", "(Ljava/lang/Object;)Z");
+            final Set<String> reachable = new LinkedHashSet<>();
+            for (final EntryPoint method : reachableMethods) {
+                reachable.add(method.display());
+            }
+            final List<EntryPoint> targets = new ArrayList<>();
+            for (final EntryPoint receiver : virtualTargets(classes, equals, callGraph.instantiatedTypes())) {
+                final Optional<EntryPoint> implementation = lowerableResolvedVirtualTarget(classes, receiver.className(), equals);
+                if (implementation.isPresent() && reachable.contains(implementation.orElseThrow().display())) {
+                    targets.add(receiver);
+                }
+            }
+            if (!targets.isEmpty()) {
+                final String symbol = "javan_dispatch_collection_equals";
+                dispatches.putIfAbsent(symbol, BytecodeToIRDynamicSupport.dispatch(
+                    classes, symbol, MethodDescriptor.parse(equals.descriptor()), targets
+                ));
+            }
+        }
         return new IrProgram(
             loweredClasses,
             List.copyOf(functions),
@@ -342,6 +362,27 @@ public final class BytecodeToIR {
                 );
             }
         }
+    }
+
+    private static boolean usesCollectionContains(
+        final Map<String, ClassFile> classes,
+        final List<EntryPoint> reachableMethods
+    ) {
+        for (final EntryPoint entry : reachableMethods) {
+            final ClassFile owner = classes.get(entry.className());
+            final Optional<MethodInfo> method = owner == null
+                ? Optional.empty() : owner.method(entry.methodName(), entry.descriptor());
+            if (method.isEmpty() || method.orElseThrow().code().isEmpty()) {
+                continue;
+            }
+            for (final Instruction instruction : method.orElseThrow().code().orElseThrow().instructions()) {
+                if (instruction.methodRef().isPresent()
+                    && JdkCallSupport.isCollectionContains(instruction.methodRef().orElseThrow())) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static boolean usesMethodInvocation(
@@ -440,7 +481,10 @@ public final class BytecodeToIR {
                                     && "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;".equals(calledMethod.descriptor())))
                             && "toString".equals(callee.methodName())
                             && "()Ljava/lang/String;".equals(callee.descriptor());
-                        if (!directCall && !charSequenceConversion) {
+                        final boolean collectionEquality = JdkCallSupport.isCollectionContains(calledMethod)
+                            && "equals".equals(callee.methodName())
+                            && "(Ljava/lang/Object;)Z".equals(callee.descriptor());
+                        if (!directCall && !charSequenceConversion && !collectionEquality) {
                             continue;
                         }
                         for (final String throwableType : typesByMethod.getOrDefault(callee, Set.of())) {
@@ -1466,6 +1510,11 @@ public final class BytecodeToIR {
                 || JdkCallSupport.isListEndpointRemove(reference)
                 || JdkCallSupport.isListEndpointAdd(reference)) {
                 possibleTypes.addAll(JdkCallSupport.transportedPlatformThrowableTypes(reference));
+            }
+            if (JdkCallSupport.isCollectionContains(reference)) {
+                possibleTypes.add("java/lang/NullPointerException");
+                addTransportedThrowableTypes("javan_dispatch_collection_equals", dispatches,
+                    transportedThrowableTypes, possibleTypes);
             }
             if (("java/util/Iterator".equals(reference.owner()) || "java/util/ListIterator".equals(reference.owner()))
                 && "next".equals(reference.name()) && "()Ljava/lang/Object;".equals(reference.descriptor())) {

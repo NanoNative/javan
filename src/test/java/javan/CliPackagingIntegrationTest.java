@@ -293,6 +293,97 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanTracksInheritedInterfaceArguments() throws Exception {
+        final Path project = tempDir.resolve("selfhost-inherited-interface-query");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                interface Finder { boolean find(List<Object> values, Object query); }
+                static class Base {
+                    public final boolean find(List<Object> values, Object query) { return values.contains(query); }
+                }
+                static final class Child extends Base implements Finder { }
+                static final class First {
+                    public boolean equals(Object other) { return other instanceof First; }
+                    public int hashCode() { return 1; }
+                }
+                static final class Second {
+                    public boolean equals(Object other) { return other instanceof Second; }
+                    public int hashCode() { return 2; }
+                }
+                public static void main(String[] args) {
+                    List<Object> values = new ArrayList<>(); values.add(new First()); values.add(new Second());
+                    System.out.println(new Base().find(values, new First()));
+                    Finder finder = new Child();
+                    System.out.println(finder.find(values, new Second()));
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir, List.of(CliTestHarness.currentJavacCommand(), "--release", "25",
+            "-d", classes.toString(), project.resolve("src/main/java/com/acme/Main.java").toString()),
+            Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult build = process(tempDir, List.of(primitiveLiteralBootstrap.toString(), "build",
+            classes.toString(), "--main", "com.acme.Main", "--output", "selfhost-inherited-interface-query"),
+            Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-inherited-interface-query").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("true\ntrue\n");
+    }
+
+    @Test
+    void nativeBuiltJavanNarrowsCollectionQueryAfterStringCall() throws Exception {
+        final Path project = tempDir.resolve("selfhost-collection-query");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            import java.nio.file.Path;
+            public final class Main {
+                record Unsupported(Optional<String> value) { }
+                static final class Key {
+                    public boolean equals(Object other) { return other instanceof Key; }
+                    public int hashCode() { return 1; }
+                }
+                static boolean find(List<Object> values, String input) {
+                    return values.contains(input.substring(1));
+                }
+                static boolean findObject(List<Object> values, Object input) {
+                    return values.contains(input);
+                }
+                public static void main(String[] args) {
+                    new Unsupported(Optional.empty());
+                    List<Object> values = new ArrayList<>();
+                    values.add("key");
+                    System.out.println(find(values, "_key"));
+                    values.add(new Key());
+                    System.out.println(findObject(values, new Key()));
+                    Path path = Path.of("item");
+                    values.add(path);
+                    System.out.println(findObject(values, path.normalize()));
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir, List.of(CliTestHarness.currentJavacCommand(), "--release", "25",
+            "-d", classes.toString(), project.resolve("src/main/java/com/acme/Main.java").toString()),
+            Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult build = process(tempDir, List.of(primitiveLiteralBootstrap.toString(), "build",
+            classes.toString(), "--main", "com.acme.Main", "--output", "selfhost-collection-query"),
+            Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(tempDir, List.of(project.resolve(".javan/bin/selfhost-collection-query").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("true\ntrue\ntrue\n");
+    }
+
+    @Test
     void nativeBuiltJavanBuildsBooleanAndObjectProgram() throws Exception {
         final Path probeProject = tempDir.resolve("selfhost-plain-boolean");
         final Path probeClasses = probeProject.resolve("classes");
@@ -3495,6 +3586,77 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             direct:0:JAVAN-RUNTIME-PANIC:-1
             try:0:JAVAN-RUNTIME-PANIC:-1:0
             """);
+    }
+
+    @Test
+    void nativeLibraryListContainsUsesApplicationEquality() throws Exception {
+        final Path project = project("library-list-equality");
+        writeJava(project, "com.acme.Api", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.List;
+            public final class Api {
+                static final class Key {
+                    final int value;
+                    Key(int value) { this.value = value; }
+                    public boolean equals(Object other) {
+                        return other instanceof Key && value == ((Key) other).value;
+                    }
+                    public int hashCode() { return value; }
+                }
+                static final class Throwing {
+                    public boolean equals(Object other) { throw new IllegalArgumentException("equality"); }
+                }
+                public static Object key(int value) { return new Key(value); }
+                public static Object throwing() { return new Throwing(); }
+                public static int contains(Object query) {
+                    List<Object> values = new ArrayList<>();
+                    values.add(new Key(7));
+                    return values.contains(query) ? 1 : 0;
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString(), "--library", "--format", "static",
+            "--export", "com.acme.Api.key(int):object", "--export", "com.acme.Api.throwing():object",
+            "--export", "com.acme.Api.contains(object):int");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path caller = writeC(project, "call_list_equality.c", """
+            #include <string.h>
+            #include ".javan/dist/bindings/c/library-list-equality.h"
+            int main(void) {
+                for (int i = 0; i < 100; i++) {
+                    for (int query = 7; query <= 8; query++) {
+                        int value = -1;
+                        JavanObjectHandle *key = 0;
+                        JavanResult result = javan_try_com_acme_Api_key_int(query, &key);
+                        if (!result.ok || key == 0) return 1;
+                        javan_result_free(&result);
+                        result = javan_try_com_acme_Api_contains_object(key, &value);
+                        if (!result.ok || value != (query == 7)) return 2;
+                        javan_result_free(&result);
+                        javan_object_handle_release(key);
+                    }
+                }
+                JavanObjectHandle *throwing = 0;
+                JavanResult result = javan_try_com_acme_Api_throwing_void(&throwing);
+                if (!result.ok || throwing == 0) return 3;
+                javan_result_free(&result);
+                int value = -1;
+                result = javan_try_com_acme_Api_contains_object(throwing, &value);
+                if (result.ok || result.message == 0 || strstr(result.message, "IllegalArgumentException") == 0) return 4;
+                javan_result_free(&result);
+                javan_object_handle_release(throwing);
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-list-equality");
+        final ProcessResult compile = process(project, List.of("cc", caller.toString(),
+            project.resolve(".javan/dist/liblibrary-list-equality.a").toString(), "-o", binary.toString()));
+        assertThat(compile.exitCode()).as(compile.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(binary.toString()), Duration.ofSeconds(30),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stderr()).isEmpty();
     }
 
     @Test

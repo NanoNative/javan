@@ -108,6 +108,9 @@ Fixed-arity and array-based `List.of` reject null elements, and the array overlo
 array. They create immutable ordered snapshots and retain duplicate elements. Other list operations
 and application-defined element equality remain incomplete. `List.copyOf` rejects null sources and
 elements and creates an immutable ordered snapshot.
+`contains` on supported list representations calls an application-defined query object’s `equals`,
+including inherited implementations. Search values of unknown type conservatively retain possible
+implementations. Set membership still uses the existing incomplete equality semantics.
 Reads using `List.get`, `getFirst` and `getLast` publish returned references safely during concurrent
 garbage collection. Supported `getFirst` and `getLast` calls transport null-receiver and empty-list
 failures within supported handler shapes.

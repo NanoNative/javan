@@ -878,7 +878,8 @@ public final class Javan {
         final Map<String, List<ServiceProvider>> providers = new LinkedHashMap<>();
         final List<Diagnostic> diagnostics = new ArrayList<>();
         for (final Map.Entry<String, List<ServiceProvider>> entry : declarations.entrySet()) {
-            if (!requestedServices.contains(entry.getKey())) {
+            final String serviceName = entry.getKey();
+            if (!requestedServices.contains(serviceName)) {
                 continue;
             }
             final List<ServiceProvider> resolved = new ArrayList<>();

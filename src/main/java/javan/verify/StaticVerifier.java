@@ -3502,6 +3502,12 @@ public final class StaticVerifier {
         if (!visiting.add(target)) {
             return Set.of();
         }
+        if (JdkCallSupport.isCollectionContains(target)) {
+            final Set<String> result = escapingPlatformExceptionTypes(classes,
+                new MethodRef("java/lang/Object", "equals", "(Ljava/lang/Object;)Z"), visiting);
+            visiting.remove(target);
+            return result;
+        }
         if (("java/lang/Object".equals(target.owner()) && "equals".equals(target.name())
                 && "(Ljava/lang/Object;)Z".equals(target.descriptor()))
             || ("java/util/random/RandomGenerator".equals(target.owner())

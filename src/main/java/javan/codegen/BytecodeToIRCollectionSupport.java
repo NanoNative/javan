@@ -1074,7 +1074,7 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("contains(Ljava/lang/Object;)Z".equals(signature)) {
-                stack.add(StackValue.intExpression(IrExpression.intCall("javan_list_contains", List.of(receiver, arguments.getFirst()))));
+                pushIntCall(instructions, stack, localDeclarations, "javan_list_contains_java", List.of(receiver, arguments.getFirst()));
                 return true;
             }
             if ("remove(Ljava/lang/Object;)Z".equals(signature)) {
@@ -1139,7 +1139,7 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("contains(Ljava/lang/Object;)Z".equals(signature)) {
-                stack.add(StackValue.intExpression(IrExpression.intCall("javan_list_contains", List.of(receiver, arguments.getFirst()))));
+                pushIntCall(instructions, stack, localDeclarations, "javan_list_contains_java", List.of(receiver, arguments.getFirst()));
                 return true;
             }
             if ("remove(Ljava/lang/Object;)Z".equals(signature)) {

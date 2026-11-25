@@ -346,7 +346,17 @@ final class LegacySubroutineNormalizer {
                     ranges.add(normalized);
                 }
                 for (final CodeException range : ranges) {
-                    if (!result.contains(range)) {
+                    boolean duplicate = false;
+                    for (final CodeException existing : result) {
+                        if (existing.startPc() == range.startPc()
+                            && existing.endPc() == range.endPc()
+                            && existing.handlerPc() == range.handlerPc()
+                            && sameCatchType(existing.catchType(), range.catchType())) {
+                            duplicate = true;
+                            break;
+                        }
+                    }
+                    if (!duplicate) {
                         result.add(range);
                     }
                 }

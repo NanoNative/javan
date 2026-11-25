@@ -2258,6 +2258,17 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies supported collection membership checks.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method checks for a single element
+     */
+    public static boolean isCollectionContains(final MethodRef methodRef) {
+        return isCollectionRuntimeOwner(methodRef.owner()) && "contains".equals(methodRef.name())
+            && "(Ljava/lang/Object;)Z".equals(methodRef.descriptor()) && isSupported(methodRef);
+    }
+
+    /**
      * Identifies supported bulk collection removal and retention.
      *
      * @param methodRef referenced JDK method

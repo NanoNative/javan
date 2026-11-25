@@ -539,6 +539,8 @@ final class RuntimeHeaderFile {
         int javan_list_size(void* list);
         int javan_list_is_empty(void* list);
         int javan_list_contains(void* list, void* value);
+        int javan_list_contains_java(void* list, void* value);
+        void javan_register_collection_equals_resolver(int (*(*resolver)(void*))(void*, void*));
         int javan_list_index_of(void* list, void* value);
         int javan_list_last_index_of(void* list, void* value);
         int javan_list_remove(void* list, void* value);

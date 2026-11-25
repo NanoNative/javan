@@ -892,6 +892,9 @@ final class RuntimeSourceMemorySections {
         static int javan_registered_type_id(void* value);
         typedef int (*javan_enum_ordinal_resolver_fn)(int, void*);
         static _Atomic(javan_enum_ordinal_resolver_fn) javan_enum_ordinal_resolver = NULL;
+        typedef int (*javan_collection_equals_fn)(void*, void*);
+        typedef javan_collection_equals_fn (*javan_collection_equals_resolver_fn)(void*);
+        static _Atomic(javan_collection_equals_resolver_fn) javan_collection_equals_resolver = NULL;
         static int javan_application_enum_type_id(void* value) {
             if (value == NULL) {
                 return 0;
@@ -13619,6 +13622,52 @@ final class RuntimeSourceMemorySections {
                 }
             }
             return 0;
+        }
+
+        void javan_register_collection_equals_resolver(javan_collection_equals_resolver_fn resolver) {
+            atomic_store_explicit(&javan_collection_equals_resolver, resolver, memory_order_release);
+        }
+
+        int javan_list_contains_java(void* value, void* element) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            javan_collection_equals_resolver_fn resolver = atomic_load_explicit(
+                &javan_collection_equals_resolver, memory_order_acquire
+            );
+            javan_collection_equals_fn equals = resolver == NULL || element == NULL ? NULL : resolver(element);
+            if (equals == NULL) {
+                return javan_list_contains(value, element);
+            }
+            javan_runtime_lock_enter();
+            int is_set = javan_list_is_set(javan_list_checked(value));
+            javan_runtime_lock_leave();
+            if (is_set != 0) {
+                return javan_list_contains(value, element);
+            }
+            void* list_root = value;
+            void* element_root = element;
+            void* current = NULL;
+            void** roots[] = { &list_root, &element_root, &current };
+            javan_root_frame_push(roots, 3);
+            int index = 0;
+            int result = 0;
+            for (;;) {
+                javan_runtime_lock_enter();
+                javan_object_list* list = javan_list_checked(list_root);
+                if (index >= javan_list_logical_length(list)) {
+                    javan_runtime_lock_leave();
+                    break;
+                }
+                current = javan_list_get_unchecked(list, index++);
+                javan_runtime_lock_leave();
+                int equal = equals(element_root, current);
+                if (javan_pending_has()) break;
+                if (equal != 0) { result = 1; break; }
+            }
+            javan_root_frame_pop(roots);
+            return result;
         }
 
         int javan_list_index_of(void* value, void* element) {

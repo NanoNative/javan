@@ -197,7 +197,8 @@ final class BytecodeToIRMetadataSupport {
         final Map<String, ClassFile> classes
     ) {
         for (final Map.Entry<MethodShape, List<PublicMethodCandidate>> entry : inherited.entrySet()) {
-            if (declaredShapes.contains(entry.getKey())) {
+            final MethodShape shape = entry.getKey();
+            if (declaredShapes.contains(shape)) {
                 continue;
             }
             List<PublicMethodCandidate> merged = result.get(entry.getKey());

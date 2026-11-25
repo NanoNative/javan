@@ -2544,6 +2544,386 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void listContainsCallsEqualityForIdenticalReference() throws Exception {
+        final Path project = project("list-contains-identical-reference");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.List;
+            public final class Main {
+                static int calls;
+                static final class Key {
+                    public boolean equals(Object other) { calls++; return false; }
+                    public int hashCode() { return 1; }
+                }
+                public static void main(String[] args) {
+                    List<Key> values = new ArrayList<>();
+                    Key key = new Key();
+                    values.add(key);
+                    System.out.println(values.contains(key));
+                    System.out.println(calls);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-contains-identical-reference").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void collectionContainsUsesCustomEquality() throws Exception {
+        final Path project = project("collection-contains-custom-equality");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.List;
+            public final class Main {
+                static final class Key {
+                    final int value;
+                    Key(int value) { this.value = value; }
+                    public boolean equals(Object other) { return other instanceof Key && value == ((Key) other).value; }
+                    public int hashCode() { return value; }
+                }
+                public static void main(String[] args) {
+                    List<Key> values = new ArrayList<>(); values.add(new Key(7));
+                    System.out.println(values.contains(new Key(7)));
+                    System.out.println(values.contains(new Key(8)));
+                    System.out.println(values.contains(null));
+                    Key same = new Key(7);
+                    java.util.Set<Key> set = new java.util.HashSet<>();
+                    set.add(same);
+                    System.out.println(set.contains(same));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/collection-contains-custom-equality").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void collectionContainsTracksQueryTypesAcrossMethods() throws Exception {
+        final Path project = project("collection-contains-query-types");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                record Unsupported(Optional<String> value) { }
+                static final class First {
+                    public boolean equals(Object other) { return other instanceof First; }
+                    public int hashCode() { return 1; }
+                }
+                static final class Second {
+                    public boolean equals(Object other) { return other instanceof Second; }
+                    public int hashCode() { return 2; }
+                }
+                static boolean find(List<Object> values, Object query) { return values.contains(query); }
+                public static void main(String[] args) {
+                    new Unsupported(Optional.empty());
+                    List<Object> values = new ArrayList<>();
+                    values.add(new First()); values.add(new Second());
+                    System.out.println(find(values, new First()));
+                    System.out.println(find(values, new Second()));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/collection-contains-query-types").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void collectionContainsRejectsUnsupportedEqualityForUnknownQuery() throws Exception {
+        final Path project = project("collection-contains-unknown-query");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                record Unsupported(Optional<String> value) { }
+                static Object query;
+                public static void main(String[] args) {
+                    query = new Unsupported(Optional.empty());
+                    List<Object> values = new ArrayList<>();
+                    System.out.println(values.contains(query));
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).isNotZero();
+        assertThat(build.stderr()).contains("unsupported record component type");
+    }
+
+    @Test
+    void collectionContainsTracksArgumentsThroughInheritedInterfaceMethods() throws Exception {
+        final Path project = project("collection-contains-inherited-interface");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                interface Finder { boolean find(List<Object> values, Object query); }
+                static class Base {
+                    public final boolean find(List<Object> values, Object query) { return values.contains(query); }
+                }
+                static final class Child extends Base implements Finder { }
+                static final class First {
+                    public boolean equals(Object other) { return other instanceof First; }
+                    public int hashCode() { return 1; }
+                }
+                static final class Second {
+                    public boolean equals(Object other) { return other instanceof Second; }
+                    public int hashCode() { return 2; }
+                }
+                public static void main(String[] args) {
+                    List<Object> values = new ArrayList<>();
+                    values.add(new First()); values.add(new Second());
+                    System.out.println(new Base().find(values, new First()));
+                    Finder finder = new Child();
+                    System.out.println(finder.find(values, new Second()));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/collection-contains-inherited-interface").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void collectionContainsRetainsPossiblePathImplementationEquality() throws Exception {
+        final Path project = project("collection-contains-path-bound");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.net.URI;
+            import java.nio.file.*;
+            import java.util.*;
+            public final class Main {
+                record Unsupported(Optional<String> value) { }
+                static final class CustomPath implements Path {
+                    public boolean equals(Object value) { return new Unsupported(Optional.empty()).equals(value); }
+                    public int hashCode() { return 1; }
+                    public String toString() { return "x"; }
+                    public FileSystem getFileSystem() { throw new UnsupportedOperationException(); }
+                    public boolean isAbsolute() { return true; }
+                    public Path getRoot() { throw new UnsupportedOperationException(); }
+                    public Path getFileName() { throw new UnsupportedOperationException(); }
+                    public Path getParent() { throw new UnsupportedOperationException(); }
+                    public int getNameCount() { return 1; }
+                    public Path getName(int index) { throw new UnsupportedOperationException(); }
+                    public Path subpath(int start, int end) { throw new UnsupportedOperationException(); }
+                    public boolean startsWith(Path path) { return false; }
+                    public boolean endsWith(Path path) { return false; }
+                    public Path normalize() { return this; }
+                    public Path resolve(Path path) { throw new UnsupportedOperationException(); }
+                    public Path relativize(Path path) { throw new UnsupportedOperationException(); }
+                    public URI toUri() { throw new UnsupportedOperationException(); }
+                    public Path toAbsolutePath() { return this; }
+                    public Path toRealPath(LinkOption... options) { return this; }
+                    public WatchKey register(WatchService service, WatchEvent.Kind<?>[] events,
+                        WatchEvent.Modifier... modifiers) { throw new UnsupportedOperationException(); }
+                    public int compareTo(Path other) { return 0; }
+                }
+                public static void main(String[] args) {
+                    List<Object> values = new ArrayList<>(); values.add("x");
+                    Path path = new CustomPath();
+                    System.out.println(values.contains(path.normalize()));
+                }
+            }
+            """);
+        final CliRun check = run(tempDir, "check", project.toString());
+        assertThat(check.exitCode()).isNotZero();
+        assertThat(check.stderr()).contains("unsupported record component type");
+    }
+
+    @Test
+    void collectionContainsDispatchesInheritedEquality() throws Exception {
+        final Path project = project("collection-contains-inherited-equality");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static class Base {
+                    final int value;
+                    Base(int value) { this.value = value; }
+                    public boolean equals(Object other) {
+                        String allocated = new String("allocated");
+                        return other instanceof Base && value == ((Base) other).value && allocated.length() == 9;
+                    }
+                    public int hashCode() { return value; }
+                }
+                static final class Child extends Base { Child(int value) { super(value); } }
+                public static void main(String[] args) {
+                    Collection<Object> values = new ArrayList<>();
+                    values.add(new Base(7)); values.add(null); values.add("text");
+                    Object query = args.length == 0 ? new Child(7) : new Base(8);
+                    System.out.println(values.contains(query));
+                    System.out.println(values.contains(new Child(8)));
+                    System.out.println(values.contains(null));
+                    System.out.println(values.contains("text"));
+                    Collection<Object> missing = args.length == 0 ? null : values;
+                    try { missing.contains(query); } catch (NullPointerException expected) { System.out.println("null receiver"); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/collection-contains-inherited-equality").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void collectionContainsDoesNotHoldRuntimeLockDuringEquality() throws Exception {
+        final Path project = project("collection-contains-equality-threads");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger signal = new AtomicInteger();
+                static final AtomicInteger completed = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() {
+                        while (signal.get() == 0) Thread.yield();
+                        completed.set(1);
+                    }
+                }
+                static final class Key {
+                    public boolean equals(Object other) {
+                        signal.set(1);
+                        for (int i = 0; i < 1000000 && completed.get() == 0; i++) Thread.yield();
+                        return completed.get() == 1;
+                    }
+                    public int hashCode() { return 1; }
+                }
+                public static void main(String[] args) throws Exception {
+                    List<Key> values = new ArrayList<>(); values.add(new Key());
+                    Thread worker = new Thread(new Worker()); worker.start();
+                    System.out.println(values.contains(new Key()));
+                    worker.join();
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/collection-contains-equality-threads").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("true\n");
+    }
+
+    @Test
+    void collectionContainsSurvivesConcurrentEqualityAllocations() throws Exception {
+        final Path project = project("collection-contains-concurrent-allocations");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static final class Key {
+                    final int value;
+                    Key(int value) { this.value = value; }
+                    public boolean equals(Object other) {
+                        String text = new String("compare");
+                        return other instanceof Key && value == ((Key) other).value && text.length() == 7;
+                    }
+                    public int hashCode() { return value; }
+                }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            List<Key> values = new ArrayList<>();
+                            for (int j = 0; j < 6; j++) values.add(new Key(j));
+                            if (!values.contains(new Key(5)) || values.contains(new Key(8))) {
+                                throw new IllegalStateException("bad comparison");
+                            }
+                        }
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join(); System.out.println("done");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/collection-contains-concurrent-allocations").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("done\n");
+    }
+
+    @Test
+    void collectionContainsTransportsApplicationEqualityFailure() throws Exception {
+        final Path project = project("collection-contains-application-exception");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static final class Failure extends RuntimeException { }
+                static final class Key {
+                    public boolean equals(Object other) { throw new Failure(); }
+                    public int hashCode() { return 1; }
+                }
+                static boolean check(List<Key> values, Key query) { return values.contains(query); }
+                public static void main(String[] args) {
+                    List<Key> values = new ArrayList<>(); values.add(new Key()); Key query = new Key();
+                    try { check(values, query); } catch (Failure expected) { System.out.println("caught"); }
+                    System.out.println(values.size());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/collection-contains-application-exception").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void collectionContainsTransportsCustomEqualityFailure() throws Exception {
+        final Path project = project("collection-custom-equality-failure");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.List;
+            public final class Main {
+                static final class Key {
+                    public boolean equals(Object other) { throw new IllegalArgumentException("equality"); }
+                    public int hashCode() { return 1; }
+                }
+                public static void main(String[] args) {
+                    List<Key> values = new ArrayList<>(); values.add(new Key());
+                    Key query = new Key();
+                    try { System.out.println(values.contains(query)); }
+                    catch (IllegalArgumentException expected) { System.out.println("caught"); }
+                    System.out.println(values.size());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/collection-custom-equality-failure").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void collectionRemoveAllHandlesViewsAndFailures() throws Exception {
         final Path project = project("collection-remove-all-errors");
         writeJava(project, "com.acme.Main", """
