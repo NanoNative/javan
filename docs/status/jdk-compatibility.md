@@ -23,10 +23,10 @@ bytecode pattern or rejects it before native code generation.
 
 | item | count |
 | --- | ---: |
-| classes | 27083 |
-| fields | 108722 |
-| constructors | 29984 |
-| methods | 204856 |
+| classes | 27084 |
+| fields | 108728 |
+| constructors | 29985 |
+| methods | 204859 |
 
 ## Inventory Is Not Support
 
@@ -58,12 +58,12 @@ Current support ledger for the active JDK 25 evidence set:
 | unaccounted rows | 1 |
 | exact supported JDK callable classes | 156 |
 | exact supported JDK constructors | 172 |
-| exact supported JDK methods | 772 |
-| exact supported JDK callables | 944 / 234840 (0.4%) |
-| exact explicit rejected JDK callables | 142083 |
-| exact done JDK callables | 143027 / 234840 (60.9%) |
-| exact unknown JDK callables | 91813 |
-| exact supported JDK callables left | 233896 |
+| exact supported JDK methods | 774 |
+| exact supported JDK callables | 946 / 234844 (0.4%) |
+| exact explicit rejected JDK callables | 142079 |
+| exact done JDK callables | 143025 / 234844 (60.9%) |
+| exact unknown JDK callables | 91819 |
+| exact supported JDK callables left | 233898 |
 | flow-qualified reachable current-thread lifecycle rejects | 0 |
 | flow-qualified unreachable current-thread lifecycle rejects | 0 |
 | flow-qualified reachable thread-builder receiver-shape rejects | 0 |

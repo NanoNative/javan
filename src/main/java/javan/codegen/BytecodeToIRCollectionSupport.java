@@ -787,6 +787,13 @@ final class BytecodeToIRCollectionSupport {
         if (!"java/util/concurrent/atomic/AtomicInteger".equals(methodRef.owner()) || !JdkCallSupport.isSupported(methodRef)) {
             return false;
         }
+        if (JdkCallSupport.isAtomicIntegerAdd(methodRef)) {
+            final IrExpression argument = popInt(classFile, method, stack);
+            final IrExpression receiver = popObject(classFile, method, stack);
+            pushIntCall(instructions, stack, localDeclarations, "javan_atomic_integer_add_java",
+                List.of(receiver, argument, IrExpression.intLiteral("getAndAdd".equals(methodRef.name()) ? 1 : 0)));
+            return true;
+        }
         if ("get".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
             final IrExpression receiver = popObject(classFile, method, stack);
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_atomic_integer_get", List.of(receiver))));

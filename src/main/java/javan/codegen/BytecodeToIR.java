@@ -487,6 +487,9 @@ public final class BytecodeToIR {
         for (final Map.Entry<String, Set<String>> entry : materializedTypes.entrySet()) {
             result.put(entry.getKey(), orderedThrowableTypes(entry.getValue()));
         }
+        result.put("javan_atomic_integer_add_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/util/concurrent/atomic/AtomicInteger", "addAndGet", "(I)I"
+        )));
         result.put("javan_exact_enum_lookup", List.of("java/lang/Error"));
         result.put(
             "javan_generated_method_invoke",
@@ -1284,7 +1287,8 @@ public final class BytecodeToIR {
             );
             if (instruction.methodRef().isPresent()) {
                 final MethodRef reference = instruction.methodRef().orElseThrow();
-                if (("java/lang/String".equals(reference.owner())
+                if ((JdkCallSupport.isAtomicIntegerAdd(reference)
+                    || "java/lang/String".equals(reference.owner())
                         && ("(I)C".equals(reference.descriptor()) || "(I)I".equals(reference.descriptor())
                             || "(II)I".equals(reference.descriptor())
                             || ("indexOf".equals(reference.name()) && ("(III)I".equals(reference.descriptor())

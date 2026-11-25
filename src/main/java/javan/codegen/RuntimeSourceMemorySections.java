@@ -16427,6 +16427,20 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        int javan_atomic_integer_add_java(void* value, int delta, int return_previous) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            javan_runtime_lock_enter();
+            javan_atomic_integer_state* state = javan_atomic_integer_checked(value);
+            int previous = state->value;
+            state->value = javan_int_add_wrapping(previous, delta);
+            int result = return_previous ? previous : state->value;
+            javan_runtime_lock_leave();
+            return result;
+        }
+
         void* javan_atomic_boolean_new(void) {
             void* value = javan_alloc(sizeof(javan_atomic_boolean_state));
             javan_atomic_boolean_state* state = (javan_atomic_boolean_state*) value;

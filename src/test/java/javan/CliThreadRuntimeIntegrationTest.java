@@ -44,6 +44,132 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @NativeTest
 final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
     @Test
+    void atomicIntegerAdditionMatchesJvmAtIntegerBoundaries() throws Exception {
+        final Path project = project("atomic-integer-add");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static int order;
+                static AtomicInteger receiver(AtomicInteger value) { order = order * 10 + 1; return value; }
+                static int delta() { order = order * 10 + 2; return 4; }
+                public static void main(String[] args) {
+                    AtomicInteger value = new AtomicInteger(2147483647);
+                    System.out.println(value.getAndAdd(1));
+                    System.out.println(value.get());
+                    System.out.println(value.addAndGet(-1));
+                    System.out.println(value.addAndGet(-2147483648));
+                    System.out.println(value.getAndAdd(-2147483648));
+                    System.out.println(value.get());
+                    System.out.println(value.addAndGet(0));
+                    System.out.println(receiver(value).addAndGet(delta()));
+                    System.out.println(order);
+                    order = 0;
+                    System.out.println(receiver(value).getAndAdd(delta()));
+                    System.out.println(order);
+                    value.getAndAdd(7);
+                    value.addAndGet(-2);
+                    System.out.println(value.get());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/atomic-integer-add").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void atomicIntegerAdditionLinearizesAcrossThreads() throws Exception {
+        final Path project = project("atomic-integer-add-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger previous = new AtomicInteger();
+                static final AtomicInteger updated = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    int previousSum;
+                    int updatedSum;
+                    public void run() {
+                        for (int i = 0; i < 2000; i++) {
+                            previousSum += previous.getAndAdd(1);
+                            updatedSum += updated.addAndGet(1);
+                        }
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Worker a = new Worker(); Worker b = new Worker();
+                    Thread first = new Thread(a); Thread second = new Thread(b);
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(previous.get());
+                    System.out.println(updated.get());
+                    System.out.println(a.previousSum + b.previousSum);
+                    System.out.println(a.updatedSum + b.updatedSum);
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/atomic-integer-add-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("4000\n4000\n7998000\n8002000\n");
+    }
+
+    @Test
+    void atomicIntegerAdditionTransportsNullReceiverFailure() throws Exception {
+        final Path project = project("atomic-integer-add-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static int calls;
+                static int delta() { calls++; return 1; }
+                static int add(AtomicInteger value) {
+                    try { return value.addAndGet(delta()); } catch (NullPointerException e) { return -1; }
+                }
+                static int getAndAdd(AtomicInteger value) {
+                    try { return value.getAndAdd(delta()); } catch (NullPointerException e) { return -2; }
+                }
+                public static void main(String[] args) {
+                    System.out.println(add(null));
+                    System.out.println(getAndAdd(null));
+                    System.out.println(calls);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/atomic-integer-add-null").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void atomicIntegerAdditionReportsUncaughtNullReceiver() throws Exception {
+        final Path project = project("atomic-integer-add-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                public static void main(String[] args) {
+                    AtomicInteger value = null;
+                    System.out.println(value.addAndGet(1));
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/atomic-integer-add-uncaught").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stderr()).contains("NullPointerException");
+    }
+
+    @Test
     void concurrentStringConstructionKeepsResultsAlive() throws Exception {
         final Path project = project("concurrent-string-construction");
         writeJava(project, "com.acme.Main", """

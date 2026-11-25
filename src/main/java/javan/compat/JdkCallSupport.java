@@ -276,6 +276,8 @@ public final class JdkCallSupport {
         runtime("AtomicInteger.getAndIncrement", "java/util/concurrent/atomic/AtomicInteger", "getAndIncrement", "()I"),
         runtime("AtomicInteger.incrementAndGet", "java/util/concurrent/atomic/AtomicInteger", "incrementAndGet", "()I"),
         runtime("AtomicInteger.decrementAndGet", "java/util/concurrent/atomic/AtomicInteger", "decrementAndGet", "()I"),
+        runtime("AtomicInteger.addAndGet", "java/util/concurrent/atomic/AtomicInteger", "addAndGet", "(I)I"),
+        runtime("AtomicInteger.getAndAdd", "java/util/concurrent/atomic/AtomicInteger", "getAndAdd", "(I)I"),
         runtime("AtomicLong.<init>", "java/util/concurrent/atomic/AtomicLong", "<init>", "(J)V"),
         runtime("AtomicLong.get", "java/util/concurrent/atomic/AtomicLong", "get", "()J"),
         runtime("AtomicLong.set", "java/util/concurrent/atomic/AtomicLong", "set", "(J)V"),
@@ -2105,6 +2107,18 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies supported atomic integer additions.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method adds and returns an atomic integer value
+     */
+    public static boolean isAtomicIntegerAdd(final MethodRef methodRef) {
+        return "java/util/concurrent/atomic/AtomicInteger".equals(methodRef.owner())
+            && ("addAndGet".equals(methodRef.name()) || "getAndAdd".equals(methodRef.name()))
+            && "(I)I".equals(methodRef.descriptor()) && isSupported(methodRef);
+    }
+
+    /**
      * Identifies first and last element removal on supported list receivers.
      *
      * @param methodRef referenced JDK method
@@ -2436,6 +2450,9 @@ public final class JdkCallSupport {
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
+        if (isAtomicIntegerAdd(methodRef)) {
+            return List.of("java/lang/NullPointerException");
+        }
         if (isListEndpointRemove(methodRef)) {
             return List.of("java/lang/NullPointerException", "java/util/NoSuchElementException",
                 "java/lang/UnsupportedOperationException");

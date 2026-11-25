@@ -911,6 +911,7 @@ final class RuntimeHeaderFile {
         int javan_atomic_integer_get_and_increment(void* value);
         int javan_atomic_integer_increment_and_get(void* value);
         int javan_atomic_integer_decrement_and_get(void* value);
+        int javan_atomic_integer_add_java(void* value, int delta, int return_previous);
         void* javan_atomic_long_new(void);
         void javan_atomic_long_init(void* value, long long initial_value);
         long long javan_atomic_long_get(void* value);
