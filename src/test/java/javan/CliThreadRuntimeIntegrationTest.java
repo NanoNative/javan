@@ -77,6 +77,48 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void concurrentClassNameLookupKeepsResultsAlive() throws Exception {
+        checkConcurrentClassNameLookup("concurrent-class-name", "getName");
+    }
+
+    @Test
+    void concurrentTypeNameLookupKeepsResultsAlive() throws Exception {
+        checkConcurrentClassNameLookup("concurrent-class-type-name", "getTypeName");
+    }
+
+    private void checkConcurrentClassNameLookup(final String name, final String method) throws Exception {
+        final Path project = project(name);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger failures = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 1000; i++) {
+                            String name = Main.class.%s();
+                            if (!name.equals("com.acme.Main")) failures.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(failures.get());
+                }
+            }
+            """.formatted(method));
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/" + name).toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stderr()).isEmpty();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
     void currentThreadInterruptStateBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("current-thread-interrupt-state");
         writeJava(project, "com.acme.Main", """

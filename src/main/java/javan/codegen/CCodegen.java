@@ -3752,6 +3752,8 @@ public final class CCodegen {
             // Only nonblocking calls may hold the lock through publication into a root.
             return switch (expression.value()) {
                 case "javan_runtime_class_literal",
+                    "javan_runtime_class_get_name",
+                    "javan_class_type_name",
                     "javan_string_from",
                     "javan_atomic_reference_get",
                     "javan_integer_value_of",
