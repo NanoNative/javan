@@ -709,6 +709,10 @@ final class BytecodeToIRControlFlowSupport {
         instructions.add(assignLocal(valueKind, localName, elseValue.expression().orElseThrow()));
         instructions.add(IrInstruction.jump(doneLabel));
         instructions.add(IrInstruction.label(targetLabel));
+        if (hasEarlierBranchTarget(bytecode, index, targetOffset)) {
+            instructions.add(IrInstruction.label(label(targetOffset)));
+            addInt(replacementLabelOffsets, targetOffset);
+        }
         instructions.addAll(targetBlock.instructions());
         instructions.add(assignLocal(valueKind, localName, targetValue.expression().orElseThrow()));
         instructions.add(IrInstruction.label(doneLabel));

@@ -2708,6 +2708,29 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void conditionalArrayValueHandlesShortCircuitTarget() throws Exception {
+        final Path project = project("conditional-array-short-circuit");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static boolean first() { return false; }
+                static boolean second() { return true; }
+                public static void main(String[] args) {
+                    Object[] values = new Object[1];
+                    values[0] = first() && second() ? new Object() : new Object();
+                    System.out.println(values[0] == null);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/conditional-array-short-circuit").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void collectionContainsAllSupportsViewsAndNullFailures() throws Exception {
         final Path project = project("collection-contains-all");
         writeJava(project, "com.acme.Main", """
