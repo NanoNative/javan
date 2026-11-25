@@ -11,7 +11,9 @@ import org.junit.jupiter.api.parallel.Resources;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
@@ -21,6 +23,48 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @ResourceLock(value = Resources.SYSTEM_PROPERTIES, mode = ResourceAccessMode.READ)
 @NativeTest
 final class CliPathFilesIntegrationTest extends CliIntegrationSupport {
+    @Test
+    void filesReadAllBytesSurvivesConcurrentCollection() throws Exception {
+        final Path project = project("files-read-all-bytes-gc");
+        Files.write(project.resolve("data.bin"), new byte[]{65, 66, 67});
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.nio.file.Files;
+            import java.nio.file.Path;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger failures = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 3000; i++) {
+                            String value = new String("example");
+                            if (value.length() != 7) failures.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start();
+                    Path path = Path.of("data.bin");
+                    for (int i = 0; i < 1000; i++) {
+                        byte[] bytes = Files.readAllBytes(path);
+                        if (bytes.length != 3 || bytes[0] != 65 || bytes[2] != 67) failures.incrementAndGet();
+                    }
+                    first.join(); second.join();
+                    System.out.println(failures.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/files-read-all-bytes-gc").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stderr()).isEmpty();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
     @Test
     void pathResolveBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("path-resolve");

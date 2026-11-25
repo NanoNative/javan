@@ -711,6 +711,7 @@ final class RuntimeHeaderFile {
         void* javan_files_write_string(void* path, void* value, void* options);
         void* javan_files_write_bytes(void* path, void* bytes, void* options);
         void* javan_files_read_all_bytes(void* path);
+        void javan_files_read_all_bytes_into(void** result, void* path);
         int javan_files_delete_if_exists(void* path);
         long long javan_files_size(void* path);
         void* javan_files_get_last_modified_time(void* path, void* options);

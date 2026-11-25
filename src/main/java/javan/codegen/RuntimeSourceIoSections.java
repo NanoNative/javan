@@ -985,41 +985,67 @@ final class RuntimeSourceIoSections {
             return path_value;
         }
 
-        void* javan_files_read_all_bytes(void* path_value) {
+        void javan_files_read_all_bytes_into(void** result, void* path_value) {
+            if (result == NULL) {
+                javan_panic("invalid readAllBytes result");
+            }
+            javan_runtime_lock_enter();
+            *result = NULL;
+            javan_runtime_lock_leave();
             const char* path = javan_path_checked(path_value);
             FILE* file = javan_file_open(path, "rb");
             if (file == NULL) {
-                return javan_files_io_failure("readAllBytes failed");
+                javan_files_io_failure("readAllBytes failed");
+                return;
             }
             javan_native_resource_frame file_resource;
             javan_native_resource_push(&file_resource, file, javan_native_file_cleanup);
             if (fseek(file, 0, SEEK_END) != 0) {
                 javan_native_resource_pop(&file_resource);
                 fclose(file);
-                return javan_files_io_failure("readAllBytes failed");
+                javan_files_io_failure("readAllBytes failed");
+                return;
             }
             long length = ftell(file);
             if (length < 0 || length > INT_MAX) {
                 javan_native_resource_pop(&file_resource);
                 fclose(file);
-                return javan_files_io_failure("readAllBytes failed");
+                javan_files_io_failure("readAllBytes failed");
+                return;
             }
             if (fseek(file, 0, SEEK_SET) != 0) {
                 javan_native_resource_pop(&file_resource);
                 fclose(file);
-                return javan_files_io_failure("readAllBytes failed");
+                javan_files_io_failure("readAllBytes failed");
+                return;
             }
-            void* result = javan_byte_array_new((int) length);
-            javan_byte_array* array = (javan_byte_array*) result;
-            if (length > 0 && fread(array->values, 1, (unsigned long) length, file) != (unsigned long) length) {
-                javan_native_resource_pop(&file_resource);
-                fclose(file);
-                return javan_files_io_failure("readAllBytes failed");
-            }
+            void** roots[] = {result};
+            javan_root_frame_push(roots, 1);
+            javan_runtime_lock_enter();
+            *result = javan_byte_array_new((int) length);
+            javan_byte_array* array = (javan_byte_array*) *result;
+            javan_runtime_lock_leave();
+            int read_failed = length > 0
+                && fread(array->values, 1, (unsigned long) length, file) != (unsigned long) length;
             javan_native_resource_pop(&file_resource);
-            if (fclose(file) != 0) {
-                return javan_files_io_failure("readAllBytes close failed");
+            int close_failed = fclose(file) != 0;
+            if (read_failed || close_failed) {
+                javan_runtime_lock_enter();
+                *result = NULL;
+                javan_runtime_lock_leave();
+                javan_root_frame_pop(roots);
+                javan_files_io_failure(read_failed ? "readAllBytes failed" : "readAllBytes close failed");
+                return;
             }
+            javan_root_frame_pop(roots);
+        }
+
+        void* javan_files_read_all_bytes(void* path_value) {
+            void* result = NULL;
+            void** roots[] = {&result};
+            javan_root_frame_push(roots, 1);
+            javan_files_read_all_bytes_into(&result, path_value);
+            javan_root_frame_pop(roots);
             return result;
         }
 
