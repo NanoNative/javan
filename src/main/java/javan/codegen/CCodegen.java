@@ -3842,6 +3842,7 @@ public final class CCodegen {
                     "javan_stringbuilder_new",
                     "javan_stringbuilder_to_string",
                     "javan_string_get_bytes_charset",
+                    "javan_resource_input_stream_read_all_bytes",
                     "javan_http_exchange_input_stream_read_all_bytes",
                     "javan_uri_get_raw_path",
                     "javan_uri_get_raw_query",

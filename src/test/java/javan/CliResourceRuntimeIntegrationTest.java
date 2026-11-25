@@ -39,7 +39,17 @@ final class CliResourceRuntimeIntegrationTest extends CliIntegrationSupport {
         checkResourceStreamDuringCollection("loader-resource-gc", "ClassLoader.getSystemClassLoader().getResourceAsStream(\"data.txt\")");
     }
 
+    @Test
+    void resourceReadAllBytesSurvivesConcurrentCollection() throws Exception {
+        checkResourceStreamDuringCollection("resource-read-all-gc", "Main.class.getResourceAsStream(\"/data.txt\")",
+            "byte[] bytes = stream.readAllBytes(); if (bytes.length != 1 || bytes[0] != 65) failures.incrementAndGet();");
+    }
+
     private void checkResourceStreamDuringCollection(final String name, final String lookup) throws Exception {
+        checkResourceStreamDuringCollection(name, lookup, "if (stream.read() != 65) failures.incrementAndGet();");
+    }
+
+    private void checkResourceStreamDuringCollection(final String name, final String lookup, final String read) throws Exception {
         final Path project = project(name);
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -60,14 +70,14 @@ final class CliResourceRuntimeIntegrationTest extends CliIntegrationSupport {
                     first.start(); second.start();
                     for (int i = 0; i < 1000; i++) {
                         InputStream stream = %s;
-                        if (stream.read() != 65) failures.incrementAndGet();
+                        %s
                         stream.close();
                     }
                     first.join(); second.join();
                     System.out.println(failures.get());
                 }
             }
-            """.formatted(lookup));
+            """.formatted(lookup, read));
         writeResource(project, "data.txt", "A");
         final CliRun build = run(tempDir, "build", project.toString());
         assertThat(build.exitCode()).as(build.stderr()).isZero();
