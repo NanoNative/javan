@@ -278,11 +278,13 @@ public final class JdkCallSupport {
         runtime("AtomicInteger.decrementAndGet", "java/util/concurrent/atomic/AtomicInteger", "decrementAndGet", "()I"),
         runtime("AtomicInteger.addAndGet", "java/util/concurrent/atomic/AtomicInteger", "addAndGet", "(I)I"),
         runtime("AtomicInteger.getAndAdd", "java/util/concurrent/atomic/AtomicInteger", "getAndAdd", "(I)I"),
-        runtime("AtomicLong.<init>", "java/util/concurrent/atomic/AtomicLong", "<init>", "(J)V"),
+        runtime("AtomicLong.<init>", "java/util/concurrent/atomic/AtomicLong", "<init>", "()V", "(J)V"),
         runtime("AtomicLong.get", "java/util/concurrent/atomic/AtomicLong", "get", "()J"),
         runtime("AtomicLong.set", "java/util/concurrent/atomic/AtomicLong", "set", "(J)V"),
         runtime("AtomicLong.incrementAndGet", "java/util/concurrent/atomic/AtomicLong", "incrementAndGet", "()J"),
         runtime("AtomicLong.decrementAndGet", "java/util/concurrent/atomic/AtomicLong", "decrementAndGet", "()J"),
+        runtime("AtomicLong.addAndGet", "java/util/concurrent/atomic/AtomicLong", "addAndGet", "(J)J"),
+        runtime("AtomicLong.getAndAdd", "java/util/concurrent/atomic/AtomicLong", "getAndAdd", "(J)J"),
         runtime("AtomicReference.<init>", "java/util/concurrent/atomic/AtomicReference", "<init>", "()V", "(Ljava/lang/Object;)V"),
         runtime("AtomicReference.get", "java/util/concurrent/atomic/AtomicReference", "get", "()Ljava/lang/Object;"),
         runtime("AtomicReference.compareAndSet", "java/util/concurrent/atomic/AtomicReference", "compareAndSet", "(Ljava/lang/Object;Ljava/lang/Object;)Z"),
@@ -2119,6 +2121,18 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies supported atomic long additions.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method adds and returns an atomic long value
+     */
+    public static boolean isAtomicLongAdd(final MethodRef methodRef) {
+        return "java/util/concurrent/atomic/AtomicLong".equals(methodRef.owner())
+            && ("addAndGet".equals(methodRef.name()) || "getAndAdd".equals(methodRef.name()))
+            && "(J)J".equals(methodRef.descriptor()) && isSupported(methodRef);
+    }
+
+    /**
      * Identifies first and last element removal on supported list receivers.
      *
      * @param methodRef referenced JDK method
@@ -2450,7 +2464,7 @@ public final class JdkCallSupport {
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
-        if (isAtomicIntegerAdd(methodRef)) {
+        if (isAtomicIntegerAdd(methodRef) || isAtomicLongAdd(methodRef)) {
             return List.of("java/lang/NullPointerException");
         }
         if (isListEndpointRemove(methodRef)) {

@@ -542,6 +542,13 @@ final class BytecodeToIRCollectionSupport {
         if (!"<init>".equals(methodRef.name())) {
             return false;
         }
+        if ("()V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.callStaticVoid(
+                "javan_atomic_long_init",
+                List.of(receiver, IrExpression.longLiteral(0))
+            ));
+            return true;
+        }
         if ("(J)V".equals(methodRef.descriptor())) {
             instructions.add(IrInstruction.callStaticVoid(
                 "javan_atomic_long_init",
@@ -726,6 +733,13 @@ final class BytecodeToIRCollectionSupport {
     ) {
         if (!"java/util/concurrent/atomic/AtomicLong".equals(methodRef.owner()) || !JdkCallSupport.isSupported(methodRef)) {
             return false;
+        }
+        if (JdkCallSupport.isAtomicLongAdd(methodRef)) {
+            final IrExpression argument = popLong(classFile, method, stack);
+            final IrExpression receiver = popObject(classFile, method, stack);
+            pushLongCall(instructions, stack, localDeclarations, "javan_atomic_long_add_java",
+                List.of(receiver, argument, IrExpression.intLiteral("getAndAdd".equals(methodRef.name()) ? 1 : 0)));
+            return true;
         }
         if ("get".equals(methodRef.name()) && "()J".equals(methodRef.descriptor())) {
             final IrExpression receiver = popObject(classFile, method, stack);

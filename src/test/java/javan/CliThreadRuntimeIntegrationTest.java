@@ -44,6 +44,130 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @NativeTest
 final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
     @Test
+    void atomicLongAdditionMatchesJvmAtLongBoundaries() throws Exception {
+        final Path project = project("atomic-long-add");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicLong;
+            public final class Main {
+                static int order;
+                static AtomicLong receiver(AtomicLong value) { order = order * 10 + 1; return value; }
+                static long delta() { order = order * 10 + 2; return 4L; }
+                public static void main(String[] args) {
+                    System.out.println(new AtomicLong().get());
+                    AtomicLong value = new AtomicLong(9223372036854775807L);
+                    System.out.println(value.getAndAdd(1L));
+                    System.out.println(value.get());
+                    System.out.println(value.addAndGet(-1L));
+                    System.out.println(value.addAndGet(-9223372036854775808L));
+                    System.out.println(value.getAndAdd(-9223372036854775808L));
+                    System.out.println(value.get());
+                    System.out.println(value.addAndGet(0L));
+                    System.out.println(receiver(value).addAndGet(delta()));
+                    System.out.println(order);
+                    order = 0;
+                    System.out.println(receiver(value).getAndAdd(delta()));
+                    System.out.println(order);
+                    value.getAndAdd(7L);
+                    value.addAndGet(-2L);
+                    System.out.println(value.get());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/atomic-long-add").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void atomicLongAdditionLinearizesAcrossThreads() throws Exception {
+        final Path project = project("atomic-long-add-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicLong;
+            public final class Main {
+                static final AtomicLong previous = new AtomicLong();
+                static final AtomicLong updated = new AtomicLong();
+                static final class Worker implements Runnable {
+                    long previousSum;
+                    long updatedSum;
+                    public void run() {
+                        for (int i = 0; i < 2000; i++) {
+                            previousSum += previous.getAndAdd(1L);
+                            updatedSum += updated.addAndGet(1L);
+                        }
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Worker a = new Worker(); Worker b = new Worker();
+                    Thread first = new Thread(a); Thread second = new Thread(b);
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(previous.get()); System.out.println(updated.get());
+                    System.out.println(a.previousSum + b.previousSum);
+                    System.out.println(a.updatedSum + b.updatedSum);
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/atomic-long-add-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("4000\n4000\n7998000\n8002000\n");
+    }
+
+    @Test
+    void atomicLongAdditionTransportsNullReceiverFailure() throws Exception {
+        final Path project = project("atomic-long-add-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicLong;
+            public final class Main {
+                static int calls;
+                static long delta() { calls++; return 1L; }
+                static long add(AtomicLong value) {
+                    try { return value.addAndGet(delta()); } catch (NullPointerException e) { return -1L; }
+                }
+                static long getAndAdd(AtomicLong value) {
+                    try { return value.getAndAdd(delta()); } catch (NullPointerException e) { return -2L; }
+                }
+                public static void main(String[] args) {
+                    System.out.println(add(null)); System.out.println(getAndAdd(null)); System.out.println(calls);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/atomic-long-add-null").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void atomicLongAdditionReportsUncaughtNullReceiver() throws Exception {
+        final Path project = project("atomic-long-add-uncaught");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.atomic.AtomicLong;
+            public final class Main {
+                public static void main(String[] args) {
+                    AtomicLong value = null;
+                    System.out.println(value.getAndAdd(1L));
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/atomic-long-add-uncaught").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stderr()).contains("NullPointerException");
+    }
+
+    @Test
     void atomicIntegerConstructionSurvivesConcurrentCollection() throws Exception {
         checkAtomicConstruction("atomic-integer-construction-gc", """
             AtomicInteger value = new AtomicInteger(i);

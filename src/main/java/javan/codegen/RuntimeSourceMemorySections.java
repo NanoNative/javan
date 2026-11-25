@@ -16562,6 +16562,20 @@ final class RuntimeSourceMemorySections {
             javan_runtime_lock_leave();
             return result;
         }
+
+        long long javan_atomic_long_add_java(void* value, long long delta, int return_previous) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            javan_runtime_lock_enter();
+            javan_atomic_long_state* state = javan_atomic_long_checked(value);
+            long long previous = state->value;
+            state->value = javan_long_add_wrapping(previous, delta);
+            long long result = return_previous ? previous : state->value;
+            javan_runtime_lock_leave();
+            return result;
+        }
         """;
 
     private static final String SOURCE_C_ABI_OBJECT_HANDLES = """

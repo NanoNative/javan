@@ -918,6 +918,7 @@ final class RuntimeHeaderFile {
         void javan_atomic_long_set(void* value, long long next_value);
         long long javan_atomic_long_increment_and_get(void* value);
         long long javan_atomic_long_decrement_and_get(void* value);
+        long long javan_atomic_long_add_java(void* value, long long delta, int return_previous);
         void* javan_secure_random_new(void);
         void javan_secure_random_next_bytes(void* value, void* array);
         void javan_secure_random_next_bytes_java(void* value, void* array);
