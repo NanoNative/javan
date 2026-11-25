@@ -118,6 +118,8 @@ while publishing it to the collector.
 Indexed `remove` transports the same failures and publishes the removed value safely.
 Indexed insertion transports null-receiver, invalid-index and immutable-list failures, and retains
 the inserted value through concurrent collection.
+Indexed bulk insertion reads supported collection views, handles self-insertion and transports
+null, invalid-index, immutable-list and representational-size failures within supported handlers.
 Object removal through supported list, set and `Collection` owners transports null-receiver and
 immutable-collection failures for the currently supported collection representations.
 Supported endpoint removals transport null, empty and immutable-list failures and publish removed

@@ -2544,6 +2544,171 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void listIndexedAddAllAcceptsViewsAndSelf() throws Exception {
+        final Path project = project("list-indexed-add-all-views");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.Collections;
+            import java.util.List;
+            public final class Main {
+                static void print(List<String> values) {
+                    System.out.println(values.size());
+                    for (int i = 0; i < values.size(); i++) System.out.println(values.get(i));
+                }
+                public static void main(String[] args) {
+                    List<String> values = new ArrayList<>();
+                    values.add("a"); values.add("b");
+                    List<String> source = new ArrayList<>();
+                    source.add("x"); source.add("y");
+                    System.out.println(values.addAll(1, Collections.unmodifiableList(source)));
+                    print(values);
+                    System.out.println(values.addAll(2, Collections.unmodifiableList(values)));
+                    print(values);
+                    System.out.println(values.addAll(0, List.of()));
+                    List<String> self = new ArrayList<>();
+                    self.add("m"); self.add("n");
+                    System.out.println(self.addAll(0, self));
+                    print(self);
+                    System.out.println(self.addAll(self.size(), self));
+                    print(self);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-indexed-add-all-views").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listIndexedAddAllAcceptsSetSource() throws Exception {
+        final Path project = project("list-indexed-add-all-set");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.Set;
+            public final class Main {
+                public static void main(String[] args) {
+                    ArrayList<String> values = new ArrayList<>();
+                    values.add("tail");
+                    System.out.println(values.addAll(0, Set.of("head")));
+                    System.out.println(values.get(0));
+                    System.out.println(values.get(1));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-indexed-add-all-set").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listIndexedAddAllTransportsFailures() throws Exception {
+        final Path project = project("list-indexed-add-all-errors");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.AbstractList;
+            import java.util.ArrayList;
+            import java.util.Collections;
+            import java.util.List;
+            public final class Main {
+                public static void main(String[] args) {
+                    ArrayList<String> concrete = new ArrayList<>();
+                    List<String> values = concrete;
+                    AbstractList<String> abstractValues = concrete;
+                    List<String> missing = args.length == 0 ? null : values;
+                    try { missing.addAll(0, values); } catch (NullPointerException expected) { System.out.println("receiver"); }
+                    try { values.addAll(0, null); } catch (NullPointerException expected) { System.out.println("source"); }
+                    try { values.addAll(-1, null); } catch (IndexOutOfBoundsException expected) { System.out.println("negative before null"); }
+                    try { concrete.addAll(1, values); } catch (IndexOutOfBoundsException expected) { System.out.println("large"); }
+                    try { List.of().addAll(-1, null); } catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                    try { Collections.unmodifiableList(values).addAll(0, List.of()); } catch (UnsupportedOperationException expected) { System.out.println("view"); }
+                    System.out.println(abstractValues.addAll(0, List.of("x")));
+                    System.out.println(values.get(0));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-indexed-add-all-errors").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listIndexedAddAllEvaluatesArgumentsBeforeNullFailure() throws Exception {
+        final Path project = project("list-indexed-add-all-null-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Collection;
+            import java.util.List;
+            public final class Main {
+                static List<String> missing() { System.out.println("receiver"); return null; }
+                static int index() { System.out.println("index"); return 0; }
+                static Collection<String> source() { System.out.println("source"); return List.of("x"); }
+                public static void main(String[] args) {
+                    missing().addAll(index(), source());
+                    System.out.println("after");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-indexed-add-all-null-order").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("receiver\nindex\nsource\n");
+        assertThat(result.stderr()).contains("NullPointerException");
+    }
+
+    @Test
+    void listIndexedAddAllSurvivesConcurrentCollection() throws Exception {
+        final Path project = project("list-indexed-add-all-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.Collections;
+            import java.util.List;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            List<String> values = new ArrayList<>();
+                            values.add(new String(new char[] {'a'}));
+                            values.add(new String(new char[] {'b'}));
+                            if (!values.addAll(1, Collections.unmodifiableList(values))) errors.incrementAndGet();
+                            if (values.size() != 4 || !values.get(0).equals("a") || !values.get(1).equals("a")
+                                || !values.get(2).equals("b") || !values.get(3).equals("b")) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-indexed-add-all-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
     void listIndexedAddTransportsFailuresAndPreservesOrder() throws Exception {
         final Path project = project("list-indexed-add-errors");
         writeJava(project, "com.acme.Main", """
@@ -4968,7 +5133,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/arraylist-direct-owner-add-all-at-oob").toString()));
 
         assertThat(nativeRun.exitCode()).isNotZero();
-        assertThat(nativeRun.stderr()).contains("index out of bounds");
+        assertThat(nativeRun.stderr()).contains("IndexOutOfBoundsException");
     }
 
     @Test
@@ -4997,7 +5162,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/list-add-all-at-oob").toString()));
 
         assertThat(nativeRun.exitCode()).isNotZero();
-        assertThat(nativeRun.stderr()).contains("index out of bounds");
+        assertThat(nativeRun.stderr()).contains("IndexOutOfBoundsException");
     }
 
     @Test
@@ -5027,7 +5192,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/abstractlist-direct-owner-add-all-at-oob").toString()));
 
         assertThat(nativeRun.exitCode()).isNotZero();
-        assertThat(nativeRun.stderr()).contains("index out of bounds");
+        assertThat(nativeRun.stderr()).contains("IndexOutOfBoundsException");
     }
 
     @Test

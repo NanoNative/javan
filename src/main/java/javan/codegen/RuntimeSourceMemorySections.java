@@ -13228,15 +13228,28 @@ final class RuntimeSourceMemorySections {
             if (index < 0 || index > list->length) {
                 javan_panic("list index out of bounds");
             }
-            int copied = source->length;
+            int copied = javan_list_logical_length(source);
             if (copied == 0) {
                 return 0;
             }
+            javan_object_list* source_backing = source;
+            while (source_backing->backing != NULL) {
+                source_backing = source_backing->backing;
+            }
+            void* snapshot = NULL;
             void** javan_list_add_all_at_roots[] = {
                 (void**) &list,
-                (void**) &source
+                (void**) &source,
+                &snapshot
             };
-            javan_root_frame_push(javan_list_add_all_at_roots, 2);
+            javan_root_frame_push(javan_list_add_all_at_roots, 3);
+            if (source_backing == list) {
+                snapshot = javan_object_array_new(copied, "[Ljava.lang.Object;");
+                javan_object_array* snapshot_array = (javan_object_array*) snapshot;
+                for (int source_index = 0; source_index < copied; source_index++) {
+                    snapshot_array->values[source_index] = javan_list_get_unchecked(source, source_index);
+                }
+            }
             javan_list_ensure_capacity(list, list->length + copied);
             if (index < list->length) {
                 memmove(
@@ -13246,12 +13259,41 @@ final class RuntimeSourceMemorySections {
                 );
             }
             for (int source_index = 0; source_index < copied; source_index++) {
-                list->values[index + source_index] = source->values[source_index];
+                list->values[index + source_index] = snapshot != NULL
+                    ? ((javan_object_array*) snapshot)->values[source_index]
+                    : javan_list_get_unchecked(source, source_index);
             }
             list->length += copied;
             javan_root_frame_pop(javan_list_add_all_at_roots);
             list->mod_count++;
             return 1;
+        }
+
+        int javan_arraylist_add_all_at_java(void* value, int index, void* collection) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            javan_runtime_lock_enter();
+            javan_object_list* list = javan_list_checked(value);
+            int result = 0;
+            if (list->immutable != 0) {
+                javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+            } else if (index < 0 || index > javan_list_logical_length(list)) {
+                javan_pending_throw("java/lang/IndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+            } else if (collection == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+            } else {
+                javan_object_list* source = javan_list_checked(collection);
+                int copied = javan_list_logical_length(source);
+                if (copied > INT_MAX - list->length) {
+                    javan_pending_throw("java/lang/OutOfMemoryError", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                } else {
+                    result = javan_arraylist_add_all_at(list, index, source);
+                }
+            }
+            javan_runtime_lock_leave();
+            return result;
         }
 
         int javan_arraylist_add_all(void* value, void* collection) {

@@ -4462,6 +4462,16 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void listAddAllIndexTransportsNullBoundsImmutableAndSizeFailures() {
+        for (final String owner : List.of("java/util/List", "java/util/AbstractList", "java/util/ArrayList")) {
+            assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
+                owner, "addAll", "(ILjava/util/Collection;)Z"
+            ))).containsExactly("java/lang/NullPointerException", "java/lang/IndexOutOfBoundsException",
+                "java/lang/UnsupportedOperationException", "java/lang/OutOfMemoryError");
+        }
+    }
+
+    @Test
     void listAddIndexTransportsNullBoundsAndImmutableFailures() {
         for (final String owner : List.of("java/util/List", "java/util/AbstractList", "java/util/ArrayList")) {
             assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(

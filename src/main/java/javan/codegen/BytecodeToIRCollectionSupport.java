@@ -925,7 +925,7 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("addAll(ILjava/util/Collection;)Z".equals(signature)) {
-                pushIntCall(instructions, stack, localDeclarations, "javan_arraylist_add_all_at", List.of(receiver, arguments.get(0), arguments.get(1)));
+                pushIntCall(instructions, stack, localDeclarations, "javan_arraylist_add_all_at_java", List.of(receiver, arguments.get(0), arguments.get(1)));
                 return true;
             }
             if ("addAll(Ljava/util/Collection;)Z".equals(signature)) {
@@ -991,7 +991,7 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("addAll(ILjava/util/Collection;)Z".equals(signature)) {
-                pushIntCall(instructions, stack, localDeclarations, "javan_arraylist_add_all_at", List.of(receiver, arguments.get(0), arguments.get(1)));
+                pushIntCall(instructions, stack, localDeclarations, "javan_arraylist_add_all_at_java", List.of(receiver, arguments.get(0), arguments.get(1)));
                 return true;
             }
             if ("get(I)Ljava/lang/Object;".equals(signature)) {

@@ -4745,6 +4745,10 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static int listAddIndexNull(int selector) { java.util.List<String> values = selector == 0 ? null : new java.util.ArrayList<>(); values.add(0, "x"); return 0; }
                 public static int listAddIndexBounds() { new java.util.ArrayList<String>().add(1, "x"); return 0; }
                 public static int listAddIndexImmutable() { java.util.List.of().add(0, "x"); return 0; }
+                public static int listAddAllIndexNull(int selector) { java.util.List<String> values = selector == 0 ? null : new java.util.ArrayList<>(); return values.addAll(0, java.util.List.of()) ? 1 : 0; }
+                public static int listAddAllIndexSourceNull() { return new java.util.ArrayList<String>().addAll(0, null) ? 1 : 0; }
+                public static int listAddAllIndexBounds() { return new java.util.ArrayList<String>().addAll(1, null) ? 1 : 0; }
+                public static int listAddAllIndexImmutable() { return java.util.List.of().addAll(0, java.util.List.of()) ? 1 : 0; }
                 public static int listRemoveFirstEmpty() { new java.util.ArrayList<String>().removeFirst(); return 0; }
                 public static int listRemoveLastNull(int selector) { java.util.List<String> values = selector == 0 ? null : new java.util.ArrayList<>(); values.removeLast(); return 0; }
                 public static int listRemoveFirstImmutable() { java.util.List.of().removeFirst(); return 0; }
@@ -4798,6 +4802,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "--export", "com.acme.Api.listRemoveObjectNull(int):int", "--export", "com.acme.Api.listRemoveObjectImmutable():int",
             "--export", "com.acme.Api.setRemoveObjectNull(int):int", "--export", "com.acme.Api.setRemoveObjectImmutable():int",
             "--export", "com.acme.Api.listAddIndexNull(int):int", "--export", "com.acme.Api.listAddIndexBounds():int", "--export", "com.acme.Api.listAddIndexImmutable():int",
+            "--export", "com.acme.Api.listAddAllIndexNull(int):int", "--export", "com.acme.Api.listAddAllIndexSourceNull():int", "--export", "com.acme.Api.listAddAllIndexBounds():int", "--export", "com.acme.Api.listAddAllIndexImmutable():int",
             "--export", "com.acme.Api.listRemoveFirstEmpty():int", "--export", "com.acme.Api.listRemoveLastNull(int):int",
             "--export", "com.acme.Api.listRemoveFirstImmutable():int", "--export", "com.acme.Api.listRemoveLastLegacyEmpty():int",
             "--export", "com.acme.Api.listAddFirstNull(int):int", "--export", "com.acme.Api.listAddLastNull(int):int",
@@ -5036,6 +5041,18 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     javan_result_free(&failure);
                     failure = javan_try_com_acme_Api_listAddIndexImmutable_void(&value);
                     if (failure.ok || failure.message == 0 || strstr(failure.message, "UnsupportedOperationException") == 0) return 85;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_listAddAllIndexNull_int(0, &value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 86;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_listAddAllIndexSourceNull_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 87;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_listAddAllIndexBounds_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "IndexOutOfBoundsException") == 0) return 88;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_listAddAllIndexImmutable_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "UnsupportedOperationException") == 0) return 89;
                     javan_result_free(&failure);
                     failure = javan_try_com_acme_Api_listRemoveFirstEmpty_void(&value);
                     if (failure.ok || failure.message == 0 || strstr(failure.message, "NoSuchElementException") == 0) return 71;

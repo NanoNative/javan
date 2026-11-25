@@ -2181,6 +2181,19 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies indexed bulk insertion on supported list receivers.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method inserts a collection at an index
+     */
+    public static boolean isListIndexedAddAll(final MethodRef methodRef) {
+        return ("java/util/List".equals(methodRef.owner()) || "java/util/ArrayList".equals(methodRef.owner())
+                || "java/util/AbstractList".equals(methodRef.owner()))
+            && "addAll".equals(methodRef.name()) && "(ILjava/util/Collection;)Z".equals(methodRef.descriptor())
+            && isSupported(methodRef);
+    }
+
+    /**
      * Identifies object removal on supported collection receivers.
      *
      * @param methodRef referenced JDK method
@@ -2378,6 +2391,10 @@ public final class JdkCallSupport {
         if (isListEndpointRemove(methodRef)) {
             return List.of("java/lang/NullPointerException", "java/util/NoSuchElementException",
                 "java/lang/UnsupportedOperationException");
+        }
+        if (isListIndexedAddAll(methodRef)) {
+            return List.of("java/lang/NullPointerException", "java/lang/IndexOutOfBoundsException",
+                "java/lang/UnsupportedOperationException", "java/lang/OutOfMemoryError");
         }
         if (isListIndexedSet(methodRef) || isListIndexedRemove(methodRef) || isListIndexedAdd(methodRef)) {
             return List.of("java/lang/NullPointerException", "java/lang/IndexOutOfBoundsException",

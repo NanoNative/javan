@@ -25571,15 +25571,15 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).contains(
             IrInstruction.assignInt(
                 "int0",
                 IrExpression.intCall(
-                    "javan_arraylist_add_all_at",
+                    "javan_arraylist_add_all_at_java",
                     List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"), IrExpression.objectLocal("arg2"))
                 )
             ),
-            IrInstruction.returnInt(IrExpression.intLocal("int0"))
+            IrInstruction.propagatePending()
         );
     }
 
@@ -25850,15 +25850,15 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).contains(
             IrInstruction.assignInt(
                 "int0",
                 IrExpression.intCall(
-                    "javan_arraylist_add_all_at",
+                    "javan_arraylist_add_all_at_java",
                     List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"), IrExpression.objectLocal("arg2"))
                 )
             ),
-            IrInstruction.returnInt(IrExpression.intLocal("int0"))
+            IrInstruction.propagatePending()
         );
     }
 
@@ -26195,15 +26195,15 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).contains(
             IrInstruction.assignInt(
                 "int0",
                 IrExpression.intCall(
-                    "javan_arraylist_add_all_at",
+                    "javan_arraylist_add_all_at_java",
                     List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"), IrExpression.objectLocal("arg2"))
                 )
             ),
-            IrInstruction.returnInt(IrExpression.intLocal("int0"))
+            IrInstruction.propagatePending()
         );
     }
 
