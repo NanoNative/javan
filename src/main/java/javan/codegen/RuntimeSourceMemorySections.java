@@ -13729,6 +13729,35 @@ final class RuntimeSourceMemorySections {
             return changed;
         }
 
+        static int javan_collection_filter_all_java(void* value, void* other, int retain) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            javan_runtime_lock_enter();
+            javan_object_list* list = javan_list_checked(value);
+            int result = 0;
+            if (list->immutable != 0) {
+                javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+            } else if (other == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+            } else if (retain) {
+                result = javan_list_retain_all(value, other);
+            } else {
+                result = javan_list_remove_all(value, other);
+            }
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        int javan_list_remove_all_java(void* value, void* other) {
+            return javan_collection_filter_all_java(value, other, 0);
+        }
+
+        int javan_list_retain_all_java(void* value, void* other) {
+            return javan_collection_filter_all_java(value, other, 1);
+        }
+
         int javan_list_contains_all(void* value, void* other) {
             javan_object_list* list = javan_list_checked(value);
             javan_object_list* probe = javan_list_checked(other);

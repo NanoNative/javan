@@ -2230,6 +2230,18 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies supported bulk collection removal and retention.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method filters elements against a collection
+     */
+    public static boolean isCollectionFilterAll(final MethodRef methodRef) {
+        return isCollectionRuntimeOwner(methodRef.owner())
+            && ("removeAll".equals(methodRef.name()) || "retainAll".equals(methodRef.name()))
+            && "(Ljava/util/Collection;)Z".equals(methodRef.descriptor()) && isSupported(methodRef);
+    }
+
+    /**
      * Identifies object removal on supported collection receivers.
      *
      * @param methodRef referenced JDK method
@@ -2434,6 +2446,9 @@ public final class JdkCallSupport {
         }
         if (isListAddAll(methodRef) || isCollectionAddAll(methodRef)) {
             return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException", "java/lang/OutOfMemoryError");
+        }
+        if (isCollectionFilterAll(methodRef)) {
+            return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException");
         }
         if (isListIndexedSet(methodRef) || isListIndexedRemove(methodRef) || isListIndexedAdd(methodRef)) {
             return List.of("java/lang/NullPointerException", "java/lang/IndexOutOfBoundsException",

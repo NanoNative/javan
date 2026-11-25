@@ -1037,11 +1037,11 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("removeAll(Ljava/util/Collection;)Z".equals(signature)) {
-                stack.add(StackValue.intExpression(IrExpression.intCall("javan_list_remove_all", List.of(receiver, arguments.getFirst()))));
+                pushIntCall(instructions, stack, localDeclarations, "javan_list_remove_all_java", List.of(receiver, arguments.getFirst()));
                 return true;
             }
             if ("retainAll(Ljava/util/Collection;)Z".equals(signature)) {
-                stack.add(StackValue.intExpression(IrExpression.intCall("javan_list_retain_all", List.of(receiver, arguments.getFirst()))));
+                pushIntCall(instructions, stack, localDeclarations, "javan_list_retain_all_java", List.of(receiver, arguments.getFirst()));
                 return true;
             }
             if ("size()I".equals(signature)) {
@@ -1110,11 +1110,11 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("removeAll(Ljava/util/Collection;)Z".equals(signature)) {
-                stack.add(StackValue.intExpression(IrExpression.intCall("javan_list_remove_all", List.of(receiver, arguments.getFirst()))));
+                pushIntCall(instructions, stack, localDeclarations, "javan_list_remove_all_java", List.of(receiver, arguments.getFirst()));
                 return true;
             }
             if ("retainAll(Ljava/util/Collection;)Z".equals(signature)) {
-                stack.add(StackValue.intExpression(IrExpression.intCall("javan_list_retain_all", List.of(receiver, arguments.getFirst()))));
+                pushIntCall(instructions, stack, localDeclarations, "javan_list_retain_all_java", List.of(receiver, arguments.getFirst()));
                 return true;
             }
             if ("contains(Ljava/lang/Object;)Z".equals(signature)) {

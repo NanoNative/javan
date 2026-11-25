@@ -126,6 +126,8 @@ views and transports null, immutable-collection and representational-size failur
 supported handlers.
 `containsAll` on supported collection and set owners handles views and transports null receiver
 and null source failures within supported handlers.
+`removeAll` and `retainAll` on supported collection and set owners handle supported views and
+transport null and immutable-collection failures within supported handlers.
 Object removal through supported list, set and `Collection` owners transports null-receiver and
 immutable-collection failures for the currently supported collection representations.
 Supported endpoint removals transport null, empty and immutable-list failures and publish removed

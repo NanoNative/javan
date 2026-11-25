@@ -26317,7 +26317,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersListRemoveAllToRuntimeCall() {
+    void propagatesListRemoveAllFailures() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -26330,16 +26330,15 @@ final class BytecodeToIRTest {
             plain(3, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnInt(IrExpression.intCall(
-                "javan_list_remove_all",
-                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
-            ))
+        assertThat(function.instructions()).contains(
+            IrInstruction.assignInt("int0", IrExpression.intCall("javan_list_remove_all_java",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))),
+            IrInstruction.propagatePending()
         );
     }
 
     @Test
-    void lowersListRetainAllToRuntimeCall() {
+    void propagatesListRetainAllFailures() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -26352,16 +26351,15 @@ final class BytecodeToIRTest {
             plain(3, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnInt(IrExpression.intCall(
-                "javan_list_retain_all",
-                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
-            ))
+        assertThat(function.instructions()).contains(
+            IrInstruction.assignInt("int0", IrExpression.intCall("javan_list_retain_all_java",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))),
+            IrInstruction.propagatePending()
         );
     }
 
     @Test
-    void lowersCollectionRemoveAllToRuntimeCall() {
+    void propagatesCollectionRemoveAllFailures() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -26374,16 +26372,15 @@ final class BytecodeToIRTest {
             plain(3, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnInt(IrExpression.intCall(
-                "javan_list_remove_all",
-                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
-            ))
+        assertThat(function.instructions()).contains(
+            IrInstruction.assignInt("int0", IrExpression.intCall("javan_list_remove_all_java",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))),
+            IrInstruction.propagatePending()
         );
     }
 
     @Test
-    void lowersCollectionRetainAllToRuntimeCall() {
+    void propagatesCollectionRetainAllFailures() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -26396,11 +26393,10 @@ final class BytecodeToIRTest {
             plain(3, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnInt(IrExpression.intCall(
-                "javan_list_retain_all",
-                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
-            ))
+        assertThat(function.instructions()).contains(
+            IrInstruction.assignInt("int0", IrExpression.intCall("javan_list_retain_all_java",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))),
+            IrInstruction.propagatePending()
         );
     }
 
@@ -26426,7 +26422,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersSetRemoveAllToRuntimeCall() {
+    void propagatesSetRemoveAllFailures() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -26439,16 +26435,15 @@ final class BytecodeToIRTest {
             plain(3, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnInt(IrExpression.intCall(
-                "javan_list_remove_all",
-                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
-            ))
+        assertThat(function.instructions()).contains(
+            IrInstruction.assignInt("int0", IrExpression.intCall("javan_list_remove_all_java",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))),
+            IrInstruction.propagatePending()
         );
     }
 
     @Test
-    void lowersSetRetainAllToRuntimeCall() {
+    void propagatesSetRetainAllFailures() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -26461,11 +26456,10 @@ final class BytecodeToIRTest {
             plain(3, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnInt(IrExpression.intCall(
-                "javan_list_retain_all",
-                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
-            ))
+        assertThat(function.instructions()).contains(
+            IrInstruction.assignInt("int0", IrExpression.intCall("javan_list_retain_all_java",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))),
+            IrInstruction.propagatePending()
         );
     }
 

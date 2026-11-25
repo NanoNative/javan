@@ -2544,6 +2544,170 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void collectionRemoveAllHandlesViewsAndFailures() throws Exception {
+        final Path project = project("collection-remove-all-errors");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.Collection;
+            import java.util.Collections;
+            import java.util.HashSet;
+            import java.util.List;
+            import java.util.Set;
+            public final class Main {
+                public static void main(String[] args) {
+                    List<String> list = new ArrayList<>(); list.add("a"); list.add("b"); list.add("a");
+                    Collection<String> values = list;
+                    System.out.println(values.removeAll(Collections.unmodifiableSet(Set.of("a"))));
+                    System.out.println(values.size()); System.out.println(list.get(0));
+                    Set<String> set = new HashSet<>(); set.add("a"); set.add("b");
+                    System.out.println(set.removeAll(List.of("b"))); System.out.println(set.contains("a"));
+                    System.out.println(values.removeAll(Collections.unmodifiableList(list))); System.out.println(values.size());
+                    try { values.removeAll(null); } catch (NullPointerException expected) { System.out.println("source"); }
+                    Collection<String> missing = args.length == 0 ? null : values;
+                    try { missing.removeAll(values); } catch (NullPointerException expected) { System.out.println("receiver"); }
+                    try { List.of("a").removeAll(List.of("a")); } catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/collection-remove-all-errors").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void collectionRetainAllHandlesViewsAndFailures() throws Exception {
+        final Path project = project("collection-retain-all-errors");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.Collection;
+            import java.util.Collections;
+            import java.util.HashSet;
+            import java.util.List;
+            import java.util.Set;
+            public final class Main {
+                public static void main(String[] args) {
+                    List<String> list = new ArrayList<>(); list.add("a"); list.add("b"); list.add("a");
+                    Collection<String> values = list;
+                    System.out.println(values.retainAll(Collections.unmodifiableSet(Set.of("a"))));
+                    System.out.println(values.size()); System.out.println(list.get(0));
+                    Set<String> set = new HashSet<>(); set.add("a"); set.add("b");
+                    System.out.println(set.retainAll(List.of("b"))); System.out.println(set.contains("b"));
+                    System.out.println(values.retainAll(Collections.unmodifiableList(list))); System.out.println(values.size());
+                    try { values.retainAll(null); } catch (NullPointerException expected) { System.out.println("source"); }
+                    Collection<String> missing = args.length == 0 ? null : values;
+                    try { missing.retainAll(values); } catch (NullPointerException expected) { System.out.println("receiver"); }
+                    try { Set.of("a").retainAll(List.of("a")); } catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/collection-retain-all-errors").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void collectionRemoveAllEvaluatesArgumentsBeforeNullFailure() throws Exception {
+        final Path project = project("collection-remove-all-null-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Collection;
+            import java.util.List;
+            public final class Main {
+                static Collection<String> missing() { System.out.println("receiver"); return null; }
+                static Collection<String> source() { System.out.println("source"); return List.of("x"); }
+                public static void main(String[] args) {
+                    missing().removeAll(source());
+                    System.out.println("after");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/collection-remove-all-null-order").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("receiver\nsource\n");
+        assertThat(result.stderr()).contains("NullPointerException");
+    }
+
+    @Test
+    void collectionRetainAllEvaluatesArgumentsBeforeNullFailure() throws Exception {
+        final Path project = project("collection-retain-all-null-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Collection;
+            import java.util.List;
+            public final class Main {
+                static Collection<String> missing() { System.out.println("receiver"); return null; }
+                static Collection<String> source() { System.out.println("source"); return List.of("x"); }
+                public static void main(String[] args) {
+                    missing().retainAll(source());
+                    System.out.println("after");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/collection-retain-all-null-order").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("receiver\nsource\n");
+        assertThat(result.stderr()).contains("NullPointerException");
+    }
+
+    @Test
+    void collectionFilterAllSurvivesConcurrentCollection() throws Exception {
+        final Path project = project("collection-filter-all-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.Collection;
+            import java.util.Collections;
+            import java.util.HashSet;
+            import java.util.List;
+            import java.util.Set;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            Collection<String> values = new ArrayList<>();
+                            Set<String> set = new HashSet<>();
+                            for (int j = 0; j < 20; j++) {
+                                String value = new String(new char[] {(char) ('a' + j)});
+                                values.add(value); set.add(value);
+                            }
+                            if (!values.removeAll(Collections.unmodifiableSet(Set.of("a", "b")))) errors.incrementAndGet();
+                            if (!set.retainAll(Collections.unmodifiableList(List.of("c", "d")))) errors.incrementAndGet();
+                            if (values.size() != 18 || set.size() != 2 || !set.contains("c")) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/collection-filter-all-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
     void collectionContainsAllSupportsViewsAndNullFailures() throws Exception {
         final Path project = project("collection-contains-all");
         writeJava(project, "com.acme.Main", """

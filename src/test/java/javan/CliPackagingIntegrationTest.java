@@ -1283,6 +1283,48 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsCollectionFilterAll() throws Exception {
+        final Path project = tempDir.resolve("selfhost-collection-filter-all");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.Collection;
+            import java.util.Collections;
+            import java.util.HashSet;
+            import java.util.List;
+            import java.util.Set;
+            public final class Main {
+                public static void main(String[] args) {
+                    Collection<String> values = new ArrayList<>(); values.add("x"); values.add("y");
+                    Set<String> set = new HashSet<>(); set.addAll(values);
+                    System.out.println(values.removeAll(Collections.unmodifiableSet(Set.of("x"))));
+                    System.out.println(set.retainAll(List.of("y"))); System.out.println(set.size());
+                    try { values.removeAll(null); } catch (NullPointerException expected) { System.out.println("null"); }
+                    try { Set.of("x").retainAll(List.of("x")); } catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-collection-filter-all"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-collection-filter-all").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout());
+    }
+
+    @Test
     void nativeBuiltJavanBuildsCollectionContainsAll() throws Exception {
         final Path project = tempDir.resolve("selfhost-collection-contains-all");
         final Path classes = project.resolve("classes");
@@ -4880,6 +4922,10 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 public static int containsAllNull(int selector) { java.util.Collection<String> values = selector == 0 ? null : new java.util.ArrayList<>(); return values.containsAll(java.util.List.of()) ? 1 : 0; }
                 public static int containsAllSourceNull() { java.util.Set<String> values = new java.util.HashSet<>(); return values.containsAll(null) ? 1 : 0; }
                 public static int containsAllSuccess() { java.util.Collection<String> values = new java.util.HashSet<>(); values.add("x"); return values.containsAll(java.util.List.of("x")) ? 1 : 0; }
+                public static int removeAllNull(int selector) { java.util.Collection<String> values = selector == 0 ? null : new java.util.ArrayList<>(); return values.removeAll(java.util.List.of()) ? 1 : 0; }
+                public static int retainAllSourceNull() { java.util.Set<String> values = new java.util.HashSet<>(); return values.retainAll(null) ? 1 : 0; }
+                public static int removeAllImmutable() { java.util.Set<String> values = java.util.Set.of("x"); return values.removeAll(java.util.List.of("x")) ? 1 : 0; }
+                public static int retainAllSuccess() { java.util.Collection<String> values = new java.util.ArrayList<>(); values.add("x"); values.add("y"); return values.retainAll(java.util.List.of("x")) && values.size() == 1 ? 1 : 0; }
                 public static int listRemoveFirstEmpty() { new java.util.ArrayList<String>().removeFirst(); return 0; }
                 public static int listRemoveLastNull(int selector) { java.util.List<String> values = selector == 0 ? null : new java.util.ArrayList<>(); values.removeLast(); return 0; }
                 public static int listRemoveFirstImmutable() { java.util.List.of().removeFirst(); return 0; }
@@ -4937,6 +4983,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "--export", "com.acme.Api.listAddAllNull(int):int", "--export", "com.acme.Api.listAddAllSourceNull():int", "--export", "com.acme.Api.listAddAllImmutable():int", "--export", "com.acme.Api.listAddAllSuccess():int",
             "--export", "com.acme.Api.collectionAddAllNull(int):int", "--export", "com.acme.Api.setAddAllSourceNull():int", "--export", "com.acme.Api.setAddAllImmutable():int", "--export", "com.acme.Api.setAddAllSuccess():int",
             "--export", "com.acme.Api.containsAllNull(int):int", "--export", "com.acme.Api.containsAllSourceNull():int", "--export", "com.acme.Api.containsAllSuccess():int",
+            "--export", "com.acme.Api.removeAllNull(int):int", "--export", "com.acme.Api.retainAllSourceNull():int", "--export", "com.acme.Api.removeAllImmutable():int", "--export", "com.acme.Api.retainAllSuccess():int",
             "--export", "com.acme.Api.listRemoveFirstEmpty():int", "--export", "com.acme.Api.listRemoveLastNull(int):int",
             "--export", "com.acme.Api.listRemoveFirstImmutable():int", "--export", "com.acme.Api.listRemoveLastLegacyEmpty():int",
             "--export", "com.acme.Api.listAddFirstNull(int):int", "--export", "com.acme.Api.listAddLastNull(int):int",
@@ -5211,6 +5258,18 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                     javan_result_free(&failure);
                     failure = javan_try_com_acme_Api_containsAllSuccess_void(&value);
                     if (!failure.ok || value != 1) return 100;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_removeAllNull_int(0, &value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 101;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_retainAllSourceNull_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 102;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_removeAllImmutable_void(&value);
+                    if (failure.ok || failure.message == 0 || strstr(failure.message, "UnsupportedOperationException") == 0) return 103;
+                    javan_result_free(&failure);
+                    failure = javan_try_com_acme_Api_retainAllSuccess_void(&value);
+                    if (!failure.ok || value != 1) return 104;
                     javan_result_free(&failure);
                     failure = javan_try_com_acme_Api_listAddAllIndexSourceNull_void(&value);
                     if (failure.ok || failure.message == 0 || strstr(failure.message, "NullPointerException") == 0) return 87;
