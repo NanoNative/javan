@@ -78,15 +78,72 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void concurrentClassNameLookupKeepsResultsAlive() throws Exception {
-        checkConcurrentClassNameLookup("concurrent-class-name", "getName");
+        checkConcurrentClassNameLookup("concurrent-class-name", "getName", "com.acme.Main");
     }
 
     @Test
     void concurrentTypeNameLookupKeepsResultsAlive() throws Exception {
-        checkConcurrentClassNameLookup("concurrent-class-type-name", "getTypeName");
+        checkConcurrentClassNameLookup("concurrent-class-type-name", "getTypeName", "com.acme.Main");
     }
 
-    private void checkConcurrentClassNameLookup(final String name, final String method) throws Exception {
+    @Test
+    void concurrentSimpleClassNameLookupKeepsResultsAlive() throws Exception {
+        checkConcurrentClassNameLookup("concurrent-simple-class-name", "getSimpleName", "Main");
+    }
+
+    @Test
+    void concurrentPackageNameLookupKeepsResultsAlive() throws Exception {
+        checkConcurrentClassNameLookup("concurrent-package-name", "getPackageName", "com.acme");
+    }
+
+    @Test
+    void concurrentClassDescriptorLookupKeepsResultsAlive() throws Exception {
+        checkConcurrentClassNameLookup("concurrent-class-descriptor", "descriptorString", "Lcom/acme/Main;");
+    }
+
+    @Test
+    void concurrentMethodNameLookupKeepsResultsAlive() throws Exception {
+        final Path project = project("concurrent-method-name");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.Method;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger failures = new AtomicInteger();
+                public static void sample() { }
+                static final class Worker implements Runnable {
+                    final Method method;
+                    Worker(Method method) { this.method = method; }
+                    public void run() {
+                        for (int i = 0; i < 1000; i++) {
+                            String name = method.getName();
+                            if (!name.equals("sample")) failures.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Method method = Main.class.getDeclaredMethod("sample");
+                    Thread first = new Thread(new Worker(method)); Thread second = new Thread(new Worker(method));
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(failures.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/concurrent-method-name").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stderr()).isEmpty();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    private void checkConcurrentClassNameLookup(
+        final String name,
+        final String method,
+        final String expected
+    ) throws Exception {
         final Path project = project(name);
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -97,7 +154,7 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
                     public void run() {
                         for (int i = 0; i < 1000; i++) {
                             String name = Main.class.%s();
-                            if (!name.equals("com.acme.Main")) failures.incrementAndGet();
+                            if (!name.equals("%s")) failures.incrementAndGet();
                         }
                     }
                 }
@@ -107,7 +164,7 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
                     System.out.println(failures.get());
                 }
             }
-            """.formatted(method));
+            """.formatted(method, expected));
         final CliRun build = run(tempDir, "build", project.toString());
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final ProcessResult result = process(project,
