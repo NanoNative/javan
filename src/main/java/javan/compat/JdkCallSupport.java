@@ -2206,6 +2206,19 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies bulk insertion on supported collection and set receivers.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method adds a collection
+     */
+    public static boolean isCollectionAddAll(final MethodRef methodRef) {
+        return ("java/util/Collection".equals(methodRef.owner()) || "java/util/Set".equals(methodRef.owner())
+                || "java/util/HashSet".equals(methodRef.owner()) || "java/util/LinkedHashSet".equals(methodRef.owner()))
+            && "addAll".equals(methodRef.name()) && "(Ljava/util/Collection;)Z".equals(methodRef.descriptor())
+            && isSupported(methodRef);
+    }
+
+    /**
      * Identifies object removal on supported collection receivers.
      *
      * @param methodRef referenced JDK method
@@ -2408,7 +2421,7 @@ public final class JdkCallSupport {
             return List.of("java/lang/NullPointerException", "java/lang/IndexOutOfBoundsException",
                 "java/lang/UnsupportedOperationException", "java/lang/OutOfMemoryError");
         }
-        if (isListAddAll(methodRef)) {
+        if (isListAddAll(methodRef) || isCollectionAddAll(methodRef)) {
             return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException", "java/lang/OutOfMemoryError");
         }
         if (isListIndexedSet(methodRef) || isListIndexedRemove(methodRef) || isListIndexedAdd(methodRef)) {

@@ -12989,8 +12989,12 @@ final class RuntimeSourceMemorySections {
             if (required <= list->capacity) {
                 return;
             }
-            int next_capacity = list->capacity <= 0 ? 4 : list->capacity * 2;
+            int next_capacity = list->capacity <= 0 ? 4 : list->capacity;
             while (next_capacity < required) {
+                if (next_capacity > INT_MAX / 2) {
+                    next_capacity = INT_MAX;
+                    break;
+                }
                 next_capacity *= 2;
             }
             int created_buffer = list->values == NULL;
@@ -13319,6 +13323,23 @@ final class RuntimeSourceMemorySections {
                 return javan_hashset_add_all(value, collection);
             }
             return javan_arraylist_add_all(value, collection);
+        }
+
+        int javan_collection_add_all_java(void* value, void* collection) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            javan_runtime_lock_enter();
+            javan_object_list* target = javan_list_checked(value);
+            int result;
+            if (javan_list_is_set(target) != 0) {
+                result = javan_hashset_add_all_java(value, collection);
+            } else {
+                result = javan_arraylist_add_all_java(value, collection);
+            }
+            javan_runtime_lock_leave();
+            return result;
         }
 
         static void javan_arraylist_add_endpoint_java(void* value, void* element, int last) {
@@ -13926,10 +13947,7 @@ final class RuntimeSourceMemorySections {
             return javan_set_new_with_capacity(0);
         }
 
-        int javan_hashset_add_all(void* value, void* collection) {
-            javan_object_list* set = javan_list_checked(value);
-            javan_object_list* source = javan_list_checked(collection);
-            javan_list_mutable_checked(set);
+        static int javan_hashset_add_all_prechecked(javan_object_list* set, javan_object_list* source, int java_errors) {
             void** javan_hashset_add_all_roots[] = {
                 (void**) &set,
                 (void**) &source
@@ -13938,12 +13956,46 @@ final class RuntimeSourceMemorySections {
             int length = javan_list_logical_length(source);
             int changed = 0;
             for (int index = 0; index < length; index++) {
-                if (javan_set_add(set, javan_list_get_unchecked(source, index)) != 0) {
+                void* element = javan_list_get_unchecked(source, index);
+                if (set->length == INT_MAX && javan_list_contains(set, element) == 0) {
+                    if (java_errors) {
+                        javan_pending_throw("java/lang/OutOfMemoryError", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                        break;
+                    }
+                    javan_panic("set capacity overflow");
+                }
+                if (javan_set_add(set, element) != 0) {
                     changed = 1;
                 }
             }
             javan_root_frame_pop(javan_hashset_add_all_roots);
             return changed;
+        }
+
+        int javan_hashset_add_all(void* value, void* collection) {
+            javan_object_list* set = javan_list_checked(value);
+            javan_object_list* source = javan_list_checked(collection);
+            javan_list_mutable_checked(set);
+            return javan_hashset_add_all_prechecked(set, source, 0);
+        }
+
+        int javan_hashset_add_all_java(void* value, void* collection) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            javan_runtime_lock_enter();
+            javan_object_list* set = javan_list_checked(value);
+            int result = 0;
+            if (set->immutable != 0) {
+                javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+            } else if (collection == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+            } else {
+                result = javan_hashset_add_all_prechecked(set, javan_list_checked(collection), 1);
+            }
+            javan_runtime_lock_leave();
+            return result;
         }
 
         void* javan_set_empty(void) {

@@ -1033,7 +1033,7 @@ final class BytecodeToIRCollectionSupport {
         }
         if (isJdkListOrCollection(methodRef.owner())) {
             if ("addAll(Ljava/util/Collection;)Z".equals(signature)) {
-                stack.add(StackValue.intExpression(IrExpression.intCall("javan_collection_add_all", List.of(receiver, arguments.getFirst()))));
+                pushIntCall(instructions, stack, localDeclarations, "javan_collection_add_all_java", List.of(receiver, arguments.getFirst()));
                 return true;
             }
             if ("removeAll(Ljava/util/Collection;)Z".equals(signature)) {
@@ -1106,7 +1106,7 @@ final class BytecodeToIRCollectionSupport {
         }
         if (isJdkSetOwner(methodRef.owner())) {
             if ("addAll(Ljava/util/Collection;)Z".equals(signature)) {
-                stack.add(StackValue.intExpression(IrExpression.intCall("javan_hashset_add_all", List.of(receiver, arguments.getFirst()))));
+                pushIntCall(instructions, stack, localDeclarations, "javan_collection_add_all_java", List.of(receiver, arguments.getFirst()));
                 return true;
             }
             if ("removeAll(Ljava/util/Collection;)Z".equals(signature)) {

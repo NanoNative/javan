@@ -2544,6 +2544,149 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void collectionAndSetAddAllSupportViewsAndFailures() throws Exception {
+        final Path project = project("collection-set-add-all");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.Collection;
+            import java.util.Collections;
+            import java.util.HashSet;
+            import java.util.LinkedHashSet;
+            import java.util.List;
+            import java.util.Set;
+            public final class Main {
+                public static void main(String[] args) {
+                    Collection<String> values = new ArrayList<>();
+                    values.add("a");
+                    System.out.println(values.addAll(Collections.unmodifiableList(List.of("b"))));
+                    System.out.println(values.size());
+                    HashSet<String> concrete = new HashSet<>();
+                    Collection<String> set = concrete;
+                    System.out.println(set.addAll(List.of("x", "y")));
+                    System.out.println(set.addAll(List.of("x")));
+                    System.out.println(set.contains("x") && set.contains("y"));
+                    System.out.println(concrete.addAll(Collections.unmodifiableSet(Set.of("z"))));
+                    Set<String> linked = new LinkedHashSet<>();
+                    System.out.println(linked.addAll(List.of("q")));
+                    try { values.addAll(null); } catch (NullPointerException expected) { System.out.println("list null"); }
+                    try { set.addAll(null); } catch (NullPointerException expected) { System.out.println("set null"); }
+                    try { Set.of().addAll(null); } catch (UnsupportedOperationException expected) { System.out.println("immutable set"); }
+                    try { Collections.unmodifiableCollection(values).addAll(List.of()); } catch (UnsupportedOperationException expected) { System.out.println("immutable collection"); }
+                    try { Collections.unmodifiableSet(concrete).addAll(List.of()); } catch (UnsupportedOperationException expected) { System.out.println("immutable view"); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/collection-set-add-all").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void setAddAllSupportsNullElementsAndSelf() throws Exception {
+        final Path project = project("set-add-all-self");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.Collections;
+            import java.util.HashSet;
+            import java.util.LinkedHashSet;
+            import java.util.List;
+            public final class Main {
+                public static void main(String[] args) {
+                    HashSet<String> values = new HashSet<>();
+                    List<String> source = new ArrayList<>(); source.add(null); source.add("x"); source.add("x");
+                    System.out.println(values.addAll(source));
+                    System.out.println(values.size()); System.out.println(values.contains(null));
+                    System.out.println(values.addAll(values));
+                    System.out.println(values.addAll(Collections.unmodifiableSet(values)));
+                    LinkedHashSet<String> linked = new LinkedHashSet<>();
+                    System.out.println(linked.addAll(source)); System.out.println(linked.addAll(source));
+                    System.out.println(linked.size()); System.out.println(linked.contains(null));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/set-add-all-self").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void collectionAddAllEvaluatesArgumentsBeforeNullFailure() throws Exception {
+        final Path project = project("collection-add-all-null-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Collection;
+            import java.util.List;
+            public final class Main {
+                static Collection<String> missing() { System.out.println("receiver"); return null; }
+                static Collection<String> source() { System.out.println("source"); return List.of("x"); }
+                public static void main(String[] args) {
+                    missing().addAll(source());
+                    System.out.println("after");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/collection-add-all-null-order").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("receiver\nsource\n");
+        assertThat(result.stderr()).contains("NullPointerException");
+    }
+
+    @Test
+    void collectionAndSetAddAllSurviveConcurrentCollection() throws Exception {
+        final Path project = project("collection-set-add-all-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.Collection;
+            import java.util.Collections;
+            import java.util.HashSet;
+            import java.util.List;
+            import java.util.Set;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            List<String> source = new ArrayList<>();
+                            for (int j = 0; j < 20; j++) source.add(new String(new char[] {(char) ('a' + j)}));
+                            Collection<String> values = new ArrayList<>();
+                            Set<String> set = new HashSet<>();
+                            if (!values.addAll(Collections.unmodifiableList(source))) errors.incrementAndGet();
+                            if (!set.addAll(values) || set.addAll(values)) errors.incrementAndGet();
+                            if (values.size() != 20 || set.size() != 20 || !set.contains("t")) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/collection-set-add-all-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
     void listAddAllAcceptsViewsAndSelf() throws Exception {
         final Path project = project("list-add-all-views");
         writeJava(project, "com.acme.Main", """

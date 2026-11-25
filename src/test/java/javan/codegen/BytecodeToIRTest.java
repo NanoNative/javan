@@ -24612,7 +24612,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersHashSetAddAllToRuntimeCall() {
+    void propagatesHashSetAddAllFailures() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -24625,11 +24625,10 @@ final class BytecodeToIRTest {
             plain(3, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnInt(IrExpression.intCall(
-                "javan_hashset_add_all",
-                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
-            ))
+        assertThat(function.instructions()).contains(
+            IrInstruction.assignInt("int0", IrExpression.intCall("javan_collection_add_all_java",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))),
+            IrInstruction.propagatePending()
         );
     }
 
@@ -24677,7 +24676,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersLinkedHashSetAddAllToRuntimeCall() {
+    void propagatesLinkedHashSetAddAllFailures() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -24690,11 +24689,10 @@ final class BytecodeToIRTest {
             plain(3, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnInt(IrExpression.intCall(
-                "javan_hashset_add_all",
-                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
-            ))
+        assertThat(function.instructions()).contains(
+            IrInstruction.assignInt("int0", IrExpression.intCall("javan_collection_add_all_java",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))),
+            IrInstruction.propagatePending()
         );
     }
 
@@ -26280,7 +26278,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersCollectionAddAllToRuntimeCall() {
+    void propagatesCollectionAddAllFailures() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -26293,11 +26291,10 @@ final class BytecodeToIRTest {
             plain(3, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnInt(IrExpression.intCall(
-                "javan_collection_add_all",
-                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
-            ))
+        assertThat(function.instructions()).contains(
+            IrInstruction.assignInt("int0", IrExpression.intCall("javan_collection_add_all_java",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))),
+            IrInstruction.propagatePending()
         );
     }
 
@@ -26412,7 +26409,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersSetAddAllToRuntimeCall() {
+    void propagatesSetAddAllFailures() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -26425,11 +26422,10 @@ final class BytecodeToIRTest {
             plain(3, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnInt(IrExpression.intCall(
-                "javan_hashset_add_all",
-                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
-            ))
+        assertThat(function.instructions()).contains(
+            IrInstruction.assignInt("int0", IrExpression.intCall("javan_collection_add_all_java",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))),
+            IrInstruction.propagatePending()
         );
     }
 

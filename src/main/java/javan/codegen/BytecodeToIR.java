@@ -1447,6 +1447,7 @@ public final class BytecodeToIR {
                 || JdkCallSupport.isListIndexedGet(reference) || JdkCallSupport.isListIndexedSet(reference)
                 || JdkCallSupport.isListIndexedRemove(reference) || JdkCallSupport.isListIndexedAdd(reference)
                 || JdkCallSupport.isListIndexedAddAll(reference) || JdkCallSupport.isListAddAll(reference)
+                || JdkCallSupport.isCollectionAddAll(reference)
                 || JdkCallSupport.isCollectionObjectRemoval(reference)
                 || JdkCallSupport.isListEndpointRemove(reference)
                 || JdkCallSupport.isListEndpointAdd(reference)) {
