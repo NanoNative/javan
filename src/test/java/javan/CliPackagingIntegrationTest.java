@@ -3498,6 +3498,52 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeLibraryFileReadsAndFailuresSurviveCollection() throws Exception {
+        final Path project = project("library-file-read");
+        Files.writeString(project.resolve("data.bin"), "ABC", StandardCharsets.UTF_8);
+        writeJava(project, "com.acme.Api", """
+            package com.acme;
+            import java.nio.file.Files;
+            import java.nio.file.Path;
+            public final class Api {
+                public static int read(int mode) throws Exception {
+                    Path path = Path.of(mode == 2 ? "missing.bin" : "data.bin");
+                    if (mode == 0) return Files.readAllBytes(path).length;
+                    return Files.readString(path).length();
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString(), "--library", "--format", "static",
+            "--export", "com.acme.Api.read");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path caller = writeC(project, "call_file_read.c", """
+            #include <string.h>
+            #include ".javan/dist/bindings/c/library-file-read.h"
+            int main(void) {
+                for (int i = 0; i < 100; i++) {
+                    for (int mode = 0; mode < 3; mode++) {
+                        int value = 0;
+                        JavanResult result = javan_try_com_acme_Api_read_int(mode, &value);
+                        if (mode < 2 && (!result.ok || value != 3)) return 1;
+                        if (mode == 2 && (result.ok || result.message == 0
+                            || strstr(result.message, "IOException") == 0)) return 2;
+                        javan_result_free(&result);
+                    }
+                }
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-file-read");
+        final ProcessResult compile = process(project, List.of("cc", caller.toString(),
+            project.resolve(".javan/dist/liblibrary-file-read.a").toString(), "-o", binary.toString()));
+        assertThat(compile.exitCode()).as(compile.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(binary.toString()), Duration.ofSeconds(30),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stderr()).isEmpty();
+    }
+
+    @Test
     void nativeLibraryFailedClassInitializationStaysFailedAcrossExports() throws Exception {
         assertFailedClassInitialization(-1, "java/lang/ExceptionInInitializerError");
     }
