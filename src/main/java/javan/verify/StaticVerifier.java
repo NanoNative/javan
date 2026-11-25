@@ -2143,6 +2143,7 @@ public final class StaticVerifier {
                     || JdkCallSupport.isListIndexedSet(target) || JdkCallSupport.isListIndexedRemove(target)
                     || JdkCallSupport.isListIndexedAdd(target) || JdkCallSupport.isListIndexedAddAll(target)
                     || JdkCallSupport.isListAddAll(target) || JdkCallSupport.isCollectionAddAll(target)
+                    || JdkCallSupport.isCollectionContainsAll(target)
                     || JdkCallSupport.isCollectionObjectRemoval(target)
                     || JdkCallSupport.isListEndpointRemove(target) || JdkCallSupport.isListEndpointAdd(target);
             }

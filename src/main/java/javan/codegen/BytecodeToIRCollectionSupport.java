@@ -1078,7 +1078,7 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("containsAll(Ljava/util/Collection;)Z".equals(signature)) {
-                stack.add(StackValue.intExpression(IrExpression.intCall("javan_list_contains_all", List.of(receiver, arguments.getFirst()))));
+                pushIntCall(instructions, stack, localDeclarations, "javan_list_contains_all_java", List.of(receiver, arguments.getFirst()));
                 return true;
             }
             if ("iterator()Ljava/util/Iterator;".equals(signature)) {
@@ -1143,7 +1143,7 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("containsAll(Ljava/util/Collection;)Z".equals(signature)) {
-                stack.add(StackValue.intExpression(IrExpression.intCall("javan_list_contains_all", List.of(receiver, arguments.getFirst()))));
+                pushIntCall(instructions, stack, localDeclarations, "javan_list_contains_all_java", List.of(receiver, arguments.getFirst()));
                 return true;
             }
             if ("size()I".equals(signature)) {

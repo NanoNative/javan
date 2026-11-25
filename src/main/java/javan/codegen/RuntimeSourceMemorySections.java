@@ -13748,6 +13748,17 @@ final class RuntimeSourceMemorySections {
             return 1;
         }
 
+        int javan_list_contains_all_java(void* value, void* other) {
+            if (value == NULL || other == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            javan_runtime_lock_enter();
+            int result = javan_list_contains_all(value, other);
+            javan_runtime_lock_leave();
+            return result;
+        }
+
         static void javan_list_clear_prechecked(javan_object_list* list) {
             javan_runtime_lock_enter();
             int length = javan_list_logical_length(list);

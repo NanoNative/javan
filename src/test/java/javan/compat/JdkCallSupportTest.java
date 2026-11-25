@@ -4462,6 +4462,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void collectionContainsAllTransportsNullFailures() {
+        for (final String owner : List.of("java/util/Collection", "java/util/List", "java/util/Set", "java/util/HashSet", "java/util/LinkedHashSet")) {
+            assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
+                owner, "containsAll", "(Ljava/util/Collection;)Z"
+            ))).containsExactly("java/lang/NullPointerException");
+        }
+    }
+
+    @Test
     void collectionAddAllTransportsNullImmutableAndSizeFailures() {
         for (final String owner : List.of("java/util/Collection", "java/util/Set", "java/util/HashSet", "java/util/LinkedHashSet")) {
             assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(

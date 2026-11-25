@@ -2219,6 +2219,17 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies bulk containment checks on supported collections.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method checks every element of a collection
+     */
+    public static boolean isCollectionContainsAll(final MethodRef methodRef) {
+        return isCollectionRuntimeOwner(methodRef.owner()) && "containsAll".equals(methodRef.name())
+            && "(Ljava/util/Collection;)Z".equals(methodRef.descriptor()) && isSupported(methodRef);
+    }
+
+    /**
      * Identifies object removal on supported collection receivers.
      *
      * @param methodRef referenced JDK method
@@ -2447,7 +2458,8 @@ public final class JdkCallSupport {
             || isMapRemove(methodRef) || isMapReplace(methodRef) || isMapPutAll(methodRef)) {
             return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException");
         }
-        if (isCollectionObjectSearch(methodRef) || isCollectionSizeQuery(methodRef) || isMapObjectGetOrPut(methodRef)
+        if (isCollectionObjectSearch(methodRef) || isCollectionContainsAll(methodRef)
+            || isCollectionSizeQuery(methodRef) || isMapObjectGetOrPut(methodRef)
             || isMapMembershipOrDefaultQuery(methodRef)) {
             return List.of("java/lang/NullPointerException");
         }

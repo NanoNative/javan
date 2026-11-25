@@ -2544,6 +2544,117 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void collectionContainsAllSupportsViewsAndNullFailures() throws Exception {
+        final Path project = project("collection-contains-all");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.Collection;
+            import java.util.Collections;
+            import java.util.HashSet;
+            import java.util.LinkedHashSet;
+            import java.util.List;
+            import java.util.Set;
+            public final class Main {
+                public static void main(String[] args) {
+                    List<String> list = new ArrayList<>(); list.add("a"); list.add("b");
+                    Collection<String> values = list;
+                    Set<String> set = new HashSet<>(); set.add("a"); set.add("b");
+                    LinkedHashSet<String> linked = new LinkedHashSet<>(); linked.add("a");
+                    System.out.println(values.containsAll(Collections.unmodifiableList(List.of("a", "b"))));
+                    System.out.println(values.containsAll(Set.of("c")));
+                    System.out.println(set.containsAll(values));
+                    System.out.println(linked.containsAll(List.of("a")));
+                    System.out.println(Collections.unmodifiableSet(set).containsAll(List.of()));
+                    try { values.containsAll(null); } catch (NullPointerException expected) { System.out.println("list source"); }
+                    try { set.containsAll(null); } catch (NullPointerException expected) { System.out.println("set source"); }
+                    Collection<String> missing = args.length == 0 ? null : values;
+                    try { missing.containsAll(values); } catch (NullPointerException expected) { System.out.println("receiver"); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/collection-contains-all").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void collectionContainsAllEvaluatesArgumentsBeforeNullFailure() throws Exception {
+        final Path project = project("collection-contains-all-null-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Collection;
+            import java.util.List;
+            public final class Main {
+                static Collection<String> missing() { System.out.println("receiver"); return null; }
+                static Collection<String> source() { System.out.println("source"); return List.of("x"); }
+                public static void main(String[] args) {
+                    missing().containsAll(source());
+                    System.out.println("after");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/collection-contains-all-null-order").toString()));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("receiver\nsource\n");
+        assertThat(result.stderr()).contains("NullPointerException");
+    }
+
+    @Test
+    void collectionContainsAllSurvivesConcurrentCollection() throws Exception {
+        final Path project = project("collection-contains-all-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.Collection;
+            import java.util.Collections;
+            import java.util.HashSet;
+            import java.util.List;
+            import java.util.Set;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger errors = new AtomicInteger();
+                static Collection<String> source() {
+                    List<String> values = new ArrayList<>();
+                    values.add(new String(new char[] {'a'})); values.add(new String(new char[] {'b'}));
+                    return Collections.unmodifiableList(values);
+                }
+                static Set<String> receiver() {
+                    Set<String> values = new HashSet<>();
+                    values.add(new String(new char[] {'a'})); values.add(new String(new char[] {'b'}));
+                    return values;
+                }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            if (!receiver().containsAll(source())) errors.incrementAndGet();
+                            if (source().containsAll(List.of("c"))) errors.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(errors.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/collection-contains-all-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
     void collectionAndSetAddAllSupportViewsAndFailures() throws Exception {
         final Path project = project("collection-set-add-all");
         writeJava(project, "com.acme.Main", """
