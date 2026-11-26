@@ -3171,6 +3171,46 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void emptyCollectionsBulkFilteringMatchesJvm() throws Exception {
+        final Path project = project("empty-collections-bulk-filter");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static void remove(Collection<String> values, Collection<String> probe) {
+                    try { System.out.println(values.removeAll(probe)); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                    catch (NullPointerException expected) { System.out.println("null"); }
+                }
+                static void retain(Collection<String> values, Collection<String> probe) {
+                    try { System.out.println(values.retainAll(probe)); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                    catch (NullPointerException expected) { System.out.println("null"); }
+                }
+                public static void main(String[] args) {
+                    remove(Collections.emptyList(), List.of("x")); retain(Collections.emptyList(), List.of("x"));
+                    remove(Collections.emptySet(), Set.of("x")); retain(Collections.emptySet(), Set.of("x"));
+                    remove(Collections.emptyList(), null); retain(Collections.emptyList(), null);
+                    remove(Collections.emptySet(), null); retain(Collections.emptySet(), null);
+                    remove(List.of(), List.of()); retain(List.of(), List.of());
+                    remove(Set.of(), Set.of()); retain(Set.of(), Set.of());
+                    remove(Collections.unmodifiableList(Collections.emptyList()), List.of());
+                    retain(Collections.unmodifiableSet(Collections.emptySet()), Set.of());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("false\nfalse\nfalse\nfalse\nnull\nnull\nnull\nnull\n"
+            + "immutable\nimmutable\nimmutable\nimmutable\nimmutable\nimmutable\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/empty-collections-bulk-filter").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void listObjectRemovalTransportsReentrantShrinkFailure() throws Exception {
         final Path project = project("list-remove-reentrant-shrink");
         writeJava(project, "com.acme.Main", """

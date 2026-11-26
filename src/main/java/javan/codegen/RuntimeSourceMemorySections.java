@@ -13942,7 +13942,11 @@ final class RuntimeSourceMemorySections {
             javan_runtime_lock_enter();
             javan_object_list* list = javan_list_checked(value);
             int result = 0;
-            if (list->immutable != 0) {
+            if ((list->view_flags & JAVAN_LIST_EMPTY_COLLECTION) != 0) {
+                if (other == NULL) {
+                    javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                }
+            } else if (list->immutable != 0) {
                 javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
             } else if (other == NULL) {
                 javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);

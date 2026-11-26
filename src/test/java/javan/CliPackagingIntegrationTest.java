@@ -1617,6 +1617,47 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsEmptyCollectionBulkFiltering() throws Exception {
+        final Path project = tempDir.resolve("selfhost-empty-bulk-filter");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static void remove(Collection<String> values, Collection<String> probe) {
+                    try { System.out.println(values.removeAll(probe)); }
+                    catch (NullPointerException expected) { System.out.println("null"); }
+                }
+                static void retain(Collection<String> values, Collection<String> probe) {
+                    try { System.out.println(values.retainAll(probe)); }
+                    catch (NullPointerException expected) { System.out.println("null"); }
+                }
+                public static void main(String[] args) {
+                    remove(Collections.emptyList(), List.of("x")); retain(Collections.emptyList(), null);
+                    remove(Collections.emptySet(), null); retain(Collections.emptySet(), Set.of("x"));
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-empty-bulk-filter"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-empty-bulk-filter").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout());
+    }
+
+    @Test
     void nativeBuiltJavanBuildsListBulkRemovalNullProbeFailures() throws Exception {
         final Path project = tempDir.resolve("selfhost-list-filter-null");
         final Path classes = project.resolve("classes");
@@ -3946,6 +3987,51 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             final Path goDir = project.resolve(".javan/dist/bindings/go");
             assertThat(processSlow(project, List.of("sh", "-c", "cd '" + goDir + "' && GO111MODULE=off CGO_ENABLED=1 go test")).exitCode()).isZero();
         }
+    }
+
+    @Test
+    void nativeLibraryEmptyCollectionBulkFilteringTransportsNullFailure() throws Exception {
+        final Path project = project("library-empty-bulk-filter");
+        writeJava(project, "com.acme.Api", """
+            package com.acme;
+            import java.util.*;
+            public final class Api {
+                public static int filter(int mode) {
+                    Collection<String> values = mode < 4 ? Collections.emptyList() : Collections.emptySet();
+                    Collection<String> probe = mode % 4 < 2 ? List.of("x") : null;
+                    if (mode % 2 == 0) return values.removeAll(probe) ? 1 : 0;
+                    return values.retainAll(probe) ? 1 : 0;
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString(), "--library", "--format", "static",
+            "--export", "com.acme.Api.filter");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path caller = writeC(project, "call_empty_bulk_filter.c", """
+            #include <string.h>
+            #include ".javan/dist/bindings/c/library-empty-bulk-filter.h"
+            int main(void) {
+                for (int i = 0; i < 100; i++) {
+                    for (int mode = 0; mode < 8; mode++) {
+                        int value = -1;
+                        JavanResult result = javan_try_com_acme_Api_filter_int(mode, &value);
+                        if (mode % 4 < 2 && (!result.ok || value != 0)) return 1;
+                        if (mode % 4 >= 2 && (result.ok || result.message == 0
+                            || strstr(result.message, "NullPointerException") == 0)) return 2;
+                        javan_result_free(&result);
+                    }
+                }
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-empty-bulk-filter");
+        final ProcessResult compile = process(project, List.of("cc", caller.toString(),
+            project.resolve(".javan/dist/liblibrary-empty-bulk-filter.a").toString(), "-o", binary.toString()));
+        assertThat(compile.exitCode()).as(compile.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(binary.toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stderr()).isEmpty();
     }
 
     @Test
