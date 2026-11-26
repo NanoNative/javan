@@ -3589,6 +3589,62 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeLibraryListIndexSearchUsesApplicationEquality() throws Exception {
+        final Path project = project("library-list-index-equality");
+        writeJava(project, "com.acme.Api", """
+            package com.acme;
+            import java.util.*;
+            public final class Api {
+                static final class Key {
+                    final int value;
+                    Key(int value) { this.value = value; }
+                    public boolean equals(Object other) {
+                        if (value == 9) throw new IllegalArgumentException("equality");
+                        return other instanceof Key && value == ((Key) other).value;
+                    }
+                    public int hashCode() { return value; }
+                }
+                public static int search(int value) {
+                    List<Object> values = new ArrayList<>();
+                    values.add(new Key(7)); values.add(new Key(8)); values.add(new Key(7));
+                    Key query = new Key(value);
+                    return (values.indexOf(query) + 1) * 10 + values.lastIndexOf(query) + 1;
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString(), "--library", "--format", "static",
+            "--export", "com.acme.Api.search");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path caller = writeC(project, "call_list_index.c", """
+            #include <string.h>
+            #include ".javan/dist/bindings/c/library-list-index-equality.h"
+            int main(void) {
+                const int queries[] = { 7, 8, 4, 9 };
+                const int expected[] = { 13, 22, 0, 0 };
+                for (int i = 0; i < 100; i++) {
+                    for (int q = 0; q < 4; q++) {
+                        int value = -1;
+                        JavanResult result = javan_try_com_acme_Api_search_int(queries[q], &value);
+                        if (q != 3 && (!result.ok || value != expected[q])) return 1;
+                        if (q == 3 && (result.ok || result.message == 0
+                            || strstr(result.message, "IllegalArgumentException") == 0)) return 2;
+                        javan_result_free(&result);
+                    }
+                }
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-list-index");
+        final ProcessResult compile = process(project, List.of("cc", caller.toString(),
+            project.resolve(".javan/dist/liblibrary-list-index-equality.a").toString(), "-o", binary.toString()));
+        assertThat(compile.exitCode()).as(compile.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(binary.toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stderr()).isEmpty();
+    }
+
+    @Test
     void nativeLibraryListContainsUsesApplicationEquality() throws Exception {
         final Path project = project("library-list-equality");
         writeJava(project, "com.acme.Api", """

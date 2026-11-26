@@ -1378,7 +1378,7 @@ public final class ReachabilityAnalyzer {
             addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
             return;
         }
-        if (JdkCallSupport.isCollectionContains(target)) {
+        if (JdkCallSupport.isCollectionEqualitySearch(target)) {
             final List<EntryPoint> targetMethods = dispatchTargets.collectionTargets(current, instruction);
             enqueueAll(work, workSet, targetMethods);
             addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);

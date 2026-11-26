@@ -13628,6 +13628,40 @@ final class RuntimeSourceMemorySections {
             atomic_store_explicit(&javan_collection_equals_resolver, resolver, memory_order_release);
         }
 
+        static int javan_list_custom_index_of(
+            void* value, void* element, javan_collection_equals_fn equals, int reverse
+        ) {
+            void* list_root = value;
+            void* element_root = element;
+            void* current = NULL;
+            void** roots[] = { &list_root, &element_root, &current };
+            javan_root_frame_push(roots, 3);
+            int index = 0;
+            if (reverse != 0) {
+                javan_runtime_lock_enter();
+                index = javan_list_logical_length(javan_list_checked(list_root)) - 1;
+                javan_runtime_lock_leave();
+            }
+            int result = -1;
+            for (;;) {
+                javan_runtime_lock_enter();
+                javan_object_list* list = javan_list_checked(list_root);
+                if (index < 0 || index >= javan_list_logical_length(list)) {
+                    javan_runtime_lock_leave();
+                    break;
+                }
+                int current_index = index;
+                index += reverse != 0 ? -1 : 1;
+                current = javan_list_get_unchecked(list, current_index);
+                javan_runtime_lock_leave();
+                int equal = equals(element_root, current);
+                if (javan_pending_has()) break;
+                if (equal != 0) { result = current_index; break; }
+            }
+            javan_root_frame_pop(roots);
+            return result;
+        }
+
         int javan_list_contains_java(void* value, void* element) {
             if (value == NULL) {
                 javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
@@ -13646,28 +13680,30 @@ final class RuntimeSourceMemorySections {
             if (is_set != 0) {
                 return javan_list_contains(value, element);
             }
-            void* list_root = value;
-            void* element_root = element;
-            void* current = NULL;
-            void** roots[] = { &list_root, &element_root, &current };
-            javan_root_frame_push(roots, 3);
-            int index = 0;
-            int result = 0;
-            for (;;) {
-                javan_runtime_lock_enter();
-                javan_object_list* list = javan_list_checked(list_root);
-                if (index >= javan_list_logical_length(list)) {
-                    javan_runtime_lock_leave();
-                    break;
-                }
-                current = javan_list_get_unchecked(list, index++);
-                javan_runtime_lock_leave();
-                int equal = equals(element_root, current);
-                if (javan_pending_has()) break;
-                if (equal != 0) { result = 1; break; }
+            return javan_list_custom_index_of(value, element, equals, 0) >= 0;
+        }
+
+        static int javan_list_index_of_with_equality(void* value, void* element, int reverse) {
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return -1;
             }
-            javan_root_frame_pop(roots);
-            return result;
+            javan_collection_equals_resolver_fn resolver = atomic_load_explicit(
+                &javan_collection_equals_resolver, memory_order_acquire
+            );
+            javan_collection_equals_fn equals = resolver == NULL || element == NULL ? NULL : resolver(element);
+            if (equals == NULL) {
+                return reverse != 0 ? javan_list_last_index_of(value, element) : javan_list_index_of(value, element);
+            }
+            return javan_list_custom_index_of(value, element, equals, reverse);
+        }
+
+        int javan_list_index_of_java(void* value, void* element) {
+            return javan_list_index_of_with_equality(value, element, 0);
+        }
+
+        int javan_list_last_index_of_java(void* value, void* element) {
+            return javan_list_index_of_with_equality(value, element, 1);
         }
 
         int javan_list_index_of(void* value, void* element) {

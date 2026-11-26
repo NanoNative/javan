@@ -263,7 +263,7 @@ public final class BytecodeToIR {
                 )
             );
         }
-        if (usesCollectionContains(classes, reachableMethods)) {
+        if (usesCollectionEqualitySearch(classes, reachableMethods)) {
             final MethodRef equals = new MethodRef("java/lang/Object", "equals", "(Ljava/lang/Object;)Z");
             final Set<String> reachable = new LinkedHashSet<>();
             for (final EntryPoint method : reachableMethods) {
@@ -368,7 +368,7 @@ public final class BytecodeToIR {
         }
     }
 
-    private static boolean usesCollectionContains(
+    private static boolean usesCollectionEqualitySearch(
         final Map<String, ClassFile> classes,
         final List<EntryPoint> reachableMethods
     ) {
@@ -381,7 +381,7 @@ public final class BytecodeToIR {
             }
             for (final Instruction instruction : method.orElseThrow().code().orElseThrow().instructions()) {
                 if (instruction.methodRef().isPresent()
-                    && JdkCallSupport.isCollectionContains(instruction.methodRef().orElseThrow())) {
+                    && JdkCallSupport.isCollectionEqualitySearch(instruction.methodRef().orElseThrow())) {
                     return true;
                 }
             }
@@ -485,7 +485,7 @@ public final class BytecodeToIR {
                                     && "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;".equals(calledMethod.descriptor())))
                             && "toString".equals(callee.methodName())
                             && "()Ljava/lang/String;".equals(callee.descriptor());
-                        final boolean collectionEquality = JdkCallSupport.isCollectionContains(calledMethod)
+                        final boolean collectionEquality = JdkCallSupport.isCollectionEqualitySearch(calledMethod)
                             && "equals".equals(callee.methodName())
                             && "(Ljava/lang/Object;)Z".equals(callee.descriptor());
                         if (!directCall && !charSequenceConversion && !collectionEquality) {
@@ -1515,7 +1515,7 @@ public final class BytecodeToIR {
                 || JdkCallSupport.isListEndpointAdd(reference)) {
                 possibleTypes.addAll(JdkCallSupport.transportedPlatformThrowableTypes(reference));
             }
-            if (JdkCallSupport.isCollectionContains(reference)) {
+            if (JdkCallSupport.isCollectionEqualitySearch(reference)) {
                 possibleTypes.add("java/lang/NullPointerException");
                 addTransportedThrowableTypes(COLLECTION_EQUALS_DISPATCH, dispatches,
                     transportedThrowableTypes, possibleTypes);

@@ -2544,6 +2544,143 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void listIndexSearchCallsEqualityInSearchOrderForIdenticalReference() throws Exception {
+        final Path project = project("list-index-equality-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static int trace;
+                static final class Key {
+                    final int id;
+                    Key(int id) { this.id = id; }
+                    public boolean equals(Object other) {
+                        trace = trace * 10 + ((Key) other).id;
+                        return false;
+                    }
+                    public int hashCode() { return id; }
+                }
+                public static void main(String[] args) {
+                    List<Key> values = new ArrayList<>();
+                    Key first = new Key(1); values.add(first); values.add(new Key(2)); values.add(new Key(3));
+                    System.out.println(values.indexOf(first)); System.out.println(trace);
+                    trace = 0;
+                    System.out.println(values.lastIndexOf(first)); System.out.println(trace);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("-1\n123\n-1\n321\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-index-equality-order").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listIndexSearchTransportsApplicationEqualityFailure() throws Exception {
+        final Path project = project("list-index-equality-failure");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static final class Failure extends RuntimeException { }
+                static final class Key {
+                    public boolean equals(Object other) { throw new Failure(); }
+                    public int hashCode() { return 1; }
+                }
+                public static void main(String[] args) {
+                    List<Object> values = new ArrayList<>(); values.add(new Key());
+                    Key query = new Key();
+                    try { System.out.println(values.indexOf(query)); } catch (Failure expected) { System.out.println("first"); }
+                    try { System.out.println(values.lastIndexOf(query)); } catch (Failure expected) { System.out.println("last"); }
+                    System.out.println(values.size());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("first\nlast\n1\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-index-equality-failure").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listLastIndexSearchDoesNotHoldRuntimeLockDuringEquality() throws Exception {
+        final Path project = project("list-last-index-equality-threads");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger signal = new AtomicInteger();
+                static final AtomicInteger completed = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() { while (signal.get() == 0) Thread.yield(); completed.set(1); }
+                }
+                static final class Key {
+                    public boolean equals(Object other) {
+                        signal.set(1);
+                        for (int i = 0; i < 1000000 && completed.get() == 0; i++) Thread.yield();
+                        return completed.get() == 1;
+                    }
+                    public int hashCode() { return 1; }
+                }
+                public static void main(String[] args) throws Exception {
+                    List<Key> values = new ArrayList<>(); values.add(new Key());
+                    Thread worker = new Thread(new Worker()); worker.start();
+                    System.out.println(values.lastIndexOf(new Key()));
+                    worker.join();
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-last-index-equality-threads").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("0\n");
+    }
+
+    @Test
+    void listIndexSearchUsesApplicationEquality() throws Exception {
+        final Path project = project("list-index-custom-equality");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static final class Key {
+                    final int value;
+                    Key(int value) { this.value = value; }
+                    public boolean equals(Object other) { return other instanceof Key && value == ((Key) other).value; }
+                    public int hashCode() { return value; }
+                }
+                public static void main(String[] args) {
+                    List<Object> values = new ArrayList<>();
+                    values.add(new Key(3)); values.add(new Key(7)); values.add(new Key(3)); values.add(null); values.add("word");
+                    System.out.println(values.indexOf(new Key(3)));
+                    System.out.println(values.lastIndexOf(new Key(3)));
+                    System.out.println(values.indexOf(new Key(9)));
+                    System.out.println(values.lastIndexOf(null));
+                    System.out.println(values.indexOf("word"));
+                    System.out.println(values.lastIndexOf("missing"));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("0\n2\n-1\n3\n4\n-1\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-index-custom-equality").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void collectionContainsWithoutApplicationEqualityPreservesEvaluationAndNullFailure() throws Exception {
         final Path project = project("collection-contains-platform-equality");
         writeJava(project, "com.acme.Main", """

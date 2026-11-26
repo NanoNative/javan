@@ -2269,6 +2269,23 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies supported collection searches that compare a single query element.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether membership or a list index is searched
+     */
+    public static boolean isCollectionEqualitySearch(final MethodRef methodRef) {
+        if (isCollectionContains(methodRef)) {
+            return true;
+        }
+        final String owner = methodRef.owner();
+        return ("java/util/List".equals(owner) || "java/util/ArrayList".equals(owner)
+                || "java/util/AbstractList".equals(owner))
+            && ("indexOf".equals(methodRef.name()) || "lastIndexOf".equals(methodRef.name()))
+            && "(Ljava/lang/Object;)I".equals(methodRef.descriptor()) && isSupported(methodRef);
+    }
+
+    /**
      * Identifies supported bulk collection removal and retention.
      *
      * @param methodRef referenced JDK method

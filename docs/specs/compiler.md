@@ -73,9 +73,10 @@ is implemented. The supported `TimeUnit`, `StandardCopyOption` and `LinkOption` 
 stable enum identity distinct from equal-looking strings. Supported collection searches, additions,
 clearing and size queries transport a null receiver as `NullPointerException`. Supported map clearing
 also transports a null receiver. Single-element additions and clearing transport
-`UnsupportedOperationException` for supported immutable collections and maps. Searches do not yet
-dispatch arbitrary application-defined `equals` methods. Search, addition and clear callables remain
-unknown in the support ledger while custom collection overrides and set equality remain incomplete.
+`UnsupportedOperationException` for supported immutable collections and maps. Application-defined
+`equals` remains incomplete for searches outside the supported list operations. Search, addition and
+clear callables remain unknown in the support ledger while custom collection overrides and set equality
+remain incomplete.
 Other methods remain subject to their supported callable entries.
 
 Native map primitives serialize access to shared map storage, including access through `Map`
@@ -108,9 +109,10 @@ Fixed-arity and array-based `List.of` reject null elements, and the array overlo
 array. They create immutable ordered snapshots and retain duplicate elements. Other list operations
 and application-defined element equality remain incomplete. `List.copyOf` rejects null sources and
 elements and creates an immutable ordered snapshot.
-`contains` on supported list representations calls an application-defined query object’s `equals`,
-including inherited implementations. Search values of unknown type conservatively retain possible
-implementations. Set membership still uses the existing incomplete equality semantics.
+`contains`, `indexOf` and `lastIndexOf` on supported list representations call an application-defined
+query object's `equals`, including inherited implementations. Search values of unknown type
+conservatively retain possible implementations. Null queries on `List.of` and `List.copyOf` searches
+remain incomplete. Set membership still uses the existing incomplete equality semantics.
 Reads using `List.get`, `getFirst` and `getLast` publish returned references safely during concurrent
 garbage collection. Supported `getFirst` and `getLast` calls transport null-receiver and empty-list
 failures within supported handler shapes.
