@@ -13302,7 +13302,15 @@ final class RuntimeSourceMemorySections {
             javan_runtime_lock_enter();
             javan_object_list* list = javan_list_checked(value);
             int result = 0;
-            if (list->immutable != 0) {
+            if ((list->view_flags & (JAVAN_LIST_EMPTY_COLLECTION | JAVAN_LIST_SINGLETON_COLLECTION)) != 0) {
+                if (index < 0 || index > javan_list_logical_length(list)) {
+                    javan_pending_throw("java/lang/IndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                } else if (collection == NULL) {
+                    javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                } else if (javan_list_logical_length(javan_list_checked(collection)) != 0) {
+                    javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                }
+            } else if (list->immutable != 0) {
                 javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
             } else if (index < 0 || index > javan_list_logical_length(list)) {
                 javan_pending_throw("java/lang/IndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
@@ -14263,7 +14271,13 @@ final class RuntimeSourceMemorySections {
             javan_runtime_lock_enter();
             javan_object_list* set = javan_list_checked(value);
             int result = 0;
-            if (set->immutable != 0) {
+            if ((set->view_flags & (JAVAN_LIST_EMPTY_COLLECTION | JAVAN_LIST_SINGLETON_COLLECTION)) != 0) {
+                if (collection == NULL) {
+                    javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                } else if (javan_list_logical_length(javan_list_checked(collection)) != 0) {
+                    javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                }
+            } else if (set->immutable != 0) {
                 javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
             } else if (collection == NULL) {
                 javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);

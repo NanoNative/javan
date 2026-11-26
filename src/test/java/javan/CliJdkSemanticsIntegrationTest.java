@@ -3401,6 +3401,51 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void emptyAndSingletonCollectionAddAllMatchesJvm() throws Exception {
+        final Path project = project("empty-singleton-add-all");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static void add(Collection<String> values, Collection<String> source) {
+                    try { System.out.println(values.addAll(source)); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                    catch (NullPointerException expected) { System.out.println("null"); }
+                }
+                static void addAt(List<String> values, int index, Collection<String> source) {
+                    try { System.out.println(values.addAll(index, source)); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                    catch (NullPointerException expected) { System.out.println("null"); }
+                    catch (IndexOutOfBoundsException expected) { System.out.println("index"); }
+                }
+                public static void main(String[] args) {
+                    add(Collections.emptyList(), List.of()); add(Collections.singletonList("x"), List.of());
+                    add(Collections.emptySet(), Set.of()); add(Collections.singleton("x"), Set.of());
+                    add(Collections.emptyList(), null); add(Collections.emptySet(), null);
+                    add(Collections.emptyList(), List.of("x")); add(Collections.singleton("x"), Set.of("x"));
+                    add(List.of(), List.of()); add(Set.of(), Set.of());
+                    add(Collections.unmodifiableList(Collections.emptyList()), List.of());
+                    add(Collections.unmodifiableSet(Collections.emptySet()), Set.of());
+                    addAt(Collections.emptyList(), 0, List.of()); addAt(Collections.singletonList("x"), 1, List.of());
+                    addAt(Collections.emptyList(), 1, null); addAt(Collections.emptyList(), 0, null);
+                    addAt(Collections.singletonList("x"), 2, List.of());
+                    addAt(Collections.emptyList(), 0, List.of("x"));
+                    addAt(List.of(), 1, null); add(null, List.of());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("false\nfalse\nfalse\nfalse\nnull\nnull\nimmutable\nimmutable\n"
+            + "immutable\nimmutable\nimmutable\nimmutable\nfalse\nfalse\nindex\nnull\nindex\nimmutable\nimmutable\nnull\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/empty-singleton-add-all").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void listBulkFilteringUsesApplicationEquality() throws Exception {
         final Path project = project("list-filter-equality");
         writeJava(project, "com.acme.Main", """

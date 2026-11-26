@@ -132,7 +132,8 @@ null, invalid-index, immutable-list and representational-size failures within su
 Bulk append through `List` or `ArrayList` supports the same collection views and failure transport.
 Bulk insertion through `Collection`, `Set`, `HashSet` and `LinkedHashSet` handles supported
 views and transports null, immutable-collection and representational-size failures within
-supported handlers.
+supported handlers. The `Collections` empty and singleton lists and sets return false when
+adding an empty collection. Their indexed list insertion checks its index before a null source.
 `containsAll` on supported collection and set owners handles views and transports null receiver
 and null source failures within supported handlers. Immutable `List.of`, `List.copyOf`, `Set.of`
 and `Set.copyOf` receivers reject a null probe when iteration reaches it. Supported list receivers

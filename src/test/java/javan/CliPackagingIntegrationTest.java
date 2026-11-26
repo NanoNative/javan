@@ -1695,6 +1695,49 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsEmptyCollectionAddAll() throws Exception {
+        final Path project = tempDir.resolve("selfhost-empty-add-all");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static void add(Collection<String> values, Collection<String> source) {
+                    try { System.out.println(values.addAll(source)); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                    catch (NullPointerException expected) { System.out.println("null"); }
+                }
+                static void addAt(List<String> values, int index, Collection<String> source) {
+                    try { System.out.println(values.addAll(index, source)); }
+                    catch (IndexOutOfBoundsException expected) { System.out.println("index"); }
+                }
+                public static void main(String[] args) {
+                    add(Collections.emptyList(), List.of()); add(Collections.singleton("x"), Set.of());
+                    add(Collections.emptySet(), null); add(Collections.singletonList("x"), List.of("x"));
+                    addAt(Collections.emptyList(), 1, null);
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-empty-add-all"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-empty-add-all").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout());
+    }
+
+    @Test
     void nativeBuiltJavanBuildsListBulkRemovalNullProbeFailures() throws Exception {
         final Path project = tempDir.resolve("selfhost-list-filter-null");
         final Path classes = project.resolve("classes");
@@ -4114,6 +4157,55 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         final Path binary = project.resolve("call-empty-bulk-filter");
         final ProcessResult compile = process(project, List.of("cc", caller.toString(),
             project.resolve(".javan/dist/liblibrary-empty-bulk-filter.a").toString(), "-o", binary.toString()));
+        assertThat(compile.exitCode()).as(compile.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(binary.toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stderr()).isEmpty();
+    }
+
+    @Test
+    void nativeLibraryEmptyCollectionAddAllTransportsFailures() throws Exception {
+        final Path project = project("library-empty-add-all");
+        writeJava(project, "com.acme.Api", """
+            package com.acme;
+            import java.util.*;
+            public final class Api {
+                public static int add(int mode) {
+                    if (mode == 0) return Collections.emptyList().addAll(List.of()) ? 1 : 0;
+                    if (mode == 1) return Collections.singleton("x").addAll(Set.of()) ? 1 : 0;
+                    if (mode == 2) return Collections.emptySet().addAll(null) ? 1 : 0;
+                    if (mode == 3) return Collections.emptyList().addAll(List.of("x")) ? 1 : 0;
+                    if (mode == 4) return Collections.emptyList().addAll(1, null) ? 1 : 0;
+                    return List.of().addAll(List.of()) ? 1 : 0;
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString(), "--library", "--format", "static",
+            "--export", "com.acme.Api.add");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path caller = writeC(project, "call_empty_add_all.c", """
+            #include <string.h>
+            #include ".javan/dist/bindings/c/library-empty-add-all.h"
+            int main(void) {
+                for (int i = 0; i < 100; i++) {
+                    for (int mode = 0; mode < 6; mode++) {
+                        int value = -1;
+                        JavanResult result = javan_try_com_acme_Api_add_int(mode, &value);
+                        if (mode < 2 && (!result.ok || value != 0)) return 1;
+                        if (mode >= 2 && (result.ok || result.message == 0)) return 2;
+                        if (mode == 2 && strstr(result.message, "NullPointerException") == 0) return 3;
+                        if ((mode == 3 || mode == 5) && strstr(result.message, "UnsupportedOperationException") == 0) return 4;
+                        if (mode == 4 && strstr(result.message, "IndexOutOfBoundsException") == 0) return 5;
+                        javan_result_free(&result);
+                    }
+                }
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-empty-add-all");
+        final ProcessResult compile = process(project, List.of("cc", caller.toString(),
+            project.resolve(".javan/dist/liblibrary-empty-add-all.a").toString(), "-o", binary.toString()));
         assertThat(compile.exitCode()).as(compile.stderr()).isZero();
         final ProcessResult result = process(project, List.of(binary.toString()), Duration.ofSeconds(60),
             Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
