@@ -1009,7 +1009,8 @@ public final class FunctionValueFlow {
                     final boolean noEquality = ((JdkCallSupport.isCollectionObjectRemoval(methodRef)
                         || JdkCallSupport.isCollectionFilterAll(methodRef))
                         && (receiver.fact().kinds() & REMOVAL_REJECTING) != 0)
-                        || (JdkCallSupport.isCollectionFilterAll(methodRef) && (argument.kinds() & ALWAYS_EMPTY) != 0);
+                        || (JdkCallSupport.isCollectionFilterAll(methodRef) && (argument.kinds() & ALWAYS_EMPTY) != 0)
+                        || (JdkCallSupport.isCollectionObjectRemoval(methodRef) && (receiver.fact().kinds() & ALWAYS_EMPTY) != 0);
                     addCollectionFact(collectionSiteKey(caller, instruction), noEquality ? Fact.platform() : query);
                 } else {
                     addCallbackFact(site(caller, instruction), arguments.getLast().fact());

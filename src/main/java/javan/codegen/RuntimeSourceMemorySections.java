@@ -94,6 +94,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_LIST_VIEW_SET 2
         #define JAVAN_LIST_EMPTY_COLLECTION 4
         #define JAVAN_LIST_REJECT_NULL_SEARCH 8
+        #define JAVAN_LIST_SINGLETON_COLLECTION 16
         #define JAVAN_MAP_VIEW_UNMODIFIABLE 1
         #define JAVAN_MAP_REJECT_NULL_QUERY 2
         #define JAVAN_BUILTIN_INSTANCEOF_COLLECTION 1
@@ -13518,7 +13519,11 @@ final class RuntimeSourceMemorySections {
                 values[index] = va_arg(arguments, void*);
             }
             va_end(arguments);
-            return javan_list_from_values(values, count, 0);
+            javan_object_list* list = (javan_object_list*) javan_list_from_values(values, count, 0);
+            if (count == 1) {
+                list->view_flags |= JAVAN_LIST_SINGLETON_COLLECTION;
+            }
+            return list;
         }
 
         void* javan_list_of_java(int count, ...) {
@@ -13793,7 +13798,12 @@ final class RuntimeSourceMemorySections {
             }
             javan_runtime_lock_enter();
             javan_object_list* list = javan_list_checked(value);
-            if (list->immutable != 0) {
+            int singleton = (list->view_flags & JAVAN_LIST_SINGLETON_COLLECTION) != 0;
+            if ((list->view_flags & JAVAN_LIST_EMPTY_COLLECTION) != 0) {
+                javan_runtime_lock_leave();
+                return 0;
+            }
+            if (list->immutable != 0 && singleton == 0) {
                 javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
                 javan_runtime_lock_leave();
                 return 0;
@@ -13804,7 +13814,14 @@ final class RuntimeSourceMemorySections {
             javan_collection_equals_fn equals = resolver == NULL || element == NULL || javan_list_is_set(list) != 0
                 ? NULL : resolver(element);
             if (equals == NULL) {
-                int result = javan_list_remove(list, element);
+                int result = 0;
+                if (singleton != 0) {
+                    if (javan_list_contains(list, element) != 0) {
+                        javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                    }
+                } else {
+                    result = javan_list_remove(list, element);
+                }
                 javan_runtime_lock_leave();
                 return result;
             }
@@ -13818,7 +13835,9 @@ final class RuntimeSourceMemorySections {
             list = javan_list_checked(list_root);
             int result = 0;
             if (!javan_pending_has() && index >= 0) {
-                if (index >= javan_list_logical_length(list)) {
+                if (singleton != 0) {
+                    javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                } else if (index >= javan_list_logical_length(list)) {
                     javan_pending_throw("java/lang/ArrayIndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
                 } else {
                     javan_arraylist_remove_at(list, index);

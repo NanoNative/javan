@@ -50,7 +50,8 @@ joins remain finite. Unknown or larger sets of types retain all instantiated imp
 conservatively. For object removal, proven always-rejecting immutable receivers do not retain query
 `equals` implementations. That fact survives a join only when every possible receiver rejects removal.
 For bulk filtering, a proven empty immutable probe also excludes equality; joins retain that fact
-only when every possible probe is empty. Unknown receiver contents remain conservative.
+only when every possible probe is empty. Object removal from a proven empty receiver likewise does
+not retain equality. Unknown receiver contents remain conservative.
 
 ## Optimization Contract
 
