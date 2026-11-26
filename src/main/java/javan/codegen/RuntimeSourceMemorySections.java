@@ -13715,9 +13715,11 @@ final class RuntimeSourceMemorySections {
                 return javan_list_contains(value, element);
             }
             javan_runtime_lock_enter();
-            int is_set = javan_list_is_set(javan_list_checked(value));
+            javan_object_list* list = javan_list_checked(value);
+            int unsupported_set = javan_list_is_set(list) != 0
+                && (javan_list_storage_owner(list)->view_flags & JAVAN_LIST_SINGLETON_COLLECTION) == 0;
             javan_runtime_lock_leave();
-            if (is_set != 0) {
+            if (unsupported_set != 0) {
                 return javan_list_contains(value, element);
             }
             return javan_list_custom_index_of(value, element, equals, 0) >= 0;
