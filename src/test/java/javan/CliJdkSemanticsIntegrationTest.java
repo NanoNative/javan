@@ -2609,6 +2609,42 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void collectionQueryAnalysisIsScopedToEachBuild() throws Exception {
+        final String[] queries = {
+            "return new Key(value);",
+            "if (value < 0) return new Key(9); return new Key(value);"
+        };
+        for (int index = 0; index < queries.length; index++) {
+            final String name = "collection-query-isolation-" + index;
+            final Path project = project(name);
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+                import java.util.*;
+                public final class Main {
+                    static final class Key {
+                        final int value;
+                        Key(int value) { this.value = value; }
+                        public boolean equals(Object other) { return other instanceof Key && value == ((Key) other).value; }
+                        public int hashCode() { return value; }
+                    }
+                    static Object query(int value) { %s }
+                    public static void main(String[] args) {
+                        List<Object> values = new ArrayList<>(); values.add(new Key(7));
+                        System.out.println(values.contains(query(%d)));
+                    }
+                }
+                """.formatted(queries[index], index == 0 ? 7 : 9));
+            final String expected = runJvm(project, "com.acme.Main");
+            assertThat(expected).isEqualTo(index == 0 ? "true\n" : "false\n");
+            final CliRun build = run(tempDir, "build", project.toString());
+            assertThat(build.exitCode()).as(build.stderr()).isZero();
+            final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/" + name).toString()));
+            assertThat(result.exitCode()).as(result.stderr()).isZero();
+            assertThat(result.stdout()).isEqualTo(expected);
+        }
+    }
+
+    @Test
     void collectionContainsTracksQueryTypesAcrossMethods() throws Exception {
         final Path project = project("collection-contains-query-types");
         writeJava(project, "com.acme.Main", """

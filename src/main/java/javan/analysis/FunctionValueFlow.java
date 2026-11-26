@@ -306,7 +306,15 @@ public final class FunctionValueFlow {
         final List<EntryPoint> reachableMethods,
         final List<EntryPoint> declaredExternalLeaves
     ) {
-        final MethodFlowCache methodFlows = new MethodFlowCache();
+        return analyze(classes, reachableMethods, declaredExternalLeaves, new MethodFlowCache());
+    }
+
+    static Result analyze(
+        final Map<String, ClassFile> classes,
+        final List<EntryPoint> reachableMethods,
+        final List<EntryPoint> declaredExternalLeaves,
+        final MethodFlowCache methodFlows
+    ) {
         final FlowResult function = containsTrackedUse(
             classes,
             reachableMethods,
@@ -342,7 +350,8 @@ public final class FunctionValueFlow {
         final Map<String, ClassFile> classes,
         final CallGraph graph,
         final List<EntryPoint> declaredExternalLeaves,
-        final List<EntryPoint> roots
+        final List<EntryPoint> roots,
+        final MethodFlowCache methodFlows
     ) {
         final List<EntryPoint> reachableMethods = graph.reachableMethods();
         if (!containsTrackedUse(classes, reachableMethods, CallbackKind.COLLECTION_QUERY)) {
@@ -350,7 +359,7 @@ public final class FunctionValueFlow {
         }
         final Map<String, CollectionQuery> result = new LinkedHashMap<>(
             new Engine(classes, reachableMethods, declaredExternalLeaves, roots, graph.callEdges(),
-                CallbackKind.COLLECTION_QUERY, new MethodFlowCache()).analyzeQueries()
+                CallbackKind.COLLECTION_QUERY, methodFlows).analyzeQueries()
         );
         for (final EntryPoint entry : reachableMethods) {
             final ClassFile owner = classes.get(entry.className());
@@ -404,7 +413,7 @@ public final class FunctionValueFlow {
     ) {
     }
 
-    private static final class MethodFlowCache {
+    static final class MethodFlowCache {
         private final Map<String, List<CachedMethodFlow>> byOwner = new HashMap<>();
 
         private CachedMethodFlow methodFlow(

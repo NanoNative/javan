@@ -118,11 +118,12 @@ public final class ReachabilityAnalyzer {
         List<String> serviceTypes = List.of();
         boolean serviceRootsResolved = false;
         Map<String, FunctionValueFlow.CollectionQuery> collectionQueries = Map.of();
+        final FunctionValueFlow.MethodFlowCache methodFlows = new FunctionValueFlow.MethodFlowCache();
         CallGraph graph;
         while (true) {
             final List<EntryPoint> roots = new ArrayList<>(entries);
             roots.addAll(serviceRoots);
-            graph = analyzePass(classes, roots, declaredExternalLeaves, instantiatedTypes, collectionQueries, false);
+            graph = analyzePass(classes, roots, declaredExternalLeaves, instantiatedTypes, collectionQueries, methodFlows, false);
             if (!serviceProviders.isEmpty()
                 && !serviceRootsResolved
                 && usesServiceLoader(classes, graph.reachableMethods())) {
@@ -139,7 +140,7 @@ public final class ReachabilityAnalyzer {
             }
             final Map<String, FunctionValueFlow.CollectionQuery> next = new HashMap<>(collectionQueries);
             final Map<String, FunctionValueFlow.CollectionQuery> discoveredQueries =
-                FunctionValueFlow.analyzeCollectionQueries(classes, graph, declaredExternalLeaves, roots);
+                FunctionValueFlow.analyzeCollectionQueries(classes, graph, declaredExternalLeaves, roots, methodFlows);
             boolean queriesChanged = false;
             for (final Map.Entry<String, FunctionValueFlow.CollectionQuery> query : discoveredQueries.entrySet()) {
                 final FunctionValueFlow.CollectionQuery previous = next.get(query.getKey());
@@ -167,7 +168,7 @@ public final class ReachabilityAnalyzer {
                 }
             }
             if (!queriesChanged) {
-                return analyzePass(classes, roots, declaredExternalLeaves, instantiatedTypes, collectionQueries, true);
+                return analyzePass(classes, roots, declaredExternalLeaves, instantiatedTypes, collectionQueries, methodFlows, true);
             }
             collectionQueries = Map.copyOf(next);
         }
@@ -331,6 +332,7 @@ public final class ReachabilityAnalyzer {
         final List<EntryPoint> declaredExternalLeaves,
         final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final Map<String, FunctionValueFlow.CollectionQuery> collectionQueries,
+        final FunctionValueFlow.MethodFlowCache methodFlows,
         final boolean complete
     ) {
         final MethodRefFactsCache methodRefFacts = new MethodRefFactsCache(classes);
@@ -462,7 +464,7 @@ public final class ReachabilityAnalyzer {
         }
         final List<EntryPoint> closedReachable = List.copyOf(reachable);
         final FunctionValueFlow.Result functionValueFlow = complete
-            ? FunctionValueFlow.analyze(classes, closedReachable, declaredExternalLeaves)
+            ? FunctionValueFlow.analyze(classes, closedReachable, declaredExternalLeaves, methodFlows)
             : FunctionValueFlow.Result.unavailable();
         return new CallGraph(
             roots.getFirst(),
