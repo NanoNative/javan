@@ -3591,6 +3591,37 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void emptyMapClearMatchesJvm() throws Exception {
+        final Path project = project("empty-map-clear");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static void check(Map<?, ?> values) {
+                    try { values.clear(); System.out.println("cleared"); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                    catch (NullPointerException expected) { System.out.println("null"); }
+                }
+                public static void main(String[] args) {
+                    check(Collections.emptyMap()); check(Collections.singletonMap("x", "y"));
+                    check(Map.of()); check(Map.ofEntries()); check(Map.copyOf(Collections.emptyMap()));
+                    check(Collections.unmodifiableMap(Collections.emptyMap())); check(null);
+                    Map<String, String> values = new HashMap<>(); values.put("x", "y");
+                    check(values); System.out.println(values.size());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("cleared\nimmutable\nimmutable\nimmutable\nimmutable\nimmutable\nnull\ncleared\n0\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/empty-map-clear").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void emptyCollectionsClearMatchesJvm() throws Exception {
         final Path project = project("empty-collections-clear");
         writeJava(project, "com.acme.Main", """

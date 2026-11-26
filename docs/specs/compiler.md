@@ -73,7 +73,8 @@ is implemented. The supported `TimeUnit`, `StandardCopyOption` and `LinkOption` 
 stable enum identity distinct from equal-looking strings. Supported collection searches, additions,
 clearing and size queries transport a null receiver as `NullPointerException`. Supported map clearing
 also transports a null receiver. Single-element additions and clearing transport
-`UnsupportedOperationException` for supported immutable collections and maps. Application-defined
+`UnsupportedOperationException` for supported immutable collections and maps, except the documented
+no-op clear operations on legacy empty factories. Application-defined
 `equals` remains incomplete for searches outside the supported list operations. Search, addition and
 clear callables remain unknown in the support ledger while custom collection overrides and set equality
 remain incomplete.
@@ -159,8 +160,8 @@ list from `equals` is not yet fully Java-compatible; a shrink past the match fai
 native indexing. `Collections.emptyList().remove` and `Collections.emptySet().remove` return false.
 `Collections.singletonList().remove` and `Collections.singleton().remove` return false for a
 non-match and throw `UnsupportedOperationException` for a match. These singleton operations use
-the query's application-defined `equals` when present. Clearing `Collections.emptyList()` or
-`Collections.emptySet()` succeeds without modifying state.
+the query's application-defined `equals` when present. Clearing `Collections.emptyList()`,
+`Collections.emptySet()` or `Collections.emptyMap()` succeeds without modifying state.
 Supported endpoint removals transport null, empty and immutable-list failures and publish removed
 values safely.
 Supported endpoint insertions transport null and immutable-list failures and retain inserted values

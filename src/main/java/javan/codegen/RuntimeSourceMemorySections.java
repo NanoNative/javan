@@ -97,6 +97,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_LIST_SINGLETON_COLLECTION 16
         #define JAVAN_MAP_VIEW_UNMODIFIABLE 1
         #define JAVAN_MAP_REJECT_NULL_QUERY 2
+        #define JAVAN_MAP_EMPTY_COLLECTION 4
         #define JAVAN_BUILTIN_INSTANCEOF_COLLECTION 1
         #define JAVAN_BUILTIN_INSTANCEOF_MAP 2
         #define JAVAN_BUILTIN_INSTANCEOF_MAP_ENTRY 3
@@ -15032,12 +15033,14 @@ final class RuntimeSourceMemorySections {
         }
 
         void* javan_map_empty(void) {
-            return javan_map_new_with_capacity(0, 1);
+            javan_object_map* map = javan_map_new_with_capacity(0, 1);
+            map->view_flags |= JAVAN_MAP_EMPTY_COLLECTION;
+            return map;
         }
 
         void* javan_map_of_empty(void) {
             javan_object_map* map = (javan_object_map*) javan_map_empty();
-            map->view_flags |= JAVAN_MAP_REJECT_NULL_QUERY;
+            map->view_flags = (map->view_flags & ~JAVAN_MAP_EMPTY_COLLECTION) | JAVAN_MAP_REJECT_NULL_QUERY;
             return map;
         }
 
@@ -15596,6 +15599,9 @@ final class RuntimeSourceMemorySections {
 
         static void javan_map_clear_java_unlocked(void* value) {
             javan_object_map* map = javan_map_checked(value);
+            if ((map->view_flags & JAVAN_MAP_EMPTY_COLLECTION) != 0) {
+                return;
+            }
             if (map->immutable != 0) {
                 javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
                 return;
