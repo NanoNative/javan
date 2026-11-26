@@ -636,6 +636,7 @@ final class RuntimeHeaderFile {
         int javan_map_size(void* map);
         int javan_map_is_empty(void* map);
         void* javan_map_empty(void);
+        void* javan_map_of_empty(void);
         void* javan_map_entry_new(void* key, void* value);
         void* javan_map_singleton(void* key, void* value);
         void* javan_map_singleton_java(void* key, void* value);

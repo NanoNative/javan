@@ -12021,7 +12021,7 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.objectCall("javan_map_empty", List.of()))
+            IrInstruction.returnObject(IrExpression.objectCall("javan_map_of_empty", List.of()))
         );
     }
 

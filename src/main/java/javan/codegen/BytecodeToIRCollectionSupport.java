@@ -117,7 +117,7 @@ final class BytecodeToIRCollectionSupport {
 
         if ("java/util/Map".equals(owner)) {
             if ("of".equals(name) && "()Ljava/util/Map;".equals(descriptor)) {
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_empty", List.of())));
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_of_empty", List.of())));
                 return true;
             }
             if ("ofEntries".equals(name) && "([Ljava/util/Map$Entry;)Ljava/util/Map;".equals(descriptor)) {

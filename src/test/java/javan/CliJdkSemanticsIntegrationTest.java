@@ -2544,6 +2544,85 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void immutableMapSearchRejectsNullQueries() throws Exception {
+        final Path project = project("immutable-map-null-search");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static void check(Map<String, String> values) {
+                    try { System.out.println(values.containsKey(null)); } catch (NullPointerException expected) { System.out.println("key"); }
+                    try { System.out.println(values.containsValue(null)); } catch (NullPointerException expected) { System.out.println("value"); }
+                    try { System.out.println((Object) values.get(null)); } catch (NullPointerException expected) { System.out.println("get"); }
+                    try { System.out.println((Object) values.getOrDefault(null, "default")); } catch (NullPointerException expected) { System.out.println("default"); }
+                }
+                public static void main(String[] args) {
+                    check(Map.of());
+                    check(Map.of("x", "y"));
+                    check(Map.of("x", "y", "a", "b"));
+                    check(Map.ofEntries());
+                    check(Map.ofEntries(Map.entry("x", "y")));
+                    check(Map.copyOf(Collections.emptyMap()));
+                    check(Map.copyOf(Map.of("x", "y")));
+                    check(Collections.unmodifiableMap(Map.of("x", "y")));
+                    check(Collections.emptyMap());
+                    check(Collections.singletonMap(null, null));
+                    Map<String, String> mutable = new HashMap<>(); mutable.put(null, null);
+                    check(mutable);
+                    check(Collections.unmodifiableMap(mutable));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("key\nvalue\nget\ndefault\n".repeat(8)
+            + "false\nfalse\nnull\ndefault\n" + "true\ntrue\nnull\nnull\n".repeat(3));
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/immutable-map-null-search").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void immutableMapNullSearchSurvivesConcurrentCollection() throws Exception {
+        final Path project = project("immutable-map-null-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger caught = new AtomicInteger();
+                static void check(Map<String, String> values) {
+                    try { values.containsKey(null); } catch (NullPointerException expected) { caught.incrementAndGet(); }
+                    try { values.containsValue(null); } catch (NullPointerException expected) { caught.incrementAndGet(); }
+                    try { values.get(null); } catch (NullPointerException expected) { caught.incrementAndGet(); }
+                    try { values.getOrDefault(null, "x"); } catch (NullPointerException expected) { caught.incrementAndGet(); }
+                }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) check(Collections.unmodifiableMap(Map.of("x", "y")));
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker());
+                    Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(caught.get());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("800\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/immutable-map-null-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void immutableSetSearchRejectsNullQueries() throws Exception {
         final Path project = project("immutable-set-null-search");
         writeJava(project, "com.acme.Main", """

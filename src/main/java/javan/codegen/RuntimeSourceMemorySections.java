@@ -95,6 +95,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_LIST_EMPTY_COLLECTION 4
         #define JAVAN_LIST_REJECT_NULL_SEARCH 8
         #define JAVAN_MAP_VIEW_UNMODIFIABLE 1
+        #define JAVAN_MAP_REJECT_NULL_QUERY 2
         #define JAVAN_BUILTIN_INSTANCEOF_COLLECTION 1
         #define JAVAN_BUILTIN_INSTANCEOF_MAP 2
         #define JAVAN_BUILTIN_INSTANCEOF_MAP_ENTRY 3
@@ -14495,6 +14496,16 @@ final class RuntimeSourceMemorySections {
             return map->concurrent != 0;
         }
 
+        static int javan_map_rejects_null_query(javan_object_map* map) {
+            while (map != NULL) {
+                if (map->concurrent != 0 || (map->view_flags & JAVAN_MAP_REJECT_NULL_QUERY) != 0) {
+                    return 1;
+                }
+                map = map->backing;
+            }
+            return 0;
+        }
+
         static int javan_map_logical_length(javan_object_map* map) {
             if (map->backing != NULL) {
                 return javan_map_logical_length(map->backing);
@@ -14900,6 +14911,12 @@ final class RuntimeSourceMemorySections {
             return javan_map_new_with_capacity(0, 1);
         }
 
+        void* javan_map_of_empty(void) {
+            javan_object_map* map = (javan_object_map*) javan_map_empty();
+            map->view_flags |= JAVAN_MAP_REJECT_NULL_QUERY;
+            return map;
+        }
+
         void* javan_map_singleton(void* key, void* value) {
             void* key_root = key;
             void* value_root = value;
@@ -14921,7 +14938,9 @@ final class RuntimeSourceMemorySections {
                 javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
                 return NULL;
             }
-            return javan_map_singleton(key, value);
+            javan_object_map* map = (javan_object_map*) javan_map_singleton(key, value);
+            map->view_flags |= JAVAN_MAP_REJECT_NULL_QUERY;
+            return map;
         }
 
         static void* javan_map_fixed_factory(void** entries, int count) {
@@ -14943,6 +14962,7 @@ final class RuntimeSourceMemorySections {
             }
             javan_root_frame_push(roots, count * 2);
             javan_object_map* map = javan_map_new_with_capacity(count, 1);
+            map->view_flags |= JAVAN_MAP_REJECT_NULL_QUERY;
             for (int index = 0; index < count; index++) {
                 map->keys[index] = entries[index * 2];
                 map->values[index] = entries[index * 2 + 1];
@@ -15013,6 +15033,7 @@ final class RuntimeSourceMemorySections {
             javan_root_frame_push(javan_map_of_entries_roots, 2);
             result_value = javan_map_new_with_capacity(entries->length, 1);
             javan_object_map* result = (javan_object_map*) result_value;
+            result->view_flags |= JAVAN_MAP_REJECT_NULL_QUERY;
             for (int index = 0; index < entries->length; index++) {
                 void* entry_value = entries->values[index];
                 if (entry_value == NULL) {
@@ -15051,6 +15072,7 @@ final class RuntimeSourceMemorySections {
             javan_root_frame_push(javan_map_copy_roots, 1);
             int length = javan_map_logical_length(source);
             javan_object_map* result = javan_map_new_with_capacity(length, 1);
+            result->view_flags |= JAVAN_MAP_REJECT_NULL_QUERY;
             for (int index = 0; index < length; index++) {
                 result->keys[index] = javan_map_key_unchecked(source, index);
                 result->values[index] = javan_map_value_unchecked(source, index);
@@ -15166,7 +15188,7 @@ final class RuntimeSourceMemorySections {
 
         void* javan_map_get_java(void* value, void* key) {
             javan_runtime_lock_enter();
-            if (key == NULL && javan_map_has_concurrent_backing(javan_map_checked(value)) != 0) {
+            if (key == NULL && javan_map_rejects_null_query(javan_map_checked(value)) != 0) {
                 javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
                 javan_runtime_lock_leave();
                 return NULL;
@@ -15191,7 +15213,7 @@ final class RuntimeSourceMemorySections {
 
         void* javan_map_get_or_default_java(void* value, void* key, void* fallback) {
             javan_runtime_lock_enter();
-            if (key == NULL && javan_map_has_concurrent_backing(javan_map_checked(value)) != 0) {
+            if (key == NULL && javan_map_rejects_null_query(javan_map_checked(value)) != 0) {
                 javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
                 javan_runtime_lock_leave();
                 return NULL;
@@ -15574,7 +15596,7 @@ final class RuntimeSourceMemorySections {
 
         int javan_map_contains_key_java(void* value, void* key) {
             javan_runtime_lock_enter();
-            if (key == NULL && javan_map_has_concurrent_backing(javan_map_checked(value)) != 0) {
+            if (key == NULL && javan_map_rejects_null_query(javan_map_checked(value)) != 0) {
                 javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
                 javan_runtime_lock_leave();
                 return 0;
@@ -15604,7 +15626,7 @@ final class RuntimeSourceMemorySections {
 
         int javan_map_contains_value_java(void* value, void* expected_value) {
             javan_runtime_lock_enter();
-            if (expected_value == NULL && javan_map_has_concurrent_backing(javan_map_checked(value)) != 0) {
+            if (expected_value == NULL && javan_map_rejects_null_query(javan_map_checked(value)) != 0) {
                 javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
                 javan_runtime_lock_leave();
                 return 0;

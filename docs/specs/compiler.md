@@ -95,6 +95,8 @@ sources and null entries and creates an immutable snapshot. `Map.entry` and all 
 overloads reject null arguments. The multi-entry overloads and `Map.ofEntries` reject duplicate keys
 within the supported key semantics. `Map.ofEntries` also rejects null arrays and entries. It consumes
 native map entries and does not yet support application-defined `Map.Entry` implementations.
+`containsKey`, `containsValue`, `get` and `getOrDefault` reject null queries on maps created by
+`Map.of`, `Map.ofEntries` and `Map.copyOf`, including unmodifiable views.
 
 Zero-argument `ArrayList` allocation, single-element append and clear coordinate their native
 storage updates with garbage collection. Other list mutation paths still require concurrency

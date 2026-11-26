@@ -1617,6 +1617,47 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsImmutableMapNullSearches() throws Exception {
+        final Path project = tempDir.resolve("selfhost-map-null-search");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static void check(Map<String, String> values) {
+                    try { System.out.println(values.containsKey(null)); } catch (NullPointerException expected) { System.out.println("key"); }
+                    try { System.out.println(values.containsValue(null)); } catch (NullPointerException expected) { System.out.println("value"); }
+                    try { System.out.println((Object) values.get(null)); } catch (NullPointerException expected) { System.out.println("get"); }
+                    try { System.out.println((Object) values.getOrDefault(null, "x")); } catch (NullPointerException expected) { System.out.println("default"); }
+                }
+                public static void main(String[] args) {
+                    check(Map.of());
+                    check(Collections.unmodifiableMap(Map.copyOf(Map.of("x", "y"))));
+                    check(Collections.emptyMap());
+                    check(Collections.singletonMap(null, null));
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-map-null-search"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-map-null-search").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout());
+    }
+
+    @Test
     void nativeBuiltJavanBuildsImmutableSetNullSearches() throws Exception {
         final Path project = tempDir.resolve("selfhost-set-null-search");
         final Path classes = project.resolve("classes");
@@ -3609,6 +3650,56 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             final Path goDir = project.resolve(".javan/dist/bindings/go");
             assertThat(processSlow(project, List.of("sh", "-c", "cd '" + goDir + "' && GO111MODULE=off CGO_ENABLED=1 go test")).exitCode()).isZero();
         }
+    }
+
+    @Test
+    void nativeLibraryImmutableMapSearchRejectsNull() throws Exception {
+        final Path project = project("library-map-null-search");
+        writeJava(project, "com.acme.Api", """
+            package com.acme;
+            import java.util.*;
+            public final class Api {
+                public static int search(int kind, int mode) {
+                    Map<String, String> values;
+                    if (kind == 0) values = Collections.unmodifiableMap(Map.copyOf(Map.of("x", "y")));
+                    else values = Collections.singletonMap(null, null);
+                    if (mode == 0) return values.containsKey(null) ? 1 : 0;
+                    if (mode == 1) return values.containsValue(null) ? 1 : 0;
+                    if (mode == 2) return values.get(null) == null ? 1 : 0;
+                    return values.getOrDefault(null, "default") == null ? 1 : 0;
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString(), "--library", "--format", "static",
+            "--export", "com.acme.Api.search");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path caller = writeC(project, "call_map_null.c", """
+            #include <string.h>
+            #include ".javan/dist/bindings/c/library-map-null-search.h"
+            int main(void) {
+                for (int i = 0; i < 100; i++) {
+                    for (int mode = 0; mode < 4; mode++) {
+                        for (int kind = 0; kind < 2; kind++) {
+                            int value = -1;
+                            JavanResult result = javan_try_com_acme_Api_search_int_int(kind, mode, &value);
+                            if (kind == 0 && (result.ok || result.message == 0
+                                || strstr(result.message, "NullPointerException") == 0)) return 1;
+                            if (kind == 1 && (!result.ok || value != 1)) return 2;
+                            javan_result_free(&result);
+                        }
+                    }
+                }
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-map-null");
+        final ProcessResult compile = process(project, List.of("cc", caller.toString(),
+            project.resolve(".javan/dist/liblibrary-map-null-search.a").toString(), "-o", binary.toString()));
+        assertThat(compile.exitCode()).as(compile.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(binary.toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stderr()).isEmpty();
     }
 
     @Test

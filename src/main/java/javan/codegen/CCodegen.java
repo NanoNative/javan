@@ -3842,6 +3842,7 @@ public final class CCodegen {
                     "javan_map_entry_get_key",
                     "javan_map_entry_get_value",
                     "javan_map_empty",
+                    "javan_map_of_empty",
                     "javan_map_singleton",
                     "javan_map_singleton_java",
                     "javan_map_pair",
