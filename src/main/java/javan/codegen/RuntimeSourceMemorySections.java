@@ -13956,6 +13956,12 @@ final class RuntimeSourceMemorySections {
                 if (other == NULL) {
                     javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
                 }
+            } else if ((list->view_flags & JAVAN_LIST_SINGLETON_COLLECTION) != 0) {
+                if (other == NULL) {
+                    javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                } else if (retain != 0 || javan_list_logical_length(javan_list_checked(other)) != 0) {
+                    javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                }
             } else if (list->immutable != 0) {
                 javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
             } else if (other == NULL) {

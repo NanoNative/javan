@@ -1654,6 +1654,44 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsSingletonEmptyBulkFiltering() throws Exception {
+        final Path project = tempDir.resolve("selfhost-singleton-empty-filter");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static void check(Collection<String> values, Collection<String> probe) {
+                    try { System.out.println(values.removeAll(probe)); }
+                    catch (NullPointerException expected) { System.out.println("null"); }
+                }
+                public static void main(String[] args) {
+                    check(Collections.singletonList("x"), List.of());
+                    check(Collections.singleton("x"), Set.of());
+                    check(Collections.singletonList("x"), null);
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-singleton-empty-filter"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-singleton-empty-filter").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout());
+    }
+
+    @Test
     void nativeBuiltJavanBuildsEmptyCollectionBulkFiltering() throws Exception {
         final Path project = tempDir.resolve("selfhost-empty-bulk-filter");
         final Path classes = project.resolve("classes");
@@ -4194,6 +4232,53 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         final Path binary = project.resolve("call-empty-clear");
         final ProcessResult compile = process(project, List.of("cc", caller.toString(),
             project.resolve(".javan/dist/liblibrary-empty-clear.a").toString(), "-o", binary.toString()));
+        assertThat(compile.exitCode()).as(compile.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(binary.toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stderr()).isEmpty();
+    }
+
+    @Test
+    void nativeLibrarySingletonEmptyBulkFilteringTransportsFailures() throws Exception {
+        final Path project = project("library-singleton-empty-filter");
+        writeJava(project, "com.acme.Api", """
+            package com.acme;
+            import java.util.*;
+            public final class Api {
+                public static int filter(int mode) {
+                    Collection<String> values = mode < 3 ? Collections.singletonList("x") : Collections.singleton("x");
+                    if (mode == 0 || mode == 3) return values.removeAll(List.of()) ? 1 : 0;
+                    if (mode == 1 || mode == 4) return values.removeAll(null) ? 1 : 0;
+                    return values.retainAll(List.of()) ? 1 : 0;
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString(), "--library", "--format", "static",
+            "--export", "com.acme.Api.filter");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path caller = writeC(project, "call_singleton_empty_filter.c", """
+            #include <string.h>
+            #include ".javan/dist/bindings/c/library-singleton-empty-filter.h"
+            int main(void) {
+                for (int i = 0; i < 100; i++) {
+                    for (int mode = 0; mode < 6; mode++) {
+                        int value = -1;
+                        JavanResult result = javan_try_com_acme_Api_filter_int(mode, &value);
+                        if (mode % 3 == 0 && (!result.ok || value != 0)) return 1;
+                        if (mode % 3 == 1 && (result.ok || result.message == 0
+                            || strstr(result.message, "NullPointerException") == 0)) return 2;
+                        if (mode % 3 == 2 && (result.ok || result.message == 0
+                            || strstr(result.message, "UnsupportedOperationException") == 0)) return 3;
+                        javan_result_free(&result);
+                    }
+                }
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-singleton-empty-filter");
+        final ProcessResult compile = process(project, List.of("cc", caller.toString(),
+            project.resolve(".javan/dist/liblibrary-singleton-empty-filter.a").toString(), "-o", binary.toString()));
         assertThat(compile.exitCode()).as(compile.stderr()).isZero();
         final ProcessResult result = process(project, List.of(binary.toString()), Duration.ofSeconds(60),
             Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));

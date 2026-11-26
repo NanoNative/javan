@@ -149,7 +149,9 @@ preserving earlier changes. Supported list receivers and list probes call applic
 `equals` on receiver elements and preserve earlier changes when comparison fails. Structural
 receiver mutation from `equals` is rejected and is not yet fully Java-compatible. Filtering
 `Collections.emptyList()` and `Collections.emptySet()` returns false for non-null probes and
-rejects null probes. Set probe equality remains incomplete.
+rejects null probes. Removing all elements from a `Collections` singleton list or set with an
+empty probe also returns false; a null probe is rejected. Other singleton filtering cases and set
+probe equality remain incomplete.
 Object removal through supported list, set and `Collection` owners transports null-receiver and
 immutable-collection failures for the currently supported collection representations. Supported
 list receivers call application-defined `equals` on the query. Reentrant mutation of the searched

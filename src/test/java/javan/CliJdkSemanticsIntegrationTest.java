@@ -3715,6 +3715,46 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void singletonCollectionsBulkFilteringWithEmptyOrNullProbesMatchesJvm() throws Exception {
+        final Path project = project("singleton-collections-empty-filter");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static void remove(Collection<String> values, Collection<String> probe) {
+                    try { System.out.println(values.removeAll(probe)); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                    catch (NullPointerException expected) { System.out.println("null"); }
+                }
+                static void retain(Collection<String> values, Collection<String> probe) {
+                    try { System.out.println(values.retainAll(probe)); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                    catch (NullPointerException expected) { System.out.println("null"); }
+                }
+                public static void main(String[] args) {
+                    remove(Collections.singletonList("x"), List.of());
+                    remove(Collections.singleton("x"), new ArrayList<>());
+                    remove(Collections.singletonList("x"), null); retain(Collections.singleton("x"), null);
+                    retain(Collections.singletonList("x"), List.of()); retain(Collections.singleton("x"), Set.of());
+                    remove(Collections.singletonList("x"), List.of("x"));
+                    remove(Collections.unmodifiableList(Collections.singletonList("x")), List.of());
+                    remove(Collections.unmodifiableSet(Collections.singleton("x")), Set.of());
+                    remove(List.of("x"), List.of()); remove(Set.of("x"), Set.of());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("false\nfalse\nnull\nnull\nimmutable\nimmutable\n"
+            + "immutable\nimmutable\nimmutable\nimmutable\nimmutable\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/singleton-collections-empty-filter").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void listBulkFilteringUsesApplicationEquality() throws Exception {
         final Path project = project("list-filter-equality");
         writeJava(project, "com.acme.Main", """
