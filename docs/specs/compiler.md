@@ -137,7 +137,8 @@ adding an empty collection. Their indexed list insertion checks its index before
 `containsAll` on supported collection and set owners handles views and transports null receiver
 and null source failures within supported handlers. Immutable `List.of`, `List.copyOf`, `Set.of`
 and `Set.copyOf` receivers reject a null probe when iteration reaches it. Supported list receivers
-also call application-defined `equals` on probe elements. Immutable factory contents retain bounded
+and `Collections.singleton` sets, including unmodifiable views, call application-defined `equals`
+on probe elements. Immutable factory contents retain bounded
 type information; unknown contents conservatively retain possible implementations. Single-element
 `Collections.singleton(...).contains` uses the query's application-defined `equals`, including through
 unmodifiable views. Other set membership keeps its existing incomplete equality semantics.

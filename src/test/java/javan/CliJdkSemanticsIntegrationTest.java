@@ -2896,6 +2896,138 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void singletonSetContainsAllDoesNotHoldRuntimeLockDuringEquality() throws Exception {
+        final Path project = project("singleton-set-contains-all-equality-threads");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger signal = new AtomicInteger();
+                static final AtomicInteger completed = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() { while (signal.get() == 0) Thread.yield(); completed.set(1); }
+                }
+                static final class Key {
+                    public boolean equals(Object other) {
+                        signal.set(1);
+                        for (int i = 0; i < 1000000 && completed.get() == 0; i++) Thread.yield();
+                        return completed.get() == 1;
+                    }
+                    public int hashCode() { return 1; }
+                }
+                public static void main(String[] args) throws Exception {
+                    Set<Object> values = Collections.singleton(new Key()); Key query = new Key();
+                    Thread worker = new Thread(new Worker()); worker.start();
+                    System.out.println(values.containsAll(List.of(query)));
+                    worker.join(); System.out.println(completed.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/singleton-set-contains-all-equality-threads").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("true\n1\n");
+    }
+
+    @Test
+    void setContainsAllKeepsEqualityForMixedEmptyAndSingletonPaths() throws Exception {
+        final Path project = project("set-contains-all-empty-singleton-paths");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static final class Key {
+                    public boolean equals(Object other) { return other instanceof Key; }
+                    public int hashCode() { return 1; }
+                }
+                public static void main(String[] args) {
+                    Set<Key> values = args.length == 0 ? Collections.emptySet() : Collections.singleton(new Key());
+                    System.out.println(values.containsAll(List.of(new Key())));
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path binary = project.resolve(".javan/bin/set-contains-all-empty-singleton-paths");
+        final ProcessResult empty = process(project, List.of(binary.toString()));
+        final ProcessResult singleton = process(project, List.of(binary.toString(), "singleton"));
+        assertThat(empty.exitCode()).as(empty.stderr()).isZero();
+        assertThat(singleton.exitCode()).as(singleton.stderr()).isZero();
+        assertThat(empty.stdout()).isEqualTo("false\n");
+        assertThat(singleton.stdout()).isEqualTo("true\n");
+    }
+
+    @Test
+    void singletonSetContainsAllUsesQueryEquality() throws Exception {
+        final Path project = project("singleton-set-contains-all-equality");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static int calls;
+                static final class Failure extends RuntimeException { }
+                static class Key {
+                    final int id; Key(int id) { this.id = id; }
+                    public boolean equals(Object other) {
+                        calls++; if (id < 0) throw new Failure();
+                        return other instanceof Key && id == ((Key) other).id;
+                    }
+                    public int hashCode() { return id; }
+                }
+                static final class Child extends Key { Child(int id) { super(id); } }
+                static void check(Collection<Object> values, Collection<?> probe) {
+                    try { System.out.println(values.containsAll(probe)); }
+                    catch (Failure expected) { System.out.println("failure"); }
+                    catch (NullPointerException expected) { System.out.println("null"); }
+                }
+                public static void main(String[] args) {
+                    Set<Object> values = Collections.singleton(new Key(1));
+                    check(values, List.of()); check(values, List.of(new Child(1), new Key(1)));
+                    check(values, List.of(new Key(9), new Key(-1))); check(values, List.of(new Key(-1)));
+                    check(Collections.unmodifiableSet(values), List.of(new Child(1)));
+                    check(Collections.emptySet(), List.of(new Key(-1))); check(values, null);
+                    System.out.println(calls);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("true\ntrue\nfalse\nfailure\ntrue\nfalse\nnull\n5\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/singleton-set-contains-all-equality").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void emptyCollectionContainsAllDoesNotRequireEquality() throws Exception {
+        final Path project = project("empty-contains-all-unsupported-equality");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                record Unsupported(Optional<String> value) { }
+                public static void main(String[] args) {
+                    List<Unsupported> probes = List.of(new Unsupported(Optional.empty()));
+                    System.out.println(Collections.emptySet().containsAll(probes));
+                    System.out.println(Collections.emptyList().containsAll(probes));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("false\nfalse\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/empty-contains-all-unsupported-equality").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void singletonSetContainsUsesQueryEquality() throws Exception {
         final Path project = project("singleton-set-contains-equality");
         writeJava(project, "com.acme.Main", """
@@ -4202,7 +4334,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                 static Collection<Object> probes;
                 public static void main(String[] args) {
                     probes = new ArrayList<>(); probes.add(new Unsupported(Optional.empty()));
-                    System.out.println(List.of().containsAll(probes));
+                    System.out.println(List.of("value").containsAll(probes));
                 }
             }
             """);

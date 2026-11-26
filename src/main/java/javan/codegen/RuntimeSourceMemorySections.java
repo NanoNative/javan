@@ -13989,7 +13989,8 @@ final class RuntimeSourceMemorySections {
             javan_collection_equals_resolver_fn resolver = java_errors == 0 ? NULL : atomic_load_explicit(
                 &javan_collection_equals_resolver, memory_order_acquire
             );
-            int uses_custom_equality = resolver != NULL && javan_list_is_set(list) == 0;
+            int uses_custom_equality = resolver != NULL && (javan_list_is_set(list) == 0
+                || (javan_list_storage_owner(list)->view_flags & JAVAN_LIST_SINGLETON_COLLECTION) != 0);
             for (int index = 0; index < probe_length; index++) {
                 element = javan_list_get_unchecked(probe, index);
                 if (java_errors != 0 && element == NULL && javan_list_rejects_null_search(list) != 0) {
