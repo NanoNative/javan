@@ -150,8 +150,10 @@ Object removal through supported list, set and `Collection` owners transports nu
 immutable-collection failures for the currently supported collection representations. Supported
 list receivers call application-defined `equals` on the query. Reentrant mutation of the searched
 list from `equals` is not yet fully Java-compatible; a shrink past the match fails without invalid
-native indexing. `Collections.emptyList().remove` returns false. `Collections.singletonList().remove`
-returns false for a non-match and throws `UnsupportedOperationException` for a match.
+native indexing. `Collections.emptyList().remove` and `Collections.emptySet().remove` return false.
+`Collections.singletonList().remove` and `Collections.singleton().remove` return false for a
+non-match and throw `UnsupportedOperationException` for a match. These singleton operations use
+the query's application-defined `equals` when present.
 Supported endpoint removals transport null, empty and immutable-list failures and publish removed
 values safely.
 Supported endpoint insertions transport null and immutable-list failures and retain inserted values

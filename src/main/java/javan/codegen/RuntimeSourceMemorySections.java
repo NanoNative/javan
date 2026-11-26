@@ -13811,8 +13811,8 @@ final class RuntimeSourceMemorySections {
             javan_collection_equals_resolver_fn resolver = atomic_load_explicit(
                 &javan_collection_equals_resolver, memory_order_acquire
             );
-            javan_collection_equals_fn equals = resolver == NULL || element == NULL || javan_list_is_set(list) != 0
-                ? NULL : resolver(element);
+            javan_collection_equals_fn equals = resolver == NULL || element == NULL
+                || (javan_list_is_set(list) != 0 && singleton == 0) ? NULL : resolver(element);
             if (equals == NULL) {
                 int result = 0;
                 if (singleton != 0) {
@@ -14270,12 +14270,13 @@ final class RuntimeSourceMemorySections {
         void* javan_set_empty(void) {
             javan_object_list* set = (javan_object_list*) javan_hashset_new();
             set->immutable = 1;
+            set->view_flags |= JAVAN_LIST_EMPTY_COLLECTION;
             return set;
         }
 
         void* javan_set_of_empty(void) {
             javan_object_list* set = (javan_object_list*) javan_set_empty();
-            set->view_flags |= JAVAN_LIST_REJECT_NULL_SEARCH;
+            set->view_flags = (set->view_flags & ~JAVAN_LIST_EMPTY_COLLECTION) | JAVAN_LIST_REJECT_NULL_SEARCH;
             return set;
         }
 
@@ -14430,6 +14431,7 @@ final class RuntimeSourceMemorySections {
             javan_root_frame_push(javan_set_singleton_roots, 1);
             javan_object_list* set = (javan_object_list*) javan_hashset_new();
             set->immutable = 1;
+            set->view_flags |= JAVAN_LIST_SINGLETON_COLLECTION;
             javan_list_ensure_capacity(set, 1);
             set->values[0] = value_root;
             set->length = 1;

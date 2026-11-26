@@ -2694,6 +2694,176 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void singletonSetObjectRemovalUsesQueryEquality() throws Exception {
+        final Path project = project("singleton-set-remove-equality");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static int calls;
+                static final class Failure extends RuntimeException { }
+                static final class Key {
+                    final int id; Key(int id) { this.id = id; }
+                    public boolean equals(Object other) {
+                        calls++;
+                        if (id < 0) throw new Failure();
+                        return other instanceof Key && id == ((Key) other).id;
+                    }
+                    public int hashCode() { return id; }
+                }
+                static final class Never {
+                    public boolean equals(Object other) { return false; }
+                    public int hashCode() { return 1; }
+                }
+                static void check(Set<Object> values, Object query) {
+                    try { System.out.println(values.remove(query)); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                    catch (Failure expected) { System.out.println("failure"); }
+                }
+                public static void main(String[] args) {
+                    check(Collections.emptySet(), new Key(-1));
+                    Set<Object> singleton = Collections.singleton(new Key(1));
+                    check(singleton, new Key(2)); check(singleton, new Key(1)); check(singleton, new Key(-1));
+                    Never same = new Never(); check(Collections.singleton(same), same);
+                    System.out.println(calls); System.out.println(singleton.size());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("false\nfalse\nimmutable\nfailure\nfalse\n3\n1\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/singleton-set-remove-equality").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void singletonSetRemovalDoesNotHoldRuntimeLockDuringEquality() throws Exception {
+        final Path project = project("singleton-set-remove-equality-threads");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger signal = new AtomicInteger();
+                static final AtomicInteger completed = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() { while (signal.get() == 0) Thread.yield(); completed.set(1); }
+                }
+                static final class Key {
+                    public boolean equals(Object other) {
+                        signal.set(1);
+                        for (int i = 0; i < 1000000 && completed.get() == 0; i++) Thread.yield();
+                        return completed.get() == 1;
+                    }
+                    public int hashCode() { return 1; }
+                }
+                public static void main(String[] args) throws Exception {
+                    Set<Object> values = Collections.singleton(new Key()); Key query = new Key();
+                    Thread worker = new Thread(new Worker()); worker.start();
+                    try { System.out.println(values.remove(query)); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                    worker.join(); System.out.println(completed.get());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/singleton-set-remove-equality-threads").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("immutable\n1\n");
+    }
+
+    @Test
+    void emptySetObjectRemovalDoesNotRequireEquality() throws Exception {
+        final Path project = project("empty-set-remove-unsupported-equality");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                record Unsupported(Optional<String> value) { }
+                public static void main(String[] args) {
+                    Set<Unsupported> values = Collections.emptySet();
+                    System.out.println(values.remove(new Unsupported(Optional.empty())));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("false\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/empty-set-remove-unsupported-equality").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void setObjectRemovalKeepsEqualityForMixedEmptyAndSingletonPaths() throws Exception {
+        final Path project = project("set-remove-empty-singleton-paths");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static final class Key {
+                    public boolean equals(Object other) { return other instanceof Key; }
+                    public int hashCode() { return 1; }
+                }
+                public static void main(String[] args) {
+                    Set<Key> values = args.length == 0 ? Collections.emptySet() : Collections.singleton(new Key());
+                    Key query = new Key();
+                    try { System.out.println(values.remove(query)); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path binary = project.resolve(".javan/bin/set-remove-empty-singleton-paths");
+        final ProcessResult empty = process(project, List.of(binary.toString()));
+        final ProcessResult singleton = process(project, List.of(binary.toString(), "singleton"));
+        assertThat(empty.exitCode()).as(empty.stderr()).isZero();
+        assertThat(singleton.exitCode()).as(singleton.stderr()).isZero();
+        assertThat(empty.stdout()).isEqualTo("false\n");
+        assertThat(singleton.stdout()).isEqualTo("immutable\n");
+    }
+
+    @Test
+    void emptyAndSingletonSetObjectRemovalMatchesJvm() throws Exception {
+        final Path project = project("singleton-set-remove");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static void check(Set<String> values, String query) {
+                    try { System.out.println(values.remove(query)); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                }
+                public static void main(String[] args) {
+                    check(Collections.emptySet(), "x");
+                    check(Collections.emptySet(), null);
+                    check(Collections.singleton("x"), "missing");
+                    check(Collections.singleton("x"), "x");
+                    check(Collections.singleton(null), "missing");
+                    check(Collections.singleton(null), null);
+                    check(Set.of(), "x");
+                    check(Collections.unmodifiableSet(Collections.emptySet()), "x");
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("false\nfalse\nfalse\nimmutable\nfalse\nimmutable\nimmutable\nimmutable\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/singleton-set-remove").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void emptyAndSingletonListObjectRemovalMatchesJvm() throws Exception {
         final Path project = project("singleton-list-remove");
         writeJava(project, "com.acme.Main", """
