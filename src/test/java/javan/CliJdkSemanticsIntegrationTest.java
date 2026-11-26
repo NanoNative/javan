@@ -2694,6 +2694,298 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void listContainsAllUsesApplicationEquality() throws Exception {
+        final Path project = project("list-contains-all-equality");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static class Key {
+                    final String value;
+                    Key(String value) { this.value = value; }
+                    public boolean equals(Object other) {
+                        return other instanceof Key && value.equals(((Key) other).value);
+                    }
+                    public int hashCode() { return value.hashCode(); }
+                }
+                static final class Child extends Key { Child(String value) { super(value); } }
+                static boolean check(List<Key> values, Collection<Key> probes) { return values.containsAll(probes); }
+                public static void main(String[] args) {
+                    List<Key> values = List.of(new Key("x"), new Key("y"));
+                    System.out.println(check(values, List.of(new Key("x"))));
+                    System.out.println(check(values, List.of(new Child("y"))));
+                    System.out.println(check(values, Collections.unmodifiableCollection(List.copyOf(List.of(new Child("y"))))));
+                    System.out.println(check(values, List.of(new Key("z"))));
+                    System.out.println(check(values, Collections.emptyList()));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("true\ntrue\ntrue\nfalse\ntrue\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-contains-all-equality").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listContainsAllCallsQueryEqualityInIterationOrder() throws Exception {
+        final Path project = project("list-contains-all-equality-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static int trace;
+                static final class Stored {
+                    final int id;
+                    Stored(int id) { this.id = id; }
+                }
+                static final class Query {
+                    final int wanted;
+                    Query(int wanted) { this.wanted = wanted; }
+                    public boolean equals(Object other) {
+                        int id = ((Stored) other).id;
+                        trace = trace * 10 + id;
+                        return id == wanted;
+                    }
+                    public int hashCode() { return wanted; }
+                }
+                static final class Never {
+                    public boolean equals(Object other) { return false; }
+                    public int hashCode() { return 1; }
+                }
+                public static void main(String[] args) {
+                    List<Object> values = List.of(new Stored(1), new Stored(2), new Stored(3));
+                    System.out.println(values.containsAll(List.of(new Query(2), new Query(3))));
+                    System.out.println(trace);
+                    Never same = new Never();
+                    System.out.println(List.of(same).containsAll(List.of(same)));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("true\n12123\nfalse\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-contains-all-equality-order").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listContainsAllTracksUnknownMutableProbeTypes() throws Exception {
+        final Path project = project("list-contains-all-unknown-equality");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static final class Key {
+                    public boolean equals(Object other) { return other instanceof Key; }
+                    public int hashCode() { return 1; }
+                }
+                static boolean check(List<Object> values, Collection<Object> probes) { return values.containsAll(probes); }
+                public static void main(String[] args) {
+                    List<Object> probes = new ArrayList<>(); probes.add(new Key());
+                    System.out.println(check(List.of(new Key()), probes));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("true\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-contains-all-unknown-equality").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listContainsAllRejectsUnsupportedEqualityForUnknownProbes() throws Exception {
+        final Path project = project("list-contains-all-unknown-unsupported");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                record Unsupported(Optional<String> value) { }
+                static Collection<Object> probes;
+                public static void main(String[] args) {
+                    probes = new ArrayList<>(); probes.add(new Unsupported(Optional.empty()));
+                    System.out.println(List.of().containsAll(probes));
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).isNotZero();
+        assertThat(build.stderr()).contains("unsupported record component type");
+    }
+
+    @Test
+    void listContainsAllNarrowsImmutableStringProbes() throws Exception {
+        final Path project = project("list-contains-all-string-probes");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                record Unsupported(Optional<String> value) { }
+                static boolean check(List<String> values, Collection<String> probes) { return values.containsAll(probes); }
+                public static void main(String[] args) {
+                    Unsupported unrelated = new Unsupported(Optional.empty());
+                    System.out.println(unrelated != null);
+                    System.out.println(check(List.of("x"), List.of("x")));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("true\ntrue\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-contains-all-string-probes").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listContainsAllAnalysisTerminatesForNestedFactoriesInLoop() throws Exception {
+        final Path project = project("list-contains-all-nested-probes");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                public static void main(String[] args) {
+                    Object nested = List.of("x");
+                    for (int i = 0; i < 5; i++) nested = List.of(nested);
+                    System.out.println(nested != null);
+                    System.out.println(List.of("x").containsAll(Collections.emptyList()));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("true\ntrue\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-contains-all-nested-probes").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listContainsAllSurvivesConcurrentEqualityAllocations() throws Exception {
+        final Path project = project("list-contains-all-concurrent-equality");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger completed = new AtomicInteger();
+                static final class Key {
+                    final int value;
+                    Key(int value) { this.value = value; }
+                    public boolean equals(Object other) {
+                        String text = new String("compare");
+                        return other instanceof Key && value == ((Key) other).value && text.length() == 7;
+                    }
+                    public int hashCode() { return value; }
+                }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            List<Key> values = List.of(new Key(1), new Key(2));
+                            if (values.containsAll(List.of(new Key(2))) && !values.containsAll(List.of(new Key(3)))) {
+                                completed.incrementAndGet();
+                            }
+                        }
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(completed.get());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("200\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-contains-all-concurrent-equality").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listContainsAllTransportsApplicationEqualityFailure() throws Exception {
+        final Path project = project("list-contains-all-equality-failure");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static final class Failure extends RuntimeException { }
+                static final class Key {
+                    public boolean equals(Object other) { throw new Failure(); }
+                    public int hashCode() { return 1; }
+                }
+                public static void main(String[] args) {
+                    List<Object> values = new ArrayList<>(); values.add(new Key());
+                    List<Object> probes = List.of(new Key());
+                    try { System.out.println(values.containsAll(probes)); }
+                    catch (Failure expected) { System.out.println("caught"); }
+                    System.out.println(values.size());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("caught\n1\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-contains-all-equality-failure").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listContainsAllDoesNotHoldRuntimeLockDuringEquality() throws Exception {
+        final Path project = project("list-contains-all-equality-threads");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger signal = new AtomicInteger();
+                static final AtomicInteger completed = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() { while (signal.get() == 0) Thread.yield(); completed.set(1); }
+                }
+                static final class Key {
+                    public boolean equals(Object other) {
+                        signal.set(1);
+                        for (int i = 0; i < 1000000 && completed.get() == 0; i++) Thread.yield();
+                        return completed.get() == 1;
+                    }
+                    public int hashCode() { return 1; }
+                }
+                public static void main(String[] args) throws Exception {
+                    List<Key> values = new ArrayList<>(); values.add(new Key());
+                    Thread worker = new Thread(new Worker()); worker.start();
+                    System.out.println(values.containsAll(List.of(new Key())));
+                    worker.join();
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-contains-all-equality-threads").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("true\n");
+    }
+
+    @Test
     void immutableCollectionContainsAllChecksNullInIterationOrder() throws Exception {
         final Path project = project("immutable-contains-all-null");
         writeJava(project, "com.acme.Main", """

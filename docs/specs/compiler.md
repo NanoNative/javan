@@ -135,7 +135,10 @@ views and transports null, immutable-collection and representational-size failur
 supported handlers.
 `containsAll` on supported collection and set owners handles views and transports null receiver
 and null source failures within supported handlers. Immutable `List.of`, `List.copyOf`, `Set.of`
-and `Set.copyOf` receivers reject a null probe when iteration reaches it.
+and `Set.copyOf` receivers reject a null probe when iteration reaches it. Supported list receivers
+also call application-defined `equals` on probe elements. Immutable factory contents retain bounded
+type information; unknown contents conservatively retain possible implementations. Set membership
+keeps its existing incomplete equality semantics.
 `removeAll` and `retainAll` on supported collection and set owners handle supported views and
 transport null and immutable-collection failures within supported handlers.
 Object removal through supported list, set and `Collection` owners transports null-receiver and

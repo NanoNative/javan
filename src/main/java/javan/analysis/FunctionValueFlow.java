@@ -370,7 +370,8 @@ public final class FunctionValueFlow {
             }
             for (final Instruction instruction : method.orElseThrow().code().orElseThrow().instructions()) {
                 if (instruction.methodRef().isPresent()
-                    && JdkCallSupport.isCollectionEqualitySearch(instruction.methodRef().orElseThrow())) {
+                    && (JdkCallSupport.isCollectionEqualitySearch(instruction.methodRef().orElseThrow())
+                        || JdkCallSupport.isCollectionContainsAll(instruction.methodRef().orElseThrow()))) {
                     result.putIfAbsent(collectionSiteKey(entry, instruction), CollectionQuery.unavailable());
                 }
             }
@@ -997,9 +998,35 @@ public final class FunctionValueFlow {
             }
             if (isIndirectUse(callbackKind, methodRef) && !arguments.isEmpty()) {
                 if (callbackKind == CallbackKind.COLLECTION_QUERY) {
-                    addCollectionFact(collectionSiteKey(caller, instruction), arguments.getLast().fact());
+                    final Fact argument = arguments.getLast().fact();
+                    addCollectionFact(collectionSiteKey(caller, instruction), JdkCallSupport.isCollectionContainsAll(methodRef)
+                        ? (argument.elements() == null ? Fact.unsafe() : argument.elements()) : argument);
                 } else {
                     addCallbackFact(site(caller, instruction), arguments.getLast().fact());
+                }
+            }
+            if (callbackKind == CallbackKind.COLLECTION_QUERY && instruction.opcode() == 184) {
+                final String owner = methodRef.owner();
+                final String name = methodRef.name();
+                final String descriptorText = methodRef.descriptor();
+                if ((("java/util/List".equals(owner) || "java/util/Set".equals(owner)) && "of".equals(name)
+                    && !descriptorText.startsWith("(["))
+                    || ("java/util/Collections".equals(owner)
+                        && ("singletonList".equals(name) || "singleton".equals(name)
+                            || "emptyList".equals(name) || "emptySet".equals(name)))) {
+                    Fact elements = Fact.platform();
+                    for (final Slot argument : arguments) {
+                        elements = elements.merge(argument.fact().withElements(null));
+                    }
+                    pushReturn(state, descriptor.result(), Fact.unsafe().withElements(elements));
+                    return;
+                }
+                if ((("java/util/List".equals(owner) || "java/util/Set".equals(owner)) && "copyOf".equals(name)
+                    || ("java/util/Collections".equals(owner)
+                        && ("unmodifiableList".equals(name) || "unmodifiableSet".equals(name)
+                            || "unmodifiableCollection".equals(name)))) && arguments.size() == 1) {
+                    pushReturn(state, descriptor.result(), Fact.unsafe().withElements(arguments.getFirst().fact().elements()));
+                    return;
                 }
             }
             if (isRequireNonNull(methodRef) && !arguments.isEmpty()) {
@@ -1784,7 +1811,8 @@ public final class FunctionValueFlow {
         final CallbackKind callbackKind,
         final MethodRef methodRef
     ) {
-        return callbackKind == CallbackKind.COLLECTION_QUERY ? JdkCallSupport.isCollectionEqualitySearch(methodRef)
+        return callbackKind == CallbackKind.COLLECTION_QUERY ? (JdkCallSupport.isCollectionEqualitySearch(methodRef)
+            || JdkCallSupport.isCollectionContainsAll(methodRef))
             : directUse(callbackKind).equals(methodRef) || isIndirectUse(callbackKind, methodRef);
     }
 
@@ -1805,7 +1833,7 @@ public final class FunctionValueFlow {
         final MethodRef methodRef
     ) {
         if (callbackKind == CallbackKind.COLLECTION_QUERY) {
-            return JdkCallSupport.isCollectionEqualitySearch(methodRef);
+            return JdkCallSupport.isCollectionEqualitySearch(methodRef) || JdkCallSupport.isCollectionContainsAll(methodRef);
         }
         return callbackKind == CallbackKind.FUNCTION
             ? isIndirectFunctionUse(methodRef)
@@ -2013,7 +2041,12 @@ public final class FunctionValueFlow {
         }
     }
 
-    private record Fact(int kinds, List<String> types, boolean unknown) {
+    // Null elements mean unknown contents; element facts do not retain nested collection contents.
+    private record Fact(int kinds, List<String> types, boolean unknown, Fact elements) {
+        private Fact(final int kinds, final List<String> types, final boolean unknown) {
+            this(kinds, types, unknown, null);
+        }
+
         private Fact {
             types = List.copyOf(types);
         }
@@ -2042,6 +2075,10 @@ public final class FunctionValueFlow {
             return UNSAFE_FACT;
         }
 
+        private Fact withElements(final Fact value) {
+            return elements == value ? this : new Fact(kinds, types, unknown, value);
+        }
+
         private Fact merge(final Fact other) {
             if (kinds == 0 && types.isEmpty() && !unknown) {
                 return other;
@@ -2049,6 +2086,11 @@ public final class FunctionValueFlow {
             if (other.kinds == 0 && other.types.isEmpty() && !other.unknown) {
                 return this;
             }
+            final Fact mergedElements = elements == null || other.elements == null ? null : elements.merge(other.elements);
+            return mergeValue(other).withElements(mergedElements);
+        }
+
+        private Fact mergeValue(final Fact other) {
             final int mergedKinds = kinds | other.kinds;
             if (unknown || other.unknown) {
                 if (mergedKinds == kinds && unknown && types.isEmpty()) {

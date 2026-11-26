@@ -43,6 +43,12 @@ direct arguments/returns and merges. `receiver-provenance.json` and `.md` report
 of up to four types; unknown/larger sets fall back to the global instantiated set. These are
 existing implementation bounds, not newly chosen performance targets.
 
+Collection equality uses the same bounded type flow. For `containsAll`, immutable factory results
+carry one level of element-type evidence through arguments and returns. Mutable or opaque collections
+remain unknown because aliases can change their contents. Nested element facts are discarded so loop
+joins remain finite. Unknown or larger sets of types retain all instantiated implementations
+conservatively.
+
 ## Optimization Contract
 
 The optimizer pipeline is:

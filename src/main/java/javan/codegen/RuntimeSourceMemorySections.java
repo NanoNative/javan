@@ -13898,20 +13898,36 @@ final class RuntimeSourceMemorySections {
         static int javan_list_contains_all_checked(void* value, void* other, int java_errors) {
             javan_object_list* list = javan_list_checked(value);
             javan_object_list* probe = javan_list_checked(other);
+            void* element = NULL;
             void** javan_list_contains_all_roots[] = {
                 (void**) &list,
-                (void**) &probe
+                (void**) &probe,
+                &element
             };
-            javan_root_frame_push(javan_list_contains_all_roots, 2);
+            javan_root_frame_push(javan_list_contains_all_roots, 3);
             int probe_length = javan_list_logical_length(probe);
+            javan_collection_equals_resolver_fn resolver = java_errors == 0 ? NULL : atomic_load_explicit(
+                &javan_collection_equals_resolver, memory_order_acquire
+            );
+            int uses_custom_equality = resolver != NULL && javan_list_is_set(list) == 0;
             for (int index = 0; index < probe_length; index++) {
-                void* element = javan_list_get_unchecked(probe, index);
+                element = javan_list_get_unchecked(probe, index);
                 if (java_errors != 0 && element == NULL && javan_list_rejects_null_search(list) != 0) {
                     javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
                     javan_root_frame_pop(javan_list_contains_all_roots);
                     return 0;
                 }
-                if (javan_list_contains(list, element) == 0) {
+                javan_collection_equals_fn equals = uses_custom_equality != 0 && element != NULL
+                    ? resolver(element) : NULL;
+                int contains;
+                if (equals != NULL) {
+                    javan_runtime_lock_leave();
+                    contains = javan_list_custom_index_of(list, element, equals, 0) >= 0;
+                    javan_runtime_lock_enter();
+                } else {
+                    contains = javan_list_contains(list, element);
+                }
+                if (contains == 0 || (java_errors != 0 && javan_pending_has())) {
                     javan_root_frame_pop(javan_list_contains_all_roots);
                     return 0;
                 }

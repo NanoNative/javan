@@ -381,7 +381,8 @@ public final class BytecodeToIR {
             }
             for (final Instruction instruction : method.orElseThrow().code().orElseThrow().instructions()) {
                 if (instruction.methodRef().isPresent()
-                    && JdkCallSupport.isCollectionEqualitySearch(instruction.methodRef().orElseThrow())) {
+                    && (JdkCallSupport.isCollectionEqualitySearch(instruction.methodRef().orElseThrow())
+                        || JdkCallSupport.isCollectionContainsAll(instruction.methodRef().orElseThrow()))) {
                     return true;
                 }
             }
@@ -485,8 +486,8 @@ public final class BytecodeToIR {
                                     && "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;".equals(calledMethod.descriptor())))
                             && "toString".equals(callee.methodName())
                             && "()Ljava/lang/String;".equals(callee.descriptor());
-                        final boolean collectionEquality = JdkCallSupport.isCollectionEqualitySearch(calledMethod)
-                            && "equals".equals(callee.methodName())
+                        final boolean collectionEquality = (JdkCallSupport.isCollectionEqualitySearch(calledMethod)
+                            || JdkCallSupport.isCollectionContainsAll(calledMethod)) && "equals".equals(callee.methodName())
                             && "(Ljava/lang/Object;)Z".equals(callee.descriptor());
                         if (!directCall && !charSequenceConversion && !collectionEquality) {
                             continue;
@@ -1515,7 +1516,7 @@ public final class BytecodeToIR {
                 || JdkCallSupport.isListEndpointAdd(reference)) {
                 possibleTypes.addAll(JdkCallSupport.transportedPlatformThrowableTypes(reference));
             }
-            if (JdkCallSupport.isCollectionEqualitySearch(reference)) {
+            if (JdkCallSupport.isCollectionEqualitySearch(reference) || JdkCallSupport.isCollectionContainsAll(reference)) {
                 possibleTypes.add("java/lang/NullPointerException");
                 addTransportedThrowableTypes(COLLECTION_EQUALS_DISPATCH, dispatches,
                     transportedThrowableTypes, possibleTypes);
