@@ -142,7 +142,10 @@ keeps its existing incomplete equality semantics.
 `removeAll` and `retainAll` on supported collection and set owners handle supported views and
 transport null and immutable-collection failures within supported handlers.
 Object removal through supported list, set and `Collection` owners transports null-receiver and
-immutable-collection failures for the currently supported collection representations.
+immutable-collection failures for the currently supported collection representations. Supported
+list receivers call application-defined `equals` on the query. Reentrant mutation of the searched
+list from `equals` is not yet fully Java-compatible; a shrink past the match fails without invalid
+native indexing.
 Supported endpoint removals transport null, empty and immutable-list failures and publish removed
 values safely.
 Supported endpoint insertions transport null and immutable-list failures and retain inserted values

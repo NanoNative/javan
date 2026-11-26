@@ -47,7 +47,8 @@ Collection equality uses the same bounded type flow. For `containsAll`, immutabl
 carry one level of element-type evidence through arguments and returns. Mutable or opaque collections
 remain unknown because aliases can change their contents. Nested element facts are discarded so loop
 joins remain finite. Unknown or larger sets of types retain all instantiated implementations
-conservatively.
+conservatively. For object removal, proven always-rejecting immutable receivers do not retain query
+`equals` implementations. That fact survives a join only when every possible receiver rejects removal.
 
 ## Optimization Contract
 

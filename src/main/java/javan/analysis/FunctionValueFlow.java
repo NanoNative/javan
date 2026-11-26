@@ -30,6 +30,7 @@ public final class FunctionValueFlow {
     private static final int UNSAFE = 4;
     private static final int PLATFORM = 8;
     private static final int BOUNDED = 16;
+    private static final int REMOVAL_REJECTING = 32;
     private static final Fact NONE_FACT = new Fact(0, List.of(), false);
     private static final Fact MATERIALIZED_FACT = new Fact(MATERIALIZED, List.of(), false);
     private static final Fact UNSAFE_FACT = new Fact(UNSAFE, List.of(), true);
@@ -999,8 +1000,10 @@ public final class FunctionValueFlow {
             if (isIndirectUse(callbackKind, methodRef) && !arguments.isEmpty()) {
                 if (callbackKind == CallbackKind.COLLECTION_QUERY) {
                     final Fact argument = arguments.getLast().fact();
-                    addCollectionFact(collectionSiteKey(caller, instruction), JdkCallSupport.isCollectionContainsAll(methodRef)
-                        ? (argument.elements() == null ? Fact.unsafe() : argument.elements()) : argument);
+                    final Fact query = JdkCallSupport.isCollectionContainsAll(methodRef)
+                        ? (argument.elements() == null ? Fact.unsafe() : argument.elements()) : argument;
+                    addCollectionFact(collectionSiteKey(caller, instruction), JdkCallSupport.isCollectionObjectRemoval(methodRef)
+                        && (receiver.fact().kinds() & REMOVAL_REJECTING) != 0 ? Fact.platform() : query);
                 } else {
                     addCallbackFact(site(caller, instruction), arguments.getLast().fact());
                 }
@@ -1018,14 +1021,17 @@ public final class FunctionValueFlow {
                     for (final Slot argument : arguments) {
                         elements = elements.merge(argument.fact().withElements(null));
                     }
-                    pushReturn(state, descriptor.result(), Fact.unsafe().withElements(elements));
+                    final Fact collection = Fact.unsafe().withElements(elements);
+                    pushReturn(state, descriptor.result(), "java/util/Collections".equals(owner)
+                        ? collection : collection.withRemovalRejecting());
                     return;
                 }
                 if ((("java/util/List".equals(owner) || "java/util/Set".equals(owner)) && "copyOf".equals(name)
                     || ("java/util/Collections".equals(owner)
                         && ("unmodifiableList".equals(name) || "unmodifiableSet".equals(name)
                             || "unmodifiableCollection".equals(name)))) && arguments.size() == 1) {
-                    pushReturn(state, descriptor.result(), Fact.unsafe().withElements(arguments.getFirst().fact().elements()));
+                    pushReturn(state, descriptor.result(), Fact.unsafe().withElements(arguments.getFirst().fact().elements())
+                        .withRemovalRejecting());
                     return;
                 }
             }
@@ -2079,6 +2085,10 @@ public final class FunctionValueFlow {
             return elements == value ? this : new Fact(kinds, types, unknown, value);
         }
 
+        private Fact withRemovalRejecting() {
+            return (kinds & REMOVAL_REJECTING) != 0 ? this : new Fact(kinds | REMOVAL_REJECTING, types, unknown, elements);
+        }
+
         private Fact merge(final Fact other) {
             if (kinds == 0 && types.isEmpty() && !unknown) {
                 return other;
@@ -2091,7 +2101,8 @@ public final class FunctionValueFlow {
         }
 
         private Fact mergeValue(final Fact other) {
-            final int mergedKinds = kinds | other.kinds;
+            final int mergedKinds = ((kinds | other.kinds) & ~REMOVAL_REJECTING)
+                | (kinds & other.kinds & REMOVAL_REJECTING);
             if (unknown || other.unknown) {
                 if (mergedKinds == kinds && unknown && types.isEmpty()) {
                     return this;

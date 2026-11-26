@@ -2694,6 +2694,377 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void listObjectRemovalUsesApplicationEquality() throws Exception {
+        final Path project = project("list-remove-equality");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static class Key {
+                    final int id;
+                    Key(int id) { this.id = id; }
+                    public boolean equals(Object other) { return other instanceof Key && id == ((Key) other).id; }
+                    public int hashCode() { return id; }
+                }
+                static final class Child extends Key { Child(int id) { super(id); } }
+                static boolean remove(List<Key> values, Object query) { return values.remove(query); }
+                public static void main(String[] args) {
+                    List<Key> values = new ArrayList<>();
+                    values.add(new Key(1)); values.add(new Key(2)); values.add(new Key(1)); values.add(null);
+                    System.out.println(remove(values, new Child(1)));
+                    System.out.println(values.size());
+                    System.out.println(values.get(0).id);
+                    System.out.println(remove(values, new Key(9)));
+                    System.out.println(remove(values, null));
+                    System.out.println(remove(values, new Key(1)));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("true\n3\n2\nfalse\ntrue\ntrue\n1\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-remove-equality").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listObjectRemovalCallsQueryEqualityInOrder() throws Exception {
+        final Path project = project("list-remove-equality-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static int trace;
+                static final class Stored { final int id; Stored(int id) { this.id = id; } }
+                static final class Query {
+                    public boolean equals(Object other) {
+                        int id = ((Stored) other).id; trace = trace * 10 + id; return id == 2;
+                    }
+                    public int hashCode() { return 1; }
+                }
+                static final class Never {
+                    public boolean equals(Object other) { return false; }
+                    public int hashCode() { return 1; }
+                }
+                public static void main(String[] args) {
+                    List<Object> values = new ArrayList<>();
+                    values.add(new Stored(1)); values.add(new Stored(2)); values.add(new Stored(3));
+                    System.out.println(values.remove(new Query()));
+                    System.out.println(trace); System.out.println(values.size());
+                    Never same = new Never(); List<Object> identity = new ArrayList<>(); identity.add(same);
+                    System.out.println(identity.remove(same)); System.out.println(identity.size());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("true\n12\n2\nfalse\n1\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-remove-equality-order").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listObjectRemovalTransportsApplicationEqualityFailure() throws Exception {
+        final Path project = project("list-remove-equality-failure");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static final class Failure extends RuntimeException { }
+                static final class Key {
+                    public boolean equals(Object other) { throw new Failure(); }
+                    public int hashCode() { return 1; }
+                }
+                public static void main(String[] args) {
+                    List<Object> values = new ArrayList<>(); values.add(new Key());
+                    Key query = new Key();
+                    try { System.out.println(values.remove(query)); }
+                    catch (Failure expected) { System.out.println("caught"); }
+                    System.out.println(values.size());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("caught\n1\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-remove-equality-failure").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listObjectRemovalRejectsImmutableBeforeEquality() throws Exception {
+        final Path project = project("list-remove-immutable-equality");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static int calls;
+                static final class Key {
+                    public boolean equals(Object other) { calls++; return true; }
+                    public int hashCode() { return 1; }
+                }
+                public static void main(String[] args) {
+                    List<Key> values = List.of(new Key()); Key query = new Key();
+                    try { System.out.println(values.remove(query)); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                    System.out.println(calls);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("immutable\n0\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-remove-immutable-equality").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listObjectRemovalTransportsReentrantShrinkFailure() throws Exception {
+        final Path project = project("list-remove-reentrant-shrink");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static final class Query {
+                    final List<Object> values;
+                    Query(List<Object> values) { this.values = values; }
+                    public boolean equals(Object other) { values.clear(); return true; }
+                    public int hashCode() { return 1; }
+                }
+                public static void main(String[] args) {
+                    List<Object> values = new ArrayList<>(); values.add("x");
+                    Query query = new Query(values);
+                    try { System.out.println(values.remove(query)); }
+                    catch (ArrayIndexOutOfBoundsException expected) { System.out.println("caught"); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("caught\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-remove-reentrant-shrink").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listObjectRemovalDoesNotHoldRuntimeLockDuringEquality() throws Exception {
+        final Path project = project("list-remove-equality-threads");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger signal = new AtomicInteger();
+                static final AtomicInteger completed = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() { while (signal.get() == 0) Thread.yield(); completed.set(1); }
+                }
+                static final class Key {
+                    public boolean equals(Object other) {
+                        signal.set(1);
+                        for (int i = 0; i < 1000000 && completed.get() == 0; i++) Thread.yield();
+                        return completed.get() == 1;
+                    }
+                    public int hashCode() { return 1; }
+                }
+                public static void main(String[] args) throws Exception {
+                    List<Key> values = new ArrayList<>(); values.add(new Key());
+                    Thread worker = new Thread(new Worker()); worker.start();
+                    System.out.println(values.remove(new Key()));
+                    worker.join(); System.out.println(values.size());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-remove-equality-threads").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("true\n0\n");
+    }
+
+    @Test
+    void listObjectRemovalSurvivesConcurrentEqualityAllocations() throws Exception {
+        final Path project = project("list-remove-concurrent-equality");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger completed = new AtomicInteger();
+                static final class Key {
+                    final int value; Key(int value) { this.value = value; }
+                    public boolean equals(Object other) {
+                        String text = new String("compare");
+                        return other instanceof Key && value == ((Key) other).value && text.length() == 7;
+                    }
+                    public int hashCode() { return value; }
+                }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            List<Key> values = new ArrayList<>(); values.add(new Key(1)); values.add(new Key(2));
+                            if (values.remove(new Key(2)) && !values.remove(new Key(3)) && values.size() == 1)
+                                completed.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(completed.get());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("200\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-remove-concurrent-equality").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listObjectRemovalOnImmutableReceiverDoesNotRequireEquality() throws Exception {
+        final Path project = project("list-remove-immutable-unsupported-equality");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                record Unsupported(Optional<String> value) { }
+                public static void main(String[] args) {
+                    List<Unsupported> values = List.of(new Unsupported(Optional.empty()));
+                    Unsupported query = new Unsupported(Optional.empty());
+                    try { System.out.println(values.remove(query)); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("immutable\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-remove-immutable-unsupported-equality").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listObjectRemovalRetainsEqualityForSingletonReceiver() throws Exception {
+        final Path project = project("list-remove-singleton-unsupported-equality");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                record Unsupported(Optional<String> value) { }
+                public static void main(String[] args) {
+                    List<Unsupported> values = Collections.singletonList(new Unsupported(Optional.empty()));
+                    Unsupported query = new Unsupported(Optional.empty());
+                    try { System.out.println(values.remove(query)); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).isNotZero();
+        assertThat(build.stderr()).contains("unsupported record component type");
+    }
+
+    @Test
+    void listObjectRemovalKeepsEqualityForMixedReceiverPaths() throws Exception {
+        final Path project = project("list-remove-mixed-receivers");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static final class Query {
+                    public boolean equals(Object other) { return "x".equals(other); }
+                    public int hashCode() { return 1; }
+                }
+                public static void main(String[] args) {
+                    List<Object> values = args.length == 0 ? List.of("x") : new ArrayList<>(List.of("x"));
+                    Query query = new Query();
+                    try { System.out.println(values.remove(query)); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path binary = project.resolve(".javan/bin/list-remove-mixed-receivers");
+        final ProcessResult immutable = process(project, List.of(binary.toString()));
+        final ProcessResult mutable = process(project, List.of(binary.toString(), "mutable"));
+        assertThat(immutable.exitCode()).as(immutable.stderr()).isZero();
+        assertThat(mutable.exitCode()).as(mutable.stderr()).isZero();
+        assertThat(immutable.stdout()).isEqualTo("immutable\n");
+        assertThat(mutable.stdout()).isEqualTo("true\n");
+    }
+
+    @Test
+    void listObjectRemovalNarrowsKnownStringQueries() throws Exception {
+        final Path project = project("list-remove-string-query");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                record Unsupported(Optional<String> value) { }
+                static boolean remove(List<Object> values, Object query) { return values.remove(query); }
+                public static void main(String[] args) {
+                    Unsupported unrelated = new Unsupported(Optional.empty());
+                    List<Object> values = new ArrayList<>(); values.add("x");
+                    System.out.println(unrelated != null);
+                    System.out.println(remove(values, "x"));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("true\ntrue\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-remove-string-query").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listObjectRemovalRejectsUnsupportedEqualityForUnknownQuery() throws Exception {
+        final Path project = project("list-remove-unknown-unsupported");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                record Unsupported(Optional<String> value) { }
+                static Object query;
+                public static void main(String[] args) {
+                    query = new Unsupported(Optional.empty());
+                    List<Object> values = new ArrayList<>();
+                    System.out.println(values.remove(query));
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).isNotZero();
+        assertThat(build.stderr()).contains("unsupported record component type");
+    }
+
+    @Test
     void listContainsAllUsesApplicationEquality() throws Exception {
         final Path project = project("list-contains-all-equality");
         writeJava(project, "com.acme.Main", """

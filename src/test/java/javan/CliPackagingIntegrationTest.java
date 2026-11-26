@@ -1617,6 +1617,50 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsListObjectRemovalApplicationEquality() throws Exception {
+        final Path project = tempDir.resolve("selfhost-list-remove-equality");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                record Unsupported(Optional<String> value) { }
+                static final class Key {
+                    final int id; Key(int id) { this.id = id; }
+                    public boolean equals(Object other) { return other instanceof Key && id == ((Key) other).id; }
+                    public int hashCode() { return id; }
+                }
+                static boolean remove(List<Object> values, Object query) { return values.remove(query); }
+                public static void main(String[] args) {
+                    Unsupported unrelated = new Unsupported(Optional.empty());
+                    System.out.println(unrelated != null);
+                    List<Object> values = new ArrayList<>(); values.add(new Key(7));
+                    System.out.println(remove(values, new Key(3)));
+                    System.out.println(remove(values, new Key(7)));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-list-remove-equality"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-list-remove-equality").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout());
+    }
+
+    @Test
     void nativeBuiltJavanBuildsListContainsAllApplicationEquality() throws Exception {
         final Path project = tempDir.resolve("selfhost-contains-all-equality");
         final Path classes = project.resolve("classes");
@@ -3732,6 +3776,57 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             final Path goDir = project.resolve(".javan/dist/bindings/go");
             assertThat(processSlow(project, List.of("sh", "-c", "cd '" + goDir + "' && GO111MODULE=off CGO_ENABLED=1 go test")).exitCode()).isZero();
         }
+    }
+
+    @Test
+    void nativeLibraryListObjectRemovalUsesApplicationEquality() throws Exception {
+        final Path project = project("library-list-remove-equality");
+        writeJava(project, "com.acme.Api", """
+            package com.acme;
+            import java.util.*;
+            public final class Api {
+                static final class Failure extends RuntimeException { }
+                static final class Key {
+                    final int id; Key(int id) { this.id = id; }
+                    public boolean equals(Object other) {
+                        if (id < 0) throw new Failure();
+                        return other instanceof Key && id == ((Key) other).id;
+                    }
+                    public int hashCode() { return id; }
+                }
+                public static int remove(int id) {
+                    List<Key> values = new ArrayList<>(); values.add(new Key(7));
+                    return values.remove(new Key(id)) ? 1 : 0;
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString(), "--library", "--format", "static",
+            "--export", "com.acme.Api.remove");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path caller = writeC(project, "call_remove_equality.c", """
+            #include <string.h>
+            #include ".javan/dist/bindings/c/library-list-remove-equality.h"
+            int main(void) {
+                for (int i = 0; i < 100; i++) {
+                    for (int id = -1; id <= 7; id += 4) {
+                        int value = -1;
+                        JavanResult result = javan_try_com_acme_Api_remove_int(id, &value);
+                        if (id < 0 && (result.ok || result.message == 0 || strstr(result.message, "Failure") == 0)) return 1;
+                        if (id >= 0 && (!result.ok || value != (id == 7 ? 1 : 0))) return 2;
+                        javan_result_free(&result);
+                    }
+                }
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-remove-equality");
+        final ProcessResult compile = process(project, List.of("cc", caller.toString(),
+            project.resolve(".javan/dist/liblibrary-list-remove-equality.a").toString(), "-o", binary.toString()));
+        assertThat(compile.exitCode()).as(compile.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(binary.toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stderr()).isEmpty();
     }
 
     @Test

@@ -13764,6 +13764,9 @@ final class RuntimeSourceMemorySections {
             return -1;
         }
 
+        """;
+
+    private static final String SOURCE_COLLECTIONS_REMOVAL = """
         int javan_list_remove(void* value, void* element) {
             javan_object_list* list = javan_list_checked(value);
             javan_list_mutable_checked(list);
@@ -13788,12 +13791,43 @@ final class RuntimeSourceMemorySections {
                 javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
                 return 0;
             }
+            javan_runtime_lock_enter();
             javan_object_list* list = javan_list_checked(value);
             if (list->immutable != 0) {
                 javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                javan_runtime_lock_leave();
                 return 0;
             }
-            return javan_list_remove(list, element);
+            javan_collection_equals_resolver_fn resolver = atomic_load_explicit(
+                &javan_collection_equals_resolver, memory_order_acquire
+            );
+            javan_collection_equals_fn equals = resolver == NULL || element == NULL || javan_list_is_set(list) != 0
+                ? NULL : resolver(element);
+            if (equals == NULL) {
+                int result = javan_list_remove(list, element);
+                javan_runtime_lock_leave();
+                return result;
+            }
+            void* list_root = value;
+            void* element_root = element;
+            void** roots[] = { &list_root, &element_root };
+            javan_root_frame_push(roots, 2);
+            javan_runtime_lock_leave();
+            int index = javan_list_custom_index_of(list_root, element_root, equals, 0);
+            javan_runtime_lock_enter();
+            list = javan_list_checked(list_root);
+            int result = 0;
+            if (!javan_pending_has() && index >= 0) {
+                if (index >= javan_list_logical_length(list)) {
+                    javan_pending_throw("java/lang/ArrayIndexOutOfBoundsException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                } else {
+                    javan_arraylist_remove_at(list, index);
+                    result = 1;
+                }
+            }
+            javan_runtime_lock_leave();
+            javan_root_frame_pop(roots);
+            return result;
         }
 
         int javan_list_remove_all(void* value, void* other) {
@@ -16913,6 +16947,7 @@ final class RuntimeSourceMemorySections {
         String result = SOURCE_COLLECTIONS_HEAD;
         result = result + SOURCE_RECORD_SHAPES;
         result = result + SOURCE_COLLECTIONS_HEAD_CONTINUED;
+        result = result + SOURCE_COLLECTIONS_REMOVAL;
         result = result + SOURCE_COLLECTIONS_TAIL;
         result = result + SOURCE_COLLECTIONS_TAIL_CONTINUED;
         result = result + SOURCE_COLLECTIONS_PROCESS;

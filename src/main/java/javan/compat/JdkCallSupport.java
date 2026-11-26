@@ -2272,10 +2272,10 @@ public final class JdkCallSupport {
      * Identifies supported collection searches that compare a single query element.
      *
      * @param methodRef referenced JDK method
-     * @return whether membership or a list index is searched
+     * @return whether membership, a list index or an object removal is searched
      */
     public static boolean isCollectionEqualitySearch(final MethodRef methodRef) {
-        if (isCollectionContains(methodRef)) {
+        if (isCollectionContains(methodRef) || isCollectionObjectRemoval(methodRef)) {
             return true;
         }
         final String owner = methodRef.owner();
@@ -2526,7 +2526,11 @@ public final class JdkCallSupport {
             || isSetCopyOf(methodRef) || isListCopyOf(methodRef) || isListFactory(methodRef)) {
             return List.of("java/lang/NullPointerException");
         }
-        if (isCollectionObjectAddition(methodRef) || isListEndpointAdd(methodRef) || isCollectionObjectRemoval(methodRef)
+        if (isCollectionObjectRemoval(methodRef)) {
+            return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException",
+                "java/lang/ArrayIndexOutOfBoundsException");
+        }
+        if (isCollectionObjectAddition(methodRef) || isListEndpointAdd(methodRef)
             || isCollectionClear(methodRef) || isMapClear(methodRef)
             || (isMapObjectGetOrPut(methodRef) && "put".equals(methodRef.name())) || isMapPutIfAbsent(methodRef)
             || isMapRemove(methodRef) || isMapReplace(methodRef) || isMapPutAll(methodRef)) {
