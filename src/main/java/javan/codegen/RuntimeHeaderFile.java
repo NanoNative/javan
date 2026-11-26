@@ -577,6 +577,7 @@ final class RuntimeHeaderFile {
         int javan_hashset_add_all(void* set, void* collection);
         int javan_hashset_add_all_java(void* set, void* collection);
         void* javan_set_empty(void);
+        void* javan_set_of_empty(void);
         void* javan_set_copy_of(void* collection);
         void* javan_set_of_singleton(void* value);
         void* javan_set_of_pair(void* left, void* right);

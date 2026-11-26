@@ -1617,6 +1617,44 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsImmutableSetNullSearches() throws Exception {
+        final Path project = tempDir.resolve("selfhost-set-null-search");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static void check(Set<String> values) {
+                    try { System.out.println(values.contains(null)); } catch (NullPointerException expected) { System.out.println("null"); }
+                }
+                public static void main(String[] args) {
+                    check(Set.of());
+                    check(Collections.unmodifiableSet(Set.copyOf(Set.of("x"))));
+                    check(Collections.emptySet());
+                    check(Collections.singleton(null));
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-set-null-search"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-set-null-search").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout());
+    }
+
+    @Test
     void nativeBuiltJavanBuildsImmutableListNullSearches() throws Exception {
         final Path project = tempDir.resolve("selfhost-list-null-search");
         final Path classes = project.resolve("classes");
@@ -3625,6 +3663,52 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             direct:0:JAVAN-RUNTIME-PANIC:-1
             try:0:JAVAN-RUNTIME-PANIC:-1:0
             """);
+    }
+
+    @Test
+    void nativeLibraryImmutableSetSearchRejectsNull() throws Exception {
+        final Path project = project("library-set-null-search");
+        writeJava(project, "com.acme.Api", """
+            package com.acme;
+            import java.util.*;
+            public final class Api {
+                public static boolean search(int kind) {
+                    Set<String> values;
+                    if (kind == 0) values = Set.of();
+                    else if (kind == 1) values = Collections.unmodifiableSet(Set.copyOf(Set.of("x")));
+                    else values = Collections.singleton(null);
+                    return values.contains(null);
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString(), "--library", "--format", "static",
+            "--export", "com.acme.Api.search");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path caller = writeC(project, "call_set_null.c", """
+            #include <string.h>
+            #include ".javan/dist/bindings/c/library-set-null-search.h"
+            int main(void) {
+                for (int i = 0; i < 100; i++) {
+                    for (int kind = 0; kind < 3; kind++) {
+                        int value = -1;
+                        JavanResult result = javan_try_com_acme_Api_search_int(kind, &value);
+                        if (kind < 2 && (result.ok || result.message == 0
+                            || strstr(result.message, "NullPointerException") == 0)) return 1;
+                        if (kind == 2 && (!result.ok || value != 1)) return 2;
+                        javan_result_free(&result);
+                    }
+                }
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-set-null");
+        final ProcessResult compile = process(project, List.of("cc", caller.toString(),
+            project.resolve(".javan/dist/liblibrary-set-null-search.a").toString(), "-o", binary.toString()));
+        assertThat(compile.exitCode()).as(compile.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(binary.toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stderr()).isEmpty();
     }
 
     @Test

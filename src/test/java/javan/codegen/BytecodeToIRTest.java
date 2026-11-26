@@ -12625,7 +12625,7 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.objectCall("javan_set_empty", List.of()))
+            IrInstruction.returnObject(IrExpression.objectCall("javan_set_of_empty", List.of()))
         );
     }
 

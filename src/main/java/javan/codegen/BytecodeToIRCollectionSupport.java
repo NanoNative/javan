@@ -195,7 +195,7 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("of".equals(name) && "()Ljava/util/Set;".equals(descriptor)) {
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_set_empty", List.of())));
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_set_of_empty", List.of())));
                 return true;
             }
             return false;

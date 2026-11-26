@@ -14180,6 +14180,12 @@ final class RuntimeSourceMemorySections {
             return set;
         }
 
+        void* javan_set_of_empty(void) {
+            javan_object_list* set = (javan_object_list*) javan_set_empty();
+            set->view_flags |= JAVAN_LIST_REJECT_NULL_SEARCH;
+            return set;
+        }
+
         void* javan_set_copy_of(void* collection) {
             if (collection == NULL) {
                 javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
@@ -14204,6 +14210,7 @@ final class RuntimeSourceMemorySections {
                 javan_set_add(result_value, element);
             }
             ((javan_object_list*) result_value)->immutable = 1;
+            ((javan_object_list*) result_value)->view_flags |= JAVAN_LIST_REJECT_NULL_SEARCH;
             javan_root_frame_pop(javan_set_copy_roots);
             return result_value;
         }
@@ -14227,6 +14234,7 @@ final class RuntimeSourceMemorySections {
             }
             javan_root_frame_push(roots, count);
             javan_object_list* set = javan_set_new_with_capacity(count);
+            set->view_flags |= JAVAN_LIST_REJECT_NULL_SEARCH;
             for (int index = 0; index < count; index++) {
                 set->values[index] = values[index];
             }
@@ -14311,6 +14319,7 @@ final class RuntimeSourceMemorySections {
                 }
             }
             javan_object_list* set = javan_set_new_with_capacity(values->length);
+            set->view_flags |= JAVAN_LIST_REJECT_NULL_SEARCH;
             for (int index = 0; index < values->length; index++) {
                 set->values[index] = values->values[index];
             }

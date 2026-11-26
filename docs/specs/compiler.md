@@ -103,7 +103,8 @@ verification.
 Fixed-arity and array-based `Set.of` reject null elements and duplicate elements within the
 supported equality semantics. The immutable result retains its elements independently of an input
 array. `Set.copyOf` rejects null sources and elements, collapses duplicates and creates an immutable
-snapshot. Application-defined equality remains incomplete.
+snapshot. `contains` rejects null queries on these sets, including unmodifiable views.
+Application-defined equality remains incomplete.
 
 Fixed-arity and array-based `List.of` reject null elements, and the array overload rejects a null
 array. They create immutable ordered snapshots and retain duplicate elements. Other list operations

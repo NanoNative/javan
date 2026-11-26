@@ -3824,6 +3824,7 @@ public final class CCodegen {
                     "javan_arraylist_remove_first_java",
                     "javan_arraylist_remove_last_java",
                     "javan_set_empty",
+                    "javan_set_of_empty",
                     "javan_set_unmodifiable",
                     "javan_set_copy_of",
                     "javan_set_of_singleton",

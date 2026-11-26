@@ -2544,6 +2544,77 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void immutableSetSearchRejectsNullQueries() throws Exception {
+        final Path project = project("immutable-set-null-search");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static void check(Set<String> values, String query) {
+                    try { System.out.println(values.contains(query)); }
+                    catch (NullPointerException expected) { System.out.println("null"); }
+                }
+                public static void main(String[] args) {
+                    check(Set.of(), null);
+                    check(Set.of("x"), null);
+                    check(Set.of("x", "y"), null);
+                    check(Set.of(new String[]{"x", "y"}), null);
+                    check(Set.copyOf(Set.of("x")), null);
+                    check(Collections.unmodifiableSet(Set.of("x")), null);
+                    check(Collections.emptySet(), null);
+                    check(Collections.singleton(null), null);
+                    Set<String> mutable = new HashSet<>(); mutable.add(null);
+                    check(mutable, null);
+                    check(Collections.unmodifiableSet(mutable), null);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("null\n".repeat(6) + "false\ntrue\ntrue\ntrue\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/immutable-set-null-search").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void immutableSetNullSearchSurvivesConcurrentCollection() throws Exception {
+        final Path project = project("immutable-set-null-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger caught = new AtomicInteger();
+                static void check(Set<String> values) {
+                    try { values.contains(null); } catch (NullPointerException expected) { caught.incrementAndGet(); }
+                }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) check(Collections.unmodifiableSet(Set.of("x")));
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker());
+                    Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(caught.get());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("200\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/immutable-set-null-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void immutableListSearchRejectsNullQueries() throws Exception {
         final Path project = project("immutable-list-null-search");
         writeJava(project, "com.acme.Main", """
