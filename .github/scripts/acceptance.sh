@@ -801,7 +801,7 @@ rejects_check "$NEGATIVE_PROJECTS/multiple-main" "multiple main classes"
 rejects_check "$NEGATIVE_PROJECTS/unsupported-reflection" "Class.forName"
 rejects_check "$NEGATIVE_PROJECTS/exception-cause-constructor" "error[JAVAN014]"
 rejects_check "$NEGATIVE_PROJECTS/enum-value-of" "error[JAVAN015]"
-rejects_check "$NEGATIVE_PROJECTS/non-ascii-string" "error[JAVAN046]"
+rejects_check "$NEGATIVE_PROJECTS/non-ascii-locale-lower-case" "error[JAVAN046]"
 rejects_check "$NEGATIVE_PROJECTS/unsupported-http-server-dependency" "error[JAVAN061]"
 
 accepts_optional_real_probes

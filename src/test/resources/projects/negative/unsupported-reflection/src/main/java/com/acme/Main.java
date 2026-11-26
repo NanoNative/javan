@@ -4,7 +4,7 @@ public final class Main {
     private Main() {
     }
 
-    public static void main(final String[] args) throws ClassNotFoundException {
-        Class.forName("com.acme.Plugin", true, ClassLoader.getSystemClassLoader());
+    public static void main(final String[] args) {
+        Class.forName((Module) null, "com.acme.Plugin");
     }
 }

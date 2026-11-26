@@ -1511,6 +1511,26 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void acceptanceReflectionRejectionFixtureIsStillUnsupported() throws Exception {
+        final Path project = project("acceptance-reflection-rejection");
+        final Path fixture = Path.of("src/test/resources/projects/negative/unsupported-reflection/src/main/java/com/acme/Main.java");
+        writeJava(project, "com.acme.Main", Files.readString(fixture));
+        final CliRun run = run(tempDir, "check", project.toString());
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains("error[JAVAN001]", "Class.forName");
+    }
+
+    @Test
+    void acceptanceNonAsciiRejectionFixtureIsStillUnsupported() throws Exception {
+        final Path project = project("acceptance-non-ascii-rejection");
+        final Path fixture = Path.of("src/test/resources/projects/negative/non-ascii-locale-lower-case/src/main/java/com/acme/Main.java");
+        writeJava(project, "com.acme.Main", Files.readString(fixture));
+        final CliRun run = run(tempDir, "check", project.toString());
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains("error[JAVAN046]");
+    }
+
+    @Test
     void reachableNonAsciiStringLengthBuildsAndRuns() throws Exception {
         final Path project = project("non-ascii-string");
         writeJava(project, "com.acme.Main", """
