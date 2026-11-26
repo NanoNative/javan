@@ -221,7 +221,7 @@ final class BytecodeToIRCollectionSupport {
         callArguments.add(IrExpression.intLiteral(materialized.size()));
         callArguments.addAll(materialized);
         if (materialized.isEmpty()) {
-            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_of", callArguments)));
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_of_java", callArguments)));
         } else {
             pushObjectCall(instructions, stack, localDeclarations, "javan_list_of_java", callArguments);
         }
@@ -922,7 +922,7 @@ final class BytecodeToIRCollectionSupport {
         final String signature = methodRef.name() + methodRef.descriptor();
         if ("contains(Ljava/lang/Object;)Z".equals(signature)
             && (isJdkListOrCollection(methodRef.owner()) || isJdkSetOwner(methodRef.owner()))) {
-            if (dispatches.containsKey(COLLECTION_EQUALS_DISPATCH)) {
+            if (arguments.getFirst().kind() != IrExpression.Kind.STRING_LITERAL) {
                 pushIntCall(instructions, stack, localDeclarations, "javan_list_contains_java", List.of(receiver, arguments.getFirst()));
             } else {
                 stack.add(StackValue.intExpression(IrExpression.intCall("javan_list_contains", List.of(receiver, arguments.getFirst()))));
@@ -932,11 +932,10 @@ final class BytecodeToIRCollectionSupport {
         if ((isJdkListClass(methodRef.owner()) || "java/util/AbstractList".equals(methodRef.owner()))
             && ("indexOf(Ljava/lang/Object;)I".equals(signature) || "lastIndexOf(Ljava/lang/Object;)I".equals(signature))) {
             final IrExpression query = arguments.getFirst();
-            final boolean applicationEquality = dispatches.containsKey(COLLECTION_EQUALS_DISPATCH)
-                && query.kind() != IrExpression.Kind.STRING_LITERAL && query.kind() != IrExpression.Kind.OBJECT_NULL;
+            final boolean checkedSearch = query.kind() != IrExpression.Kind.STRING_LITERAL;
             final String function = "indexOf".equals(methodRef.name())
-                ? (applicationEquality ? "javan_list_index_of_java" : "javan_list_index_of")
-                : (applicationEquality ? "javan_list_last_index_of_java" : "javan_list_last_index_of");
+                ? (checkedSearch ? "javan_list_index_of_java" : "javan_list_index_of")
+                : (checkedSearch ? "javan_list_last_index_of_java" : "javan_list_last_index_of");
             pushIntCall(instructions, stack, localDeclarations, function, List.of(receiver, query));
             return true;
         }

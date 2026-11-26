@@ -1617,6 +1617,45 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsImmutableListNullSearches() throws Exception {
+        final Path project = tempDir.resolve("selfhost-list-null-search");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static void check(List<String> values) {
+                    try { System.out.println(values.contains(null)); } catch (NullPointerException expected) { System.out.println("contains"); }
+                    try { System.out.println(values.indexOf(null)); } catch (NullPointerException expected) { System.out.println("first"); }
+                    try { System.out.println(values.lastIndexOf(null)); } catch (NullPointerException expected) { System.out.println("last"); }
+                }
+                public static void main(String[] args) {
+                    check(List.of());
+                    check(Collections.unmodifiableList(List.copyOf(List.of("x"))));
+                    check(Collections.singletonList(null));
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-list-null-search"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-list-null-search").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout());
+    }
+
+    @Test
     void nativeBuiltJavanBuildsStringIsBlank() throws Exception {
         final Path project = tempDir.resolve("selfhost-string-is-blank");
         final Path classes = project.resolve("classes");
@@ -3586,6 +3625,55 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             direct:0:JAVAN-RUNTIME-PANIC:-1
             try:0:JAVAN-RUNTIME-PANIC:-1:0
             """);
+    }
+
+    @Test
+    void nativeLibraryImmutableListSearchRejectsNull() throws Exception {
+        final Path project = project("library-list-null-search");
+        writeJava(project, "com.acme.Api", """
+            package com.acme;
+            import java.util.*;
+            public final class Api {
+                public static int search(int kind, int mode) {
+                    List<String> values;
+                    if (kind == 0) values = List.of("x");
+                    else values = Collections.singletonList(null);
+                    if (mode == 0) return values.contains(null) ? 1 : 0;
+                    if (mode == 1) return values.indexOf(null);
+                    return values.lastIndexOf(null);
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString(), "--library", "--format", "static",
+            "--export", "com.acme.Api.search");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path caller = writeC(project, "call_list_null.c", """
+            #include <string.h>
+            #include ".javan/dist/bindings/c/library-list-null-search.h"
+            int main(void) {
+                for (int i = 0; i < 100; i++) {
+                    for (int mode = 0; mode < 3; mode++) {
+                        for (int kind = 0; kind < 2; kind++) {
+                            int value = -1;
+                            JavanResult result = javan_try_com_acme_Api_search_int_int(kind, mode, &value);
+                            if (kind == 0 && (result.ok || result.message == 0
+                                || strstr(result.message, "NullPointerException") == 0)) return 1;
+                            if (kind == 1 && (!result.ok || value != (mode == 0 ? 1 : 0))) return 2;
+                            javan_result_free(&result);
+                        }
+                    }
+                }
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-list-null");
+        final ProcessResult compile = process(project, List.of("cc", caller.toString(),
+            project.resolve(".javan/dist/liblibrary-list-null-search.a").toString(), "-o", binary.toString()));
+        assertThat(compile.exitCode()).as(compile.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(binary.toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stderr()).isEmpty();
     }
 
     @Test

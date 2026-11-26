@@ -93,6 +93,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_LIST_VIEW_UNMODIFIABLE 1
         #define JAVAN_LIST_VIEW_SET 2
         #define JAVAN_LIST_EMPTY_COLLECTION 4
+        #define JAVAN_LIST_REJECT_NULL_SEARCH 8
         #define JAVAN_MAP_VIEW_UNMODIFIABLE 1
         #define JAVAN_BUILTIN_INSTANCEOF_COLLECTION 1
         #define JAVAN_BUILTIN_INSTANCEOF_MAP 2
@@ -13484,7 +13485,7 @@ final class RuntimeSourceMemorySections {
             return list;
         }
 
-        static void* javan_list_from_values(void** values, int count) {
+        static void* javan_list_from_values(void** values, int count, int reject_null_search) {
             void** roots[count > 0 ? count : 1];
             for (int index = 0; index < count; index++) {
                 roots[index] = &values[index];
@@ -13493,6 +13494,9 @@ final class RuntimeSourceMemorySections {
                 javan_root_frame_push(roots, count);
             }
             javan_object_list* list = javan_list_new_with_capacity(count, 1);
+            if (reject_null_search != 0) {
+                list->view_flags |= JAVAN_LIST_REJECT_NULL_SEARCH;
+            }
             for (int index = 0; index < count; index++) {
                 javan_list_append_raw(list, values[index]);
             }
@@ -13513,7 +13517,7 @@ final class RuntimeSourceMemorySections {
                 values[index] = va_arg(arguments, void*);
             }
             va_end(arguments);
-            return javan_list_from_values(values, count);
+            return javan_list_from_values(values, count, 0);
         }
 
         void* javan_list_of_java(int count, ...) {
@@ -13533,7 +13537,7 @@ final class RuntimeSourceMemorySections {
                     return NULL;
                 }
             }
-            return javan_list_from_values(values, count);
+            return javan_list_from_values(values, count, 1);
         }
 
         void* javan_list_of_array(void* array) {
@@ -13556,6 +13560,7 @@ final class RuntimeSourceMemorySections {
                 }
             }
             javan_object_list* list = javan_list_new_with_capacity(values->length, 1);
+            list->view_flags |= JAVAN_LIST_REJECT_NULL_SEARCH;
             for (int index = 0; index < values->length; index++) {
                 javan_list_append_raw(list, values->values[index]);
             }
@@ -13577,6 +13582,7 @@ final class RuntimeSourceMemorySections {
             javan_root_frame_push(javan_list_copy_roots, 2);
             int length = javan_list_logical_length(source);
             list = javan_list_new_with_capacity(length, 1);
+            list->view_flags |= JAVAN_LIST_REJECT_NULL_SEARCH;
             for (int index = 0; index < length; index++) {
                 void* element = javan_list_get_unchecked(source, index);
                 if (element == NULL) {
@@ -13628,6 +13634,16 @@ final class RuntimeSourceMemorySections {
             atomic_store_explicit(&javan_collection_equals_resolver, resolver, memory_order_release);
         }
 
+        static int javan_list_rejects_null_search(javan_object_list* list) {
+            while (list != NULL) {
+                if ((list->view_flags & JAVAN_LIST_REJECT_NULL_SEARCH) != 0) {
+                    return 1;
+                }
+                list = list->backing;
+            }
+            return 0;
+        }
+
         static int javan_list_custom_index_of(
             void* value, void* element, javan_collection_equals_fn equals, int reverse
         ) {
@@ -13667,6 +13683,16 @@ final class RuntimeSourceMemorySections {
                 javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
                 return 0;
             }
+            if (element == NULL) {
+                javan_runtime_lock_enter();
+                int reject_null = javan_list_rejects_null_search(javan_list_checked(value));
+                javan_runtime_lock_leave();
+                if (reject_null != 0) {
+                    javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                    return 0;
+                }
+                return javan_list_contains(value, NULL);
+            }
             javan_collection_equals_resolver_fn resolver = atomic_load_explicit(
                 &javan_collection_equals_resolver, memory_order_acquire
             );
@@ -13687,6 +13713,16 @@ final class RuntimeSourceMemorySections {
             if (value == NULL) {
                 javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
                 return -1;
+            }
+            if (element == NULL) {
+                javan_runtime_lock_enter();
+                int reject_null = javan_list_rejects_null_search(javan_list_checked(value));
+                javan_runtime_lock_leave();
+                if (reject_null != 0) {
+                    javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                    return -1;
+                }
+                return reverse != 0 ? javan_list_last_index_of(value, NULL) : javan_list_index_of(value, NULL);
             }
             javan_collection_equals_resolver_fn resolver = atomic_load_explicit(
                 &javan_collection_equals_resolver, memory_order_acquire

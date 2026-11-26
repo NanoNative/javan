@@ -2544,6 +2544,113 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void immutableListSearchRejectsNullQueries() throws Exception {
+        final Path project = project("immutable-list-null-search");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static void check(List<String> values, String query) {
+                    try { System.out.println(values.contains(query)); } catch (NullPointerException expected) { System.out.println("contains"); }
+                    try { System.out.println(values.indexOf(query)); } catch (NullPointerException expected) { System.out.println("first"); }
+                    try { System.out.println(values.lastIndexOf(query)); } catch (NullPointerException expected) { System.out.println("last"); }
+                }
+                static void checkLiteral(List<String> values) {
+                    try { System.out.println(values.contains(null)); } catch (NullPointerException expected) { System.out.println("contains"); }
+                    try { System.out.println(values.indexOf(null)); } catch (NullPointerException expected) { System.out.println("first"); }
+                    try { System.out.println(values.lastIndexOf(null)); } catch (NullPointerException expected) { System.out.println("last"); }
+                }
+                public static void main(String[] args) {
+                    check(List.of(), null);
+                    check(List.of("x"), null);
+                    check(List.of("x", "y"), null);
+                    check(List.of(new String[]{"x", "y"}), null);
+                    check(List.copyOf(List.of("x")), null);
+                    check(Collections.unmodifiableList(List.of("x")), null);
+                    checkLiteral(List.of("x"));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("contains\nfirst\nlast\n".repeat(7));
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/immutable-list-null-search").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void immutableListNullSearchSurvivesConcurrentCollection() throws Exception {
+        final Path project = project("immutable-list-null-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger failures = new AtomicInteger();
+                static void check(List<String> values) {
+                    try { values.contains(null); } catch (NullPointerException expected) { failures.incrementAndGet(); }
+                    try { values.indexOf(null); } catch (NullPointerException expected) { failures.incrementAndGet(); }
+                    try { values.lastIndexOf(null); } catch (NullPointerException expected) { failures.incrementAndGet(); }
+                }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            check(Collections.unmodifiableList(List.of("x")));
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker());
+                    Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(failures.get());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("600\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/immutable-list-null-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void nullableListSearchAcceptsNullQueries() throws Exception {
+        final Path project = project("nullable-list-null-search");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static void check(List<String> values) {
+                    System.out.println(values.contains(null));
+                    System.out.println(values.indexOf(null));
+                    System.out.println(values.lastIndexOf(null));
+                }
+                public static void main(String[] args) {
+                    List<String> values = new ArrayList<>(); values.add("x"); values.add(null);
+                    check(values);
+                    check(Collections.singletonList(null));
+                    check(Collections.singletonList("x"));
+                    check(Collections.emptyList());
+                    check(Collections.unmodifiableList(values));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/nullable-list-null-search").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void listIndexSearchCallsEqualityInSearchOrderForIdenticalReference() throws Exception {
         final Path project = project("list-index-equality-order");
         writeJava(project, "com.acme.Main", """

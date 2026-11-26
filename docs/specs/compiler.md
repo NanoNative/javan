@@ -111,8 +111,9 @@ and application-defined element equality remain incomplete. `List.copyOf` reject
 elements and creates an immutable ordered snapshot.
 `contains`, `indexOf` and `lastIndexOf` on supported list representations call an application-defined
 query object's `equals`, including inherited implementations. Search values of unknown type
-conservatively retain possible implementations. Null queries on `List.of` and `List.copyOf` searches
-remain incomplete. Set membership still uses the existing incomplete equality semantics.
+conservatively retain possible implementations. `List.of` and `List.copyOf` searches reject null
+queries, including through unmodifiable views. Set membership still uses the existing incomplete
+equality semantics.
 Reads using `List.get`, `getFirst` and `getLast` publish returned references safely during concurrent
 garbage collection. Supported `getFirst` and `getLast` calls transport null-receiver and empty-list
 failures within supported handler shapes.

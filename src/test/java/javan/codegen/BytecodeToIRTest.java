@@ -24586,10 +24586,11 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).contains(
             IrInstruction.propagatePending(),
-            IrInstruction.returnInt(IrExpression.intCall(
-                "javan_list_contains",
+            IrInstruction.assignInt("int0", IrExpression.intCall(
+                "javan_list_contains_java",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
-            ))
+            )),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
         );
     }
 
@@ -25355,10 +25356,11 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).contains(
             IrInstruction.propagatePending(),
-            IrInstruction.returnInt(IrExpression.intCall(
-                "javan_list_contains",
+            IrInstruction.assignInt("int0", IrExpression.intCall(
+                "javan_list_contains_java",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
-            ))
+            )),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
         );
     }
 
@@ -25700,8 +25702,9 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).contains(
             IrInstruction.assignInt(
                 "int0",
-                IrExpression.intCall("javan_list_index_of", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
+                IrExpression.intCall("javan_list_index_of_java", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
             ),
+            IrInstruction.propagatePending(),
             IrInstruction.returnInt(IrExpression.intLocal("int0"))
         );
     }
@@ -25724,8 +25727,9 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).contains(
             IrInstruction.assignInt(
                 "int0",
-                IrExpression.intCall("javan_list_last_index_of", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
+                IrExpression.intCall("javan_list_last_index_of_java", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
             ),
+            IrInstruction.propagatePending(),
             IrInstruction.returnInt(IrExpression.intLocal("int0"))
         );
     }
@@ -25923,8 +25927,9 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).contains(
             IrInstruction.assignInt(
                 "int0",
-                IrExpression.intCall("javan_list_index_of", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
+                IrExpression.intCall("javan_list_index_of_java", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
             ),
+            IrInstruction.propagatePending(),
             IrInstruction.returnInt(IrExpression.intLocal("int0"))
         );
     }
@@ -26005,8 +26010,9 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).contains(
             IrInstruction.assignInt(
                 "int0",
-                IrExpression.intCall("javan_list_last_index_of", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
+                IrExpression.intCall("javan_list_last_index_of_java", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
             ),
+            IrInstruction.propagatePending(),
             IrInstruction.returnInt(IrExpression.intLocal("int0"))
         );
     }
@@ -26245,8 +26251,9 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).contains(
             IrInstruction.assignInt(
                 "int0",
-                IrExpression.intCall("javan_list_index_of", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
+                IrExpression.intCall("javan_list_index_of_java", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
             ),
+            IrInstruction.propagatePending(),
             IrInstruction.returnInt(IrExpression.intLocal("int0"))
         );
     }
@@ -26269,8 +26276,9 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).contains(
             IrInstruction.assignInt(
                 "int0",
-                IrExpression.intCall("javan_list_last_index_of", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
+                IrExpression.intCall("javan_list_last_index_of_java", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
             ),
+            IrInstruction.propagatePending(),
             IrInstruction.returnInt(IrExpression.intLocal("int0"))
         );
     }
@@ -26641,10 +26649,11 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).contains(
             IrInstruction.propagatePending(),
-            IrInstruction.returnInt(IrExpression.intCall(
-                "javan_list_contains",
+            IrInstruction.assignInt("int0", IrExpression.intCall(
+                "javan_list_contains_java",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
-            ))
+            )),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
         );
     }
 
@@ -26664,10 +26673,11 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).contains(
             IrInstruction.propagatePending(),
-            IrInstruction.returnInt(IrExpression.intCall(
-                "javan_list_contains",
+            IrInstruction.assignInt("int0", IrExpression.intCall(
+                "javan_list_contains_java",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
-            ))
+            )),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
         );
     }
 
