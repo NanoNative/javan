@@ -134,7 +134,8 @@ Bulk insertion through `Collection`, `Set`, `HashSet` and `LinkedHashSet` handle
 views and transports null, immutable-collection and representational-size failures within
 supported handlers.
 `containsAll` on supported collection and set owners handles views and transports null receiver
-and null source failures within supported handlers.
+and null source failures within supported handlers. Immutable `List.of`, `List.copyOf`, `Set.of`
+and `Set.copyOf` receivers reject a null probe when iteration reaches it.
 `removeAll` and `retainAll` on supported collection and set owners handle supported views and
 transport null and immutable-collection failures within supported handlers.
 Object removal through supported list, set and `Collection` owners transports null-receiver and

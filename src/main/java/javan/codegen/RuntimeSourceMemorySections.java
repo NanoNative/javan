@@ -13895,7 +13895,7 @@ final class RuntimeSourceMemorySections {
             return javan_collection_filter_all_java(value, other, 1);
         }
 
-        int javan_list_contains_all(void* value, void* other) {
+        static int javan_list_contains_all_checked(void* value, void* other, int java_errors) {
             javan_object_list* list = javan_list_checked(value);
             javan_object_list* probe = javan_list_checked(other);
             void** javan_list_contains_all_roots[] = {
@@ -13905,7 +13905,13 @@ final class RuntimeSourceMemorySections {
             javan_root_frame_push(javan_list_contains_all_roots, 2);
             int probe_length = javan_list_logical_length(probe);
             for (int index = 0; index < probe_length; index++) {
-                if (javan_list_contains(list, javan_list_get_unchecked(probe, index)) == 0) {
+                void* element = javan_list_get_unchecked(probe, index);
+                if (java_errors != 0 && element == NULL && javan_list_rejects_null_search(list) != 0) {
+                    javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                    javan_root_frame_pop(javan_list_contains_all_roots);
+                    return 0;
+                }
+                if (javan_list_contains(list, element) == 0) {
                     javan_root_frame_pop(javan_list_contains_all_roots);
                     return 0;
                 }
@@ -13914,13 +13920,17 @@ final class RuntimeSourceMemorySections {
             return 1;
         }
 
+        int javan_list_contains_all(void* value, void* other) {
+            return javan_list_contains_all_checked(value, other, 0);
+        }
+
         int javan_list_contains_all_java(void* value, void* other) {
             if (value == NULL || other == NULL) {
                 javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
                 return 0;
             }
             javan_runtime_lock_enter();
-            int result = javan_list_contains_all(value, other);
+            int result = javan_list_contains_all_checked(value, other, 1);
             javan_runtime_lock_leave();
             return result;
         }

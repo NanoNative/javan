@@ -2694,6 +2694,81 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void immutableCollectionContainsAllChecksNullInIterationOrder() throws Exception {
+        final Path project = project("immutable-contains-all-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static void check(Collection<String> values, Collection<String> probes) {
+                    try { System.out.println(values.containsAll(probes)); }
+                    catch (NullPointerException expected) { System.out.println("null"); }
+                }
+                public static void main(String[] args) {
+                    Collection<String> nullOnly = Collections.singletonList(null);
+                    List<String> missFirst = new ArrayList<>(); missFirst.add("missing"); missFirst.add(null);
+                    List<String> nullFirst = new ArrayList<>(); nullFirst.add(null); nullFirst.add("missing");
+                    check(List.of("x"), nullOnly);
+                    check(Set.of("x"), nullOnly);
+                    check(Collections.unmodifiableCollection(List.of("x")), nullOnly);
+                    check(List.copyOf(List.of("x")), nullFirst);
+                    check(Set.copyOf(Set.of("x")), missFirst);
+                    check(List.of("x"), missFirst);
+                    check(List.of("x"), Collections.emptyList());
+                    check(Collections.emptyList(), nullOnly);
+                    check(Collections.singletonList(null), nullOnly);
+                    Set<String> mutable = new HashSet<>(); mutable.add(null);
+                    check(Collections.unmodifiableSet(mutable), nullOnly);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("null\nnull\nnull\nnull\nfalse\nfalse\ntrue\nfalse\ntrue\ntrue\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/immutable-contains-all-null").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void immutableCollectionContainsAllNullSurvivesConcurrentCollection() throws Exception {
+        final Path project = project("immutable-contains-all-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger caught = new AtomicInteger();
+                static void check(Collection<String> values, Collection<String> probes) {
+                    try { values.containsAll(probes); } catch (NullPointerException expected) { caught.incrementAndGet(); }
+                }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++)
+                            check(Collections.unmodifiableCollection(List.of("x")), Collections.singletonList(null));
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread first = new Thread(new Worker());
+                    Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(caught.get());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("200\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/immutable-contains-all-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void immutableListSearchRejectsNullQueries() throws Exception {
         final Path project = project("immutable-list-null-search");
         writeJava(project, "com.acme.Main", """
