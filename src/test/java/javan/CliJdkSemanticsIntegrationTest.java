@@ -2988,6 +2988,93 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void listBulkRemovalTransportsNullProbeFailureAfterPriorChanges() throws Exception {
+        final Path project = project("list-filter-null-probe");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static void remove(List<String> values, Collection<String> probes) {
+                    try { System.out.println(values.removeAll(probes)); }
+                    catch (NullPointerException expected) { System.out.println("null"); }
+                }
+                static void retain(List<String> values, Collection<String> probes) {
+                    try { System.out.println(values.retainAll(probes)); }
+                    catch (NullPointerException expected) { System.out.println("null"); }
+                }
+                public static void main(String[] args) {
+                    List<String> removed = new ArrayList<>(); removed.add("x"); removed.add(null); removed.add("z");
+                    remove(removed, List.of("x"));
+                    System.out.println(removed.size()); System.out.println(removed.get(0)); System.out.println(removed.get(1));
+                    List<String> retained = new ArrayList<>(); retained.add("y"); retained.add(null); retained.add("x");
+                    retain(retained, Collections.unmodifiableSet(Set.of("x")));
+                    System.out.println(retained.size()); System.out.println(retained.get(0)); System.out.println(retained.get(1));
+                    List<String> first = new ArrayList<>(); first.add(null); first.add("x");
+                    remove(first, Set.of("x")); System.out.println(first.size());
+                    remove(new ArrayList<>(), List.of("x"));
+                    List<String> nullable = new ArrayList<>(); nullable.add(null); nullable.add("z");
+                    remove(nullable, Collections.singletonList(null));
+                    System.out.println(nullable.size()); System.out.println(nullable.get(0));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("null\n2\nnull\nz\nnull\n2\nnull\nx\nnull\n2\nfalse\ntrue\n1\nz\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-filter-null-probe").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listBulkRemovalNullProbeSurvivesConcurrentCollection() throws Exception {
+        final Path project = project("list-filter-null-concurrent");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger completed = new AtomicInteger();
+                static void record(List<String> values) {
+                    if (values.size() == 2 && values.get(0) == null && "z".equals(values.get(1)))
+                        completed.incrementAndGet();
+                }
+                static void remove(List<String> values, Collection<String> probes) {
+                    try { values.removeAll(probes); } catch (NullPointerException expected) { record(values); }
+                }
+                static void retain(List<String> values, Collection<String> probes) {
+                    try { values.retainAll(probes); } catch (NullPointerException expected) { record(values); }
+                }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            List<String> removed = new ArrayList<>(); removed.add("x"); removed.add(null); removed.add("z");
+                            remove(removed, List.of("x"));
+                            List<String> retained = new ArrayList<>(); retained.add("x"); retained.add(null); retained.add("z");
+                            retain(retained, Set.of("z"));
+                        }
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(completed.get());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("400\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-filter-null-concurrent").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void listObjectRemovalKeepsEqualityForMixedReceiverPaths() throws Exception {
         final Path project = project("list-remove-mixed-receivers");
         writeJava(project, "com.acme.Main", """

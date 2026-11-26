@@ -13830,74 +13830,62 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
-        int javan_list_remove_all(void* value, void* other) {
+        static int javan_list_filter_all_checked(void* value, void* other, int retain, int java_errors) {
             javan_object_list* list = javan_list_checked(value);
             javan_object_list* probe = javan_list_checked(other);
             javan_list_mutable_checked(list);
             if (javan_list_storage_owner(list) == javan_list_storage_owner(probe)) {
-                int changed = javan_list_logical_length(list) != 0;
+                int changed = retain == 0 && javan_list_logical_length(list) != 0;
                 if (changed != 0) {
                     javan_list_clear(value);
                 }
                 return changed;
             }
-            void** javan_list_remove_all_roots[] = {
-                (void**) &list,
-                (void**) &probe
-            };
-            javan_root_frame_push(javan_list_remove_all_roots, 2);
+            void** roots[] = { (void**) &list, (void**) &probe };
+            javan_root_frame_push(roots, 2);
             int length = javan_list_logical_length(list);
             int write_index = 0;
             int changed = 0;
+            int check_null = java_errors != 0 && javan_list_is_set(list) == 0
+                && javan_list_rejects_null_search(probe) != 0;
             for (int index = 0; index < length; index++) {
                 void* element = javan_list_get_unchecked(list, index);
-                if (javan_list_contains(probe, element) != 0) {
+                if (check_null != 0 && element == NULL) {
+                    if (changed != 0) {
+                        int remaining = length - index;
+                        memmove(list->values + write_index, list->values + index,
+                            (unsigned long) remaining * sizeof(void*));
+                        int new_length = write_index + remaining;
+                        memset(list->values + new_length, 0, (unsigned long) (length - new_length) * sizeof(void*));
+                        list->length = new_length;
+                        list->mod_count++;
+                    }
+                    javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                    javan_root_frame_pop(roots);
+                    return 0;
+                }
+                int contains = javan_list_contains(probe, element);
+                if ((retain != 0) != (contains != 0)) {
                     changed = 1;
                     continue;
                 }
-                list->values[write_index] = element;
-                write_index++;
+                list->values[write_index++] = element;
             }
             if (changed != 0) {
                 memset(list->values + write_index, 0, (unsigned long) (length - write_index) * sizeof(void*));
                 list->length = write_index;
                 list->mod_count++;
             }
-            javan_root_frame_pop(javan_list_remove_all_roots);
+            javan_root_frame_pop(roots);
             return changed;
         }
 
+        int javan_list_remove_all(void* value, void* other) {
+            return javan_list_filter_all_checked(value, other, 0, 0);
+        }
+
         int javan_list_retain_all(void* value, void* other) {
-            javan_object_list* list = javan_list_checked(value);
-            javan_object_list* probe = javan_list_checked(other);
-            javan_list_mutable_checked(list);
-            if (javan_list_storage_owner(list) == javan_list_storage_owner(probe)) {
-                return 0;
-            }
-            void** javan_list_retain_all_roots[] = {
-                (void**) &list,
-                (void**) &probe
-            };
-            javan_root_frame_push(javan_list_retain_all_roots, 2);
-            int length = javan_list_logical_length(list);
-            int write_index = 0;
-            int changed = 0;
-            for (int index = 0; index < length; index++) {
-                void* element = javan_list_get_unchecked(list, index);
-                if (javan_list_contains(probe, element) == 0) {
-                    changed = 1;
-                    continue;
-                }
-                list->values[write_index] = element;
-                write_index++;
-            }
-            if (changed != 0) {
-                memset(list->values + write_index, 0, (unsigned long) (length - write_index) * sizeof(void*));
-                list->length = write_index;
-                list->mod_count++;
-            }
-            javan_root_frame_pop(javan_list_retain_all_roots);
-            return changed;
+            return javan_list_filter_all_checked(value, other, 1, 0);
         }
 
         static int javan_collection_filter_all_java(void* value, void* other, int retain) {
@@ -13912,10 +13900,8 @@ final class RuntimeSourceMemorySections {
                 javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
             } else if (other == NULL) {
                 javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
-            } else if (retain) {
-                result = javan_list_retain_all(value, other);
             } else {
-                result = javan_list_remove_all(value, other);
+                result = javan_list_filter_all_checked(value, other, retain, 1);
             }
             javan_runtime_lock_leave();
             return result;
