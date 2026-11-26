@@ -53,6 +53,7 @@ import java.util.Set;
  * Lowers the initial supported bytecode subset to javan IR.
  */
 public final class BytecodeToIR {
+    static final String COLLECTION_EQUALS_DISPATCH = "javan_dispatch_collection_equals";
     static final int TYPE_JAVA_LANG_INTEGER = -1001;
     static final int TYPE_JAVA_LANG_LONG = -1002;
     static final int TYPE_JAVA_LANG_FLOAT = -1003;
@@ -262,6 +263,25 @@ public final class BytecodeToIR {
                 )
             );
         }
+        if (usesCollectionContains(classes, reachableMethods)) {
+            final MethodRef equals = new MethodRef("java/lang/Object", "equals", "(Ljava/lang/Object;)Z");
+            final Set<String> reachable = new LinkedHashSet<>();
+            for (final EntryPoint method : reachableMethods) {
+                reachable.add(method.display());
+            }
+            final List<EntryPoint> targets = new ArrayList<>();
+            for (final EntryPoint receiver : virtualTargets(classes, equals, callGraph.instantiatedTypes())) {
+                final Optional<EntryPoint> implementation = lowerableResolvedVirtualTarget(classes, receiver.className(), equals);
+                if (implementation.isPresent() && reachable.contains(implementation.orElseThrow().display())) {
+                    targets.add(receiver);
+                }
+            }
+            if (!targets.isEmpty()) {
+                dispatches.putIfAbsent(COLLECTION_EQUALS_DISPATCH, BytecodeToIRDynamicSupport.dispatch(
+                    classes, COLLECTION_EQUALS_DISPATCH, MethodDescriptor.parse(equals.descriptor()), targets
+                ));
+            }
+        }
         for (final EntryPoint reachable : reachableMethods) {
             if (configuredNativeLeaf(classes, reachable, nativeInterop)) {
                 continue;
@@ -291,25 +311,9 @@ public final class BytecodeToIR {
         if (usesMethodInvocation(classes, reachableMethods)) {
             addReflectiveInvocationDispatches(classes, reflectedClasses, callGraph.instantiatedTypes(), dispatches);
         }
-        if (usesCollectionContains(classes, reachableMethods)) {
-            final MethodRef equals = new MethodRef("java/lang/Object", "equals", "(Ljava/lang/Object;)Z");
-            final Set<String> reachable = new LinkedHashSet<>();
-            for (final EntryPoint method : reachableMethods) {
-                reachable.add(method.display());
-            }
-            final List<EntryPoint> targets = new ArrayList<>();
-            for (final EntryPoint receiver : virtualTargets(classes, equals, callGraph.instantiatedTypes())) {
-                final Optional<EntryPoint> implementation = lowerableResolvedVirtualTarget(classes, receiver.className(), equals);
-                if (implementation.isPresent() && reachable.contains(implementation.orElseThrow().display())) {
-                    targets.add(receiver);
-                }
-            }
-            if (!targets.isEmpty()) {
-                final String symbol = "javan_dispatch_collection_equals";
-                dispatches.putIfAbsent(symbol, BytecodeToIRDynamicSupport.dispatch(
-                    classes, symbol, MethodDescriptor.parse(equals.descriptor()), targets
-                ));
-            }
+        final IrDispatch collectionEquals = dispatches.remove(COLLECTION_EQUALS_DISPATCH);
+        if (collectionEquals != null) {
+            dispatches.put(COLLECTION_EQUALS_DISPATCH, collectionEquals);
         }
         return new IrProgram(
             loweredClasses,
@@ -1513,7 +1517,7 @@ public final class BytecodeToIR {
             }
             if (JdkCallSupport.isCollectionContains(reference)) {
                 possibleTypes.add("java/lang/NullPointerException");
-                addTransportedThrowableTypes("javan_dispatch_collection_equals", dispatches,
+                addTransportedThrowableTypes(COLLECTION_EQUALS_DISPATCH, dispatches,
                     transportedThrowableTypes, possibleTypes);
             }
             if (("java/util/Iterator".equals(reference.owner()) || "java/util/ListIterator".equals(reference.owner()))

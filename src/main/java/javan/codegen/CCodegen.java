@@ -71,7 +71,7 @@ public final class CCodegen {
         new MethodRef("java/lang/Object", "equals", "(Ljava/lang/Object;)Z")
     );
     private static final String RECORD_REFERENCE_EQUALS_DISPATCH = "javan_dispatch_record_reference_equals";
-    private static final String COLLECTION_EQUALS_DISPATCH = "javan_dispatch_collection_equals";
+    private static final String COLLECTION_EQUALS_DISPATCH = BytecodeToIR.COLLECTION_EQUALS_DISPATCH;
     private static final String RECORD_REFERENCE_HASH_CODE_DISPATCH = "javan_dispatch_record_reference_hash_code";
     private static final String FALLIBLE_APPLY_METHOD_NAME = "applyWithException";
 

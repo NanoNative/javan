@@ -2544,6 +2544,39 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void collectionContainsWithoutApplicationEqualityPreservesEvaluationAndNullFailure() throws Exception {
+        final Path project = project("collection-contains-platform-equality");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static int calls;
+                static String query() { calls++; return "two"; }
+                static void failWithQuery(Collection<String> values) { values.contains(query()); }
+                static void checkNull(Collection<String> values) {
+                    try { failWithQuery(values); }
+                    catch (NullPointerException expected) { System.out.println("caught"); }
+                }
+                public static void main(String[] args) {
+                    List<String> values = new ArrayList<>(); values.add("two");
+                    System.out.println(values.contains(query()));
+                    System.out.println(values.contains(null));
+                    System.out.println(calls);
+                    checkNull(args.length == 0 ? null : values);
+                    System.out.println(calls);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("true\nfalse\n1\ncaught\n2\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/collection-contains-platform-equality").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void listContainsCallsEqualityForIdenticalReference() throws Exception {
         final Path project = project("list-contains-identical-reference");
         writeJava(project, "com.acme.Main", """

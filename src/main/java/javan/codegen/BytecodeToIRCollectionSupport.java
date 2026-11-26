@@ -920,6 +920,15 @@ final class BytecodeToIRCollectionSupport {
         final IrExpression receiver
     ) {
         final String signature = methodRef.name() + methodRef.descriptor();
+        if ("contains(Ljava/lang/Object;)Z".equals(signature)
+            && (isJdkListOrCollection(methodRef.owner()) || isJdkSetOwner(methodRef.owner()))) {
+            if (dispatches.containsKey(COLLECTION_EQUALS_DISPATCH)) {
+                pushIntCall(instructions, stack, localDeclarations, "javan_list_contains_java", List.of(receiver, arguments.getFirst()));
+            } else {
+                stack.add(StackValue.intExpression(IrExpression.intCall("javan_list_contains", List.of(receiver, arguments.getFirst()))));
+            }
+            return true;
+        }
         if (JdkCallSupport.isCollectionClear(methodRef)) {
             instructions.add(IrInstruction.callStaticVoid("javan_collection_clear_java", List.of(receiver)));
             return true;
@@ -1073,10 +1082,6 @@ final class BytecodeToIRCollectionSupport {
                 stack.add(StackValue.intExpression(IrExpression.intCall("javan_list_is_empty", List.of(receiver))));
                 return true;
             }
-            if ("contains(Ljava/lang/Object;)Z".equals(signature)) {
-                pushIntCall(instructions, stack, localDeclarations, "javan_list_contains_java", List.of(receiver, arguments.getFirst()));
-                return true;
-            }
             if ("remove(Ljava/lang/Object;)Z".equals(signature)) {
                 pushIntCall(instructions, stack, localDeclarations, "javan_collection_remove_java", List.of(receiver, arguments.getFirst()));
                 return true;
@@ -1136,10 +1141,6 @@ final class BytecodeToIRCollectionSupport {
             }
             if ("retainAll(Ljava/util/Collection;)Z".equals(signature)) {
                 pushIntCall(instructions, stack, localDeclarations, "javan_list_retain_all_java", List.of(receiver, arguments.getFirst()));
-                return true;
-            }
-            if ("contains(Ljava/lang/Object;)Z".equals(signature)) {
-                pushIntCall(instructions, stack, localDeclarations, "javan_list_contains_java", List.of(receiver, arguments.getFirst()));
                 return true;
             }
             if ("remove(Ljava/lang/Object;)Z".equals(signature)) {
