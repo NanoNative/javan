@@ -14040,6 +14040,9 @@ final class RuntimeSourceMemorySections {
 
         void javan_collection_clear_java(void* value) {
             javan_object_list* list = javan_list_checked(value);
+            if ((list->view_flags & JAVAN_LIST_EMPTY_COLLECTION) != 0) {
+                return;
+            }
             if (list->immutable != 0) {
                 javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
                 return;

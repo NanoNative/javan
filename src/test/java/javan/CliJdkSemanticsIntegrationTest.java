@@ -3322,6 +3322,39 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void emptyCollectionsClearMatchesJvm() throws Exception {
+        final Path project = project("empty-collections-clear");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static void check(Collection<?> values) {
+                    try { values.clear(); System.out.println("cleared"); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                    catch (NullPointerException expected) { System.out.println("null"); }
+                }
+                public static void main(String[] args) {
+                    check(Collections.emptyList()); check(Collections.emptySet());
+                    check(Collections.singletonList("x")); check(Collections.singleton("x"));
+                    check(Collections.unmodifiableList(Collections.emptyList()));
+                    check(Collections.unmodifiableSet(Collections.emptySet()));
+                    check(List.of()); check(Set.of()); check(null);
+                    List<String> values = new ArrayList<>(); values.add("x"); check(values); System.out.println(values.size());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("cleared\ncleared\nimmutable\nimmutable\nimmutable\nimmutable\n"
+            + "immutable\nimmutable\nnull\ncleared\n0\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/empty-collections-clear").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void listObjectRemovalOnImmutableReceiverDoesNotRequireEquality() throws Exception {
         final Path project = project("list-remove-immutable-unsupported-equality");
         writeJava(project, "com.acme.Main", """

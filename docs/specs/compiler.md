@@ -154,7 +154,8 @@ list from `equals` is not yet fully Java-compatible; a shrink past the match fai
 native indexing. `Collections.emptyList().remove` and `Collections.emptySet().remove` return false.
 `Collections.singletonList().remove` and `Collections.singleton().remove` return false for a
 non-match and throw `UnsupportedOperationException` for a match. These singleton operations use
-the query's application-defined `equals` when present.
+the query's application-defined `equals` when present. Clearing `Collections.emptyList()` or
+`Collections.emptySet()` succeeds without modifying state.
 Supported endpoint removals transport null, empty and immutable-list failures and publish removed
 values safely.
 Supported endpoint insertions transport null and immutable-list failures and retain inserted values
