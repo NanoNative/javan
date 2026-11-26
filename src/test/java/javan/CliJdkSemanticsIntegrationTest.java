@@ -3591,6 +3591,44 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void emptyAndSingletonMapPutAllMatchesJvm() throws Exception {
+        final Path project = project("empty-singleton-map-put-all");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static void check(Map<String, String> values, Map<String, String> source) {
+                    try { values.putAll(source); System.out.println("done"); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                    catch (NullPointerException expected) { System.out.println("null"); }
+                }
+                public static void main(String[] args) {
+                    check(Collections.emptyMap(), Map.of()); check(Collections.singletonMap("x", "y"), new HashMap<>());
+                    check(Collections.emptyMap(), null); check(Collections.singletonMap("x", "y"), null);
+                    check(Collections.emptyMap(), Map.of("x", "y"));
+                    check(Collections.singletonMap("x", "y"), Map.of("x", "y"));
+                    check(Map.of(), Map.of()); check(Map.of("x", "y"), Map.of());
+                    check(Map.copyOf(Collections.singletonMap("x", "y")), Map.of());
+                    check(Collections.unmodifiableMap(Collections.emptyMap()), Map.of());
+                    check(Collections.unmodifiableMap(Collections.singletonMap("x", "y")), Map.of());
+                    check(null, Map.of());
+                    Map<String, String> values = new HashMap<>(); check(values, Map.of("x", "y"));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("done\ndone\nnull\nnull\nimmutable\nimmutable\n"
+            + "immutable\nimmutable\nimmutable\nimmutable\nimmutable\nnull\ndone\n1\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/empty-singleton-map-put-all").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void emptyMapRemoveMatchesJvm() throws Exception {
         final Path project = project("empty-map-remove");
         writeJava(project, "com.acme.Main", """

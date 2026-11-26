@@ -162,7 +162,9 @@ native indexing. `Collections.emptyList().remove` and `Collections.emptySet().re
 non-match and throw `UnsupportedOperationException` for a match. These singleton operations use
 the query's application-defined `equals` when present. Clearing `Collections.emptyList()`,
 `Collections.emptySet()` or `Collections.emptyMap()` succeeds without modifying state.
-Single-key removal from `Collections.emptyMap()` returns null, including for a null key.
+`putAll` on `Collections.emptyMap()` or `Collections.singletonMap(...)` accepts an empty source
+without modification and rejects a null source. Single-key removal from `Collections.emptyMap()`
+returns null, including for a null key.
 Supported endpoint removals transport null, empty and immutable-list failures and publish removed
 values safely.
 Supported endpoint insertions transport null and immutable-list failures and retain inserted values

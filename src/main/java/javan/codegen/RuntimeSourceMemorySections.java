@@ -98,6 +98,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_MAP_VIEW_UNMODIFIABLE 1
         #define JAVAN_MAP_REJECT_NULL_QUERY 2
         #define JAVAN_MAP_EMPTY_COLLECTION 4
+        #define JAVAN_MAP_SINGLETON_COLLECTION 8
         #define JAVAN_BUILTIN_INSTANCEOF_COLLECTION 1
         #define JAVAN_BUILTIN_INSTANCEOF_MAP 2
         #define JAVAN_BUILTIN_INSTANCEOF_MAP_ENTRY 3
@@ -15053,6 +15054,7 @@ final class RuntimeSourceMemorySections {
             };
             javan_root_frame_push(javan_map_singleton_roots, 2);
             javan_object_map* map = javan_map_new_with_capacity(1, 1);
+            map->view_flags |= JAVAN_MAP_SINGLETON_COLLECTION;
             map->keys[0] = key_root;
             map->values[0] = value_root;
             map->length = 1;
@@ -15066,7 +15068,7 @@ final class RuntimeSourceMemorySections {
                 return NULL;
             }
             javan_object_map* map = (javan_object_map*) javan_map_singleton(key, value);
-            map->view_flags |= JAVAN_MAP_REJECT_NULL_QUERY;
+            map->view_flags = (map->view_flags & ~JAVAN_MAP_SINGLETON_COLLECTION) | JAVAN_MAP_REJECT_NULL_QUERY;
             return map;
         }
 
@@ -15259,6 +15261,15 @@ final class RuntimeSourceMemorySections {
         void javan_map_put_all_java(void* value, void* source_value) {
             javan_runtime_lock_enter();
             javan_object_map* map = javan_map_checked(value);
+            if ((map->view_flags & (JAVAN_MAP_EMPTY_COLLECTION | JAVAN_MAP_SINGLETON_COLLECTION)) != 0) {
+                if (source_value == NULL) {
+                    javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                } else if (javan_map_logical_length(javan_map_checked(source_value)) != 0) {
+                    javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                }
+                javan_runtime_lock_leave();
+                return;
+            }
             if (map->immutable != 0) {
                 javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
                 javan_runtime_lock_leave();

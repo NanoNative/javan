@@ -1617,6 +1617,44 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsEmptyMapPutAll() throws Exception {
+        final Path project = tempDir.resolve("selfhost-fixed-map-put-all");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static void check(Map<String, String> values, Map<String, String> source) {
+                    try { values.putAll(source); System.out.println("done"); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                    catch (NullPointerException expected) { System.out.println("null"); }
+                }
+                public static void main(String[] args) {
+                    check(Collections.emptyMap(), Map.of()); check(Collections.singletonMap("x", "y"), Map.of());
+                    check(Collections.emptyMap(), null); check(Map.of("x", "y"), Map.of());
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-fixed-map-put-all"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-fixed-map-put-all").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout());
+    }
+
+    @Test
     void nativeBuiltJavanBuildsEmptyMapRemove() throws Exception {
         final Path project = tempDir.resolve("selfhost-empty-map-remove");
         final Path classes = project.resolve("classes");
@@ -4263,6 +4301,58 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             final Path goDir = project.resolve(".javan/dist/bindings/go");
             assertThat(processSlow(project, List.of("sh", "-c", "cd '" + goDir + "' && GO111MODULE=off CGO_ENABLED=1 go test")).exitCode()).isZero();
         }
+    }
+
+    @Test
+    void nativeLibraryEmptyMapPutAllTransportsFailures() throws Exception {
+        final Path project = project("library-fixed-map-put-all");
+        writeJava(project, "com.acme.Api", """
+            package com.acme;
+            import java.util.*;
+            public final class Api {
+                public static int putAll(int mode) {
+                    Map<String, String> values = switch (mode) {
+                        case 0, 2, 3 -> Collections.emptyMap();
+                        case 1 -> Collections.singletonMap("x", "y");
+                        case 4 -> Map.of("x", "y");
+                        default -> Collections.unmodifiableMap(Collections.emptyMap());
+                    };
+                    Map<String, String> source = mode == 2 ? null : mode == 3 ? Map.of("x", "y") : Map.of();
+                    values.putAll(source);
+                    return 42;
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString(), "--library", "--format", "static",
+            "--export", "com.acme.Api.putAll");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path caller = writeC(project, "call_fixed_map_put_all.c", """
+            #include <string.h>
+            #include ".javan/dist/bindings/c/library-fixed-map-put-all.h"
+            int main(void) {
+                for (int i = 0; i < 100; i++) {
+                    for (int mode = 0; mode < 6; mode++) {
+                        int value = -1;
+                        JavanResult result = javan_try_com_acme_Api_putAll_int(mode, &value);
+                        if (mode < 2 && (!result.ok || value != 42)) return 1;
+                        if (mode == 2 && (result.ok || result.message == 0
+                            || strstr(result.message, "NullPointerException") == 0)) return 2;
+                        if (mode >= 3 && (result.ok || result.message == 0
+                            || strstr(result.message, "UnsupportedOperationException") == 0)) return 3;
+                        javan_result_free(&result);
+                    }
+                }
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-fixed-map-put-all");
+        final ProcessResult compile = process(project, List.of("cc", caller.toString(),
+            project.resolve(".javan/dist/liblibrary-fixed-map-put-all.a").toString(), "-o", binary.toString()));
+        assertThat(compile.exitCode()).as(compile.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(binary.toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stderr()).isEmpty();
     }
 
     @Test
