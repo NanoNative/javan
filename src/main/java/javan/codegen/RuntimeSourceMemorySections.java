@@ -15647,6 +15647,10 @@ final class RuntimeSourceMemorySections {
         void* javan_map_remove_java(void* value, void* key) {
             javan_runtime_lock_enter();
             javan_object_map* map = javan_map_checked(value);
+            if ((map->view_flags & JAVAN_MAP_EMPTY_COLLECTION) != 0) {
+                javan_runtime_lock_leave();
+                return NULL;
+            }
             if (map->immutable != 0) {
                 javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
                 javan_runtime_lock_leave();

@@ -1617,6 +1617,45 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsEmptyMapRemove() throws Exception {
+        final Path project = tempDir.resolve("selfhost-empty-map-remove");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static void check(Map<String, String> values, String key) {
+                    Object removed;
+                    try { removed = values.remove(key); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable"); return; }
+                    System.out.println(removed == null ? "null" : "value");
+                }
+                public static void main(String[] args) {
+                    check(Collections.emptyMap(), "x"); check(Collections.emptyMap(), null);
+                    check(Map.of(), "x"); check(Collections.unmodifiableMap(Collections.emptyMap()), "x");
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-empty-map-remove"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-empty-map-remove").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout());
+    }
+
+    @Test
     void nativeBuiltJavanBuildsEmptyMapClear() throws Exception {
         final Path project = tempDir.resolve("selfhost-empty-map-clear");
         final Path classes = project.resolve("classes");
@@ -4224,6 +4263,59 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             final Path goDir = project.resolve(".javan/dist/bindings/go");
             assertThat(processSlow(project, List.of("sh", "-c", "cd '" + goDir + "' && GO111MODULE=off CGO_ENABLED=1 go test")).exitCode()).isZero();
         }
+    }
+
+    @Test
+    void nativeLibraryEmptyMapRemoveTransportsFailures() throws Exception {
+        final Path project = project("library-empty-map-remove");
+        writeJava(project, "com.acme.Api", """
+            package com.acme;
+            import java.util.*;
+            public final class Api {
+                public static int remove(int mode) {
+                    Map<String, String> values = switch (mode) {
+                        case 0, 1, 6 -> Collections.emptyMap(); case 2 -> Map.of();
+                        case 3 -> Collections.unmodifiableMap(Collections.emptyMap());
+                        case 4 -> null; default -> new HashMap<>();
+                    };
+                    if (mode == 5) values.put("x", "y");
+                    if (mode == 6) return values.remove("x", "y") ? 1 : 0;
+                    Object removed = values.remove(mode == 1 ? null : "x");
+                    return removed == null ? 1 : 2;
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString(), "--library", "--format", "static",
+            "--export", "com.acme.Api.remove");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path caller = writeC(project, "call_empty_map_remove.c", """
+            #include <string.h>
+            #include ".javan/dist/bindings/c/library-empty-map-remove.h"
+            int main(void) {
+                for (int i = 0; i < 100; i++) {
+                    for (int mode = 0; mode < 7; mode++) {
+                        int value = -1;
+                        JavanResult result = javan_try_com_acme_Api_remove_int(mode, &value);
+                        if ((mode == 0 || mode == 1) && (!result.ok || value != 1)) return 1;
+                        if ((mode == 2 || mode == 3 || mode == 6) && (result.ok || result.message == 0
+                            || strstr(result.message, "UnsupportedOperationException") == 0)) return 2;
+                        if (mode == 4 && (result.ok || result.message == 0
+                            || strstr(result.message, "NullPointerException") == 0)) return 3;
+                        if (mode == 5 && (!result.ok || value != 2)) return 4;
+                        javan_result_free(&result);
+                    }
+                }
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-empty-map-remove");
+        final ProcessResult compile = process(project, List.of("cc", caller.toString(),
+            project.resolve(".javan/dist/liblibrary-empty-map-remove.a").toString(), "-o", binary.toString()));
+        assertThat(compile.exitCode()).as(compile.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(binary.toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stderr()).isEmpty();
     }
 
     @Test

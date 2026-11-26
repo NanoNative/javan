@@ -3591,6 +3591,47 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void emptyMapRemoveMatchesJvm() throws Exception {
+        final Path project = project("empty-map-remove");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static int evaluated;
+                static String query() { evaluated++; return "x"; }
+                static void check(Map<String, String> values, String key) {
+                    Object removed;
+                    try { removed = values.remove(key); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable"); return; }
+                    catch (NullPointerException expected) { System.out.println("null-receiver"); return; }
+                    System.out.println(removed == null ? "null" : "y");
+                }
+                static void conditional(Map<String, String> values) {
+                    boolean removed;
+                    try { removed = values.remove("x", "y"); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable"); return; }
+                    System.out.println(removed);
+                }
+                public static void main(String[] args) {
+                    check(Collections.emptyMap(), query()); check(Collections.emptyMap(), null);
+                    conditional(Collections.emptyMap()); check(Map.of(), query());
+                    check(Collections.unmodifiableMap(Collections.emptyMap()), query()); check(null, query());
+                    Map<String, String> values = new HashMap<>(); values.put("x", "y"); check(values, query());
+                    System.out.println(values.size()); System.out.println(evaluated);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("null\nnull\nimmutable\nimmutable\nimmutable\nnull-receiver\ny\n0\n5\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/empty-map-remove").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void emptyMapClearMatchesJvm() throws Exception {
         final Path project = project("empty-map-clear");
         writeJava(project, "com.acme.Main", """
