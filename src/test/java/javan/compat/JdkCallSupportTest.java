@@ -4462,13 +4462,14 @@ final class JdkCallSupportTest {
     }
 
     @Test
-    void collectionFilterAllTransportsNullAndImmutableFailures() {
+    void collectionFilterAllTransportsNullImmutableAndConcurrentModificationFailures() {
         for (final String owner : List.of("java/util/Collection", "java/util/List", "java/util/ArrayList",
                 "java/util/Set", "java/util/HashSet", "java/util/LinkedHashSet")) {
             for (final String method : List.of("removeAll", "retainAll")) {
                 assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
                     owner, method, "(Ljava/util/Collection;)Z"
-                ))).containsExactly("java/lang/NullPointerException", "java/lang/UnsupportedOperationException");
+                ))).containsExactly("java/lang/NullPointerException", "java/lang/UnsupportedOperationException",
+                    "java/util/ConcurrentModificationException");
             }
         }
     }
@@ -4533,12 +4534,13 @@ final class JdkCallSupportTest {
     }
 
     @Test
-    void collectionRemoveObjectTransportsNullAndImmutableFailures() {
+    void collectionRemoveObjectTransportsNullImmutableAndBoundsFailures() {
         for (final String owner : List.of("java/util/List", "java/util/ArrayList", "java/util/Collection",
             "java/util/Set", "java/util/HashSet", "java/util/LinkedHashSet")) {
             assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
                 owner, "remove", "(Ljava/lang/Object;)Z"
-            ))).containsExactly("java/lang/NullPointerException", "java/lang/UnsupportedOperationException");
+            ))).containsExactly("java/lang/NullPointerException", "java/lang/UnsupportedOperationException",
+                "java/lang/ArrayIndexOutOfBoundsException");
         }
     }
 
