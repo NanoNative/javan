@@ -31,6 +31,8 @@ public final class FunctionValueFlow {
     private static final int PLATFORM = 8;
     private static final int BOUNDED = 16;
     private static final int REMOVAL_REJECTING = 32;
+    private static final int ALWAYS_EMPTY = 64;
+    private static final int COLLECTION_MUST_FACTS = REMOVAL_REJECTING | ALWAYS_EMPTY;
     private static final Fact NONE_FACT = new Fact(0, List.of(), false);
     private static final Fact MATERIALIZED_FACT = new Fact(MATERIALIZED, List.of(), false);
     private static final Fact UNSAFE_FACT = new Fact(UNSAFE, List.of(), true);
@@ -372,7 +374,8 @@ public final class FunctionValueFlow {
             for (final Instruction instruction : method.orElseThrow().code().orElseThrow().instructions()) {
                 if (instruction.methodRef().isPresent()
                     && (JdkCallSupport.isCollectionEqualitySearch(instruction.methodRef().orElseThrow())
-                        || JdkCallSupport.isCollectionContainsAll(instruction.methodRef().orElseThrow()))) {
+                        || JdkCallSupport.isCollectionContainsAll(instruction.methodRef().orElseThrow())
+                        || JdkCallSupport.isCollectionFilterAll(instruction.methodRef().orElseThrow()))) {
                     result.putIfAbsent(collectionSiteKey(entry, instruction), CollectionQuery.unavailable());
                 }
             }
@@ -1000,10 +1003,14 @@ public final class FunctionValueFlow {
             if (isIndirectUse(callbackKind, methodRef) && !arguments.isEmpty()) {
                 if (callbackKind == CallbackKind.COLLECTION_QUERY) {
                     final Fact argument = arguments.getLast().fact();
-                    final Fact query = JdkCallSupport.isCollectionContainsAll(methodRef)
-                        ? (argument.elements() == null ? Fact.unsafe() : argument.elements()) : argument;
-                    addCollectionFact(collectionSiteKey(caller, instruction), JdkCallSupport.isCollectionObjectRemoval(methodRef)
-                        && (receiver.fact().kinds() & REMOVAL_REJECTING) != 0 ? Fact.platform() : query);
+                    final Fact source = JdkCallSupport.isCollectionFilterAll(methodRef) ? receiver.fact() : argument;
+                    final Fact query = JdkCallSupport.isCollectionContainsAll(methodRef) || JdkCallSupport.isCollectionFilterAll(methodRef)
+                        ? (source.elements() == null ? Fact.unsafe() : source.elements()) : source;
+                    final boolean noEquality = ((JdkCallSupport.isCollectionObjectRemoval(methodRef)
+                        || JdkCallSupport.isCollectionFilterAll(methodRef))
+                        && (receiver.fact().kinds() & REMOVAL_REJECTING) != 0)
+                        || (JdkCallSupport.isCollectionFilterAll(methodRef) && (argument.kinds() & ALWAYS_EMPTY) != 0);
+                    addCollectionFact(collectionSiteKey(caller, instruction), noEquality ? Fact.platform() : query);
                 } else {
                     addCallbackFact(site(caller, instruction), arguments.getLast().fact());
                 }
@@ -1021,17 +1028,26 @@ public final class FunctionValueFlow {
                     for (final Slot argument : arguments) {
                         elements = elements.merge(argument.fact().withElements(null));
                     }
-                    final Fact collection = Fact.unsafe().withElements(elements);
-                    pushReturn(state, descriptor.result(), "java/util/Collections".equals(owner)
-                        ? collection : collection.withRemovalRejecting());
+                    Fact collection = Fact.unsafe().withElements(elements);
+                    if (!"java/util/Collections".equals(owner)) {
+                        collection = collection.withRemovalRejecting();
+                    }
+                    if (arguments.isEmpty()) {
+                        collection = collection.withAlwaysEmpty();
+                    }
+                    pushReturn(state, descriptor.result(), collection);
                     return;
                 }
                 if ((("java/util/List".equals(owner) || "java/util/Set".equals(owner)) && "copyOf".equals(name)
                     || ("java/util/Collections".equals(owner)
                         && ("unmodifiableList".equals(name) || "unmodifiableSet".equals(name)
                             || "unmodifiableCollection".equals(name)))) && arguments.size() == 1) {
-                    pushReturn(state, descriptor.result(), Fact.unsafe().withElements(arguments.getFirst().fact().elements())
-                        .withRemovalRejecting());
+                    final Fact original = arguments.getFirst().fact();
+                    Fact collection = Fact.unsafe().withElements(original.elements()).withRemovalRejecting();
+                    if ((original.kinds() & ALWAYS_EMPTY) != 0) {
+                        collection = collection.withAlwaysEmpty();
+                    }
+                    pushReturn(state, descriptor.result(), collection);
                     return;
                 }
             }
@@ -1818,7 +1834,7 @@ public final class FunctionValueFlow {
         final MethodRef methodRef
     ) {
         return callbackKind == CallbackKind.COLLECTION_QUERY ? (JdkCallSupport.isCollectionEqualitySearch(methodRef)
-            || JdkCallSupport.isCollectionContainsAll(methodRef))
+            || JdkCallSupport.isCollectionContainsAll(methodRef) || JdkCallSupport.isCollectionFilterAll(methodRef))
             : directUse(callbackKind).equals(methodRef) || isIndirectUse(callbackKind, methodRef);
     }
 
@@ -1839,7 +1855,8 @@ public final class FunctionValueFlow {
         final MethodRef methodRef
     ) {
         if (callbackKind == CallbackKind.COLLECTION_QUERY) {
-            return JdkCallSupport.isCollectionEqualitySearch(methodRef) || JdkCallSupport.isCollectionContainsAll(methodRef);
+            return JdkCallSupport.isCollectionEqualitySearch(methodRef) || JdkCallSupport.isCollectionContainsAll(methodRef)
+                || JdkCallSupport.isCollectionFilterAll(methodRef);
         }
         return callbackKind == CallbackKind.FUNCTION
             ? isIndirectFunctionUse(methodRef)
@@ -2089,6 +2106,10 @@ public final class FunctionValueFlow {
             return (kinds & REMOVAL_REJECTING) != 0 ? this : new Fact(kinds | REMOVAL_REJECTING, types, unknown, elements);
         }
 
+        private Fact withAlwaysEmpty() {
+            return (kinds & ALWAYS_EMPTY) != 0 ? this : new Fact(kinds | ALWAYS_EMPTY, types, unknown, elements);
+        }
+
         private Fact merge(final Fact other) {
             if (kinds == 0 && types.isEmpty() && !unknown) {
                 return other;
@@ -2101,8 +2122,8 @@ public final class FunctionValueFlow {
         }
 
         private Fact mergeValue(final Fact other) {
-            final int mergedKinds = ((kinds | other.kinds) & ~REMOVAL_REJECTING)
-                | (kinds & other.kinds & REMOVAL_REJECTING);
+            final int mergedKinds = ((kinds | other.kinds) & ~COLLECTION_MUST_FACTS)
+                | (kinds & other.kinds & COLLECTION_MUST_FACTS);
             if (unknown || other.unknown) {
                 if (mergedKinds == kinds && unknown && types.isEmpty()) {
                     return this;

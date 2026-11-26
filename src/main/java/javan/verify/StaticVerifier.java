@@ -3502,7 +3502,8 @@ public final class StaticVerifier {
         if (!visiting.add(target)) {
             return Set.of();
         }
-        if (JdkCallSupport.isCollectionEqualitySearch(target) || JdkCallSupport.isCollectionContainsAll(target)) {
+        if (JdkCallSupport.isCollectionEqualitySearch(target) || JdkCallSupport.isCollectionContainsAll(target)
+            || JdkCallSupport.isCollectionFilterAll(target)) {
             final Set<String> result = escapingPlatformExceptionTypes(classes,
                 new MethodRef("java/lang/Object", "equals", "(Ljava/lang/Object;)Z"), visiting);
             visiting.remove(target);

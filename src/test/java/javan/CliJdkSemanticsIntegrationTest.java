@@ -2988,6 +2988,341 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void listBulkFilteringUsesApplicationEquality() throws Exception {
+        final Path project = project("list-filter-equality");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static class Key {
+                    final int id; Key(int id) { this.id = id; }
+                    public boolean equals(Object other) { return other instanceof Key && id == ((Key) other).id; }
+                    public int hashCode() { return id; }
+                }
+                static final class Child extends Key { Child(int id) { super(id); } }
+                static List<Key> values() {
+                    List<Key> values = new ArrayList<>();
+                    values.add(new Child(1)); values.add(new Key(2)); values.add(new Key(1));
+                    return values;
+                }
+                public static void main(String[] args) {
+                    List<Key> removed = values();
+                    System.out.println(removed.removeAll(List.of(new Key(1))));
+                    System.out.println(removed.size()); System.out.println(removed.get(0).id);
+                    List<Key> retained = values();
+                    System.out.println(retained.retainAll(List.of(new Key(1))));
+                    System.out.println(retained.size()); System.out.println(retained.get(0).id); System.out.println(retained.get(1).id);
+                    System.out.println(retained.removeAll(List.of(new Key(9))));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("true\n1\n2\ntrue\n2\n1\n1\nfalse\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-filter-equality").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listBulkFilteringCallsReceiverEqualityInOrder() throws Exception {
+        final Path project = project("list-filter-equality-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static int trace;
+                static final class Probe {
+                    final int id; Probe(int id) { this.id = id; }
+                    public boolean equals(Object other) { return false; }
+                    public int hashCode() { return id; }
+                }
+                static final class Value {
+                    final int id; Value(int id) { this.id = id; }
+                    public boolean equals(Object other) {
+                        trace = trace * 10 + id;
+                        return other instanceof Probe && id == ((Probe) other).id;
+                    }
+                    public int hashCode() { return id; }
+                }
+                static final class Never {
+                    public boolean equals(Object other) { return false; }
+                    public int hashCode() { return 1; }
+                }
+                public static void main(String[] args) {
+                    List<Object> values = new ArrayList<>();
+                    values.add(new Value(1)); values.add(new Value(2)); values.add(new Value(3));
+                    System.out.println(values.removeAll(List.of(new Probe(2))));
+                    System.out.println(trace); System.out.println(values.size());
+                    Never same = new Never(); List<Object> identity = new ArrayList<>(); identity.add(same);
+                    System.out.println(identity.removeAll(List.of(same))); System.out.println(identity.size());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("true\n123\n2\nfalse\n1\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-filter-equality-order").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listBulkFilteringWithEmptyProbeDoesNotRequireEquality() throws Exception {
+        final Path project = project("list-filter-empty-unsupported-equality");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                record Unsupported(Optional<String> value) { }
+                public static void main(String[] args) {
+                    List<Unsupported> values = new ArrayList<>(); values.add(new Unsupported(Optional.empty()));
+                    System.out.println(values.removeAll(Collections.unmodifiableList(List.of())));
+                    System.out.println(values.retainAll(List.copyOf(Collections.emptyList())));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("false\ntrue\n0\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-filter-empty-unsupported-equality").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listBulkFilteringKeepsEqualityForMixedEmptyProbePaths() throws Exception {
+        final Path project = project("list-filter-mixed-empty-probes");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static final class Key {
+                    public boolean equals(Object other) { return other instanceof Key; }
+                    public int hashCode() { return 1; }
+                }
+                public static void main(String[] args) {
+                    Collection<Key> probes = args.length == 0 ? List.of() : List.of(new Key());
+                    List<Key> values = new ArrayList<>(); values.add(new Key());
+                    System.out.println(values.removeAll(probes)); System.out.println(values.size());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path binary = project.resolve(".javan/bin/list-filter-mixed-empty-probes");
+        final ProcessResult empty = process(project, List.of(binary.toString()));
+        final ProcessResult populated = process(project, List.of(binary.toString(), "populated"));
+        assertThat(empty.exitCode()).as(empty.stderr()).isZero();
+        assertThat(populated.exitCode()).as(populated.stderr()).isZero();
+        assertThat(empty.stdout()).isEqualTo("false\n1\n");
+        assertThat(populated.stdout()).isEqualTo("true\n0\n");
+    }
+
+    @Test
+    void listBulkFilteringOnImmutableReceiverDoesNotRequireEquality() throws Exception {
+        final Path project = project("list-filter-immutable-unsupported-equality");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                record Unsupported(Optional<String> value) { }
+                public static void main(String[] args) {
+                    List<Unsupported> values = List.of(new Unsupported(Optional.empty()));
+                    Collection<String> probes = List.of("x");
+                    try { System.out.println(values.removeAll(probes)); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("immutable\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-filter-immutable-unsupported-equality").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listBulkFilteringRejectsUnsupportedEqualityForUnknownReceiverContents() throws Exception {
+        final Path project = project("list-filter-unknown-unsupported-equality");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                record Unsupported(Optional<String> value) { }
+                public static void main(String[] args) {
+                    List<Object> values = new ArrayList<>(); values.add(new Unsupported(Optional.empty()));
+                    System.out.println(values.removeAll(List.of("x")));
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).isNotZero();
+        assertThat(build.stderr()).contains("unsupported record component type");
+    }
+
+    @Test
+    void listBulkFilteringPreservesPriorChangesWhenEqualityThrows() throws Exception {
+        final Path project = project("list-filter-equality-failure");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static final class Failure extends RuntimeException { }
+                static class Key {
+                    final int id; Key(int id) { this.id = id; }
+                    public boolean equals(Object other) { return other instanceof Key && id == ((Key) other).id; }
+                    public int hashCode() { return id; }
+                }
+                static final class Bomb extends Key {
+                    Bomb(int id) { super(id); }
+                    public boolean equals(Object other) { throw new Failure(); }
+                }
+                static void remove(List<Key> values, Collection<Key> probes) {
+                    try { values.removeAll(probes); } catch (Failure expected) { System.out.println("caught"); }
+                }
+                static void retain(List<Key> values, Collection<Key> probes) {
+                    try { values.retainAll(probes); } catch (Failure expected) { System.out.println("caught"); }
+                }
+                public static void main(String[] args) {
+                    List<Key> removed = new ArrayList<>(); removed.add(new Key(1)); removed.add(new Bomb(2)); removed.add(new Key(3));
+                    remove(removed, List.of(new Key(1)));
+                    System.out.println(removed.size()); System.out.println(removed.get(0).id); System.out.println(removed.get(1).id);
+                    List<Key> retained = new ArrayList<>(); retained.add(new Key(1)); retained.add(new Bomb(2)); retained.add(new Key(3));
+                    retain(retained, List.of(new Key(2)));
+                    System.out.println(retained.size()); System.out.println(retained.get(0).id); System.out.println(retained.get(1).id);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("caught\n2\n2\n3\ncaught\n2\n2\n3\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-filter-equality-failure").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listBulkFilteringSurvivesConcurrentEqualityAllocations() throws Exception {
+        final Path project = project("list-filter-concurrent-equality");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger completed = new AtomicInteger();
+                static final class Key {
+                    final int id; Key(int id) { this.id = id; }
+                    public boolean equals(Object other) {
+                        String text = new String("compare");
+                        return other instanceof Key && id == ((Key) other).id && text.length() == 7;
+                    }
+                    public int hashCode() { return id; }
+                }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 100; i++) {
+                            List<Key> values = new ArrayList<>(); values.add(new Key(1)); values.add(new Key(2));
+                            if (values.removeAll(List.of(new Key(1))) && values.size() == 1 && values.get(0).id == 2)
+                                completed.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(completed.get());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("200\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-filter-concurrent-equality").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void listBulkFilteringRejectsReentrantStructuralMutation() throws Exception {
+        final Path project = project("list-filter-reentrant-mutation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static final class Key {
+                    final List<Object> values; Key(List<Object> values) { this.values = values; }
+                    public boolean equals(Object other) { values.clear(); return true; }
+                    public int hashCode() { return 1; }
+                }
+                public static void main(String[] args) {
+                    List<Object> values = new ArrayList<>(); values.add(new Key(values));
+                    Collection<Object> probes = List.of("x");
+                    try { System.out.println(values.removeAll(probes)); }
+                    catch (ConcurrentModificationException expected) { System.out.println("changed"); }
+                    System.out.println(values.size());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-filter-reentrant-mutation").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("changed\n0\n");
+    }
+
+    @Test
+    void listBulkFilteringDoesNotHoldRuntimeLockDuringEquality() throws Exception {
+        final Path project = project("list-filter-equality-threads");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger signal = new AtomicInteger();
+                static final AtomicInteger completed = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() { while (signal.get() == 0) Thread.yield(); completed.set(1); }
+                }
+                static final class Key {
+                    public boolean equals(Object other) {
+                        signal.set(1);
+                        for (int i = 0; i < 1000000 && completed.get() == 0; i++) Thread.yield();
+                        return completed.get() == 1;
+                    }
+                    public int hashCode() { return 1; }
+                }
+                public static void main(String[] args) throws Exception {
+                    List<Key> values = new ArrayList<>(); values.add(new Key());
+                    List<Key> probes = List.of(new Key());
+                    Thread worker = new Thread(new Worker()); worker.start();
+                    System.out.println(values.removeAll(probes));
+                    worker.join(); System.out.println(values.size());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/list-filter-equality-threads").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("true\n0\n");
+    }
+
+    @Test
     void listBulkRemovalTransportsNullProbeFailureAfterPriorChanges() throws Exception {
         final Path project = project("list-filter-null-probe");
         writeJava(project, "com.acme.Main", """

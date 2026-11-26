@@ -382,7 +382,8 @@ public final class BytecodeToIR {
             for (final Instruction instruction : method.orElseThrow().code().orElseThrow().instructions()) {
                 if (instruction.methodRef().isPresent()
                     && (JdkCallSupport.isCollectionEqualitySearch(instruction.methodRef().orElseThrow())
-                        || JdkCallSupport.isCollectionContainsAll(instruction.methodRef().orElseThrow()))) {
+                        || JdkCallSupport.isCollectionContainsAll(instruction.methodRef().orElseThrow())
+                        || JdkCallSupport.isCollectionFilterAll(instruction.methodRef().orElseThrow()))) {
                     return true;
                 }
             }
@@ -487,7 +488,8 @@ public final class BytecodeToIR {
                             && "toString".equals(callee.methodName())
                             && "()Ljava/lang/String;".equals(callee.descriptor());
                         final boolean collectionEquality = (JdkCallSupport.isCollectionEqualitySearch(calledMethod)
-                            || JdkCallSupport.isCollectionContainsAll(calledMethod)) && "equals".equals(callee.methodName())
+                            || JdkCallSupport.isCollectionContainsAll(calledMethod)
+                            || JdkCallSupport.isCollectionFilterAll(calledMethod)) && "equals".equals(callee.methodName())
                             && "(Ljava/lang/Object;)Z".equals(callee.descriptor());
                         if (!directCall && !charSequenceConversion && !collectionEquality) {
                             continue;
@@ -1516,7 +1518,8 @@ public final class BytecodeToIR {
                 || JdkCallSupport.isListEndpointAdd(reference)) {
                 possibleTypes.addAll(JdkCallSupport.transportedPlatformThrowableTypes(reference));
             }
-            if (JdkCallSupport.isCollectionEqualitySearch(reference) || JdkCallSupport.isCollectionContainsAll(reference)) {
+            if (JdkCallSupport.isCollectionEqualitySearch(reference) || JdkCallSupport.isCollectionContainsAll(reference)
+                || JdkCallSupport.isCollectionFilterAll(reference)) {
                 possibleTypes.add("java/lang/NullPointerException");
                 addTransportedThrowableTypes(COLLECTION_EQUALS_DISPATCH, dispatches,
                     transportedThrowableTypes, possibleTypes);

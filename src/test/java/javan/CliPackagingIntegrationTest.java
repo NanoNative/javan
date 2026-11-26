@@ -1660,6 +1660,45 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsListBulkFilteringApplicationEquality() throws Exception {
+        final Path project = tempDir.resolve("selfhost-list-filter-equality");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static final class Key {
+                    final int id; Key(int id) { this.id = id; }
+                    public boolean equals(Object other) { return other instanceof Key && id == ((Key) other).id; }
+                    public int hashCode() { return id; }
+                }
+                public static void main(String[] args) {
+                    List<Key> values = new ArrayList<>(); values.add(new Key(7)); values.add(new Key(3));
+                    System.out.println(values.removeAll(List.of(new Key(7))));
+                    System.out.println(values.size()); System.out.println(values.get(0).id);
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-list-filter-equality"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-list-filter-equality").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout());
+    }
+
+    @Test
     void nativeBuiltJavanBuildsListObjectRemovalApplicationEquality() throws Exception {
         final Path project = tempDir.resolve("selfhost-list-remove-equality");
         final Path classes = project.resolve("classes");
@@ -3871,6 +3910,72 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         final Path binary = project.resolve("call-filter-null");
         final ProcessResult compile = process(project, List.of("cc", caller.toString(),
             project.resolve(".javan/dist/liblibrary-list-filter-null.a").toString(), "-o", binary.toString()));
+        assertThat(compile.exitCode()).as(compile.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(binary.toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stderr()).isEmpty();
+    }
+
+    @Test
+    void nativeLibraryListBulkFilteringUsesApplicationEquality() throws Exception {
+        final Path project = project("library-list-filter-equality");
+        writeJava(project, "com.acme.Api", """
+            package com.acme;
+            import java.util.*;
+            public final class Api {
+                static final class Failure extends RuntimeException { }
+                static class Key {
+                    final int id; Key(int id) { this.id = id; }
+                    public boolean equals(Object other) { return other instanceof Key && id == ((Key) other).id; }
+                    public int hashCode() { return id; }
+                }
+                static final class Bomb extends Key {
+                    Bomb(int id) { super(id); }
+                    public boolean equals(Object other) { throw new Failure(); }
+                }
+                static int state(List<Key> values) {
+                    return values.size() == 2 && values.get(0).id == 2 && values.get(1).id == 3 ? 7 : -1;
+                }
+                static int remove(List<Key> values, Collection<Key> probes) {
+                    try { values.removeAll(probes); } catch (Failure expected) { return state(values); }
+                    return -2;
+                }
+                static int retain(List<Key> values, Collection<Key> probes) {
+                    try { values.retainAll(probes); } catch (Failure expected) { return state(values); }
+                    return -2;
+                }
+                public static int filter(int mode) {
+                    List<Key> values = new ArrayList<>(); values.add(new Key(1)); values.add(new Bomb(2)); values.add(new Key(3));
+                    if (mode == 0) return values.removeAll(List.of(new Key(1))) ? 1 : 0;
+                    if (mode == 1) return remove(values, List.of(new Key(1)));
+                    if (mode == 2) return retain(values, List.of(new Key(2)));
+                    return values.removeAll(List.of()) ? 1 : 0;
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString(), "--library", "--format", "static",
+            "--export", "com.acme.Api.filter");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path caller = writeC(project, "call_filter_equality.c", """
+            #include <string.h>
+            #include ".javan/dist/bindings/c/library-list-filter-equality.h"
+            int main(void) {
+                for (int i = 0; i < 100; i++) {
+                    for (int mode = 0; mode < 4; mode++) {
+                        int value = -1;
+                        JavanResult result = javan_try_com_acme_Api_filter_int(mode, &value);
+                        if (mode == 0 && (result.ok || result.message == 0 || strstr(result.message, "Failure") == 0)) return 1;
+                        if (mode > 0 && (!result.ok || value != (mode == 3 ? 0 : 7))) return 2;
+                        javan_result_free(&result);
+                    }
+                }
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-filter-equality");
+        final ProcessResult compile = process(project, List.of("cc", caller.toString(),
+            project.resolve(".javan/dist/liblibrary-list-filter-equality.a").toString(), "-o", binary.toString()));
         assertThat(compile.exitCode()).as(compile.stderr()).isZero();
         final ProcessResult result = process(project, List.of(binary.toString()), Duration.ofSeconds(60),
             Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));

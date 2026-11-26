@@ -49,6 +49,8 @@ remain unknown because aliases can change their contents. Nested element facts a
 joins remain finite. Unknown or larger sets of types retain all instantiated implementations
 conservatively. For object removal, proven always-rejecting immutable receivers do not retain query
 `equals` implementations. That fact survives a join only when every possible receiver rejects removal.
+For bulk filtering, a proven empty immutable probe also excludes equality; joins retain that fact
+only when every possible probe is empty. Unknown receiver contents remain conservative.
 
 ## Optimization Contract
 

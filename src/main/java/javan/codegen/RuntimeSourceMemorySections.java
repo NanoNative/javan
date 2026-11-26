@@ -13841,16 +13841,42 @@ final class RuntimeSourceMemorySections {
                 }
                 return changed;
             }
-            void** roots[] = { (void**) &list, (void**) &probe };
-            javan_root_frame_push(roots, 2);
+            void* element = NULL;
+            void** roots[] = { (void**) &list, (void**) &probe, &element };
+            javan_root_frame_push(roots, 3);
             int length = javan_list_logical_length(list);
+            int expected_mod_count = javan_list_observed_mod_count(list);
             int write_index = 0;
             int changed = 0;
-            int check_null = java_errors != 0 && javan_list_is_set(list) == 0
-                && javan_list_rejects_null_search(probe) != 0;
+            int list_receiver = java_errors != 0 && javan_list_is_set(list) == 0;
+            int check_null = list_receiver != 0 && javan_list_rejects_null_search(probe) != 0;
+            javan_collection_equals_resolver_fn resolver = list_receiver == 0 ? NULL : atomic_load_explicit(
+                &javan_collection_equals_resolver, memory_order_acquire
+            );
+            int uses_custom_equality = resolver != NULL && javan_list_is_set(probe) == 0;
             for (int index = 0; index < length; index++) {
-                void* element = javan_list_get_unchecked(list, index);
-                if (check_null != 0 && element == NULL) {
+                element = javan_list_get_unchecked(list, index);
+                int null_failure = check_null != 0 && element == NULL;
+                int contains = 0;
+                if (null_failure == 0) {
+                    javan_collection_equals_fn equals = uses_custom_equality != 0 && element != NULL
+                        ? resolver(element) : NULL;
+                    if (equals != NULL) {
+                        javan_runtime_lock_leave();
+                        contains = javan_list_custom_index_of(probe, element, equals, 0) >= 0;
+                        javan_runtime_lock_enter();
+                        if (javan_list_observed_mod_count(list) != expected_mod_count) {
+                            if (!javan_pending_has()) {
+                                javan_pending_throw("java/util/ConcurrentModificationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                            }
+                            javan_root_frame_pop(roots);
+                            return 0;
+                        }
+                    } else {
+                        contains = javan_list_contains(probe, element);
+                    }
+                }
+                if (null_failure != 0 || (java_errors != 0 && javan_pending_has())) {
                     if (changed != 0) {
                         int remaining = length - index;
                         memmove(list->values + write_index, list->values + index,
@@ -13860,11 +13886,12 @@ final class RuntimeSourceMemorySections {
                         list->length = new_length;
                         list->mod_count++;
                     }
-                    javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                    if (null_failure != 0) {
+                        javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                    }
                     javan_root_frame_pop(roots);
                     return 0;
                 }
-                int contains = javan_list_contains(probe, element);
                 if ((retain != 0) != (contains != 0)) {
                     changed = 1;
                     continue;

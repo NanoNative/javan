@@ -142,7 +142,10 @@ keeps its existing incomplete equality semantics.
 `removeAll` and `retainAll` on supported collection and set owners handle supported views and
 transport null and immutable-collection failures within supported handlers. For supported list
 receivers, a null element rejected by an immutable probe raises `NullPointerException` after
-preserving earlier changes. Application-defined equality in bulk filtering remains incomplete.
+preserving earlier changes. Supported list receivers and list probes call application-defined
+`equals` on receiver elements and preserve earlier changes when comparison fails. Structural
+receiver mutation from `equals` is rejected and is not yet fully Java-compatible. Set probe
+equality remains incomplete.
 Object removal through supported list, set and `Collection` owners transports null-receiver and
 immutable-collection failures for the currently supported collection representations. Supported
 list receivers call application-defined `equals` on the query. Reentrant mutation of the searched

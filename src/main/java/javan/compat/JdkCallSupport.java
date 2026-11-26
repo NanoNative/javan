@@ -52,6 +52,7 @@ public final class JdkCallSupport {
         java/lang/invoke/WrongMethodTypeException=java/lang/RuntimeException
         java/lang/classfile/constantpool/ConstantPoolException=java/lang/IllegalArgumentException
         java/util/NoSuchElementException=java/lang/RuntimeException
+        java/util/ConcurrentModificationException=java/lang/RuntimeException
         java/util/ServiceConfigurationError=java/lang/Error
         java/lang/InterruptedException=java/lang/Exception
         java/io/IOException=java/lang/Exception
@@ -2507,7 +2508,8 @@ public final class JdkCallSupport {
             return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException", "java/lang/OutOfMemoryError");
         }
         if (isCollectionFilterAll(methodRef)) {
-            return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException");
+            return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException",
+                "java/util/ConcurrentModificationException");
         }
         if (isListIndexedSet(methodRef) || isListIndexedRemove(methodRef) || isListIndexedAdd(methodRef)) {
             return List.of("java/lang/NullPointerException", "java/lang/IndexOutOfBoundsException",
