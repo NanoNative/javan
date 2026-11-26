@@ -7771,7 +7771,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
             final Collection<String> values = Collections.unmodifiableCollection(mutable);
             values.removeAll(java.util.List.of("x"));
             """,
-            "unsupported operation on immutable list"
+            "UnsupportedOperationException"
         );
     }
 
@@ -7785,7 +7785,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
             final Collection<String> values = Collections.unmodifiableCollection(mutable);
             values.retainAll(java.util.List.of("x"));
             """,
-            "unsupported operation on immutable list"
+            "UnsupportedOperationException"
         );
     }
 
