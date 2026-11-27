@@ -21,8 +21,15 @@ public final class ReflectionDeclaration {
     private ReflectionDeclaration() {
     }
 
-    /** Parsed class and method targets and deterministic validation errors. */
-    public record Result(List<String> classes, List<EntryPoint> methods, List<Diagnostic> diagnostics) {
+    /**
+     * Parsed project declaration.
+     *
+     * @param present whether a valid declaration exists, including an empty declaration
+     * @param classes declared classes and required parameter classes
+     * @param methods declared method bodies
+     * @param diagnostics deterministic validation errors
+     */
+    public record Result(boolean present, List<String> classes, List<EntryPoint> methods, List<Diagnostic> diagnostics) {
         public Result {
             classes = List.copyOf(classes);
             methods = List.copyOf(methods);
@@ -69,7 +76,7 @@ public final class ReflectionDeclaration {
             }
         }
         if (declaration == null) {
-            return new Result(List.of(), List.of(), List.of());
+            return new Result(false, List.of(), List.of(), List.of());
         }
         final String ownerName = declarationOwner.name();
         if (!declarationOwner.isPublic() || !declaration.isPublic() || !declaration.isStatic()
@@ -173,7 +180,7 @@ public final class ReflectionDeclaration {
         if (cursor != instructions.size() - 1 || instructions.getLast().opcode() != 176) {
             return invalid(ownerName, "Return the declared array directly.");
         }
-        return new Result(targets, methods, List.of());
+        return new Result(true, targets, methods, List.of());
     }
 
     private static Optional<String> classLiteralDescriptor(final Instruction instruction) {
@@ -201,7 +208,7 @@ public final class ReflectionDeclaration {
     }
 
     private static Result invalid(final String owner, final String reason) {
-        return new Result(List.of(), List.of(), List.of(Diagnostic.error(
+        return new Result(false, List.of(), List.of(), List.of(Diagnostic.error(
             "JAVAN096", "invalid reflection declaration", owner, METHOD, METHOD, reason,
             "Return an array of compiled class literals and getDeclaredMethod calls with literal parameters."
         )));

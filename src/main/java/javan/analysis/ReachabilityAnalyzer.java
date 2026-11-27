@@ -119,13 +119,16 @@ public final class ReachabilityAnalyzer {
         boolean serviceRootsResolved = false;
         Map<String, FunctionValueFlow.CollectionQuery> collectionQueries = Map.of();
         final FunctionValueFlow.MethodFlowCache methodFlows = new FunctionValueFlow.MethodFlowCache();
-        final List<EntryPoint> reflectionRoots = ReflectionDeclaration.analyze(classes).methods();
+        final ReflectionDeclaration.Result declaration = ReflectionDeclaration.analyze(classes);
+        final List<EntryPoint> reflectionRoots = declaration.methods();
+        final Set<String> reflectionClasses = new HashSet<>(declaration.classes());
         CallGraph graph;
         while (true) {
             final List<EntryPoint> roots = new ArrayList<>(entries);
             roots.addAll(reflectionRoots);
             roots.addAll(serviceRoots);
-            graph = analyzePass(classes, roots, declaredExternalLeaves, instantiatedTypes, collectionQueries, methodFlows, false);
+            graph = analyzePass(classes, roots, declaredExternalLeaves, instantiatedTypes, collectionQueries,
+                methodFlows, declaration.present(), reflectionClasses, false);
             if (!serviceProviders.isEmpty()
                 && !serviceRootsResolved
                 && usesServiceLoader(classes, graph.reachableMethods())) {
@@ -139,6 +142,13 @@ public final class ReachabilityAnalyzer {
             if (!discovered.equals(instantiatedTypes)) {
                 instantiatedTypes = discovered;
                 continue;
+            }
+            if (declaration.present()) {
+                final ClassInitializationGraph.Result initialization =
+                    ClassInitializationGraph.analyze(classes, graph.reachableMethods());
+                if (reflectionClasses.addAll(ClassMetadataReachability.collect(classes, graph, initialization, declaration))) {
+                    continue;
+                }
             }
             final Map<String, FunctionValueFlow.CollectionQuery> next = new HashMap<>(collectionQueries);
             final Map<String, FunctionValueFlow.CollectionQuery> discoveredQueries =
@@ -170,7 +180,8 @@ public final class ReachabilityAnalyzer {
                 }
             }
             if (!queriesChanged) {
-                return analyzePass(classes, roots, declaredExternalLeaves, instantiatedTypes, collectionQueries, methodFlows, true);
+                return analyzePass(classes, roots, declaredExternalLeaves, instantiatedTypes, collectionQueries,
+                    methodFlows, declaration.present(), reflectionClasses, true);
             }
             collectionQueries = Map.copyOf(next);
         }
@@ -335,6 +346,8 @@ public final class ReachabilityAnalyzer {
         final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final Map<String, FunctionValueFlow.CollectionQuery> collectionQueries,
         final FunctionValueFlow.MethodFlowCache methodFlows,
+        final boolean boundedReflection,
+        final Set<String> reflectionClasses,
         final boolean complete
     ) {
         final MethodRefFactsCache methodRefFacts = new MethodRefFactsCache(classes);
@@ -411,6 +424,8 @@ public final class ReachabilityAnalyzer {
                             classes,
                             code.orElseThrow(),
                             instruction,
+                            boundedReflection,
+                            reflectionClasses,
                             work,
                             workSet,
                             current,
@@ -2039,7 +2054,7 @@ public final class ReachabilityAnalyzer {
             return Optional.empty();
         }
         final MethodRef method = instruction.methodRef().orElseThrow();
-        if (!"java/lang/Class".equals(method.owner()) || !"forName".equals(method.name())
+        if (!ClassMetadataReachability.isClassForName(method)
             || !"(Ljava/lang/String;)Ljava/lang/Class;".equals(method.descriptor())) {
             return Optional.empty();
         }
@@ -2062,6 +2077,8 @@ public final class ReachabilityAnalyzer {
         final Map<String, ClassFile> classes,
         final CodeAttribute code,
         final Instruction instruction,
+        final boolean boundedReflection,
+        final Set<String> reflectionClasses,
         final List<EntryPoint> work,
         final EntryPointMembership workSet,
         final EntryPoint current,
@@ -2072,10 +2089,7 @@ public final class ReachabilityAnalyzer {
             return;
         }
         final MethodRef method = instruction.methodRef().orElseThrow();
-        if (!"java/lang/Class".equals(method.owner())
-            || !"forName".equals(method.name())
-            || !("(Ljava/lang/String;)Ljava/lang/Class;".equals(method.descriptor())
-                || "(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;".equals(method.descriptor()))) {
+        if (!ClassMetadataReachability.isClassForName(method)) {
             return;
         }
         final Optional<String> target = literalClassForNameTarget(code, instruction);
@@ -2083,7 +2097,7 @@ public final class ReachabilityAnalyzer {
             enqueueClassInitializer(classes, target.orElseThrow(), work, workSet, current, callEdges, entryPoints);
             return;
         }
-        final List<String> owners = new ArrayList<>(classes.keySet());
+        final List<String> owners = new ArrayList<>(boundedReflection ? reflectionClasses : classes.keySet());
         for (int index = 1; index < owners.size(); index++) {
             final String owner = owners.get(index);
             int insertion = index;

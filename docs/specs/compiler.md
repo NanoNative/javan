@@ -86,8 +86,11 @@ for the exact parameter list, including all bytecode methods with that name and 
 list when return types differ. An empty array is valid. Duplicate declarations, different
 signatures, missing methods and computed or unsupported elements produce `JAVAN096`.
 Constructor and field declarations are not implemented yet. Unknown dynamic `Class.forName`
-targets remain conservative over the parsed world, even when a declaration exists.
-Automatically proven targets remain available without the declaration.
+targets remain conservative over the parsed world when no declaration exists. With a
+declaration, dynamic names resolve against the declared classes, classes retained by reachable
+code and their required hierarchies, and compiled classes named by string literals in reachable
+code. Supported platform classes remain available. Other application names produce
+`ClassNotFoundException`. Automatically proven targets remain available without the declaration.
 
 Direct `new Object()` creates a distinct managed instance with `java.lang.Object` class metadata.
 `Object.equals` dispatches statically reachable application overrides and supports default identity,

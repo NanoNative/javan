@@ -2,14 +2,12 @@ package javan.codegen;
 
 import javan.analysis.CallGraph;
 import javan.analysis.ClassInitializationGraph;
+import javan.analysis.ClassMetadataReachability;
 import javan.analysis.EntryPoint;
 import javan.analysis.GeneratedObjectCloneSupport;
-import javan.analysis.ReachabilityAnalyzer;
 import javan.analysis.ReflectionDeclaration;
 import javan.classfile.ClassFile;
 import javan.classfile.ClassFileScanner;
-import javan.classfile.CodeAttribute;
-import javan.classfile.CodeException;
 import javan.classfile.FieldInfo;
 import javan.classfile.Instruction;
 import javan.classfile.MethodInfo;
@@ -307,7 +305,7 @@ final class BytecodeToIRMetadataSupport {
                     publicMethodLookup |= "java/lang/Class".equals(reference.owner())
                         && "getMethod".equals(reference.name())
                         && "(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;".equals(reference.descriptor());
-                    dynamicClassLookup |= isClassForName(reference);
+                    dynamicClassLookup |= ClassMetadataReachability.isClassForName(reference);
                 }
                 if ((instruction.opcode() == 18 || instruction.opcode() == 19 || instruction.opcode() == 20)
                     && instruction.className().isPresent()) {
@@ -469,64 +467,9 @@ final class BytecodeToIRMetadataSupport {
         final CallGraph callGraph,
         final ClassInitializationGraph.Result classInitialization
     ) {
-        if (!callGraph.instantiatedTypes().complete()) {
-            return lowerClasses(classes);
-        }
-        final Set<String> retained = new HashSet<>();
-        for (final String declared : ReflectionDeclaration.analyze(classes).classes()) {
-            addClass(classes, retained, declared);
-        }
-        for (final EntryPoint entryPoint : callGraph.reachableMethods()) {
-            if (isClassForName(entryPoint.className(), entryPoint.methodName(), entryPoint.descriptor())) {
-                return lowerClasses(classes);
-            }
-            addClass(classes, retained, entryPoint.className());
-            final ClassFile owner = classes.get(entryPoint.className());
-            final Optional<MethodInfo> method = owner == null
-                ? Optional.empty()
-                : owner.method(entryPoint.methodName(), entryPoint.descriptor());
-            if (method.isEmpty()) {
-                continue;
-            }
-            final Optional<CodeAttribute> methodCode = method.orElseThrow().code();
-            if (methodCode.isEmpty()) {
-                continue;
-            }
-            final CodeAttribute code = methodCode.orElseThrow();
-            for (final CodeException handler : code.exceptionTable()) {
-                if (handler.catchType().isPresent()) {
-                    addClass(classes, retained, handler.catchType().orElseThrow());
-                }
-            }
-            for (final Instruction instruction : code.instructions()) {
-                if (instruction.className().isPresent()) {
-                    addClass(classes, retained, instruction.className().orElseThrow());
-                }
-                if (instruction.methodRef().isPresent()) {
-                    final MethodRef reference = instruction.methodRef().orElseThrow();
-                    if (isClassForName(reference)) {
-                        final Optional<String> target = ReachabilityAnalyzer.literalClassForNameTarget(code, instruction);
-                        if (target.isEmpty() || !classes.containsKey(target.orElseThrow())) {
-                            return lowerClasses(classes);
-                        }
-                        addClass(classes, retained, target.orElseThrow());
-                    }
-                    addClass(classes, retained, reference.owner());
-                }
-                if (instruction.fieldRef().isPresent()) {
-                    addClass(classes, retained, instruction.fieldRef().orElseThrow().owner());
-                }
-            }
-        }
-        for (final String type : callGraph.instantiatedTypes().types()) {
-            addClass(classes, retained, type);
-        }
-        for (final Map.Entry<String, List<String>> entry : classInitialization.dependencies().entrySet()) {
-            addClass(classes, retained, entry.getKey());
-            for (final String dependency : entry.getValue()) {
-                addClass(classes, retained, dependency);
-            }
-        }
+        final Set<String> retained = ClassMetadataReachability.collect(
+            classes, callGraph, classInitialization, ReflectionDeclaration.analyze(classes)
+        );
         final Map<String, ClassFile> selected = new LinkedHashMap<>();
         for (final ClassFile classFile : sortedClasses(classes)) {
             if (retained.contains(classFile.name())) {
@@ -555,41 +498,6 @@ final class BytecodeToIRMetadataSupport {
         return Collections.unmodifiableMap(result);
     }
 
-    private static boolean isClassForName(final MethodRef reference) {
-        return isClassForName(reference.owner(), reference.name(), reference.descriptor());
-    }
-
-    private static boolean isClassForName(final String owner, final String name, final String descriptor) {
-        return "java/lang/Class".equals(owner)
-            && "forName".equals(name)
-            && ("(Ljava/lang/String;)Ljava/lang/Class;".equals(descriptor)
-                || "(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;".equals(descriptor));
-    }
-
-    private static void addClass(
-        final Map<String, ClassFile> classes,
-        final Set<String> retained,
-        final String reference
-    ) {
-        if (reference == null || reference.isEmpty()) {
-            return;
-        }
-        String name = reference;
-        while (name.startsWith("[")) {
-            name = name.substring(1);
-        }
-        if (name.startsWith("L") && name.endsWith(";")) {
-            name = name.substring(1, name.length() - 1);
-        }
-        final ClassFile classFile = classes.get(name);
-        if (classFile == null || !retained.add(name)) {
-            return;
-        }
-        addClass(classes, retained, classFile.superName());
-        for (final String interfaceName : classFile.interfaces()) {
-            addClass(classes, retained, interfaceName);
-        }
-    }
     static List<EntryPoint> sortedEntryPoints(final List<EntryPoint> entries) {
         final List<String> symbols = new ArrayList<>();
         for (final EntryPoint entry : entries) symbols.add(symbol(entry));

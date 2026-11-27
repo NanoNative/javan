@@ -337,6 +337,40 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBoundsDynamicReflectionClasses() throws Exception {
+        final Path project = project("selfhost-bounded-reflection");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() { return new AnnotatedElement[] {Target.class}; }
+                public static void main(String[] args) {
+                    final String name = args[0];
+                    try { System.out.println(Class.forName(name).getName()); }
+                    catch (ClassNotFoundException missing) { System.out.println("missing"); }
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target { }
+            """);
+        writeJava(project, "com.acme.Unrelated", """
+            package com.acme;
+            public final class Unrelated { }
+            """);
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final String executable = project.resolve(".javan/bin/selfhost-bounded-reflection").toString();
+        final ProcessResult known = process(project, List.of(executable, "com.acme.Target"));
+        assertThat(known.exitCode()).as(known.stderr()).isZero();
+        assertThat(known.stdout()).isEqualTo("com.acme.Target\n");
+        final ProcessResult missing = process(project, List.of(executable, "com.acme.Unrelated"));
+        assertThat(missing.exitCode()).as(missing.stderr()).isZero();
+        assertThat(missing.stdout()).isEqualTo("missing\n");
+    }
+
+    @Test
     void nativeBuiltJavanTracksInheritedInterfaceArguments() throws Exception {
         final Path project = tempDir.resolve("selfhost-inherited-interface-query");
         final Path classes = project.resolve("classes");

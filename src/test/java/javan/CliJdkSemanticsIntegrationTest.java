@@ -16836,6 +16836,93 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void reflectionDeclarationBoundsDynamicClassesAndPreservesInitializerDependencies() throws Exception {
+        final Path project = project("bounded-dynamic-class");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() {
+                    return new AnnotatedElement[] {Target.class};
+                }
+                public static void main(String[] args) {
+                    final String name = args[0];
+                    System.out.println(Known.class.getName());
+                    try { System.out.println(Class.forName(name).getName()); }
+                    catch (ClassNotFoundException missing) { System.out.println("missing"); }
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target { static { Helper.start(); System.out.println("target initialized"); } }
+            """);
+        writeJava(project, "com.acme.Helper", """
+            package com.acme;
+            public final class Helper {
+                static { System.out.println("helper initialized"); }
+                public static void start() { }
+            }
+            """);
+        writeJava(project, "com.acme.Known", """
+            package com.acme;
+            public final class Known { static { System.out.println("known initialized"); } }
+            """);
+        writeJava(project, "com.acme.Unrelated", """
+            package com.acme;
+            public final class Unrelated { static { System.out.println("unrelated initialized"); } }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final String executable = project.resolve(".javan/bin/bounded-dynamic-class").toString();
+        final ProcessResult declared = process(project, List.of(executable, "com.acme.Target"));
+        assertThat(declared.exitCode()).as(declared.stderr()).isZero();
+        assertThat(declared.stdout()).isEqualTo("com.acme.Known\nhelper initialized\ntarget initialized\ncom.acme.Target\n");
+        final ProcessResult staticallyKnown = process(project, List.of(executable, "com.acme.Known"));
+        assertThat(staticallyKnown.exitCode()).as(staticallyKnown.stderr()).isZero();
+        assertThat(staticallyKnown.stdout()).isEqualTo("com.acme.Known\nknown initialized\ncom.acme.Known\n");
+        final ProcessResult initializerDependency = process(project, List.of(executable, "com.acme.Helper"));
+        assertThat(initializerDependency.exitCode()).as(initializerDependency.stderr()).isZero();
+        assertThat(initializerDependency.stdout()).isEqualTo("com.acme.Known\nhelper initialized\ncom.acme.Helper\n");
+        final ProcessResult unrelated = process(project, List.of(executable, "com.acme.Unrelated"));
+        assertThat(unrelated.exitCode()).as(unrelated.stderr()).isZero();
+        assertThat(unrelated.stdout()).isEqualTo("com.acme.Known\nmissing\n");
+        assertThat(generatedProgramSource(project)).doesNotContain("javan_class_com_acme_Unrelated");
+        assertThat(Files.readString(project.resolve(".javan/reports/call-graph.json")))
+            .doesNotContain("com/acme/Unrelated.<clinit>()V");
+    }
+
+    @Test
+    void reflectionDeclarationKeepsClassNamesReferencedAcrossControlFlow() throws Exception {
+        final Path project = project("bounded-class-name-branch");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() { return new AnnotatedElement[0]; }
+                public static void main(String[] args) throws Exception {
+                    final String name = args.length == 0 ? "com.acme.Target" : args[0];
+                    System.out.println(Class.forName(name).getName());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target { static { System.out.println("initialized"); } }
+            """);
+        writeJava(project, "com.acme.Unrelated", """
+            package com.acme;
+            public final class Unrelated { }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/bounded-class-name-branch").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("initialized\ncom.acme.Target\n");
+        assertThat(generatedProgramSource(project)).doesNotContain("javan_class_com_acme_Unrelated");
+    }
+
+    @Test
     void reflectionDeclarationResolvesExactMethodOverloadForRuntimeInput() throws Exception {
         final Path project = project("declared-reflection-method");
         writeJava(project, "com.acme.Main", """

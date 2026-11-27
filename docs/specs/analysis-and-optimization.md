@@ -36,7 +36,9 @@ and C generation consumes the same facts as reachability.
 
 Class structs/descriptors are emitted for reachable code, instantiated types, initialization
 and required hierarchies. Stable type IDs preserve gaps when unused classes are omitted.
-Incomplete analysis or an unresolved supported `Class.forName` retains the parsed set conservatively.
+Incomplete analysis or an unresolved supported `Class.forName` without a reflection declaration
+retains the parsed set conservatively. With a declaration, class metadata and initializer
+reachability share the bounded declared and statically discovered class set until it stabilizes.
 For a one-argument `Class.forName` with a literal class name in a straight-line method without
 exception handlers, reachability retains that class's required initializers and metadata. Calls
 with unknown names or control flow retain candidates conservatively.
