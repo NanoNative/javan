@@ -500,9 +500,12 @@ final class CliCustomMapKeyIntegrationTest extends CliIntegrationSupport {
                     public int hashCode() { return number; }
                     public boolean equals(Object other) { return other instanceof Key key && number == key.number; }
                 }
-                public static void main(String[] args) {
+                static Map.Entry<Key, String>[] source() {
                     Key first = new Key(1); Key second = new Key(2);
-                    Map.Entry<Key, String>[] entries = new Map.Entry[] { Map.entry(first, "one"), Map.entry(second, "two") };
+                    return new Map.Entry[] { Map.entry(first, "one"), Map.entry(second, "two") };
+                }
+                public static void main(String[] args) {
+                    Map.Entry<Key, String>[] entries = source();
                     try { Map.ofEntries(entries); }
                     catch (UnsupportedOperationException expected) { System.out.println("unsupported entries"); }
                 }

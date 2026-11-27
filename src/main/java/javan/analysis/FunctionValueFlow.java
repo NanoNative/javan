@@ -762,10 +762,10 @@ public final class FunctionValueFlow {
             final State state
         ) {
             final int opcode = instruction.opcode();
-            // Only track fresh arrays while they remain on a straight-line operand stack.
+            // Only track fresh arrays through straight-line locals and operand stacks.
             // Any escape, control-flow split or opaque stack manipulation loses the fact.
             if (callbackKind == CallbackKind.COLLECTION_QUERY
-                && (opcode >= 54 && opcode <= 78 || opcode >= 87 && opcode <= 88
+                && (opcode >= 87 && opcode <= 88
                     || opcode >= 90 && opcode <= 95 || opcode >= 153 && opcode <= 181
                     || opcode == 186 || opcode == 190 || opcode >= 191 && opcode <= 201)) {
                 state.clearInlineEntryArrays();
@@ -914,6 +914,7 @@ public final class FunctionValueFlow {
                     && instruction.className().isPresent()
                     && "java/util/Map$Entry".equals(instruction.className().orElseThrow())
                     && index > 0 && inlineArrayLength(bytecode.get(index - 1)) > 1;
+                if (multiEntryArray) state.inlineEntryArrays = true;
                 state.stack().add(new Slot(multiEntryArray
                     ? new Fact(PLATFORM | INLINE_ENTRY_ARRAY, List.of(), false, null)
                     : callbackKind == CallbackKind.COLLECTION_QUERY ? Fact.platform() : Fact.unsafe(), 1));
@@ -2330,6 +2331,7 @@ public final class FunctionValueFlow {
         private final Fact[] locals;
         private final List<Slot> stack;
         private final FlowStatus status;
+        private boolean inlineEntryArrays;
 
         private State(
             final Fact[] locals,
@@ -2358,10 +2360,17 @@ public final class FunctionValueFlow {
         }
 
         private State copy() {
-            return new State(locals, stack, status);
+            final State copy = new State(locals, stack, status);
+            copy.inlineEntryArrays = inlineEntryArrays;
+            return copy;
         }
 
         private void clearInlineEntryArrays() {
+            if (!inlineEntryArrays) return;
+            inlineEntryArrays = false;
+            for (int index = 0; index < locals.length; index++) {
+                if ((locals[index].kinds() & INLINE_ENTRY_ARRAY) != 0) locals[index] = Fact.platform();
+            }
             for (int index = 0; index < stack.size(); index++) {
                 final Slot slot = stack.get(index);
                 if ((slot.fact().kinds() & INLINE_ENTRY_ARRAY) != 0) {
@@ -2374,6 +2383,9 @@ public final class FunctionValueFlow {
             final Fact clearedKey = key.withoutFreshEmptySet();
             final Fact storedKey = new Fact(clearedKey.kinds(), clearedKey.types(), clearedKey.unknown(), array.elements());
             final Fact updated = new Fact(array.kinds(), array.types(), array.unknown(), storedKey);
+            for (int index = 0; index < locals.length; index++) {
+                if (locals[index] == array) locals[index] = updated;
+            }
             for (int index = 0; index < stack.size(); index++) {
                 final Slot slot = stack.get(index);
                 if (slot.fact() == array) stack.set(index, new Slot(updated, slot.width()));
@@ -2397,8 +2409,15 @@ public final class FunctionValueFlow {
                 return false;
             }
             boolean changed = false;
+            State source = incoming;
+            if (inlineEntryArrays || incoming.inlineEntryArrays) {
+                changed = inlineEntryArrays;
+                clearInlineEntryArrays();
+                source = incoming.copy();
+                source.clearInlineEntryArrays();
+            }
             for (int index = 0; index < locals.length; index++) {
-                final Fact merged = locals[index].merge(incoming.locals[index]);
+                final Fact merged = locals[index].merge(source.locals[index]);
                 if (merged != locals[index]) {
                     locals[index] = merged;
                     changed = true;
@@ -2406,7 +2425,7 @@ public final class FunctionValueFlow {
             }
             for (int index = 0; index < stack.size(); index++) {
                 final Slot current = stack.get(index);
-                final Slot other = incoming.stack.get(index);
+                final Slot other = source.stack.get(index);
                 if (current.width() != other.width()) {
                     reject();
                     return false;

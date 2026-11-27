@@ -707,6 +707,37 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
 
 
 
+
+    @Test
+    void nativeBuiltJavanInfersLocalMapEntryArrayKeys() throws Exception {
+        final Path project = project("selfhost-map-entry-local-array");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Map;
+            public final class Main {
+                static int hashes;
+                static final class Key {
+                    final int value; Key(int value) { this.value = value; }
+                    public int hashCode() { hashes++; return value; }
+                    public boolean equals(Object x) { return x instanceof Key key && value == key.value; }
+                }
+                public static void main(String[] args) {
+                    Map.Entry<Key, String>[] entries = new Map.Entry[] {
+                        Map.entry(new Key(1), "one"), Map.entry(new Key(2), "two")
+                    };
+                    var result = Map.ofEntries(entries);
+                    System.out.println(result.size());
+                    System.out.println(hashes);
+                }
+            }
+            """);
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/selfhost-map-entry-local-array").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("2\n2\n");
+    }
+
     @Test
     void nativeBuiltJavanInfersFiveInlineMapEntryKeyTypes() throws Exception {
         final Path project = project("selfhost-map-entry-five-key-types");
