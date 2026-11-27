@@ -767,7 +767,7 @@ public final class FunctionValueFlow {
             // Escapes, opaque operations and divergent array facts lose the proof.
             if (callbackKind == CallbackKind.COLLECTION_QUERY
                 && (opcode >= 90 && opcode <= 95 || opcode >= 168 && opcode <= 177
-                    || opcode >= 179 && opcode <= 181 || opcode == 186 || opcode >= 191 && opcode <= 197
+                    || opcode == 179 || opcode == 181 || opcode == 186 || opcode >= 191 && opcode <= 197
                     || opcode >= 200 && opcode <= 201)) {
                 state.clearInlineEntryArrays();
             }

@@ -682,6 +682,7 @@ public final class CompatibilityReports {
             pass("map-of-entries-inline-distinct-key-types"),
             pass("map-of-entries-local-array-key-flow"),
             pass("map-of-entries-local-array-static-read"),
+            pass("map-of-entries-local-array-instance-field-read"),
             pass("map-of-entries-local-array-length-read"),
             pass("map-of-entries-local-array-discarded-results"),
             pass("map-of-entries-local-array-unchanged-branches"),

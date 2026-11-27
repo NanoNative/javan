@@ -713,6 +713,41 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
 
 
 
+
+    @Test
+    void nativeBuiltJavanPreservesEntryArrayKeysAcrossInstanceFieldReads() throws Exception {
+        final Path project = project("selfhost-map-entry-field-read");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Map;
+            public final class Main {
+                static int hashes;
+                static final class Holder { int value = 42; }
+                static final class Key {
+                    final int value; Key(int value) { this.value = value; }
+                    public int hashCode() { hashes++; return value; }
+                    public boolean equals(Object x) { return x instanceof Key key && value == key.value; }
+                }
+                public static void main(String[] args) {
+                    Holder holder = new Holder();
+                    Map.Entry<Key, String>[] entries = new Map.Entry[] {
+                        Map.entry(new Key(1), "one"), Map.entry(new Key(2), "two")
+                    };
+                    int observed = holder.value;
+                    var result = Map.ofEntries(entries);
+                    System.out.println(observed);
+                    System.out.println(result.size());
+                    System.out.println(hashes);
+                }
+            }
+            """);
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()), Duration.ofSeconds(60));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/selfhost-map-entry-field-read").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("42\n2\n2\n");
+    }
+
     @Test
     void nativeBuiltJavanPreservesEntryArrayKeysAcrossBranches() throws Exception {
         final Path project = project("selfhost-map-entry-array-branch");
