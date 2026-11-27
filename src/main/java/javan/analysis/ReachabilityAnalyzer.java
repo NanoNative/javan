@@ -894,7 +894,7 @@ public final class ReachabilityAnalyzer {
                 if (instruction.methodRef().isPresent()
                     && (JdkCallSupport.isCollectionObjectAddition(instruction.methodRef().orElseThrow())
                         || JdkCallSupport.isMapKeyOperation(instruction.methodRef().orElseThrow())
-                        || JdkCallSupport.isMapPairFactory(instruction.methodRef().orElseThrow()))) {
+                        || JdkCallSupport.isMapMultiEntryFactory(instruction.methodRef().orElseThrow()))) {
                     return List.of();
                 }
                 return virtualTargets(member);
@@ -1482,14 +1482,14 @@ public final class ReachabilityAnalyzer {
             enqueueAll(work, workSet, targetMethods);
             addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
         }
-        if (JdkCallSupport.isMapKeyOperation(target) || JdkCallSupport.isMapPairFactory(target)) {
+        if (JdkCallSupport.isMapKeyOperation(target) || JdkCallSupport.isMapMultiEntryFactory(target)) {
             final List<EntryPoint> customEquals = new ArrayList<>();
             final List<EntryPoint> customHash = new ArrayList<>();
             final MethodRef equality = new MethodRef("java/lang/Object", "equals", "(Ljava/lang/Object;)Z");
             final MethodRef hash = new MethodRef("java/lang/Object", "hashCode", "()I");
-            if (JdkCallSupport.isMapPairFactory(target)) {
-                for (int key = 0; key < 2; key++) {
-                    final String site = FunctionValueFlow.mapPairSiteKey(current, instruction, key);
+            if (JdkCallSupport.isMapMultiEntryFactory(target)) {
+                for (int key = 0; key < JdkCallSupport.mapFixedEntryCount(target); key++) {
+                    final String site = FunctionValueFlow.mapFixedSiteKey(current, instruction, key);
                     customEquals.addAll(dispatchTargets.collectionTargets(instruction, equality, site));
                     customHash.addAll(dispatchTargets.collectionTargets(instruction, hash, site));
                 }

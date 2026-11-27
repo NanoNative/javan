@@ -11,8 +11,8 @@
     "rule": "a broad JDK-compatibility release requires zero unknown leftovers; the first native release is scenario-bounded and requires declared reachable behavior to be supported or rejected"
   },
   "counts": {
-    "rows": 333,
-    "pass": 332,
+    "rows": 334,
+    "pass": 333,
     "scoped": 1,
     "target": 0,
     "rejected": 0
@@ -258,6 +258,7 @@
     {"feature": "map-of-octuple", "jdk25": "pass"},
     {"feature": "map-of-nonuple", "jdk25": "pass"},
     {"feature": "map-of-decuple", "jdk25": "pass"},
+    {"feature": "map-of-fixed-custom-key-callbacks", "jdk25": "pass"},
     {"feature": "map-of-entries", "jdk25": "pass"},
     {"feature": "set-copy-of", "jdk25": "pass"},
     {"feature": "set-of-empty", "jdk25": "pass"},

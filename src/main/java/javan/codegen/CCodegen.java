@@ -789,6 +789,14 @@ public final class CCodegen {
         result.add("javan_map_get_java_into");
         result.add("javan_map_put_java_into");
         result.add("javan_map_pair_java_into");
+        result.add("javan_map_triple_java_into");
+        result.add("javan_map_quadruple_java_into");
+        result.add("javan_map_quintuple_java_into");
+        result.add("javan_map_sextuple_java_into");
+        result.add("javan_map_septuple_java_into");
+        result.add("javan_map_octuple_java_into");
+        result.add("javan_map_nonuple_java_into");
+        result.add("javan_map_decuple_java_into");
         result.add("javan_map_remove_java_into");
         result.add(EXACT_CATCH_NULL_APPLY_SYMBOL);
         if (!program.materializedLambdaTargets().isEmpty()) {
@@ -4082,14 +4090,6 @@ public final class CCodegen {
                     "javan_map_of_empty",
                     "javan_map_singleton",
                     "javan_map_singleton_java",
-                    "javan_map_triple",
-                    "javan_map_quadruple",
-                    "javan_map_quintuple",
-                    "javan_map_sextuple",
-                    "javan_map_septuple",
-                    "javan_map_octuple",
-                    "javan_map_nonuple",
-                    "javan_map_decuple",
                     "javan_map_of_entries",
                     "javan_map_copy_of",
                     "javan_map_unmodifiable",

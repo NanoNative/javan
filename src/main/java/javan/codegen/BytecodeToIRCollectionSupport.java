@@ -100,14 +100,14 @@ final class BytecodeToIRCollectionSupport {
                 helper = switch (materialized.size() / 2) {
                     case 1 -> "javan_map_singleton_java";
                     case 2 -> "javan_map_pair_java_into";
-                    case 3 -> "javan_map_triple";
-                    case 4 -> "javan_map_quadruple";
-                    case 5 -> "javan_map_quintuple";
-                    case 6 -> "javan_map_sextuple";
-                    case 7 -> "javan_map_septuple";
-                    case 8 -> "javan_map_octuple";
-                    case 9 -> "javan_map_nonuple";
-                    case 10 -> "javan_map_decuple";
+                    case 3 -> "javan_map_triple_java_into";
+                    case 4 -> "javan_map_quadruple_java_into";
+                    case 5 -> "javan_map_quintuple_java_into";
+                    case 6 -> "javan_map_sextuple_java_into";
+                    case 7 -> "javan_map_septuple_java_into";
+                    case 8 -> "javan_map_octuple_java_into";
+                    case 9 -> "javan_map_nonuple_java_into";
+                    case 10 -> "javan_map_decuple_java_into";
                     default -> throw unsupported(classFile, method, firstInstruction(method));
                 };
             }

@@ -611,11 +611,11 @@ public final class BytecodeToIR {
                         final boolean collectionEquality = (JdkCallSupport.isCollectionEqualitySearch(calledMethod)
                             || JdkCallSupport.isCollectionContainsAll(calledMethod)
                             || JdkCallSupport.isCollectionFilterAll(calledMethod)
-                            || JdkCallSupport.isMapKeyOperation(calledMethod) || JdkCallSupport.isMapPairFactory(calledMethod)
+                            || JdkCallSupport.isMapKeyOperation(calledMethod) || JdkCallSupport.isMapMultiEntryFactory(calledMethod)
                             || JdkCallSupport.isMapPutAll(calledMethod))
                             && "equals".equals(callee.methodName())
                             && "(Ljava/lang/Object;)Z".equals(callee.descriptor())
-                            || (JdkCallSupport.isMapKeyOperation(calledMethod) || JdkCallSupport.isMapPairFactory(calledMethod)
+                            || (JdkCallSupport.isMapKeyOperation(calledMethod) || JdkCallSupport.isMapMultiEntryFactory(calledMethod)
                                 || JdkCallSupport.isMapPutAll(calledMethod))
                             && "hashCode".equals(callee.methodName())
                             && "()I".equals(callee.descriptor());
@@ -1679,7 +1679,7 @@ public final class BytecodeToIR {
                 || JdkCallSupport.isListEndpointAdd(reference)) {
                 possibleTypes.addAll(JdkCallSupport.transportedPlatformThrowableTypes(reference));
             }
-            if (JdkCallSupport.isMapKeyOperation(reference) || JdkCallSupport.isMapPairFactory(reference)
+            if (JdkCallSupport.isMapKeyOperation(reference) || JdkCallSupport.isMapMultiEntryFactory(reference)
                 || JdkCallSupport.isMapPutAll(reference)) {
                 possibleTypes.add("java/util/ConcurrentModificationException");
                 addTransportedThrowableTypes(MAP_CUSTOM_EQUALS_DISPATCH, dispatches, transportedThrowableTypes, possibleTypes);

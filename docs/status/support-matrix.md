@@ -9,8 +9,8 @@ External project names do not belong in this matrix; this ledger stays compiler-
 
 | Measure | Count |
 | --- | ---: |
-| rows | 333 |
-| pass | 332 |
+| rows | 334 |
+| pass | 333 |
 | scoped | 1 |
 | target | 0 |
 | rejected | 0 |
@@ -266,6 +266,7 @@ Status mapping:
 | `map-of-octuple` | pass |
 | `map-of-nonuple` | pass |
 | `map-of-decuple` | pass |
+| `map-of-fixed-custom-key-callbacks` | pass |
 | `map-of-entries` | pass |
 | `set-copy-of` | pass |
 | `set-of-empty` | pass |

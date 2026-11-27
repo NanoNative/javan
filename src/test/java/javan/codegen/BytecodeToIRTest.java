@@ -12264,7 +12264,7 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).containsSubsequence(
             IrInstruction.assignObject("object0",
                 IrExpression.objectCall(
-                    "javan_map_triple",
+                    "javan_map_triple_java_into",
                     List.of(
                         IrExpression.objectLocal("arg0"),
                         IrExpression.objectLocal("arg1"),
@@ -12302,7 +12302,7 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).containsSubsequence(
             IrInstruction.assignObject("object0",
                 IrExpression.objectCall(
-                    "javan_map_quadruple",
+                    "javan_map_quadruple_java_into",
                     List.of(
                         IrExpression.objectLocal("arg0"),
                         IrExpression.objectLocal("arg1"),
@@ -12344,7 +12344,7 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).containsSubsequence(
             IrInstruction.assignObject("object0",
                 IrExpression.objectCall(
-                    "javan_map_quintuple",
+                    "javan_map_quintuple_java_into",
                     List.of(
                         IrExpression.objectLocal("arg0"),
                         IrExpression.objectLocal("arg1"),
@@ -12390,7 +12390,7 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).containsSubsequence(
             IrInstruction.assignObject("object0",
                 IrExpression.objectCall(
-                    "javan_map_sextuple",
+                    "javan_map_sextuple_java_into",
                     List.of(
                         IrExpression.objectLocal("arg0"),
                         IrExpression.objectLocal("arg1"),
@@ -12440,7 +12440,7 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).containsSubsequence(
             IrInstruction.assignObject("object0",
                 IrExpression.objectCall(
-                    "javan_map_septuple",
+                    "javan_map_septuple_java_into",
                     List.of(
                         IrExpression.objectLocal("arg0"),
                         IrExpression.objectLocal("arg1"),
@@ -12494,7 +12494,7 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).containsSubsequence(
             IrInstruction.assignObject("object0",
                 IrExpression.objectCall(
-                    "javan_map_octuple",
+                    "javan_map_octuple_java_into",
                     List.of(
                         IrExpression.objectLocal("arg0"),
                         IrExpression.objectLocal("arg1"),
@@ -12552,7 +12552,7 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).containsSubsequence(
             IrInstruction.assignObject("object0",
                 IrExpression.objectCall(
-                    "javan_map_nonuple",
+                    "javan_map_nonuple_java_into",
                     List.of(
                         IrExpression.objectLocal("arg0"),
                         IrExpression.objectLocal("arg1"),
@@ -12614,7 +12614,7 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).containsSubsequence(
             IrInstruction.assignObject("object0",
                 IrExpression.objectCall(
-                    "javan_map_decuple",
+                    "javan_map_decuple_java_into",
                     List.of(
                         IrExpression.objectLocal("arg0"),
                         IrExpression.objectLocal("arg1"),

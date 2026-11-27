@@ -15605,23 +15605,28 @@ final class RuntimeSourceMemorySections {
             return map;
         }
 
-        void javan_map_pair_java_into(void** result, void* first_key, void* first_value, void* second_key, void* second_value) {
-            void* entries[] = { first_key, first_value, second_key, second_value };
+        static void javan_map_fixed_java_into(void** result, void** entries, int count) {
             void* map = NULL;
             void* previous = NULL;
             *result = NULL;
-            void** roots[] = { &entries[0], &entries[1], &entries[2], &entries[3], &map, &previous, result };
-            javan_root_frame_push(roots, 7);
+            void** roots[23];
+            for (int index = 0; index < count * 2; index++) roots[index] = &entries[index];
+            roots[count * 2] = &map;
+            roots[count * 2 + 1] = &previous;
+            roots[count * 2 + 2] = result;
+            javan_root_frame_push(roots, count * 2 + 3);
             javan_runtime_lock_enter();
-            if (!javan_map_has_custom_key(entries[0]) && !javan_map_has_custom_key(entries[2])) {
-                *result = javan_map_fixed_factory(entries, 2);
+            int custom = 0;
+            for (int index = 0; index < count; index++) custom |= javan_map_has_custom_key(entries[index * 2]);
+            if (!custom) {
+                *result = javan_map_fixed_factory(entries, count);
                 javan_runtime_lock_leave();
                 javan_root_frame_pop(roots);
                 return;
             }
-            map = javan_map_new_with_capacity(2, 0);
+            map = javan_map_new_with_capacity(count, 0);
             javan_runtime_lock_leave();
-            for (int index = 0; index < 2; index++) {
+            for (int index = 0; index < count; index++) {
                 if (entries[index * 2] == NULL || entries[index * 2 + 1] == NULL) {
                     javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
                     break;
@@ -15643,44 +15648,49 @@ final class RuntimeSourceMemorySections {
             javan_root_frame_pop(roots);
         }
 
-        void* javan_map_triple(void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value) {
+        void javan_map_pair_java_into(void** result, void* first_key, void* first_value, void* second_key, void* second_value) {
+            void* entries[] = { first_key, first_value, second_key, second_value };
+            javan_map_fixed_java_into(result, entries, 2);
+        }
+
+        void javan_map_triple_java_into(void** result, void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value) {
             void* entries[] = { first_key, first_value, second_key, second_value, third_key, third_value };
-            return javan_map_fixed_factory(entries, 3);
+            javan_map_fixed_java_into(result, entries, 3);
         }
 
-        void* javan_map_quadruple(void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value, void* fourth_key, void* fourth_value) {
+        void javan_map_quadruple_java_into(void** result, void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value, void* fourth_key, void* fourth_value) {
             void* entries[] = { first_key, first_value, second_key, second_value, third_key, third_value, fourth_key, fourth_value };
-            return javan_map_fixed_factory(entries, 4);
+            javan_map_fixed_java_into(result, entries, 4);
         }
 
-        void* javan_map_quintuple(void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value, void* fourth_key, void* fourth_value, void* fifth_key, void* fifth_value) {
+        void javan_map_quintuple_java_into(void** result, void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value, void* fourth_key, void* fourth_value, void* fifth_key, void* fifth_value) {
             void* entries[] = { first_key, first_value, second_key, second_value, third_key, third_value, fourth_key, fourth_value, fifth_key, fifth_value };
-            return javan_map_fixed_factory(entries, 5);
+            javan_map_fixed_java_into(result, entries, 5);
         }
 
-        void* javan_map_sextuple(void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value, void* fourth_key, void* fourth_value, void* fifth_key, void* fifth_value, void* sixth_key, void* sixth_value) {
+        void javan_map_sextuple_java_into(void** result, void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value, void* fourth_key, void* fourth_value, void* fifth_key, void* fifth_value, void* sixth_key, void* sixth_value) {
             void* entries[] = { first_key, first_value, second_key, second_value, third_key, third_value, fourth_key, fourth_value, fifth_key, fifth_value, sixth_key, sixth_value };
-            return javan_map_fixed_factory(entries, 6);
+            javan_map_fixed_java_into(result, entries, 6);
         }
 
-        void* javan_map_septuple(void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value, void* fourth_key, void* fourth_value, void* fifth_key, void* fifth_value, void* sixth_key, void* sixth_value, void* seventh_key, void* seventh_value) {
+        void javan_map_septuple_java_into(void** result, void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value, void* fourth_key, void* fourth_value, void* fifth_key, void* fifth_value, void* sixth_key, void* sixth_value, void* seventh_key, void* seventh_value) {
             void* entries[] = { first_key, first_value, second_key, second_value, third_key, third_value, fourth_key, fourth_value, fifth_key, fifth_value, sixth_key, sixth_value, seventh_key, seventh_value };
-            return javan_map_fixed_factory(entries, 7);
+            javan_map_fixed_java_into(result, entries, 7);
         }
 
-        void* javan_map_octuple(void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value, void* fourth_key, void* fourth_value, void* fifth_key, void* fifth_value, void* sixth_key, void* sixth_value, void* seventh_key, void* seventh_value, void* eighth_key, void* eighth_value) {
+        void javan_map_octuple_java_into(void** result, void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value, void* fourth_key, void* fourth_value, void* fifth_key, void* fifth_value, void* sixth_key, void* sixth_value, void* seventh_key, void* seventh_value, void* eighth_key, void* eighth_value) {
             void* entries[] = { first_key, first_value, second_key, second_value, third_key, third_value, fourth_key, fourth_value, fifth_key, fifth_value, sixth_key, sixth_value, seventh_key, seventh_value, eighth_key, eighth_value };
-            return javan_map_fixed_factory(entries, 8);
+            javan_map_fixed_java_into(result, entries, 8);
         }
 
-        void* javan_map_nonuple(void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value, void* fourth_key, void* fourth_value, void* fifth_key, void* fifth_value, void* sixth_key, void* sixth_value, void* seventh_key, void* seventh_value, void* eighth_key, void* eighth_value, void* ninth_key, void* ninth_value) {
+        void javan_map_nonuple_java_into(void** result, void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value, void* fourth_key, void* fourth_value, void* fifth_key, void* fifth_value, void* sixth_key, void* sixth_value, void* seventh_key, void* seventh_value, void* eighth_key, void* eighth_value, void* ninth_key, void* ninth_value) {
             void* entries[] = { first_key, first_value, second_key, second_value, third_key, third_value, fourth_key, fourth_value, fifth_key, fifth_value, sixth_key, sixth_value, seventh_key, seventh_value, eighth_key, eighth_value, ninth_key, ninth_value };
-            return javan_map_fixed_factory(entries, 9);
+            javan_map_fixed_java_into(result, entries, 9);
         }
 
-        void* javan_map_decuple(void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value, void* fourth_key, void* fourth_value, void* fifth_key, void* fifth_value, void* sixth_key, void* sixth_value, void* seventh_key, void* seventh_value, void* eighth_key, void* eighth_value, void* ninth_key, void* ninth_value, void* tenth_key, void* tenth_value) {
+        void javan_map_decuple_java_into(void** result, void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value, void* fourth_key, void* fourth_value, void* fifth_key, void* fifth_value, void* sixth_key, void* sixth_value, void* seventh_key, void* seventh_value, void* eighth_key, void* eighth_value, void* ninth_key, void* ninth_value, void* tenth_key, void* tenth_value) {
             void* entries[] = { first_key, first_value, second_key, second_value, third_key, third_value, fourth_key, fourth_value, fifth_key, fifth_value, sixth_key, sixth_value, seventh_key, seventh_value, eighth_key, eighth_value, ninth_key, ninth_value, tenth_key, tenth_value };
-            return javan_map_fixed_factory(entries, 10);
+            javan_map_fixed_java_into(result, entries, 10);
         }
 
         void* javan_map_of_entries(void* value) {

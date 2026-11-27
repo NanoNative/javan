@@ -678,6 +678,33 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanUsesTenCustomKeysInMapOf() throws Exception {
+        final Path project = project("selfhost-map-of-ten-custom-keys");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Map;
+            public final class Main {
+                static final class Key {
+                    final int value; Key(int value) { this.value = value; }
+                    public int hashCode() { return 1; }
+                    public boolean equals(Object other) { return other instanceof Key key && value == key.value; }
+                }
+                public static void main(String[] args) {
+                    var map = Map.of(new Key(1), "1", new Key(2), "2", new Key(3), "3", new Key(4), "4", new Key(5), "5",
+                        new Key(6), "6", new Key(7), "7", new Key(8), "8", new Key(9), "9", new Key(10), "10");
+                    System.out.println(map.size());
+                    System.out.println(map.get(new Key(10)));
+                }
+            }
+            """);
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/selfhost-map-of-ten-custom-keys").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("10\n10\n");
+    }
+
+    @Test
     void nativeBuiltJavanUsesCustomKeysInMapOf() throws Exception {
         final Path project = project("selfhost-map-of-custom-keys");
         writeJava(project, "com.acme.Main", """

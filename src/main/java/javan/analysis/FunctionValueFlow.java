@@ -377,12 +377,14 @@ public final class FunctionValueFlow {
                 if (instruction.methodRef().isPresent()
                     && (JdkCallSupport.isCollectionEqualitySearch(instruction.methodRef().orElseThrow())
                         || JdkCallSupport.isMapKeyOperation(instruction.methodRef().orElseThrow())
-                        || JdkCallSupport.isMapPairFactory(instruction.methodRef().orElseThrow())
+                        || JdkCallSupport.isMapMultiEntryFactory(instruction.methodRef().orElseThrow())
                         || JdkCallSupport.isCollectionContainsAll(instruction.methodRef().orElseThrow())
                         || JdkCallSupport.isCollectionFilterAll(instruction.methodRef().orElseThrow()))) {
-                    if (JdkCallSupport.isMapPairFactory(instruction.methodRef().orElseThrow())) {
-                        result.putIfAbsent(mapPairSiteKey(entry, instruction, 0), CollectionQuery.unavailable());
-                        result.putIfAbsent(mapPairSiteKey(entry, instruction, 1), CollectionQuery.unavailable());
+                    if (JdkCallSupport.isMapMultiEntryFactory(instruction.methodRef().orElseThrow())) {
+                        final int count = JdkCallSupport.mapFixedEntryCount(instruction.methodRef().orElseThrow());
+                        for (int key = 0; key < count; key++) {
+                            result.putIfAbsent(mapFixedSiteKey(entry, instruction, key), CollectionQuery.unavailable());
+                        }
                     } else {
                         result.putIfAbsent(collectionSiteKey(entry, instruction), CollectionQuery.unavailable());
                     }
@@ -1039,9 +1041,10 @@ public final class FunctionValueFlow {
             }
             if (isIndirectUse(callbackKind, methodRef) && !arguments.isEmpty()) {
                 if (callbackKind == CallbackKind.COLLECTION_QUERY) {
-                    if (JdkCallSupport.isMapPairFactory(methodRef)) {
-                        addCollectionFact(mapPairSiteKey(caller, instruction, 0), arguments.get(0).fact());
-                        addCollectionFact(mapPairSiteKey(caller, instruction, 1), arguments.get(2).fact());
+                    if (JdkCallSupport.isMapMultiEntryFactory(methodRef)) {
+                        for (int key = 0; key < arguments.size() / 2; key++) {
+                            addCollectionFact(mapFixedSiteKey(caller, instruction, key), arguments.get(key * 2).fact());
+                        }
                     } else {
                         final Fact argument = JdkCallSupport.isMapKeyOperation(methodRef)
                             ? arguments.getFirst().fact() : arguments.getLast().fact();
@@ -1882,7 +1885,7 @@ public final class FunctionValueFlow {
     ) {
         return callbackKind == CallbackKind.COLLECTION_QUERY ? (JdkCallSupport.isCollectionEqualitySearch(methodRef)
             || JdkCallSupport.isMapKeyOperation(methodRef)
-            || JdkCallSupport.isMapPairFactory(methodRef)
+            || JdkCallSupport.isMapMultiEntryFactory(methodRef)
             || JdkCallSupport.isCollectionContainsAll(methodRef) || JdkCallSupport.isCollectionFilterAll(methodRef))
             : directUse(callbackKind).equals(methodRef) || isIndirectUse(callbackKind, methodRef);
     }
@@ -1906,7 +1909,7 @@ public final class FunctionValueFlow {
         if (callbackKind == CallbackKind.COLLECTION_QUERY) {
             return JdkCallSupport.isCollectionEqualitySearch(methodRef) || JdkCallSupport.isCollectionContainsAll(methodRef)
                 || JdkCallSupport.isCollectionFilterAll(methodRef) || JdkCallSupport.isMapKeyOperation(methodRef)
-                || JdkCallSupport.isMapPairFactory(methodRef);
+                || JdkCallSupport.isMapMultiEntryFactory(methodRef);
         }
         return callbackKind == CallbackKind.FUNCTION
             ? isIndirectFunctionUse(methodRef)
@@ -1947,7 +1950,7 @@ public final class FunctionValueFlow {
         return entryPoint.display() + "#" + instruction.offset();
     }
 
-    static String mapPairSiteKey(final EntryPoint entryPoint, final Instruction instruction, final int key) {
+    static String mapFixedSiteKey(final EntryPoint entryPoint, final Instruction instruction, final int key) {
         return collectionSiteKey(entryPoint, instruction) + ":" + key;
     }
 
