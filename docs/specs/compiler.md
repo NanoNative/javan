@@ -146,13 +146,13 @@ Other methods remain subject to their supported callable entries.
 Native map primitives serialize access to shared map storage, including access through `Map`
 references. This protects those primitives and record map traversal during concurrent mutation.
 Supported `get`, `getOrDefault`, `containsKey`, `put`, `putIfAbsent`, `replace`, `remove`,
-`putAll` and map-copy constructors use statically reachable application key `equals` and `hashCode`
+`putAll`, map-copy constructors and the two-entry `Map.of` factory use statically reachable application key `equals` and `hashCode`
 methods. Application callbacks execute outside the runtime lock, and their exceptions propagate.
 Ordinary maps reject structural changes observed during an equality callback with
 `ConcurrentModificationException`; concurrent maps retry the lookup. Canonical generated record
 key methods containing only primitives and Strings are proven side-effect-free and execute under
 the map's runtime lock. Known application key overrides that cannot be compiled fail with
-`UnsupportedOperationException` when needed. Multi-entry immutable map factories and copies reject application keys whose equality
+`UnsupportedOperationException` when needed. Other multi-entry immutable map factories and copies reject application keys whose equality
 or hashing is not supported by their factory path. Inherited platform key methods, application-defined map
 value equality and custom key queries through map views remain incomplete.
 `ConcurrentHashMap` rejects null keys for `get`, `getOrDefault`, `containsKey`, `put`, `putIfAbsent`,

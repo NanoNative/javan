@@ -651,6 +651,32 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanUsesCustomKeysInMapOf() throws Exception {
+        final Path project = project("selfhost-map-of-custom-keys");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Map;
+            public final class Main {
+                static final class Key {
+                    final int value; Key(int value) { this.value = value; }
+                    public int hashCode() { return 1; }
+                    public boolean equals(Object other) { return other instanceof Key key && value == key.value; }
+                }
+                public static void main(String[] args) {
+                    var map = Map.of(new Key(1), "one", new Key(2), "two");
+                    System.out.println(map.get(new Key(1)));
+                    System.out.println(map.get(new Key(2)));
+                }
+            }
+            """);
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/selfhost-map-of-custom-keys").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("one\ntwo\n");
+    }
+
+    @Test
     void nativeBuiltJavanPreservesRecordEqualityInMapOperations() throws Exception {
         final Path project = project("selfhost-map-record-equality");
         writeJava(project, "com.acme.Main", """

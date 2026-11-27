@@ -882,15 +882,19 @@ public final class ReachabilityAnalyzer {
         }
 
         private List<EntryPoint> collectionTargets(final EntryPoint current, final Instruction instruction, final MethodRef member) {
-            final FunctionValueFlow.CollectionQuery provenance = collectionQueries.get(
-                FunctionValueFlow.collectionSiteKey(current, instruction));
+            return collectionTargets(instruction, member, FunctionValueFlow.collectionSiteKey(current, instruction));
+        }
+
+        private List<EntryPoint> collectionTargets(final Instruction instruction, final MethodRef member, final String site) {
+            final FunctionValueFlow.CollectionQuery provenance = collectionQueries.get(site);
             if (provenance == null) {
                 return List.of();
             }
             if (provenance.unknown()) {
                 if (instruction.methodRef().isPresent()
                     && (JdkCallSupport.isCollectionObjectAddition(instruction.methodRef().orElseThrow())
-                        || JdkCallSupport.isMapKeyOperation(instruction.methodRef().orElseThrow()))) {
+                        || JdkCallSupport.isMapKeyOperation(instruction.methodRef().orElseThrow())
+                        || JdkCallSupport.isMapPairFactory(instruction.methodRef().orElseThrow()))) {
                     return List.of();
                 }
                 return virtualTargets(member);
@@ -1478,17 +1482,28 @@ public final class ReachabilityAnalyzer {
             enqueueAll(work, workSet, targetMethods);
             addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
         }
-        if (JdkCallSupport.isMapKeyOperation(target)) {
-            final List<EntryPoint> customEquals = dispatchTargets.collectionTargets(current, instruction);
-            final List<EntryPoint> customHash = dispatchTargets.collectionTargets(current, instruction,
-                new MethodRef("java/lang/Object", "hashCode", "()I"));
+        if (JdkCallSupport.isMapKeyOperation(target) || JdkCallSupport.isMapPairFactory(target)) {
+            final List<EntryPoint> customEquals = new ArrayList<>();
+            final List<EntryPoint> customHash = new ArrayList<>();
+            final MethodRef equality = new MethodRef("java/lang/Object", "equals", "(Ljava/lang/Object;)Z");
+            final MethodRef hash = new MethodRef("java/lang/Object", "hashCode", "()I");
+            if (JdkCallSupport.isMapPairFactory(target)) {
+                for (int key = 0; key < 2; key++) {
+                    final String site = FunctionValueFlow.mapPairSiteKey(current, instruction, key);
+                    customEquals.addAll(dispatchTargets.collectionTargets(instruction, equality, site));
+                    customHash.addAll(dispatchTargets.collectionTargets(instruction, hash, site));
+                }
+            } else {
+                customEquals.addAll(dispatchTargets.collectionTargets(current, instruction, equality));
+                customHash.addAll(dispatchTargets.collectionTargets(current, instruction, hash));
+            }
             enqueueAll(work, workSet, customEquals);
             enqueueAll(work, workSet, customHash);
             addEdges(callEdges, current, customEquals, CallEdge.Kind.CALL);
             addEdges(callEdges, current, customHash, CallEdge.Kind.CALL);
             final List<EntryPoint> recordMethods = new ArrayList<>();
-            for (final EntryPoint equality : dispatchTargets.collectionTargets(current, instruction)) {
-                final ClassFile owner = classes.get(equality.className());
+            for (final EntryPoint equalityTarget : customEquals) {
+                final ClassFile owner = classes.get(equalityTarget.className());
                 if (owner != null && RecordMapKeySupport.isSafe(owner)) {
                     recordMethods.add(entryPoints.entry(owner.name(), "equals", "(Ljava/lang/Object;)Z"));
                     recordMethods.add(entryPoints.entry(owner.name(), "hashCode", "()I"));

@@ -2426,6 +2426,18 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies the two-entry immutable map factory.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method creates a two-entry immutable map
+     */
+    public static boolean isMapPairFactory(final MethodRef methodRef) {
+        return "java/util/Map".equals(methodRef.owner()) && "of".equals(methodRef.name())
+            && "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;"
+                .equals(methodRef.descriptor());
+    }
+
+    /**
      * Identifies the map factory that consumes an array of entries.
      *
      * @param methodRef referenced JDK method

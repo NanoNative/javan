@@ -15605,9 +15605,42 @@ final class RuntimeSourceMemorySections {
             return map;
         }
 
-        void* javan_map_pair(void* first_key, void* first_value, void* second_key, void* second_value) {
+        void javan_map_pair_java_into(void** result, void* first_key, void* first_value, void* second_key, void* second_value) {
             void* entries[] = { first_key, first_value, second_key, second_value };
-            return javan_map_fixed_factory(entries, 2);
+            void* map = NULL;
+            void* previous = NULL;
+            *result = NULL;
+            void** roots[] = { &entries[0], &entries[1], &entries[2], &entries[3], &map, &previous, result };
+            javan_root_frame_push(roots, 7);
+            javan_runtime_lock_enter();
+            if (!javan_map_has_custom_key(entries[0]) && !javan_map_has_custom_key(entries[2])) {
+                *result = javan_map_fixed_factory(entries, 2);
+                javan_runtime_lock_leave();
+                javan_root_frame_pop(roots);
+                return;
+            }
+            map = javan_map_new_with_capacity(2, 0);
+            javan_runtime_lock_leave();
+            for (int index = 0; index < 2; index++) {
+                if (entries[index * 2] == NULL || entries[index * 2 + 1] == NULL) {
+                    javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                    break;
+                }
+                javan_map_put_java_into(&previous, map, entries[index * 2], entries[index * 2 + 1]);
+                if (javan_pending_has()) break;
+                if (previous != NULL) {
+                    javan_pending_throw("java/lang/IllegalArgumentException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                    break;
+                }
+            }
+            if (!javan_pending_has()) {
+                javan_runtime_lock_enter();
+                ((javan_object_map*) map)->immutable = 1;
+                ((javan_object_map*) map)->view_flags |= JAVAN_MAP_REJECT_NULL_QUERY;
+                *result = map;
+                javan_runtime_lock_leave();
+            }
+            javan_root_frame_pop(roots);
         }
 
         void* javan_map_triple(void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value) {

@@ -99,7 +99,7 @@ final class BytecodeToIRCollectionSupport {
             } else {
                 helper = switch (materialized.size() / 2) {
                     case 1 -> "javan_map_singleton_java";
-                    case 2 -> "javan_map_pair";
+                    case 2 -> "javan_map_pair_java_into";
                     case 3 -> "javan_map_triple";
                     case 4 -> "javan_map_quadruple";
                     case 5 -> "javan_map_quintuple";

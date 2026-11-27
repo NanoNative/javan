@@ -489,7 +489,7 @@ final class CliCustomMapKeyIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void multiEntryFactoryRejectsUncompiledCustomKeySemantics() throws Exception {
+    void entryArrayFactoryRejectsUnsupportedCustomKeySemantics() throws Exception {
         final Path project = project("map-custom-factory-rejection");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -502,8 +502,6 @@ final class CliCustomMapKeyIntegrationTest extends CliIntegrationSupport {
                 }
                 public static void main(String[] args) {
                     Key first = new Key(1); Key second = new Key(2);
-                    try { Map.of(first, "one", second, "two"); }
-                    catch (UnsupportedOperationException expected) { System.out.println("unsupported"); }
                     Map.Entry<Key, String>[] entries = new Map.Entry[] { Map.entry(first, "one"), Map.entry(second, "two") };
                     try { Map.ofEntries(entries); }
                     catch (UnsupportedOperationException expected) { System.out.println("unsupported entries"); }
@@ -514,7 +512,7 @@ final class CliCustomMapKeyIntegrationTest extends CliIntegrationSupport {
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-custom-factory-rejection").toString()));
         assertThat(result.exitCode()).as(result.stderr()).isZero();
-        assertThat(result.stdout()).isEqualTo("unsupported\nunsupported entries\n");
+        assertThat(result.stdout()).isEqualTo("unsupported entries\n");
     }
 
     @Test

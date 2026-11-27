@@ -788,6 +788,7 @@ public final class CCodegen {
         result.add("javan_map_replace_java_into");
         result.add("javan_map_get_java_into");
         result.add("javan_map_put_java_into");
+        result.add("javan_map_pair_java_into");
         result.add("javan_map_remove_java_into");
         result.add(EXACT_CATCH_NULL_APPLY_SYMBOL);
         if (!program.materializedLambdaTargets().isEmpty()) {
@@ -4081,7 +4082,6 @@ public final class CCodegen {
                     "javan_map_of_empty",
                     "javan_map_singleton",
                     "javan_map_singleton_java",
-                    "javan_map_pair",
                     "javan_map_triple",
                     "javan_map_quadruple",
                     "javan_map_quintuple",
