@@ -25,7 +25,7 @@ import static org.junit.platform.launcher.TagFilter.includeTags;
 
 /** Discovers one execution suite and deterministically divides it between CI workers. */
 public final class CiTestWorkerPlanner {
-    private static final int LARGE_CLASS_METHODS = 100;
+    private static final int LARGE_CLASS_METHODS = 80;
     private static final Map<String, Double> NATIVE_CLASS_SECONDS = durations();
 
     private CiTestWorkerPlanner() {
