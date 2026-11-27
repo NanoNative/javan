@@ -2591,6 +2591,45 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void staticLibraryMapValueViewsUpdateBackingMap() throws Exception {
+        final Path project = project("library-map-value-views");
+        writeJava(project, "com.acme.Views", """
+            package com.acme;
+            import java.util.*;
+            public final class Views {
+                public static int remove(int mode) {
+                    Map<String, String> map = new LinkedHashMap<>(); map.put("a", "same");
+                    Collection<String> values = map.values(); map.put("b", "same");
+                    if (mode == 0) values.remove("same");
+                    else { Iterator<String> iterator = values.iterator(); iterator.next(); iterator.remove(); }
+                    return map.size() * 10 + (map.containsKey("b") ? 1 : 0);
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString(), "--kind", "staticlib", "--export", "com.acme.Views.remove");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path caller = writeC(project, "call_views.c", """
+            #include ".javan/dist/bindings/c/library-map-value-views.h"
+            int main(void) {
+                for (int i = 0; i < 100; i++) {
+                    int value = -1;
+                    JavanResult result = javan_try_com_acme_Views_remove_int(i % 2, &value);
+                    if (!result.ok || value != 11) return 1;
+                    javan_result_free(&result);
+                }
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-views");
+        final ProcessResult compile = process(project, List.of("cc", caller.toString(),
+            project.resolve(".javan/dist/liblibrary-map-value-views.a").toString(), "-o", binary.toString()));
+        assertThat(compile.exitCode()).as(compile.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(binary.toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+    }
+
+    @Test
     void staticLibraryMapKeyViewsUpdateBackingMap() throws Exception {
         final Path project = project("library-map-key-views");
         writeJava(project, "com.acme.Views", """

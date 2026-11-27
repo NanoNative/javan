@@ -564,6 +564,7 @@ final class RuntimeHeaderFile {
         void* javan_list_iterator_at(void* list, int index);
         int javan_iterator_has_next(void* iterator);
         void* javan_iterator_next(void* iterator);
+        void javan_iterator_next_into(void** result, void* iterator);
         int javan_list_iterator_has_previous(void* iterator);
         void* javan_list_iterator_previous(void* iterator);
         int javan_list_iterator_next_index(void* iterator);

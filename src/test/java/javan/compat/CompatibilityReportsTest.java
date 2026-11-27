@@ -282,6 +282,8 @@ final class CompatibilityReportsTest {
             "| `map-is-empty` | pass |",
             "| `map-size` | pass |",
             "| `map-values` | pass |",
+            "| `map-values-backed-view` | pass |",
+            "| `concurrent-map-values-iterator-gc` | pass |",
             "| `map-remove` | pass |",
             "| `map-remove-key-value` | pass |",
             "| `map-contains-value` | pass |",
@@ -488,6 +490,8 @@ final class CompatibilityReportsTest {
             "\"feature\": \"map-remove-key-value\"",
             "\"feature\": \"map-concrete-key-set\"",
             "\"feature\": \"map-concrete-entry-set\"",
+            "\"feature\": \"map-values-backed-view\"",
+            "\"feature\": \"concurrent-map-values-iterator-gc\"",
             "\"feature\": \"map-of-singleton\"",
             "\"feature\": \"map-of-pair\"",
             "\"feature\": \"map-of-triple\"",
@@ -608,10 +612,10 @@ final class CompatibilityReportsTest {
             "A broad JDK-compatibility release must report:",
             "The first native release is scenario-bounded.",
             "not a release-completion percentage.",
-            "| support rows | 322 |",
-            "| pass rows | 321 |",
+            "| support rows | 324 |",
+            "| pass rows | 323 |",
             "| scoped rows | 1 |",
-            "| accounted rows | 321 |",
+            "| accounted rows | 323 |",
             "| unaccounted rows | 1 |"
         );
         assertThat(matrix).contains(

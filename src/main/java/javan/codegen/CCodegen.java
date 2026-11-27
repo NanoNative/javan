@@ -3816,6 +3816,8 @@ public final class CCodegen {
                     "javan_list_of_java",
                     "javan_list_of_array",
                     "javan_list_unmodifiable",
+                    "javan_list_iterator",
+                    "javan_list_iterator_at",
                     "javan_list_get",
                     "javan_list_get_java",
                     "javan_list_get_first",
@@ -5547,6 +5549,7 @@ public final class CCodegen {
             || "javan_plain_object_new".equals(expression.value())
             || "javan_character_to_chars".equals(expression.value())
             || "javan_string_to_char_array".equals(expression.value())
+            || "javan_iterator_next".equals(expression.value())
             || "javan_files_read_all_bytes".equals(expression.value())
             || "javan_files_read_string".equals(expression.value())
             || isArrayCopyIntoCall(expression.value())

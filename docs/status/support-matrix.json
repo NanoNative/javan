@@ -11,8 +11,8 @@
     "rule": "a broad JDK-compatibility release requires zero unknown leftovers; the first native release is scenario-bounded and requires declared reachable behavior to be supported or rejected"
   },
   "counts": {
-    "rows": 322,
-    "pass": 321,
+    "rows": 324,
+    "pass": 323,
     "scoped": 1,
     "target": 0,
     "rejected": 0
@@ -232,6 +232,8 @@
     {"feature": "map-is-empty", "jdk25": "pass"},
     {"feature": "map-size", "jdk25": "pass"},
     {"feature": "map-values", "jdk25": "pass"},
+    {"feature": "map-values-backed-view", "jdk25": "pass"},
+    {"feature": "concurrent-map-values-iterator-gc", "jdk25": "pass"},
     {"feature": "map-remove", "jdk25": "pass"},
     {"feature": "map-remove-key-value", "jdk25": "pass"},
     {"feature": "map-contains-value", "jdk25": "pass"},
