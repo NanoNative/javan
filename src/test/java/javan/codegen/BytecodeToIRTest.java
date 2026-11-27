@@ -294,9 +294,11 @@ final class BytecodeToIRTest {
         final IrProgram program = lowerProgram(main, zeta, model);
 
         assertThat(program.classes()).containsExactly(
-            new IrClass("com/acme/Main", "javan_class_com_acme_Main", List.of(), List.of(), List.of()),
+            new IrClass("com/acme/Main", "java/lang/Object", "javan_class_com_acme_Main",
+                List.of(), List.of(), List.of(), false, false, List.of(1)),
             new IrClass(
                 "com/acme/Model",
+                "java/lang/Object",
                 "javan_class_com_acme_Model",
                 List.of(
                     new IrField(IrType.INT, "count", "field_count"),
@@ -310,14 +312,19 @@ final class BytecodeToIRTest {
                 ),
                 List.of("READY"),
                 false,
-                true
+                true,
+                List.of(2)
             ),
             new IrClass(
                 "com/acme/Zeta",
+                "java/lang/Object",
                 "javan_class_com_acme_Zeta",
                 List.of(new IrField(IrType.OBJECT, "name", "field_name")),
                 List.of(),
-                List.of()
+                List.of(),
+                false,
+                false,
+                List.of(3)
             )
         );
     }
@@ -497,6 +504,10 @@ final class BytecodeToIRTest {
             Map.entry("com/acme/Main", 4),
             Map.entry("com/acme/Marker", 5)
         );
+        assertThat(program.classes()).filteredOn(classInfo -> classInfo.jvmName().equals("com/acme/Base"))
+            .singleElement().extracting(IrClass::assignableTypeIds).isEqualTo(List.of(2, 3));
+        assertThat(program.classes()).filteredOn(classInfo -> classInfo.jvmName().equals("com/acme/Marker"))
+            .singleElement().extracting(IrClass::assignableTypeIds).isEqualTo(List.of(3, 5));
         assertThat(Files.readString(new CCodegen().generate(
             program,
             tempDir.resolve("reachable-class-metadata")

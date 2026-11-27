@@ -13,6 +13,7 @@ import java.util.List;
  * @param enumConstants enum constant names in declaration order
  * @param enumClass whether this class is declared as an enum, including empty enums
  * @param cloneable whether instances may be cloned through Object.clone
+ * @param assignableTypeIds original type IDs assignable to this class or interface
  */
 public record IrClass(
     String jvmName,
@@ -22,8 +23,26 @@ public record IrClass(
     List<IrField> staticFields,
     List<String> enumConstants,
     boolean enumClass,
-    boolean cloneable
+    boolean cloneable,
+    List<Integer> assignableTypeIds
 ) {
+    public IrClass {
+        assignableTypeIds = List.copyOf(assignableTypeIds);
+    }
+
+    /** Creates class metadata without explicit assignability information. */
+    public IrClass(
+        final String jvmName,
+        final String superName,
+        final String symbol,
+        final List<IrField> fields,
+        final List<IrField> staticFields,
+        final List<String> enumConstants,
+        final boolean enumClass,
+        final boolean cloneable
+    ) {
+        this(jvmName, superName, symbol, fields, staticFields, enumConstants, enumClass, cloneable, List.of());
+    }
     /**
      * Creates class metadata without static fields.
      *

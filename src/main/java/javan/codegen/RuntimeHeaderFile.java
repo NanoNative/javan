@@ -305,6 +305,7 @@ final class RuntimeHeaderFile {
         void javan_object_handle_retain(JavanObjectHandle* handle);
         void javan_object_handle_release(JavanObjectHandle* handle);
         void javan_register_type_descriptors(JavanTypeDescriptor* descriptors, int count);
+        void javan_register_type_assignability(int (*resolver)(int, int));
         void javan_register_static_roots(void*** roots, int count);
         void javan_root_frame_push(void*** roots, int count);
         void javan_root_frame_pop(void*** roots);

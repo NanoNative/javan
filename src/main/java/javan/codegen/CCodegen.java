@@ -148,7 +148,7 @@ public final class CCodegen {
         if (!program.classes().isEmpty()) {
             c.append(System.lineSeparator());
         }
-        emitTypeDescriptors(program, c);
+        emitTypeDescriptors(program, features, c);
         c.append(System.lineSeparator());
         if (features.methodMetadata()) {
             emitMethodMetadata(program, c);
@@ -422,7 +422,7 @@ public final class CCodegen {
         final CodegenFeatures features,
         final StringBuilder core
     ) {
-        emitTypeDescriptors(program, core);
+        emitTypeDescriptors(program, features, core);
         core.append(System.lineSeparator());
         if (features.methodMetadata()) {
             emitMethodMetadata(program, core);
@@ -599,7 +599,7 @@ public final class CCodegen {
         if (!program.classes().isEmpty()) {
             c.append(System.lineSeparator());
         }
-        emitTypeDescriptors(program, c);
+        emitTypeDescriptors(program, features, c);
         c.append(System.lineSeparator());
         if (features.methodMetadata()) {
             emitMethodMetadata(program, c);
@@ -948,7 +948,7 @@ public final class CCodegen {
         c.append("};").append(System.lineSeparator());
     }
 
-    private static void emitTypeDescriptors(final IrProgram program, final StringBuilder c) {
+    private static void emitTypeDescriptors(final IrProgram program, final CodegenFeatures features, final StringBuilder c) {
         final java.util.Map<String, Integer> ids = typeIds(program);
         for (final IrClass classInfo : program.classes()) {
             final List<javan.ir.IrField> objectFields = objectFields(classInfo.fields());
@@ -1003,7 +1003,32 @@ public final class CCodegen {
             }
             c.append("};").append(System.lineSeparator());
         }
+        if (features.classAssignability()) {
+            c.append("static int javan_generated_type_assignable(int target, int actual) {").append(System.lineSeparator());
+            c.append("    (void) actual;").append(System.lineSeparator());
+            c.append("    switch (target) {").append(System.lineSeparator());
+            for (final IrClass classInfo : program.classes()) {
+                if (classInfo.assignableTypeIds().isEmpty()) {
+                    continue;
+                }
+                c.append("        case ").append(ids.get(classInfo.jvmName()).intValue())
+                    .append(": switch (actual) {").append(System.lineSeparator());
+                for (int index = 0; index < classInfo.assignableTypeIds().size(); index++) {
+                    c.append("            case ").append(classInfo.assignableTypeIds().get(index).intValue())
+                        .append(':').append(System.lineSeparator());
+                }
+                c.append("                return 1;").append(System.lineSeparator());
+                c.append("            default: return 0;").append(System.lineSeparator());
+                c.append("        }").append(System.lineSeparator());
+            }
+            c.append("        default: return 0;").append(System.lineSeparator());
+            c.append("    }").append(System.lineSeparator());
+            c.append("}").append(System.lineSeparator());
+        }
         c.append("static void javan_register_generated_type_descriptors(void) {").append(System.lineSeparator());
+        c.append("    javan_register_type_assignability(")
+            .append(features.classAssignability() ? "javan_generated_type_assignable" : "(int (*)(int, int)) 0")
+            .append(");").append(System.lineSeparator());
         if (program.classes().isEmpty()) {
             c.append("    javan_register_type_descriptors((JavanTypeDescriptor*) 0, 0);").append(System.lineSeparator());
         } else {
@@ -5816,6 +5841,11 @@ public final class CCodegen {
 
         private boolean methodMetadata() {
             return declaredMethodMetadata() || publicMethodMetadata();
+        }
+
+        private boolean classAssignability() {
+            return methodInvocation() || calls("javan_class_is_instance") || calls("javan_class_is_assignable_from")
+                || calls("javan_class_cast") || calls("javan_method_can_access") || calls("javan_record_shape_validate");
         }
     }
 }

@@ -36,9 +36,47 @@ import static javan.codegen.BytecodeToIR.*;
 
 final class BytecodeToIRMetadataSupport {
     static List<IrClass> lowerClasses(final Map<String, ClassFile> classes) {
+        return lowerClasses(classes, classes.keySet());
+    }
+
+    private static List<IrClass> lowerClasses(final Map<String, ClassFile> classes, final Set<String> retained) {
         final List<IrClass> result = new ArrayList<>();
         final List<ClassFile> sorted = sortedClasses(classes);
+        final Map<String, List<Integer>> assignable = new LinkedHashMap<>();
         for (final ClassFile classFile : sorted) {
+            if (retained.contains(classFile.name())) {
+                assignable.put(classFile.name(), new ArrayList<>());
+            }
+        }
+        for (int index = 0; index < sorted.size(); index++) {
+            if (!retained.contains(sorted.get(index).name())) {
+                continue;
+            }
+            final List<String> hierarchy = new ArrayList<>();
+            final Set<String> visited = new HashSet<>();
+            hierarchy.add(sorted.get(index).name());
+            for (int cursor = 0; cursor < hierarchy.size(); cursor++) {
+                final String name = hierarchy.get(cursor);
+                if (!visited.add(name)) {
+                    continue;
+                }
+                final List<Integer> matches = assignable.get(name);
+                if (matches != null) {
+                    matches.add(index + 1);
+                }
+                final ClassFile classFile = classes.get(name);
+                if (classFile != null) {
+                    if (classFile.superName() != null && !classFile.superName().isEmpty()) {
+                        hierarchy.add(classFile.superName());
+                    }
+                    hierarchy.addAll(classFile.interfaces());
+                }
+            }
+        }
+        for (final ClassFile classFile : sorted) {
+            if (!retained.contains(classFile.name())) {
+                continue;
+            }
             result.add(new IrClass(
                 classFile.name(),
                 classFile.superName() == null ? "" : classFile.superName(),
@@ -48,7 +86,8 @@ final class BytecodeToIRMetadataSupport {
                 enumConstants(classFile),
                 classFile.isEnum(),
                 GeneratedObjectCloneSupport.status(classes, classFile)
-                    == GeneratedObjectCloneSupport.Status.SUPPORTED
+                    == GeneratedObjectCloneSupport.Status.SUPPORTED,
+                assignable.get(classFile.name())
             ));
         }
         return List.copyOf(result);
@@ -470,13 +509,7 @@ final class BytecodeToIRMetadataSupport {
         final Set<String> retained = ClassMetadataReachability.collect(
             classes, callGraph, classInitialization, ReflectionDeclaration.analyze(classes)
         );
-        final Map<String, ClassFile> selected = new LinkedHashMap<>();
-        for (final ClassFile classFile : sortedClasses(classes)) {
-            if (retained.contains(classFile.name())) {
-                selected.put(classFile.name(), classFile);
-            }
-        }
-        return lowerClasses(selected);
+        return lowerClasses(classes, retained);
     }
 
     static Map<String, Integer> retainedTypeIds(

@@ -54,7 +54,8 @@ Closed-world support includes:
 
 - `Class.forName` with one argument or the system/bootstrap loader, compiled class/array
   lookup, optional initialization and once-only initialization failures. Custom loaders remain
-  outside the supported closed world.
+  outside the supported closed world. Dynamically loaded compiled classes use the retained
+  class and interface hierarchy for `isInstance` and `isAssignableFrom`.
 - Declared/public method lookup, supported metadata and access checks, and generated
   application `Method.invoke` with dispatch, supported boxing/widening and wrapped causes.
   Metadata-only platform methods are not automatically invocable.

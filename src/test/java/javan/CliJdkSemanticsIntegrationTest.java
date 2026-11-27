@@ -16661,6 +16661,62 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void dynamicallyLoadedClassRecognizesSubclassAndInterfaceImplementations() throws Exception {
+        final Path project = project("class-for-name-assignability");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) throws Exception {
+                    final Class<?> type = Class.forName(args[0]);
+                    final Child child = new Child();
+                    System.out.println(type.isInstance(child));
+                    System.out.println(type.isAssignableFrom(child.getClass()));
+                    System.out.println(type.isAssignableFrom(Class.forName("com.acme.SubMarker")));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Base", """
+            package com.acme;
+            public class Base { }
+            """);
+        writeJava(project, "com.acme.Marker", """
+            package com.acme;
+            public interface Marker { }
+            """);
+        writeJava(project, "com.acme.Child", """
+            package com.acme;
+            public final class Child extends Base implements SubMarker { }
+            """);
+        writeJava(project, "com.acme.SubMarker", """
+            package com.acme;
+            public interface SubMarker extends Marker { }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final String executable = project.resolve(".javan/bin/class-for-name-assignability").toString();
+        for (final String type : List.of("com.acme.Base", "com.acme.Marker")) {
+            final ProcessResult result = process(project, List.of(executable, type));
+            assertThat(result.exitCode()).as(result.stderr()).isZero();
+            assertThat(result.stdout()).isEqualTo("com.acme.Marker".equals(type)
+                ? "true\ntrue\ntrue\n" : "true\ntrue\nfalse\n");
+        }
+    }
+
+    @Test
+    void programWithoutClassTypeQueriesOmitsAssignabilityTables() throws Exception {
+        final Path project = project("no-class-assignability");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) { System.out.println("ok"); }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        assertThat(generatedProgramSource(project)).doesNotContain("javan_generated_type_assignable");
+    }
+
+    @Test
     void classForNameLiteralRetainsMethodMetadataForTheTarget() throws Exception {
         final Path project = project("class-for-name-literal-method");
         writeJava(project, "com.acme.Target", """

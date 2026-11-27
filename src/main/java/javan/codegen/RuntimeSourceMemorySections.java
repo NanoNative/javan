@@ -662,6 +662,8 @@ final class RuntimeSourceMemorySections {
         static unsigned long javan_adaptive_gc_next_allocations = JAVAN_ADAPTIVE_GC_MIN_ALLOCATIONS;
         static JavanTypeDescriptor* javan_type_descriptors_value = NULL;
         static int javan_type_descriptor_count_value = 0;
+        typedef int (*javan_type_assignability_fn)(int, int);
+        static _Atomic(javan_type_assignability_fn) javan_type_assignability = NULL;
         static int (*javan_record_object_equals_resolver_value)(void*, void*) = NULL;
         static int (*javan_record_object_hash_code_resolver_value)(void*) = NULL;
         static int (*javan_record_exact_type_resolver_value)(void*, int) = NULL;
@@ -1519,6 +1521,10 @@ final class RuntimeSourceMemorySections {
             javan_type_descriptor_count_value = count;
             javan_heap_maybe_validate();
             javan_runtime_lock_leave();
+        }
+
+        void javan_register_type_assignability(int (*resolver)(int, int)) {
+            atomic_store_explicit(&javan_type_assignability, resolver, memory_order_release);
         }
 
         void javan_register_record_object_method_resolvers(
@@ -4562,6 +4568,10 @@ final class RuntimeSourceMemorySections {
                 if (state->assignable_type_ids[index] == type_id) {
                     return 1;
                 }
+            }
+            javan_type_assignability_fn resolver = atomic_load_explicit(&javan_type_assignability, memory_order_acquire);
+            if (state->exact_type_id > 0 && resolver != NULL) {
+                return resolver(state->exact_type_id, type_id);
             }
             return 0;
         }
