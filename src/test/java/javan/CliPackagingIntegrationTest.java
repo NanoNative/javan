@@ -436,6 +436,34 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanEnablesPrivateConstructorAccess() throws Exception {
+        final Path project = project("selfhost-constructor-access");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) throws Exception {
+                    var constructor = Target.class.getDeclaredConstructor();
+                    System.out.println(constructor.canAccess(null));
+                    System.out.println(constructor.trySetAccessible());
+                    System.out.println(((Target) constructor.newInstance()).message());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target {
+                private Target() { }
+                public String message() { return "opened"; }
+            }
+            """);
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/selfhost-constructor-access").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("false\ntrue\nopened\n");
+    }
+
+    @Test
     void nativeBuiltJavanReadsConstructorParameterMetadata() throws Exception {
         final Path project = project("selfhost-constructor-metadata");
         writeJava(project, "com.acme.Main", """

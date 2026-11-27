@@ -117,6 +117,8 @@ together with inline parameter literals, is retained automatically even with an 
 `getConstructor` selects only public constructors, even when non-public constructors are declared.
 Constructor metadata supports `getDeclaringClass`, `getParameterCount`, `getParameterTypes`
 and `getModifiers`. Each `getParameterTypes` call returns a fresh array.
+Constructor `canAccess`, `setAccessible`, `trySetAccessible` and `isAccessible` use the same
+closed-world access checks as invocation, including rejection of non-null `canAccess` targets.
 Local targets across branches or exception handlers remain conservative.
 With a declaration, other dynamic targets require a declared constructor. Without one,
 unresolved constructor lookups retain the parsed world conservatively. Platform constructor

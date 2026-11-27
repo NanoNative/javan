@@ -4945,6 +4945,7 @@ final class BytecodeToIRInvokeSupport {
 
     private static boolean methodAccessCall(final MethodRef methodRef) {
         if (!"java/lang/reflect/Method".equals(methodRef.owner())
+            && !"java/lang/reflect/Constructor".equals(methodRef.owner())
             && !"java/lang/reflect/AccessibleObject".equals(methodRef.owner())) {
             return false;
         }

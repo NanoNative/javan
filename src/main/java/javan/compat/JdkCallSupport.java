@@ -204,6 +204,10 @@ public final class JdkCallSupport {
         ),
         runtime("Method.getReturnType", "java/lang/reflect/Method", "getReturnType", "()Ljava/lang/Class;"),
         runtime("Method.getModifiers", "java/lang/reflect/Method", "getModifiers", "()I"),
+        runtime("Constructor.canAccess", "java/lang/reflect/Constructor", "canAccess", "(Ljava/lang/Object;)Z"),
+        runtime("Constructor.setAccessible", "java/lang/reflect/Constructor", "setAccessible", "(Z)V"),
+        runtime("Constructor.trySetAccessible", "java/lang/reflect/Constructor", "trySetAccessible", "()Z"),
+        runtime("Constructor.isAccessible", "java/lang/reflect/Constructor", "isAccessible", "()Z"),
         runtime("Method.canAccess", "java/lang/reflect/Method", "canAccess", "(Ljava/lang/Object;)Z"),
         runtime("Method.setAccessible", "java/lang/reflect/Method", "setAccessible", "(Z)V"),
         runtime("Method.trySetAccessible", "java/lang/reflect/Method", "trySetAccessible", "()Z"),
@@ -3039,6 +3043,7 @@ public final class JdkCallSupport {
 
     private static boolean methodAccessOwner(final MethodRef methodRef) {
         return "java/lang/reflect/Method".equals(methodRef.owner())
+            || "java/lang/reflect/Constructor".equals(methodRef.owner())
             || "java/lang/reflect/AccessibleObject".equals(methodRef.owner());
     }
 
