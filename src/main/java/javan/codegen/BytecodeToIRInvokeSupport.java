@@ -4712,7 +4712,9 @@ final class BytecodeToIRInvokeSupport {
             );
         }
         if ("java/lang/reflect/Method".equals(methodRef.owner())
-            || "java/lang/reflect/Constructor".equals(methodRef.owner())) {
+            || "java/lang/reflect/Constructor".equals(methodRef.owner())
+            || "java/lang/reflect/Executable".equals(methodRef.owner())
+            || "java/lang/reflect/Member".equals(methodRef.owner())) {
             final String runtimeHelper = methodMetadataRuntimeHelper(methodRef);
             if (runtimeHelper == null) {
                 return false;

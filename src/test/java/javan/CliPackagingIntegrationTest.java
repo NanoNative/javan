@@ -436,6 +436,30 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanReadsExecutableAndMemberMetadata() throws Exception {
+        final Path project = project("selfhost-executable-member");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.Executable;
+            import java.lang.reflect.Member;
+            public final class Main {
+                public static void main(String[] args) throws Exception {
+                    Executable constructor = Target.class.getConstructor(String.class);
+                    Member member = constructor;
+                    System.out.println(member.getName());
+                    System.out.println(constructor.getParameterTypes()[0].getName());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", "package com.acme; public final class Target { public Target(String value) { } }");
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/selfhost-executable-member").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("com.acme.Target\njava.lang.String\n");
+    }
+
+    @Test
     void nativeBuiltJavanEnablesPrivateConstructorAccess() throws Exception {
         final Path project = project("selfhost-constructor-access");
         writeJava(project, "com.acme.Main", """

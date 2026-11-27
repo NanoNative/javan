@@ -119,6 +119,8 @@ Constructor metadata supports `getName`, `getDeclaringClass`, `getParameterCount
 and `getModifiers`. Each `getParameterTypes` call returns a fresh array.
 Constructor `canAccess`, `setAccessible`, `trySetAccessible` and `isAccessible` use the same
 closed-world access checks as invocation, including rejection of non-null `canAccess` targets.
+The shared `Executable` and `Member` metadata accessors work for compiled Method and Constructor
+objects. Field reflection remains outside this subset.
 Local targets across branches or exception handlers remain conservative.
 With a declaration, other dynamic targets require a declared constructor. Without one,
 unresolved constructor lookups retain the parsed world conservatively. Platform constructor

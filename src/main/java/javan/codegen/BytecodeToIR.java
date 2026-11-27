@@ -2493,7 +2493,8 @@ public final class BytecodeToIR {
                 );
                 break;
             case 185:
-                if (instruction.methodRef().filter(JdkCallSupport::isSecureRandomSupertypeCall).isPresent()) {
+                if (instruction.methodRef().filter(target -> JdkCallSupport.isSecureRandomSupertypeCall(target)
+                    || "java/lang/reflect/Member".equals(target.owner()) && JdkCallSupport.isSupported(target)).isPresent()) {
                     BytecodeToIRInvokeSupport.lowerVirtualCall(
                         classes, classFile, method, instruction, instructions, stack, localDeclarations,
                         pendingExceptionHandlerStacks, dispatches, materializedLambdaMethods, functionValueFlow,

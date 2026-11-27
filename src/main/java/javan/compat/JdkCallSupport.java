@@ -184,6 +184,14 @@ public final class JdkCallSupport {
             "([Ljava/lang/Class;)Ljava/lang/reflect/Constructor;"),
         runtime("Constructor.newInstance", "java/lang/reflect/Constructor", "newInstance",
             "([Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("Executable.getName", "java/lang/reflect/Executable", "getName", "()Ljava/lang/String;"),
+        runtime("Executable.getDeclaringClass", "java/lang/reflect/Executable", "getDeclaringClass", "()Ljava/lang/Class;"),
+        runtime("Executable.getModifiers", "java/lang/reflect/Executable", "getModifiers", "()I"),
+        runtime("Executable.getParameterCount", "java/lang/reflect/Executable", "getParameterCount", "()I"),
+        runtime("Executable.getParameterTypes", "java/lang/reflect/Executable", "getParameterTypes", "()[Ljava/lang/Class;"),
+        runtime("Member.getName", "java/lang/reflect/Member", "getName", "()Ljava/lang/String;"),
+        runtime("Member.getDeclaringClass", "java/lang/reflect/Member", "getDeclaringClass", "()Ljava/lang/Class;"),
+        runtime("Member.getModifiers", "java/lang/reflect/Member", "getModifiers", "()I"),
         runtime("Constructor.getName", "java/lang/reflect/Constructor", "getName", "()Ljava/lang/String;"),
         runtime("Constructor.getDeclaringClass", "java/lang/reflect/Constructor", "getDeclaringClass", "()Ljava/lang/Class;"),
         runtime("Constructor.getParameterCount", "java/lang/reflect/Constructor", "getParameterCount", "()I"),
@@ -1858,6 +1866,7 @@ public final class JdkCallSupport {
             return List.of("reflection-metadata");
         }
         if ("java/lang/reflect/Method".equals(owner) || "java/lang/reflect/Constructor".equals(owner)
+            || "java/lang/reflect/Executable".equals(owner) || "java/lang/reflect/Member".equals(owner)
             || "java/lang/reflect/AccessibleObject".equals(owner)) {
             return List.of("reflection-metadata");
         }
@@ -3030,7 +3039,9 @@ public final class JdkCallSupport {
     private static boolean methodMetadataAccessor(final MethodRef methodRef) {
         final boolean method = "java/lang/reflect/Method".equals(methodRef.owner());
         final boolean constructor = "java/lang/reflect/Constructor".equals(methodRef.owner());
-        if (!method && !constructor) {
+        final boolean executable = "java/lang/reflect/Executable".equals(methodRef.owner());
+        final boolean member = "java/lang/reflect/Member".equals(methodRef.owner());
+        if (!method && !constructor && !executable && !member) {
             return false;
         }
         return "getName".equals(methodRef.name()) && "()Ljava/lang/String;".equals(methodRef.descriptor())
