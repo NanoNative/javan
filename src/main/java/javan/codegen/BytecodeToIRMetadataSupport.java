@@ -5,6 +5,7 @@ import javan.analysis.ClassInitializationGraph;
 import javan.analysis.EntryPoint;
 import javan.analysis.GeneratedObjectCloneSupport;
 import javan.analysis.ReachabilityAnalyzer;
+import javan.analysis.ReflectionDeclaration;
 import javan.classfile.ClassFile;
 import javan.classfile.ClassFileScanner;
 import javan.classfile.CodeAttribute;
@@ -472,6 +473,9 @@ final class BytecodeToIRMetadataSupport {
             return lowerClasses(classes);
         }
         final Set<String> retained = new HashSet<>();
+        for (final String declared : ReflectionDeclaration.analyze(classes).classes()) {
+            addClass(classes, retained, declared);
+        }
         for (final EntryPoint entryPoint : callGraph.reachableMethods()) {
             if (isClassForName(entryPoint.className(), entryPoint.methodName(), entryPoint.descriptor())) {
                 return lowerClasses(classes);

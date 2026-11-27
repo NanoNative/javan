@@ -4,6 +4,7 @@ import javan.analysis.CallGraph;
 import javan.analysis.ClassInitializationGraph;
 import javan.analysis.EntryPoint;
 import javan.analysis.ReachabilityAnalyzer;
+import javan.analysis.ReflectionDeclaration;
 import javan.build.BindingGenerator;
 import javan.build.BuildKind;
 import javan.build.BuildInvoker;
@@ -197,6 +198,7 @@ public final class Javan {
             );
         }
         final List<Diagnostic> diagnostics = new ArrayList<>(mainDetection.diagnostics());
+        diagnostics.addAll(ReflectionDeclaration.analyze(classes).diagnostics());
         diagnostics.addAll(services.diagnostics());
         diagnostics.addAll(callGraph.diagnostics());
         instantiatedTypeReports.write(layout.outputDirectory(), callGraph.instantiatedTypes());
@@ -507,6 +509,7 @@ public final class Javan {
         final String mainClass = mainClassDetector.detect(options.mainClass(), classes);
         final CallGraph callGraph = reachabilityAnalyzer.analyze(classes, mainClass);
         final List<Diagnostic> diagnostics = new ArrayList<>(callGraph.diagnostics());
+        diagnostics.addAll(ReflectionDeclaration.analyze(classes).diagnostics());
         diagnostics.addAll(staticVerifier.verify(classes, callGraph.reachableMethods()));
         diagnostics.addAll(dependencyReports.write(layout, classes, callGraph).diagnostics());
         reports.writeDiagnostics(layout, diagnostics, classes, callGraph);

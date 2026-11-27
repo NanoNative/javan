@@ -16691,6 +16691,151 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void publicReflectionDeclarationRetainsOnlyDeclaredClassMetadataWithoutRunningIt() throws Exception {
+        final Path project = project("declared-reflection-class");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) { System.out.println("main"); }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target extends Base { }
+            """);
+        writeJava(project, "com.acme.Base", """
+            package com.acme;
+            public class Base { }
+            """);
+        writeJava(project, "com.acme.Unrelated", """
+            package com.acme;
+            public final class Unrelated { }
+            """);
+        writeJava(project, "com.acme.Registry", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Registry {
+                static { System.out.println("registry initialized"); }
+                public static AnnotatedElement[] javanReflectionTargets() {
+                    return new AnnotatedElement[] {Target.class};
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        assertThat(build.stdout()).doesNotContain("registry initialized");
+        assertThat(generatedProgramSource(project))
+            .contains("javan_class_com_acme_Target")
+            .contains("javan_class_com_acme_Base")
+            .doesNotContain("javan_class_com_acme_Unrelated");
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/declared-reflection-class").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("main\n");
+        writeJava(project, "com.acme.VerifyRegistry", """
+            package com.acme;
+            public final class VerifyRegistry {
+                public static void main(String[] args) {
+                    System.out.println(Registry.javanReflectionTargets()[0] == Target.class);
+                }
+            }
+            """);
+        assertThat(runJvm(project, "com.acme.VerifyRegistry")).isEqualTo("registry initialized\ntrue\n");
+    }
+
+    @Test
+    void reflectionDeclarationRejectsComputedTargets() throws Exception {
+        final Path project = project("invalid-reflection-declaration");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static void main(String[] args) { }
+                public static AnnotatedElement[] javanReflectionTargets() {
+                    return selected();
+                }
+                static AnnotatedElement[] selected() { return new AnnotatedElement[] {Main.class}; }
+            }
+            """);
+        final CliRun first = run(tempDir, "check", project.toString());
+        final CliRun second = run(tempDir, "check", project.toString());
+        assertThat(first.exitCode()).isEqualTo(2);
+        assertThat(first.stderr()).contains("JAVAN179", "javanReflectionTargets");
+        assertThat(second.exitCode()).isEqualTo(first.exitCode());
+        assertThat(second.stderr()).isEqualTo(first.stderr());
+    }
+
+    @Test
+    void reflectionDeclarationRejectsMoreThanOneProjectDeclaration() throws Exception {
+        final Path project = project("duplicate-reflection-declaration");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static void main(String[] args) { }
+                public static AnnotatedElement[] javanReflectionTargets() { return new AnnotatedElement[0]; }
+            }
+            """);
+        writeJava(project, "com.acme.Registry", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Registry {
+                public static AnnotatedElement[] javanReflectionTargets() { return new AnnotatedElement[0]; }
+            }
+            """);
+        final CliRun result = run(tempDir, "check", project.toString());
+        assertThat(result.exitCode()).isEqualTo(2);
+        assertThat(result.stderr()).contains("JAVAN179", "Only one declaration");
+    }
+
+    @Test
+    void reflectionDeclarationAcceptsAnEmptyPublicArray() throws Exception {
+        final Path project = project("empty-reflection-declaration");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static void main(String[] args) { }
+                public static AnnotatedElement[] javanReflectionTargets() { return new AnnotatedElement[0]; }
+            }
+            """);
+        final CliRun result = run(tempDir, "check", project.toString());
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+    }
+
+    @Test
+    void declaredClassCanBeLoadedFromRuntimeInputAndUnknownClassFails() throws Exception {
+        final Path project = project("declared-dynamic-class");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() {
+                    return new AnnotatedElement[] {Target.class};
+                }
+                public static void main(String[] args) {
+                    final String name = args[0];
+                    try { System.out.println(Class.forName(name).getName()); }
+                    catch (ClassNotFoundException missing) { System.out.println("missing"); }
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target { static { System.out.println("initialized"); } }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        assertThat(build.stdout()).doesNotContain("initialized");
+        final String executable = project.resolve(".javan/bin/declared-dynamic-class").toString();
+        final ProcessResult known = process(project, List.of(executable, "com.acme.Target"));
+        assertThat(known.exitCode()).as(known.stderr()).isZero();
+        assertThat(known.stdout()).isEqualTo("initialized\ncom.acme.Target\n");
+        final ProcessResult missing = process(project, List.of(executable, "com.acme.Missing"));
+        assertThat(missing.exitCode()).as(missing.stderr()).isZero();
+        assertThat(missing.stdout()).isEqualTo("missing\n");
+    }
+
+    @Test
     void classForNameFindsClosedWorldClassInitializesOnceAndMatchesJvmFailures() throws Exception {
         final Path project = project("class-for-name");
         writeJava(project, "com.acme.Plugin", """

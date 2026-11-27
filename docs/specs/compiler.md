@@ -32,7 +32,7 @@ its contract instead of requiring identical values from separate executions.
 | COMP-003 | Unsupported reachable behavior MUST produce a deterministic diagnostic with its location, reason and actionable boundary; native linking must not be the first unsupported-feature detector. |
 | COMP-004 | Closed-world reachability MUST retain every constructible receiver and explicit entrypoint; unknown receiver facts MUST remain conservative. |
 | COMP-005 | Application initialization MUST remain lazy runtime work. Compiling an application MUST NOT execute its initializers or capture runtime entropy, clocks or environment as application state. |
-| COMP-006 | Supported reflection, resource and service discovery MUST resolve from the compiled world automatically, without user-maintained registration lists. Behavior outside that world MUST be reported explicitly. |
+| COMP-006 | Supported reflection, resource and service discovery MUST resolve from the compiled world automatically where analysis proves the targets. Reflection targets that cannot be proven MAY be declared by the application. Behavior outside that world MUST be reported explicitly. |
 | COMP-007 | Reports MUST distinguish proven reachable edges, findings and unsupported scope. Unknown behavior MUST NOT be presented as a proven edge or supported callable. |
 | DIST-001 | The distributed executable MUST consume normal Java outputs through the same CLI and reports as the development build. |
 
@@ -64,6 +64,25 @@ Closed-world support includes:
 - Services from `META-INF/services` and module declarations, lazy cached provider construction,
   supported provider factories, iteration, `findFirst` and `reload`. `loadInstalled` uses the
   platform view. Dynamic loader discovery and provider streams are not implied.
+
+Reflection fallback: a project may define one public static method named
+`javanReflectionTargets` on a public application class. The method returns
+`java.lang.reflect.AnnotatedElement[]` and can be called by JVM tests. Javan reads its
+bytecode without executing the method or initializing its declaring class. The first
+supported shape is a directly returned array of class literals from the compiled application
+or its scanned dependencies:
+
+```java
+public static java.lang.reflect.AnnotatedElement[] javanReflectionTargets() {
+    return new java.lang.reflect.AnnotatedElement[] { Plugin.class };
+}
+```
+
+The named classes and required hierarchies are retained. An empty array is valid. Duplicate
+declarations, different signatures and computed or unsupported elements produce `JAVAN179`.
+Member declarations, including `getDeclaredMethod`, are not implemented yet. Unknown dynamic
+`Class.forName` targets remain conservative over the parsed world, even when a declaration
+exists. Automatically proven targets remain available without the declaration.
 
 Direct `new Object()` creates a distinct managed instance with `java.lang.Object` class metadata.
 `Object.equals` dispatches statically reachable application overrides and supports default identity,

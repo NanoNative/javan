@@ -293,6 +293,48 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanReadsPublicReflectionDeclaration() throws Exception {
+        final Path project = project("selfhost-reflection-declaration");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static void main(String[] args) { System.out.println("main"); }
+                public static AnnotatedElement[] javanReflectionTargets() {
+                    return new AnnotatedElement[] {Target.class};
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target { }
+            """);
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        assertThat(generatedProgramSource(project)).contains("javan_class_com_acme_Target");
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/selfhost-reflection-declaration").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo("main\n");
+    }
+
+    @Test
+    void nativeBuiltJavanRejectsComputedReflectionDeclarations() throws Exception {
+        final Path project = project("selfhost-invalid-reflection-declaration");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static void main(String[] args) { }
+                public static AnnotatedElement[] javanReflectionTargets() { return computed(); }
+                static AnnotatedElement[] computed() { return new AnnotatedElement[] {Main.class}; }
+            }
+            """);
+        final ProcessResult check = process(project, List.of(primitiveLiteralBootstrap.toString(), "check", project.toString()));
+        assertThat(check.exitCode()).isEqualTo(2);
+        assertThat(check.stderr()).contains("JAVAN179", "javanReflectionTargets");
+    }
+
+    @Test
     void nativeBuiltJavanTracksInheritedInterfaceArguments() throws Exception {
         final Path project = tempDir.resolve("selfhost-inherited-interface-query");
         final Path classes = project.resolve("classes");
