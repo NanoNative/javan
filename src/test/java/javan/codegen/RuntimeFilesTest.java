@@ -7580,9 +7580,9 @@ final class RuntimeFilesTest {
             "void** javan_map_copy_roots[] = {",
             "javan_root_frame_push(javan_map_copy_roots, 1);",
             "javan_root_frame_pop(javan_map_copy_roots);",
-            "void** javan_map_values_roots[] = {",
-            "javan_root_frame_push(javan_map_values_roots, 1);",
-            "javan_root_frame_pop(javan_map_values_roots);"
+            "void** javan_map_view_roots[] = { (void**) &map };",
+            "javan_root_frame_push(javan_map_view_roots, 1);",
+            "javan_root_frame_pop(javan_map_view_roots);"
         );
     }
 

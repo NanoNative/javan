@@ -16209,15 +16209,15 @@ final class RuntimeSourceMemorySections {
 
         static void* javan_map_view_unlocked(void* value, int flags) {
             javan_object_map* map = javan_map_checked(value);
-            void** roots[] = { (void**) &map };
-            javan_root_frame_push(roots, 1);
+            void** javan_map_view_roots[] = { (void**) &map };
+            javan_root_frame_push(javan_map_view_roots, 1);
             javan_object_list* view = javan_list_new_with_capacity(0, 0);
             view->view_flags = flags;
             if ((flags & JAVAN_LIST_VIEW_MAP_ENTRIES) == 0 && javan_map_rejects_null_query(map) != 0) {
                 view->view_flags |= JAVAN_LIST_REJECT_NULL_SEARCH;
             }
             view->backing = (javan_object_list*) map;
-            javan_root_frame_pop(roots);
+            javan_root_frame_pop(javan_map_view_roots);
             return view;
         }
 
