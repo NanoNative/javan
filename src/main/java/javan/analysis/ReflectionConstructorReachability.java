@@ -67,7 +67,38 @@ public final class ReflectionConstructorReachability {
                     ordered &= indexes.get(position).intValue() == indexes.size() - position - 1;
                 }
                 if (!ordered) continue;
-                final Instruction receiver = code.get(cursor - 2);
+                int receiverIndex = cursor - 2;
+                Instruction receiver = code.get(receiverIndex);
+                if (receiver.opcode() >= 25 && receiver.opcode() <= 45
+                    && method.orElseThrow().code().orElseThrow().exceptionTable().isEmpty()) {
+                    boolean straightLine = true;
+                    for (final Instruction instruction : code) {
+                        final int opcode = instruction.opcode();
+                        if (opcode >= 153 && opcode <= 171 || opcode == 196 || opcode >= 198 && opcode <= 201) {
+                            straightLine = false;
+                            break;
+                        }
+                    }
+                    while (straightLine && receiverIndex > 0) {
+                        final int opcode = receiver.opcode();
+                        final int local = opcode == 25 && receiver.operands().length == 1
+                            ? receiver.operands()[0] & 0xff
+                            : opcode >= 42 && opcode <= 45 ? opcode - 42 : -1;
+                        if (local < 0) break;
+                        int store = receiverIndex - 1;
+                        for (; store >= 0; store--) {
+                            final Instruction candidate = code.get(store);
+                            final int candidateOpcode = candidate.opcode();
+                            final int stored = candidateOpcode == 58 && candidate.operands().length == 1
+                                ? candidate.operands()[0] & 0xff
+                                : candidateOpcode >= 75 && candidateOpcode <= 78 ? candidateOpcode - 75 : -1;
+                            if (stored == local) break;
+                        }
+                        if (store <= 0) break;
+                        receiverIndex = store - 1;
+                        receiver = code.get(receiverIndex);
+                    }
+                }
                 final Optional<String> targetName;
                 if (receiver.opcode() == 18 || receiver.opcode() == 19) {
                     targetName = receiver.className();

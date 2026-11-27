@@ -436,6 +436,35 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanFollowsLocalClassNameToConstructor() throws Exception {
+        final Path project = project("selfhost-local-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() { return new AnnotatedElement[0]; }
+                public static void main(String[] args) throws Exception {
+                    Class<?> type = Class.forName("com.acme.Target");
+                    Class<?> alias = type;
+                    System.out.println(((Target) alias.getDeclaredConstructor().newInstance()).message());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target {
+                public Target() { }
+                public String message() { return "known"; }
+            }
+            """);
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/selfhost-local-constructor").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("known\n");
+    }
+
+    @Test
     void nativeBuiltJavanPreservesRecordEqualityInSetOperations() throws Exception {
         final Path project = project("selfhost-set-record-equality");
         writeJava(project, "com.acme.Main", """
