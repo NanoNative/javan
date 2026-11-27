@@ -301,6 +301,11 @@ supported when each value-producing branch assigns it at its exit. Partially ini
 are rejected during lowering. Some nested expressions that combine an earlier operand with a
 conditional also remain unsupported and fail during lowering. Within supported control-flow
 shapes, an earlier static-field read is preserved across later calls, writes and class initialization.
+A typed handler can protect an inline `Map.ofEntries` expression when each entry is created by
+`Map.entry` from simple arguments and stored at its proven index in the fresh array. Supported
+application constructors and key callbacks propagate exceptions through the handler. Array
+accesses whose safety cannot be proven retain the existing `JAVAN014` boundary.
+
 Nested conditionals inside a local exception handler remain limited to the verifier's supported
 handler shapes and otherwise fail with `JAVAN014`.
 Within supported handler shapes, `String.charAt`, `codePointAt`, `codePointBefore`,

@@ -734,6 +734,26 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanCatchesInlineMapEntryFailures() throws Exception {
+        final Path project = project("selfhost-map-entry-inline-handler");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Map;
+            public final class Main {
+                public static void main(String[] args) {
+                    try { Map.ofEntries(Map.entry("same", "one"), Map.entry("same", "two")); }
+                    catch (IllegalArgumentException expected) { System.out.println("duplicate"); }
+                }
+            }
+            """);
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/selfhost-map-entry-inline-handler").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("duplicate\n");
+    }
+
+    @Test
     void nativeBuiltJavanUsesKnownCustomKeysInMapOfEntries() throws Exception {
         final Path project = project("selfhost-map-ofentries-custom-keys");
         writeJava(project, "com.acme.Main", """

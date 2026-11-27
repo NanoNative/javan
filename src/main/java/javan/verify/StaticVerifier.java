@@ -1965,6 +1965,78 @@ public final class StaticVerifier {
         return cursor;
     }
 
+    private static Set<Integer> boundedInlineMapEntryArrayOperations(final CodeAttribute code, final CodeException handler) {
+        final List<Instruction> instructions = code.instructions();
+        final Set<Integer> result = new HashSet<>();
+        for (int allocationIndex = 1; allocationIndex < instructions.size(); allocationIndex++) {
+            final Instruction allocation = instructions.get(allocationIndex);
+            if (allocation.opcode() != 189 || !"java/util/Map$Entry".equals(allocation.className().orElse(""))
+                || allocation.offset() < handler.startPc() || allocation.offset() >= handler.endPc()) continue;
+            final Instruction size = instructions.get(allocationIndex - 1);
+            final int length = size.intValue().orElse(-1);
+            if (length < 0 || size.offset() < handler.startPc()) continue;
+            int cursor = allocationIndex + 1;
+            final Set<Integer> candidate = new HashSet<>();
+            candidate.add(Integer.valueOf(allocation.offset()));
+            boolean valid = true;
+            for (int index = 0; index < length; index++) {
+                if (cursor + 1 >= instructions.size() || instructions.get(cursor).opcode() != 89
+                    || instructions.get(cursor + 1).intValue().orElse(-1) != index) {
+                    valid = false;
+                    break;
+                }
+                cursor += 2;
+                cursor = boundedInlineMapEntryArgumentEnd(instructions, cursor);
+                if (cursor < 0) { valid = false; break; }
+                cursor = boundedInlineMapEntryArgumentEnd(instructions, cursor);
+                if (cursor < 0 || cursor + 1 >= instructions.size()) { valid = false; break; }
+                final Instruction entry = instructions.get(cursor++);
+                final Instruction store = instructions.get(cursor++);
+                if (entry.opcode() != 184 || entry.methodRef().isEmpty()
+                    || !JdkCallSupport.isMapSingleEntryFactory(entry.methodRef().orElseThrow())
+                    || !"entry".equals(entry.methodRef().orElseThrow().name()) || store.opcode() != 83) {
+                    valid = false;
+                    break;
+                }
+                candidate.add(Integer.valueOf(entry.offset()));
+                candidate.add(Integer.valueOf(store.offset()));
+            }
+            if (!valid || cursor >= instructions.size()) continue;
+            final Instruction call = instructions.get(cursor);
+            if (call.offset() >= handler.endPc() || call.opcode() != 184 || call.methodRef().isEmpty()
+                || !JdkCallSupport.isMapEntryArrayFactory(call.methodRef().orElseThrow())
+                || hasControlFlowEntryInExpression(instructions, allocationIndex, cursor - 1)) continue;
+            boolean handlerInside = false;
+            for (final CodeException exception : code.exceptionTable()) {
+                if (exception.handlerPc() >= allocation.offset() && exception.handlerPc() < call.offset()) handlerInside = true;
+            }
+            if (!handlerInside) result.addAll(candidate);
+        }
+        return result;
+    }
+
+    private static int boundedInlineMapEntryArgumentEnd(final List<Instruction> instructions, final int start) {
+        if (start < 0 || start >= instructions.size()) return -1;
+        final Instruction value = instructions.get(start);
+        if (boundedInlineMapEntrySimpleValue(value)) return start + 1;
+        if (value.opcode() != 187 || value.className().isEmpty() || start + 2 >= instructions.size()
+            || instructions.get(start + 1).opcode() != 89) return -1;
+        int cursor = start + 2;
+        while (cursor < instructions.size() && boundedInlineMapEntrySimpleValue(instructions.get(cursor))) cursor++;
+        if (cursor >= instructions.size()) return -1;
+        final Instruction constructor = instructions.get(cursor);
+        if (constructor.opcode() != 183 || constructor.methodRef().isEmpty()) return -1;
+        final MethodRef target = constructor.methodRef().orElseThrow();
+        if (!"<init>".equals(target.name()) || !value.className().orElseThrow().equals(target.owner())
+            || MethodDescriptor.parse(target.descriptor()).parameterTypes().size() != cursor - start - 2) return -1;
+        return cursor + 1;
+    }
+
+    private static boolean boundedInlineMapEntrySimpleValue(final Instruction instruction) {
+        final int opcode = instruction.opcode();
+        return opcode >= 1 && opcode <= 45;
+    }
+
     private static boolean supportedBoundedProtectedInstruction(
         final Map<String, ClassFile> classes,
         final MethodInfo method,
@@ -2176,6 +2248,7 @@ public final class StaticVerifier {
         boolean typedOperation = false;
         final List<Instruction> instructions = code.instructions();
         final boolean reflectiveInvocationRange = containsMethodInvocation(instructions, handler);
+        Set<Integer> inlineEntryArrayOperations = null;
         final Optional<Instruction> protectedEntry = instructionAtOffset(code, handler.startPc());
         final boolean staticReceiverRange = protectedEntry.isPresent()
             && sameClassStaticRead(classes, currentOwner, code, handler, protectedEntry.orElseThrow());
@@ -2194,6 +2267,10 @@ public final class StaticVerifier {
                 if (factoryIndex >= 0) {
                     instructionIndex = factoryIndex - 1;
                     continue;
+                }
+                if (inlineEntryArrayOperations == null
+                    && "java/util/Map$Entry".equals(instruction.className().orElse(""))) {
+                    inlineEntryArrayOperations = boundedInlineMapEntryArrayOperations(code, handler);
                 }
             }
             if (instruction.methodRef().isPresent()) {
@@ -2280,7 +2357,8 @@ public final class StaticVerifier {
                 freshCharacterArrayLength = freshCharacterArrayLength && isolated;
                 classNameAfterLookup = classNameAfterLookup && isolated;
             }
-            if (!supportedInterruptedWaitProtectedInstruction(instruction)
+            if ((inlineEntryArrayOperations == null || !inlineEntryArrayOperations.contains(Integer.valueOf(instruction.offset())))
+                && !supportedInterruptedWaitProtectedInstruction(instruction)
                 && !(staticReceiverRange && instruction.offset() == handler.startPc())
                 && !(staticReceiverRange && sameClassStaticArgumentCall(classes, currentOwner, instruction))
                 && !classNameAfterLookup
@@ -3399,6 +3477,11 @@ public final class StaticVerifier {
     private static boolean staticallyNonThrowingGeneratedMethod(final MethodInfo method) {
         for (final Instruction instruction : method.code().orElseThrow().instructions()) {
             final int opcode = instruction.opcode();
+            if (opcode == 183 && instruction.methodRef().isPresent()) {
+                final MethodRef target = instruction.methodRef().orElseThrow();
+                if ("java/lang/Object".equals(target.owner()) && "<init>".equals(target.name())
+                    && "()V".equals(target.descriptor())) continue;
+            }
             if (opcode == 0 || opcode == 1 || (opcode >= 2 && opcode <= 20)
                 || (opcode >= 21 && opcode <= 45) || (opcode >= 54 && opcode <= 78)
                 || (opcode >= 87 && opcode <= 95) || (opcode >= 116 && opcode <= 152)
