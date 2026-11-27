@@ -1473,6 +1473,18 @@ public final class ReachabilityAnalyzer {
             enqueueAll(work, workSet, targetMethods);
             addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
         }
+        if (JdkCallSupport.isMapKeyOperation(target)) {
+            final List<EntryPoint> recordMethods = new ArrayList<>();
+            for (final EntryPoint equality : dispatchTargets.collectionTargets(current, instruction)) {
+                final ClassFile owner = classes.get(equality.className());
+                if (owner != null && RecordMapKeySupport.isSafe(owner)) {
+                    recordMethods.add(entryPoints.entry(owner.name(), "equals", "(Ljava/lang/Object;)Z"));
+                    recordMethods.add(entryPoints.entry(owner.name(), "hashCode", "()I"));
+                }
+            }
+            enqueueAll(work, workSet, recordMethods);
+            addEdges(callEdges, current, recordMethods, CallEdge.Kind.CALL);
+        }
         if (isJdkCall(target) || NetworkApiSupport.isNetworkCall(target)) {
             return;
         }

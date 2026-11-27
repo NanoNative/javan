@@ -7,6 +7,7 @@ import javan.analysis.CMethodSymbols;
 import javan.analysis.EntryPoint;
 import javan.analysis.FunctionValueFlow;
 import javan.analysis.InstantiatedTypeAnalysis;
+import javan.analysis.RecordMapKeySupport;
 import javan.analysis.ThrowableReturnAnalysis;
 import javan.build.NativeInteropConfig;
 import javan.classfile.ClassFile;
@@ -55,6 +56,8 @@ import java.util.Set;
 public final class BytecodeToIR {
     static final String COLLECTION_EQUALS_DISPATCH = "javan_dispatch_collection_equals";
     static final String UNAVAILABLE_COLLECTION_EQUALS = "javan_unavailable_collection_equals";
+    static final String MAP_RECORD_EQUALS_DISPATCH = "javan_dispatch_map_record_equals";
+    static final String MAP_RECORD_HASH_DISPATCH = "javan_dispatch_map_record_hash";
     static final int TYPE_JAVA_LANG_INTEGER = -1001;
     static final int TYPE_JAVA_LANG_LONG = -1002;
     static final int TYPE_JAVA_LANG_FLOAT = -1003;
@@ -290,6 +293,28 @@ public final class BytecodeToIR {
                     new IrDispatch(dispatch.symbol(), dispatch.returnType(), dispatch.parameters(), List.copyOf(allTargets)));
             }
         }
+        if (usesMapRecordKeys(classes, reachableMethods)) {
+            final Set<String> reachable = new LinkedHashSet<>();
+            for (final EntryPoint method : reachableMethods) reachable.add(method.display());
+            final List<EntryPoint> equalsTargets = new ArrayList<>();
+            final List<EntryPoint> hashTargets = new ArrayList<>();
+            for (final InstantiatedTypeAnalysis.Fact fact : callGraph.instantiatedTypes().facts()) {
+                final ClassFile owner = classes.get(fact.type());
+                if (owner == null || !RecordMapKeySupport.isSafe(owner)) continue;
+                final EntryPoint equality = new EntryPoint(owner.name(), "equals", "(Ljava/lang/Object;)Z");
+                final EntryPoint hash = new EntryPoint(owner.name(), "hashCode", "()I");
+                if (reachable.contains(equality.display()) && reachable.contains(hash.display())) {
+                    equalsTargets.add(equality);
+                    hashTargets.add(hash);
+                }
+            }
+            if (!equalsTargets.isEmpty()) {
+                dispatches.putIfAbsent(MAP_RECORD_EQUALS_DISPATCH, BytecodeToIRDynamicSupport.dispatch(
+                    classes, MAP_RECORD_EQUALS_DISPATCH, MethodDescriptor.parse("(Ljava/lang/Object;)Z"), equalsTargets));
+                dispatches.putIfAbsent(MAP_RECORD_HASH_DISPATCH, BytecodeToIRDynamicSupport.dispatch(
+                    classes, MAP_RECORD_HASH_DISPATCH, MethodDescriptor.parse("()I"), hashTargets));
+            }
+        }
         for (final EntryPoint reachable : reachableMethods) {
             if (configuredNativeLeaf(classes, reachable, nativeInterop)) {
                 continue;
@@ -409,6 +434,18 @@ public final class BytecodeToIR {
                     final MethodRef target = instruction.methodRef().orElseThrow();
                     if (JdkCallSupport.isCollectionObjectAddition(target) && JdkCallSupport.isCollectionEqualitySearch(target)) return true;
                 }
+            }
+        }
+        return false;
+    }
+
+    private static boolean usesMapRecordKeys(final Map<String, ClassFile> classes, final List<EntryPoint> reachableMethods) {
+        for (final EntryPoint entry : reachableMethods) {
+            final ClassFile owner = classes.get(entry.className());
+            final Optional<MethodInfo> method = owner == null ? Optional.empty() : owner.method(entry.methodName(), entry.descriptor());
+            if (method.isEmpty() || method.orElseThrow().code().isEmpty()) continue;
+            for (final Instruction instruction : method.orElseThrow().code().orElseThrow().instructions()) {
+                if (instruction.methodRef().isPresent() && JdkCallSupport.isMapKeyOperation(instruction.methodRef().orElseThrow())) return true;
             }
         }
         return false;

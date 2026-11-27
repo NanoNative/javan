@@ -542,6 +542,8 @@ final class RuntimeHeaderFile {
         int javan_list_contains(void* list, void* value);
         int javan_list_contains_java(void* list, void* value);
         void javan_register_collection_equals_resolver(int (*(*resolver)(void*))(void*, void*));
+        void javan_register_map_record_resolvers(int (*(*equals_resolver)(void*))(void*, void*),
+            int (*(*hash_resolver)(void*))(void*));
         int javan_list_index_of(void* list, void* value);
         int javan_list_last_index_of(void* list, void* value);
         int javan_list_index_of_java(void* list, void* value);

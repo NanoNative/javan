@@ -911,6 +911,10 @@ final class RuntimeSourceMemorySections {
         typedef int (*javan_collection_equals_fn)(void*, void*);
         typedef javan_collection_equals_fn (*javan_collection_equals_resolver_fn)(void*);
         static _Atomic(javan_collection_equals_resolver_fn) javan_collection_equals_resolver = NULL;
+        typedef int (*javan_map_record_hash_fn)(void*);
+        typedef javan_map_record_hash_fn (*javan_map_record_hash_resolver_fn)(void*);
+        static _Atomic(javan_collection_equals_resolver_fn) javan_map_record_equals_resolver = NULL;
+        static _Atomic(javan_map_record_hash_resolver_fn) javan_map_record_hash_resolver = NULL;
         static int javan_application_enum_type_id(void* value) {
             if (value == NULL) {
                 return 0;
@@ -12391,6 +12395,14 @@ final class RuntimeSourceMemorySections {
             return javan_object_equals(left, right);
         }
 
+        void javan_register_map_record_resolvers(
+            javan_collection_equals_resolver_fn equals_resolver,
+            javan_map_record_hash_resolver_fn hash_resolver
+        ) {
+            atomic_store_explicit(&javan_map_record_equals_resolver, equals_resolver, memory_order_release);
+            atomic_store_explicit(&javan_map_record_hash_resolver, hash_resolver, memory_order_release);
+        }
+
         static int javan_map_key_hash(void* value) {
             if (value == NULL) {
                 return 0;
@@ -12435,6 +12447,9 @@ final class RuntimeSourceMemorySections {
                 javan_map_entry_state* entry = (javan_map_entry_state*) value;
                 return javan_map_key_hash(entry->key) ^ javan_map_key_hash(entry->value);
             }
+            javan_map_record_hash_resolver_fn resolver = atomic_load_explicit(&javan_map_record_hash_resolver, memory_order_acquire);
+            javan_map_record_hash_fn hash = resolver == NULL ? NULL : resolver(value);
+            if (hash != NULL) return hash(value);
             return javan_record_reference_identity_hash_code(value);
         }
 
@@ -15189,6 +15204,11 @@ final class RuntimeSourceMemorySections {
         }
 
         static int javan_map_key_equals(void* left, void* right) {
+            if (right != NULL) {
+                javan_collection_equals_resolver_fn resolver = atomic_load_explicit(&javan_map_record_equals_resolver, memory_order_acquire);
+                javan_collection_equals_fn equals = resolver == NULL ? NULL : resolver(right);
+                if (equals != NULL) return equals(right, left);
+            }
             return javan_object_equals(left, right);
         }
 

@@ -95,6 +95,29 @@ final class CliSetEqualityIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void recordElementEqualityWorksInReleaseBuild() throws Exception {
+        final Path project = project("record-set-release");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.HashSet;
+            public final class Main {
+                record Key(String value) { }
+                public static void main(String[] args) {
+                    var set = new HashSet<Key>();
+                    set.add(new Key("key"));
+                    System.out.println(set.contains(new Key("key")));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString(), "--release");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/record-set-release").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("true\n");
+    }
+
+    @Test
     void hashSetUsesQueryEqualsRatherThanStoredElementEquals() throws Exception {
         final Path project = project("set-query-equals-direction");
         writeJava(project, "com.acme.Main", """

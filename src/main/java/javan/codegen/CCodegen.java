@@ -2125,6 +2125,26 @@ public final class CCodegen {
         c.append("    if (self == 0) {").append(System.lineSeparator());
         c.append("        javan_panic(\"null dispatch\");").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
+        if (BytecodeToIR.MAP_RECORD_EQUALS_DISPATCH.equals(dispatch.symbol())
+            || BytecodeToIR.MAP_RECORD_HASH_DISPATCH.equals(dispatch.symbol())) {
+            final boolean hash = BytecodeToIR.MAP_RECORD_HASH_DISPATCH.equals(dispatch.symbol());
+            c.append("    switch (javan_object_registered_type_id(self)) {\n");
+            for (final IrDispatchTarget target : dispatch.targets()) {
+                c.append("        case ").append(typeIds.get(target.owner()).intValue())
+                    .append(": return ").append(target.functionSymbol())
+                    .append("(").append(dispatchArguments(dispatch)).append(");\n");
+            }
+            c.append("        default: return 0;\n    }\n}\n\n");
+            c.append(hash ? "static int (*javan_select_map_record_hash(void* self))(void*) {\n"
+                : "static int (*javan_select_map_record_equals(void* self))(void*, void*) {\n")
+                .append("    switch (javan_object_registered_type_id(self)) {\n");
+            for (final IrDispatchTarget target : dispatch.targets()) {
+                c.append("        case ").append(typeIds.get(target.owner()).intValue())
+                    .append(": return ").append(target.functionSymbol()).append(";\n");
+            }
+            c.append("        default: return 0;\n    }\n}\n\n");
+            return;
+        }
         if (COLLECTION_EQUALS_DISPATCH.equals(dispatch.symbol())) {
             c.append("    switch (javan_object_registered_type_id(self)) {").append(System.lineSeparator());
             for (final IrDispatchTarget target : dispatch.targets()) {
@@ -2726,6 +2746,10 @@ public final class CCodegen {
         if (hasDispatch(program, COLLECTION_EQUALS_DISPATCH)) {
             c.append("    javan_register_collection_equals_resolver(")
                 .append("javan_select_collection_equals").append(");").append(System.lineSeparator());
+        }
+        if (hasDispatch(program, BytecodeToIR.MAP_RECORD_EQUALS_DISPATCH)
+            && hasDispatch(program, BytecodeToIR.MAP_RECORD_HASH_DISPATCH)) {
+            c.append("    javan_register_map_record_resolvers(javan_select_map_record_equals, javan_select_map_record_hash);\n");
         }
         if (!hasDispatch(program, RECORD_REFERENCE_EQUALS_DISPATCH)
             && !hasDispatch(program, RECORD_REFERENCE_HASH_CODE_DISPATCH)) {

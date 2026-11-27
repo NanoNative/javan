@@ -376,6 +376,7 @@ public final class FunctionValueFlow {
             for (final Instruction instruction : method.orElseThrow().code().orElseThrow().instructions()) {
                 if (instruction.methodRef().isPresent()
                     && (JdkCallSupport.isCollectionEqualitySearch(instruction.methodRef().orElseThrow())
+                        || JdkCallSupport.isMapKeyOperation(instruction.methodRef().orElseThrow())
                         || JdkCallSupport.isCollectionContainsAll(instruction.methodRef().orElseThrow())
                         || JdkCallSupport.isCollectionFilterAll(instruction.methodRef().orElseThrow()))) {
                     result.putIfAbsent(collectionSiteKey(entry, instruction), CollectionQuery.unavailable());
@@ -1032,7 +1033,8 @@ public final class FunctionValueFlow {
             }
             if (isIndirectUse(callbackKind, methodRef) && !arguments.isEmpty()) {
                 if (callbackKind == CallbackKind.COLLECTION_QUERY) {
-                    final Fact argument = arguments.getLast().fact();
+                    final Fact argument = JdkCallSupport.isMapKeyOperation(methodRef)
+                        ? arguments.getFirst().fact() : arguments.getLast().fact();
                     final Fact source = JdkCallSupport.isCollectionFilterAll(methodRef) ? receiver.fact() : argument;
                     final Fact query = JdkCallSupport.isCollectionContainsAll(methodRef) || JdkCallSupport.isCollectionFilterAll(methodRef)
                         ? (source.elements() == null ? Fact.unsafe() : source.elements()) : source;
@@ -1868,6 +1870,7 @@ public final class FunctionValueFlow {
         final MethodRef methodRef
     ) {
         return callbackKind == CallbackKind.COLLECTION_QUERY ? (JdkCallSupport.isCollectionEqualitySearch(methodRef)
+            || JdkCallSupport.isMapKeyOperation(methodRef)
             || JdkCallSupport.isCollectionContainsAll(methodRef) || JdkCallSupport.isCollectionFilterAll(methodRef))
             : directUse(callbackKind).equals(methodRef) || isIndirectUse(callbackKind, methodRef);
     }
@@ -1890,7 +1893,7 @@ public final class FunctionValueFlow {
     ) {
         if (callbackKind == CallbackKind.COLLECTION_QUERY) {
             return JdkCallSupport.isCollectionEqualitySearch(methodRef) || JdkCallSupport.isCollectionContainsAll(methodRef)
-                || JdkCallSupport.isCollectionFilterAll(methodRef);
+                || JdkCallSupport.isCollectionFilterAll(methodRef) || JdkCallSupport.isMapKeyOperation(methodRef);
         }
         return callbackKind == CallbackKind.FUNCTION
             ? isIndirectFunctionUse(methodRef)

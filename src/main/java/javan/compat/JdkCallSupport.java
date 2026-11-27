@@ -2521,6 +2521,18 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies supported map operations whose first argument is a key.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the operation compares or hashes its first argument as a key
+     */
+    public static boolean isMapKeyOperation(final MethodRef methodRef) {
+        return isMapObjectGetOrPut(methodRef) || isMapPutIfAbsent(methodRef) || isMapRemove(methodRef)
+            || isMapReplace(methodRef) || isMapMembershipOrDefaultQuery(methodRef)
+                && !"containsValue".equals(methodRef.name());
+    }
+
+    /**
      * Returns platform throwable types transported by a supported JDK call.
      *
      * @param methodRef method reference

@@ -460,6 +460,30 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanPreservesRecordEqualityInMapOperations() throws Exception {
+        final Path project = project("selfhost-map-record-equality");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.HashMap;
+            public final class Main {
+                record Key(String name, int number) { }
+                public static void main(String[] args) {
+                    var map = new HashMap<Key, String>();
+                    map.put(new Key("key", 7), "found");
+                    System.out.println(map.get(new Key("key", 7)));
+                    System.out.println(map.size());
+                }
+            }
+            """);
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/selfhost-map-record-equality").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("found\n1\n");
+    }
+
+    @Test
     void nativeBuiltJavanRejectsComputedReflectionDeclarations() throws Exception {
         final Path project = project("selfhost-invalid-reflection-declaration");
         writeJava(project, "com.acme.Main", """

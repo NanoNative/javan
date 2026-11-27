@@ -171,6 +171,7 @@ final class CompatibilityReportsTest {
             "| `library-retained-input-ownership` | pass |",
             "| `library-negative-byte-array-rejection` | pass |",
             "| `hashmap-realloc-gc` | pass |",
+            "| `hashmap-primitive-string-record-keys` | pass |",
             "| `collections-empty-set` | pass |",
             "| `collections-unmodifiable-collection` | pass |",
             "| `collections-unmodifiable-set` | pass |",
@@ -619,10 +620,10 @@ final class CompatibilityReportsTest {
             "A broad JDK-compatibility release must report:",
             "The first native release is scenario-bounded.",
             "not a release-completion percentage.",
-            "| support rows | 328 |",
-            "| pass rows | 327 |",
+            "| support rows | 329 |",
+            "| pass rows | 328 |",
             "| scoped rows | 1 |",
-            "| accounted rows | 327 |",
+            "| accounted rows | 328 |",
             "| unaccounted rows | 1 |"
         );
         assertThat(matrix).contains(

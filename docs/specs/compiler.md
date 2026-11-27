@@ -136,6 +136,10 @@ Other methods remain subject to their supported callable entries.
 
 Native map primitives serialize access to shared map storage, including access through `Map`
 references. This protects those primitives and record map traversal during concurrent mutation.
+Supported `get`, `getOrDefault`, `containsKey`, `put`, `putIfAbsent`, `replace` and `remove`
+calls use application record keys whose canonical generated `equals` and `hashCode` have only
+primitive and String components. Their generated operations are side-effect-free and execute
+under the map's runtime lock. Other application key equality and hashing remain incomplete.
 `ConcurrentHashMap` rejects null keys for `get`, `getOrDefault`, `containsKey`, `put`, `putIfAbsent`,
 `remove` and `replace`, and null values for `containsValue`, `put`, `putIfAbsent` and `replace`,
 including through `Map` references. Bulk `putAll` rejects null entries when targeting a concurrent

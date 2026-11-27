@@ -538,6 +538,7 @@ public final class CompatibilityReports {
             pass("library-structured-last-error-fields"),
             pass("deduplication-plan"),
             pass("hashmap-realloc-gc"),
+            pass("hashmap-primitive-string-record-keys"),
             pass("collections-empty-set"),
             pass("collections-unmodifiable-collection"),
             pass("collections-unmodifiable-set"),
