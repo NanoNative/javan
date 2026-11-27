@@ -234,20 +234,35 @@ public final class ProjectReports {
     ) throws IOException {
         final List<EntryPoint> methods = sortedMethods(callGraph.reachableMethods());
         final List<CallEdge> edges = sortedEdges(callGraph.callEdges());
+        final List<EntryPoint> declaredTargets = new ArrayList<>();
+        for (final EntryPoint target : sortedMethods(callGraph.declaredReflectionTargets())) {
+            if (!declaredTargets.contains(target)) {
+                declaredTargets.add(target);
+            }
+        }
+        final List<String> reflectionClasses = new ArrayList<>();
+        for (final String name : callGraph.reflectionRetainedClasses()) {
+            if (!reflectionClasses.contains(name)) {
+                reflectionClasses.add(name);
+            }
+        }
+        final List<String> sortedReflectionClasses = reorder(reflectionClasses, Strings2.sortedIndexes(reflectionClasses));
         final FindingSummary findings = findingSummary(methods, diagnostics);
-        Files2.writeString(reports.resolve("call-graph.json"), callGraphJson(callGraph.entryPoint(), methods, edges, findings));
-        Files2.writeString(reports.resolve("call-graph.md"), callGraphMarkdown(callGraph.entryPoint(), methods, edges, findings));
-        Files2.writeString(reports.resolve("call-flow.html"), callGraphHtml(callGraph.entryPoint(), methods, edges, findings));
-        Files2.writeString(reports.resolve("call-graph.dot"), callGraphDot(callGraph.entryPoint(), methods, edges, findings));
+        Files2.writeString(reports.resolve("call-graph.json"), callGraphJson(callGraph.entryPoint(), methods, edges, declaredTargets, sortedReflectionClasses, findings));
+        Files2.writeString(reports.resolve("call-graph.md"), callGraphMarkdown(callGraph.entryPoint(), methods, edges, declaredTargets, sortedReflectionClasses, findings));
+        Files2.writeString(reports.resolve("call-flow.html"), callGraphHtml(callGraph.entryPoint(), methods, edges, declaredTargets, sortedReflectionClasses, findings));
+        Files2.writeString(reports.resolve("call-graph.dot"), callGraphDot(callGraph.entryPoint(), methods, edges, declaredTargets, findings));
     }
 
     private static String callGraphJson(
         final EntryPoint entryPoint,
         final List<EntryPoint> methods,
         final List<CallEdge> edges,
+        final List<EntryPoint> declaredTargets,
+        final List<String> reflectionClasses,
         final FindingSummary findings
     ) {
-        final String completeness = graphCompleteness(methods);
+        final String completeness = graphCompleteness(methods, edges, declaredTargets, reflectionClasses);
         final StringBuilder result = new StringBuilder();
         result.append("{\n");
         appendJsonField(result, "schemaVersion", "1", true);
@@ -261,6 +276,8 @@ public final class ProjectReports {
         appendJsonField(result, "warnings", Integer.toString(findings.warnings()), true);
         appendJsonField(result, "methodsWithFindings", Integer.toString(findings.methodsWithFindings()), true);
         appendJsonField(result, "diagnosticsOutsideFlow", Integer.toString(findings.outsideFlow().size()), true);
+        appendJsonField(result, "declaredReflectionTargets", jsonList(sortedEntries(declaredTargets)), true);
+        appendJsonField(result, "reflectionRetainedClasses", jsonList(reflectionClasses), true);
         result.append("  \"nodes\": [\n");
         for (int index = 0; index < methods.size(); index++) {
             final EntryPoint method = methods.get(index);
@@ -303,9 +320,11 @@ public final class ProjectReports {
         final EntryPoint entryPoint,
         final List<EntryPoint> methods,
         final List<CallEdge> edges,
+        final List<EntryPoint> declaredTargets,
+        final List<String> reflectionClasses,
         final FindingSummary findings
     ) {
-        final String completeness = graphCompleteness(methods);
+        final String completeness = graphCompleteness(methods, edges, declaredTargets, reflectionClasses);
         final StringBuilder result = new StringBuilder();
         result.append("# Call Graph\n\n");
         result.append("- completeness: `").append(completeness).append("`\n");
@@ -317,6 +336,22 @@ public final class ProjectReports {
         result.append("## Edge Kinds\n\n");
         for (final CallEdge.Kind kind : CallEdge.Kind.values()) {
             result.append("- ").append(edgeKind(kind)).append(": `").append(edgeCount(edges, kind)).append("`\n");
+        }
+        result.append("\n## Declared reflection targets\n\n");
+        if (declaredTargets.isEmpty()) {
+            result.append("No method targets were declared.\n");
+        } else {
+            for (final EntryPoint target : declaredTargets) {
+                result.append("- `").append(target.display()).append("`\n");
+            }
+        }
+        result.append("\n## Reflection-retained classes\n\n");
+        if (reflectionClasses.isEmpty()) {
+            result.append("No classes were retained by a reflection declaration.\n");
+        } else {
+            for (final String name : reflectionClasses) {
+                result.append("- `").append(name).append("`\n");
+            }
         }
         appendFindingsMarkdown(result, methods, findings);
         result.append("\n## Flow\n\n");
@@ -337,6 +372,8 @@ public final class ProjectReports {
         final EntryPoint entryPoint,
         final List<EntryPoint> methods,
         final List<CallEdge> edges,
+        final List<EntryPoint> declaredTargets,
+        final List<String> reflectionClasses,
         final FindingSummary findings
     ) {
         final StringBuilder result = new StringBuilder();
@@ -368,12 +405,13 @@ public final class ProjectReports {
                 .line.initialize { border-top-color: #7c3aed; border-top-style: dashed; }
                 .line.thread { border-top-color: #b45309; }
                 .scope { margin-top: 20px; color: #52606d; font: 14px/1.55 system-ui, sans-serif; }
+                .reflection-roots { margin-top: 24px; overflow-wrap: anywhere; }
                 .empty { padding: 36px; text-align: center; }
                 .empty p { color: #52606d; margin-top: 8px; font: 14px/1.5 system-ui, sans-serif; }
                 .edge { fill: none; stroke: #64748b; stroke-width: 1.7; marker-end: url(#arrow); }
                 .edge.initialize { stroke: #7c3aed; stroke-dasharray: 5 4; marker-end: url(#arrow-initialize); }
                 .edge.thread { stroke: #b45309; stroke-width: 2.3; marker-end: url(#arrow-thread); }
-                .edge-label { fill: #52606d; font: 12px system-ui, sans-serif; text-anchor: middle; }
+                .edge-label { fill: #52606d; font: 12px system-ui, sans-serif; text-anchor: middle; paint-order: stroke; stroke: #ffffff; stroke-width: 4px; stroke-linejoin: round; }
                 .node rect { fill: #eff6ff; stroke: #2563eb; stroke-width: 1.4; }
                 .node.entry rect { fill: #ecfdf3; stroke: #15803d; stroke-width: 2; }
                 .node.warning rect { fill: #fffbeb; stroke: #b45309; stroke-width: 2; }
@@ -406,9 +444,9 @@ public final class ProjectReports {
                 <h1>Call flow</h1>
             """);
         result.append("    <p class=\"intro\">")
-            .append(html(flowDescription(entryPoint, methods, edges)))
+            .append(html(flowDescription(entryPoint, methods, edges, declaredTargets, reflectionClasses)))
             .append("</p>\n");
-        appendCallGraphFacts(result, entryPoint, methods, edges, findings);
+        appendCallGraphFacts(result, entryPoint, methods, edges, declaredTargets, reflectionClasses, findings);
         if (methods.isEmpty()) {
             result.append("""
                     <section class="diagram empty">
@@ -423,10 +461,25 @@ public final class ProjectReports {
                       <span class="key"><span class="line"></span>method call</span>
                       <span class="key"><span class="line initialize"></span>class initialization</span>
                       <span class="key"><span class="line thread"></span>thread start</span>
+                      <span class="key">may invoke / may initialize mark reflection candidates</span>
                     </div>
                 """);
         }
         appendFindingsHtml(result, methods, findings);
+        if (!declaredTargets.isEmpty()) {
+            result.append("    <section class=\"reflection-roots\"><h2>Declared reflection targets</h2><ul>\n");
+            for (final EntryPoint target : declaredTargets) {
+                result.append("      <li>").append(html(target.display())).append("</li>\n");
+            }
+            result.append("    </ul></section>\n");
+        }
+        if (!reflectionClasses.isEmpty()) {
+            result.append("    <section class=\"reflection-roots\"><h2>Reflection-retained classes</h2><ul>\n");
+            for (final String name : reflectionClasses) {
+                result.append("      <li>").append(html(name)).append("</li>\n");
+            }
+            result.append("    </ul></section>\n");
+        }
         result.append("    <p class=\"scope\">").append(html(graphScope(methods))).append("</p>\n");
         return result.append("""
               </main>
@@ -440,12 +493,17 @@ public final class ProjectReports {
         final EntryPoint entryPoint,
         final List<EntryPoint> methods,
         final List<CallEdge> edges,
+        final List<EntryPoint> declaredTargets,
+        final List<String> reflectionClasses,
         final FindingSummary findings
     ) {
         result.append("    <dl class=\"facts\">\n");
         appendCallGraphFact(result, "Starts at", methods.isEmpty() ? "not available" : methodLabel(entryPoint));
-        appendCallGraphFact(result, "Reachable methods", Integer.toString(methods.size()));
-        appendCallGraphFact(result, "Proven connections", Integer.toString(edges.size()));
+        final boolean conservative = graphCompleteness(methods, edges, declaredTargets, reflectionClasses)
+            .equals("closed-world-conservative");
+        appendCallGraphFact(result, conservative ? "Retained methods" : "Reachable methods", Integer.toString(methods.size()));
+        appendCallGraphFact(result, conservative
+            ? "Connections including candidates" : "Proven connections", Integer.toString(edges.size()));
         appendCallGraphFact(result, "Errors", Integer.toString(findings.errors()));
         appendCallGraphFact(result, "Warnings", Integer.toString(findings.warnings()));
         result.append("    </dl>\n");
@@ -562,8 +620,10 @@ public final class ProjectReports {
             .append(html(methodLabel(edge.caller()))).append(' ').append(html(edgePhrase(edge.kind()))).append(' ')
             .append(html(methodLabel(edge.callee()))).append("</title></path>\n");
         if (edge.kind() != CallEdge.Kind.CALL) {
-            final int labelX = (startX + endX) / 2;
-            final int labelY = (startY + endY) / 2 - 8;
+            final boolean returnEdge = endX <= startX;
+            final int labelX = returnEdge ? startX + FlowLayout.RETURN_EDGE_OFFSET : (startX + endX) / 2;
+            final int labelY = returnEdge ? Math.max(startY, endY) + FlowLayout.RETURN_EDGE_OFFSET + 12
+                : (startY + endY) / 2 - 8;
             result.append("        <text class=\"edge-label\" x=\"").append(labelX).append("\" y=\"")
                 .append(labelY).append("\">").append(html(edgePhrase(edge.kind()))).append("</text>\n");
         }
@@ -572,7 +632,8 @@ public final class ProjectReports {
     private static String htmlEdgeClass(final CallEdge.Kind kind) {
         return switch (kind) {
             case CALL -> "call";
-            case CLASS_INITIALIZER -> "initialize";
+            case CLASS_INITIALIZER, CLASS_INITIALIZER_CANDIDATE -> "initialize";
+            case REFLECTION_CANDIDATE -> "call";
             case THREAD_START_TASK -> "thread";
         };
     }
@@ -713,8 +774,18 @@ public final class ProjectReports {
                 );
             }
         }
+        boolean hasReturnEdge = false;
+        for (final CallEdge edge : edges) {
+            final FlowNode caller = nodes.get(edge.caller().display());
+            final FlowNode callee = nodes.get(edge.callee().display());
+            if (caller != null && callee != null && callee.x() <= caller.x() + FlowLayout.NODE_WIDTH) {
+                hasReturnEdge = true;
+                break;
+            }
+        }
         final int width = Math.max(720, FlowLayout.HORIZONTAL_MARGIN * 2
-            + (layerCount - 1) * FlowLayout.HORIZONTAL_DISTANCE + FlowLayout.NODE_WIDTH);
+            + (layerCount - 1) * FlowLayout.HORIZONTAL_DISTANCE + FlowLayout.NODE_WIDTH
+            + (hasReturnEdge ? 120 : 0));
         final int height = Math.max(180, FlowLayout.VERTICAL_MARGIN * 2
             + (largestLayer - 1) * FlowLayout.VERTICAL_DISTANCE + FlowLayout.NODE_HEIGHT + FlowLayout.RETURN_EDGE_OFFSET);
         return new FlowLayout(width, height, Map.copyOf(nodes));
@@ -731,15 +802,20 @@ public final class ProjectReports {
     private static String flowDescription(
         final EntryPoint entryPoint,
         final List<EntryPoint> methods,
-        final List<CallEdge> edges
+        final List<CallEdge> edges,
+        final List<EntryPoint> declaredTargets,
+        final List<String> reflectionClasses
     ) {
         if (methods.isEmpty()) {
             return "No application entry point was available for static analysis.";
         }
-        return new StringBuilder("Javan proved ")
-            .append(methods.size()).append(" reachable method").append(pluralSuffix(methods.size()))
+        final boolean conservative = "closed-world-conservative".equals(
+            graphCompleteness(methods, edges, declaredTargets, reflectionClasses));
+        return new StringBuilder(conservative ? "Javan retained " : "Javan proved ")
+            .append(methods.size()).append(conservative ? " method" : " reachable method").append(pluralSuffix(methods.size()))
             .append(" and ").append(edges.size()).append(" connection").append(pluralSuffix(edges.size()))
-            .append(" starting at ").append(methodLabel(entryPoint)).append('.')
+            .append(conservative ? " through entry points and conservative reflection analysis." : " starting at ")
+            .append(conservative ? "" : methodLabel(entryPoint) + ".")
             .toString();
     }
 
@@ -780,6 +856,7 @@ public final class ProjectReports {
         final EntryPoint entryPoint,
         final List<EntryPoint> methods,
         final List<CallEdge> edges,
+        final List<EntryPoint> declaredTargets,
         final FindingSummary findings
     ) {
         final StringBuilder result = new StringBuilder();
@@ -792,8 +869,17 @@ public final class ProjectReports {
             if (method.equals(entryPoint)) {
                 result.append(", shape=doubleoctagon, fillcolor=\"#dcfce7\", color=\"#15803d\", penwidth=2");
             }
+            if (declaredTargets.contains(method)) {
+                result.append(", peripheries=2, xlabel=\"declared reflection target\"");
+            }
             appendDotFindingStyle(result, findings.forMethod(method));
             result.append("];\n");
+        }
+        for (final EntryPoint target : declaredTargets) {
+            if (!methods.contains(target)) {
+                result.append("  ").append(dot(target.display())).append(" [label=").append(dot(methodLabel(target)))
+                    .append(", style=\"rounded,dashed\", xlabel=\"declared reflection target (metadata only)\"];\n");
+            }
         }
         for (final CallEdge edge : edges) {
             result.append("  ").append(dot(edge.caller().display())).append(" -> ").append(dot(edge.callee().display()));
@@ -832,6 +918,10 @@ public final class ProjectReports {
     private static void appendDotEdgeStyle(final StringBuilder result, final CallEdge.Kind kind) {
         if (kind == CallEdge.Kind.CLASS_INITIALIZER) {
             result.append(" [label=\"initializes\", style=dashed, color=\"#7c3aed\"]");
+        } else if (kind == CallEdge.Kind.CLASS_INITIALIZER_CANDIDATE) {
+            result.append(" [label=\"may initialize\", style=dashed, color=\"#7c3aed\"]");
+        } else if (kind == CallEdge.Kind.REFLECTION_CANDIDATE) {
+            result.append(" [label=\"may invoke\", style=dashed, color=\"#64748b\"]");
         } else if (kind == CallEdge.Kind.THREAD_START_TASK) {
             result.append(" [label=\"starts a thread\", penwidth=2, color=\"#b45309\"]");
         }
@@ -863,6 +953,8 @@ public final class ProjectReports {
         return switch (kind) {
             case CALL -> "call";
             case CLASS_INITIALIZER -> "class-initializer";
+            case CLASS_INITIALIZER_CANDIDATE -> "class-initializer-candidate";
+            case REFLECTION_CANDIDATE -> "reflection-candidate";
             case THREAD_START_TASK -> "thread-start-task";
         };
     }
@@ -871,6 +963,8 @@ public final class ProjectReports {
         return switch (kind) {
             case CALL -> "calls";
             case CLASS_INITIALIZER -> "initializes";
+            case CLASS_INITIALIZER_CANDIDATE -> "may initialize";
+            case REFLECTION_CANDIDATE -> "may invoke";
             case THREAD_START_TASK -> "starts a thread running";
         };
     }
@@ -1118,15 +1212,33 @@ public final class ProjectReports {
         return simple.replace('$', '.');
     }
 
-    private static String graphCompleteness(final List<EntryPoint> methods) {
-        return methods.isEmpty() ? "not-analyzed" : "closed-world-proven";
+    private static String graphCompleteness(
+        final List<EntryPoint> methods,
+        final List<CallEdge> edges,
+        final List<EntryPoint> declaredTargets,
+        final List<String> reflectionClasses
+    ) {
+        if (methods.isEmpty()) {
+            return "not-analyzed";
+        }
+        if (!declaredTargets.isEmpty() || !reflectionClasses.isEmpty()) {
+            return "closed-world-conservative";
+        }
+        for (final CallEdge edge : edges) {
+            if (edge.kind() == CallEdge.Kind.REFLECTION_CANDIDATE
+                || edge.kind() == CallEdge.Kind.CLASS_INITIALIZER_CANDIDATE) {
+                return "closed-world-conservative";
+            }
+        }
+        return "closed-world-proven";
     }
 
     private static String graphScope(final List<EntryPoint> methods) {
         if (methods.isEmpty()) {
             return "No reachable code was analyzed because a valid entry point is unavailable; see diagnostics.";
         }
-        return "Only analyzer-proven closed-world edges are listed; unresolved or dynamic targets remain diagnostics.";
+        return "Static calls and conservative reflection candidates are listed. Candidates may not execute; "
+            + "declared reflection targets are retained without proving a call. Unsupported behavior appears in diagnostics.";
     }
 
     private static long edgeCount(final List<CallEdge> edges, final CallEdge.Kind target) {

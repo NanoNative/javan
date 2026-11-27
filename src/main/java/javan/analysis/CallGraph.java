@@ -13,6 +13,8 @@ import java.util.List;
  * @param callEdges reachable caller-to-callee edges
  * @param functionValueFlow exact Function receiver flow when analyzed
  * @param instantiatedTypes concrete receiver types proven constructible
+ * @param declaredReflectionTargets explicitly declared method targets, including abstract methods
+ * @param reflectionRetainedClasses classes retained by the reflection declaration
  */
 public record CallGraph(
     EntryPoint entryPoint,
@@ -20,8 +22,26 @@ public record CallGraph(
     List<Diagnostic> diagnostics,
     List<CallEdge> callEdges,
     FunctionValueFlow.Result functionValueFlow,
-    InstantiatedTypeAnalysis.Result instantiatedTypes
+    InstantiatedTypeAnalysis.Result instantiatedTypes,
+    List<EntryPoint> declaredReflectionTargets,
+    List<String> reflectionRetainedClasses
 ) {
+    public CallGraph {
+        declaredReflectionTargets = List.copyOf(declaredReflectionTargets);
+        reflectionRetainedClasses = List.copyOf(reflectionRetainedClasses);
+    }
+
+    /** Creates a graph without an explicit reflection declaration. */
+    public CallGraph(
+        final EntryPoint entryPoint,
+        final List<EntryPoint> reachableMethods,
+        final List<Diagnostic> diagnostics,
+        final List<CallEdge> callEdges,
+        final FunctionValueFlow.Result functionValueFlow,
+        final InstantiatedTypeAnalysis.Result instantiatedTypes
+    ) {
+        this(entryPoint, reachableMethods, diagnostics, callEdges, functionValueFlow, instantiatedTypes, List.of(), List.of());
+    }
     /**
      * Backward-compatible constructor for tests and utility call sites that do not care about caller edges yet.
      *

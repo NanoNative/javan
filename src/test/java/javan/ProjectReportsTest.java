@@ -117,7 +117,7 @@ final class ProjectReportsTest {
                 "[open the call flow in a browser](call-flow.html)",
                 "[Graphviz DOT](call-graph.dot)",
                 "`Main.main(String[])` calls `Alpha.call()`",
-                "unresolved or dynamic targets remain diagnostics"
+                "conservative reflection candidates are listed"
             );
         assertThat(Files.readString(layout.outputDirectory().resolve("reports/call-flow.html")))
             .contains(

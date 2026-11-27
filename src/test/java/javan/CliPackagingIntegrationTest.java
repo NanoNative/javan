@@ -313,7 +313,9 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         assertThat(generatedProgramSource(project)).contains("javan_class_com_acme_Target");
         assertThat(Files.readString(project.resolve(".javan/reports/call-graph.json")))
-            .contains("com/acme/Target.run(Ljava/lang/String;I)Ljava/lang/String;");
+            .contains("com/acme/Target.run(Ljava/lang/String;I)Ljava/lang/String;")
+            .contains("\"declaredReflectionTargets\": [\"com/acme/Target.run(Ljava/lang/String;I)Ljava/lang/String;\"]")
+            .contains("\"completeness\": \"closed-world-conservative\"");
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/selfhost-reflection-declaration").toString()));
         assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
         assertThat(nativeRun.stdout()).isEqualTo("main\n");

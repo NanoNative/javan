@@ -43,6 +43,12 @@ For a one-argument `Class.forName` with a literal class name in a straight-line 
 exception handlers, reachability retains that class's required initializers and metadata. Calls
 with unknown names or control flow retain candidates conservatively.
 
+Call-graph reports distinguish `reflection-candidate` and `class-initializer-candidate` edges
+from established call and initialization edges. JSON, Markdown and HTML list declared
+reflection method targets and declaration-retained classes separately. DOT marks declared
+method targets, including metadata-only targets. Graphs with these candidates or roots use
+`closed-world-conservative`; retention does not prove that a candidate executes.
+
 For future reflection optimization, resolve class and member targets from proven call-flow
 facts and emit direct calls or bounded dispatch where those targets are known. Retain only
 the metadata and implementations needed by the proven targets and the remaining observable

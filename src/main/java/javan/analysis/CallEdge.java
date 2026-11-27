@@ -24,6 +24,8 @@ public record CallEdge(EntryPoint caller, EntryPoint callee, Kind kind) {
     public enum Kind {
         CALL,
         CLASS_INITIALIZER,
+        CLASS_INITIALIZER_CANDIDATE,
+        REFLECTION_CANDIDATE,
         THREAD_START_TASK
     }
 }

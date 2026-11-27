@@ -506,7 +506,9 @@ public final class ReachabilityAnalyzer {
                 : List.of(),
             callEdges.snapshot(),
             functionValueFlow,
-            instantiatedTypes
+            instantiatedTypes,
+            declaration.methods(),
+            declaration.classes()
         );
     }
 
@@ -553,7 +555,7 @@ public final class ReachabilityAnalyzer {
             }
         }
         enqueueAll(work, workSet, targets);
-        addEdges(callEdges, current, targets, CallEdge.Kind.CALL);
+        addEdges(callEdges, current, targets, CallEdge.Kind.REFLECTION_CANDIDATE);
     }
 
     private static List<Diagnostic> resolveCallbackDiagnostics(
@@ -2132,7 +2134,8 @@ public final class ReachabilityAnalyzer {
             owners.set(insertion, owner);
         }
         for (final String owner : owners) {
-            enqueueClassInitializer(classes, owner, work, workSet, current, callEdges, entryPoints);
+            enqueueClassInitializer(classes, owner, work, workSet, current, callEdges, entryPoints,
+                CallEdge.Kind.CLASS_INITIALIZER_CANDIDATE);
         }
     }
 
@@ -2145,6 +2148,20 @@ public final class ReachabilityAnalyzer {
         final CallEdgeTracker callEdges,
         final EntryPointPool entryPoints
     ) {
+        enqueueClassInitializer(classes, owner, work, workSet, current, callEdges, entryPoints,
+            CallEdge.Kind.CLASS_INITIALIZER);
+    }
+
+    private static void enqueueClassInitializer(
+        final Map<String, ClassFile> classes,
+        final String owner,
+        final List<EntryPoint> work,
+        final EntryPointMembership workSet,
+        final EntryPoint current,
+        final CallEdgeTracker callEdges,
+        final EntryPointPool entryPoints,
+        final CallEdge.Kind kind
+    ) {
         for (final String initializerOwner : ClassInitializationGraph.initializerOwners(classes, owner)) {
             final ClassFile classFile = classes.get(initializerOwner);
             final Optional<MethodInfo> method = classFile.method("<clinit>", "()V");
@@ -2154,7 +2171,7 @@ public final class ReachabilityAnalyzer {
             final MethodInfo classInitializer = method.orElseThrow();
             final EntryPoint callee = entryPoints.entry(initializerOwner, classInitializer.name(), classInitializer.descriptor());
             enqueue(work, workSet, callee);
-            addEdge(callEdges, current, callee, CallEdge.Kind.CLASS_INITIALIZER);
+            addEdge(callEdges, current, callee, kind);
         }
     }
 

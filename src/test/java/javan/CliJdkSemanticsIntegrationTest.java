@@ -16620,6 +16620,8 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertThat(result.stdout()).isEqualTo("target initialized\n");
         assertThat(Files.readString(project.resolve(".javan/reports/call-graph.json")))
             .contains("com/acme/Target.<clinit>()V")
+            .contains("\"completeness\": \"closed-world-proven\"")
+            .doesNotContain("class-initializer-candidate")
             .doesNotContain("com/acme/Unrelated.<clinit>()V");
         assertThat(Files.readString(project.resolve(".javan/generated/main.c")))
             .contains("javan_class_com_acme_Target")
@@ -16651,6 +16653,8 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
             """);
         final CliRun build = run(tempDir, "build", project.toString());
         assertThat(build.exitCode()).as(build.stderr()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/call-graph.json")))
+            .contains("\"completeness\": \"closed-world-conservative\"", "\"kind\": \"class-initializer-candidate\"");
         final String executable = project.resolve(".javan/bin/class-for-name-merged-target").toString();
         final ProcessResult known = process(project, List.of(executable));
         assertThat(known.exitCode()).as(known.stderr()).isZero();
@@ -17206,6 +17210,96 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
             .doesNotContain("com/acme/Target.hidden(Ljava/lang/String;)Ljava/lang/String;")
             .doesNotContain("com/acme/Unrelated.unused(Ljava/lang/String;)Ljava/lang/String;");
         assertThat(generatedProgramSource(project)).doesNotContain("javan_class_com_acme_Unrelated");
+    }
+
+    @Test
+    void callGraphDistinguishesReflectionCandidatesAndDeclaredTargets() throws Exception {
+        final Path project = project("reflection-call-graph-candidates");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] {Target.class.getDeclaredMethod("run", String.class)};
+                }
+                public static void main(String[] args) throws Exception {
+                    final var method = Class.forName(args[0]).getDeclaredMethod(args[1], String.class);
+                    System.out.println((String) method.invoke(null, "ok"));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target {
+                static { System.out.println("initialized"); }
+                public static String run(String value) { return value; }
+            }
+            """);
+        final CliRun check = run(tempDir, "check", project.toString());
+        assertThat(check.exitCode()).as(check.stderr()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/call-graph.json")))
+            .contains("\"completeness\": \"closed-world-conservative\"")
+            .contains("\"declaredReflectionTargets\": [\"com/acme/Target.run(Ljava/lang/String;)Ljava/lang/String;\"]")
+            .contains("\"reflectionRetainedClasses\": [\"com/acme/Target\"]")
+            .contains("\"kind\": \"reflection-candidate\"")
+            .contains("\"kind\": \"class-initializer-candidate\"");
+        assertThat(Files.readString(project.resolve(".javan/reports/call-graph.md")))
+            .contains("Declared reflection targets", "Reflection-retained classes", "may invoke", "may initialize");
+        assertThat(Files.readString(project.resolve(".javan/reports/call-flow.html")))
+            .contains("Declared reflection targets", "Reflection-retained classes", "may invoke", "may initialize");
+        assertThat(Files.readString(project.resolve(".javan/reports/call-graph.dot")))
+            .contains("may invoke", "may initialize", "declared reflection target");
+    }
+
+    @Test
+    void callGraphListsAbstractDeclaredMethodsWithoutInventingCallableNodes() throws Exception {
+        final Path project = project("reflection-call-graph-abstract");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] {Service.class.getDeclaredMethod("run", String.class)};
+                }
+                public static void main(String[] args) { }
+            }
+            """);
+        writeJava(project, "com.acme.Service", """
+            package com.acme;
+            public interface Service { String run(String value); }
+            """);
+        final CliRun check = run(tempDir, "check", project.toString());
+        assertThat(check.exitCode()).as(check.stderr()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/call-graph.json")))
+            .contains("\"completeness\": \"closed-world-conservative\"")
+            .contains("\"declaredReflectionTargets\": [\"com/acme/Service.run(Ljava/lang/String;)Ljava/lang/String;\"]")
+            .contains("\"reflectionRetainedClasses\": [\"com/acme/Service\"]")
+            .doesNotContain("\"method\": \"com/acme/Service.run(Ljava/lang/String;)Ljava/lang/String;\"");
+        assertThat(Files.readString(project.resolve(".javan/reports/call-graph.dot")))
+            .contains("declared reflection target (metadata only)");
+    }
+
+    @Test
+    void callGraphMarksUndeclaredReflectiveCallsAsCandidates() throws Exception {
+        final Path project = project("reflection-call-graph-undeclared");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) throws Exception {
+                    Target.class.getDeclaredMethod("run").invoke(null);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target { public static void run() { } }
+            """);
+        final CliRun check = run(tempDir, "check", project.toString());
+        assertThat(check.exitCode()).as(check.stderr()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/call-graph.json")))
+            .contains("\"completeness\": \"closed-world-conservative\"")
+            .contains("\"declaredReflectionTargets\": []", "\"reflectionRetainedClasses\": []")
+            .contains("\"kind\": \"reflection-candidate\"");
     }
 
     @Test
