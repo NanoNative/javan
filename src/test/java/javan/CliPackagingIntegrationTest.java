@@ -331,7 +331,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             """);
         final ProcessResult check = process(project, List.of(primitiveLiteralBootstrap.toString(), "check", project.toString()));
         assertThat(check.exitCode()).isEqualTo(2);
-        assertThat(check.stderr()).contains("JAVAN179", "javanReflectionTargets");
+        assertThat(check.stderr()).contains("error[JAVAN096]", "javanReflectionTargets");
     }
 
     @Test

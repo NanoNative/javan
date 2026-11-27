@@ -109,7 +109,7 @@ public final class ReflectionDeclaration {
 
     private static Result invalid(final String owner, final String reason) {
         return new Result(List.of(), List.of(Diagnostic.error(
-            "JAVAN179", "invalid reflection declaration", owner, METHOD, METHOD, reason,
+            "JAVAN096", "invalid reflection declaration", owner, METHOD, METHOD, reason,
             "Declare one public static AnnotatedElement[] javanReflectionTargets() returning an array of compiled class literals."
         )));
     }

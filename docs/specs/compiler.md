@@ -79,7 +79,7 @@ public static java.lang.reflect.AnnotatedElement[] javanReflectionTargets() {
 ```
 
 The named classes and required hierarchies are retained. An empty array is valid. Duplicate
-declarations, different signatures and computed or unsupported elements produce `JAVAN179`.
+declarations, different signatures and computed or unsupported elements produce `JAVAN096`.
 Member declarations, including `getDeclaredMethod`, are not implemented yet. Unknown dynamic
 `Class.forName` targets remain conservative over the parsed world, even when a declaration
 exists. Automatically proven targets remain available without the declaration.

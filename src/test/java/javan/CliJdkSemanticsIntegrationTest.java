@@ -16759,7 +16759,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final CliRun first = run(tempDir, "check", project.toString());
         final CliRun second = run(tempDir, "check", project.toString());
         assertThat(first.exitCode()).isEqualTo(2);
-        assertThat(first.stderr()).contains("JAVAN179", "javanReflectionTargets");
+        assertThat(first.stderr()).contains("error[JAVAN096]", "javanReflectionTargets");
         assertThat(second.exitCode()).isEqualTo(first.exitCode());
         assertThat(second.stderr()).isEqualTo(first.stderr());
     }
@@ -16784,7 +16784,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
             """);
         final CliRun result = run(tempDir, "check", project.toString());
         assertThat(result.exitCode()).isEqualTo(2);
-        assertThat(result.stderr()).contains("JAVAN179", "Only one declaration");
+        assertThat(result.stderr()).contains("error[JAVAN096]", "Only one declaration");
     }
 
     @Test
