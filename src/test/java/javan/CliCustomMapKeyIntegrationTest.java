@@ -682,34 +682,6 @@ final class CliCustomMapKeyIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void immutableCopyRejectsUnsupportedMultipleCustomKeySemantics() throws Exception {
-        final Path project = project("map-custom-copyof-rejection");
-        writeJava(project, "com.acme.Main", """
-            package com.acme;
-            import java.util.HashMap;
-            import java.util.Map;
-            public final class Main {
-                static final class Key {
-                    final int value; Key(int value) { this.value = value; }
-                    public int hashCode() { return value; }
-                    public boolean equals(Object other) { return other instanceof Key key && value == key.value; }
-                }
-                public static void main(String[] args) {
-                    var source = new HashMap<Key, String>(); source.put(new Key(1), "one"); source.put(new Key(2), "two");
-                    try { Map.copyOf(source); }
-                    catch (UnsupportedOperationException expected) { System.out.println("unsupported"); }
-                    System.out.println(source.size());
-                }
-            }
-            """);
-        final CliRun build = run(tempDir, "build", project.toString());
-        assertThat(build.exitCode()).as(build.stderr()).isZero();
-        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-custom-copyof-rejection").toString()));
-        assertThat(result.exitCode()).as(result.stderr()).isZero();
-        assertThat(result.stdout()).isEqualTo("unsupported\n2\n");
-    }
-
-    @Test
     void recordKeysWithListComponentsUseTheirValueSemantics() throws Exception {
         final Path project = project("map-record-list-components");
         writeJava(project, "com.acme.Main", """

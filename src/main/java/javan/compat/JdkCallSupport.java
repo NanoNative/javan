@@ -2614,7 +2614,8 @@ public final class JdkCallSupport {
             return List.of("java/lang/NullPointerException", "java/lang/IllegalArgumentException");
         }
         if (isMapCopyOf(methodRef)) {
-            return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException");
+            return List.of("java/lang/NullPointerException", "java/lang/IllegalArgumentException",
+                "java/lang/UnsupportedOperationException");
         }
         if (isMapCopyConstructor(methodRef) || isMapSingleEntryFactory(methodRef)
             || isSetCopyOf(methodRef) || isListCopyOf(methodRef) || isListFactory(methodRef)) {

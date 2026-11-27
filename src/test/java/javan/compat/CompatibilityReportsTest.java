@@ -309,6 +309,7 @@ final class CompatibilityReportsTest {
             "| `map-of-nonuple` | pass |",
             "| `map-of-decuple` | pass |",
             "| `map-of-fixed-custom-key-callbacks` | pass |",
+            "| `map-copyof-custom-key-callbacks` | pass |",
             "| `map-of-entries` | pass |",
             "| `set-copy-of` | pass |",
             "| `set-of-empty` | pass |",
@@ -516,6 +517,7 @@ final class CompatibilityReportsTest {
             "\"feature\": \"map-of-nonuple\"",
             "\"feature\": \"map-of-decuple\"",
             "\"feature\": \"map-of-fixed-custom-key-callbacks\"",
+            "\"feature\": \"map-copyof-custom-key-callbacks\"",
             "\"feature\": \"set-copy-of\"",
             "\"feature\": \"set-of-empty\"",
             "\"feature\": \"set-of-singleton\"",
@@ -626,10 +628,10 @@ final class CompatibilityReportsTest {
             "A broad JDK-compatibility release must report:",
             "The first native release is scenario-bounded.",
             "not a release-completion percentage.",
-            "| support rows | 334 |",
-            "| pass rows | 333 |",
+            "| support rows | 335 |",
+            "| pass rows | 334 |",
             "| scoped rows | 1 |",
-            "| accounted rows | 333 |",
+            "| accounted rows | 334 |",
             "| unaccounted rows | 1 |"
         );
         assertThat(matrix).contains(

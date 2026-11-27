@@ -678,6 +678,34 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanCopiesCustomMapKeys() throws Exception {
+        final Path project = project("selfhost-map-copyof-custom-keys");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.HashMap;
+            import java.util.Map;
+            public final class Main {
+                static final class Key {
+                    final int value; Key(int value) { this.value = value; }
+                    public int hashCode() { return 1; }
+                    public boolean equals(Object other) { return other instanceof Key key && value == key.value; }
+                }
+                public static void main(String[] args) {
+                    var source = new HashMap<Key, String>(); source.put(new Key(1), "one"); source.put(new Key(2), "two");
+                    var copy = Map.copyOf(source); source.clear();
+                    System.out.println(copy.get(new Key(1)));
+                    System.out.println(copy.get(new Key(2)));
+                }
+            }
+            """);
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/selfhost-map-copyof-custom-keys").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("one\ntwo\n");
+    }
+
+    @Test
     void nativeBuiltJavanUsesTenCustomKeysInMapOf() throws Exception {
         final Path project = project("selfhost-map-of-ten-custom-keys");
         writeJava(project, "com.acme.Main", """

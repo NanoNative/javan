@@ -129,7 +129,7 @@ final class BytecodeToIRCollectionSupport {
                 return false;
             }
             final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-            pushObjectCall(instructions, stack, localDeclarations, "javan_map_copy_of", arguments);
+            pushObjectCall(instructions, stack, localDeclarations, "javan_map_copy_of_java_into", arguments);
             return true;
         }
         if ("java/util/Collections".equals(owner)) {
