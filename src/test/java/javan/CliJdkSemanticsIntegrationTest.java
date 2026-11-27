@@ -17488,6 +17488,50 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void reflectionDeclarationAcceptsPrimitiveAndVoidClassLiterals() throws Exception {
+        final Path project = project("declared-reflection-primitives");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() {
+                    return new AnnotatedElement[] {boolean.class, byte.class, char.class, short.class, int.class,
+                        long.class, float.class, double.class, void.class};
+                }
+                public static void main(String[] args) {
+                    for (AnnotatedElement target : javanReflectionTargets()) {
+                        System.out.println(((Class<?>) target).getName());
+                    }
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/declared-reflection-primitives").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("boolean\nbyte\nchar\nshort\nint\nlong\nfloat\ndouble\nvoid\n");
+    }
+
+    @Test
+    void reflectionDeclarationRejectsMethodsOnPrimitiveClasses() throws Exception {
+        final Path project = project("declared-primitive-method");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] {int.class.getDeclaredMethod("missing")};
+                }
+                public static void main(String[] args) { }
+            }
+            """);
+        final CliRun check = run(tempDir, "check", project.toString());
+        assertThat(check.exitCode()).isEqualTo(2);
+        assertThat(check.stderr()).contains("error[JAVAN096]", "Primitive classes cannot declare method targets");
+    }
+
+    @Test
     void reflectionDeclarationPreservesAbstractMethodDispatch() throws Exception {
         final Path project = project("bounded-abstract-method");
         writeJava(project, "com.acme.Main", """

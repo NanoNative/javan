@@ -106,6 +106,13 @@ public final class ReflectionDeclaration {
                 return invalid(ownerName, "Each array element must be a class or declared method literal.");
             }
             final Instruction value = instructions.get(cursor + 2);
+            if (value.opcode() == 178 && classLiteralDescriptor(value).isPresent()) {
+                cursor += 3;
+                if (instructions.get(cursor++).opcode() != 83) {
+                    return invalid(ownerName, "Primitive classes cannot declare method targets.");
+                }
+                continue;
+            }
             if ((value.opcode() != 18 && value.opcode() != 19)
                 || value.className().isEmpty()) {
                 return invalid(ownerName, "Each target must name a class from the compiled world.");

@@ -72,8 +72,8 @@ Reflection fallback: a project may define one public static method named
 supported reflection subset. Javan reads its
 bytecode without executing the method or initializing its declaring class. Supported entries
 are class literals from the compiled application or scanned dependencies, their array class
-literals, primitive array class literals, and `getDeclaredMethod` on non-array classes,
-with a literal name and literal parameter types:
+literals, primitive and void class literals, primitive array class literals, and
+`getDeclaredMethod` on non-array classes, with a literal name and literal parameter types:
 
 ```java
 public static java.lang.reflect.AnnotatedElement[] javanReflectionTargets()
