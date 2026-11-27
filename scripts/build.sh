@@ -16,7 +16,10 @@ case "$(uname -s)" in
 esac
 
 OUTPUT=${1:-dist/javan$BOOTSTRAP_SUFFIX}
-VERSION=$(./mvnw -q help:evaluate -Dexpression=project.version -DforceStdout | tail -n 1)
+VERSION=${JAVAN_VERSION:-}
+if [ -z "$VERSION" ]; then
+  VERSION=$(./mvnw -q help:evaluate -Dexpression=project.version -DforceStdout | tail -n 1)
+fi
 GENERATION=${JAVAN_BOOTSTRAP_GENERATION:-3}
 SOURCE=${JAVAN_BOOTSTRAP_SOURCE:-}
 case "$GENERATION" in
@@ -47,7 +50,11 @@ if [ "$REUSE_TARGET" = "true" ]; then
     exit 1
   fi
 else
-  ./mvnw -q -DskipTests clean package
+  if [ -n "${JAVAN_VERSION:-}" ]; then
+    ./mvnw -q "-Djavan.version=$VERSION" -DskipTests clean package
+  else
+    ./mvnw -q -DskipTests clean package
+  fi
 fi
 mkdir -p "$(dirname -- "$OUTPUT")"
 JAR="target/javan-$VERSION.jar"
