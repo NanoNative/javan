@@ -656,6 +656,7 @@ public final class CompatibilityReports {
             pass("map-contains-value"),
             pass("map-concrete-key-set"),
             pass("map-concrete-entry-set"),
+            pass("map-entry-set-backed-view"),
             pass("map-of-singleton"),
             pass("map-of-pair"),
             pass("map-of-triple"),

@@ -105,8 +105,12 @@ bulk operations modify the map. Supported `Map.values()` views also remain conne
 Their iterators remove their returned entry, including when values repeat. Concurrent map iterators
 retain and safely return a value even when its mapping is removed during garbage collection.
 Application-defined value comparisons are not yet supported and raise `UnsupportedOperationException`
-before bulk operations modify the map. `entrySet()` is still a detached snapshot and does not yet
-provide Java's backed-view behavior. It must not be relied on to modify the map.
+before bulk operations modify the map. `HashMap` and `LinkedHashMap` provide backed `entrySet()`
+views, including through unmodifiable map wrappers. Reads reflect current mappings. Supported
+removals compare the key and value, and iterator removal uses the returned entry's key. Iteration
+and copying produce detached native entries. `Map.Entry.setValue` and application-defined entry
+comparisons remain unsupported. Concurrent maps, enum maps and immutable factories still return
+detached `entrySet()` snapshots.
 
 Zero-argument `ArrayList` allocation, single-element append and clear coordinate their native
 storage updates with garbage collection. Other list mutation paths still require concurrency

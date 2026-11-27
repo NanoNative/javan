@@ -4089,6 +4089,134 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mapEntrySetReadsCurrentMappingsAndRemovesMatchingEntries() throws Exception {
+        final Path project = project("map-entry-set-live");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Iterator;
+            import java.util.LinkedHashMap;
+            import java.util.Map;
+            import java.util.Set;
+
+            public final class Main {
+                public static void main(String[] args) {
+                    Map<String, String> map = new LinkedHashMap<>();
+                    Set<Map.Entry<String, String>> entries = map.entrySet();
+                    map.put("first", "old");
+                    map.put("second", "keep");
+                    map.put("first", "current");
+                    System.out.println(entries.size());
+                    System.out.println(entries.contains(Map.entry("first", "old")));
+                    System.out.println(entries.contains(Map.entry("first", "current")));
+                    System.out.println(entries.remove(Map.entry("first", "old")));
+                    Iterator<Map.Entry<String, String>> iterator = entries.iterator();
+                    System.out.println(iterator.next().getValue());
+                    iterator.remove();
+                    System.out.println(map.containsKey("first"));
+                    System.out.println(entries.remove(Map.entry("second", "keep")));
+                    System.out.println(map.isEmpty());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("2\nfalse\ntrue\nfalse\ncurrent\nfalse\ntrue\ntrue\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-entry-set-live").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void mapEntrySetCopiesKeepTheirMappingsDuringCollection() throws Exception {
+        final Path project = project("map-entry-set-copy");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.ArrayList;
+            import java.util.LinkedHashMap;
+            import java.util.List;
+            import java.util.Map;
+            import java.util.Set;
+
+            public final class Main {
+                public static void main(String[] args) {
+                    Map<String, String> map = new LinkedHashMap<>();
+                    map.put("first", new StringBuilder().append("value").append(1).toString());
+                    map.put("second", new StringBuilder().append("value").append(2).toString());
+                    Set<Map.Entry<String, String>> entries = map.entrySet();
+                    Object[] array = entries.toArray();
+                    List<Map.Entry<String, String>> list = List.copyOf(entries);
+                    Set<Map.Entry<String, String>> set = Set.copyOf(entries);
+                    ArrayList<Map.Entry<String, String>> added = new ArrayList<>();
+                    added.add(Map.entry("anchor", "before"));
+                    added.addAll(0, entries);
+                    entries.clear();
+                    System.out.println(map.isEmpty());
+                    System.out.println(((Map.Entry<?, ?>) array[0]).getValue());
+                    System.out.println(((Map.Entry<?, ?>) array[1]).getValue());
+                    System.out.println(list.get(0).getValue());
+                    System.out.println(set.contains(Map.entry("second", "value2")));
+                    System.out.println(added.get(0).getKey());
+                    System.out.println(added.get(2).getKey());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("true\nvalue1\nvalue2\nvalue1\ntrue\nfirst\nanchor\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-entry-set-copy").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void mapEntrySetFiltersMatchingPairsAndRejectsChangesThroughUnmodifiableMap() throws Exception {
+        final Path project = project("map-entry-set-filter");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Collections;
+            import java.util.HashMap;
+            import java.util.List;
+            import java.util.Map;
+            import java.util.Set;
+
+            public final class Main {
+                static void remove(Set<Map.Entry<String, String>> entries, Map.Entry<String, String> entry) {
+                    try {
+                        entries.remove(entry);
+                    } catch (UnsupportedOperationException expected) {
+                        System.out.println("immutable");
+                    }
+                }
+                public static void main(String[] args) {
+                    Map<String, String> map = new HashMap<>();
+                    Set<Map.Entry<String, String>> readonly = Collections.unmodifiableMap(map).entrySet();
+                    map.put("keep", "same");
+                    map.put("remove", "same");
+                    Set<Map.Entry<String, String>> entries = map.entrySet();
+                    System.out.println(entries.retainAll(List.of(Map.entry("keep", "same"))));
+                    System.out.println(map.size());
+                    System.out.println(readonly.contains(Map.entry("keep", "same")));
+                    remove(readonly, Map.entry("keep", "same"));
+                    System.out.println(entries.removeAll(List.of(Map.entry("keep", "wrong"))));
+                    System.out.println(map.containsKey("keep"));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("true\n1\ntrue\nimmutable\nfalse\ntrue\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-entry-set-filter").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void mapCopyOfBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("map-copy-of");
         writeJava(project, "com.acme.Main", """

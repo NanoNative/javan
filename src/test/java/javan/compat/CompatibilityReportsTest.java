@@ -289,6 +289,7 @@ final class CompatibilityReportsTest {
             "| `map-contains-value` | pass |",
             "| `map-concrete-key-set` | pass |",
             "| `map-concrete-entry-set` | pass |",
+            "| `map-entry-set-backed-view` | pass |",
             "| `map-of-singleton` | pass |",
             "| `map-of-pair` | pass |",
             "| `map-of-triple` | pass |",
@@ -490,6 +491,7 @@ final class CompatibilityReportsTest {
             "\"feature\": \"map-remove-key-value\"",
             "\"feature\": \"map-concrete-key-set\"",
             "\"feature\": \"map-concrete-entry-set\"",
+            "\"feature\": \"map-entry-set-backed-view\"",
             "\"feature\": \"map-values-backed-view\"",
             "\"feature\": \"concurrent-map-values-iterator-gc\"",
             "\"feature\": \"map-of-singleton\"",
@@ -612,10 +614,10 @@ final class CompatibilityReportsTest {
             "A broad JDK-compatibility release must report:",
             "The first native release is scenario-bounded.",
             "not a release-completion percentage.",
-            "| support rows | 324 |",
-            "| pass rows | 323 |",
+            "| support rows | 325 |",
+            "| pass rows | 324 |",
             "| scoped rows | 1 |",
-            "| accounted rows | 323 |",
+            "| accounted rows | 324 |",
             "| unaccounted rows | 1 |"
         );
         assertThat(matrix).contains(
