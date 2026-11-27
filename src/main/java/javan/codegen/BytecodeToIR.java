@@ -538,6 +538,21 @@ public final class BytecodeToIR {
         for (final Map.Entry<String, Set<String>> entry : materializedTypes.entrySet()) {
             result.put(entry.getKey(), orderedThrowableTypes(entry.getValue()));
         }
+        result.put("javan_list_contains_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/util/Collection", "contains", "(Ljava/lang/Object;)Z"
+        )));
+        result.put("javan_list_contains_all_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/util/Collection", "containsAll", "(Ljava/util/Collection;)Z"
+        )));
+        result.put("javan_set_equals", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/util/Set", "equals", "(Ljava/lang/Object;)Z"
+        )));
+        result.put("javan_iterator_next", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/util/Iterator", "next", "()Ljava/lang/Object;"
+        )));
+        result.put("javan_list_iterator_remove", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/util/Iterator", "remove", "()V"
+        )));
         result.put("javan_atomic_integer_add_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/util/concurrent/atomic/AtomicInteger", "addAndGet", "(I)I"
         )));

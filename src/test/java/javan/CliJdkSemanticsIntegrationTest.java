@@ -3670,6 +3670,644 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mapKeySetRetainsBackingMapAndRemovesNullValues() throws Exception {
+        final Path project = project("map-key-set-roots");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static Set<String> keys() {
+                    Map<String, String> values = new HashMap<>(); values.put("x", null); values.put("y", "two");
+                    return values.keySet();
+                }
+                public static void main(String[] args) {
+                    Set<String> keys = keys();
+                    for (int i = 0; i < 100; i++) { Object[] garbage = new Object[8]; garbage[0] = new Object(); }
+                    System.out.println(keys.size()); System.out.println(keys.remove("x"));
+                    System.out.println(keys.contains("x")); System.out.println(keys.remove("missing"));
+                    keys.clear(); System.out.println(keys.size());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("2\ntrue\nfalse\nfalse\n0\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-key-set-roots").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void immutableMapKeySetSearchAndRemovalMatchesJvm() throws Exception {
+        final Path project = project("immutable-map-key-set-search");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static void remove(Set<String> keys, String query) {
+                    try { System.out.println(keys.remove(query)); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                }
+                static void contains(Set<String> keys, String query) {
+                    try { System.out.println(keys.contains(query)); }
+                    catch (NullPointerException expected) { System.out.println("null"); }
+                }
+                public static void main(String[] args) {
+                    Set<String> keys = Map.of("x", "y").keySet();
+                    remove(keys, "missing"); remove(keys, "x"); remove(keys, null); contains(keys, null);
+                    remove(Collections.unmodifiableMap(new HashMap<String, String>()).keySet(), "missing");
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("false\nimmutable\nfalse\nnull\nimmutable\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/immutable-map-key-set-search").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void mapKeySetIteratorRemovesBackingEntriesAndDetectsChanges() throws Exception {
+        final Path project = project("map-key-set-iterator");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static void changed(Iterator<String> iterator) {
+                    Object value;
+                    try { value = iterator.next(); }
+                    catch (ConcurrentModificationException expected) { System.out.println("changed"); return; }
+                    System.out.println(value == null ? "null" : "value");
+                }
+                static void remove(Iterator<String> iterator) {
+                    try { iterator.remove(); System.out.println("removed"); }
+                    catch (IllegalStateException expected) { System.out.println("state"); }
+                }
+                public static void main(String[] args) {
+                    Map<String, String> values = new LinkedHashMap<>(); values.put("a", "one"); values.put("b", "two");
+                    Iterator<String> iterator = values.keySet().iterator();
+                    remove(iterator); System.out.println(iterator.next()); remove(iterator); remove(iterator);
+                    System.out.println(values.containsKey("a")); System.out.println(iterator.next());
+                    remove(iterator); System.out.println(values.size());
+                    values.put("a", "one"); iterator = values.keySet().iterator(); values.put("b", "two"); changed(iterator);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("state\na\nremoved\nstate\nfalse\nb\nremoved\n0\nchanged\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-key-set-iterator").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void mapKeySetRemoveIfStopsAfterConcurrentModification() throws Exception {
+        final Path project = project("map-key-set-remove-if-modification");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            import java.util.function.Predicate;
+            public final class Main {
+                static final class RemoveOther implements Predicate<String> {
+                    final Map<String, String> values;
+                    RemoveOther(Map<String, String> values) { this.values = values; }
+                    public boolean test(String key) { values.remove("b"); return true; }
+                }
+                static void filter(Set<String> keys, Predicate<String> predicate) {
+                    try { keys.removeIf(predicate); }
+                    catch (ConcurrentModificationException expected) { System.out.println("modified"); }
+                }
+                public static void main(String[] args) {
+                    Map<String, String> values = new LinkedHashMap<>();
+                    values.put("a", "one"); values.put("b", "two"); values.put("c", "three");
+                    filter(values.keySet(), new RemoveOther(values));
+                    System.out.println(values.size()); System.out.println(values.containsKey("a"));
+                    System.out.println(values.containsKey("c"));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("modified\n2\ntrue\ntrue\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-key-set-remove-if-modification").toString()),
+            Duration.ofSeconds(10), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void mapKeySetRemoveIfStopsWhenPredicateThrows() throws Exception {
+        final Path project = project("map-key-set-remove-if-throws");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            import java.util.function.Predicate;
+            public final class Main {
+                static final class Filter implements Predicate<String> {
+                    public boolean test(String key) { if ("b".equals(key)) throw new IllegalStateException(); return true; }
+                }
+                static void filter(Set<String> keys, Predicate<String> predicate) {
+                    try { keys.removeIf(predicate); }
+                    catch (IllegalStateException expected) { System.out.println("failed"); }
+                }
+                public static void main(String[] args) {
+                    Map<String, String> values = new LinkedHashMap<>();
+                    values.put("a", "one"); values.put("b", "two"); values.put("c", "three");
+                    filter(values.keySet(), new Filter());
+                    System.out.println(values.size()); System.out.println(values.containsKey("b"));
+                    System.out.println(values.containsKey("c"));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("failed\n2\ntrue\ntrue\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-key-set-remove-if-throws").toString()),
+            Duration.ofSeconds(10), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void concurrentMapKeySetRemovalDoesNotLoseOtherKeys() throws Exception {
+        final Path project = project("concurrent-map-key-set-removal");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            import java.util.concurrent.*;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final class Worker implements Runnable {
+                    final Map<String, String> values; final Set<String> keys; final String key; final AtomicInteger failures;
+                    Worker(Map<String, String> values, Set<String> keys, String key, AtomicInteger failures) {
+                        this.values = values; this.keys = keys; this.key = key; this.failures = failures;
+                    }
+                    public void run() {
+                        for (int i = 0; i < 1000; i++) {
+                            values.put(key, key); if (!keys.remove(key)) failures.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Map<String, String> values = new ConcurrentHashMap<>(); Set<String> keys = values.keySet();
+                    AtomicInteger failures = new AtomicInteger();
+                    Thread first = new Thread(new Worker(values, keys, "a", failures));
+                    Thread second = new Thread(new Worker(values, keys, "b", failures));
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(failures.get()); System.out.println(values.size()); System.out.println(keys.size());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("0\n0\n0\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/concurrent-map-key-set-removal").toString()),
+            Duration.ofSeconds(90), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void concurrentMapKeySetCopiesRemainConsistentDuringMutation() throws Exception {
+        final Path project = project("concurrent-map-key-set-copy");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            import java.util.concurrent.*;
+            public final class Main {
+                static final class Worker implements Runnable {
+                    final Map<String, String> values;
+                    Worker(Map<String, String> values) { this.values = values; }
+                    public void run() {
+                        for (int i = 0; i < 300; i++) { values.put("changing", "value"); values.remove("changing"); }
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Map<String, String> values = new ConcurrentHashMap<>(); values.put("anchor", "value");
+                    Set<String> keys = values.keySet(); Thread worker = new Thread(new Worker(values)); worker.start();
+                    int failures = 0;
+                    for (int i = 0; i < 300; i++) {
+                        Object[] array = keys.toArray(); boolean found = false;
+                        for (Object item : array) { if (item == null) failures++; if ("anchor".equals(item)) found = true; }
+                        if (!found || !List.copyOf(keys).contains("anchor") || !Set.copyOf(keys).contains("anchor")
+                            || !keys.containsAll(List.of("anchor"))) failures++;
+                    }
+                    worker.join(); System.out.println(failures); System.out.println(values.containsKey("anchor"));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("0\ntrue\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/concurrent-map-key-set-copy").toString()),
+            Duration.ofSeconds(90), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void concurrentMapKeySetIteratorRetainsNextKeyAfterRemoval() throws Exception {
+        final Path project = project("concurrent-map-key-set-iterator-next");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            import java.util.concurrent.*;
+            public final class Main {
+                public static void main(String[] args) {
+                    Map<String, String> values = new ConcurrentHashMap<>();
+                    String key = new StringBuilder().append("entry").append(7).toString(); values.put(key, "one");
+                    Iterator<String> iterator = values.keySet().iterator();
+                    System.out.println(iterator.hasNext()); values.remove(key); key = null;
+                    for (int i = 0; i < 100; i++) { new StringBuilder().append(i).toString(); }
+                    System.out.println(iterator.next()); System.out.println(iterator.hasNext());
+                    values.put("a", "one"); values.put("b", "two"); iterator = values.keySet().iterator();
+                    String first = iterator.next(); String second = "a".equals(first) ? "b" : "a";
+                    values.remove(second); System.out.println(iterator.next().equals(second));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("true\nentry7\nfalse\ntrue\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/concurrent-map-key-set-iterator-next").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void concurrentMapKeySetIteratorNeverRemovesAnotherKey() throws Exception {
+        final Path project = project("concurrent-map-key-set-iterator");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            import java.util.concurrent.*;
+            public final class Main {
+                public static void main(String[] args) {
+                    Map<String, String> values = new ConcurrentHashMap<>(); values.put("a", "one"); values.put("b", "two");
+                    Iterator<String> iterator = values.keySet().iterator(); String first = iterator.next();
+                    values.remove(first); values.put("new", "three"); iterator.remove();
+                    System.out.println(values.size()); System.out.println(values.containsKey("new"));
+                    System.out.println(values.containsKey("a") || values.containsKey("b"));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("2\ntrue\ntrue\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/concurrent-map-key-set-iterator").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void mapKeySetAdditionMatchesJvm() throws Exception {
+        final Path project = project("map-key-set-addition");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static void add(Set<String> keys, Collection<String> values) {
+                    try { System.out.println(keys.addAll(values)); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                    catch (NullPointerException expected) { System.out.println("null"); }
+                }
+                public static void main(String[] args) {
+                    Map<String, String> values = new HashMap<>();
+                    add(values.keySet(), List.of()); add(values.keySet(), List.of("x")); add(values.keySet(), null);
+                    add(Map.of("x", "y").keySet(), List.of());
+                    add(Collections.unmodifiableMap(values).keySet(), List.of()); System.out.println(values.size());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("false\nimmutable\nnull\nfalse\nimmutable\n0\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-key-set-addition").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void mapKeySetBulkFilteringRejectsUnsupportedKeysBeforeMutation() throws Exception {
+        final Path project = project("map-key-set-filter-unsupported-key");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static final class Key {
+                    public boolean equals(Object other) { return other instanceof Key; }
+                    public int hashCode() { return 1; }
+                }
+                static void remove(Set<Object> keys, List<Object> probe) {
+                    try { System.out.println(keys.removeAll(probe)); }
+                    catch (UnsupportedOperationException expected) { System.out.println(expected.getMessage()); }
+                }
+                public static void main(String[] args) {
+                    Map<Object, String> values = new LinkedHashMap<>(); values.put("a", "one"); values.put(new Key(), "two");
+                    List<Object> probe = List.of("a", new Key()); remove(values.keySet(), probe);
+                    System.out.println(values.size()); System.out.println(values.containsKey("a"));
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-key-set-filter-unsupported-key").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("application-defined map key queries are not supported in key views\n2\ntrue\n");
+    }
+
+    @Test
+    void immutableMapKeySetEqualityWithNullMatchesJvm() throws Exception {
+        final Path project = project("map-key-set-equals-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                public static void main(String[] args) {
+                    Set<String> nulls = new HashSet<>(); nulls.add(null);
+                    System.out.println(Map.of("a", "one").keySet().equals(nulls));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("false\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-key-set-equals-null").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void mapKeySetEqualityReportsUnsupportedApplicationKeys() throws Exception {
+        final Path project = project("map-key-set-equals-unsupported-key");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static final class Key {
+                    public boolean equals(Object other) { return other instanceof Key; }
+                    public int hashCode() { return 1; }
+                }
+                static void compare(Set<Key> keys, Set<Key> probe) {
+                    try { System.out.println(keys.equals(probe)); }
+                    catch (UnsupportedOperationException expected) { System.out.println(expected.getMessage()); }
+                }
+                public static void main(String[] args) {
+                    Map<Key, String> values = new HashMap<>(); values.put(new Key(), "one");
+                    compare(values.keySet(), Set.of(new Key())); System.out.println(values.size());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-key-set-equals-unsupported-key").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("application-defined map key queries are not supported in key views\n1\n");
+    }
+
+    @Test
+    void concurrentMapKeySetIteratorRejectsUnsupportedApplicationKeysWithoutMutation() throws Exception {
+        final Path project = project("concurrent-map-key-set-iterator-unsupported");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            import java.util.concurrent.*;
+            public final class Main {
+                static final class Key {
+                    public boolean equals(Object other) { return other instanceof Key; }
+                    public int hashCode() { return 1; }
+                }
+                public static void main(String[] args) {
+                    Map<Key, String> values = new ConcurrentHashMap<>(); values.put(new Key(), "one");
+                    Iterator<Key> iterator = values.keySet().iterator(); iterator.next();
+                    try { iterator.remove(); } catch (UnsupportedOperationException expected) { System.out.println(expected.getMessage()); }
+                    System.out.println(values.size());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/concurrent-map-key-set-iterator-unsupported").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("application-defined map key queries are not supported in key views\n1\n");
+    }
+
+    @Test
+    void mapKeySetRejectsUnsupportedApplicationKeysWithoutMutation() throws Exception {
+        final Path project = project("map-key-set-unsupported-key");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static final class Key {
+                    final int id; Key(int id) { this.id = id; }
+                    public boolean equals(Object other) { return other instanceof Key && id == ((Key) other).id; }
+                    public int hashCode() { return id; }
+                }
+                static void remove(Set<Key> keys, Key query) {
+                    try { System.out.println(keys.remove(query)); }
+                    catch (UnsupportedOperationException expected) { System.out.println(expected.getMessage()); }
+                }
+                static void contains(Set<Key> keys, Key query) {
+                    try { System.out.println(keys.contains(query)); }
+                    catch (UnsupportedOperationException expected) { System.out.println(expected.getMessage()); }
+                }
+                static void containsAll(Set<Key> keys, List<Key> query) {
+                    try { System.out.println(keys.containsAll(query)); }
+                    catch (UnsupportedOperationException expected) { System.out.println(expected.getMessage()); }
+                }
+                public static void main(String[] args) {
+                    Map<Key, String> values = new HashMap<>(); values.put(new Key(1), "one");
+                    Set<Key> keys = values.keySet(); Key query = new Key(1);
+                    remove(keys, query); contains(keys, query); containsAll(keys, List.of(query));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-key-set-unsupported-key").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(("application-defined map key queries are not supported in key views\n").repeat(3) + "1\n");
+    }
+
+    @Test
+    void mapKeySetBulkFilteringPreservesEarlierChangesOnFailure() throws Exception {
+        final Path project = project("map-key-set-filter-failure");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static void retain(Set<String> keys, Collection<String> probe) {
+                    try { System.out.println(keys.retainAll(probe)); }
+                    catch (NullPointerException expected) { System.out.println("null"); }
+                }
+                public static void main(String[] args) {
+                    Map<String, String> values = new LinkedHashMap<>();
+                    values.put("a", "one"); values.put(null, "null"); values.put("b", "two");
+                    retain(values.keySet(), List.of("b"));
+                    System.out.println(values.size()); System.out.println(values.containsKey("a"));
+                    System.out.println(values.containsKey(null)); System.out.println(values.containsKey("b"));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("null\n2\nfalse\ntrue\ntrue\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-key-set-filter-failure").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void mapKeySetBulkFilteringMatchesJvm() throws Exception {
+        final Path project = project("map-key-set-filter");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static void remove(Set<String> keys, Collection<String> probe) {
+                    try { System.out.println(keys.removeAll(probe)); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                    catch (NullPointerException expected) { System.out.println("null"); }
+                }
+                static void retain(Set<String> keys, Collection<String> probe) {
+                    try { System.out.println(keys.retainAll(probe)); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                    catch (NullPointerException expected) { System.out.println("null"); }
+                }
+                public static void main(String[] args) {
+                    Map<String, String> values = new LinkedHashMap<>(); values.put("a", "one"); values.put("b", "two");
+                    Set<String> keys = values.keySet(); remove(keys, List.of("a"));
+                    System.out.println(values.containsKey("a")); retain(keys, List.of("b"));
+                    retain(keys, List.of()); System.out.println(values.size());
+                    values.put("a", "one"); values.put("b", "two"); remove(keys, values.keySet());
+                    System.out.println(values.size()); remove(keys, null);
+                    Set<String> immutable = Map.of("x", "y").keySet();
+                    remove(immutable, List.of("missing")); retain(immutable, List.of("x"));
+                    remove(immutable, List.of("x")); retain(immutable, List.of());
+                    remove(Collections.unmodifiableMap(values).keySet(), List.of());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("true\nfalse\nfalse\ntrue\n0\ntrue\n0\nnull\n"
+            + "false\nfalse\nimmutable\nimmutable\nimmutable\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-key-set-filter").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void mapKeySetSupportsArrayAndCollectionCopies() throws Exception {
+        final Path project = project("map-key-set-copies");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                public static void main(String[] args) {
+                    Map<String, String> values = new LinkedHashMap<>(); values.put("a", "one");
+                    Set<String> keys = values.keySet(); values.put("b", "two");
+                    Object[] array = keys.toArray(); List<String> list = List.copyOf(keys); Set<String> set = Set.copyOf(keys);
+                    System.out.println(array.length); System.out.println(list.size()); System.out.println(set.size());
+                    System.out.println(list.contains("a") && list.contains("b"));
+                    System.out.println(set.contains("a") && set.contains("b"));
+                    values.remove("a"); System.out.println(keys.size()); System.out.println(list.size());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("2\n2\n2\ntrue\ntrue\n1\n2\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-key-set-copies").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void mapKeySetReflectsBackingChangesAndMutations() throws Exception {
+        final Path project = project("map-key-set-live");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                public static void main(String[] args) {
+                    Map<String, String> values = new HashMap<>(); values.put("x", "one");
+                    Set<String> keys = values.keySet(); values.put("y", "two");
+                    System.out.println(keys.contains("y")); System.out.println(keys.remove("x"));
+                    System.out.println(values.containsKey("x")); keys.clear(); System.out.println(values.size());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("true\ntrue\nfalse\n0\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-key-set-live").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void immutableMapKeySetRejectsClear() throws Exception {
+        final Path project = project("immutable-map-key-set-clear");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static void check(Set<String> values) {
+                    try { values.clear(); System.out.println("cleared"); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                }
+                public static void main(String[] args) {
+                    check(Map.of("x", "y").keySet());
+                    check(Collections.unmodifiableMap(new HashMap<String, String>()).keySet());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("immutable\nimmutable\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/immutable-map-key-set-clear").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void emptyMapClearMatchesJvm() throws Exception {
         final Path project = project("empty-map-clear");
         writeJava(project, "com.acme.Main", """

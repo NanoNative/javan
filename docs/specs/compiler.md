@@ -98,6 +98,11 @@ within the supported key semantics. `Map.ofEntries` also rejects null arrays and
 native map entries and does not yet support application-defined `Map.Entry` implementations.
 `containsKey`, `containsValue`, `get` and `getOrDefault` reject null queries on maps created by
 `Map.of`, `Map.ofEntries` and `Map.copyOf`, including unmodifiable views.
+Supported `Map.keySet()` views remain connected to their map. Reads and supported removals reflect
+changes in either direction, and concurrent map iterators remove the key they returned. Application-defined
+key comparisons in these views are not yet supported and raise `UnsupportedOperationException` before
+bulk operations modify the map. `values()` and `entrySet()` are still detached snapshots and do not yet
+provide Java's backed-view behavior. They must not be relied on to modify the map.
 
 Zero-argument `ArrayList` allocation, single-element append and clear coordinate their native
 storage updates with garbage collection. Other list mutation paths still require concurrency

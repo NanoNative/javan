@@ -2507,6 +2507,11 @@ public final class JdkCallSupport {
         if (isListAddAll(methodRef) || isCollectionAddAll(methodRef)) {
             return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException", "java/lang/OutOfMemoryError");
         }
+        if (isCollectionRuntimeOwner(methodRef.owner()) && "removeIf".equals(methodRef.name())
+            && "(Ljava/util/function/Predicate;)Z".equals(methodRef.descriptor())) {
+            return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException",
+                "java/lang/IllegalStateException", "java/util/ConcurrentModificationException");
+        }
         if (isCollectionFilterAll(methodRef)) {
             return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException",
                 "java/util/ConcurrentModificationException");
@@ -2538,8 +2543,15 @@ public final class JdkCallSupport {
             || isMapRemove(methodRef) || isMapReplace(methodRef) || isMapPutAll(methodRef)) {
             return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException");
         }
-        if (isCollectionObjectSearch(methodRef) || isCollectionContainsAll(methodRef)
-            || isCollectionSizeQuery(methodRef) || isMapObjectGetOrPut(methodRef)
+        if (("java/util/Set".equals(methodRef.owner()) || "java/util/AbstractSet".equals(methodRef.owner())
+            || "java/util/HashSet".equals(methodRef.owner()) || "java/util/LinkedHashSet".equals(methodRef.owner()))
+            && "equals".equals(methodRef.name()) && "(Ljava/lang/Object;)Z".equals(methodRef.descriptor())) {
+            return List.of("java/lang/UnsupportedOperationException");
+        }
+        if (isCollectionContains(methodRef) || isCollectionContainsAll(methodRef)) {
+            return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException");
+        }
+        if (isCollectionObjectSearch(methodRef) || isCollectionSizeQuery(methodRef) || isMapObjectGetOrPut(methodRef)
             || isMapMembershipOrDefaultQuery(methodRef)) {
             return List.of("java/lang/NullPointerException");
         }
@@ -2904,7 +2916,13 @@ public final class JdkCallSupport {
         }
         if (("java/util/Iterator".equals(methodRef.owner()) || "java/util/ListIterator".equals(methodRef.owner()))
             && "next".equals(methodRef.name()) && "()Ljava/lang/Object;".equals(methodRef.descriptor())) {
-            return List.of("java/util/NoSuchElementException", "java/util/ServiceConfigurationError");
+            return List.of("java/util/NoSuchElementException", "java/util/ServiceConfigurationError",
+                "java/util/ConcurrentModificationException");
+        }
+        if (("java/util/Iterator".equals(methodRef.owner()) || "java/util/ListIterator".equals(methodRef.owner()))
+            && "remove".equals(methodRef.name()) && "()V".equals(methodRef.descriptor())) {
+            return List.of("java/lang/IllegalStateException", "java/lang/UnsupportedOperationException",
+                "java/util/ConcurrentModificationException");
         }
         return List.of();
     }

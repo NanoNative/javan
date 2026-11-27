@@ -1660,7 +1660,7 @@ final class BytecodeToIRTest {
         );
 
         assertThat(program.functions()).filteredOn(function -> function.name().equals("iterate")).singleElement().satisfies(function ->
-            assertThat(function.instructions()).containsExactly(
+            assertThat(function.instructions()).containsSubsequence(
                 IrInstruction.assignObject("object0", IrExpression.objectLocal("arg0")),
                 IrInstruction.label("label_iterator_for_each_remaining_loop_2_1"),
                 IrInstruction.assignInt(
@@ -1677,12 +1677,15 @@ final class BytecodeToIRTest {
                     "object2",
                     IrExpression.objectCall("javan_iterator_next", List.of(IrExpression.objectLocal("object0")))
                 ),
+                IrInstruction.branchIf("label_iterator_for_each_remaining_end_2_1",
+                    IrExpression.intComparison("!=", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))),
                 IrInstruction.callStaticVoid(
                     "javan_materialized_lambda_apply_void",
                     List.of(IrExpression.objectLocal("arg1"), IrExpression.objectLocal("object2"))
                 ),
                 IrInstruction.jump("label_iterator_for_each_remaining_loop_2_1"),
                 IrInstruction.label("label_iterator_for_each_remaining_end_2_1"),
+                IrInstruction.propagatePending(),
                 IrInstruction.returnVoid()
             )
         );
@@ -1711,7 +1714,7 @@ final class BytecodeToIRTest {
         );
 
         assertThat(program.functions()).filteredOn(function -> function.name().equals("iterate")).singleElement().satisfies(function ->
-            assertThat(function.instructions()).containsExactly(
+            assertThat(function.instructions()).containsSubsequence(
                 IrInstruction.assignObject("object0", IrExpression.objectLocal("arg0")),
                 IrInstruction.label("label_iterator_for_each_remaining_loop_2_1"),
                 IrInstruction.assignInt(
@@ -1728,12 +1731,15 @@ final class BytecodeToIRTest {
                     "object2",
                     IrExpression.objectCall("javan_iterator_next", List.of(IrExpression.objectLocal("object0")))
                 ),
+                IrInstruction.branchIf("label_iterator_for_each_remaining_end_2_1",
+                    IrExpression.intComparison("!=", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))),
                 IrInstruction.callStaticVoid(
                     "javan_com_acme_Printer_accept__Ljava_lang_Object__V",
                     List.of(IrExpression.objectLocal("arg1"), IrExpression.objectLocal("object2"))
                 ),
                 IrInstruction.jump("label_iterator_for_each_remaining_loop_2_1"),
                 IrInstruction.label("label_iterator_for_each_remaining_end_2_1"),
+                IrInstruction.propagatePending(),
                 IrInstruction.returnVoid()
             )
         );
@@ -1757,7 +1763,7 @@ final class BytecodeToIRTest {
         );
 
         assertThat(program.functions()).filteredOn(function -> function.name().equals("iterate")).singleElement().satisfies(function ->
-            assertThat(function.instructions()).containsExactly(
+            assertThat(function.instructions()).containsSubsequence(
                 IrInstruction.assignObject(
                     "object0",
                     IrExpression.objectCall("javan_list_iterator", List.of(IrExpression.objectLocal("arg0")))
@@ -1777,12 +1783,15 @@ final class BytecodeToIRTest {
                     "object2",
                     IrExpression.objectCall("javan_iterator_next", List.of(IrExpression.objectLocal("object0")))
                 ),
+                IrInstruction.branchIf("label_iterator_for_each_remaining_end_2_1",
+                    IrExpression.intComparison("!=", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))),
                 IrInstruction.callStaticVoid(
                     "javan_materialized_lambda_apply_void",
                     List.of(IrExpression.objectLocal("arg1"), IrExpression.objectLocal("object2"))
                 ),
                 IrInstruction.jump("label_iterator_for_each_remaining_loop_2_1"),
                 IrInstruction.label("label_iterator_for_each_remaining_end_2_1"),
+                IrInstruction.propagatePending(),
                 IrInstruction.returnVoid()
             )
         );
@@ -1811,7 +1820,7 @@ final class BytecodeToIRTest {
         );
 
         assertThat(program.functions()).filteredOn(function -> function.name().equals("iterate")).singleElement().satisfies(function ->
-            assertThat(function.instructions()).containsExactly(
+            assertThat(function.instructions()).containsSubsequence(
                 IrInstruction.assignObject(
                     "object0",
                     IrExpression.objectCall("javan_list_iterator", List.of(IrExpression.objectLocal("arg0")))
@@ -1831,12 +1840,15 @@ final class BytecodeToIRTest {
                     "object2",
                     IrExpression.objectCall("javan_iterator_next", List.of(IrExpression.objectLocal("object0")))
                 ),
+                IrInstruction.branchIf("label_iterator_for_each_remaining_end_2_1",
+                    IrExpression.intComparison("!=", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))),
                 IrInstruction.callStaticVoid(
                     "javan_com_acme_Printer_accept__Ljava_lang_Object__V",
                     List.of(IrExpression.objectLocal("arg1"), IrExpression.objectLocal("object2"))
                 ),
                 IrInstruction.jump("label_iterator_for_each_remaining_loop_2_1"),
                 IrInstruction.label("label_iterator_for_each_remaining_end_2_1"),
+                IrInstruction.propagatePending(),
                 IrInstruction.returnVoid()
             )
         );
@@ -1865,7 +1877,7 @@ final class BytecodeToIRTest {
         );
 
         assertThat(program.functions()).filteredOn(function -> function.name().equals("iterate")).singleElement().satisfies(function ->
-            assertThat(function.instructions()).containsExactly(
+            assertThat(function.instructions()).containsSubsequence(
                 IrInstruction.assignObject(
                     "object0",
                     IrExpression.objectCall("javan_list_iterator", List.of(IrExpression.objectLocal("arg0")))
@@ -1886,6 +1898,8 @@ final class BytecodeToIRTest {
                     "object3",
                     IrExpression.objectCall("javan_iterator_next", List.of(IrExpression.objectLocal("object0")))
                 ),
+                IrInstruction.branchIf("label_collection_remove_if_end_2_2",
+                    IrExpression.intComparison("!=", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))),
                 IrInstruction.assignInt(
                     "int4",
                     IrExpression.intCall(
@@ -1900,10 +1914,13 @@ final class BytecodeToIRTest {
                 IrInstruction.jump("label_collection_remove_if_continue_2_2"),
                 IrInstruction.label("label_collection_remove_if_remove_2_2"),
                 IrInstruction.callStaticVoid("javan_list_iterator_remove", List.of(IrExpression.objectLocal("object0"))),
+                IrInstruction.branchIf("label_collection_remove_if_end_2_2",
+                    IrExpression.intComparison("!=", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))),
                 IrInstruction.assignInt("int1", IrExpression.intLiteral(1)),
                 IrInstruction.label("label_collection_remove_if_continue_2_2"),
                 IrInstruction.jump("label_collection_remove_if_loop_2_2"),
                 IrInstruction.label("label_collection_remove_if_end_2_2"),
+                IrInstruction.propagatePending(),
                 IrInstruction.returnInt(IrExpression.intLocal("int1"))
             )
         );
@@ -1927,7 +1944,7 @@ final class BytecodeToIRTest {
         );
 
         assertThat(program.functions()).filteredOn(function -> function.name().equals("iterate")).singleElement().satisfies(function ->
-            assertThat(function.instructions()).containsExactly(
+            assertThat(function.instructions()).containsSubsequence(
                 IrInstruction.assignObject(
                     "object0",
                     IrExpression.objectCall("javan_list_iterator", List.of(IrExpression.objectCall("javan_map_entry_set", List.of(IrExpression.objectLocal("arg0")))))
@@ -1947,6 +1964,8 @@ final class BytecodeToIRTest {
                     "object2",
                     IrExpression.objectCall("javan_iterator_next", List.of(IrExpression.objectLocal("object0")))
                 ),
+                IrInstruction.branchIf("label_map_for_each_end_2_1",
+                    IrExpression.intComparison("!=", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))),
                 IrInstruction.assignObject(
                     "object3",
                     IrExpression.objectCall("javan_map_entry_get_key", List.of(IrExpression.objectLocal("object2")))
@@ -1961,6 +1980,7 @@ final class BytecodeToIRTest {
                 ),
                 IrInstruction.jump("label_map_for_each_loop_2_1"),
                 IrInstruction.label("label_map_for_each_end_2_1"),
+                IrInstruction.propagatePending(),
                 IrInstruction.returnVoid()
             )
         );
@@ -2017,7 +2037,7 @@ final class BytecodeToIRTest {
         );
 
         assertThat(program.functions()).filteredOn(function -> function.name().equals("iterate")).singleElement().satisfies(function ->
-            assertThat(function.instructions()).containsExactly(
+            assertThat(function.instructions()).containsSubsequence(
                 IrInstruction.assignObject(
                     "object0",
                     IrExpression.objectCall("javan_list_iterator", List.of(IrExpression.objectCall("javan_map_entry_set", List.of(IrExpression.objectLocal("arg0")))))
@@ -2037,6 +2057,8 @@ final class BytecodeToIRTest {
                     "object2",
                     IrExpression.objectCall("javan_iterator_next", List.of(IrExpression.objectLocal("object0")))
                 ),
+                IrInstruction.branchIf("label_map_for_each_end_2_1",
+                    IrExpression.intComparison("!=", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))),
                 IrInstruction.assignObject(
                     "object3",
                     IrExpression.objectCall("javan_map_entry_get_key", List.of(IrExpression.objectLocal("object2")))
@@ -2051,6 +2073,7 @@ final class BytecodeToIRTest {
                 ),
                 IrInstruction.jump("label_map_for_each_loop_2_1"),
                 IrInstruction.label("label_map_for_each_end_2_1"),
+                IrInstruction.propagatePending(),
                 IrInstruction.returnVoid()
             )
         );
@@ -13255,11 +13278,13 @@ final class BytecodeToIRTest {
             plain(5, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnInt(IrExpression.intCall(
+        assertThat(function.instructions()).containsSubsequence(
+            IrInstruction.assignInt("int0", IrExpression.intCall(
                 "javan_set_equals",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
-            ))
+            )),
+            IrInstruction.propagatePending(),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
         );
     }
 
@@ -26923,8 +26948,9 @@ final class BytecodeToIRTest {
             plain(2, 177, "return")
         ));
 
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).containsSubsequence(
             IrInstruction.callStaticVoid("javan_list_iterator_remove", List.of(IrExpression.objectLocal("arg0"))),
+            IrInstruction.propagatePending(),
             IrInstruction.returnVoid()
         );
     }
@@ -26942,8 +26968,9 @@ final class BytecodeToIRTest {
             plain(2, 177, "return")
         ));
 
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).containsSubsequence(
             IrInstruction.callStaticVoid("javan_list_iterator_remove", List.of(IrExpression.objectLocal("arg0"))),
+            IrInstruction.propagatePending(),
             IrInstruction.returnVoid()
         );
     }

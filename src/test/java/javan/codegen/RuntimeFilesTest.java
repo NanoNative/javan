@@ -1787,7 +1787,7 @@ final class RuntimeFilesTest {
     }
 
     @Test
-    void runtimeSetEqualsUsesMaterializedMapKeySetSnapshot() throws Exception {
+    void runtimeSetEqualsObservesBackingMapChanges() throws Exception {
         final String stdout = runRuntimeBoundaryProbe("""
             #include "javan_runtime.h"
             #include <stdio.h>
@@ -1805,7 +1805,7 @@ final class RuntimeFilesTest {
             }
             """, "512");
 
-        assertThat(stdout).isEqualTo("1\n");
+        assertThat(stdout).isEqualTo("0\n");
     }
 
     @Test

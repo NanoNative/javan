@@ -1119,9 +1119,7 @@ final class BytecodeToIRCollectionSupport {
             }
         }
         if (isJdkSetEqualsOwner(methodRef.owner()) && "equals(Ljava/lang/Object;)Z".equals(signature)) {
-            stack.add(StackValue.intExpression(
-                IrExpression.intCall("javan_set_equals", List.of(receiver, arguments.getFirst()))
-            ));
+            pushIntCall(instructions, stack, localDeclarations, "javan_set_equals", List.of(receiver, arguments.getFirst()));
             return true;
         }
         if (isJdkSetOwner(methodRef.owner())) {
@@ -1535,6 +1533,8 @@ final class BytecodeToIRCollectionSupport {
             valueLocal,
             IrExpression.objectCall("javan_iterator_next", List.of(IrExpression.objectLocal(iteratorLocal)))
         ));
+        instructions.add(IrInstruction.branchIf(endLabel,
+            IrExpression.intComparison("!=", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))));
         lowerConsumerAcceptCall(
             classes,
             classFile,
@@ -1547,6 +1547,8 @@ final class BytecodeToIRCollectionSupport {
             consumer,
             IrExpression.objectLocal(valueLocal)
         );
+        instructions.add(IrInstruction.branchIf(endLabel,
+            IrExpression.intComparison("!=", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))));
         instructions.add(IrInstruction.jump(loopLabel));
         instructions.add(IrInstruction.label(endLabel));
     }
@@ -1594,6 +1596,8 @@ final class BytecodeToIRCollectionSupport {
             valueLocal,
             IrExpression.objectCall("javan_iterator_next", List.of(IrExpression.objectLocal(iteratorLocal)))
         ));
+        instructions.add(IrInstruction.branchIf(endLabel,
+            IrExpression.intComparison("!=", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))));
         lowerPredicateTestCall(
             classes,
             classFile,
@@ -1607,6 +1611,8 @@ final class BytecodeToIRCollectionSupport {
             IrExpression.objectLocal(valueLocal),
             predicateLocal
         );
+        instructions.add(IrInstruction.branchIf(endLabel,
+            IrExpression.intComparison("!=", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))));
         instructions.add(IrInstruction.branchIf(
             removeLabel,
             IrExpression.intComparison("!=", IrExpression.intLocal(predicateLocal), IrExpression.intLiteral(0))
@@ -1614,6 +1620,8 @@ final class BytecodeToIRCollectionSupport {
         instructions.add(IrInstruction.jump(continueLabel));
         instructions.add(IrInstruction.label(removeLabel));
         instructions.add(IrInstruction.callStaticVoid("javan_list_iterator_remove", List.of(IrExpression.objectLocal(iteratorLocal))));
+        instructions.add(IrInstruction.branchIf(endLabel,
+            IrExpression.intComparison("!=", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))));
         instructions.add(IrInstruction.assignInt(changedLocal, IrExpression.intLiteral(1)));
         instructions.add(IrInstruction.label(continueLabel));
         instructions.add(IrInstruction.jump(loopLabel));
@@ -1661,6 +1669,8 @@ final class BytecodeToIRCollectionSupport {
             entryLocal,
             IrExpression.objectCall("javan_iterator_next", List.of(IrExpression.objectLocal(iteratorLocal)))
         ));
+        instructions.add(IrInstruction.branchIf(endLabel,
+            IrExpression.intComparison("!=", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))));
         instructions.add(IrInstruction.assignObject(
             keyLocal,
             IrExpression.objectCall("javan_map_entry_get_key", List.of(IrExpression.objectLocal(entryLocal)))
@@ -1682,6 +1692,8 @@ final class BytecodeToIRCollectionSupport {
             IrExpression.objectLocal(keyLocal),
             IrExpression.objectLocal(valueLocal)
         );
+        instructions.add(IrInstruction.branchIf(endLabel,
+            IrExpression.intComparison("!=", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))));
         instructions.add(IrInstruction.jump(loopLabel));
         instructions.add(IrInstruction.label(endLabel));
     }
@@ -2663,10 +2675,14 @@ final class BytecodeToIRCollectionSupport {
             valueLocal,
             IrExpression.objectCall("javan_iterator_next", List.of(IrExpression.objectLocal(iteratorLocal)))
         ));
+        instructions.add(IrInstruction.branchIf(endLabel,
+            IrExpression.intComparison("!=", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))));
         instructions.add(IrInstruction.assignInt(
             predicateLocal,
             invokePredicateLambdaExpression(lambda, IrExpression.objectLocal(valueLocal))
         ));
+        instructions.add(IrInstruction.branchIf(endLabel,
+            IrExpression.intComparison("!=", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))));
         instructions.add(IrInstruction.branchIf(
             removeLabel,
             IrExpression.intComparison("!=", IrExpression.intLocal(predicateLocal), IrExpression.intLiteral(0))
@@ -2674,6 +2690,8 @@ final class BytecodeToIRCollectionSupport {
         instructions.add(IrInstruction.jump(continueLabel));
         instructions.add(IrInstruction.label(removeLabel));
         instructions.add(IrInstruction.callStaticVoid("javan_list_iterator_remove", List.of(IrExpression.objectLocal(iteratorLocal))));
+        instructions.add(IrInstruction.branchIf(endLabel,
+            IrExpression.intComparison("!=", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))));
         instructions.add(IrInstruction.assignInt(changedLocal, IrExpression.intLiteral(1)));
         instructions.add(IrInstruction.label(continueLabel));
         instructions.add(IrInstruction.jump(loopLabel));
