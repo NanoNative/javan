@@ -38,6 +38,13 @@ Class structs/descriptors are emitted for reachable code, instantiated types, in
 and required hierarchies. Stable type IDs preserve gaps when unused classes are omitted.
 Incomplete analysis or reachable supported `Class.forName` retains the parsed set conservatively.
 
+For future reflection optimization, resolve class and member targets from proven call-flow
+facts and emit direct calls or bounded dispatch where those targets are known. Retain only
+the metadata and implementations needed by the proven targets and the remaining observable
+reflection operations. Preserve Java initialization, access, argument conversion, exception
+and `Class`/`Method` behavior. Unknown targets require an explicit compatibility boundary
+before the existing conservative retention can be narrowed.
+
 Direct `Function.apply` and `Supplier.get` refine receivers through locals, casts, final fields,
 direct arguments/returns and merges. `receiver-provenance.json` and `.md` report bounded sets
 of up to four types; unknown/larger sets fall back to the global instantiated set. These are

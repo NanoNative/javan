@@ -13,8 +13,10 @@ behavior slices. macOS x64 and Windows package support remain outside that relea
 
 The longer-term compatibility goal is full Java 25 coverage. Begin with the closed-world
 native architecture and extend supported reflection automatically for classes included in
-the build. Runtime-provided names may resolve included classes; definitions obtained only
-after the build require a separate execution-model decision.
+the build. Resolve reflection to direct calls or bounded dispatch when analysis proves the
+targets, retaining the metadata required by observable Java behavior. Runtime-provided names
+may resolve included classes; definitions obtained only after the build require a separate
+execution-model decision. Unknown target retention remains a separate compatibility decision.
 
 Normal Java source and build outputs remain the input. The compiler selects supported
 behavior automatically, explains unsupported reachable behavior early, and preserves
