@@ -18,11 +18,11 @@ public final class ReflectionMethodReachability {
     }
 
     /**
-     * Collects literals directly supplied to supported reflective method lookups.
+     * Collects literal values supplied to supported reflective method lookups.
      *
      * @param classes parsed closed-world classes
      * @param reachable reachable method identities
-     * @return literal method names appearing as lookup arguments
+     * @return literal method names traced to lookup arguments
      */
     public static Set<String> literalNames(final Map<String, ClassFile> classes, final List<EntryPoint> reachable) {
         final Set<String> names = new HashSet<>();
@@ -72,10 +72,9 @@ public final class ReflectionMethodReachability {
                     }
                     cursor -= 2;
                 }
-                if (cursor < 0 || instructions.get(cursor).stringValue().isEmpty()) {
-                    continue;
+                if (cursor >= 0) {
+                    names.addAll(ReflectionStringFlow.literals(method.orElseThrow(), cursor));
                 }
-                names.add(instructions.get(cursor).stringValue().orElseThrow());
             }
         }
         return Set.copyOf(names);

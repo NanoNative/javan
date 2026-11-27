@@ -16949,6 +16949,146 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void reflectionDeclarationDoesNotRetainClassNamesUsedOnlyAsLogText() throws Exception {
+        final Path project = project("bounded-class-log-text");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() { return new AnnotatedElement[] {Target.class}; }
+                public static void main(String[] args) {
+                    if (args.length == 0) System.out.println("com.acme.Unrelated");
+                    final String name = args[0];
+                    try { System.out.println(Class.forName(name).getName()); }
+                    catch (ClassNotFoundException missing) { System.out.println("missing"); }
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target { }
+            """);
+        writeJava(project, "com.acme.Unrelated", """
+            package com.acme;
+            public final class Unrelated { }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/bounded-class-log-text").toString(), "com.acme.Unrelated"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("missing\n");
+        assertThat(generatedProgramSource(project)).doesNotContain("javan_class_com_acme_Unrelated");
+    }
+
+    @Test
+    void reflectionDeclarationKeepsLiteralNamesForSystemLoaderAndInitializationFlag() throws Exception {
+        final Path project = project("bounded-class-loader-literal");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() { return new AnnotatedElement[0]; }
+                public static void main(String[] args) throws Exception {
+                    final ClassLoader loader = ClassLoader.getSystemClassLoader();
+                    System.out.println(Class.forName("com.acme.Target", false, loader).getName());
+                    Class.forName("com.acme.Target", true, loader);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target { static { System.out.println("initialized"); } }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/bounded-class-loader-literal").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("com.acme.Target\ninitialized\n");
+    }
+
+    @Test
+    void reflectionDeclarationIgnoresOverwrittenClassNameLiterals() throws Exception {
+        final Path project = project("bounded-overwritten-class-name");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() { return new AnnotatedElement[0]; }
+                public static void main(String[] args) throws Exception {
+                    String name = "com.acme.Unrelated";
+                    name = args[0];
+                    System.out.println(Class.forName(name).getName());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Unrelated", """
+            package com.acme;
+            public final class Unrelated { }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/bounded-overwritten-class-name").toString(), "com.acme.Unrelated"));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stderr()).contains("ClassNotFoundException");
+        assertThat(generatedProgramSource(project)).doesNotContain("javan_class_com_acme_Unrelated");
+    }
+
+    @Test
+    void reflectionDeclarationFollowsClassNameThroughLocalAliases() throws Exception {
+        final Path project = project("bounded-aliased-class-name");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() { return new AnnotatedElement[0]; }
+                public static void main(String[] args) throws Exception {
+                    String name = "com.acme.Target";
+                    String alias = name;
+                    System.out.println(Class.forName(alias).getName());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target { }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/bounded-aliased-class-name").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("com.acme.Target\n");
+    }
+
+    @Test
+    void reflectionDeclarationFollowsClassNamesIntoExceptionHandlers() throws Exception {
+        final Path project = project("bounded-class-name-handler");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() { return new AnnotatedElement[0]; }
+                public static void main(String[] args) throws Exception {
+                    String name = "com.acme.Target";
+                    try { throw new IllegalArgumentException(); }
+                    catch (IllegalArgumentException expected) { System.out.println(Class.forName(name).getName()); }
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target { }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/bounded-class-name-handler").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("com.acme.Target\n");
+    }
+
+    @Test
     void reflectionDeclarationKeepsClassNamesReferencedAcrossControlFlow() throws Exception {
         final Path project = project("bounded-class-name-branch");
         writeJava(project, "com.acme.Main", """
@@ -17091,6 +17231,41 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/bounded-literal-method").toString()));
         assertThat(result.exitCode()).as(result.stderr()).isZero();
         assertThat(result.stdout()).isEqualTo("ok\n");
+    }
+
+    @Test
+    void reflectionDeclarationFollowsMethodNamesThroughLocalBranches() throws Exception {
+        final Path project = project("bounded-method-name-branch");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() { return new AnnotatedElement[0]; }
+                public static void main(String[] args) throws Exception {
+                    if (args.length == 2) System.out.println("hidden");
+                    String name = args.length == 0 ? "run" : args[0];
+                    String alias = name;
+                    final var method = Target.class.getDeclaredMethod(alias, String.class);
+                    System.out.println((String) method.invoke(null, "ok"));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target {
+                public static String run(String value) { return value; }
+                public static String hidden(String value) { return value; }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final String executable = project.resolve(".javan/bin/bounded-method-name-branch").toString();
+        final ProcessResult known = process(project, List.of(executable));
+        assertThat(known.exitCode()).as(known.stderr()).isZero();
+        assertThat(known.stdout()).isEqualTo("ok\n");
+        final ProcessResult missing = process(project, List.of(executable, "hidden"));
+        assertThat(missing.exitCode()).isNotZero();
+        assertThat(missing.stderr()).contains("NoSuchMethodException");
     }
 
     @Test

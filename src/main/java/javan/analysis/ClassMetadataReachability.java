@@ -37,8 +37,6 @@ public final class ClassMetadataReachability {
             return Set.copyOf(classes.keySet());
         }
         final Set<String> retained = new HashSet<>();
-        final Set<String> literalNames = new HashSet<>();
-        boolean dynamicClassLookup = false;
         for (final String target : declaration.classes()) {
             addClass(classes, retained, target);
         }
@@ -58,10 +56,9 @@ public final class ClassMetadataReachability {
                     addClass(classes, retained, handler.catchType().orElseThrow());
                 }
             }
-            for (final Instruction instruction : code.instructions()) {
-                if (declaration.present() && instruction.stringValue().isPresent()) {
-                    literalNames.add(instruction.stringValue().orElseThrow().replace('.', '/'));
-                }
+            final List<Instruction> instructions = code.instructions();
+            for (int index = 0; index < instructions.size(); index++) {
+                final Instruction instruction = instructions.get(index);
                 if (instruction.className().isPresent()) {
                     addClass(classes, retained, instruction.className().orElseThrow());
                 }
@@ -73,8 +70,28 @@ public final class ClassMetadataReachability {
                             addClass(classes, retained, target.orElseThrow());
                         } else if (!declaration.present()) {
                             return Set.copyOf(classes.keySet());
-                        } else {
-                            dynamicClassLookup = true;
+                        } else if ("(Ljava/lang/String;)Ljava/lang/Class;".equals(reference.descriptor())) {
+                            for (final String literal : ReflectionStringFlow.literals(method.orElseThrow(), index - 1)) {
+                                addClass(classes, retained, literal.replace('.', '/'));
+                            }
+                        } else if (index >= 3) {
+                            final Instruction loader = instructions.get(index - 1);
+                            final Instruction initialize = instructions.get(index - 2);
+                            final int loaderOpcode = loader.opcode();
+                            final boolean directLoader = loaderOpcode == 1 || loaderOpcode == 25
+                                || loaderOpcode >= 42 && loaderOpcode <= 45
+                                || loaderOpcode == 184 && loader.methodRef().isPresent()
+                                    && "java/lang/ClassLoader".equals(loader.methodRef().orElseThrow().owner())
+                                    && "getSystemClassLoader".equals(loader.methodRef().orElseThrow().name())
+                                    && "()Ljava/lang/ClassLoader;".equals(loader.methodRef().orElseThrow().descriptor());
+                            final int flagOpcode = initialize.opcode();
+                            final boolean directFlag = initialize.intValue().isPresent() || flagOpcode == 21
+                                || flagOpcode >= 26 && flagOpcode <= 29;
+                            if (directLoader && directFlag) {
+                                for (final String literal : ReflectionStringFlow.literals(method.orElseThrow(), index - 3)) {
+                                    addClass(classes, retained, literal.replace('.', '/'));
+                                }
+                            }
                         }
                     }
                     addClass(classes, retained, reference.owner());
@@ -82,11 +99,6 @@ public final class ClassMetadataReachability {
                 if (instruction.fieldRef().isPresent()) {
                     addClass(classes, retained, instruction.fieldRef().orElseThrow().owner());
                 }
-            }
-        }
-        if (dynamicClassLookup) {
-            for (final String literal : literalNames) {
-                addClass(classes, retained, literal);
             }
         }
         for (final String type : callGraph.instantiatedTypes().types()) {

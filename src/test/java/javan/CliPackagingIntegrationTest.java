@@ -371,6 +371,59 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanFollowsAliasedClassNames() throws Exception {
+        final Path project = project("selfhost-aliased-class-name");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() { return new AnnotatedElement[0]; }
+                public static void main(String[] args) throws Exception {
+                    String name = "com.acme.Target";
+                    String alias = name;
+                    System.out.println(Class.forName(alias).getName());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target { }
+            """);
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/selfhost-aliased-class-name").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("com.acme.Target\n");
+    }
+
+    @Test
+    void nativeBuiltJavanFollowsAliasedMethodNames() throws Exception {
+        final Path project = project("selfhost-aliased-method-name");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() { return new AnnotatedElement[0]; }
+                public static void main(String[] args) throws Exception {
+                    String name = args.length == 0 ? "run" : args[0];
+                    String alias = name;
+                    final var method = Target.class.getDeclaredMethod(alias, String.class);
+                    System.out.println((String) method.invoke(null, "ok"));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target { public static String run(String value) { return value; } }
+            """);
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/selfhost-aliased-method-name").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("ok\n");
+    }
+
+    @Test
     void nativeBuiltJavanBoundsDynamicReflectionMethods() throws Exception {
         final Path project = project("selfhost-bounded-reflection-method");
         writeJava(project, "com.acme.Main", """

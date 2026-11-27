@@ -71,7 +71,7 @@ Reflection fallback: a project may define one public static method named
 `java.lang.reflect.AnnotatedElement[]` and can be called by JVM and native tests within the
 supported reflection subset. Javan reads its
 bytecode without executing the method or initializing its declaring class. Supported entries
-are class literals from the compiled application or scanned dependencies and
+are non-array class literals from the compiled application or scanned dependencies and
 `getDeclaredMethod` on such classes, with a literal name and literal parameter types:
 
 ```java
@@ -90,13 +90,17 @@ signatures, missing methods and computed or unsupported elements produce `JAVAN0
 Constructor and field declarations are not implemented yet. Unknown dynamic `Class.forName`
 targets remain conservative over the parsed world when no declaration exists. With a
 declaration, dynamic names resolve against the declared classes, classes retained by reachable
-code and their required hierarchies, and compiled classes named by string literals in reachable
-code. Supported platform classes remain available. Other application names produce
+code and their required hierarchies, and class-name literals traced to the lookup directly or
+through local assignments and control flow in the same method. The three-argument overload
+currently traces simple loader and initialization-flag expressions. Names that cannot be
+proven, including names received from external input, require an explicit declaration.
+Supported platform classes remain available. Other application names produce
 `ClassNotFoundException`. For application methods, metadata and invocation retain declared
-identities and literal arguments directly supplied to reachable `getDeclaredMethod` or
-`getMethod` calls. Literal-name matches conservatively retain all overloads; the normal
-parameter check still selects the requested overload. Names that cannot yet be proven require
-an explicit declaration. Other dynamic application method names produce `NoSuchMethodException`.
+identities and literal arguments traced through local assignments and control flow to reachable
+`getDeclaredMethod` or `getMethod` calls. Literal-name matches conservatively retain all
+overloads; the normal parameter check still selects the requested overload. Names that cannot
+yet be proven require an explicit declaration. Other dynamic application method names produce
+`NoSuchMethodException`.
 Supported platform method metadata remains available. Automatically proven targets remain
 available without the declaration.
 
