@@ -678,6 +678,7 @@ public final class CompatibilityReports {
             pass("map-of-fixed-custom-key-callbacks"),
             pass("map-copyof-custom-key-callbacks"),
             pass("map-of-entries"),
+            scoped("map-of-entries-custom-key-callbacks"),
             pass("set-copy-of"),
             pass("set-of-empty"),
             pass("set-of-singleton"),

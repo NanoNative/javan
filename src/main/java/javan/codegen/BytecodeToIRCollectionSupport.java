@@ -122,7 +122,7 @@ final class BytecodeToIRCollectionSupport {
             }
             if ("ofEntries".equals(name) && "([Ljava/util/Map$Entry;)Ljava/util/Map;".equals(descriptor)) {
                 final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-                pushObjectCall(instructions, stack, localDeclarations, "javan_map_of_entries", arguments);
+                pushObjectCall(instructions, stack, localDeclarations, "javan_map_of_entries_java_into", arguments);
                 return true;
             }
             if (!"copyOf".equals(name) || !"(Ljava/util/Map;)Ljava/util/Map;".equals(descriptor)) {

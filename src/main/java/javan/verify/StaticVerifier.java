@@ -3585,7 +3585,8 @@ public final class StaticVerifier {
         if (!visiting.add(target)) {
             return Set.of();
         }
-        if (JdkCallSupport.isMapKeyOperation(target) || JdkCallSupport.isMapMultiEntryFactory(target) || JdkCallSupport.isMapCopyOf(target)
+        if (JdkCallSupport.isMapKeyOperation(target) || JdkCallSupport.isMapMultiEntryFactory(target)
+            || JdkCallSupport.isMapCopyOf(target) || JdkCallSupport.isMapEntryArrayFactory(target)
             || JdkCallSupport.isMapPutAll(target)) {
             final Set<String> result = new HashSet<>(escapingPlatformExceptionTypes(classes,
                 new MethodRef("java/lang/Object", "equals", "(Ljava/lang/Object;)Z"), visiting));

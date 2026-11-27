@@ -311,6 +311,7 @@ final class CompatibilityReportsTest {
             "| `map-of-fixed-custom-key-callbacks` | pass |",
             "| `map-copyof-custom-key-callbacks` | pass |",
             "| `map-of-entries` | pass |",
+            "| `map-of-entries-custom-key-callbacks` | scoped |",
             "| `set-copy-of` | pass |",
             "| `set-of-empty` | pass |",
             "| `set-of-singleton` | pass |",
@@ -518,6 +519,7 @@ final class CompatibilityReportsTest {
             "\"feature\": \"map-of-decuple\"",
             "\"feature\": \"map-of-fixed-custom-key-callbacks\"",
             "\"feature\": \"map-copyof-custom-key-callbacks\"",
+            "\"feature\": \"map-of-entries-custom-key-callbacks\"",
             "\"feature\": \"set-copy-of\"",
             "\"feature\": \"set-of-empty\"",
             "\"feature\": \"set-of-singleton\"",
@@ -628,11 +630,11 @@ final class CompatibilityReportsTest {
             "A broad JDK-compatibility release must report:",
             "The first native release is scenario-bounded.",
             "not a release-completion percentage.",
-            "| support rows | 335 |",
+            "| support rows | 336 |",
             "| pass rows | 334 |",
-            "| scoped rows | 1 |",
+            "| scoped rows | 2 |",
             "| accounted rows | 334 |",
-            "| unaccounted rows | 1 |"
+            "| unaccounted rows | 2 |"
         );
         assertThat(matrix).contains(
             "A broad JDK-compatibility release requires `done = supported variants + rejected variants` with zero unknown leftovers.",

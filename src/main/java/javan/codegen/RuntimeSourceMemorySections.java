@@ -15693,7 +15693,7 @@ final class RuntimeSourceMemorySections {
             javan_map_fixed_java_into(result, entries, 10);
         }
 
-        void* javan_map_of_entries(void* value) {
+        static void* javan_map_of_entries_unlocked(void* value) {
             if (value == NULL) {
                 javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
                 return NULL;
@@ -15723,11 +15723,6 @@ final class RuntimeSourceMemorySections {
                     javan_root_frame_pop(javan_map_of_entries_roots);
                     return NULL;
                 }
-                if (entries->length > 1 && javan_map_has_custom_key(entry->key)) {
-                    javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
-                    javan_root_frame_pop(javan_map_of_entries_roots);
-                    return NULL;
-                }
                 if (javan_map_find(result, entry->key) >= 0) {
                     javan_pending_throw("java/lang/IllegalArgumentException", NULL, NULL, NULL, NULL, -1, -1, NULL);
                     javan_root_frame_pop(javan_map_of_entries_roots);
@@ -15741,6 +15736,77 @@ final class RuntimeSourceMemorySections {
             javan_map_rebuild_index(result);
             javan_root_frame_pop(javan_map_of_entries_roots);
             return result;
+        }
+
+        void javan_map_of_entries_java_into(void** result, void* value) {
+            void* entries_root = value;
+            void* keys = NULL;
+            void* elements = NULL;
+            void* map = NULL;
+            void* previous = NULL;
+            *result = NULL;
+            void** roots[] = { &entries_root, &keys, &elements, &map, &previous, result };
+            javan_root_frame_push(roots, 6);
+            javan_runtime_lock_enter();
+            if (entries_root == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                javan_runtime_lock_leave();
+                javan_root_frame_pop(roots);
+                return;
+            }
+            javan_array_header* header = javan_array_checked(entries_root);
+            javan_array_kind_checked(header, JAVAN_ARRAY_KIND_OBJECT);
+            javan_object_array* entries = (javan_object_array*) header;
+            int length = entries->length;
+            int custom = 0;
+            for (int index = 0; index < length; index++) {
+                if (entries->values[index] == NULL) {
+                    javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                    javan_runtime_lock_leave();
+                    javan_root_frame_pop(roots);
+                    return;
+                }
+                javan_map_entry_state* entry = javan_map_entry_checked(entries->values[index]);
+                if (length > 1) custom |= javan_map_has_custom_key(entry->key);
+            }
+            if (!custom) {
+                *result = javan_map_of_entries_unlocked(entries_root);
+                javan_runtime_lock_leave();
+                javan_root_frame_pop(roots);
+                return;
+            }
+            keys = javan_object_array_new(length, "[Ljava.lang.Object;");
+            elements = javan_object_array_new(length, "[Ljava.lang.Object;");
+            entries = (javan_object_array*) javan_array_checked(entries_root);
+            for (int index = 0; index < length; index++) {
+                javan_map_entry_state* entry = javan_map_entry_checked(entries->values[index]);
+                ((javan_object_array*) keys)->values[index] = entry->key;
+                ((javan_object_array*) elements)->values[index] = entry->value;
+            }
+            map = javan_map_new_with_capacity(length, 0);
+            javan_runtime_lock_leave();
+            for (int index = 0; index < length; index++) {
+                void* key = ((javan_object_array*) keys)->values[index];
+                void* element = ((javan_object_array*) elements)->values[index];
+                if (key == NULL || element == NULL) {
+                    javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                    break;
+                }
+                javan_map_put_java_into(&previous, map, key, element);
+                if (javan_pending_has()) break;
+                if (previous != NULL) {
+                    javan_pending_throw("java/lang/IllegalArgumentException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                    break;
+                }
+            }
+            if (!javan_pending_has()) {
+                javan_runtime_lock_enter();
+                ((javan_object_map*) map)->immutable = 1;
+                ((javan_object_map*) map)->view_flags |= JAVAN_MAP_REJECT_NULL_QUERY;
+                *result = map;
+                javan_runtime_lock_leave();
+            }
+            javan_root_frame_pop(roots);
         }
 
         """;

@@ -12659,7 +12659,7 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).containsSubsequence(
             IrInstruction.assignObject("object0",
                 IrExpression.objectCall(
-                    "javan_map_of_entries",
+                    "javan_map_of_entries_java_into",
                     List.of(IrExpression.objectLocal("arg0"))
                 )
             ),

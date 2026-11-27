@@ -612,11 +612,13 @@ public final class BytecodeToIR {
                             || JdkCallSupport.isCollectionContainsAll(calledMethod)
                             || JdkCallSupport.isCollectionFilterAll(calledMethod)
                             || JdkCallSupport.isMapKeyOperation(calledMethod) || JdkCallSupport.isMapMultiEntryFactory(calledMethod)
-                            || JdkCallSupport.isMapPutAll(calledMethod) || JdkCallSupport.isMapCopyOf(calledMethod))
+                            || JdkCallSupport.isMapPutAll(calledMethod) || JdkCallSupport.isMapCopyOf(calledMethod)
+                            || JdkCallSupport.isMapEntryArrayFactory(calledMethod))
                             && "equals".equals(callee.methodName())
                             && "(Ljava/lang/Object;)Z".equals(callee.descriptor())
                             || (JdkCallSupport.isMapKeyOperation(calledMethod) || JdkCallSupport.isMapMultiEntryFactory(calledMethod)
-                                || JdkCallSupport.isMapPutAll(calledMethod) || JdkCallSupport.isMapCopyOf(calledMethod))
+                                || JdkCallSupport.isMapPutAll(calledMethod) || JdkCallSupport.isMapCopyOf(calledMethod)
+                                || JdkCallSupport.isMapEntryArrayFactory(calledMethod))
                             && "hashCode".equals(callee.methodName())
                             && "()I".equals(callee.descriptor());
                         if (!directCall && !charSequenceConversion && !collectionEquality) {
@@ -1680,7 +1682,8 @@ public final class BytecodeToIR {
                 possibleTypes.addAll(JdkCallSupport.transportedPlatformThrowableTypes(reference));
             }
             if (JdkCallSupport.isMapKeyOperation(reference) || JdkCallSupport.isMapMultiEntryFactory(reference)
-                || JdkCallSupport.isMapCopyOf(reference) || JdkCallSupport.isMapPutAll(reference)) {
+                || JdkCallSupport.isMapCopyOf(reference) || JdkCallSupport.isMapEntryArrayFactory(reference)
+                || JdkCallSupport.isMapPutAll(reference)) {
                 possibleTypes.add("java/util/ConcurrentModificationException");
                 addTransportedThrowableTypes(MAP_CUSTOM_EQUALS_DISPATCH, dispatches, transportedThrowableTypes, possibleTypes);
                 addTransportedThrowableTypes(MAP_CUSTOM_HASH_DISPATCH, dispatches, transportedThrowableTypes, possibleTypes);

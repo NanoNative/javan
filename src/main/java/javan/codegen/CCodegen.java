@@ -790,6 +790,7 @@ public final class CCodegen {
         result.add("javan_map_put_java_into");
         result.add("javan_map_pair_java_into");
         result.add("javan_map_copy_of_java_into");
+        result.add("javan_map_of_entries_java_into");
         result.add("javan_map_triple_java_into");
         result.add("javan_map_quadruple_java_into");
         result.add("javan_map_quintuple_java_into");
@@ -4091,7 +4092,7 @@ public final class CCodegen {
                     "javan_map_of_empty",
                     "javan_map_singleton",
                     "javan_map_singleton_java",
-                    "javan_map_of_entries",
+
                     "javan_map_unmodifiable",
                     "javan_map_get",
                     "javan_map_get_or_default",
