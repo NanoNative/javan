@@ -108,9 +108,9 @@ yet be proven require an explicit declaration. Other dynamic application method 
 Supported platform method metadata remains available. Automatically proven targets remain
 available without the declaration.
 
-This class-name bound applies without a declaration as well. Unresolved reflective method or
-constructor invocation can still conservatively retain additional application code when no
-declaration exists, which can also make more classes available to `Class.forName`.
+These class-name and method-name bounds apply without a declaration as well. Unresolved
+reflective constructor invocation can still conservatively retain additional application code
+when no declaration exists, which can also make more classes available to `Class.forName`.
 
 Within the compiled application and dependencies, `getDeclaredConstructor`, `getConstructor` and
 `Constructor.newInstance` support exact overload lookup, argument conversion, access checks,

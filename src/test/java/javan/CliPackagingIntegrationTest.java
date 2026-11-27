@@ -752,6 +752,31 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBoundsImplicitMethodInvocation() throws Exception {
+        final Path project = project("selfhost-implicit-method-bounds");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) throws Exception {
+                    System.out.println(Target.class.getDeclaredMethod("run").invoke(null));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target {
+                public static String run() { return "ok"; }
+                public static void unused() { System.setProperty("unused", "never"); }
+            }
+            """);
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/selfhost-implicit-method-bounds").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("ok\n");
+    }
+
+    @Test
     void nativeBuiltJavanFollowsAliasedMethodNames() throws Exception {
         final Path project = project("selfhost-aliased-method-name");
         writeJava(project, "com.acme.Main", """

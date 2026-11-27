@@ -12,7 +12,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-/** Shared conservative method targets for an explicit reflection declaration. */
+/** Shared conservative method targets for statically known and declared reflection lookups. */
 public final class ReflectionMethodReachability {
     private ReflectionMethodReachability() {
     }
@@ -99,7 +99,7 @@ public final class ReflectionMethodReachability {
         final String name,
         final String descriptor
     ) {
-        if (!declaration.present() || literalNames.contains(name)
+        if (literalNames.contains(name)
             || declaration.methods().contains(new EntryPoint(owner, name, descriptor))) {
             return true;
         }

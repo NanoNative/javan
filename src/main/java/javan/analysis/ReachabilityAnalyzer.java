@@ -169,12 +169,12 @@ public final class ReachabilityAnalyzer {
                 constructorsChanged = true;
             }
             if (constructorsChanged) continue;
-            if (declaration.present() || usesClassForName(classes, graph.reachableMethods())) {
+            if (declaration.present() || usesClassForNameOrMethodLookup(classes, graph.reachableMethods())) {
                 final ClassInitializationGraph.Result initialization =
                     ClassInitializationGraph.analyze(classes, graph.reachableMethods());
                 final boolean classesChanged = reflectionClasses.addAll(
                     ClassMetadataReachability.collect(classes, graph, initialization, declaration));
-                final boolean namesChanged = declaration.present() && reflectionMethodNames.addAll(
+                final boolean namesChanged = reflectionMethodNames.addAll(
                     ReflectionMethodReachability.literalNames(classes, graph.reachableMethods()));
                 if (classesChanged || namesChanged) {
                     continue;
@@ -217,14 +217,18 @@ public final class ReachabilityAnalyzer {
         }
     }
 
-    private static boolean usesClassForName(final Map<String, ClassFile> classes, final List<EntryPoint> reachable) {
+    private static boolean usesClassForNameOrMethodLookup(final Map<String, ClassFile> classes, final List<EntryPoint> reachable) {
         for (final EntryPoint entry : reachable) {
             final ClassFile owner = classes.get(entry.className());
             final Optional<MethodInfo> method = owner == null ? Optional.empty() : owner.method(entry.methodName(), entry.descriptor());
             if (method.isEmpty() || method.orElseThrow().code().isEmpty()) continue;
             for (final Instruction instruction : method.orElseThrow().code().orElseThrow().instructions()) {
-                if (instruction.methodRef().isPresent()
-                    && ClassMetadataReachability.isClassForName(instruction.methodRef().orElseThrow())) return true;
+                if (instruction.methodRef().isPresent()) {
+                    final MethodRef target = instruction.methodRef().orElseThrow();
+                    if (ClassMetadataReachability.isClassForName(target)) return true;
+                    if ("java/lang/Class".equals(target.owner())
+                        && ("getMethod".equals(target.name()) || "getDeclaredMethod".equals(target.name()))) return true;
+                }
             }
         }
         return false;
@@ -591,7 +595,7 @@ public final class ReachabilityAnalyzer {
         }
         final List<EntryPoint> targets = new ArrayList<>();
         for (final ClassFile classFile : classes.values()) {
-            if (declaration.present() && !reflectionClasses.contains(classFile.name())) {
+            if (!reflectionClasses.contains(classFile.name())) {
                 continue;
             }
             for (final MethodInfo method : classFile.methods()) {

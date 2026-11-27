@@ -445,8 +445,7 @@ final class BytecodeToIRMetadataSupport {
         allClasses.putAll(classes);
         final Set<String> classpathClasses = classes.keySet();
         final ReflectionDeclaration.Result declaration = ReflectionDeclaration.analyze(classes);
-        final Set<String> literalNames = declaration.present()
-            ? ReflectionMethodReachability.literalNames(classes, reachableMethods) : Set.of();
+        final Set<String> literalNames = ReflectionMethodReachability.literalNames(classes, reachableMethods);
         final ReflectionConstructorReachability.Result constructorAnalysis =
             ReflectionConstructorReachability.analyze(classes, reachableMethods);
         final List<EntryPoint> literalConstructors = constructorAnalysis.targets();
@@ -522,9 +521,6 @@ final class BytecodeToIRMetadataSupport {
         final ReflectionDeclaration.Result declaration,
         final Set<String> literalNames
     ) {
-        if (!declaration.present()) {
-            return methods;
-        }
         final List<IrMethodMetadata> selected = new ArrayList<>();
         for (final IrMethodMetadata method : methods) {
             final StringBuilder descriptor = new StringBuilder("(");
