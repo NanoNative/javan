@@ -9,8 +9,8 @@ External project names do not belong in this matrix; this ledger stays compiler-
 
 | Measure | Count |
 | --- | ---: |
-| rows | 341 |
-| pass | 339 |
+| rows | 342 |
+| pass | 340 |
 | scoped | 2 |
 | target | 0 |
 | rejected | 0 |
@@ -273,6 +273,7 @@ Status mapping:
 | `map-of-entries-inline-distinct-key-types` | pass |
 | `map-of-entries-local-array-key-flow` | pass |
 | `map-of-entries-local-array-static-read` | pass |
+| `map-of-entries-local-array-length-read` | pass |
 | `map-of-entries-proven-index-overwrite` | pass |
 | `map-of-entries-custom-key-callbacks` | scoped |
 | `set-copy-of` | pass |
